@@ -496,11 +496,56 @@ def condition_payload_for(phrase: str) -> dict | None:
         return None
 
 
+def board_count_spec_for(phrase: str) -> dict | None:
+    """The count spec a printed where-clause *definition* means, or None to
+    refuse — "**the number of basic land types among lands you control**"
+    (Collective Restraint).
+
+    The string-in front door onto the one where-clause reader
+    (``where_x.parse_where_x_definition_body``) and the one count lowering
+    (``lowering/_amounts.count_spec``), for a derivation table that arrives with
+    the clause already delimited: ``engine/combat_restrictions.py``'s attack
+    toll, whose price is a count. A regex of its own there would be a second
+    answer to what "the number of …" may say — the fork SET_PLAYBOOK records
+    from Revised — and every definition this grammar learns later would have to
+    be taught to it again.
+
+    **Only a count of the battlefield, scoped to "you".** The caller is a
+    static ability: nothing resolved, so there is no scratchpad, no announced X,
+    no target and no firing event, and ``handlers/_common.evaluate_count`` is
+    handed nothing but the board and the permanent's controller. A definition
+    that needs any of those — a record, a cost channel, "that player" — is one
+    this spec would answer wrongly rather than refuse, so it is refused here.
+    The whole phrase must be consumed, as :func:`card_filter_payload` requires.
+    """
+    from .lowering._amounts import count_spec
+    from .where_x import parse_where_x_definition_body
+
+    lexed = tokenize(phrase.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, lexed.normalized)
+    try:
+        definition = parse_where_x_definition_body(stream)
+    except GrammarError:
+        return None
+    if not stream.exhausted or not isinstance(definition, ast.CountOf):
+        return None
+    try:
+        spec = count_spec(definition.filter, None)
+    except LoweringError:
+        return None
+    if spec.get("zone") != "battlefield" or spec.get("owner") != "you":
+        return None
+    return spec
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
     "CompiledLine", "GRAMMAR_CATEGORIES", "GrammarError", "LoweringError",
-    "ast", "card_filter_payload", "compile_line", "condition_payload_for",
+    "ast", "board_count_spec_for", "card_filter_payload", "compile_line",
+    "condition_payload_for",
     "graveyard_position_payload_for", "parse_line",
     "subject_filter_payload",
 ]

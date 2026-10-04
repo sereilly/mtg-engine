@@ -361,8 +361,8 @@ def lower_counted_pump(
             # this is the same amount spelled as a repetition, which is the
             # argument the ``pump_self`` branch below makes for its own pair.
             # The count is taken once, at resolution, and the boost it sizes
-            # does not move afterwards (CR 608.2h, CR 611.2c): the temporary
-            # channel records a number, not a spec.
+            # does not move afterwards (CR 608.2h): the temporary channel
+            # records a number, not a spec.
             #
             # Reached only with a duration. Durationless, "target creature gets
             # +1/+1 for each …" would be a permanent bonus nothing recomputes

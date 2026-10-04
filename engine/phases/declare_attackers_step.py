@@ -22,8 +22,10 @@ from ..combat_restrictions import (declaration_company_required,
 from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
 from ..subject_filters import subject_matches
 from ..events import emit
+from ..handlers._common import evaluate_count
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..oracle_types import X_FROM_COUNT
 from ..pt import pt_counter_key
 from ..static_bonuses import conditional_static_holds
 from ..trigger_utils import matching_triggers
@@ -611,7 +613,9 @@ class DeclareAttackersStepMixin:
             # printing reduces to "creatures" and so reaches every attacker,
             # which is what it always did.
             sources += [
-                instruction.payload
+                self._counted_toll_payload(
+                    instruction.payload, attacked_seat, permanent
+                )
                 for permanent in self.controlled_by(attacked_seat)
                 for instruction in compile_card_oracle(
                     permanent.effective_card
@@ -680,6 +684,41 @@ class DeclareAttackersStepMixin:
             if cost:
                 costs.append(cost)
         return costs
+
+    def _counted_toll_payload(
+        self, payload: dict, seat: int, permanent: Permanent
+    ) -> dict:
+        """*payload* with a counted price resolved to the number it is now.
+
+        "…unless their controller pays **{X}** for each creature they control
+        that's attacking you, **where X is the number of basic land types among
+        lands you control**." (Collective Restraint.) The price is a reading of
+        the toll controller's board (CR 109.5: a static ability's "you" is the
+        current controller of the permanent it is on), so it is counted here —
+        inside the one reader the gate, the plan and the charge all go through,
+        which is what keeps a declaration from being approved at one price and
+        billed at another — through ``evaluate_count``, the one evaluator of a
+        count spec.
+
+        A payload with a printed price comes back untouched. An X of zero
+        leaves no cost at all, which is what paying {0} for each attacker is: a
+        Collective Restraint whose controller has no basic land type stops
+        nothing.
+        """
+        spec = payload.get(X_FROM_COUNT)
+        if spec is None:
+            return payload
+        counted = evaluate_count(
+            self, self.players[seat], spec, exclude=permanent, source=permanent
+        )
+        return {
+            **payload,
+            "mana": {
+                symbol: counted if amount == "x" else amount
+                for symbol, amount in (payload.get("mana") or {}).items()
+                if (counted if amount == "x" else amount)
+            },
+        }
 
     def _declaration_mana_plan(
         self,
