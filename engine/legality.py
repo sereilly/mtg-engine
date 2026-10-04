@@ -62,6 +62,7 @@ from .targeting import (
     derive_cast_spec,
     derive_instruction_spec,
     role_relation_holds,
+    spec_is_a_cost,
     spec_roles,
     usable_activated_abilities,
 )
@@ -457,9 +458,9 @@ def _resolution_rechecks_description(spec: dict) -> bool:
 
     No for the shapes the question is not about:
 
-    * a **cost** picker (``sacrifice_cost`` / ``discard_cost`` / ``exile_cost``
-      on the spec itself) — a payment is not a target (CR 601.2b vs 601.2c),
-      and a sacrificed creature has, by design, left the description;
+    * a **cost** picker (any of ``targeting.COST_PICKER_FLAGS`` on the spec
+      itself) — a payment is not a target (CR 601.2b vs 601.2c), and a
+      sacrificed creature has, by design, left the description;
     * a **stack** target — its own branch below, and a spell's type does not
       change on the stack in this pool;
     * a **graveyard** target — a card in a zone has no computed
@@ -480,10 +481,7 @@ def _resolution_rechecks_description(spec: dict) -> bool:
         return False
     if kind in (GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND):
         return False
-    if (
-        spec.get("sacrifice_cost") or spec.get("discard_cost")
-        or spec.get("exile_cost") or spec.get("tap_cost") or spec.get("return_cost")
-    ):
+    if spec_is_a_cost(spec):
         return False
     return True
 
@@ -1675,9 +1673,41 @@ class LegalityMixin:
                 controller_index, card, cost_spec, for_cast=False,
                 source_permanent=source_permanent,
             )
+            self._attach_more_cost_targets(
+                controller_index, card, cost_spec, source_permanent
+            )
             spec["cost_spec"] = cost_spec
+        else:
+            self._attach_more_cost_targets(
+                controller_index, card, spec, source_permanent
+            )
         self._attach_chosen_source_targets(controller_index, card, spec)
         return spec
+
+    def _attach_more_cost_targets(
+        self, controller_index: int, card: CardDefinition, cost_spec: dict,
+        source_permanent,
+    ) -> None:
+        """Enumerate the pickers a cost asks *after* its first (``more_costs``:
+        Viscerid Drone's Swamp after its creature), each over its own candidates
+        and with no targeting legality, exactly as the first is. A no-op for
+        every cost that hands its payer one choice.
+
+        Copied rather than written into, because the entries are the derived
+        spec's own dicts and a list of candidates is a fact about this board.
+        """
+        chained = cost_spec.get("more_costs")
+        if not chained:
+            return
+        enumerated = []
+        for entry in chained:
+            entry = dict(entry)
+            entry["valid_targets"] = self._enumerate_targets(
+                controller_index, card, entry, for_cast=False,
+                source_permanent=source_permanent,
+            )
+            enumerated.append(entry)
+        cost_spec["more_costs"] = enumerated
 
     def _attach_chosen_source_targets(
         self, controller_index: int, card: CardDefinition, spec: dict
@@ -1803,9 +1833,13 @@ class LegalityMixin:
         # A cost payment (Sacrifice) and a chosen *source* (Jade Monolith,
         # Circle of Protection) are not targets — CR 601.2b/601.2c — so an empty
         # board does not make them unactivatable. Their own paths validate them.
+        #
+        # Every cost flag, through the one reader of them (PCY W3G5): this was a
+        # list of four, and a cost flag it does not name is asked a target's
+        # question — Benthic Explorers' untap the day it had a picker, and an
+        # exile cost already.
         if (
-            spec.get("sacrifice_cost") or spec.get("discard_cost")
-            or spec.get("tap_cost") or spec.get("return_cost")
+            spec_is_a_cost(spec)
             or spec.get("also_stack") or spec.get("requires_source")
         ):
             return None
@@ -2639,10 +2673,10 @@ class LegalityMixin:
         #
         # A **cost** payment is not a target (CR 601.2b vs 601.2c), and the
         # spec says so — the same flag the seat loop below reads — so a
-        # sacrifice cost keeps enumerating while the ban is up.
-        if self.targeting_bans and not triggered and not (
-            spec.get("sacrifice_cost") or spec.get("tap_cost") or spec.get("return_cost")
-        ):
+        # sacrifice cost keeps enumerating while the ban is up. Every cost flag
+        # (``spec_is_a_cost``), not the three this once listed: an exile, a
+        # discard or an untap paid under Peace Talks targets nothing either.
+        if self.targeting_bans and not triggered and not spec_is_a_cost(spec):
             return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which
@@ -2826,11 +2860,10 @@ class LegalityMixin:
         # script. That is the picker/resolution disagreement the round-48 guard
         # exists for, arriving through the cost field instead of the target one.
         # A tap cost and a return cost the same: tapping a White Knight to pay
-        # Opposition's cost is not targeting it.
-        paying_a_cost = bool(
-            spec.get("sacrifice_cost") or spec.get("tap_cost")
-            or spec.get("return_cost")
-        )
+        # Opposition's cost is not targeting it — and every other cost flag
+        # (``spec_is_a_cost``): untapping an opponent's shrouded land to pay
+        # Benthic Explorers' cost targets it no more than tapping one would.
+        paying_a_cost = spec_is_a_cost(spec)
         for seat, player in enumerate(self.players):
             # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
             if spec.get("own_only") and seat != caster_index:

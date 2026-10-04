@@ -290,10 +290,22 @@ def test_phyrexian_tribute_sacrifices_the_two_creatures_named():
 
 def test_the_tap_and_counted_sacrifice_costs_open_the_set_picker():
     picker = app_js_function_body("activationPermanentCostSpec")
-    assert "tap_cost" in picker and "announces_x" in picker
+    # The flags the set picker opens for are one table since PCY W3G5
+    # (`PERMANENT_SET_COST_VERBS`, flag and verb together); the tap cost is
+    # its first row.
+    assert "PERMANENT_SET_COST_VERBS" in picker and "announces_x" in picker
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    assert '["tap_cost", "tap"]' in source
     confirm = app_js_function_body("confirmPermanentCost")
-    # Copper-Leaf Angel: X is the number of lands named.
-    assert "fields.x_value = picked.length" in confirm
+    # Copper-Leaf Angel: X is the number of lands named (carried across a
+    # chain's later steps since PCY W3G5, so it is read off the step that
+    # announced it).
+    assert "pending.announcesX ? picked.length" in confirm
+    assert "fields.x_value = xValue" in confirm
 
 
 def test_the_combat_declarations_ask_for_their_costs_first():
@@ -301,3 +313,135 @@ def test_the_combat_declarations_ask_for_their_costs_first():
     assert ok.count("startDeclarationCostPrompt(") == 2, "attackers and blockers"
     assert "startDeclarationCostPrompt(" in _async_function_body("confirmPendingAttackTarget")
     assert "cost_permanent_ids: chosen" in app_js_function_body("continueDeclarationCost")
+
+
+# ---------------------------------------------------------------------------
+# PCY W3G5: the last costs paid by the default, over the wire
+# ---------------------------------------------------------------------------
+
+
+def test_w3g5_viscerid_drone_ships_both_sacrifices_and_pays_the_two_named():
+    """The payload carries the second choice (``more_costs``) with its own
+    candidates, and one activate body carries both answers on
+    ``cost_permanent_ids`` in the list's order."""
+    sid, game = _session(
+        ["Viscerid Drone", "Grizzly Bears", "Hill Giant", "Swamp", "Swamp"],
+        ["Serra Angel"],
+    )
+    _drone, bears, giant, s1, s2 = game.players[0].battlefield
+    (angel,) = game.players[1].battlefield
+
+    permanent = _state(sid)["players"][0]["battlefield"][0]
+    cost = permanent["ability_target_specs"][0]["cost_spec"]
+    (swamps,) = cost["more_costs"]
+    assert swamps["sacrifice_cost"] is True
+    assert [t["name"] for t in swamps["valid_targets"]] == ["Swamp", "Swamp"]
+
+    resp = _act(
+        sid, action="activate", permanent_name="Viscerid Drone", permanent_index=0,
+        ability_index=0, target_permanent_id=angel.permanent_id,
+        cost_permanent_ids=[giant.permanent_id, s2.permanent_id],
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    assert game.is_on_battlefield(bears) and game.is_on_battlefield(s1)
+    assert not game.is_on_battlefield(giant) and not game.is_on_battlefield(s2)
+    assert not game.is_on_battlefield(angel)
+
+
+def test_w3g5_benthic_explorers_untaps_the_opponents_land_named_over_the_wire():
+    """The first cost picker over somebody else's permanents: the ids are the
+    opponent's, and the land named is the one untapped."""
+    sid, game = _session(["Benthic Explorers"], ["Forest", "Island"])
+    forest, island = game.players[1].battlefield
+    forest.tapped = island.tapped = True
+
+    spec = _state(sid)["players"][0]["battlefield"][0]["target_spec"]
+    assert spec["untap_cost"] is True
+    assert [(t["seat"], t["name"]) for t in spec["valid_targets"]] == [
+        (1, "Forest"), (1, "Island"),
+    ]
+
+    resp = _act(
+        sid, action="activate", permanent_name="Benthic Explorers", permanent_index=0,
+        cost_permanent_ids=[island.permanent_id],
+    )
+    assert resp.status_code == 200, resp.text
+    assert not island.tapped and forest.tapped
+
+
+def test_w3g5_spike_rogue_and_wandering_mage_pay_with_the_creature_named():
+    from engine.named_counters import counters_on
+    from engine.pt import add_pt_counters
+
+    sid, game = _session(["Spike Rogue", "Grizzly Bears", "Wandering Mage", "Hill Giant"])
+    rogue, bears, mage, giant = game.players[0].battlefield
+    add_pt_counters(rogue, "+1/+1", 2)
+    add_pt_counters(bears, "+1/+1", 1)
+
+    resp = _act(
+        sid, action="activate", permanent_name="Spike Rogue", permanent_index=0,
+        ability_index=1, cost_permanent_ids=[bears.permanent_id],
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    assert counters_on(bears, "+1/+1") == 0 and counters_on(rogue, "+1/+1") == 3
+
+    resp = _act(
+        sid, action="activate", permanent_name="Wandering Mage", permanent_index=2,
+        ability_index=2, target_seat=0, cost_permanent_ids=[giant.permanent_id],
+    )
+    assert resp.status_code == 200, resp.text
+    game._settle()
+    assert giant.effective_toughness == 2 and mage.effective_toughness == 3
+
+
+def test_w3g5_the_client_walks_every_cost_choice():
+    """The client half, read as source. The set picker opens for the new
+    verbs and for any chain; confirming one step opens the next with what was
+    already named; and a spec that *is* a cost is never read as a target."""
+    picker = app_js_function_body("activationPermanentCostSpec")
+    assert "more_costs" in picker
+    confirm = app_js_function_body("confirmPermanentCost")
+    assert "pending.remaining" in confirm and "openPermanentCostStep(" in confirm
+    assert "cost_permanent_ids: chosen" in confirm
+
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2] / "web" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    for flag in ("untap_cost", "put_counter_cost", "remove_counter_cost"):
+        assert f'["{flag}", ' in source, flag
+    # Keldon Battlewagon's tap cost was not a cost to the client at all.
+    assert "specIsACost(spec)" in app_js_function_body("castCostSpec")
+    # Benthic Explorers' land is a payment, not the land a target prompt wants.
+    assert "!specIsACost(targetSpecOf(card))" in source
+    # Hidden Retreat's card from hand takes the discard prompt's pick.
+    assert "cardRequiresHandCost(card)" in app_js_function_body("startActivationPrompt")
+    # Wandering Mage's "target player or planeswalker" is asked, not defaulted.
+    assert '"player_or_planeswalker"' in app_js_function_body(
+        "activatedAbilityRequiresTargetAny"
+    )
+
+
+def test_w3g5_an_exile_cost_answers_on_the_cost_field():
+    """City of Shadows' "Exile a creature you control": the prompt said
+    "exile", the player clicked a creature, and the pick went out as a target
+    while the engine's default exiled the first creature — observed in the
+    app. The cost-only canvas branch now takes a battlefield exile, and a hand
+    exile (Cadaverous Bloom) takes the hand-card prompt on ``cost_hand_index``."""
+    prompt = app_js_function_body("startActivationPrompt")
+    assert "spec.sacrifice_cost || battlefieldExile" in prompt
+    assert 'spec?.exile_cost && spec?.kind === "hand_card"' in app_js_function_body(
+        "cardRequiresHandCost"
+    )
+
+    sid, game = _session(["City of Shadows", "Grizzly Bears", "Hill Giant"])
+    _city, bears, giant = game.players[0].battlefield
+    resp = _act(
+        sid, action="activate", permanent_name="City of Shadows", permanent_index=0,
+        ability_index=0, cost_permanent_id=giant.permanent_id,
+    )
+    assert resp.status_code == 200, resp.text
+    assert game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)

@@ -40,7 +40,16 @@ for _path in manifest_set_paths(include_measured=True):
 # they are what tells the client which field the answer rides, and a cost
 # reported under the wrong one would be collected and then paid with something
 # else.
-_COST_FLAGS = ("sacrifice_cost", "discard_cost", "tap_cost", "return_cost")
+_COST_FLAGS = (
+    "sacrifice_cost", "discard_cost", "tap_cost", "return_cost", "exile_cost",
+    # PCY W3G5: the four costs paid with a permanent other than a sacrifice,
+    # tap or return — "Untap a tapped land an opponent controls" (Benthic
+    # Explorers), "Put a -1/-1 counter on a creature you control" (Wandering
+    # Mage), "Remove a +1/+1 counter from a creature you control" (Spike
+    # Rogue) — and the hand card "put on top of your library" (Hidden Retreat,
+    # Penance).
+    "untap_cost", "put_counter_cost", "remove_counter_cost", "library_top_cost",
+)
 
 # The gaps this guard found the day it was written are closed (round 52), so the
 # list is empty. The mechanism stays: the two tests below are what force an
@@ -52,6 +61,30 @@ _COST_FLAGS = ("sacrifice_cost", "discard_cost", "tap_cost", "return_cost")
 # never asked. Atog's default ate the *Black Lotus* on a board that also held a
 # Mox, because among equal-power permanents the tie breaks on permanent id.
 _PICKERLESS_ACTIVATION_COSTS: set[tuple[str, int]] = set()
+
+# The cast side's twin, keyed by card name. PCY W3G5 widened the question from
+# "does the spell derive *a* picker?" to "is *every* choice its costs hand the
+# caster described?", and the wider question found two shipped spells whose
+# cost no picker has ever described. Pinned rather than fixed, each with what
+# it would take:
+_PICKERLESS_CAST_COSTS: dict[str, str] = {
+    # "As an additional cost to cast this spell, exile X creature cards from
+    # your graveyard." The charger takes the top X of the pile and says so
+    # (casting.py, "this engine has no graveyard picker on the cast path yet"):
+    # there is no wire field for a set of graveyard positions on a cast, and the
+    # client's X box and the picker would have to be one announcement.
+    "Haunting Misery": "no cast-path graveyard set picker or wire field",
+    # "As an additional cost to cast this spell, return X Swamps you control to
+    # their owner's hand." The charger already honours ``cost_permanent_ids``
+    # (casting.py's return branch); what is missing is the whole announcement:
+    # ``_cost_picker_specs`` reads the activation spelling
+    # (``return_to_hand_filter``) and not the cast one (``return_filter`` /
+    # ``return_count_x``), and the cast client asks X inside the divided-damage
+    # prompt, after any cost stage — so a set picker of X Swamps has nowhere to
+    # learn X from. Emitting the spec alone would route it to the one-click
+    # sacrifice prompt, which says "sacrifice" and answers on the wrong field.
+    "Infernal Harvest": "cast-side return spelling unread; X asked after the cost stage",
+}
 
 
 def _has_cost_picker(spec: dict | None) -> bool:
@@ -113,18 +146,88 @@ def _payer_chooses(cost) -> bool:
     a picker, so for sixteen shipped cards a human seat tapped whatever the
     default chose. Unerring Sling's damage *is* the tapped creature's power.
     """
+    return bool(_chosen_cost_flags(cost))
+
+
+def _chosen_cost_flags(cost) -> list[str]:
+    """One picker flag per choice *cost* hands its payer, in no order.
+
+    A *list*, because "does this cost choose anything?" was the wrong question
+    and let five shipped cards through. Viscerid Drone's "Sacrifice a creature
+    **and a Swamp**" and Urborg Panther's "Sacrifice a creature named Feral
+    Shadow, a creature named Breathstealer, …" are two choices; the spec
+    described the first, the guard asked for *a* picker and got one, and the
+    Swamp was the engine's default for every human who ever paid it. The same
+    question let the costs no flag existed for through entirely — Benthic
+    Explorers' untap, Wandering Mage's -1/-1 counter, Spike Rogue's +1/+1
+    counter removal, Hidden Retreat's and Penance's card put back on the
+    library — because the enumeration below did not know their fields.
+
+    Read with ``getattr`` because it is asked of both cost records — an
+    activation's ``ActivatedAbilityCost`` and a cast's ``AdditionalCost`` —
+    and they spell the same cost differently ("return_to_hand_filter" on one,
+    "return_filter" on the other). Asking one spelling only is how Infernal
+    Harvest's "return X Swamps" went unasked.
+    """
+    flags: list[str] = []
     if cost.sacrifice_filter is not None:
-        return True
+        flags.append("sacrifice_cost")
+    # "Sacrifice a creature **and a Swamp**" (Viscerid Drone): the second noun
+    # phrase is a second permanent and a second choice.
+    if getattr(cost, "sacrifice_also_filter", None) is not None:
+        flags.append("sacrifice_cost")
     if getattr(cost, "tap_filter", None) is not None and getattr(cost, "tap_count", 0):
-        return True
+        flags.append("tap_cost")
     # …and its one-zone-over twin, "Return a Forest you control to its owner's
-    # hand" (Quirion Ranger, Flooded Shoreline).
+    # hand" (Quirion Ranger, Flooded Shoreline) — and the cast side's spelling
+    # of it, "return X Swamps you control" (Infernal Harvest).
     if getattr(cost, "return_to_hand_filter", None) is not None and getattr(
         cost, "return_to_hand_count", 0
     ):
-        return True
-    return bool(cost.discard_cards) and not getattr(
-        cost, "discard_at_random", False
+        flags.append("return_cost")
+    if getattr(cost, "return_filter", None) is not None:
+        flags.append("return_cost")
+    # "Exile a creature you control" (City of Shadows), "Exile a creature card
+    # from your graveyard" (Necropolis), "exile X creature cards from your
+    # graveyard" on the cast side (Haunting Misery).
+    if getattr(cost, "exile_filter", None) is not None:
+        flags.append("exile_cost")
+    if getattr(cost, "exile_graveyard_filter", None) is not None:
+        flags.append("exile_cost")
+    if getattr(cost, "untap_filter", None) is not None:
+        flags.append("untap_cost")
+    if getattr(cost, "put_counter_filter", None) is not None:
+        flags.append("put_counter_cost")
+    if getattr(cost, "remove_counter_filter", None) is not None:
+        flags.append("remove_counter_cost")
+    if getattr(cost, "hand_to_library_top", 0):
+        flags.append("library_top_cost")
+    if (
+        cost.discard_cards or getattr(cost, "discard_count_x", False)
+    ) and not getattr(cost, "discard_at_random", False):
+        flags.append("discard_cost")
+    return flags
+
+
+def _cost_head(spec: dict | None) -> dict | None:
+    """The first cost picker *spec* carries, wherever it rides."""
+    if spec is None:
+        return None
+    nested = spec.get("cost_spec")
+    if isinstance(nested, dict):
+        return nested
+    return spec if any(spec.get(flag) for flag in _COST_FLAGS) else None
+
+
+def _described_cost_flags(spec: dict | None) -> list[str]:
+    """Every cost flag *spec* describes, the first picker and the ones after it
+    (``more_costs``) — the list the client walks, one prompt per entry."""
+    head = _cost_head(spec)
+    if head is None:
+        return []
+    chain = [head, *(head.get("more_costs") or ())]
+    return sorted(
+        flag for entry in chain for flag in _COST_FLAGS if entry.get(flag)
     )
 
 
@@ -179,7 +282,10 @@ def test_the_pool_has_costs_of_both_kinds_to_check():
     assert _activation_cost_abilities(), "no ability in the pool charges one"
 
 
-@pytest.mark.parametrize("card_name,zone", _cast_cost_cards())
+@pytest.mark.parametrize(
+    "card_name,zone",
+    [pair for pair in _cast_cost_cards() if pair[0] not in _PICKERLESS_CAST_COSTS],
+)
 def test_every_printed_cast_cost_derives_a_picker(card_name, zone):
     """CR 601.2b: the caster announces how they will pay, so there has to be
     somewhere to announce it.
@@ -277,3 +383,157 @@ def test_the_pinned_gaps_all_still_charge_a_cost():
         f"pinned entries that no longer charge a choosable cost: {stale} — drop "
         "them from _PICKERLESS_ACTIVATION_COSTS"
     )
+
+
+# ---------------------------------------------------------------------------
+# PCY W3G5: every choice a cost hands its payer, not merely one of them
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "card_name,ability_index",
+    [pair for pair in _activation_cost_abilities() if pair not in _PICKERLESS_ACTIVATION_COSTS],
+)
+def test_every_choice_an_activation_cost_makes_is_described(card_name, ability_index):
+    """CR 602.2b through CR 601.2h: each permanent or card a cost pays with is
+    the payer's choice, so each needs a picker — one per choice, in the list
+    the client walks (the first picker and its ``more_costs``).
+
+    Validated backwards: on the tree before this round it names exactly six
+    abilities on five cards — Benthic Explorers, Spike Rogue's second ability,
+    Urborg Panther's second, Viscerid Drone's two and Wandering Mage's third —
+    plus Hidden Retreat and Penance, whose "put a card from your hand on top of
+    your library" the old enumeration did not know to ask about.
+    """
+    program = compile_card_oracle(_POOL[card_name])
+    ability = program.activated_abilities[ability_index]
+    expected = sorted(_chosen_cost_flags(ability.cost))
+    described = _described_cost_flags(derive_activation_spec(ability))
+
+    assert described == expected, (
+        f"{card_name}'s ability {ability_index} hands its payer {expected} and "
+        f"its picker describes {described} — every choice left off is paid "
+        "with the engine's default for a human seat that was never asked"
+    )
+
+
+@pytest.mark.parametrize(
+    "card_name,zone",
+    [pair for pair in _cast_cost_cards() if pair[0] not in _PICKERLESS_CAST_COSTS],
+)
+def test_every_choice_a_cast_cost_makes_is_described(card_name, zone):
+    """The cast side of the same question (CR 601.2b, 601.2h). A spell's
+    picker is its first choosable additional cost; no spell in the pool prints
+    two, and :func:`test_no_cast_picker_carries_a_chain` holds that — the cast
+    client does not walk ``more_costs``."""
+    card = _POOL[card_name]
+    announced = {
+        cost.optional_key: 1
+        for cost in additional_costs(card)
+        if cost.optional_key is not None
+    }
+    expected = sorted(
+        flag
+        for cost in additional_costs(card)
+        if (cost.from_zone or "hand") == zone
+        for flag in _chosen_cost_flags(cost)
+    )
+    spec = derive_cast_spec(
+        card, compile_card_oracle(card), from_zone=zone,
+        optional_cost_payments=announced or None,
+    )
+    described = _described_cost_flags(spec)
+
+    assert described == expected, (
+        f"{card_name} cast from the {zone} hands its caster {expected} and its "
+        f"picker describes {described}"
+    )
+
+
+def test_no_cast_picker_carries_a_chain():
+    """The cast client asks one cost picker and sends; the activation client
+    walks ``more_costs``. A spell whose costs needed a chain would have the
+    second choice derived here and dropped in the browser, so the first such
+    spell fails this until the cast path learns the walk."""
+    chained = []
+    for name, card in sorted(_POOL.items()):
+        for zone in {cost.from_zone or "hand" for cost in additional_costs(card)}:
+            announced = {
+                cost.optional_key: 1
+                for cost in additional_costs(card)
+                if cost.optional_key is not None
+            }
+            head = _cost_head(derive_cast_spec(
+                card, compile_card_oracle(card), from_zone=zone,
+                optional_cost_payments=announced or None,
+            ))
+            if head is not None and head.get("more_costs"):
+                chained.append((name, zone))
+    assert not chained, chained
+
+
+def test_a_chained_cost_is_a_set_of_permanents():
+    """What the activation client's chain can ask: a set of permanents, one
+    picker after another, every answer on ``cost_permanent_ids``. A hand card
+    or a graveyard card in the chain would be collected by nobody — so the
+    first ability that needs one fails here rather than in a browser."""
+    chained = []
+    for name, card in sorted(_POOL.items()):
+        for index, ability in enumerate(compile_card_oracle(card).activated_abilities):
+            head = _cost_head(derive_activation_spec(ability))
+            for entry in (head or {}).get("more_costs") or ():
+                chained.append((name, index, entry.get("kind")))
+    assert chained, "no ability in the pool carries a cost chain to check"
+    unaskable = [
+        entry for entry in chained
+        if entry[2] in (None, "hand_card", "graveyard_creature", "none")
+    ]
+    assert not unaskable, unaskable
+
+
+@pytest.mark.parametrize("card_name", sorted(_PICKERLESS_CAST_COSTS))
+def test_the_recorded_pickerless_cast_costs_are_still_open(card_name):
+    """The ratchet's other half for the cast side: pinned only while the gap is
+    one, and only while the card still charges the cost."""
+    card = _POOL[card_name]
+    zones = {cost.from_zone or "hand" for cost in additional_costs(card) if _payer_chooses(cost)}
+    assert zones, f"{card_name} no longer charges a choosable cast cost — unpin it"
+    for zone in zones:
+        expected = sorted(
+            flag
+            for cost in additional_costs(card)
+            if (cost.from_zone or "hand") == zone
+            for flag in _chosen_cost_flags(cost)
+        )
+        described = _described_cost_flags(
+            derive_cast_spec(card, compile_card_oracle(card), from_zone=zone)
+        )
+        assert described != expected, (
+            f"{card_name} now describes every cost choice — drop it from "
+            "_PICKERLESS_CAST_COSTS"
+        )
+
+
+def test_an_exile_cost_is_picked_from_the_zone_it_names():
+    """A picker over the wrong zone is a picker whose every answer is wrong.
+    Cadaverous Bloom's "Exile a card **from your hand**" fell through to the
+    battlefield branch and described a picker over the payer's permanents —
+    the list offered was the board, and an answer would have been read as a
+    hand position. Validated backwards: on the tree before PCY W3G5 this names
+    Cadaverous Bloom and nothing else."""
+    wrong = []
+    for name, card in sorted(_POOL.items()):
+        for index, ability in enumerate(compile_card_oracle(card).activated_abilities):
+            cost = ability.cost
+            if cost.exile_filter is None:
+                continue
+            head = _cost_head(derive_activation_spec(ability))
+            wanted = {"hand": "hand_card", "graveyard": "graveyard_creature"}.get(
+                cost.exile_zone
+            )
+            kind = (head or {}).get("kind")
+            if wanted is not None and kind != wanted:
+                wrong.append((name, index, cost.exile_zone, kind))
+            if wanted is None and kind in ("hand_card", "graveyard_creature"):
+                wrong.append((name, index, cost.exile_zone, kind))
+    assert not wrong, wrong

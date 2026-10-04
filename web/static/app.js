@@ -2049,7 +2049,17 @@ function activatedAbilityDestroyPermanentColor(card) {
 function activatedAbilityRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
 // Aladdin: "Gain control of target artifact for as long as you control this creature."
 function activatedAbilityRequiresTargetArtifact(card) { return specKind(card) === "artifact"; }
-function activatedAbilityRequiresTargetAny(card) { return specKind(card) === "any"; }
+// …and "target player **or planeswalker**" (Wandering Mage's third ability,
+// Chandra's Magmutt, Heartwood Giant, Goblin Bomb, Land's Edge — ten shipped
+// abilities): the same prompt over the narrower list the backend enumerated,
+// which the prompt's own text already tells apart. No activation branch read
+// this kind, so each fell to the cascade's tail and was sent at the default
+// seat — the opponent, for a Wandering Mage whose player meant to shield
+// themselves.
+function activatedAbilityRequiresTargetAny(card) {
+  const kind = specKind(card);
+  return kind === "any" || kind === "player_or_planeswalker";
+}
 function activatedAbilityRequiresTargetPlayer(card) { return specKind(card) === "player"; }
 function activatedAbilityRequiresTargetCreatureGrant(card) { return specKind(card) === "creature"; }
 function activatedAbilityRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
@@ -10082,9 +10092,13 @@ function renderActivationPrompt() {
     const discardCount = Math.max(1, Number(pendingDiscardCost.count || 1));
     const picked = pendingDiscardCost.picked || [];
     const noun = discardCount === 1 ? "a card" : `${discardCount} cards`;
-    body.textContent = pendingDiscardCost.activation
-      ? `Discard ${noun} to activate this ability. Choose which.`
-      : `Discard ${noun} to cast it. Choose which.`;
+    body.textContent = pendingDiscardCost.libraryTop
+      ? `Put ${noun} from your hand on top of your library to activate this ability. Choose which.`
+      : pendingDiscardCost.exileFromHand
+      ? `Exile ${noun} from your hand to activate this ability. Choose which.`
+      : pendingDiscardCost.activation
+        ? `Discard ${noun} to activate this ability. Choose which.`
+        : `Discard ${noun} to cast it. Choose which.`;
     const cardButtons = pendingDiscardCost.options
       .map(
         (option) =>
@@ -10112,8 +10126,7 @@ function renderActivationPrompt() {
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Cost — ${pending.cardName}`;
-    const verb = pending.verb === "tap" ? "Tap"
-      : pending.verb === "return" ? "Return" : "Sacrifice";
+    const verb = permanentCostVerbLabel(pending);
     const picked = pending.picked || [];
     // "Sacrifice X lands" announces X by the lands named (CR 601.2b), so any
     // number is an answer and the count is what X becomes.
@@ -10137,9 +10150,12 @@ function renderActivationPrompt() {
       })
       .join("");
     const ready = pending.announcesX ? true : picked.length === pending.count;
+    // A counter cost's verb is a phrase ("Put a -1/-1 counter on"), which
+    // reads as nonsense before a tally; the confirm says what it does instead.
+    const tallyVerb = /counter/.test(pending.verb || "") ? "Confirm" : verb;
     const confirmLabel = pending.announcesX
-      ? `${verb} ${picked.length} (X = ${picked.length})`
-      : `${verb} ${picked.length} of ${pending.count}`;
+      ? `${tallyVerb} ${picked.length} (X = ${picked.length})`
+      : `${tallyVerb} ${picked.length} of ${pending.count}`;
     steps.innerHTML = `<div class="prompt-choice-column">${permanentButtons}`
       + `<button type="button" class="prompt-choice-btn" id="permanentCostConfirmBtn"${ready ? "" : " disabled"}>`
       + `${escapeHtml(confirmLabel)}</button></div>`;
@@ -11402,7 +11418,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     pendingActivationCost = null;
   }
   const costAnswered = activationCostAnswered(permanentIndex, abilityIndex);
-  if (!costAnswered && cardRequiresDiscardCost(card) &&
+  if (!costAnswered && cardRequiresHandCost(card) &&
       startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex)) {
     return;
   }
@@ -11425,13 +11441,25 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // with the answer on the cost field. Without this the player was never asked
   // and the deterministic default paid — with Atog on a board holding a Black
   // Lotus and a Mox, it took the Lotus.
+  //
+  // "Exile a creature you control" (City of Shadows, Food Chain) is the same
+  // pick with the exile's verb — the prompt already said "exile" — and it was
+  // not routed here, so the cascade below read the cost's noun as a target:
+  // the creature clicked went out as a target the ability does not have and
+  // the engine's default exiled whichever creature came first. Only a
+  // battlefield exile: a card from a graveyard or a hand has its own prompt.
   {
     const spec = targetSpecOf(card);
-    if (spec.sacrifice_cost && !costAnswered) {
+    const battlefieldExile = !!spec.exile_cost
+      && !["graveyard_creature", "hand_card"].includes(spec.kind);
+    if ((spec.sacrifice_cost || battlefieldExile) && !costAnswered) {
       const fields = pendingTargetFields(card);
       if (fields.validKeys.size === 0) {
         SFX.onError();
-        updateActionHint(`${cardName} has nothing it can sacrifice for its cost.`, true);
+        updateActionHint(
+          `${cardName} has nothing it can ${battlefieldExile ? "exile" : "sacrifice"} for its cost.`,
+          true,
+        );
         return;
       }
       pendingCastTarget = {
@@ -11919,11 +11947,24 @@ function cardIsModal(card) {
 // the target as the spec itself and the cost beside it under `cost_spec`
 // (Demonic Embrace, Goblin Grenade, Soul Exchange) — engine/targeting.py builds
 // both, exactly as it does for an activated ability.
+//
+// "A cost flag at the top level" is every flag the engine sets, not three of
+// them: this listed discard, sacrifice and exile, so a spec that *is* a tap
+// cost (Keldon Battlewagon, Llanowar Behemoth, Karplusan Giant, Vodalian War
+// Machine) was not a cost here at all — the set picker was never opened, the
+// cascade read the cost's noun as a target, and the creature clicked went out
+// as a target the ability does not have while the engine's default paid.
 function castCostSpec(card) {
   const spec = targetSpecOf(card);
   if (spec?.cost_spec) return spec.cost_spec;
-  if (spec?.discard_cost || spec?.sacrifice_cost || spec?.exile_cost) return spec;
+  if (specIsACost(spec)) return spec;
   return null;
+}
+
+// engine/targeting.spec_is_a_cost: a spec carrying a cost flag at its top
+// level is a payment picker and nothing else — the ability targets nothing.
+function specIsACost(spec) {
+  return !!spec && ACTIVATION_COST_FLAGS.some((flag) => spec[flag]);
 }
 
 // Whether that cost is a second announcement beside a real target, rather than
@@ -11939,6 +11980,18 @@ function castCostIsSeparate(card) {
 // re-checks the answer, so this is a hint rather than the authority.
 function cardRequiresDiscardCost(card) {
   return !!castCostSpec(card)?.discard_cost;
+}
+
+// A cost paid with a card from hand, whatever happens to the card: discarded,
+// or "put on top of your library" (Hidden Retreat, Penance). One prompt, one
+// field (`cost_hand_index`) — only the verb it says differs.
+function cardRequiresHandCost(card) {
+  const spec = castCostSpec(card);
+  return !!(
+    spec?.discard_cost || spec?.library_top_cost
+    // "Exile a card from your hand" (Cadaverous Bloom).
+    || (spec?.exile_cost && spec?.kind === "hand_card")
+  );
 }
 
 function discardCostOptions(card) {
@@ -12062,6 +12115,11 @@ function startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentI
     count: Math.max(1, Number(castCostSpec(card)?.count || 1)),
     picked: [],
     activation: { targetSeat, permanentIndex, abilityIndex },
+    // "Put a card from your hand on top of your library" (Hidden Retreat,
+    // Penance) and "Exile a card from your hand" (Cadaverous Bloom): the same
+    // pick on the same field, said with its own verb.
+    libraryTop: !!castCostSpec(card)?.library_top_cost,
+    exileFromHand: !!castCostSpec(card)?.exile_cost,
   };
   renderActivationPrompt();
   return true;
@@ -12071,54 +12129,123 @@ function startActivationDiscardCostPrompt(card, cardName, targetSeat, permanentI
 // Activation costs paid with permanents the payer picks, several at a time
 // ---------------------------------------------------------------------------
 
-// The cost picker an ability's permanents-for-a-cost need, or null: a tap cost
-// of any size, a sacrifice of more than one, or a sacrifice of X. A lone
-// sacrifice keeps the canvas picker it has always had.
+// The cost picker an ability's permanents-for-a-cost need, or null: a tap,
+// return, untap or counter cost of any size, a sacrifice of more than one or
+// of X, and any cost that hands its payer **more than one** choice
+// (`more_costs`). A lone sacrifice keeps the canvas picker it has always had.
 function activationPermanentCostSpec(card) {
   const costSpec = castCostSpec(card);
   if (!costSpec) return null;
-  if (costSpec.tap_cost || costSpec.return_cost) return costSpec;
+  if (Array.isArray(costSpec.more_costs) && costSpec.more_costs.length) return costSpec;
+  if (PERMANENT_SET_COST_VERBS.some(([flag]) => costSpec[flag])) return costSpec;
   if (costSpec.sacrifice_cost && (costSpec.announces_x || Number(costSpec.count || 1) > 1)) {
     return costSpec;
   }
   return null;
 }
 
-function startActivationPermanentCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
-  const costSpec = activationPermanentCostSpec(card);
-  if (!costSpec) return false;
-  const verb = costSpec.tap_cost ? "tap" : costSpec.return_cost ? "return" : "sacrifice";
-  // By id, never by slot: the set is chosen before anything taps or leaves,
-  // and the charger reads `cost_permanent_ids`.
+// The verb each permanent-set cost flag says (engine/targeting's
+// `_permanent_set_cost_spec`). The sacrifice is the default and so is not
+// listed: a flag missing here would be asked as a sacrifice and *said* as
+// one, which is the one wrong word that costs a player a creature.
+const PERMANENT_SET_COST_VERBS = [
+  ["tap_cost", "tap"],
+  ["return_cost", "return"],
+  // "Untap a tapped land an opponent controls" (Benthic Explorers).
+  ["untap_cost", "untap"],
+  // "Put a -1/-1 counter on a creature you control" (Wandering Mage).
+  ["put_counter_cost", "put_counter"],
+  // "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
+  ["remove_counter_cost", "remove_counter"],
+];
+
+function permanentCostVerb(costSpec) {
+  const found = PERMANENT_SET_COST_VERBS.find(([flag]) => costSpec?.[flag]);
+  return found ? found[1] : "sacrifice";
+}
+
+// The words a button and the prompt say for one pending step.
+function permanentCostVerbLabel(pending) {
+  const counter = pending.counter || "";
+  switch (pending.verb) {
+    case "tap": return "Tap";
+    case "return": return "Return";
+    case "untap": return "Untap";
+    case "put_counter": return `Put a ${counter} counter on`;
+    case "remove_counter": return `Remove a ${counter} counter from`;
+    default: return "Sacrifice";
+  }
+}
+
+// One picker of the chain, as the set picker holds it. By id, never by slot:
+// the set is chosen before anything taps or leaves, and the charger reads
+// `cost_permanent_ids`. A permanent an earlier step of the same chain already
+// named is not offered again — Viscerid Drone's creature and its Swamp are two
+// permanents, and one animated creature Swamp cannot be both.
+function permanentCostStep(costSpec, alreadyChosen = []) {
   const options = (costSpec.valid_targets || [])
     .filter((option) => option?.kind === "permanent")
     .map((option) => ({
       id: permanentIdAt(option.seat, option.index),
       name: option.name,
     }))
-    .filter((option) => Number.isInteger(option.id));
-  const announcesX = !!costSpec.announces_x;
-  const count = Math.max(1, Number(costSpec.count || 1));
-  if (!announcesX && options.length < count) {
+    .filter((option) => Number.isInteger(option.id) && !alreadyChosen.includes(option.id));
+  // The printed subtype when the noun phrase has one ("a **Swamp**", Viscerid
+  // Drone): its spec's kind is only "permanent", which tells the player
+  // nothing about what the list offers.
+  const subtype = costSpec.filter?.subtype_filter;
+  return {
+    verb: permanentCostVerb(costSpec),
+    counter: costSpec.counter || null,
+    noun: typeof subtype === "string"
+      ? subtype.charAt(0).toUpperCase() + subtype.slice(1)
+      : (costSpec.kind || "permanent"),
+    count: Math.max(1, Number(costSpec.count || 1)),
+    announcesX: !!costSpec.announces_x,
+    options,
+  };
+}
+
+function startActivationPermanentCostPrompt(card, cardName, targetSeat, permanentIndex, abilityIndex) {
+  const costSpec = activationPermanentCostSpec(card);
+  if (!costSpec) return false;
+  // Every choice the cost hands its payer, in the engine's order: the first
+  // picker, then each of `more_costs` ("Sacrifice a creature **and a
+  // Swamp**", Viscerid Drone). Their answers ride one `cost_permanent_ids`.
+  const chain = [costSpec, ...(Array.isArray(costSpec.more_costs) ? costSpec.more_costs : [])];
+  return openPermanentCostStep(card, cardName, {
+    chain, chosen: [], activation: { targetSeat, permanentIndex, abilityIndex },
+  });
+}
+
+// Open the next picker of an activation's cost chain. Returns true whether it
+// opened or refused (the caller's cascade stops either way).
+function openPermanentCostStep(card, cardName, run) {
+  const [costSpec, ...rest] = run.chain;
+  const step = permanentCostStep(costSpec, run.chosen);
+  if (!step.announcesX && step.options.length < step.count) {
     // CR 601.2h: a cost the board cannot cover is not paid with less. Said
     // here, before anything else is asked; the engine refuses it the same way.
     SFX.onError();
-    updateActionHint(`${cardName} has too few permanents to ${verb} for its cost.`, true);
+    const words = permanentCostVerbLabel({ verb: step.verb, counter: step.counter }).toLowerCase();
+    updateActionHint(`${cardName} has too few permanents to ${words} for its cost.`, true);
     return true;
   }
   pendingPermanentCost = {
     card,
     cardName,
-    verb,
-    noun: costSpec.kind || "permanent",
-    count,
-    announcesX,
-    options,
+    ...step,
     picked: [],
-    activation: { targetSeat, permanentIndex, abilityIndex },
+    activation: run.activation,
+    // The rest of the chain, what earlier steps named, and an X one of them
+    // announced.
+    remaining: rest,
+    chosen: run.chosen,
+    xValue: run.xValue,
   };
   renderActivationPrompt();
-  updateActionHint(`Choose what ${cardName} will ${verb} to pay its cost.`);
+  const words = permanentCostVerbLabel(step).toLowerCase();
+  updateActionHint(`Choose what ${cardName} will ${words} to pay its cost.`);
   return true;
 }
 
@@ -12167,10 +12294,21 @@ function confirmPermanentCost() {
       .finally(() => clearPendingHandCast());
     return;
   }
-  const fields = { cost_permanent_ids: picked };
+  // The next choice the same cost hands its payer, if any — Viscerid Drone's
+  // Swamp after its creature. Each step's answer is appended in chain order,
+  // which is the order the engine's chargers read them in.
+  const chosen = [...(pending.chosen || []), ...picked];
   // "Sacrifice X lands": the number named is the X announced (CR 601.2b), so
   // the two cannot disagree — and an X the engine is never told is zero.
-  if (pending.announcesX) fields.x_value = picked.length;
+  const xValue = pending.announcesX ? picked.length : pending.xValue;
+  if (Array.isArray(pending.remaining) && pending.remaining.length) {
+    openPermanentCostStep(pending.card, pending.cardName, {
+      chain: pending.remaining, chosen, xValue, activation: pending.activation,
+    });
+    return;
+  }
+  const fields = { cost_permanent_ids: chosen };
+  if (Number.isInteger(xValue)) fields.x_value = xValue;
   resumeActivationAfterCost(pending.card, pending.activation, fields);
 }
 
@@ -12214,6 +12352,7 @@ function resumeActivationAfterCost(card, activation, fields) {
 // picker and nothing else.
 const ACTIVATION_COST_FLAGS = [
   "sacrifice_cost", "discard_cost", "exile_cost", "tap_cost", "return_cost",
+  "untap_cost", "put_counter_cost", "remove_counter_cost", "library_top_cost",
 ];
 
 // ---------------------------------------------------------------------------
@@ -15427,7 +15566,14 @@ function createCardElement(card, options = {}) {
         // Activated abilities that act on a target land (e.g. Gaea's Liege)
         // let the player pick which land in play to affect. The backend supplies
         // the legal lands (already excluding Swamps for Cyclopean Tomb, etc.).
-        if (activatedAbilityRequiresTargetLand(card)) {
+        //
+        // Not a spec that *is* a cost, whose noun is a land because the cost
+        // pays with one — Benthic Explorers' "Untap a tapped land an opponent
+        // controls", Karplusan Giant's "Tap an untapped snow land you
+        // control". Claimed here, the land clicked went out as a target the
+        // ability does not have and the engine's default paid; the cost's own
+        // picker in `startActivationPrompt` asks it instead.
+        if (activatedAbilityRequiresTargetLand(card) && !specIsACost(targetSpecOf(card))) {
           const fields = pendingTargetFields(card);
           if (fields.validKeys.size === 0) {
             const noun = activatedAbilityTargetLandExcludesSwamp(card) ? "non-Swamp land" : "land";

@@ -2142,7 +2142,13 @@ class AbilityActivationMixin:
         if ability.cost.exile_filter is not None:
             exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,
-                cost_permanent_index,
+                # A card from hand (Cadaverous Bloom) is named where every
+                # other hand-card cost is — ``cost_hand_index``, which its
+                # picker answers on since PCY W3G5 — and the slot channel stays
+                # the fallback a caller written before then still sends.
+                cost_hand_index
+                if ability.cost.exile_zone == "hand" and isinstance(cost_hand_index, int)
+                else cost_permanent_index,
             )
             if exile_cost_choice is None:
                 details = (
