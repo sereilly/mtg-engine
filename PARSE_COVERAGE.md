@@ -25,29 +25,12 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**11 unclaimed sentence(s) across 10 supported card(s).**
+**2 unclaimed sentence(s) across 2 supported card(s).**
 
-- **Crosis's Catacombs**
-  - `{t}: add {u}, {b}, or {r}`
-- **Darigaaz's Caldera**
-  - `{t}: add {b}, {r}, or {g}`
 - **Dralnu's Crusade**
   - `all goblins are black and are zombies in addition to their other creature types`
-- **Dromar's Cavern**
-  - `{t}: add {w}, {u}, or {b}`
-- **Natural Emergence**
-  - `lands you control are 2/2 creatures with first strike`
-  - `they're still lands`
-- **Rith's Grove**
-  - `{t}: add {r}, {g}, or {w}`
 - **Shifting Sky**
   - `all nonland permanents are the chosen color`
-- **Skyshroud Blessing**
-  - `all lands gain shroud until end of turn`
-- **Star Compass**
-  - `{t}: add one mana of any color that a basic land you control could produce`
-- **Treva's Ruins**
-  - `{t}: add {g}, {w}, or {u}`
 
 ## Acknowledged simplifications
 

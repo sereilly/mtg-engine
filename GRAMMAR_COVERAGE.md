@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 72.9% | 68.2% | 49.0% | 93 |
+| PLS *(measured)* | 143 | 255 | 76.1% | 71.8% | 52.5% | 95 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -59,15 +59,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 559 | 270 | expected a subject |  |
-| 155 | 82 | unrecognized effect verb |  |
-| 140 | 75 | unconsumed text |  |
+| 154 | 81 | unrecognized effect verb |  |
+| 134 | 69 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 24 | 8 | expected what this creature can't block, or a duration |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 19 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 4 | expected 'card' |  |
 | 7 | 1 | no lowering for RawEffect |  |
+| 7 | 3 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -1769,6 +1769,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this creature: Add {U}{B}{R}.`
 - **Crosis's Catacombs**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
+  - `{T}: Add {U}, {B}, or {R}.`
 - **Crosis's Charm**
   - `• Return target permanent to its owner's hand.`
   - `• Destroy target nonblack creature. It can't be regenerated.`
@@ -1896,6 +1897,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this creature: Add {B}{R}{G}.`
 - **Darigaaz's Caldera**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
+  - `{T}: Add {B}, {R}, or {G}.`
 - **Darigaaz's Charm**
   - `• Return target creature card from your graveyard to your hand.`
   - `• Darigaaz's Charm deals 3 damage to any target.`
@@ -2364,6 +2366,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, Sacrifice this creature: Add {W}{U}{B}.`
 - **Dromar's Cavern**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
+  - `{T}: Add {W}, {U}, or {B}.`
 - **Dromar's Charm**
   - `• You gain 5 life.`
   - `• Counter target spell.`
@@ -5399,6 +5402,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}: Target creature becomes blue until end of turn.`
 - **Metathran Zombie**
   - `{B}: Regenerate this creature.`
+- **Meteor Crater**
+  - `{T}: Choose a color of a permanent you control. Add one mana of that color.`
 - **Meteor Shower**
   - `Meteor Shower deals X plus 1 damage divided as you choose among any number of targets.`
 - **Meteor Storm**
@@ -5713,6 +5718,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player who controls six or more lands chooses five lands they control and sacrifices the rest. Each player who controls four or fewer lands may search their library for up to X basic land cards and put them onto the battlefield, where X is five minus the number of lands they control. Then each player who searched their library this way shuffles.`
 - **Natural Emergence**
   - `When this enchantment enters, return a red or green enchantment you control to its owner's hand.`
+  - `Lands you control are 2/2 creatures with first strike. They're still lands.`
 - **Natural Order**
   - `Search your library for a green creature card, put it onto the battlefield, then shuffle.`
 - **Natural Selection**
@@ -7128,6 +7134,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Prevent all damage a source of your choice would deal this turn.`
 - **Rith's Grove**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
+  - `{T}: Add {R}, {G}, or {W}.`
 - **Rith, the Awakener**
   - `Whenever Rith deals combat damage to a player, you may pay {2}{G}. If you do, choose a color, then create a 1/1 green Saproling creature token for each permanent of that color.`
 - **Ritual of Steel**
@@ -7971,6 +7978,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Skyshroud Archer**
   - `{T}: Target creature with flying gets -1/-1 until end of turn.`
 - **Skyshroud Blessing**
+  - `All lands gain shroud until end of turn. (They can't be the targets of spells or abilities.)`
   - `Draw a card.`
 - **Skyshroud Claim**
   - `Search your library for up to two Forest cards, put them onto the battlefield, then shuffle.`
@@ -8397,6 +8405,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}, Pay 1 life: Add one mana of any color.`
 - **Stangg**
   - `When Stangg enters, create Stangg Twin, a legendary 3/4 red and green Human Warrior creature token. Exile that token when Stangg leaves the battlefield. Sacrifice Stangg when that token leaves the battlefield.`
+- **Star Compass**
+  - `{T}: Add one mana of any color that a basic land you control could produce.`
 - **Stasis**
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
   - `At the beginning of your upkeep, sacrifice this enchantment unless you pay {U}.`
@@ -9246,6 +9256,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `• Draw a card, then discard a card.`
 - **Treva's Ruins**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
+  - `{T}: Add {G}, {W}, or {U}.`
 - **Treva, the Renewer**
   - `Whenever Treva deals combat damage to a player, you may pay {2}{W}. If you do, choose a color, then you gain 1 life for each permanent of that color.`
 - **Triangle of War**
