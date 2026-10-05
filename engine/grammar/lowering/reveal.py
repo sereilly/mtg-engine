@@ -727,6 +727,16 @@ def _lower_reveal_hand_and_choose(
         payload["up_to"] = True
     if not node.revealed:
         payload["looked_at"] = True
+    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+        # "Whenever this creature deals combat damage to a player, look at
+        # **that player's** hand and choose a card from it." (Doomsday
+        # Specter.) The seat the damage froze (CR 603.10), under the word the
+        # reveal above and every Specter's discard already spell it with — a
+        # different fire site from the row below and so a different record,
+        # which is why the two are told apart by the event rather than tried in
+        # turn at resolution.
+        payload["victim"] = "damaged_player"
+        return (OracleInstruction("reveal_hand_and_choose", "", payload),)
     if node.player.kind == "that_player":
         # "Look at **that player's** hand …" (Leshrac's Sigil). Nothing was
         # targeted, so there is no choice to read the seat off: it is the one

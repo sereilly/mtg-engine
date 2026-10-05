@@ -4017,6 +4017,17 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that player'"
         victim = game.players[seat]
+    elif instruction.payload.get("victim") == "damaged_player":
+        # "Whenever this creature deals combat damage to a player, look at
+        # **that player's** hand …" (Doomsday Specter.) The seat the damage
+        # went to, on the key every damage fire site stamps — read narrowly,
+        # for the branch above's reason: with none recorded the words named
+        # nobody, and the fallback below is the ability's own controller,
+        # whose hand is the one this must not open.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no damaged player was frozen for 'that player'"
+        victim = game.players[seat]
     else:
         victim = context.target if context.target is not None else context.caster
     victim_index = next(
@@ -9680,11 +9691,22 @@ def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, con
         victim = context.target if context.target is not None else context.caster
     if not victim.hand:
         game.log.append(f"{victim.name} has no cards in hand to reveal")
+        # "…equal to **that card's mana value**" (Planeswalker's Mirth) about a
+        # card nobody revealed: CR 107.2, "if anything needs to use a number
+        # that can't be determined … it uses 0 instead". Written rather than
+        # left absent because ``lowering/_records`` declares the record for the
+        # kind, and so a stale number from an earlier step cannot answer.
+        context.results["its_mana_value"] = 0
         return True, "resolved"
     index = random.randrange(len(victim.hand))
     card = victim.hand[index]
     context.results["revealed_card"] = card
     context.results[REVEALED_HAND_INDEX] = index
+    # The printed mana value (CR 202.3): a card in a hand has no computed
+    # characteristics (CR 613.1), and the number is frozen here because the
+    # sentence behind this one cannot go and look — the hand is hidden and the
+    # slot was nobody's choice (CR 608.2h).
+    context.results["its_mana_value"] = int(card.cmc or 0)
     seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
     if seat is not None:
         game.record_reveal(seat, [card.name])

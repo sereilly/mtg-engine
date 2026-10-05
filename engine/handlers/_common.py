@@ -226,11 +226,21 @@ def count_from_payload(
     # "…where X is **the milled card's mana value**" (Infernal Genesis). The
     # printed mana value (CR 202.3; a card in a zone has no computed one) of
     # what the earlier step recorded — nothing milled is zero.
+    #
+    # "…where X is **the revealed card's mana value**" (Planeswalker's Favor,
+    # Scorn). The same read over a record that is *one card* rather than a list
+    # of them — ``revealed_card`` is singular because a reveal of one card names
+    # one referent. An empty hand revealed nothing, the record is absent, and
+    # CR 107.2 makes the number 0.
     recorded_mana_value = spec.get("recorded_card_mana_value")
     if recorded_mana_value is not None:
+        recorded = context.results.get(str(recorded_mana_value))
+        if recorded is None:
+            recorded = ()
+        elif not isinstance(recorded, (list, tuple)):
+            recorded = (recorded,)
         return max(0, _scaled(sum(
-            int(getattr(card, "cmc", 0) or 0)
-            for card in (context.results.get(str(recorded_mana_value)) or ())
+            int(getattr(card, "cmc", 0) or 0) for card in recorded
         ), spec))
     recorded_cards = spec.get("recorded_cards")
     if recorded_cards is not None:
