@@ -348,7 +348,7 @@ def test_rust_leaves_an_ability_from_a_creature_alone(set_pool):
     in the game."""
     game, _p1, p2 = _ability_on_the_stack(set_pool, _source("Test Beast", artifact=False), "Rust")
 
-    assert game.cast_from_hand(1, "Rust", target_stack_index=0).supported
+    assert not game.cast_from_hand(1, "Rust", target_stack_index=0).supported  # CR 601.2c
     game.resolve_stack()
 
     assert p2.life == 19, "the creature's ability is not Rust's business"
@@ -541,9 +541,9 @@ def test_avoid_fate_leaves_a_spell_aimed_at_a_permanent_you_do_not_control(set_p
     theirs = p2.battlefield[0]
 
     result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
-    game._settle()
+    game.resolve_stack()
 
-    assert result.supported, result.details
+    assert not result.supported, "CR 601.2c: refused at the announcement, unpaid"
     assert not game.stack
     assert theirs.card.name == "Theirs"
     assert any(
@@ -558,9 +558,9 @@ def test_avoid_fate_leaves_a_sorcery_alone(set_pool):
     game, p1, _p2 = _avoid_fate_game(set_pool, "Psychic Purge", 0)
 
     result = game.cast_from_hand(0, "Avoid Fate", target_stack_index=0)
-    game._settle()
+    game.resolve_stack()
 
-    assert result.supported, result.details
+    assert not result.supported, "CR 601.2c: refused at the announcement, unpaid"
     assert not game.stack
     assert any(
         "Psychic Purge dealt 1 damage to Mine" in line for line in game.log

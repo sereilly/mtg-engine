@@ -1568,6 +1568,18 @@ class SpellCastingMixin:
             self.log.append(named_refusal)
             return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
 
+        # …and the same rule for a named **spell on the stack**, which the gate
+        # above does not read (its slots are battlefield slots). See
+        # `legality.cast_stack_target_refusal`: without it "counter target
+        # creature spell" was announceable at any spell, paid for, and then
+        # declined by its own handler.
+        stack_refusal = self.cast_stack_target_refusal(
+            caster_index, card, target_stack_item, from_zone=from_zone,
+        )
+        if stack_refusal is not None:
+            self.log.append(stack_refusal)
+            return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
+
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
         if divided_targets is not None:

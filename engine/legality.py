@@ -2376,6 +2376,59 @@ class LegalityMixin:
                 return refused
         return None
 
+    def cast_stack_target_refusal(
+        self, caster_index: int, card: CardDefinition, target_stack_item,
+        *, from_zone: str = "hand",
+    ) -> str | None:
+        """CR 601.2c for a **named spell on the stack**: it must be one the
+        printed target phrase admits. Returns the refusal, or None.
+
+        The stack half of :meth:`cast_target_refusal`, which leaves ``stack``
+        specs alone (``_UNCHECKED_CAST_TARGET_KINDS``) because it compares
+        battlefield slots. What stood in its place was the counter arm of
+        ``_validate_cast_targets``, and that arm asks one question — the
+        colour. Every other narrowing a counterspell prints was enforced by the
+        picker (which never offered the wrong spell) and by the handler (which
+        declined to counter it), and by nothing in between: "Counter target
+        **creature** spell" could be announced at a Lightning Bolt, the mana
+        was spent, the card went to the graveyard and the Bolt resolved. Found
+        on Spite, the pool's first *spell* to print "target noncreature spell";
+        twenty shipped spells carried a narrowing the arm did not ask.
+
+        The answer is the picker's own list — ``_enumerate_stack_targets`` over
+        the spec ``derive_cast_spec`` gives the client — so the gate and the
+        picker are one enumeration rather than two readings of one phrase
+        (idiom #9: the picker's list is a hint and the engine re-checks the
+        answer). Compared by identity: ``StackItem`` compares by value, and two
+        casts of one card at one target are equal.
+
+        Only what was **named** is asked, for :meth:`cast_target_refusal`'s
+        reason: "is there any legal target at all" stays the arm's question.
+        Instants and sorceries, non-modal, for that method's reasons too — a
+        permanent spell's spec is its trigger's, and a modal spell's is mode
+        0's.
+        """
+        if target_stack_item is None:
+            return None
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes:
+            return None
+        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        if spec is None or spec.get("kind") != "stack":
+            return None
+        depth = len(self.stack)
+        offered = {
+            depth - 1 - entry["stack_index"]
+            for entry in self._enumerate_stack_targets(caster_index, card, spec)
+            if entry.get("kind") == "stack" and entry.get("stack_index") is not None
+        }
+        for index, item in enumerate(self.stack):
+            if item is target_stack_item:
+                return None if index in offered else f"no valid target for {card.name}"
+        return f"no valid target for {card.name}"
+
     def illegal_targets_refusal(self, item) -> str | None:
         """CR 608.2b: whether *item* must leave the stack without resolving.
 
