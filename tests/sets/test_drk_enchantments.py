@@ -606,7 +606,7 @@ def _brainwashed_board(set_pool, catalog_by_name, *, mountains: int, creatures: 
 def test_brainwash_refuses_the_attack_when_the_toll_cannot_be_paid(set_pool, catalog_by_name):
     """"Enchanted creature can't attack unless its controller pays {3}."
 
-    CR 508.1g: a cost paid as attackers are declared. With no mana available the
+    CR 508.1h: a cost paid as attackers are declared. With no mana available the
     declaration is refused outright — the failure mode this guards against is
     the opposite one, an unenforced restriction letting the creature attack for
     free, which is silent and wrong in the attacker's favour.
@@ -637,7 +637,7 @@ def test_brainwash_charges_the_toll_it_checked(set_pool, catalog_by_name):
 def test_brainwash_tolls_add_up_across_attackers(set_pool, catalog_by_name):
     """Two enchanted creatures cost {6}, not {3}.
 
-    The toll is per attacking creature (CR 508.1g is asked of each declaration),
+    The toll is per attacking creature (CR 508.1h is asked of each declaration),
     so a board that can pay one cannot declare both — the reading that charges
     once for the whole attack is the widening one.
     """

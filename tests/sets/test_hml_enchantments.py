@@ -377,7 +377,7 @@ def _w1g5_attack_rig(set_pool, *, lands: int, attackers: int, falls: bool = True
 
 def test_koskun_falls_charges_two_generic_for_each_attacker(set_pool):
     """"Creatures can't attack you unless their controller pays {2} for each
-    creature they control that's attacking you." (CR 508.1g.)
+    creature they control that's attacking you." (CR 508.1h.)
 
     The multiplication is the declaration's own sum, not a number in the
     payload: two attackers owe {4} together, and three lands cannot pay it.

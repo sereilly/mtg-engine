@@ -1548,7 +1548,7 @@ def _legal_declaration(
     pruned.sort(key=lambda entry: -_permanent_value(entry[1]))
     while pruned:
         # **What the declaration costs is pruned against too, and it was not.**
-        # CR 508.1g's costs are summed over the whole declaration
+        # CR 508.1h's costs are summed over the whole declaration
         # (`_declaration_mana_plan`, `_declaration_sacrifice_plan`), where
         # `legal_attackers` above can only ask "could this seat afford *this*
         # creature". So a seat with one land under a {1}-per-attacker toll

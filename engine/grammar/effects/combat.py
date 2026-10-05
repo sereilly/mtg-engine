@@ -148,7 +148,7 @@ def _parse_cant_attack_or_block(
                     subject, "cant_attack_until_eot", ()
                 )
         # "This creature can't attack **unless you sacrifice two Islands**."
-        # (Leviathan.) CR 508.1g: an additional *cost* to attack, paid as
+        # (Leviathan.) CR 508.1h: an additional *cost* to attack, paid as
         # attackers are declared — not a target and not a board condition, so
         # the declaration charges it and an unpayable cost makes the attack
         # illegal. The noun phrase is `phrases.parse_counted_subject`, the same
@@ -228,7 +228,7 @@ def _parse_cant_attack_or_block(
         # "Green creatures can't attack unless **their controller** sacrifices a
         # land of their choice **for each green creature they control that's
         # attacking**." (Flooded Woodlands, Reclamation — one sentence with the
-        # colour word changed.) CR 508.1g again, and three things differ from
+        # colour word changed.) CR 508.1h again, and three things differ from
         # Leviathan's cost one branch down: the sentence is printed on a
         # permanent that names a *class* of creatures rather than itself, the
         # payer is that class's controller rather than "you", and the cost is
@@ -240,7 +240,7 @@ def _parse_cant_attack_or_block(
         # once for a whole team.
         # "This turn, creatures can't attack unless **their controller pays
         # {X}** for each attacking creature they control." (War Tax.) The
-        # sacrifice tail below with the cost paid in mana instead — CR 508.1g's
+        # sacrifice tail below with the cost paid in mana instead — CR 508.1h's
         # other currency — and it is read *before* that branch because the two
         # share their first three words and differ on the fourth.
         #
@@ -345,7 +345,7 @@ def _parse_cant_attack_or_block(
         # blocker gate cannot see one pair at a time.
         # "This turn, creatures can't block unless **their controller pays {X}**
         # for each blocking creature they control." (War Cadence.) The exact
-        # mirror of the attack toll above — CR 509.1d is CR 508.1g's blocking
+        # mirror of the attack toll above — CR 509.1d is CR 508.1h's blocking
         # side, one sentence with two verbs — and its own kind for the reason
         # ``cant_attack`` and ``cant_block`` are two: the gate that answers it
         # is a different step, and one kind asked at two steps is a kind one of

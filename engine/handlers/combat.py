@@ -1702,7 +1702,7 @@ def cant_block_until_eot(game: Game, instruction: OracleInstruction, context: Or
 
 #: The two turn-scoped declaration tolls, mapped to the list each is filed in
 #: and the word a log line uses. One table because the two handlers below differ
-#: in nothing else: CR 508.1g and CR 509.1d are the same rule on two sides of
+#: in nothing else: CR 508.1h and CR 509.1d are the same rule on two sides of
 #: combat, and the *readers* are what tell them apart.
 _PAY_TOLL_LISTS: dict[str, tuple[str, str]] = {
     "creatures_cant_attack_unless_pay_until_eot": (
@@ -1765,7 +1765,7 @@ def creatures_cant_attack_unless_pay_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
 ) -> tuple[bool, str]:
     """"This turn, creatures can't attack unless their controller pays {X} for
-    each attacking creature they control." (War Tax.) CR 508.1g."""
+    each attacking creature they control." (War Tax.) CR 508.1h."""
     return _arm_declaration_toll(
         game, instruction, context, "creatures_cant_attack_unless_pay_until_eot"
     )

@@ -309,7 +309,7 @@ def _lower_combat_restriction(
         return (
             OracleInstruction("cant_attack_until_eot", "", armed),
         )
-    # CR 508.1g / CR 509.1d: what a declaration *costs*, as against the
+    # CR 508.1h / CR 509.1d: what a declaration *costs*, as against the
     # restrictions this function answers. One question asked once, in
     # ``_declaration_costs`` — the floor those four branches moved to when the
     # two mana tolls took this module past the size guard. It answers None for

@@ -1,4 +1,4 @@
-"""What a declaration *costs* (CR 508.1g, CR 509.1d).
+"""What a declaration *costs* (CR 508.1h, CR 509.1d).
 
 The additional costs a creature's controller must pay to declare it as an
 attacker or a blocker — "unless you sacrifice two Islands" (Leviathan),
@@ -37,7 +37,7 @@ from ._common import (
 
 #: The two turn-scoped declaration tolls, mapped to the printed *state* their
 #: "for each" tail must name. War Tax counts the payer's attacking creatures
-#: (CR 508.1g) and War Cadence their blocking ones (CR 509.1d) — one sentence
+#: (CR 508.1h) and War Cadence their blocking ones (CR 509.1d) — one sentence
 #: with two verbs, and two kinds because the gate that answers each is a
 #: different step of combat.
 _PAY_TOLL_STATES: dict[str, str] = {
@@ -137,7 +137,7 @@ def lower_declaration_cost(
     if node.kind in _PAY_TOLL_STATES:
         return _lower_combat_pay_toll(node)
     # "This creature can't attack unless you sacrifice two Islands." (Leviathan
-    # — "This cost is paid as attackers are declared".) CR 508.1g. The filter is
+    # — "This cost is paid as attackers are declared".) CR 508.1h. The filter is
     # held to what the *charger* can test: `_sacrifice_candidate_indices` reads
     # a payload through the same matcher every other sacrifice does, and a
     # narrowing it cannot answer would either charge the wrong permanents or

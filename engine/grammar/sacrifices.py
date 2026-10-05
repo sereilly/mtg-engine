@@ -6,7 +6,7 @@ mirror re-forming rather than forking. The seam is the one
 ``parse_counted_subject``'s own docstring already drew: these four readers are
 the *shared* half of one clause, read by three families that never see each
 other — the board family's "sacrifice …" and its "unless you sacrifice …" tails,
-the combat family's attack cost (CR 508.1g), and the stack family's counter
+the combat family's attack cost (CR 508.1h), and the stack family's counter
 tails. One reading is what keeps the offer, the cost gate and the charge from
 disagreeing about what the card asks for.
 
@@ -232,7 +232,7 @@ def parse_counted_subject(
     two families read the same phrase: "unless you sacrifice **two Islands**"
     (the `board` family's destroy and sacrifice tails) and "can't attack unless
     you sacrifice **two Islands**" (the `combat` family's attack cost, CR
-    508.1g). One reading, so the offer, the cost gate and the charge cannot
+    508.1h). One reading, so the offer, the cost gate and the charge cannot
     disagree about what the card asks for.
 
     "**an** Island" (Elder Spawn) prints its count as the article, and

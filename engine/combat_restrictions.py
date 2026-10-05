@@ -233,7 +233,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         "cant_block_unless_you_control_more",
     ),
     # "Enchanted creature can't attack unless its controller pays {3}."
-    # (Brainwash.) CR 508.1g: an additional *cost* to attack, paid as attackers
+    # (Brainwash.) CR 508.1h: an additional *cost* to attack, paid as attackers
     # are declared — the mana twin of Leviathan's "unless you sacrifice two
     # Islands", which the grammar reads because its cost is a parsed noun
     # phrase. This one's cost is a printed symbol run, which is exactly what a
@@ -271,7 +271,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     (
         # "Creatures can't attack you unless their controller pays {2} for each
         # creature they control that's attacking you." (Koskun Falls.) The same
-        # CR 508.1g cost read from the *defending* side: the row above is
+        # CR 508.1h cost read from the *defending* side: the row above is
         # printed on the attacker (or on an Aura about it) and this one on a
         # permanent the defending player controls, so the third channel
         # ``_attack_mana_costs_of`` consults is the defender's own board.

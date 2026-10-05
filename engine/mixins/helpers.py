@@ -2366,7 +2366,7 @@ class GameHelpersMixin:
         """The order a seat gives permanents up in — lowest first.
 
         Split out of :meth:`default_sacrifice_pick` because a caller that has to
-        pay **several** costs at once cannot pick them one at a time: CR 508.1g's
+        pay **several** costs at once cannot pick them one at a time: CR 508.1h's
         sacrifices are one payment, and which permanent answers which cost is a
         matching (`_declaration_sacrifice_plan`). That planner needs the policy
         as an *order* rather than as a winner, and a second ordering written

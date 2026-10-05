@@ -1606,7 +1606,7 @@ def test_war_tax_taxes_each_attacker_and_refuses_an_unpayable_declaration(set_po
     """"{X}{U}: This turn, creatures can't attack unless their controller pays
     {X} for each attacking creature they control." (War Tax.)
 
-    CR 508.1g: the toll is an additional cost to declare, summed over the whole
+    CR 508.1h: the toll is an additional cost to declare, summed over the whole
     declaration — so two attackers under X=1 owe {2}, and a seat holding one
     land cannot declare both. The refusal is the point: a restriction whose cost
     nobody charges is silently absent, and this asserts the charge as well as

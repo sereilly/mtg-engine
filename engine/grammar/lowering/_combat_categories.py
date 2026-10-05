@@ -61,11 +61,11 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than on the creature, so the count is payload and the check lives
     # where the declaration is assembled.
     "cant_attack_unless_others_attack": "combat_restrictions",
-    # CR 508.1g printed on a permanent that names a class of creatures
+    # CR 508.1h printed on a permanent that names a class of creatures
     # rather than itself (Flooded Woodlands, Reclamation).
     "creatures_cant_attack_unless_sacrifice": "combat_restrictions",
     # War Tax and War Cadence: the same board-wide declaration toll with the
-    # cost in mana and a window on it (CR 508.1g, CR 509.1d). Two kinds
+    # cost in mana and a window on it (CR 508.1h, CR 509.1d). Two kinds
     # because the gate that charges each is a different step of combat.
     "creatures_cant_attack_unless_pay_until_eot": "combat_restrictions",
     "creatures_cant_block_unless_pay_until_eot": "combat_restrictions",

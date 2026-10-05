@@ -307,7 +307,7 @@ def test_leviathan_untaps_when_two_islands_are_sacrificed(set_pool):
 
 def test_leviathan_cannot_attack_without_two_islands_to_sacrifice(set_pool):
     """"This creature can't attack unless you sacrifice two Islands. (This cost
-    is paid as attackers are declared.)" CR 508.1g — a cost, not a target.
+    is paid as attackers are declared.)" CR 508.1h — a cost, not a target.
 
     With one Island the cost is unpayable, so the declaration is illegal. The
     Island stays: a refused declaration charges nothing.
