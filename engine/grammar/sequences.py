@@ -93,6 +93,9 @@ from .stream import TokenStream
 # line of their own rather than in the list above: that list is one long line
 # every round appends to, and a second import statement cannot collide with it.
 from .riders import _attach_silent_target_change, _attach_tied_reveals_unchanged
+# "This cost is reduced by {2} for each …" (Draco) — a rider on the toll in
+# front of it, and it lives with the tolls because what it narrows is a price.
+from .tolls import _attach_toll_cost_reduction
 
 
 def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
@@ -427,6 +430,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # you." (Cosmic Horror.) A consequence of what the sentence before
             # it did, not a step.
             if _attach_destroyed_this_way(stream, steps):
+                stream.accept_punct(".")
+                continue
+            # "This cost is reduced by {2} for each basic land type among lands
+            # you control." (Draco.) A size on the price the sentence before it
+            # offered, not a step: alone, "this cost" names nothing. Opens on
+            # words no other rider here reads and refuses without consuming.
+            if _attach_toll_cost_reduction(stream, steps):
                 stream.accept_punct(".")
                 continue
             # "A creature destroyed this way can't be regenerated." (Soul Rend.)

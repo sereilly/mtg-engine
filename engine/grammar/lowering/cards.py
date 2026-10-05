@@ -14,7 +14,8 @@ from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec, halved_count_spec
+from ._amounts import (count_filter_on_targeted_seat, count_spec,
+                       halved_count_spec)
 # The characteristics ``count_from_payload`` reads off a cost-eaten
 # permanent. A floor, shared with the damage family that named it: a mill
 # sized by one asks the same question a damage sized by one does, and two
@@ -205,8 +206,18 @@ def _lower_draw(
         # instruction alone rather than over the sentence: the count belongs to
         # this draw, and "draw a card, then draw cards equal to …" has a
         # literal 1 in front of it that must stay one.
+        #
+        # "**Target player** draws a card for each basic land type among lands
+        # **they** control." (Allied Strategies.) "They" is the drawer, and the
+        # drawer is the player this sentence chose — so the narrowing moves
+        # onto the scope the resolution answers with ``context.target``, the
+        # same seat `draw_target_cards` draws for. A drawer that is not a
+        # chosen target leaves the filter as it was, for `count_spec` to refuse.
         payload: dict[str, object] = {
-            "amount": "x", X_FROM_COUNT: count_spec(node.count.filter, node),
+            "amount": "x",
+            X_FROM_COUNT: count_spec(
+                count_filter_on_targeted_seat(node.count.filter, node.player), node
+            ),
         }
     elif isinstance(node.count, ast.GreatestDiscardedThisWay):
         # "…draws cards equal to **the greatest number of cards a player

@@ -658,6 +658,16 @@ class SacrificeUnlessPay:
     #: instead of counting it. ``cost`` then carries the *reduction*, which is
     #: the only number the card prints.
     cost_from: str | None = None
+    #: "…unless you pay {10}. **This cost is reduced by {2} for each basic land
+    #: type among lands you control.**" (Draco.) The rider sentence behind the
+    #: toll, folded in by ``tolls._attach_toll_cost_reduction``: how much comes
+    #: off per repetition, and the set the repetitions are counted over. Named
+    #: rather than counted for ``cost_from``'s reason one field up — the number
+    #: is the board's *when the trigger resolves*, which is not knowable while
+    #: the sentence is being read. Both None when the card prints no rider, and
+    #: never one without the other.
+    cost_reduction: ManaCost | None = None
+    cost_reduction_per_each: ObjectFilter | None = None
 
 
 @dataclass(frozen=True)

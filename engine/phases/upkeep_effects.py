@@ -263,7 +263,7 @@ class UpkeepEffectsMixin:
         trig = ctx.trig
         # "…unless you pay **its mana cost**" resolves here, through the reader
         # the prompt quoted from; None is CR 118.6's unpayable cost.
-        tolled = resolved_toll_instruction(permanent, trig.instruction)
+        tolled = resolved_toll_instruction(permanent, trig.instruction, self)
         if tolled is None:
             self.sacrifice_permanent(permanent)
             self.log.append(
@@ -795,7 +795,7 @@ class UpkeepEffectsMixin:
         # permanent now, through the one reader the prompt quoted from. None is
         # CR 118.6 — a land or a token has no mana cost, so the cost is
         # unpayable and the permanent goes without anything being offered.
-        tolled = resolved_toll_instruction(permanent, trig.instruction)
+        tolled = resolved_toll_instruction(permanent, trig.instruction, self)
         if tolled is None:
             self.sacrifice_permanent(permanent)
             self.log.append(

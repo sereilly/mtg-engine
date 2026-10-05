@@ -35,7 +35,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .oracle_types import _COLOR_WORD_TO_SYMBOL
+from .oracle_types import _COLOR_WORD_TO_SYMBOL, strip_ability_word
 
 # Card types a cost modifier can name. "spell" is the unfiltered form; the "non"
 # forms are the printed negation (Vryn Wingmare), not a separate mechanism.
@@ -1516,10 +1516,16 @@ def cost_modifier_reduction_sentences(oracle_text: str) -> tuple[str, ...]:
 # pattern with two delimiting groups rather than two tables — and a line
 # printing both is refused below, because two conditions is a conjunction
 # nothing here was asked to read.
+#
+# "…less to cast **for each basic land type among lands you control**."
+# (Stratadon, Draco.) The third way the size is not the printed number: a
+# multiplier, delimited here as the whole "for each …" clause and read by the
+# grammar's own per-each reader (``grammar.per_each_count_spec_for``) rather
+# than by a second pattern for what may be counted.
 _SELF_REDUCTION = re.compile(
     r"(?:if (?P<fronted>.+?), )?"
     r"(?:(?P<during>during your turn), )?this spell costs (?P<pips>(?:\{[^}]+\})+) "
-    r"less to cast(?: if (?P<condition>[^.]+))?"
+    r"less to cast(?: (?P<per_each>for each [^.]+?))?(?: if (?P<condition>[^.]+))?"
     r"(?:, where x is (?P<counted>[^.]+))?\.?$"
 )
 
@@ -1707,13 +1713,28 @@ class SelfCostReduction:
     #: every intervening-if in the pool, asked here of the caster at CR 601.2f.
     #: None when the reduction is unconditional or gated by a row of the table.
     gate: dict | None = None
+    #: "This spell costs {1} less to cast **for each basic land type among
+    #: lands you control**." (Stratadon; {2} on Draco.) The count ``reduction``
+    #: is taken **once per**: the spec ``handlers/_common.evaluate_count``
+    #: answers for every other sentence that spends one, read off the caster's
+    #: board through the layers at CR 601.2f. A spec rather than a row of
+    #: ``_SELF_REDUCTION_COUNTS`` because the phrase is an ordinary noun phrase
+    #: in an ordinary count position — the grammar reads it, so a card
+    #: counting artifacts instead needs no code. None when the size is printed.
+    per_each: dict | None = None
 
 
 @lru_cache(maxsize=None)
 def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
     """The reduction *oracle_text*'s own first line applies to itself, if any."""
     for line in oracle_text.lower().split("\n"):
-        match = _SELF_REDUCTION.match(line.strip())
+        # CR 207.2c: "Domain — This spell costs …". An ability word has no
+        # rules meaning, and the compiler and the grammar both drop it before
+        # they read the line, so this reader has to as well — it is handed the
+        # card's text as printed, and an anchored pattern that kept the word
+        # would claim the line through one door and never apply it through
+        # this one.
+        match = _SELF_REDUCTION.match(strip_ability_word(line.strip()))
         if match is None:
             continue
         condition = match.group("condition")
@@ -1741,6 +1762,9 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
         if counted_clause is not None:
             if match.group("pips").upper() != "{X}":
                 return None
+            if match.group("per_each") is not None:
+                # Two sizes for one reduction; neither alone is the card.
+                return None
             counted = _SELF_REDUCTION_COUNTS.get(counted_clause.strip())
             if counted is None:
                 return None
@@ -1761,11 +1785,32 @@ def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
                 # compute; refuse rather than under-charging. A "{X} … where X
                 # is <count>" clause is handled above and never reaches here.
                 return None
+        # "…less to cast **for each basic land type among lands you control**."
+        # (Stratadon.) The printed pips are one repetition and the clause says
+        # how many. Read by the grammar's per-each reader, and refused when it
+        # refuses: a multiplier this could not count would leave the flat
+        # reduction standing — a discount the card gives only to a board that
+        # earned it.
+        per_each = None
+        per_each_clause = match.group("per_each")
+        if per_each_clause is not None:
+            if colored or not generic or condition is not None or gate is not None:
+                # A coloured pip repeated per object is CR 118.7b–c's spill
+                # arithmetic once per repetition, and a gate beside a
+                # multiplier is two riders on one cost; neither is printed and
+                # either read alone is a cheaper spell.
+                return None
+            from .grammar import per_each_count_spec_for
+
+            per_each = per_each_count_spec_for(per_each_clause)
+            if per_each is None:
+                return None
         return SelfCostReduction(
             reduction=CostReduction(generic, tuple(sorted(colored.items()))),
             condition=condition,
             during_your_turn=match.group("during") is not None,
             gate=gate,
+            per_each=per_each,
         )
     return None
 
@@ -1910,6 +1955,20 @@ def self_cost_reduction_for_cast(game, caster_index: int, card) -> CostReduction
     # already paid.
     if described.counted is not None:
         return CostReduction(_counted_reduction(game, caster_index, described.counted))
+    # "…for each basic land type among lands you control" (Stratadon, Draco).
+    # The same moment and the same reader as the branch above — the cost is
+    # being determined, so the count is the caster's board *now*, through the
+    # layers (a Blood Moon or a Phantasmal Terrain changes what a land is, and
+    # ``evaluate_count`` asks the computed types). CR 601.2f locks the total in
+    # once it is determined, so a land lost in response changes nothing.
+    # ``reduce_cost`` floors the result at zero: five types take {10} off
+    # Draco's {16} and five off Stratadon's {10}, and a reduction larger than
+    # the generic component simply stops there.
+    if described.per_each is not None:
+        from .handlers._common import evaluate_count
+
+        repetitions = evaluate_count(game, caster, described.per_each)
+        return CostReduction(described.reduction.generic * max(0, repetitions))
     return described.reduction
 
 
