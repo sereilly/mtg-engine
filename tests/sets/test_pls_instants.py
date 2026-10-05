@@ -98,7 +98,7 @@ def test_w1g4_gaeas_might_pumps_by_its_casters_domain(set_pool):
 
 
 def test_w1g4_gaeas_might_is_locked_in_and_ends_with_the_turn(set_pool):
-    """CR 611.2c: the size is fixed as the spell resolves. A land lost
+    """CR 608.2h: the size is determined once, as the spell resolves. A land lost
     afterwards takes nothing back — the Bears stay 7/7 — and the cleanup step
     ends the whole of it."""
     game, mine, _theirs = _w1g4_instant_table(
