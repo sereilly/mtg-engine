@@ -796,6 +796,42 @@ def source_damage_cap(line: str) -> tuple[tuple[str, ...], int, int] | None:
     return types, int(match.group("threshold")), int(match.group("capped"))
 
 
+#: "If an **instant or sorcery** spell of the chosen color would deal damage to
+#: you, it deals that damage to its controller instead." (Harsh Judgment.) A
+#: CR 614.9 redirection whose source class is a *spell* of a card type and of
+#: the colour this permanent recorded as it entered (CR 614.1c). The types are
+#: payload, read the way ``_SOURCE_DAMAGE_CAP`` above reads its own class; the
+#: colour is not in the sentence at all, so it is read off the permanent by
+#: ``damage_redirects.chosen_color_spell_redirects`` when the damage would be
+#: dealt.
+_CHOSEN_COLOR_SPELL_REDIRECT = re.compile(
+    r"^if an? (?P<source_class>[a-z ]+?) spell of the chosen color would deal "
+    r"damage to you, it deals that damage to its controller instead$"
+)
+
+
+def chosen_color_spell_redirect(line: str) -> tuple[str, ...] | None:
+    """The spell types whose damage *line* sends back, or None if it is not
+    that line.
+
+    One matcher, asked by the redirect scan and by
+    :func:`replacement_claims_line`, so what is redirected and what is claimed
+    cannot drift. A class naming no readable card type refuses the line for
+    ``source_damage_cap``'s reason: ``source_has_type`` answers False for a
+    word it does not know, and a redirect that can never fire is the silent
+    shape the claim reader exists to keep out of the supported pool.
+    """
+    from .grammar.vocabulary import CARD_TYPES
+
+    source_class = _match_group(_CHOSEN_COLOR_SPELL_REDIRECT, line, "source_class")
+    if source_class is None:
+        return None
+    types = tuple(word.strip() for word in source_class.split(" or ") if word.strip())
+    if not types or any(word not in CARD_TYPES for word in types):
+        return None
+    return types
+
+
 def _capped_source_damage(game, payload: dict) -> int | None:
     """The amount a printed source cap would leave, or None when none applies.
 
@@ -4358,6 +4394,12 @@ def replacement_claims_line(line: str) -> bool:
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.
     if source_damage_cap(normalized) is not None:
+        return True
+    # "If an instant or sorcery spell of the chosen color would deal damage to
+    # you, it deals that damage to its controller instead." (Harsh Judgment.)
+    # The same arrangement again: the spell types are payload, and the reader
+    # asked is the one ``damage_redirects`` derives the redirect from.
+    if chosen_color_spell_redirect(normalized) is not None:
         return True
     # "If a spell would deal damage to a permanent or player, it deals that much
     # damage minus 1 …" (Benevolent Unicorn) / "…plus 1…" for a red spell

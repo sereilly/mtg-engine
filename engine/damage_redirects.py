@@ -130,6 +130,14 @@ class DamageRedirect:
     #: source (``damage_events.damage_source_seat``, the one answer every event
     #: already carries) rather than frozen into ``new_recipient``.
     to_source_controller: bool = False
+    #: "If an **instant or sorcery spell of the chosen color** would deal damage
+    #: to you…" (Harsh Judgment.) The third way a record names its sources:
+    #: ``source`` is one object, ``sources`` a noun phrase asked of a permanent,
+    #: and this is a class of **spells** — ``(card types, colour symbol)`` —
+    #: which a noun phrase cannot be asked of, because a spell's damage source
+    #: is its printed card (CR 109.5) and has no battlefield state to read.
+    #: Answered by :func:`spell_source_matches`. ``None`` is every other record.
+    spell_sources: "tuple[tuple[str, ...], str] | None" = None
 
     @property
     def spent(self) -> bool:
@@ -506,6 +514,80 @@ def _host_static_redirects(game, recipient) -> list[DamageRedirect]:
     return found
 
 
+def chosen_color_spell_redirects(game, recipient) -> list[DamageRedirect]:
+    """The redirections a permanent's own **static** text gives its controller
+    against spells of the colour it chose.
+
+    "As this enchantment enters, choose a color. / If an instant or sorcery
+    spell of the chosen color would deal damage to you, it deals that damage to
+    its controller instead." (Harsh Judgment.) Derived on each event, for
+    :func:`attached_static_redirects`' reason: a static ability exists exactly
+    while its permanent is on the battlefield, so there is nothing to arm and
+    nothing to sweep — and the colour is re-read off the record the entry
+    choice wrote, so an answer that arrived late is the one applied.
+
+    "You" is CR 109.5's controller of the permanent, so the scan is over what
+    *recipient* controls; a permanent is never "you", and gets nothing. A
+    permanent that has not chosen (the record is absent) contributes no record
+    rather than one answering to every colour.
+    """
+    if _is_permanent(recipient):
+        return []
+    seat = next(
+        (i for i, player in enumerate(game.players) if player is recipient), None
+    )
+    if seat is None:
+        return []
+    from .replacements import chosen_color_spell_redirect
+
+    found: list[DamageRedirect] = []
+    for permanent in game.controlled_by(seat):
+        chosen = permanent.metadata.get("chosen_color")
+        if not chosen:
+            continue
+        # ``effective_card``, like every other text read here (CR 707.2).
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            types = chosen_color_spell_redirect(line)
+            if types is None:
+                continue
+            record = _derived_record(permanent, None)
+            record.to_source_controller = True
+            record.spell_sources = (types, str(chosen))
+            found.append(record)
+            break
+    return found
+
+
+def spell_source_matches(game, redirect: DamageRedirect, source) -> bool:
+    """Whether *source* is a spell of the class this record watches.
+
+    ``spell_sources`` None is every source. Otherwise three questions, each
+    asked of the one reader that already answers it: is the source a **spell**
+    (``replacements._source_is_a_spell`` — the resolving stack object, which is
+    the only way a spell can be told from a permanent's ability), does it have
+    one of the printed **card types** (``prevention.source_has_type``), and is
+    it the recorded **colour as a source of damage**
+    (``damage_source_colors``, CR 609.7b — rechecked at damage time, so a spell
+    recoloured on the stack is that colour or not when its damage would be
+    dealt).
+    """
+    if redirect.spell_sources is None:
+        return True
+    from .damage_events import damage_source_seat
+    from .damage_source_colors import damage_source_colors
+    from .prevention import source_has_type
+    from .replacements import _source_is_a_spell
+
+    types, color = redirect.spell_sources
+    if not _source_is_a_spell(game, source):
+        return False
+    if not any(source_has_type(game, source, word) for word in types):
+        return False
+    return color in damage_source_colors(
+        game, source, seat=damage_source_seat(game, source)
+    )
+
+
 def source_class_matches(game, redirect: DamageRedirect, source) -> bool:
     """Whether an incoming damage *source* is in the class this record watches.
 
@@ -557,6 +639,7 @@ def applicable_redirect(
         # anyway. When a second contender is printed it wants CR 616.1e's choice
         # put to the affected player, not a different order here.
         own + attached_static_redirects(game, recipient)
+        + chosen_color_spell_redirects(game, recipient)
         + class_redirects(game, recipient) + resolving_object_redirects(game)
         + source_keyed_redirects(game)
     ):
@@ -567,6 +650,8 @@ def applicable_redirect(
         if not source_matches(redirect.source, source):
             continue
         if not source_class_matches(game, redirect, source):
+            continue
+        if not spell_source_matches(game, redirect, source):
             continue
         if live_recipient(game, redirect, source) is None:
             continue
