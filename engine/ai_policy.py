@@ -11,8 +11,12 @@ from .ai_valuation import (
     SPELL_TYPES,
     CastOffer,
     cast_offers,
+    activation_target_side,
     entry_sacrifice_is_unavoidable,
+    entry_self_return_gate,
+    entry_trigger_seat_side,
     entry_trigger_target_side,
+    entry_triggers_bought,
     ability_denies_its_target,
     ability_target_side,
     cards_drawn_by_controller,
@@ -65,7 +69,7 @@ from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
 from .targeting import (bounce_subject_filter, derive_activation_spec,
-                        derive_cast_spec, spec_roles,
+                        derive_cast_spec, derive_instruction_spec, spec_roles,
                         usable_activated_abilities)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -678,6 +682,54 @@ def _paid_for_half_names_nothing(
     return not game._enumerate_targets(player_index, card, taken, for_cast=True)
 
 
+def _paid_for_trigger_has_nothing_to_hit(
+    game: Game, player_index: int, card: CardDefinition, offers: "dict[str, int]"
+) -> bool:
+    """Whether *offers* buys an entry trigger with no target on the side its
+    effect wants.
+
+    `_paid_for_half_names_nothing`'s question asked of **every** trigger an
+    offer buys, not only of the one the cast's picker describes. A permanent
+    printing two kickers (CR 702.33b) gates one entry trigger on each, and the
+    second one's target is chosen when it is put on the stack (CR 603.3d) --
+    where the choice is mandatory. So a Nightscape Battlemage that pays {2}{R}
+    while only its own seat controls a land **must** destroy its own land, and
+    a Thornscape Battlemage that pays {W} with one artifact on the table, its
+    own, destroys that. Paying is legal and buys a loss; the announcement is
+    declined and the caller falls back to the one without that cost.
+
+    The side is the reading a seat nobody asks already gets on the stack
+    (`_default_trigger_target_side`): `ability_target_side`, then the kind's
+    family. The candidates are the engine's own enumeration. A trigger whose
+    target is a player always has one, and one with no side has no wrong
+    board to land on -- both are left to the cast.
+    """
+    for instruction in entry_triggers_bought(card, offers):
+        spec = derive_instruction_spec([instruction])
+        if (
+            not isinstance(spec, dict)
+            or spec.get("kind") in _NOT_OBJECT_SPECS
+            or spec_roles(spec)
+        ):
+            continue
+        side = ability_target_side(instruction) or activation_target_side(instruction)
+        if side is None:
+            continue
+        legal = game._enumerate_targets(
+            player_index, card, spec, for_cast=True,
+            ability_instruction=instruction, triggered=True,
+        )
+        if any(entry.get("kind") != "permanent" for entry in legal):
+            continue
+        wanted = (
+            {player_index} if side == "you"
+            else {seat for seat in range(len(game.players)) if seat != player_index}
+        )
+        if not any(entry.get("seat") in wanted for entry in legal):
+            return True
+    return False
+
+
 def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
     """``(offer, times)`` for every optional **mana** offer *offers* takes.
 
@@ -836,6 +888,12 @@ def _cast_candidate_announcing(
         # "Sacrifice a creature. Rupture deals damage equal to that creature's
         # power…": with nothing to sacrifice the whole resolution is nothing.
         return None
+    if _entry_gate_gives_back_more_than_it_brings(game, player_index, card):
+        # "When this creature enters, return a red or green creature you
+        # control to its owner's hand" with no other such creature — the cast
+        # ends with the card back in hand and the mana spent — or with only a
+        # dearer one to give back.
+        return None
     if not _caster_holds_a_hand_pick_entrant(game, player_index, card, hand_index):
         # "Each player chooses a card in their hand. … The owner of each
         # creature card revealed this way with the lowest mana value puts it
@@ -855,6 +913,13 @@ def _cast_candidate_announcing(
         # (a kicked Tolarian Emissary with no enchantment anywhere). Paying is
         # legal and buys nothing, so this candidate is declined and the caller
         # falls back to the plain cast.
+        return None
+    if announces_offer and _paid_for_trigger_has_nothing_to_hit(
+        game, player_index, card, offers
+    ):
+        # ...and the same for a trigger the picker does not describe: the
+        # second of a Battlemage's two, whose target is chosen on the stack and
+        # would have to be the caster's own permanent.
         return None
     sized_offer = next((offer for offer, _times in taken_offers if offer.x_count), None)
     if sized_offer is not None and not game.enforce_mana_costs:
@@ -3308,7 +3373,15 @@ def _choose_several_targets(
         if maximum < 1:
             return None
         exact = bool((spec or {}).get("exact_targets"))
-    legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
+    # Enumerated for the announcement being built, like the spec above: the
+    # game's own picker reads an unanswered offer as declined (CR 702.33g), so
+    # asked without it a kicked-only several-target part -- Nightscape
+    # Battlemage's "return up to two target nonblack creatures" -- had a
+    # maximum of two and a candidate list of none, and fell through to the
+    # one-target chooser.
+    legal = game.cast_target_spec(
+        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+    ).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
     # A graveyard card is not a permanent and has no `permanent_id`; its slots
     # are indices into one player's graveyard, so they are collected under that
@@ -3545,6 +3618,85 @@ def _caster_can_make_its_sacrifices(
     return True
 
 
+def _entry_gate_gives_back_more_than_it_brings(
+    game: Game, caster_index: int, card: CardDefinition
+) -> bool:
+    """Whether casting *card* now is a trade down: it prints "when this
+    enters, return a <noun> you control to its owner's hand"
+    (``ai_valuation.entry_self_return_gate``), it is itself such a <noun>, and
+    what the seat would have to give back is worth more than *card*.
+
+    Two boards, one answer. With **no other** such permanent the pick is forced
+    onto the entering one — the cast ends with the card back in hand and the
+    mana spent, and the seat re-proposes it next turn and the turn after. With
+    one, the seat gives back whatever `given_back_first` puts first, and when
+    that costs more to replace than *card* itself the cast has shrunk the board
+    (Horned Kavu returning Shivan Wurm, which then returns Horned Kavu: nine
+    casts in six simulated games, each undoing the last). Not proposed in
+    either, for the reason every gate in `_cast_candidate_announcing` is there.
+
+    Both halves through the matchers the resolution itself asks —
+    ``_card_matches_filter`` for the card in hand, ``subject_matches`` for the
+    board (colour through the layers, so a creature turned red counts as red).
+    A card its own noun does not admit is left alone: with nothing to return
+    the trigger does nothing, and the permanent stays.
+    """
+    from .handlers._common import _card_matches_filter
+
+    gate = entry_self_return_gate(card)
+    if gate is None:
+        return False
+    described = dict(gate.get("filter") or {})
+    player = game.players[caster_index]
+    if not _card_matches_filter(card, described, game=game, owner=player):
+        return False
+    others = [
+        permanent for permanent in game.controlled_by(caster_index)
+        if subject_matches(game, permanent, described, observer=caster_index)
+    ]
+    if not others:
+        return True
+    return _given_back_loss(given_back_first(others, None)[0]) > float(card.cmc)
+
+
+def _given_back_loss(permanent: Permanent) -> float:
+    """What a seat loses by returning *permanent* to its owner's hand.
+
+    A card comes back for its mana value. A *token* does not come back at all
+    (CR 111.7), so it is priced as the body the board loses
+    (`_permanent_value`) — which keeps a 1/1 token on the table beside a
+    one-drop and gives it up before a six-drop.
+    """
+    if permanent.metadata.get("is_token"):
+        return _permanent_value(permanent)
+    return float(permanent.card.cmc)
+
+
+def given_back_first(permanents, source) -> list:
+    """*permanents* — one seat's own — in the order that seat gives them back
+    to its hand when a permanent it controls makes it return one.
+
+    For ``_default_permanent_set_choice``, and only where *source* (the
+    permanent asking) is itself one of them: gating, Shrieking Drake,
+    Stampeding Wildebeests. Three rules, in order:
+
+    * **the asking permanent last** — returning it undoes the cast that asked;
+    * **the smallest loss first** (`_given_back_loss`);
+    * **board order** between equals, which is the determinism every default
+      in the registry keeps.
+
+    The weights are tuning and live here; that they are consulted at all is
+    the registry's decision, made where the candidates are known.
+    """
+    ranked = sorted(
+        enumerate(permanents),
+        key=lambda entry: (
+            entry[1] is source, _given_back_loss(entry[1]), entry[0],
+        ),
+    )
+    return [permanent for _slot, permanent in ranked]
+
+
 def _caster_holds_a_hand_pick_entrant(
     game: Game, caster_index: int, card: CardDefinition, hand_index: int | None
 ) -> bool:
@@ -3608,6 +3760,14 @@ def _choose_target_for_spell(
     if side == "you":
         return caster_index
     if side == "opponent":
+        return choose_attack_target(game, caster_index)
+    # A permanent spell's seat is its entry trigger's "target player" (the
+    # cast names it), and the score below cannot read a trigger: its tie-break
+    # hands a creature spell's seat to the caster, which is how Abyssal Horror
+    # made its own controller discard two cards. Read off the trigger this
+    # announcement will fire (`_OFFERS_ANNOUNCED`: a Battlemage's discard exists
+    # only for a cast that paid for it).
+    if entry_trigger_seat_side(card, _OFFERS_ANNOUNCED.get()) == "opponent":
         return choose_attack_target(game, caster_index)
     self_score = _score_spell_target(card, caster_index, caster_index, game, x_value)
     opponent_index = choose_attack_target(game, caster_index)

@@ -47,6 +47,7 @@ from .condition_counts import accept_counted_condition
 # reads either.
 from .record_conditions import (_accept_record_condition,
                                 accept_mana_added_with_this_ability)
+from .records import accept_named_kicker
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, NUMBER_WORDS
 
@@ -285,15 +286,26 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # clauses below use, so "this spell", "this creature", the card's own name
     # and the bare pronoun are one production. The reference is kept on the
     # node as printed for ``rebinding``'s reason: a bare "it" is a pronoun.
+    #
+    # "…if it was kicked **with its {1}{G} kicker**" (the five Battlemages) is
+    # the same clause naming one of two kicker costs (CR 702.33b, CR 702.33f),
+    # and the narrowing is read off both polarities: a tail this did not read
+    # is left on the stream and fails the line, so "kicked with its …" can
+    # never be admitted as the unqualified question.
     kicked_mark = stream.mark()
     kicked_subject = accept_source_reference_spec(stream)
     if kicked_subject is not None:
         if stream.accept_phrase("was", "kicked"):
-            return ast.WasKicked(kicked_subject)
+            return ast.WasKicked(
+                kicked_subject, kicker=accept_named_kicker(stream)
+            )
         if stream.accept_phrase("wasn't", "kicked") or stream.accept_phrase(
             "was", "not", "kicked"
         ):
-            return ast.WasKicked(kicked_subject, negated=True)
+            return ast.WasKicked(
+                kicked_subject, negated=True,
+                kicker=accept_named_kicker(stream),
+            )
     stream.reset(kicked_mark)
 
     # "**you haven't added mana with this ability this turn**" (Carpet of

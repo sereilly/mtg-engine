@@ -41,7 +41,7 @@ from .handlers._common import (evaluate_count, excluded_graveyard_slot,
 from .models import CardDefinition, Permanent, PlayerState
 from .alternative_costs import alternative_costs
 from .cast_costs import (buyback_cost, cast_announces_x, costs_charged_from,
-                         kicker_cost)
+                         kicker_costs)
 from .cast_restrictions import timing_fixed_seat
 from .faces import is_multi_face
 from .combat_restrictions import restriction_condition_holds
@@ -1313,7 +1313,12 @@ class LegalityMixin:
         # …and which is its **kicker** (CR 702.33a), for the same reason: the
         # player deciding whether to pay {1}{G} on Benalish Emissary needs to
         # know that price is what destroys the land.
-        kicker = kicker_cost(card.oracle_text or "")
+        #
+        # Every one of them: a Battlemage prints two (CR 702.33b, "Kicker
+        # {1}{G} and/or {2}{U}"), and each is an offer of its own with the
+        # word beside its own symbols -- which is what tells the player the
+        # two prices buy two different triggers.
+        kickers = kicker_costs(card.oracle_text or "")
         charged = costs_charged_from(card, from_zone)
         # CR 601.2b's optional **non-mana** price (Constant Mists'
         # "Buyback—Sacrifice a land"). Emitted before the mana walk below and
@@ -1404,7 +1409,7 @@ class LegalityMixin:
                 # byte-identical payload.
                 "label": (
                     "buyback" if buyback and offer.symbols == buyback
-                    else "kicker" if kicker and offer.symbols == kicker
+                    else "kicker" if offer.symbols in kickers
                     else offer.symbols
                 ),
                 "repeatable": offer.repeatable,

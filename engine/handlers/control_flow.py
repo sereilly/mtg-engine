@@ -515,15 +515,62 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         #
         # Both come from ``cast_costs.kicked``, the reader keyed by the offer
         # the kicker rewrite produced.
-        from ..cast_costs import KICKED, kicked
+        #
+        # "…kicked **with its {1}{G} kicker**" (the Battlemages, CR 702.33f) is
+        # the same question about one of the card's two kicker costs
+        # (CR 702.33b): ``kicker`` is that cost's recorded key, and the two
+        # places answer it the same way -- the permanent off
+        # ``KICKED_WITH``, the tuple of keys ``_resolve_card`` stamped beside
+        # the flag, and the spell off its own record through
+        # ``cast_costs.kicked_with``. A permanent stamped by nothing (not cast,
+        # CR 400.7) was kicked with none of them.
+        from ..cast_costs import KICKED, KICKED_WITH, kicked, kicked_with
 
+        wanted = payload.get("kicker")
         source = context.source_permanent
         if source is not None:
-            answer = bool(source.metadata.get(KICKED))
+            if wanted is None:
+                answer = bool(source.metadata.get(KICKED))
+            else:
+                answer = str(wanted) in tuple(
+                    source.metadata.get(KICKED_WITH) or ()
+                )
+        elif context.card is None:
+            answer = False
+        elif wanted is None:
+            answer = kicked(context.card, context.choices)
         else:
-            answer = context.card is not None and kicked(
-                context.card, context.choices
-            )
+            answer = kicked_with(context.card, context.choices, str(wanted))
+        return answer != bool(payload.get("negated"))
+
+    if kind == "target_was_kicked":
+        # "Counter target spell **if it was kicked**." (Ertai's Trickery.)
+        # CR 702.33d's fact about *another* spell: the one this effect targets,
+        # which the lowering settled off the branch this guards -- the
+        # ``target_is_color`` arrangement, read through the same half of the
+        # context a counter reads (``context.stack_target``).
+        #
+        # Asked of that spell's own stack record through ``cast_costs.kicked``,
+        # so it is any of its kicker costs (a Battlemage that paid only its
+        # second is a kicked spell) and never an unrelated optional cost: a
+        # bought-back Capsize was not kicked. A spell that has left the stack
+        # answers no to both polarities, for the reason the colour clause
+        # gives -- the negated reading must not say yes about nothing.
+        from ..cast_costs import kicked, kicked_with
+
+        chosen = context.stack_target
+        if (
+            payload.get("target") != "spell"
+            or chosen is None
+            or chosen not in game.stack
+            or chosen.card is None
+        ):
+            return False
+        wanted = payload.get("kicker")
+        answer = (
+            kicked(chosen.card, chosen.choices) if wanted is None
+            else kicked_with(chosen.card, chosen.choices, str(wanted))
+        )
         return answer != bool(payload.get("negated"))
 
     if kind == "all_of":

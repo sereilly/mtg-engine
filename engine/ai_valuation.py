@@ -498,6 +498,145 @@ def entry_trigger_target_side(card: CardDefinition) -> str | None:
     return None
 
 
+#: Kinds whose effect on the **player** they target is a denial and whose
+#: category cannot say so: a discard is filed under ``zones`` beside every
+#: other card movement, where "damage" and "tapping" already answer for theirs.
+_SEAT_DENIAL_KINDS = frozenset({"discard_target_cards"})
+
+#: The spec kinds whose candidates include a player's face
+#: (``resolution._CHOOSABLE_TRIGGER_PLAYER_KINDS``, the picker's own set).
+_SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
+
+
+def entry_trigger_seat_side(
+    card: CardDefinition, optional_cost_payments: dict | None = None
+) -> str | None:
+    """"opponent" when the **player** a permanent spell's cast names is one its
+    entry trigger denies -- else None, for no preference.
+
+    The seat half of :func:`entry_trigger_target_side`, and the same standing
+    approximation: this engine names an entry trigger's target as the permanent
+    is cast, so the cast's seat *is* the trigger's "target player". The spell
+    scorer cannot read that -- its probes are about a spell's own text, and its
+    tie-break gives a creature spell's seat to the caster -- so "When this
+    creature enters, **target player discards two cards**" (Abyssal Horror)
+    was aimed at the seat that cast it, and "tap all lands **target player**
+    controls" (Gulf Squid) tapped its controller's own. Thunderscape
+    Battlemage's {1}{B} kicker is the third printing of the first.
+
+    Asked of the one trigger the cast's picker is derived from -- the first
+    that describes a target, among those a cast announced with
+    *optional_cost_payments* will fire (``targeting.entry_trigger_instructions``,
+    CR 702.33g) -- so the answer is about the target the cast actually names.
+    Only the denial is answered: a gift aimed by this rule could contradict the
+    printed phrase ("target **opponent** draws two cards", Lord of
+    Tresserhorn), and every seat-targeting entry trigger in the pool that is
+    not a denial already lands where its card prints it.
+    """
+    from .targeting import _first_described_slot, entry_trigger_instructions
+
+    if card.primary_type in SPELL_TYPES:
+        return None
+    slot = _first_described_slot(entry_trigger_instructions(
+        card, compile_card_oracle(card),
+        optional_cost_payments=optional_cost_payments,
+    ))
+    if slot is None:
+        return None
+    spec, instruction = slot
+    if spec.get("kind") not in _SEAT_SPEC_KINDS:
+        return None
+    if (
+        instruction.kind in _SEAT_DENIAL_KINDS
+        or activation_target_side(instruction) == "opponent"
+    ):
+        return "opponent"
+    return None
+
+
+def entry_self_return_gate(card: CardDefinition) -> dict | None:
+    """The choice a permanent's "When this enters, **return a <noun> you
+    control to its owner's hand**" makes its controller make -- the
+    ``choose_permanents`` payload -- or None when *card* prints no such
+    trigger.
+
+    Planeshift's gating ("return a red or green creature you control", ten
+    creatures) and Shrieking Drake's unnarrowed original. The return is not
+    optional and the permanent that asks is itself a legal answer, which is the
+    whole of why a policy has to read it: cast onto a board with nothing else
+    the noun admits, the creature returns **itself**, and the seat has spent
+    its turn's mana to put a card back in its hand -- then does it again next
+    turn, because nothing about the card in hand has changed. Measured over
+    six simulated games with all ten pinned: 112 of 127 gating triggers
+    returned the creature that had just been cast.
+
+    Derived from the compiled shape rather than the keyword's name (it has
+    none): an entry trigger that is exactly a forced pick from the controller's
+    own board followed by the return of what was picked. "Sacrifice it
+    **unless** you return …" (the Karoo lands, the Lairs) is a toll with a
+    different top-level kind and is not this.
+    """
+    if card.primary_type in SPELL_TYPES:
+        return None
+    for ability in compile_card_oracle(card).triggered_abilities:
+        instruction = ability.instruction
+        if (
+            not ability.supported
+            or instruction is None
+            or ability.condition.kind != "enters_battlefield"
+            or instruction.kind != "sequence"
+        ):
+            continue
+        steps = tuple((instruction.payload or {}).get("steps") or ())
+        if len(steps) != 2:
+            continue
+        chosen, returned = (step.payload or {} for step in steps)
+        if (
+            steps[0].kind == "choose_permanents"
+            and steps[1].kind == "return_recorded_permanents_to_hand"
+            and chosen.get("chooser") == "you"
+            and chosen.get("controlled_by") == "chooser"
+            and int(chosen.get("at_least", 0) or 0) >= 1
+            and returned.get("permanents_from") == chosen.get("result_key")
+        ):
+            return dict(chosen)
+    return None
+
+
+def entry_triggers_bought(
+    card: CardDefinition, optional_cost_payments: dict | None
+) -> tuple[OracleInstruction, ...]:
+    """The entry-trigger instructions a permanent spell fires **because of**
+    the optional costs in *optional_cost_payments* -- the triggers a cast that
+    takes them fires and a cast that declines every offer does not.
+
+    "When this creature enters, if it was kicked with its {2}{R} kicker,
+    destroy target land." (Nightscape Battlemage.) What the {2}{R} *buys* is
+    that one trigger, and whether it is worth the mana is a question about that
+    trigger's own target -- which the cast's picker cannot answer for a second
+    trigger, since it describes only the first.
+
+    Derived as a difference of two readings of the compiled program
+    (``targeting.entry_trigger_instructions``) rather than by naming the gate,
+    so any condition the kicked view comes to understand is covered here too.
+    Empty for an instant or sorcery, whose bought half is a step of its own
+    resolution and is read off the cast spec.
+    """
+    from .targeting import entry_trigger_instructions
+
+    if card.primary_type in SPELL_TYPES or not optional_cost_payments:
+        return ()
+    program = compile_card_oracle(card)
+    taken = entry_trigger_instructions(
+        card, program, optional_cost_payments=optional_cost_payments
+    )
+    declined = entry_trigger_instructions(card, program, optional_cost_payments={})
+    return tuple(
+        instruction for instruction in taken
+        if not any(instruction is kept for kept in declined)
+    )
+
+
 #: The printed controller narrowings a target's noun phrase can carry, as sides.
 _PRINTED_SEATS = {"you": "you", "not_you": "opponent", "opponent": "opponent"}
 
@@ -1323,6 +1462,21 @@ _SLOT_DISPOSITION: dict[str, str] = {
     # control**") never reaches this: the controller branch above
     # answers first, off the printed noun phrase.
     "exile_target_permanent": "opponent",
+    # And a return to hand, the denial one zone over again -- the kind
+    # ``_OPPONENT_KINDS`` has always listed for the one-target chooser. Two
+    # cards: Nightscape Battlemage's kicked "return **up to two** target
+    # nonblack creatures to their owners' hands", which is what found it, and
+    # the shipped Undo ("Return two target creatures to their owners' hands"),
+    # which had been bouncing two of its caster's own whenever the caster
+    # controlled two.
+    #
+    # The rest of this class is measured and left (PLS W1G2's report): Plow
+    # Under, Panic Attack, Jagged Lightning, Volcanic Salvo, Sick and Tired and
+    # Deadshot name the caster's own board for the same reason -- this table
+    # lags the one-target reading -- and closing it wholesale by falling back
+    # to ``instruction_target_side`` moves cards whose slots want *different*
+    # boards (Deadshot, Kor Chant), so it is a round of its own.
+    "bounce_target_creature": "opponent",
 }
 
 

@@ -531,6 +531,38 @@ def accept_additional_cost_paid(stream: "TokenStream") -> str | None:
     return symbols
 
 
+def accept_named_kicker(stream: "TokenStream") -> str | None:
+    """``with its {1}{G} kicker`` — the printed symbols, or None with the
+    cursor unmoved.
+
+    "When this creature enters, if it was kicked **with its {1}{G} kicker**,
+    destroy target creature with flying." (Sunscape Battlemage.) CR 702.33f:
+    the sentence is linked to one of the two kicker costs the card prints
+    (CR 702.33b), and the cost is how it says which.
+
+    Beside :func:`accept_additional_cost_paid` because it is the same kind of
+    phrase — a run of mana symbols naming a *payment* made at CR 601.2b — and
+    captured **as printed** for that function's reason: the lowering turns the
+    run into the recorded key through ``mana_payment``, so the parse cannot
+    come to disagree with the charge about what "{1}{G}" means. The leading
+    "was kicked" is the caller's to consume; this reads from "with".
+
+    Every word is required. "With its kicker" and no symbols would name no
+    cost, and a run of symbols with no "kicker" after it is some other
+    sentence.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("with", "its"):
+        return None
+    symbols = ""
+    while stream.at_kind(MANA):
+        symbols += stream.next().text
+    if not symbols or not stream.accept_word("kicker"):
+        stream.reset(mark)
+        return None
+    return symbols
+
+
 def accept_plus_per_cost_paid(
     stream: "TokenStream", base: "ast.Amount", unit: str
 ) -> "ast.Plus | None":

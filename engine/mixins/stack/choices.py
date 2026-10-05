@@ -4947,6 +4947,26 @@ class PendingChoicesMixin:
         floor = int(choice.data.get("at_least", 0) or 0)
         live = self.live_permanent_set_choices(choice)
         own = [perm for perm in live if self.controls(choice.player_index, perm)]
+        # **The one place board order is not the answer: the permanent that is
+        # asking is itself on the list.** "When this creature enters, return a
+        # red or green creature you control to its owner's hand" (Planeshift's
+        # gating; Shrieking Drake) is a forced pick that the entering creature
+        # satisfies, and board order has no opinion about that -- it returned
+        # whichever creature had been on the battlefield longest, which in six
+        # simulated games was a seat's 7/7 while a 1/1 stood beside it. Asked
+        # of the valuation the docstring above points at
+        # (``ai_policy.given_back_first``): the asking permanent last, the
+        # cheapest loss first, board order between equals.
+        #
+        # Keyed on that structural fact and on a floor, never on a card: every
+        # other user of this prompt -- a Karoo's Plains, Bull Elephant's
+        # Forests, Raiding Party's survivors -- does not offer its own source
+        # and keeps the order it has always had.
+        asking = getattr(choice.data.get("_context"), "source_permanent", None)
+        if floor and asking is not None and any(perm is asking for perm in own):
+            from ...ai_policy import given_back_first
+
+            own = given_back_first(own, asking)
         picks = own[:limit]
         if len(picks) < floor:
             # **A floor is not a ceiling, and the own-only rule is about the

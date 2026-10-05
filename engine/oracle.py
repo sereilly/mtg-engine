@@ -59,7 +59,7 @@ from .alternative_costs import (
     unread_granted_alternative_cost_sentence,
 )
 from .cast_costs import (cast_cost_claims_line, read_discard_clause,
-                         unread_cost_sentence)
+                         unlinked_kicker_question, unread_cost_sentence)
 from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
 from .enter_effects import enter_effect_line
@@ -7196,6 +7196,23 @@ def _compile_card_oracle(
                 f"printed cost nothing charges: {unread_cost}",
                 normalized_text,
             )
+
+    # "…if it was kicked **with its {5} kicker**" on a card whose kicker line
+    # offers no {5} (CR 702.33f: the ability is linked to one of the kicker
+    # costs *listed on the card*). The sentence parses and lowers -- its key is
+    # simply one no payment is ever recorded under -- so the card would report
+    # supported with an ability that can never trigger: the uncharged cost's
+    # twin, a question nothing can answer yes. Asked of the printed text,
+    # because the rewrite above has already turned the kicker line into a
+    # sentence that no longer says "kicker".
+    unlinked = unlinked_kicker_question(printed_text)
+    if unlinked is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"asks about a kicker cost this card does not print: {unlinked}",
+            normalized_text,
+        )
 
     # A **cycling** keyword line the CR 702.29a rewrite could not read
     # (``engine/cycling.py``). Beside the uncharged-cost gate above and for its
