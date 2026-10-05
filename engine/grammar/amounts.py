@@ -8,6 +8,7 @@ place here and an unknown quantity word is an error, not a zero.
 
 from __future__ import annotations
 
+from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
 from ..oracle_types import LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT
 from . import ast
 from .errors import GrammarError
@@ -402,6 +403,35 @@ def accept_counters_on_event_subject(
             if noun is not None and _singular(noun) in _EVENT_SUBJECT_NOUNS:
                 stream.advance()
                 return ast.CountersOnEventSubject(kind)
+    stream.reset(mark)
+    return None
+
+
+def accept_counters_on_granter(stream: TokenStream) -> "ast.CountersOnGranter | None":
+    """``<word> counters on the permanent with id <N> that granted this
+    ability`` — the count of a named counter on the object whose effect gave
+    the source this ability, or None when the words are something else.
+
+    The third referent a counter clause can name, after the source and the
+    event's subject. No card prints the relation: ``bind_granter`` writes it in
+    place of the granter's own name as the quote is folded onto its host
+    (CR 201.5a), so the only sentences that reach here are abilities some other
+    permanent is granting right now.
+
+    All of the phrase or none of it — a head with no id, or an id with no
+    tail, resets and leaves the line to refuse.
+    """
+    mark = stream.mark()
+    token = accept_counter_kind(stream)
+    if (
+        token is not None
+        and stream.accept_word("counter", "counters")
+        and stream.accept_word("on")
+        and stream.accept_phrase(*GRANTER_PHRASE_HEAD)
+    ):
+        number = stream.accept_kind(NUMBER)
+        if number is not None and stream.accept_phrase(*GRANTER_PHRASE_TAIL):
+            return ast.CountersOnGranter(token.text, int(number.text))
     stream.reset(mark)
     return None
 

@@ -21,6 +21,7 @@ is no.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 
 from .oracle_types import compilation_cache
@@ -115,4 +116,68 @@ def bind_chosen_player(text: str) -> str:
     return line[:index] + _CHOSEN_PLAYERS + line[index + len(_THAT_PLAYERS):]
 
 
-__all__ = ["bind_chosen_player", "granted_ability_supported"]
+#: How a granted ability names **the permanent that granted it**, once that
+#: ability is the host's own text. 'Enchanted creature has "{T}: This creature
+#: deals X damage …, where X is the number of arrow counters on **Archery
+#: Training**."' Printed on the Aura the name is the Aura naming itself; folded
+#: onto the creature it enchants it is a proper noun the creature's compiler
+#: has never heard of. CR 201.5a says what it means there: "the name refers
+#: only to the specific object which is that first ability's source" — one
+#: object, not any object so named — so the name is written as the relation it
+#: stood for, *with the object's id*, which is the only spelling that keeps two
+#: Archery Trainings on one creature counting their own arrows.
+#:
+#: The same move ``grammar/effects/tokens.TOKEN_CREATOR_PHRASE`` makes for a
+#: token whose text names its maker, and ``bind_chosen_player`` above makes for
+#: a pronoun: rewrite the sentence once into words a reader knows, rather than
+#: teach every reader of every ability what a foreign name might mean.
+GRANTER_PHRASE_HEAD = ("the", "permanent", "with", "id")
+GRANTER_PHRASE_TAIL = ("that", "granted", "this", "ability")
+
+#: The id a quote is bound with when **no permanent is in hand** — the support
+#: gate and the coverage scripts ask whether the sentence can be read, which
+#: does not depend on which object it names. No permanent has it:
+#: ``models.next_permanent_id`` counts from 1.
+GRANTER_PROBE_ID = 0
+
+
+def granter_phrase(permanent_id: int) -> str:
+    """The words a granted ability names its granter by (see above)."""
+    return " ".join(
+        (*GRANTER_PHRASE_HEAD, str(int(permanent_id)), *GRANTER_PHRASE_TAIL)
+    )
+
+
+def bind_granter(
+    text: str, granter_name: str | None, permanent_id: int = GRANTER_PROBE_ID
+) -> str:
+    """*text* with *granter_name* read as the one permanent granting it.
+
+    Whole-name matches only, case-insensitively (the Aura readers lower-case
+    what they hand out and a spell's quote keeps its capitals). A quote that
+    never names its granter comes back unchanged, which is nineteen of the
+    twenty quoted Aura grants in the pool.
+
+    This binds the *name*; it does not promise a reader. A quote that names its
+    granter somewhere no production reads the relation ("Sacrifice <the Aura>:
+    …") still refuses to compile, and the caller asking
+    :func:`granted_ability_supported` then reports the grant unreadable — which
+    is the answer, not a gap in this function.
+    """
+    line = text or ""
+    name = (granter_name or "").strip()
+    if not line or not name:
+        return line
+    pattern = re.compile(rf"(?<![\w']){re.escape(name)}(?![\w])", re.IGNORECASE)
+    return pattern.sub(granter_phrase(permanent_id), line)
+
+
+__all__ = [
+    "GRANTER_PHRASE_HEAD",
+    "GRANTER_PHRASE_TAIL",
+    "GRANTER_PROBE_ID",
+    "bind_chosen_player",
+    "bind_granter",
+    "granted_ability_supported",
+    "granter_phrase",
+]

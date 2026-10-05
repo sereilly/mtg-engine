@@ -20,7 +20,7 @@ This module imports nothing from `phrases` any longer.
 
 from . import ast
 from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
-from .amounts import accept_counters_on_source
+from .amounts import accept_counters_on_granter, accept_counters_on_source
 from .cost_records import (accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
 from .records import (accept_added_base, accept_damage_dealt_this_turn,
@@ -494,6 +494,13 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
     counters = accept_counters_on_source(stream)
     if counters is not None:
         return counters
+    # "…the number of arrow counters on **the permanent with id N that granted
+    # this ability**" (Archery Training's quote on the creature it enchants).
+    # The same pile on a different object, and its own reader for the reason it
+    # is its own node: the source reader above must never take it.
+    granter = accept_counters_on_granter(stream)
+    if granter is not None:
+        return granter
     # A count position, so the domain spelling ("the number of **basic land
     # types among** lands you control", Tribal Flames) is read here too.
     filt = parse_counted_objects(stream)

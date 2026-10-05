@@ -597,6 +597,20 @@ def aura_effect_claim(normalized_line: str, card_name: str = "") -> str | None:
         normalized_line = re.sub(
             rf"^when {own_name} enters", "when this aura enters", normalized_line
         )
+    # **A quoted grant is claimed only if the host can read the quote.** The
+    # two rows below that admit `has "<anything>"` ask nothing of what is
+    # between the quotes — the words are compiled on a *different permanent*,
+    # by `Permanent.effective_card` — so an Aura whose quote the grammar
+    # refuses reported supported, attached, and granted a sentence no step ever
+    # acted on. Pendrell Flux did nothing for nine sets and Archery Training
+    # for four. Asked before every claim rather than inside those two rows: a
+    # line carrying an unreadable quote is unimplemented whichever reader
+    # further down would also have liked the rest of it.
+    quoted = _QUOTED_ABILITY_GRANT.match(normalized_line)
+    if quoted is not None and not quoted_grant_readable(
+        quoted.group("ability"), card_name
+    ):
+        return None
     for pattern, claim in _TEMPLATES:
         if pattern.match(normalized_line):
             return claim
@@ -1979,7 +1993,46 @@ _QUOTED_ABILITY_GRANT = re.compile(
 )
 
 
-def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
+@lru_cache(maxsize=None)
+def aura_quoted_grants(oracle_text: str) -> tuple[str, ...]:
+    """Every ability *oracle_text* grants its host in quotes, **as printed** —
+    whether or not the engine can read it.
+
+    The half of :func:`aura_granted_ability_lines` that is a pure function of
+    the text, for the reason ``_conditional_ability_grant_shapes`` is split
+    from its own compile check: what the card *says* is cacheable here, and
+    whether it compiles is ``granted_ability_supported``'s answer, held in a
+    cache ``clear_compilation_caches`` knows about. It is also the reader a
+    census wants — one that asked the filtered list below how many grants were
+    unreadable would always be told none.
+    """
+    quotes: list[str] = []
+    for raw_line in (oracle_text or "").splitlines():
+        match = _QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
+        if match is not None:
+            quotes.append(match.group("ability"))
+    return tuple(quotes)
+
+
+def quoted_grant_readable(quote: str, granter_name: str | None = None) -> bool:
+    """Whether the host will be able to read *quote* once it is folded on.
+
+    The one question both ends ask: the support gate
+    (:func:`aura_effect_claim`), so an Aura whose quote the compiler refuses is
+    not reported supported, and the fold (:func:`aura_granted_ability_lines`),
+    so such a quote is never handed to a host. Bound first, because the quote
+    is compiled on the *host* and the granter's own name means nothing there
+    until ``bind_granter`` has said which object it is (CR 201.5a).
+    """
+    from .granted_abilities import bind_granter, granted_ability_supported
+
+    return granted_ability_supported(bind_granter(quote, granter_name))
+
+
+def aura_granted_ability_lines(
+    oracle_text: str, *, granter_name: str | None = None,
+    granter_id: int | None = None,
+) -> tuple[str, ...]:
     """The printed ability lines an Aura grants the permanent it is attached to.
 
     **Derived, not recorded.** ``Permanent.effective_card`` asks this of every
@@ -1991,13 +2044,27 @@ def aura_granted_ability_lines(oracle_text: str) -> tuple[str, ...]:
     it named had been deleted, so Equinox's whole printed effect was a claim
     with nothing behind it: the card reported supported and the land it
     enchanted gained nothing at all.
+
+    **Bound to the granter, and only what compiles.** *granter_name* and
+    *granter_id* are the attached permanent's: a quote naming its own Aura
+    ("…the number of arrow counters on Archery Training") is handed to the host
+    naming that one object (``granted_abilities.bind_granter``). And a quote
+    the compiler cannot read is not handed over at all — the host's rules text
+    is compiled as a whole, so one unreadable line appended to a creature made
+    the *creature* unsupported and took every ability it printed with it. A
+    Prodigal Sorcerer wearing the unread Archery Training could not ping.
     """
-    lines: list[str] = []
-    for raw_line in (oracle_text or "").splitlines():
-        match = _QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
-        if match is not None:
-            lines.append(match.group("ability"))
-    return tuple(lines)
+    quotes = aura_quoted_grants(oracle_text or "")
+    if not quotes:
+        return ()
+    from .granted_abilities import GRANTER_PROBE_ID, bind_granter
+
+    bound_id = GRANTER_PROBE_ID if granter_id is None else granter_id
+    return tuple(
+        bind_granter(quote, granter_name, bound_id)
+        for quote in quotes
+        if quoted_grant_readable(quote, granter_name)
+    )
 
 
 # 'As long as enchanted permanent is red or green, it has "At the beginning of
