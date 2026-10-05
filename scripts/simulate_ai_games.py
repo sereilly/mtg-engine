@@ -126,6 +126,22 @@ def main() -> int:
         )
         return 1
 
+    # A step that ended with something still owed — a prompt nobody answered,
+    # an object still on the stack. The sixth of the "it plays a whole turn"
+    # omissions looked exactly like a clean run: every step ran and every log
+    # line was there, with an upkeep trigger's answer taken after the draw. So
+    # it is counted where the steps change and it fails the run, because zero
+    # is the only reading under which the turn structure above was real.
+    if report.steps_left_owing:
+        total = sum(report.steps_left_owing.values())
+        print(
+            f"Steps that ended with something still owed: {total} "
+            "(a decision was taken in a later step than the one that asked)"
+        )
+        for what, count in report.steps_left_owing.most_common(8):
+            print(f"  {count}x {what}")
+        return 1
+
     if report.issues:
         print("Issues found:")
         for issue in report.issues:

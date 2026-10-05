@@ -19,6 +19,9 @@ class PhaseStepsMixin:
         seeded simulation reproducible.
         """
         pause_for_choices = bool(self.interactive_seats)
+        if not pause_for_choices and self.prompt_driver is not None:
+            self._resolve_window_answering_prompts()
+            return
         while True:
             self.resolve_stack(pause_for_choices=pause_for_choices)
             if not self.stack:
@@ -32,6 +35,39 @@ class PhaseStepsMixin:
             # spin — `resolve_stack` returning at once, the stack never
             # shrinking, the condition never true.
             if top.resolution_held or self.announcement_choice_for(top) is not None:
+                return
+
+    def _resolve_window_answering_prompts(self) -> None:
+        """The window above for a table whose prompts a driver answers.
+
+        One object at a time, and each one's prompts answered before the next
+        resolves — and before this returns, which is the part that was missing.
+        The plain headless drain resolves the whole stack and leaves every
+        prompt it armed for "the caller, afterwards"; for a caller that then
+        runs the *next step*, afterwards is too late. ``run_ai_simulation``
+        went upkeep -> draw with Elfhame Sanctuary's "you may search … If you
+        do, you skip your draw step this turn" still queued, so the skip was
+        armed 21 times in a ten-game Invasion run and spent 0 — and Mirri's
+        Guile arranged the top of a library its controller had already drawn
+        from, in every Tempest game that played one.
+
+        A prompt owed as the window opens is answered first: a turn-based
+        action can arm one (an upkeep cost, an entry choice made as a land
+        came in) with nothing on the stack to resolve at all.
+
+        State-based actions are checked after an answer for the reason
+        ``_settle_resumed_resolution`` gives: the answer is the rest of a
+        resolution, and CR 704.3 checks before anybody would receive priority
+        after one. Ends when a pass neither answered nor resolved anything —
+        which also covers an object that refuses to resolve and a prompt the
+        driver will not answer, either of which used to be a spin.
+        """
+        for _ in range(self.MAX_SETTLE_ITERS):
+            answered = self.drive_owed_prompts()
+            if answered:
+                self.check_state_based_actions()
+            resolved = bool(self.stack) and self.resolve_top_of_stack()
+            if not answered and not resolved:
                 return
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:

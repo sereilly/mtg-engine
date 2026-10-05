@@ -913,6 +913,16 @@ class StackResolutionMixin:
         iterations = 0
         while True:
             self.check_state_based_actions()
+            # A table whose prompts a driver answers (`Game.prompt_driver`, the
+            # AI simulator): what the object just resolved asked is answered
+            # *here*, before the next object resolves, rather than after this
+            # whole loop has returned. Inert for every other game, so the
+            # sentence above about not answering anything still holds for them.
+            if self.drive_owed_prompts():
+                iterations += 1
+                if iterations > self.MAX_SETTLE_ITERS:
+                    break
+                continue
             if not self.stack:
                 break
             if not self.resolve_top_of_stack(pause_for_choices=pause_for_choices):
