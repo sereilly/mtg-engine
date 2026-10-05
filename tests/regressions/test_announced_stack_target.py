@@ -38,6 +38,11 @@ from engine.targeting import derive_cast_spec
 _VICTIMS = (
     "Grizzly Bears", "Sol Ring", "Crusade", "Lightning Bolt", "Mind Twist",
     "Ancestral Recall",
+    # …and one spell with **two** card types (CR 205.2), added at the W1G5
+    # integration. Every victim above has one, so a picker that read a spell's
+    # type off ``primary_type`` agreed with the gate on all of them — and the
+    # gate, which is that picker's list, refused Annul aimed at this.
+    "Ornithopter",
 )
 
 
@@ -137,3 +142,77 @@ def test_remove_soul_aimed_at_an_instant_is_refused_with_nothing_spent(_catalog)
     assert refused.details == "no valid target for Remove Soul"
     assert [card.name for card in p1.hand] == ["Remove Soul"]
     assert p1.mana_pool["U"] == 2 and len(game.stack) == 1
+
+
+def _handler_acts_where_the_picker_does_not_offer(catalog):
+    """``(examined, findings)``: with the announcement gate off, every stack
+    spell is cast at every victim and resolved, and a victim that **left the
+    stack** although the picker did not offer it is a finding.
+
+    The other half of the sweep above. That one holds the gate to the picker;
+    this holds the picker to the handler, which is the reading CR 601.2c is
+    actually about — and the half the gate cannot check, because it *is* the
+    picker's list. A spell that does not remove its target (Fork, Deflection)
+    never produces a finding here and is not a claim either way.
+    """
+    by_name = {card.name: card for card in catalog}
+    examined = 0
+    findings: list[tuple[str, str]] = []
+    for card, spec in _stack_targeting_spells(catalog):
+        for victim in _VICTIMS:
+            game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+            game.enforce_mana_costs = False
+            game.players[0].hand.append(by_name[victim])
+            game.players[1].hand.append(card)
+            queued = game.queue_from_hand(0, victim, target_player_index=1)
+            if not queued.supported or len(game.stack) != 1:
+                continue
+            victim_item = game.stack[0]
+            offered = any(
+                entry.get("stack_index") == 0
+                for entry in game._enumerate_stack_targets(1, card, spec)
+            )
+            try:
+                result = game.queue_from_hand(1, card.name, target_stack_index=0)
+                if not result.supported:
+                    continue
+                game.resolve_top_of_stack()
+            except Exception:  # noqa: BLE001 - needs more than a target; not this sweep's
+                continue
+            examined += 1
+            removed = not any(item is victim_item for item in game.stack)
+            if removed and not offered:
+                findings.append((card.name, victim))
+    return examined, findings
+
+
+def test_the_picker_offers_every_spell_the_handler_would_act_on(_catalog, monkeypatch):
+    monkeypatch.setattr(
+        Game, "cast_stack_target_refusal", lambda self, *args, **kwargs: None,
+    )
+    examined, findings = _handler_acts_where_the_picker_does_not_offer(_catalog)
+
+    assert examined >= 200, f"the sweep examined only {examined} resolutions"
+    assert findings == [], (
+        "CR 601.2c / CR 205.2: the handler acts on these spells and the picker "
+        f"- which is the announcement gate - does not offer them: {findings}"
+    )
+
+
+def test_annul_counters_an_artifact_creature_spell(_catalog):
+    """The case by name: an artifact creature spell is an artifact spell."""
+    by_name = {card.name: card for card in _catalog}
+    game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
+    game.enforce_mana_costs = False
+    p0, p1 = game.players
+    p0.hand.append(by_name["Ornithopter"])
+    p1.hand.append(by_name["Annul"])
+    assert game.queue_from_hand(0, "Ornithopter").supported
+
+    cast = game.queue_from_hand(1, "Annul", target_stack_index=0)
+    assert cast.supported, cast.details
+    game.resolve_top_of_stack()
+
+    assert game.stack == []
+    assert [card.name for card in p0.graveyard] == ["Ornithopter"]
+    assert not any(perm.card.name == "Ornithopter" for perm in game.all_permanents())

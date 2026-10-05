@@ -3616,9 +3616,24 @@ class LegalityMixin:
             # Miscast: "target instant or sorcery spell" — the union the
             # compiled counter carries, tested here so the picker offers only
             # what the handler would counter.
+            #
+            # Through the handler's own reader (``_spell_is_one_of``, CR 205.2:
+            # a card has every type its line names). This asked
+            # ``primary_type``, which picks one type off the line — "creature"
+            # for an artifact creature — so Annul ("artifact or enchantment
+            # spell") was never offered an Ornithopter while its handler would
+            # have countered one. That was a picker short of a legal target for
+            # as long as the picker was only a hint; it became a legal cast
+            # **refused** the day `cast_stack_target_refusal` made this list
+            # the announcement gate (INV W1G2), which is what found it. The
+            # complement below already asked the handler's reader for exactly
+            # this reason.
             stack_card_types = spec.get("stack_card_types")
-            if stack_card_types and item_card.primary_type not in stack_card_types:
-                continue
+            if stack_card_types:
+                from .handlers.stack import _spell_is_one_of
+
+                if not _spell_is_one_of(item_card, stack_card_types):
+                    continue
             # Null Brooch: "target **noncreature** spell" — the complement,
             # asked through ``_spell_is_one_of`` rather than through
             # ``primary_type`` above it. That is the handler's own reader, and
@@ -3626,12 +3641,9 @@ class LegalityMixin:
             # union: CR 205.2 gives an artifact creature spell *both* types, so
             # a ``primary_type`` test would offer it ("artifact" is not
             # "creature") and the handler would then decline — the whole hand
-            # discarded for nothing. See the note in the report: the union above
-            # still makes the reading the handler stopped making.
+            # discarded for nothing. The union above asks the same reader now.
             stack_excluded_types = spec.get("stack_excluded_types")
             if stack_excluded_types:
-                from .handlers.stack import _spell_is_one_of
-
                 if _spell_is_one_of(item_card, stack_excluded_types):
                     continue
             # "target instant or **Aura** spell" (Avoid Fate, Ring of
