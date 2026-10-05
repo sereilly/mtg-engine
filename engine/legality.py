@@ -2493,10 +2493,12 @@ class LegalityMixin:
         instead, from the one cast path, before the mana is spent.
 
         Only what the caller **named** is checked here. "Is there any legal
-        target at all?" is the arms' own question and several of them answer it
-        with a card-specific rule; this one answers "is the one you named among
-        the ones the picker would have offered?", which is idiom #9 — the
-        picker's enumeration is a hint and the engine re-checks the answer.
+        target at all?" is :meth:`no_legal_cast_target_refusal`'s question,
+        asked one call earlier on the cast path (it was the arms' own, and the
+        arms only reach the spells whose first instruction they name); this
+        one answers "is the one you named among the ones the picker would have
+        offered?", which is idiom #9 — the picker's enumeration is a hint and
+        the engine re-checks the answer.
 
         **One shape is the exception, and it is the exception because the count
         itself was announced**: a spell whose targets are sized by a CR 601.2b
@@ -2509,13 +2511,17 @@ class LegalityMixin:
         announcement, and CR 601.2c makes that an uncastable spell rather than
         an ineffective one: the refusal lands before any mana is spent.
 
-        That is the engine's only enforced target **floor**. Everywhere else a
+        That is the engine's only enforced target **count**. Everywhere else a
         printed count is a maximum the announcement may fall short of — there is
         no ``min_targets`` in this engine, so "one or more target creatures"
-        (Heaven's Gate and its four colour siblings) may still be cast naming
-        none. Widening this to those is a separate change with a separate blast
-        radius; what makes the cost-sized case answerable *now* is that its
-        number comes from an announcement the same cast already made.
+        (Heaven's Gate and its four colour siblings) and "two target creatures"
+        may still be cast naming fewer *while a legal target exists*; the
+        handler then picks or does less. What is enforced for them is the
+        floor of one: with no legal target anywhere the cast is refused
+        (:meth:`no_legal_cast_target_refusal`). Widening the count to those is
+        a separate change with a separate blast radius; what makes the
+        cost-sized case answerable *now* is that its number comes from an
+        announcement the same cast already made.
         """
         if card.primary_type not in ("instant", "sorcery"):
             # **A permanent spell does not target.** ``derive_cast_spec`` reads

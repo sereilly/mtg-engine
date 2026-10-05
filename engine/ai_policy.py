@@ -2615,6 +2615,15 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     this — ask the enumeration the picker and the cast path already use. That
     is the same move ``activation_target_refusal`` made when it replaced the
     per-kind if-chain in ``activation.py``.
+
+    **Two layers since INV W2G7.** The first is the engine's own CR 601.2c
+    predicate, so the rule has one definition; the second is this policy's
+    wider preference, which also declines casts the engine *accepts* because
+    they are legal and useless. "Is every quantifier an *up to*?" is the
+    second layer's question now and no longer the definition of a targeted
+    spell — it called "X target creatures" and "any number of target
+    creatures" mandatory, which the engine does not, and that reading must not
+    travel back into the cast path.
     """
     # **The engine's rule first, through the engine's predicate** (CR 601.2c,
     # `legality.no_legal_cast_target_refusal`) — the very call the cast path
