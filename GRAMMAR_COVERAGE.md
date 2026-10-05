@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 86.1% | 85.9% | 60.3% | 267 |
+| INV *(measured)* | 335 | 547 | 87.2% | 87.0% | 61.4% | 273 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 525 | 242 | expected a subject |  |
+| 522 | 239 | expected a subject |  |
 | 148 | 75 | unrecognized effect verb |  |
-| 131 | 66 | unconsumed text |  |
+| 128 | 63 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -5902,6 +5902,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a player puts a nontoken creature onto the battlefield, that player returns a land they control to its owner's hand.`
 - **Overlaid Terrain**
   - `Lands you control have "{T}: Add two mana of any one color."`
+- **Overload**
+  - `Destroy target artifact if its mana value is 2 or less. If this spell was kicked, destroy that artifact if its mana value is 5 or less instead.`
 - **Overrun**
   - `Creatures you control get +3/+3 and gain trample until end of turn. (Each of those creatures can deal excess combat damage to the player or planeswalker it's attacking.)`
 - **Overtaker**
@@ -6346,6 +6348,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature deals 1 damage to any target.`
   - `{T}: This creature deals 1 damage to any target.`
   - `{T}: This creature deals 1 damage to any target.`
+- **Prohibit**
+  - `Counter target spell if its mana value is 2 or less. If this spell was kicked, counter that spell if its mana value is 4 or less instead.`
 - **Prophecy**
   - `Reveal the top card of target opponent's library. If it's a land, you gain 1 life. Then that player shuffles.`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -7261,6 +7265,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, if there are no Zombies on the battlefield, this enchantment deals 1 damage to you.`
 - **Savaen Elves**
   - `{G}{G}, {T}: Destroy target Aura attached to a land.`
+- **Savage Offensive**
+  - `Creatures you control gain first strike until end of turn. If this spell was kicked, they get +1/+1 until end of turn.`
 - **Savage Twister**
   - `Savage Twister deals X damage to each creature.`
 - **Sawback Manticore**
@@ -7335,6 +7341,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{C}{C}{C}.`
 - **Scorching Dragonfire**
   - `Scorching Dragonfire deals 3 damage to target creature or planeswalker. If that creature or planeswalker would die this turn, exile it instead.`
+- **Scorching Lava**
+  - `Scorching Lava deals 2 damage to any target. If this spell was kicked, that creature can't be regenerated this turn and if it would die this turn, exile it instead.`
 - **Scoria Wurm**
   - `At the beginning of your upkeep, flip a coin. If you lose the flip, return this creature to its owner's hand.`
 - **Scour**
@@ -9226,6 +9234,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Urza's Power Plant**
   - `{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.`
   - `{T}: Add {C}. If you control an Urza's Mine and an Urza's Tower, add {C}{C} instead.`
+- **Urza's Rage**
+  - `Urza's Rage deals 3 damage to any target. If this spell was kicked, instead it deals 10 damage to that permanent or player and the damage can't be prevented.`
 - **Urza's Tower**
   - `{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.`
   - `{T}: Add {C}. If you control an Urza's Mine and an Urza's Power-Plant, add {C}{C}{C} instead.`
@@ -9372,6 +9382,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Vigilant Martyr**
   - `Sacrifice this creature: Regenerate target creature.`
   - `{W}{W}, {T}, Sacrifice this creature: Counter target spell that targets an enchantment.`
+- **Vigorous Charge**
+  - `Target creature gains trample until end of turn. Whenever that creature deals combat damage this turn, if this spell was kicked, you gain life equal to that damage.`
 - **Vile Requiem**
   - `At the beginning of your upkeep, you may put a verse counter on this enchantment.`
   - `{1}{B}, Sacrifice this enchantment: Destroy up to X target nonblack creatures, where X is the number of verse counters on this enchantment. They can't be regenerated.`
