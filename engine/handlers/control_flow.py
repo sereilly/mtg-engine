@@ -1505,6 +1505,37 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
         return shares_most_common_color(game, target)
 
+    if kind == "target_shares_color_with_chosen":
+        # "Prevent all combat damage target creature would deal this turn **if
+        # it shares a color with that permanent**." (Guard Dogs.) CR 105.2's
+        # relation between the effect's target and the permanent a step earlier
+        # in this resolution chose — both read now, while the instruction is
+        # followed (CR 608.2h), and both through layer 5: a target a response
+        # recoloured is judged on the colour it has, not the one it was aimed
+        # at for.
+        #
+        # ``object_colors.share_a_color`` is the one reading of the relation:
+        # a colourless object on either side shares nothing, and so does a
+        # choice that was never made or whose permanent has gone.
+        from ..object_colors import share_a_color
+        from ._common import resolve_target_permanent
+
+        target = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: True,
+            fallback_players=(),
+            fallback_on_invalid_choice=False,
+        )
+        recorded = context.results.get(str(payload.get("permanent_from") or ""))
+        chosen = (
+            game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+        )
+        if target is None or chosen is None:
+            return False
+        return share_a_color(
+            game._effective_colors(target), game._effective_colors(chosen)
+        )
+
     if kind == "color_is_most_common":
         # "…white is the most common color among all permanents or is tied for
         # most common." The Djinns print it on a static, where

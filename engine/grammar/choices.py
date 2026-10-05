@@ -121,6 +121,63 @@ def _names_that_permanents_colors(stream: TokenStream) -> bool:
     )
 
 
+def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePermanent | None":
+    """``Choose a permanent you control.`` — a pick made as the effect resolves
+    (CR 608.2d), with **no** printed "target".
+
+    "Choose a permanent you control. Prevent all combat damage target creature
+    would deal this turn if it shares a color with **that permanent**." (Guard
+    Dogs.) The bare-imperative spelling of the sentence ``player_verbs`` reads
+    with a subject in front of it ("defending player chooses an untapped
+    creature they control"): with no subject the chooser is the effect's own
+    controller, and it is the same node and the same prompt.
+
+    CR 115.1b is the whole difference from :func:`_parse_choose_target` below:
+    an untargeted "choose" is made on resolution, so nothing is announced for
+    it, hexproof and protection do not stop it, and no picker is raised as the
+    ability goes on the stack.
+
+    **Only a sentence when a later one reads what it chose**, for this module's
+    standing reason — a choice nothing spends is an instruction that performs
+    nothing while the card reports supported. One binder today: a clause
+    comparing colours with "that permanent". Declines without consuming for
+    everything else, so every other "choose" keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    try:
+        chosen = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        chosen is None
+        or chosen.targeted
+        or chosen.quantifier != "a"
+        or chosen.count != 1
+        or chosen.filter.zone != "battlefield"
+    ):
+        stream.reset(mark)
+        return None
+    after_filter = stream.mark()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    binds = any(
+        window == ("shares", "a", "color", "with", "that", "permanent")
+        for window in zip(*(words[offset:] for offset in range(6)))
+    )
+    # The sentence boundary goes back, for the reason the targeted form's
+    # ``reset(after_filter)`` gives: the sentence loop is what consumes it.
+    stream.reset(after_filter)
+    if not binds:
+        stream.reset(mark)
+        return None
+    return ast.ChoosePermanent(ast.PlayerRef("you"), chosen)
+
+
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":
     """``Choose target creature.`` — a sentence whose whole content is
     CR 601.2c's choosing of targets (Reincarnation, Glyph of Life).

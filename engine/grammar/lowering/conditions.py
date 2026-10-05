@@ -30,7 +30,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import _is_enchanted, testable_filter_payload
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, _EVENT_SUBJECT_OBJECTS,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_PERMANENT,
+                      _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
 from ._record_conditions import lower_record_condition
@@ -251,6 +252,36 @@ def _lower_condition(
                 node=condition,
             )
         return {"kind": "target_shares_most_common_color", "target": referent}
+    if isinstance(condition, ast.SharesColorWithChosenPermanent):
+        # "…**if it shares a color with that permanent**." (Guard Dogs.) Two
+        # back-references and a gate for each. "It" is the target of the effect
+        # this guards — the census clause's referent just above, refused for
+        # its two reasons. "That permanent" is the one a "Choose a permanent …"
+        # step earlier in this same effect recorded, admitted only where one
+        # did: read under any other sentence the words name an object nobody
+        # picked, and the evaluator would answer False for ever on a card
+        # reporting supported.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        if referent != "permanent":
+            raise LoweringError(
+                "a shared colour is asked of a targeted permanent, and this "
+                "effect names none",
+                node=condition,
+            )
+        if CHOSEN_PERMANENT not in produced:
+            raise LoweringError(
+                "'that permanent' names a permanent no step of this effect "
+                "chose",
+                node=condition,
+            )
+        return {
+            "kind": "target_shares_color_with_chosen",
+            "target": referent,
+            "permanent_from": CHOSEN_PERMANENT,
+        }
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an

@@ -569,3 +569,81 @@ def test_w1g6_samite_elders_protection_stops_a_spell_of_the_named_colour(set_poo
     assert game.queue_from_hand(
         1, "Lightning Bolt", target_permanent_ids=[elder.permanent_id],
     ).supported
+
+
+def _w1g6_dogs_combat(set_pool, choose, *, recolor=None, interactive=(0,)):
+    """The opponent's red Hill Giant attacks; seat 0 answers with Guard Dogs
+    aimed at it and (when asked) chooses the permanent named *choose*. The
+    Giant goes unblocked. Returns the game and the prompts that were owed."""
+    game, mine, theirs = _w1g6_table(
+        set_pool,
+        ["Guard Dogs", "Grizzly Bears", "Mons's Goblin Raiders", "Howling Mine"],
+        ["Hill Giant"], mana=True, interactive=interactive,
+    )
+    giant = theirs[0]
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(1, [game.battlefield_index_of(giant)])[0]
+    game.players[0].mana_pool["W"] = 3
+    assert game.queue_permanent_ability(
+        0, "Guard Dogs", ability_index=0, target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert mine[0].tapped and game.players[0].mana_pool["W"] == 0
+    if recolor is not None:
+        giant.metadata["color_override_until_eot"] = recolor
+        game._recompute_continuous_effects()
+    game.resolve_top_of_stack()
+    owed = [(c.kind, c.player_index) for c in game.pending_choices]
+    if owed:
+        picked = next(p for p in game.controlled_by(0) if p.card.name == choose)
+        assert game.confirm_permanent_choice(0, permanent_id=picked.permanent_id)
+    _w1g6_resolve_stack(game)
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(0, {})[0]
+    for _ in range(4):
+        game.advance_combat_phase()
+    return game, owed  # _w1g6_dogs_combat
+
+
+def test_w1g6_guard_dogs_prevents_the_combat_damage_of_a_creature_sharing_the_chosen_colour(set_pool):
+    """"{2}{W}, {T}: Choose a permanent you control. Prevent all combat damage
+    target creature would deal this turn if it shares a color with that
+    permanent." The creature is a target, announced as the ability is
+    activated; the permanent is *chosen as it resolves* (CR 115.1b, 608.2d),
+    which is when its controller is asked. The red Goblin is chosen against the
+    red Giant: three unblocked combat damage is prevented."""
+    dogs = _w1g6_card(set_pool, "Guard Dogs")
+    _ability, spec = _w1g6_ability(dogs)
+    assert spec == {"kind": "creature"}, "only the creature is announced"
+
+    game, owed = _w1g6_dogs_combat(set_pool, "Mons's Goblin Raiders")
+    assert owed == [("permanent_choice", 0)]
+    assert game.players[0].life == 20
+
+
+@_w1g6_pytest.mark.parametrize("choose", ["Grizzly Bears", "Howling Mine", "Guard Dogs"])
+def test_w1g6_guard_dogs_prevents_nothing_when_the_colours_do_not_meet(set_pool, choose):
+    """A green permanent, a colourless one (CR 105.2: it shares a colour with
+    nothing) and the white Dogs themselves: none shares a colour with the red
+    Giant, so the ability resolves, the cost is spent and the damage is dealt."""
+    game, owed = _w1g6_dogs_combat(set_pool, choose)
+    assert owed == [("permanent_choice", 0)]
+    assert game.players[0].life == 17
+
+
+def test_w1g6_guard_dogs_judges_the_target_on_the_colour_it_has_as_it_resolves(set_pool):
+    """CR 608.2h, through layer 5: the Giant is turned green after the ability
+    is on the stack, so the green Bears share a colour with it by the time the
+    condition is asked and the damage is prevented."""
+    game, _owed = _w1g6_dogs_combat(set_pool, "Grizzly Bears", recolor="G")
+    assert game.players[0].life == 20
+
+
+def test_w1g6_guard_dogs_resolves_whole_for_a_seat_nobody_asks(set_pool):
+    """A headless seat takes the prompt's stated default — the first candidate
+    in board order, the white Dogs — with no prompt left owing, and the
+    condition is then asked of that pick like any other: white and red do not
+    meet, so the damage is dealt."""
+    game, owed = _w1g6_dogs_combat(set_pool, None, interactive=())
+    assert owed == [] and game.pending_choices == []
+    assert game.players[0].life == 17
