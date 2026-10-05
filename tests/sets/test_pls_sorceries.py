@@ -393,3 +393,51 @@ def test_w1g4_planar_overlay_prompt_reaches_the_client_as_a_return(set_pool):
     assert sorted(c.name for c in game.players[0].hand) == [
         "Forest", "Plains", "Tropical Island",
     ]
+
+
+# -- supported on arrival: driven, not built ----------------------------------
+
+
+def test_w1g4_exotic_disease_drains_by_its_casters_domain(set_pool):
+    """"Target player loses X life and you gain X life, where X is the number
+    of basic land types among lands you control." Three lands holding five
+    types drain five, whatever the target controls; the two halves read one X,
+    so aimed at its own caster the spell is a wash."""
+    game, _mine, _theirs = _w1g4_sorcery_table(
+        set_pool, "Exotic Disease",
+        mine=["Plains", "Tropical Island", "Badlands"], theirs=["Forest"],
+    )
+    cast = game.cast_from_hand(0, "Exotic Disease", target_player_index=1)
+    assert cast.supported, cast.details
+    _w1g4_resolve(game)
+    assert [player.life for player in game.players] == [25, 15]
+    assert "Exotic Disease: W1G4-B lost 5 life (20 -> 15)" in game.log
+
+    game, _mine, _theirs = _w1g4_sorcery_table(
+        set_pool, "Exotic Disease", mine=["Forest", "Swamp"], theirs=_W1G4_FIVE,
+    )
+    assert game.cast_from_hand(0, "Exotic Disease", target_player_index=0).supported
+    _w1g4_resolve(game)
+    assert [player.life for player in game.players] == [20, 20]
+
+
+def test_w1g4_exotic_disease_counts_at_resolution(set_pool):
+    """CR 608.2h: X is the caster's board as the spell resolves — a dual land
+    arriving while it is on the stack adds its two types — and a caster with
+    no land drains nothing."""
+    game, _mine, _theirs = _w1g4_sorcery_table(
+        set_pool, "Exotic Disease", mine=["Forest"],
+    )
+    assert game.queue_from_hand(0, "Exotic Disease", target_player_index=1).supported
+    game._put_permanent_onto_battlefield(
+        0, _W1G4Permanent(card=set_pool("LEA")["Tundra"]), None
+    )
+    _w1g4_resolve(game)
+    assert [player.life for player in game.players] == [23, 17]
+
+    game, _mine, _theirs = _w1g4_sorcery_table(
+        set_pool, "Exotic Disease", theirs=_W1G4_FIVE,
+    )
+    assert game.cast_from_hand(0, "Exotic Disease", target_player_index=1).supported
+    _w1g4_resolve(game)
+    assert [player.life for player in game.players] == [20, 20]

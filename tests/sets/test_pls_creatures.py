@@ -533,3 +533,192 @@ def test_w1g4_a_board_named_landwalk_refuses_what_it_cannot_name():
     ):
         assert landwalk_per_type_spec(line) is None, line
         assert not compile_line(line).usable, line
+
+
+# -- supported on arrival: driven, not built ----------------------------------
+
+_W1G4_FAMILIARS = (
+    # (the Familiar, a spell of each colour it names, a spell of neither)
+    ("Sunscape Familiar", "Craw Wurm", "Air Elemental", "Serra Angel"),
+    ("Stormscape Familiar", "Serra Angel", "Sengir Vampire", "Craw Wurm"),
+    ("Nightscape Familiar", "Air Elemental", "Shivan Dragon", "Craw Wurm"),
+    ("Thunderscape Familiar", "Sengir Vampire", "Craw Wurm", "Serra Angel"),
+    ("Thornscape Familiar", "Shivan Dragon", "Serra Angel", "Air Elemental"),
+)
+
+
+def _w1g4_generic_cost(game, seat, card):
+    from engine.ai_policy import _cost_for
+
+    return _cost_for(game, game.players[seat], card, None)["generic"]  # _w1g4_generic_cost
+
+
+import pytest as _w1g4_pytest
+
+
+@_w1g4_pytest.mark.parametrize(
+    "familiar,first,second,neither", _W1G4_FAMILIARS,
+    ids=[row[0] for row in _W1G4_FAMILIARS],
+)
+def test_w1g4_familiar_takes_one_generic_off_its_controllers_two_colours(
+    set_pool, familiar, first, second, neither,
+):
+    """"<Colour> spells and <colour> spells you cast cost {1} less to cast."
+    Each named colour is a mana cheaper for the Familiar's controller, a spell
+    of neither colour is not, and the seat across the table pays full price
+    for everything — "you cast" is the controller (CR 109.5)."""
+    lea = set_pool("LEA")
+    game, _mine, _theirs = _w1g4_table(set_pool, mine=[familiar])
+    plain, _a, _b = _w1g4_table(set_pool)
+    for spell in (first, second):
+        printed = _w1g4_generic_cost(plain, 0, lea[spell])
+        assert _w1g4_generic_cost(game, 0, lea[spell]) == printed - 1, spell
+        assert _w1g4_generic_cost(game, 1, lea[spell]) == printed, spell
+    printed = _w1g4_generic_cost(plain, 0, lea[neither])
+    assert _w1g4_generic_cost(game, 0, lea[neither]) == printed
+
+
+def test_w1g4_familiars_stack_and_one_familiar_is_one_reduction(set_pool):
+    """Two Familiars are two effects and take {2}; one Familiar naming both of
+    a spell's colours is one effect and takes {1} — Arcades Sabboth is green
+    *and* blue under a single Sunscape Familiar and is one mana cheaper, not
+    two. A second Familiar naming one of its colours takes the second."""
+    from engine.cost_modifiers import cost_reduction_for_cast
+
+    lea, leg = set_pool("LEA"), set_pool("LEG")
+    game, _mine, _theirs = _w1g4_table(set_pool, mine=["Sunscape Familiar"])
+    assert cost_reduction_for_cast(game, 0, leg["Arcades Sabboth"])[0].generic == 1
+
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, mine=["Sunscape Familiar", "Sunscape Familiar"],
+    )
+    assert cost_reduction_for_cast(game, 0, lea["Craw Wurm"])[0].generic == 2
+
+    # Sunscape names green and blue, Thunderscape black and green.
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, mine=["Sunscape Familiar", "Thunderscape Familiar"],
+    )
+    reductions = {
+        name: cost_reduction_for_cast(game, 0, lea[name])[0].generic
+        for name in ("Craw Wurm", "Air Elemental", "Sengir Vampire", "Serra Angel",
+                     "Juggernaut")
+    }
+    assert reductions == {
+        "Craw Wurm": 2, "Air Elemental": 1, "Sengir Vampire": 1, "Serra Angel": 0,
+        "Juggernaut": 0,
+    }
+
+
+def test_w1g4_a_familiars_reduction_is_generic_mana_only(set_pool):
+    """CR 118.7a: a generic reduction touches the generic component and
+    nothing else. Under a Sunscape Familiar a {1}{G} Bears is cast for one
+    Forest, and a {G} Giant Growth is still {G} — with the pool empty the cast
+    is refused, because there was no generic mana for the Familiar to take."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, hand=["Grizzly Bears", "Giant Growth"],
+        mine=["Sunscape Familiar", "Forest"],
+    )
+    assert _w1g4_tap_lands(game) == 1
+    cast = game.cast_from_hand(0, "Grizzly Bears")
+    assert cast.supported, cast.details
+    _w1g4_resolve(game)
+    assert "Grizzly Bears costs less to cast (Sunscape Familiar)" in game.log
+    assert sum(game.players[0].mana_pool.values()) == 0
+
+    growth = game.cast_from_hand(
+        0, "Giant Growth", target_player_index=0,
+        target_permanent_ids=[mine[0].permanent_id],
+    )
+    assert not growth.supported and "insufficient mana" in growth.details
+
+
+def test_w1g4_a_familiar_takes_its_mana_off_an_x_spell(set_pool):
+    """{X} is generic mana once announced (CR 107.3), so the reduction comes
+    off it: Hurricane with X=3 is {3}{G}, and three Forests pay it under a
+    Sunscape Familiar. All three points of damage are dealt."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, hand=["Hurricane"],
+        mine=["Sunscape Familiar", "Forest", "Forest", "Forest"],
+    )
+    assert _w1g4_tap_lands(game) == 3
+    cast = game.cast_from_hand(0, "Hurricane", x_value=3)
+    assert cast.supported, cast.details
+    _w1g4_resolve(game)
+    assert [player.life for player in game.players] == [17, 17]
+    assert sum(game.players[0].mana_pool.values()) == 0
+
+
+def test_w1g4_the_familiars_keep_their_printed_bodies(set_pool):
+    """The line beside the reduction is the rest of the card: Sunscape is a
+    0/3 with defender and cannot be declared as an attacker, Stormscape flies,
+    Thunderscape has first strike."""
+    for name, keyword in (
+        ("Sunscape Familiar", "defender"), ("Stormscape Familiar", "flying"),
+        ("Thunderscape Familiar", "first strike"),
+    ):
+        game, mine, _theirs = _w1g4_table(set_pool, mine=[name])
+        assert game._has_keyword(mine[0], keyword), name
+
+    game, mine, _theirs = _w1g4_table(set_pool, mine=["Sunscape Familiar"])
+    assert (mine[0].effective_power, mine[0].effective_toughness) == (0, 3)
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    assert not game.declare_attackers(0, [0])[0]
+
+
+def test_w1g4_nightscape_familiar_regenerates_for_one_and_a_black(set_pool):
+    """"{1}{B}: Regenerate this creature." Two Swamps pay it; a Lightning Bolt
+    then destroys nothing — the shield is spent, the Familiar is tapped and
+    still on the battlefield (CR 701.19a)."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, mine=["Nightscape Familiar", "Swamp", "Swamp"],
+    )
+    familiar = mine[0]
+    game.players[1].hand.append(_w1g4_find(set_pool, "Lightning Bolt"))
+    assert _w1g4_tap_lands(game) == 2
+    activated = game.activate_permanent_ability(0, "Nightscape Familiar")
+    assert activated.supported, activated.details
+    _w1g4_resolve(game)
+    assert sum(game.players[0].mana_pool.values()) == 0
+
+    game.enforce_mana_costs = False
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_player_index=0,
+        target_permanent_ids=[familiar.permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert game.is_on_battlefield(familiar) and familiar.tapped
+    assert "Nightscape Familiar regenerated" in game.log
+
+
+def test_w1g4_samite_pilgrim_prevents_its_activators_domain(set_pool):
+    """"{T}: Prevent the next X damage that would be dealt to target creature
+    this turn, where X is the number of basic land types among lands you
+    control." Three types shield the Bears for three: a 5-point hit deals 2
+    and the next is dealt in full. The count is the *activator's* — aimed at
+    an opponent's creature it is still sized by the Pilgrim's side."""
+    from tests.helpers import _damage_dealt
+
+    game, mine, theirs = _w1g4_table(
+        set_pool, mine=["Samite Pilgrim", "Grizzly Bears", "Plains", "Island", "Swamp"],
+        theirs=["Mountain"], enforce=False,
+    )
+    pilgrim, bears = mine[0], mine[1]
+    activated = game.activate_permanent_ability(
+        0, "Samite Pilgrim", target_permanent_ids=[bears.permanent_id],
+    )
+    assert activated.supported, activated.details
+    _w1g4_resolve(game)
+    assert pilgrim.tapped
+    assert "Grizzly Bears gains prevention shield for 3 damage" in game.log
+    assert _damage_dealt(game, bears, 5, source=theirs[0]) == 2
+    assert _damage_dealt(game, bears, 2, source=theirs[0]) == 2
+
+    game, mine, theirs = _w1g4_table(
+        set_pool, mine=["Samite Pilgrim", "Forest"],
+        theirs=("Grizzly Bears",) + _W1G4_FIVE, enforce=False,
+    )
+    assert game.activate_permanent_ability(
+        0, "Samite Pilgrim", target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert _damage_dealt(game, theirs[0], 5, source=mine[1]) == 4
