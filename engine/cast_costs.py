@@ -1276,21 +1276,44 @@ def _buyback_line_offer(line: str) -> tuple[str, str] | None:
     match = _BUYBACK_COST_LINE.match(stripped)
     if match is None:
         return None
-    # The printed clause opens a line, so it is capitalized ("Sacrifice a
-    # land"); mid-sentence it is not. Only the first letter is touched — a
-    # wholesale lowercasing would eat a printed subtype ("sacrifice a Goblin"),
-    # which the noun reader needs the case of.
-    #
-    # **Every clause, not only the first.** A buyback cost is a *list* — "Pay 3
-    # life, Discard a card at random" (Flowstone Flood) — and Magic capitalizes
-    # each item of it, because each opens where a sentence would. Lowering only
-    # the leading letter of the whole line left "Discard" capitalized in the
-    # middle of the rewritten sentence, where ``_COST_CLAUSES``' rows are
-    # lowercase and match nothing: the clause went unread and, by
-    # ``_read_cost_clauses``' all-or-nothing rule, took the whole cost with it.
-    # The split is the same one that reader splits on, so a clause boundary
-    # cannot mean two things.
-    clause = match.group("cost").strip().rstrip(".")
+    return _optional_cost_phrase_offer(match.group("cost"))
+
+
+def _optional_cost_phrase_offer(printed_cost: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for a keyword's printed
+    **non-mana** cost — the words behind the em dash of "Buyback—Sacrifice a
+    land." and "Kicker—Sacrifice a land." — or None when the table cannot
+    charge it.
+
+    One reader for both keywords, which is the point: CR 702.27a and CR 702.33a
+    define their keyword as the *same* sentence ("You may pay an additional
+    [cost] as you cast this spell"), so the rewrite of a cost phrase cannot
+    depend on which word stood in front of it. This was the tail of
+    ``_buyback_line_offer`` until Planeshift printed the phrase behind
+    "Kicker", and a second copy there would have been two answers to "what is
+    this cost's key" — the one question :func:`kicked` and :func:`buyback_paid`
+    cannot afford two answers to.
+
+    The printed clause opens a line, so it is capitalized ("Sacrifice a land");
+    mid-sentence it is not. Only the first letter is touched — a wholesale
+    lowercasing would eat a printed subtype ("sacrifice a Goblin"), which the
+    noun reader needs the case of.
+
+    **Every clause, not only the first.** Such a cost is a *list* — "Pay 3 life,
+    Discard a card at random" (Flowstone Flood) — and Magic capitalizes each
+    item of it, because each opens where a sentence would. Lowering only the
+    leading letter of the whole line left "Discard" capitalized in the middle
+    of the rewritten sentence, where ``_COST_CLAUSES``' rows are lowercase and
+    match nothing: the clause went unread and, by ``_read_cost_clauses``'
+    all-or-nothing rule, took the whole cost with it. The split is the same one
+    that reader splits on, so a clause boundary cannot mean two things.
+
+    The key is read **back off** the :class:`AdditionalCost` the sentence
+    produces rather than normalized a second time here: a second normalization
+    is a second answer, and the two disagreeing is a spell that paid its kicker
+    and resolved unkicked.
+    """
+    clause = printed_cost.strip().rstrip(".")
     sentence = BUYBACK_COST_RULES_TEXT.format(cost=_lowered_clauses(clause))
     read = _printed_additional_cost(sentence)
     if read is None or read.optional_key is None:
@@ -1431,6 +1454,20 @@ _KICKER_LINE = re.compile(
 #: cost {1} less" -- a static ability *about* kicker -- out of it.
 _KICKER_SHAPE = re.compile(r"^(?:multi)?kicker\s*(?:[—–-]|\{)", re.IGNORECASE)
 
+#: "**Kicker—Sacrifice a land.**" (Falling Timber, and eight more Planeshift
+#: cards.) CR 702.33a's cost is any cost, not a run of mana symbols, and the
+#: printed form for a non-mana one puts it behind an em dash rather than a
+#: space -- ``_BUYBACK_COST_LINE``'s shape with the other keyword in front, and
+#: read by the same function (:func:`_optional_cost_phrase_offer`).
+#:
+#: Its own pattern beside :data:`_KICKER_LINE` rather than a widening of it:
+#: that one is a run of mana symbols the cast folds into its mana payment, this
+#: one is a price ``_pay_additional_costs`` collects, and the announcement key
+#: of each is read back off a different field of the cost it produces.
+_KICKER_COST_LINE = re.compile(
+    r"^kicker\s*[—–-]\s*(?P<cost>.+)$", re.IGNORECASE
+)
+
 
 def _kicker_line_offer(line: str) -> tuple[str, str] | None:
     """``(announcement key, rules sentence)`` for one kicker line, or None.
@@ -1446,7 +1483,7 @@ def _kicker_line_offer(line: str) -> tuple[str, str] | None:
     stripped = stripped.strip().rstrip(".")
     match = _KICKER_LINE.match(stripped)
     if match is None:
-        return None
+        return _kicker_cost_line_offer(stripped)
     read = _printed_additional_cost(
         BUYBACK_RULES_TEXT.format(cost=match.group("cost"))
     )
@@ -1454,6 +1491,24 @@ def _kicker_line_offer(line: str) -> tuple[str, str] | None:
         return None
     key = read.optional_mana[0].symbols
     return key, BUYBACK_RULES_TEXT.format(cost=key)
+
+
+def _kicker_cost_line_offer(stripped: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for a kicker line whose cost is
+    **not mana** ("Kicker—Sacrifice a land."), or None.
+
+    *stripped* is the line with its reminder text and full stop already off,
+    which is how :func:`_kicker_line_offer` hands it over. The key is the
+    ``optional_key`` of the :class:`AdditionalCost` the rewritten sentence
+    produces -- the string ``_optional_cost_announcement`` accepts the
+    announcement under, ``optional_cost_taken`` charges by and :func:`kicked`
+    reads back, all three off the one object, so a kicker that was paid cannot
+    resolve unkicked for want of a spelling.
+    """
+    match = _KICKER_COST_LINE.match(stripped)
+    if match is None:
+        return None
+    return _optional_cost_phrase_offer(match.group("cost"))
 
 
 def is_kicker_line(line: str) -> bool:

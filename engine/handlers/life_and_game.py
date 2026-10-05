@@ -1114,6 +1114,7 @@ def forbid_casting_types_this_turn(game: Game, instruction: OracleInstruction, c
     needs no code, which is the same promise ``_BANNABLE_SPELL_TYPES`` makes one
     module over.
     """
+    from ..spell_prohibitions import ANY_SPELL
     from ..spell_prohibitions import forbid_casting_this_turn as record
 
     victim = context.target
@@ -1121,6 +1122,11 @@ def forbid_casting_types_this_turn(game: Game, instruction: OracleInstruction, c
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
     types = tuple(instruction.payload.get("card_types") or ())
+    if instruction.payload.get("any_spell"):
+        # "Target player can't cast spells this turn." (Orim's Chant.) No type
+        # printed, so the record carries the one entry that is not a type —
+        # see ``spell_prohibitions.ANY_SPELL`` for why it is not a list of them.
+        types = (ANY_SPELL,)
     if not types:
         # A ban naming nothing is a ban on nothing; recording it would leave a
         # seat marked and unstopped, which reads as an effect that worked.

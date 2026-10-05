@@ -74,8 +74,8 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
                           enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
-                          enchant_subject_seat, role_is_seat, spec_roles,
-                          targets_mana_value_x)
+                          enchant_subject_seat, instructions_as_announced,
+                          role_is_seat, spec_roles, targets_mana_value_x)
 
 def _optional_cost_offers(
     costs: "tuple[AdditionalCost, ...]",
@@ -1592,6 +1592,9 @@ class SpellCastingMixin:
             card, caster_index, target_player_index, target_permanent_index, target_stack_item,
             mode_index=mode_index, x_value=x_value,
             target_permanent_ids=target_permanent_ids,
+            # CR 601.2b is answered above; CR 702.33g makes the targets this
+            # gate counts depend on it.
+            optional_cost_payments=optional_paid,
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -1847,7 +1850,17 @@ class SpellCastingMixin:
         # proposal, and the refusal has to be here rather than at resolution
         # because CR 601.2e returns the game to before a proposal and a
         # resolution-time answer would already have spent the mana.
-        found = divided_description(compile_card_oracle(card).instructions)
+        #
+        # **Of the steps this announcement will run** (CR 702.33g): a kicked
+        # Magma Burst divides over two targets and an unkicked one names one
+        # the ordinary way, and Pollen Remedy's shares total 3 or 6 — so which
+        # divided step is the spell's is CR 601.2b's answer, read through the
+        # same view the picker's spec is.
+        found = divided_description(
+            instructions_as_announced(
+                card, compile_card_oracle(card), optional_paid
+            )
+        )
         if found is not None:
             division = found[1].get("division", EVENLY)
             total = _divided_total(found[0], resolved_x_value)
@@ -3977,6 +3990,7 @@ class SpellCastingMixin:
         mode_index: int | None = None,
         x_value: int | None = None,
         target_permanent_ids: list[int | None] | None = None,
+        optional_cost_payments: dict | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -3985,6 +3999,16 @@ class SpellCastingMixin:
 
         For a "Choose one —" modal spell, the chosen mode's instruction (not the
         first one) determines what the spell targets.
+
+        *optional_cost_payments* is CR 601.2b's answer so far, for CR 702.33g:
+        "If this spell was kicked, prevent all combat damage **another target
+        creature** would deal this turn" (Falling Timber) announces its second
+        target only when the kicker was. This gate re-derives the spell's spec
+        to count its roles, so it has to derive the one the *announcement*
+        describes — read as the card's whole program, an unkicked Falling
+        Timber was refused "requires 2 targets" and one named with two was
+        accepted. None reads every arm, which is the question a caller with no
+        announcement in hand is asking.
         """
         # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
         # player can't be chosen as a target, which under CR 601.2c makes the
@@ -4131,10 +4155,37 @@ class SpellCastingMixin:
             if isinstance(target_permanent_index, list)
             else None
         )
-        cast_spec = derive_cast_spec(card, program) or {}
+        cast_spec = derive_cast_spec(
+            card, program, optional_cost_payments=optional_cost_payments,
+        ) or {}
         maximum = cast_spec.get("max_targets")
         if isinstance(maximum, int) and announced is not None and announced > maximum:
             return False, f"too many targets for {card.name}"
+        # CR 702.33g's other direction: a target printed only in the kicked
+        # half is not chosen by a cast that was not kicked. The roles gate
+        # below counts the slots a kicked cast names; this is the same count
+        # for the cast that declined, whose spec has no roles left to count
+        # against — so without it an unkicked Falling Timber naming two
+        # creatures was simply accepted, the second one recorded on the stack
+        # item as a target the spell does not have.
+        if (
+            optional_cost_payments is not None
+            and not spec_roles(cast_spec)
+            and spec_roles(derive_cast_spec(card, program) or {})
+        ):
+            named = (
+                [pid for pid in target_permanent_ids if pid is not None]
+                if target_permanent_ids
+                else (
+                    target_permanent_index
+                    if isinstance(target_permanent_index, list) else []
+                )
+            )
+            if len(named) > 1:
+                return False, (
+                    f"{card.name} names one target unless it was kicked "
+                    f"(CR 702.33g)"
+                )
 
         # A spell naming several targets of **different kinds** (Glyph of
         # Delusion). Gated here, above every per-kind arm below, because none of

@@ -95,6 +95,7 @@ from .lowering import (
     _lower_damage,
     _lower_damage_conjunction,
     _lower_damage_unless_pay,
+    kicked_second_damage_target,
     _fused_conditional_counter,
     _fused_tap_enchanted_then_counters,
     _fused_tap_then_bite,
@@ -755,6 +756,19 @@ def lower_statement(
         )
         if fused is not None:
             return fused
+        # "Magma Burst deals 3 damage to any target. If this spell was kicked,
+        # it deals 3 damage to **another target**." Read ahead of the roles
+        # planner below, which is the same sentence over *permanents* and
+        # declines "any target" by design: a slot that may be a seat or an
+        # object has no role kind. A rewrite of the pair into the two-armed
+        # sentence it means (`lowering/damage.kicked_second_damage_target`),
+        # lowered by this dispatcher like any other `Conditional`.
+        kicked_pair = kicked_second_damage_target(statement.steps)
+        if kicked_pair is not None:
+            return lower_statement(
+                kicked_pair, produced, event=event,
+                event_subject=event_subject, whole_effect=whole_effect,
+            )
         # "…Then return **another** target creature…" (Withdraw): the word is
         # the proof of two announcements, so the pair is lowered as two roles
         # (`_roles.plan_another_target_roles`) instead of refused below.

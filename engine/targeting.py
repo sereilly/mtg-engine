@@ -2580,7 +2580,105 @@ def _as_kicked(instructions, was_kicked: bool) -> tuple:
     carrying it as an ``intervening_if`` stays only when the gate will hold.
     Everything else is walked through the wrappers ``_WRAPPER_STEP_KEYS``
     already names, so a gate inside a ``sequence`` is found where it is.
+
+    **A third gate, for the announcement the arms share.** "Prevent all combat
+    damage target creature would deal this turn. If this spell was kicked,
+    prevent all combat damage **another** target creature would deal this
+    turn." (Falling Timber.) The printed "another" makes the two targets one
+    ordered *roles* announcement, and the lowering stamps that whole list onto
+    every step that spends a slot of it -- so the step **outside** the kicked
+    arm still described two targets after the arm was taken away, and an
+    unkicked Falling Timber was refused "requires 2 targets" while one named
+    with two was accepted. :func:`_without_unspent_roles` drops a role no
+    surviving step spends, which is the rule read off the program rather than
+    off the card.
     """
+    viewed = _kicked_arms(instructions, was_kicked)
+    dropped = _spent_roles(instructions, set()) - _spent_roles(viewed, set())
+    if not dropped:
+        return viewed
+    return _without_unspent_roles(viewed, dropped)
+
+
+#: Where a wrapper keeps the steps under it, for the roles walk two functions
+#: down. ``lowering/_roles._ANNOUNCEMENT_BRANCH_KEYS``' list, spelled again here
+#: because this module is imported by that one: every key a stamped roles
+#: description can sit under, which is wider than ``_WRAPPER_STEP_KEYS`` by the
+#: toll's ``otherwise`` (Withdraw).
+_ROLE_BRANCH_KEYS = ("steps", "then", "else", "action", "otherwise")
+
+
+def _spent_roles(instructions, found: set) -> set:
+    """Every role name a step under *instructions* acts on (its ``targets``
+    description's own ``role`` key), gathered into *found*."""
+    for instruction in instructions:
+        payload = getattr(instruction, "payload", None) or {}
+        role = payload_own_role(payload)
+        if role is not None:
+            found.add(role)
+        for key in _ROLE_BRANCH_KEYS:
+            nested = payload.get(key)
+            if isinstance(nested, (list, tuple)):
+                _spent_roles(nested, found)
+    return found
+
+
+def _without_unspent_roles(instructions, dropped: set) -> tuple:
+    """*instructions* with the roles named in *dropped* taken out of every
+    shared roles description (CR 702.33g).
+
+    A description left with **one** role is put back to the ordinary one-target
+    shape it was stamped from -- ``roles_spec`` refuses a one-role list, on the
+    ground that the two shapes must not both be able to mean the same spell --
+    and one left with several keeps the rest in order.
+
+    **Only a trailing role is dropped.** The chosen targets travel as one
+    positional list in role order (:func:`role_slot`), and the resolution reads
+    the card's own program, not this view: taking a role out of the *front*
+    would move every later slot down one in the announcement and leave the
+    handler reading the old position. No card prints its kicked-only target
+    first; a description that did is left whole, which asks for a target the
+    card would not rather than resolving one step onto another's object.
+    """
+    rewritten: list = []
+    for instruction in instructions:
+        payload = getattr(instruction, "payload", None) or {}
+        updated = None
+        described = payload.get("targets")
+        if payload_own_role(payload) is not None:
+            roles = [entry for entry in described.get("roles") or ()]
+            kept = [
+                entry for entry in roles
+                if not (isinstance(entry, dict) and entry.get("role") in dropped)
+            ]
+            if len(kept) < len(roles) and roles[:len(kept)] == kept:
+                if len(kept) == 1:
+                    plain = {
+                        key: value for key, value in described.items()
+                        if key not in ("roles", "role")
+                    }
+                    plain["kind"] = kept[0].get("kind", "object")
+                else:
+                    plain = {**described, "roles": kept}
+                updated = {**payload, "targets": plain}
+        for key in _ROLE_BRANCH_KEYS:
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            inner = _without_unspent_roles(tuple(nested), dropped)
+            if inner != tuple(nested):
+                updated = {**(updated or payload), key: inner}
+        rewritten.append(
+            instruction if updated is None
+            else type(instruction)(instruction.kind, instruction.value, updated)
+        )
+    return tuple(rewritten)
+
+
+def _kicked_arms(instructions, was_kicked: bool) -> tuple:
+    """The arm-and-gate half of :func:`_as_kicked`: every ``was_kicked``
+    ``if_then`` collapsed to the arm that will run, every instruction gated on
+    it kept or dropped, recursing through the wrappers."""
     kept: list = []
     for instruction in instructions:
         payload = instruction.payload or {}
@@ -2595,14 +2693,14 @@ def _as_kicked(instructions, was_kicked: bool) -> tuple:
             and condition.get("kind") == "was_kicked"
         ):
             arm = "then" if was_kicked != bool(condition.get("negated")) else "else"
-            kept.extend(_as_kicked(tuple(payload.get(arm) or ()), was_kicked))
+            kept.extend(_kicked_arms(tuple(payload.get(arm) or ()), was_kicked))
             continue
         rewritten = None
         for key in _WRAPPER_STEP_KEYS.get(instruction.kind, ()):
             steps = tuple(payload.get(key) or ())
             if not steps:
                 continue
-            viewed = _as_kicked(steps, was_kicked)
+            viewed = _kicked_arms(steps, was_kicked)
             if viewed != steps:
                 rewritten = {**(rewritten or payload), key: viewed}
         if rewritten is not None:
@@ -2758,6 +2856,37 @@ def cast_target_slot(
                 int(optional_cost_payments.get(kicker, 0) or 0) > 0,
             )
     return _first_described_slot(instructions)
+
+
+def instructions_as_announced(
+    card, program, optional_cost_payments: dict | None,
+) -> tuple:
+    """*program*'s instructions as a cast announcing *optional_cost_payments*
+    will run them: the :func:`_as_kicked` view for a card that prints a kicker
+    and a caller that has CR 601.2b's answer, the program itself otherwise.
+
+    For a reader that needs the **step** an announcement is about rather than
+    its picker spec — today the casting path's division gate
+    (``divided_damage.divided_description``). "Magma Burst deals 3 damage to
+    any target. If this spell was kicked, it deals 3 damage to another target."
+    and "Prevent the next 3 damage … divided as you choose. If this spell was
+    kicked, prevent the next 6 damage this way instead." (Pollen Remedy) both
+    keep their divided step under a ``was_kicked`` arm, and which arm it is
+    decides how many targets are named and what the shares must total
+    (CR 601.2c, CR 601.2d). Read off the card's every arm, that gate found no
+    divided step at all — it walks a ``sequence`` and nothing else — so a
+    kicked Magma Burst announced two targets, had no share stamped on either,
+    and resolved the even split of 3: one damage each.
+    """
+    instructions = tuple(program.instructions)
+    if optional_cost_payments is None:
+        return instructions
+    kicker = kicker_cost(card.oracle_text or "")
+    if kicker is None:
+        return instructions
+    return _as_kicked(
+        instructions, int(optional_cost_payments.get(kicker, 0) or 0) > 0
+    )
 
 
 def derive_cast_target(card, program, *, from_zone: str = "hand") -> str | None:

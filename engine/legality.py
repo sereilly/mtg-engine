@@ -1157,8 +1157,22 @@ class LegalityMixin:
             # replaces `_enumerate_targets` — so the shared tail below is out of
             # reach and the source list has to be attached here too.
             self._attach_chosen_source_targets(caster_index, card, spec)
+            # …and the cost picker's candidates, for the same reason. A kicked
+            # Falling Timber is the first roles spell that also pays with a
+            # permanent ("Kicker—Sacrifice a land"): without this the picker
+            # described a land to give up and offered none to choose from.
+            if spec.get("cost_spec"):
+                cost_spec = dict(spec["cost_spec"])
+                cost_spec["valid_targets"] = self._enumerate_targets(
+                    caster_index, card, cost_spec, for_cast=True,
+                )
+                spec["cost_spec"] = cost_spec
             return spec
-        spec["valid_targets"] = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        spec["valid_targets"] = self._enumerate_targets(
+            caster_index, card, spec, for_cast=True,
+            # The same answer the spec above was derived under (CR 702.33g).
+            optional_cost_payments=optional_cost_payments or {},
+        )
         # Demonic Embrace, Goblin Grenade, Soul Exchange: a spell with a target
         # *and* a choosable cost carries two pickers, each enumerating its own
         # candidates — the cost over the caster's own cards with no targeting
@@ -1330,8 +1344,13 @@ class LegalityMixin:
                 # by. The client's counter and ``_optional_cost_announcement``
                 # both address an offer by it, so one name keeps them one path.
                 "symbols": cost.optional_key,
+                # "kicker" for "Kicker—Sacrifice a land" (Falling Timber), for
+                # the reason the mana walk below names it: the player deciding
+                # whether to give up a land needs to know that price is what
+                # the spell's second sentence asks about.
                 "label": (
                     "buyback" if buyback == cost.optional_key
+                    else "kicker" if kicker == cost.optional_key
                     else cost.describe()
                 ),
                 "repeatable": False,
@@ -2400,7 +2419,8 @@ class LegalityMixin:
         return f"{card.name} can't name the same target twice"
 
     def _described_cast_target_slots(
-        self, caster_index: int, card: CardDefinition, spec: dict
+        self, caster_index: int, card: CardDefinition, spec: dict,
+        *, optional_cost_payments: dict | None = None,
     ) -> set[tuple[int, int]]:
         """Every battlefield slot *card*'s printed target description admits
         **now**, as ``(seat, index)``.
@@ -2415,8 +2435,15 @@ class LegalityMixin:
         announcement and the resolution cannot come to disagree about what a
         printed word means. Two copies of that list is how "nonblack" came to
         be enforced at announcement and forgotten at resolution.
+
+        *optional_cost_payments* is the announcement *spec* was derived under
+        (CR 702.33g), handed on so the per-candidate probe judges each slot
+        against that same spec rather than against the card's every arm.
         """
-        valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+        valid = self._enumerate_targets(
+            caster_index, card, spec, for_cast=True,
+            optional_cost_payments=optional_cost_payments,
+        )
         return {
             (t["seat"], t["index"]) for t in valid
             if t.get("kind") == "permanent" and t.get("index") is not None
@@ -2473,7 +2500,10 @@ class LegalityMixin:
         )
         if spec is None or spec.get("kind") == "stack":
             return None
-        if self._enumerate_targets(caster_index, card, dict(spec), for_cast=True):
+        if self._enumerate_targets(
+            caster_index, card, dict(spec), for_cast=True,
+            optional_cost_payments=optional_cost_payments,
+        ):
             return None
         return f"no valid target for {card.name}"
 
@@ -2550,7 +2580,17 @@ class LegalityMixin:
             # legal cast. The chosen mode's own targets are checked by the arms
             # in ``_validate_cast_targets``, which is handed the mode index.
             return None
-        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        # Under the announcement where there is one (CR 702.33g): a target
+        # printed only in a kicked half belongs to a kicked cast alone, so the
+        # spec the named targets are judged against is the one that cast
+        # describes. Read as the whole card, Falling Timber is two roles —
+        # which the branch below hands to ``_validate_cast_targets`` — and the
+        # one target of an *unkicked* Falling Timber was then checked by
+        # nobody: it could be aimed at a land.
+        spec = derive_cast_spec(
+            card, program, from_zone=from_zone,
+            optional_cost_payments=optional_cost_payments,
+        )
         if spec is None or spec.get("kind") in _UNCHECKED_CAST_TARGET_KINDS:
             return None
         if spec_roles(spec):
@@ -2655,7 +2695,10 @@ class LegalityMixin:
                                                  target_player_index)
         if repeated is not None:
             return repeated
-        legal = self._described_cast_target_slots(caster_index, card, spec)
+        legal = self._described_cast_target_slots(
+            caster_index, card, spec,
+            optional_cost_payments=optional_cost_payments,
+        )
         refused = f"no valid target for {card.name}"
         chosen: list = []
         for permanent_id in named_ids:
@@ -3137,6 +3180,12 @@ class LegalityMixin:
         self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,
         ability_instruction=None, source_permanent=None, ability_source=None,
         triggered: bool = False,
+        # CR 601.2b's answer so far, for the per-candidate probe below: it asks
+        # ``_validate_cast_targets`` about one slot, and that gate re-derives
+        # the spell's spec -- which for a kicked-only target (CR 702.33g) is a
+        # different spec for a kicked cast than for an unkicked one. None reads
+        # every arm, which is what the probe did before a card printed one.
+        optional_cost_payments: dict | None = None,
     ) -> list[dict]:
         kind = spec["kind"]
         if kind in ("none", "modal"):
@@ -3455,6 +3504,7 @@ class LegalityMixin:
                         ok, _ = self._validate_cast_targets(
                             card, caster_index,
                             target_player_index=seat, target_permanent_index=idx,
+                            optional_cost_payments=optional_cost_payments,
                         )
                         if not ok:
                             continue
