@@ -148,7 +148,7 @@ def test_w1g1_reality_anchor_will_not_strip_a_noncreature(set_pool):
     """
     tmp = set_pool("TMP")
 
-    def cast_with_no_permanent_named(battlefield):
+    def cast_with_no_permanent_named(battlefield, *, leaves_in_response=None):
         p0 = PlayerState(
             name="P0",
             battlefield=[_nosick(Permanent(card=tmp[name])) for name in battlefield],
@@ -159,17 +159,34 @@ def test_w1g1_reality_anchor_will_not_strip_a_noncreature(set_pool):
         game.enforce_mana_costs = False
         game._sync_control()
         # The shape the AI produced: a player named, no permanent.
-        game.cast_from_hand(0, "Reality Anchor", target_player_index=0)
+        # Queued, not cast-and-resolved: one rig below responds to it.
+        result = game.queue_from_hand(0, "Reality Anchor", target_player_index=0)
+        if leaves_in_response is not None and result.supported:
+            game.remove_from_battlefield(p0.battlefield[leaves_in_response])
         resolve_stack(game)
-        return game, p0
+        return game, p0, result
 
-    # No creature at all: the enchantment must not be taken as a substitute.
-    game, _ = cast_with_no_permanent_named(["Circle of Protection: Shadow"])
+    # No creature at all: since INV W2G7 that is not a spell with nothing to do
+    # but an announcement CR 601.2c forbids — refused, the card still in hand,
+    # and (the point of this test) nothing stripped from the enchantment.
+    game, p0, result = cast_with_no_permanent_named(["Circle of Protection: Shadow"])
+    assert not result.supported and "no valid target" in result.details
+    assert [card.name for card in p0.hand] == ["Reality Anchor"]
+    assert not any("Circle of Protection: Shadow loses" in line for line in game.log)
+
+    # …and the handler's own scan, reached the one way it still can be: the
+    # only creature leaves in response. The enchantment must not be taken as a
+    # substitute.
+    game, _, result = cast_with_no_permanent_named(
+        ["Circle of Protection: Shadow", "Soltari Foot Soldier"],
+        leaves_in_response=1,
+    )
+    assert result.supported, result.details
     assert any("no valid target to strip" in line for line in game.log)
     assert not any("Circle of Protection: Shadow loses" in line for line in game.log)
 
     # A creature behind it: the scan finds the creature, not the enchantment.
-    game, p0 = cast_with_no_permanent_named(
+    game, p0, _ = cast_with_no_permanent_named(
         ["Circle of Protection: Shadow", "Soltari Foot Soldier"]
     )
     soltari = p0.battlefield[1]

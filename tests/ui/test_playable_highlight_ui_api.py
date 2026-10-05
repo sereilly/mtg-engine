@@ -273,3 +273,33 @@ def test_the_highlight_prices_every_cast_modifier_the_engine_knows():
     }
     assert "Gloom" in modifiers
     assert len(modifiers) > 20, sorted(modifiers)
+
+
+# ---------------------------------------------------------------------------
+# INV W2G7 — CR 601.2c: a spell with no legal target does not glow
+# ---------------------------------------------------------------------------
+#
+# The highlight asked ``_validate_cast_targets`` with no target named, whose
+# per-kind arms answer for the spells whose *first* instruction they name. A
+# two-sentence spell ("Destroy target artifact. You gain life equal to its mana
+# value.") is a ``sequence`` first, reached no arm, and glowed on a board with
+# no artifact — and the click was then stopped by the picker. It asks
+# ``legality.no_legal_cast_target_refusal`` now, the predicate the cast path
+# itself refuses with.
+
+
+def test_w2g7_a_targeted_spell_with_nothing_to_target_is_not_highlighted():
+    assert _playable(_board_session(["Plains", "Plains"], ["Divine Offering"])) == []
+
+
+def test_w2g7_the_same_spell_is_highlighted_once_a_target_exists():
+    with_artifact = _board_session(
+        ["Plains", "Plains", "Ornithopter"], ["Divine Offering"]
+    )
+    assert _playable(with_artifact) == [0]
+
+
+def test_w2g7_a_spell_that_may_name_no_target_keeps_its_highlight():
+    """"Tap up to three target creatures without flying." (Tidal Surge.) Zero
+    is a legal announcement, so an empty board is not a reason to grey it."""
+    assert _playable(_board_session(["Island", "Island"], ["Tidal Surge"])) == [0]

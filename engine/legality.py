@@ -715,17 +715,61 @@ def cast_target_obligation(
         return None
     if spec_is_a_cost(spec) or any(spec.get(flag) for flag in _UNTARGETED_SPEC_FLAGS):
         return None
-    described = (getattr(instruction, "payload", None) or {}).get("targets")
-    quantifier = described.get("quantifier") if isinstance(described, dict) else None
-    if quantifier is None:
+    unnamed = _slot_may_name_nobody(instruction, x_value)
+    if unnamed is None:
         if _inside_an_offer(program.instructions, instruction):
             return None
         return spec
-    if quantifier in _ZERO_TARGET_QUANTIFIERS:
+    return None if unnamed else spec
+
+
+def _slot_may_name_nobody(instruction, x_value: int | None) -> bool | None:
+    """Whether the target slot *instruction* carries may be announced naming
+    nobody (CR 601.2c) — True, False, or None when the slot prints no
+    quantifier at all and so says neither.
+
+    True for "up to N target" and "any number of target", and for "**X**
+    target" until the caster has announced an X of one or more (CR 601.2b comes
+    first, and X may be zero). False for every other printed quantifier: the
+    bare word, a printed count, "one or more".
+    """
+    described = (getattr(instruction, "payload", None) or {}).get("targets")
+    quantifier = described.get("quantifier") if isinstance(described, dict) else None
+    if quantifier is None:
         return None
+    if quantifier in _ZERO_TARGET_QUANTIFIERS:
+        return True
     if described.get("count") == "x":
-        return spec if isinstance(x_value, int) and x_value >= 1 else None
-    return spec
+        return not (isinstance(x_value, int) and x_value >= 1)
+    return False
+
+
+def cast_may_name_no_target(
+    card: CardDefinition, program, *, x_value: int | None = None,
+) -> bool:
+    """Whether an instant or sorcery's target may legally be left unnamed —
+    the positive half of :func:`cast_target_obligation`, for the per-kind arms
+    in ``_validate_cast_targets``.
+
+    Those arms each end in "…and with nothing named, some legal target must
+    exist", written for the one-target spell each was written about. Asked of
+    "Tap **up to three** target creatures" (Tidal Surge), "Destroy **any number
+    of** target creatures" (Phyrexian Purge) or "Return **X** target creatures"
+    (Aether Tide) it refuses an announcement CR 601.2c allows: zero targets is
+    a legal number of them. Seven shipped spells were uncastable at an empty
+    board for it, and the AI — whose own reader knew "up to" — proposed one of
+    them every turn and was refused every turn.
+
+    True only on printed evidence (:func:`_slot_may_name_nobody`); a slot with
+    no quantifier, a modal spell and a spell with no target all answer False,
+    which leaves each arm exactly as strict as it was.
+    """
+    if program.modes:
+        return False
+    slot = cast_target_slot(card, program)
+    if slot is None:
+        return False
+    return _slot_may_name_nobody(slot[1], x_value) is True
 
 
 def _role_object_key(obj) -> tuple:
