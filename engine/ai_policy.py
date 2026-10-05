@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from itertools import product
 from dataclasses import dataclass
 import re
 
 from .ai_valuation import (
+    OFFER_ALTERS,
+    OFFER_RETURNS_SPELL,
     SPELL_TYPES,
+    CastOffer,
+    cast_offers,
+    entry_trigger_target_side,
     ability_denies_its_target,
     ability_target_side,
     cards_drawn_by_controller,
@@ -36,7 +42,7 @@ from .ai_valuation import (
 from .activation_permissions import activation_permission_denial
 from .activation_restrictions import activation_denial, global_activation_ban
 from .auras import controller_cast_ban
-from .cast_costs import additional_costs, cast_announces_x, kicker_cost
+from .cast_costs import additional_costs, cast_announces_x
 from .cast_restrictions import global_cast_ban, last_cast_color_ban
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
@@ -404,6 +410,198 @@ def _cast_spec(card: CardDefinition, program):
     )
 
 
+#: Optional additional costs (CR 601.2b) — the tuning. *Which* offers a card
+#: makes and what each buys is `ai_valuation.cast_offers`; these say how far a
+#: seat goes for one.
+#:
+#: The most times a repeatable offer is announced ("you may pay {1}{G} any
+#: number of times"). The lands bound it first; this bounds the search.
+OFFER_REPEAT_CAP = 6
+#: A buyback paid in life (Slaughter's 4) is taken only while the seat keeps
+#: this much — the reserve `FOREIGN_ACTIVATION_LIFE_RESERVE` keeps, for the
+#: same reason: life is the one resource whose last points lose the game.
+BUYBACK_LIFE_RESERVE = 10
+#: A buyback paid in permanents ("Buyback—Sacrifice a land") is taken only by
+#: a seat that still controls this many of them afterwards: enough lands to
+#: cast everything a limited deck holds.
+BUYBACK_PERMANENTS_KEPT = 6
+#: A buyback paid in cards is taken only from a hand already over its maximum
+#: size (CR 402.2), where the cards it costs were going to cleanup anyway.
+BUYBACK_HAND_KEPT = 7
+
+
+def _mana_value_of(cost: dict[str, int]) -> int:
+    return sum(int(amount or 0) for amount in cost.values())
+
+
+def _buyback_mana_is_spare(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+    offer: CastOffer, from_zone: str,
+) -> bool:
+    """Whether paying *offer* costs this seat no other spell this turn.
+
+    A buyback buys the *next* cast of this card, with mana that could have
+    cast something now. So the rule is the one a player uses: take it with
+    mana nothing else in hand wants. Concretely — if some other spell in hand
+    could be cast *alongside* this one, and could not once the buyback is
+    paid too, the mana is not spare and the offer is declined.
+
+    Free mana (a game not enforcing costs) is always spare.
+    """
+    if not game.enforce_mana_costs:
+        return True
+    player = game.players[player_index]
+    spell = _cost_for(game, player, card, None)
+    with_offer = dict(spell)
+    for symbol, amount in offer.mana.cost_at(None).items():
+        with_offer[symbol] = with_offer.get(symbol, 0) + amount
+    for other_index, other in hand_spells(player):
+        if from_zone == "hand" and other_index == hand_index:
+            continue
+        if other.primary_type == "land" or cast_announces_x(other):
+            continue
+        beside = _cost_for(game, player, other, None)
+        both = dict(spell)
+        every = dict(with_offer)
+        for symbol, amount in beside.items():
+            both[symbol] = both.get(symbol, 0) + amount
+            every[symbol] = every.get(symbol, 0) + amount
+        if (
+            _plan_land_taps(game, player, both) is not None
+            and _plan_land_taps(game, player, every) is None
+        ):
+            return False
+    return True
+
+
+def _buyback_price_is_worth_paying(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+    offer: CastOffer, from_zone: str,
+) -> bool:
+    """Whether a buyback whose price is not mana is worth its price now.
+
+    Three resources, three reserves (the constants above), and a price asking
+    for several is taken only when every one is spare — Flowstone Flood's "Pay
+    3 life, Discard a card at random" is both.
+    """
+    price = offer.price
+    player = game.players[player_index]
+    if price.pay_life_x or price.discard_count_x or price.return_count_x:
+        return False
+    if price.pay_life and player.life - price.pay_life < BUYBACK_LIFE_RESERVE:
+        return False
+    cards_asked = (
+        price.discard_cards + len(price.discard_filters)
+        + (len(player.hand) if price.discard_whole_hand else 0)
+    )
+    if cards_asked:
+        held = len(player.hand) - (1 if from_zone == "hand" else 0)
+        if held - cards_asked < BUYBACK_HAND_KEPT:
+            return False
+    for giving_up, filter_, count in (
+        ("sacrifice", price.sacrifice_filter, max(1, price.sacrifice_count)),
+        ("return", price.return_filter, max(1, price.return_count)),
+    ):
+        if filter_ is None:
+            continue
+        # The engine's own list of what could pay — the one its gate counts.
+        available = game._additional_cost_candidates(
+            player_index, price, giving_up=giving_up
+        )
+        if len(available) - count < BUYBACK_PERMANENTS_KEPT:
+            return False
+    if price.sacrifice_all_filter is not None or price.exile_filter is not None:
+        return False
+    if price.exile_graveyard_filter is not None and price.exile_graveyard_count_x:
+        return False
+    return True
+
+
+def _times_worth_taking(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+    offer: CastOffer, from_zone: str,
+) -> int:
+    """The most times this seat would pay *offer* on this cast — 0 to decline.
+
+    **The policy, by what the offer buys** (`ai_valuation.CastOffer.buys`):
+
+    * *kicked* and *more_effect* — taken whenever the lands can pay for it,
+      a repeatable one as many times as they can. That was the kicker rule;
+      it is every mana offer's now, because "the spell does more" is the same
+      purchase whichever keyword sells it. Whether the lands **can** is not
+      decided here: each announcement is built as a whole candidate, and one
+      the board cannot pay or cannot aim falls back to the next.
+    * *returns_spell* (buyback) — taken with mana nothing else in hand wants
+      (`_buyback_mana_is_spare`), or with a non-mana price the seat can spare
+      (`_buyback_price_is_worth_paying`). A seat that always bought back would
+      spend its turn's mana re-buying one spell while its hand sat uncast; one
+      that never did left half of 28 cards unreachable, which is where this
+      started.
+    * *other_effect* — declined. The paid spell is a different spell rather
+      than a larger one (Undergrowth's paid Fog spares every red creature),
+      and nothing here can tell which the board wants. One shipped card.
+    """
+    if offer.from_zone not in (None, from_zone):
+        return 0
+    if offer.buys == OFFER_ALTERS:
+        return 0
+    if offer.price is not None:
+        if offer.buys != OFFER_RETURNS_SPELL:
+            return 0
+        return 1 if _buyback_price_is_worth_paying(
+            game, player_index, card, hand_index, offer, from_zone
+        ) else 0
+    if offer.buys == OFFER_RETURNS_SPELL and not _buyback_mana_is_spare(
+        game, player_index, card, hand_index, offer, from_zone
+    ):
+        return 0
+    if not offer.repeatable:
+        return 1
+    if not game.enforce_mana_costs:
+        # Free mana has no ceiling to size "any number of times" by; once.
+        return 1
+    each = _mana_value_of(offer.mana.cost_at(None))
+    if each <= 0:
+        return 1
+    untapped = sum(
+        1 for permanent in game.controlled_by(player_index)
+        if permanent.has_type("land") and not permanent.tapped
+    )
+    return max(0, min(OFFER_REPEAT_CAP, untapped // each))
+
+
+def _offer_announcements(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int,
+    from_zone: str,
+) -> list[dict[str, int]]:
+    """Every answer to CR 601.2b's offers this seat would give, best first.
+
+    Empty for a card that makes no offer. Otherwise the announcements run from
+    everything worth taking, as many times as worth taking, down to ``{}`` —
+    most payments first, so the first one that builds a legal, affordable
+    candidate is the most the board can actually pay for.
+    """
+    if card.primary_type == "land":
+        return []
+    offers = cast_offers(card)
+    if not offers:
+        return []
+    wanted = [
+        (offer, times) for offer in offers
+        if (times := _times_worth_taking(
+            game, player_index, card, hand_index, offer, from_zone
+        )) > 0
+    ]
+    combinations = sorted(
+        product(*(range(times, -1, -1) for _offer, times in wanted)),
+        key=lambda counts: -sum(counts),
+    )
+    return [
+        {offer.key: count for (offer, _times), count in zip(wanted, counts) if count}
+        for counts in combinations
+    ]
+
+
 def _cast_candidate(
     game: Game,
     player_index: int,
@@ -416,22 +614,24 @@ def _cast_candidate(
     """The `CastAction` casting *card* from *from_zone* would be, or None when
     the cast is illegal, unaffordable or has nothing legal to point at.
 
-    **Kicker (CR 702.33) is decided here, and the policy is stated: kick
-    whenever the lands can pay for it.** A card that prints a kicker is tried
-    kicked first and unkicked second, each as a whole candidate, because the
-    two are different announcements -- a different price, and by CR 702.33g a
-    different set of targets (an unkicked Benalish Emissary names no land). So
-    a kicked attempt that cannot be afforded, or whose kicked half has nothing
-    legal to point at, falls back to the plain creature rather than leaving the
-    card in hand all game.
+    **CR 601.2b's optional additional costs are decided here** — kicker
+    (CR 702.33), buyback (CR 702.27) and the unnamed "you may pay … any number
+    of times" alike, by what each buys rather than by what it is called
+    (`_times_worth_taking`). Each answer is tried as a whole candidate, most
+    paid first, because two answers are two different announcements: a
+    different price, and by CR 702.33g and CR 601.2c a different set of targets
+    (an unkicked Benalish Emissary names no land; a Primitive Justice paid
+    twice names three artifacts). So an attempt that cannot be afforded, or
+    whose paid-for half has nothing legal to point at, falls back to the next
+    and finally to the plain spell rather than leaving the card in hand.
     """
-    kicker = kicker_cost(card.oracle_text or "")
-    if kicker is None or card.primary_type == "land":
+    announcements = _offer_announcements(game, player_index, card, hand_index, from_zone)
+    if not announcements:
         return _cast_candidate_announcing(
             game, player_index, card, hand_index,
             from_zone=from_zone, extra_generic=extra_generic, offers=None,
         )
-    for offers in ({kicker: 1}, {}):
+    for offers in announcements:
         token = _OFFERS_ANNOUNCED.set(offers)
         try:
             candidate = _cast_candidate_announcing(
@@ -466,21 +666,30 @@ def _paid_for_half_names_nothing(
     return not game._enumerate_targets(player_index, card, taken, for_cast=True)
 
 
-def _offer_taken(card: CardDefinition, offers: "dict[str, int] | None"):
-    """The one optional mana offer *offers* takes on *card*, or None.
+def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
+    """``(offer, times)`` for every optional **mana** offer *offers* takes.
 
-    One, because one is all this policy announces: the kicker. Read back off
-    ``additional_costs`` -- the table the cast path charges from -- so the mana
-    planned here is the mana the cast will ask for.
+    Read back off ``additional_costs`` -- the table the cast path charges from
+    -- so the mana planned here is the mana the cast will ask for. A non-mana
+    price (``optional_key``) is not in this list: it is paid out of permanents,
+    cards or life, and `_printed_costs_are_payable` asks the engine's gate
+    about it.
     """
-    for symbols, times in (offers or {}).items():
-        if int(times or 0) <= 0:
-            continue
-        for cost in additional_costs(card):
-            for offer in cost.optional_mana:
-                if offer.symbols == symbols:
-                    return offer
-    return None
+    taken = []
+    for cost in additional_costs(card):
+        for offer in cost.optional_mana:
+            times = int((offers or {}).get(offer.symbols, 0) or 0)
+            if times > 0:
+                taken.append((offer, times))
+    return taken
+
+
+def _announces_any_offer(card: CardDefinition, offers: "dict[str, int] | None") -> bool:
+    """Whether *offers* takes anything *card* actually offers, mana or not."""
+    if not offers:
+        return False
+    keys = {offer.key for offer in cast_offers(card)}
+    return any(int(times or 0) > 0 and key in keys for key, times in offers.items())
 
 
 def _cast_candidate_announcing(
@@ -547,7 +756,7 @@ def _cast_candidate_announcing(
     # running. What made it visible was Surge of Strength, whose "discard a red
     # or green card" became payable-or-not the moment the clause was read at all.
     if not _printed_costs_are_payable(
-        game, player_index, card, hand_index, from_zone, x_value
+        game, player_index, card, hand_index, from_zone, x_value, taken=offers
     ):
         return None
     target = _choose_target_for_spell(card, player_index, game, x_value)
@@ -584,6 +793,10 @@ def _cast_candidate_announcing(
             target, target_permanent_index, target_permanent_ids = roles
         else:
             several = _choose_several_targets(game, player_index, card)
+            if several == ():
+                # The announced count has no legal set of targets on the side
+                # the effect wants (CR 601.2c). Not proposed.
+                return None
             if several is not None:
                 target, target_permanent_index, target_permanent_ids = several
             else:
@@ -621,8 +834,9 @@ def _cast_candidate_announcing(
     tap_colors: tuple[str, ...] = ()
 
     alternative_cost = False
-    taken_offer = _offer_taken(card, offers)
-    if taken_offer is not None and _paid_for_half_names_nothing(
+    taken_offers = _offers_taken(card, offers)
+    announces_offer = _announces_any_offer(card, offers)
+    if announces_offer and _paid_for_half_names_nothing(
         game, player_index, card, offers
     ):
         # The half the offer buys has a target and the board has none for it
@@ -630,36 +844,38 @@ def _cast_candidate_announcing(
         # legal and buys nothing, so this candidate is declined and the caller
         # falls back to the plain cast.
         return None
-    if taken_offer is not None and not game.enforce_mana_costs and taken_offer.x_count:
+    sized_offer = next((offer for offer, _times in taken_offers if offer.x_count), None)
+    if sized_offer is not None and not game.enforce_mana_costs:
         # A free X has no ceiling to size it by, and "the most the lands can
         # pay" is the only rule this policy has for one. Declined.
         return None
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
-        if taken_offer is not None:
-            # The offer's mana on top of the spell's, planned as one payment
+        if taken_offers:
+            # The offers' mana on top of the spell's, planned as one payment
             # because it is paid as one (`casting.queue_from_hand` folds an
-            # optional cost into the same mana). For an offer printing an {X}
-            # the X is sized here, largest first, exactly as
-            # `_max_affordable_x` sizes a mana cost's -- and an X of zero is
-            # not proposed, for the reason `x_value == 0` is refused above: it
-            # is a price paid for nothing.
+            # optional cost into the same mana) — each offer as many times as
+            # it is announced. For an offer printing an {X} the X is sized
+            # here, largest first, exactly as `_max_affordable_x` sizes a mana
+            # cost's -- and an X of zero is not proposed, for the reason
+            # `x_value == 0` is refused above: it is a price paid for nothing.
             sized = None
-            for offer_x in (range(15, 0, -1) if taken_offer.x_count else (None,)):
+            for offer_x in (range(15, 0, -1) if sized_offer is not None else (None,)):
                 total = dict(required)
-                for symbol, amount in taken_offer.cost_at(offer_x).items():
-                    total[symbol] = total.get(symbol, 0) + amount
+                for offer, times in taken_offers:
+                    for symbol, amount in offer.cost_at(offer_x).items():
+                        total[symbol] = total.get(symbol, 0) + amount * times
                 if _plan_land_taps(game, player, total) is not None:
                     sized = (offer_x, total)
                     break
             if sized is None:
                 return None
-            if taken_offer.x_count:
+            if sized_offer is not None:
                 x_value = sized[0]
             required = sized[1]
         plan = _plan_land_taps(game, player, required)
         if plan is None:
-            if taken_offer is not None:
+            if announces_offer:
                 return None
             # CR 118.9: the mana cost is not the only price. A spell whose
             # printed alternative cost this board *can* pay is castable right
@@ -695,7 +911,7 @@ def _cast_candidate_announcing(
         alternative_cost=alternative_cost,
         divided_targets=divided_targets,
         land_tap_colors=tap_colors,
-        optional_cost_payments=dict(offers) if taken_offer is not None else None,
+        optional_cost_payments=dict(offers) if announces_offer else None,
     )
 
 
@@ -706,8 +922,13 @@ def _printed_costs_are_payable(
     hand_index: int,
     from_zone: str,
     x_value: int | None,
+    taken: "dict[str, int] | None" = None,
 ) -> bool:
     """Whether *card*'s printed additional costs (CR 601.2b) can be paid now.
+
+    *taken* is the candidate's answer to the optional ones: a price nobody
+    took is not charged and cannot make the spell uncastable, and one that
+    was taken ("Buyback—Sacrifice a land") is gated like any other.
 
     Asked of ``_unpayable_additional_cost`` rather than re-derived, for the
     reason :func:`_alternative_cost_is_payable` beside it gives: a policy that
@@ -733,6 +954,7 @@ def _printed_costs_are_payable(
         spell_hand_index=hand_index if from_zone == "hand" else None,
         from_zone=from_zone,
         x_value=x_value,
+        taken=taken,
     ) is None
 
 
@@ -1030,6 +1252,20 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # and a pump with no friendly one landed on an opponent's: an
             # activation that resolves and harms the seat that paid for it.
             side = _activation_target_side(permanent, ability.instruction)
+            if spec.get("source_of_choice"):
+                # "…a source of your choice…" (CR 609.7a) is not a target, so
+                # no side describes it — and a shield's own category reads
+                # "you", which named the activator's own largest creature as
+                # the thing to be shielded *from* (Bone Mask, Dark Sphere,
+                # Kithkin Armor, Pentagram of the Ages, Protective Sphere,
+                # Righteous Aura). The cast side's answer, for the same phrase.
+                named = _choose_damage_source(game, player_index, perms)
+                if not named:
+                    continue
+                perms = [
+                    t for t in perms if (t["seat"], t["index"]) == (named[0], named[1])
+                ]
+                side = None
             if side == "you" and ability_denies_its_target(ability.instruction):
                 # "Destroy target … you control" (Rats of Rath), "Return target
                 # land you control to its owner's hand" (Trade Routes): the
@@ -2998,9 +3234,10 @@ def _choose_role_targets(
 
 def _choose_several_targets(
     game: Game, caster_index: int, card: CardDefinition
-) -> tuple[int, list[int], list[int] | None] | None:
+) -> tuple[int, list[int], list[int] | None] | tuple[()] | None:
     """Pick ``(seat, [permanent_index, …], [permanent_id, …] | None)`` for a spell
-    naming several targets, or None when the card names no such choice.
+    naming several targets, None when the card names no such choice, or ``()``
+    when it names an exact number the board cannot supply.
 
     Which cards this reaches is *derived*, never a list of names: the compiled
     program carries the maximum (``engine/targeting.py``'s ``max_targets``), so a
@@ -3033,6 +3270,7 @@ def _choose_several_targets(
         game.announced_cast_x(caster_index, card)
         if (spec or {}).get("x_targets") else None
     )
+    exact = False
     if announced is not None:
         if announced < 1:
             # CR 601.2c: naming nothing is a legal announcement for an "up to"
@@ -3043,17 +3281,21 @@ def _choose_several_targets(
     elif not isinstance(maximum, int) or maximum <= 1:
         # "Destroy target artifact. For each additional {1}{R} you paid, destroy
         # **another** target artifact…" (Primitive Justice): the count is fixed
-        # by an announcement (CR 601.2b) this policy does not make, since it
-        # takes no optional additional cost -- so the number is the base alone,
-        # and it can be one. One is still a number this chooser has to answer:
-        # CR 601.2c refuses an announcement that names no target
+        # by CR 601.2b's announcement — the candidate being built's own
+        # (`_OFFERS_ANNOUNCED`), read through the reader the announcement gate
+        # sizes it by. With nothing taken it is the base alone, and it can be
+        # one. One is still a number this chooser has to answer: CR 601.2c
+        # refuses an announcement that names no target
         # (`legality.cast_target_refusal`), and a several-target handler has no
         # resolution-time board scan to fall into the way a single-target one
         # does. Without this the seat re-proposes the spell every turn and is
         # refused every turn, which is exactly what `refused_casts` counts.
-        maximum = cost_target_count((spec or {}).get("cost_targets"), {}) or 0
+        maximum = cost_target_count(
+            (spec or {}).get("cost_targets"), _OFFERS_ANNOUNCED.get() or {}
+        ) or 0
         if maximum < 1:
             return None
+        exact = bool((spec or {}).get("exact_targets"))
     legal = game.cast_target_spec(caster_index, card).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
     # A graveyard card is not a permanent and has no `permanent_id`; its slots
@@ -3116,7 +3358,17 @@ def _choose_several_targets(
     if sides and set(sides) == {"opponent"}:
         opponents = sorted(seat for seat in by_seat if seat != caster_index)
         if opponents:
+            if exact and len(by_seat[opponents[0]]) < maximum:
+                # A count the announcement fixed and this board cannot fill
+                # (a Primitive Justice paid twice with one artifact to aim
+                # at): `()`, so the caller declines this announcement and
+                # tries the next smaller one.
+                return ()
             return opponents[0], by_seat[opponents[0]][:maximum], None
+        if exact:
+            # Every slot wants an opponent's permanent and no opponent has
+            # one. The fallback below would aim them at the caster's own.
+            return ()
 
     # One seat's worth: the index list is positional on a single battlefield
     # (`target_player_index` names whose), so a cross-seat spread needs the ids
@@ -3124,6 +3376,8 @@ def _choose_several_targets(
     # where no slot names a side: "up to N" may legally choose fewer, but every
     # card carrying that template gives a benefit per target, so more is better.
     seat = caster_index if caster_index in by_seat else min(by_seat)
+    if exact and len(by_seat[seat]) < maximum:
+        return ()
     return seat, by_seat[seat][:maximum], None
 
 
@@ -3178,7 +3432,11 @@ def _choose_single_object_target(
         # (Scapegoat): a denial the printed words aim at the caster's own
         # board, which this policy has no rescue to time it for.
         return ()
-    side = spell_target_side(card)
+    if spec.get("source_of_choice"):
+        return _choose_damage_source(game, caster_index, legal)
+    # A permanent's entry trigger, whose target this engine names as the
+    # permanent is cast: `spell_target_side` has nothing to read for it.
+    side = spell_target_side(card) or entry_trigger_target_side(card)
     others = [seat for seat in range(len(game.players)) if seat != caster_index]
     if side == "you":
         order = [caster_index]
@@ -3197,6 +3455,57 @@ def _choose_single_object_target(
             if isinstance(permanent_id, int):
                 return seat, entry["index"], [permanent_id]
     return ()
+
+
+def _choose_damage_source(game: Game, caster_index: int, legal: list[dict]):
+    """Name "a source of your choice" (CR 609.7a) for a spell that shields
+    against one: ``(seat, index, [permanent_id])``, or ``()`` when no source on
+    the table is one this seat would want to name.
+
+    A source is not a target, so no effect has a *side* for it
+    (``spell_target_side`` is None) and the chooser above took the first legal
+    permanent on the caster's own seat — its own first land. Legal, and a card
+    spent on nothing: three of seven simulated Samite Ministrations, and every
+    Reverse Damage, Eye for an Eye, Shadowbane, Reflect Damage and
+    Invulnerability an AI seat ever cast.
+
+    The choice is the one the engine makes for a seat that names nothing
+    (``handlers/prevention.default_damage_source``, written for the activated
+    half of the same phrase): the opposing source most likely to deal damage
+    this turn. Asked of that function rather than restated, and then held to
+    the announcement's own enumeration — where the printed phrase narrows what
+    may be chosen, the same rule is applied to what it admits. With no
+    opposing creature there is nothing worth shielding against and the card is
+    kept for a board that has one.
+    """
+    from .handlers.prevention import default_damage_source
+
+    by_id: dict[int, tuple[int, int]] = {}
+    for entry in legal:
+        permanent = game.permanent_at(entry["seat"], entry["index"])
+        permanent_id = game.permanent_id_of(permanent)
+        if isinstance(permanent_id, int):
+            by_id[permanent_id] = (entry["seat"], entry["index"])
+    chosen = default_damage_source(game, caster_index)
+    chosen_id = getattr(chosen, "permanent_id", None)
+    if chosen_id in by_id:
+        seat, index = by_id[chosen_id]
+        return seat, index, [chosen_id]
+    admitted = [
+        permanent
+        for permanent_id, (seat, _index) in by_id.items()
+        if seat != caster_index
+        and (permanent := game.permanent_by_id(permanent_id)) is not None
+        and permanent.is_creature
+    ]
+    if not admitted:
+        return ()
+    best = max(
+        admitted,
+        key=lambda perm: (bool(perm.attacking), perm.effective_power, -perm.permanent_id),
+    )
+    seat, index = by_id[best.permanent_id]
+    return seat, index, [best.permanent_id]
 
 
 def _caster_can_make_its_sacrifices(

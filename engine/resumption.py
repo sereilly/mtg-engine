@@ -40,6 +40,35 @@ from __future__ import annotations
 from typing import Any, Callable, Iterable
 
 
+class _RestOfLoop:
+    """One loop's record on ``game.resume_stack``: the steps it has not run.
+
+    ``live`` is whether the step in front of that remainder is **still
+    executing** — the loop is on the Python call stack right now, not waiting
+    for anybody. The difference did not exist while every answer arrived from
+    outside the engine (a player's confirm, a test's drain): by then every loop
+    on the stack had returned, so "on the stack" and "waiting" were one fact.
+
+    A table whose prompts a driver answers (`Game.prompt_driver`) breaks that.
+    The combat damage step's last step drains its priority window; a trigger
+    resolving in that window runs a loop of its own, which stops to ask; the
+    driver answers at once — *inside* the window, with the outer loop's step
+    still running. Unwinding everything then re-runs the outer loop's remainder
+    from underneath it, and the outer step returns to pop a record that is
+    already gone. So the unwinding stops at a live record: that loop will carry
+    on by itself the moment its step returns.
+    """
+
+    __slots__ = ("resume", "live")
+
+    def __init__(self, resume: Callable[[], None]) -> None:
+        self.resume = resume
+        self.live = True
+
+    def __call__(self) -> None:
+        self.resume()
+
+
 def run_resumable(game, items: Iterable[Any], step: Callable[[Any], None]) -> None:
     """Run *step* over *items*, stopping if one of them suspends.
 
@@ -51,8 +80,12 @@ def run_resumable(game, items: Iterable[Any], step: Callable[[Any], None]) -> No
 
     def run_from(index: int) -> None:
         for position in range(index, len(items)):
-            game.resume_stack.append(lambda position=position: run_from(position + 1))
-            step(items[position])
+            rest = _RestOfLoop(lambda position=position: run_from(position + 1))
+            game.resume_stack.append(rest)
+            try:
+                step(items[position])
+            finally:
+                rest.live = False
             if game.effect_suspended:
                 # Leave the continuation: it is the rest of this loop, and
                 # answering the prompt is what will come back for it.
@@ -67,7 +100,10 @@ def resume_after_answer(game) -> None:
 
     Innermost first — the deepest loop is the one whose next step comes soonest.
     A continuation that suspends again leaves its own record and stops the
-    unwinding, so the next answer picks up from there.
+    unwinding, so the next answer picks up from there. So does a record whose
+    step is still running (`_RestOfLoop.live`): that loop is not waiting.
     """
     while game.resume_stack and not game.effect_suspended:
+        if getattr(game.resume_stack[-1], "live", False):
+            return
         game.resume_stack.pop()()

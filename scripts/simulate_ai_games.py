@@ -75,6 +75,12 @@ def main() -> int:
         f"{report.cleanup_discards} card(s) discarded to hand size"
     )
 
+    # CR 500.7: extra turns actually taken. Only a pool printing one can move
+    # it — and until INV's wave 2 nothing could, because the loop alternated
+    # the seats itself and walked past the queue.
+    if report.extra_turns_taken:
+        print(f"Extra turns taken: {report.extra_turns_taken}")
+
     # CR 602.1b: abilities activated on a permanent another seat controls
     # ("Any player may activate this ability"). Only a pool printing one can
     # move it, so it is shown when it did.
@@ -124,6 +130,22 @@ def main() -> int:
             f"{report.games_completed} game(s). The run proves nothing — check "
             f"that {selection.label} can produce mana for its own spells."
         )
+        return 1
+
+    # A step that ended with something still owed — a prompt nobody answered,
+    # an object still on the stack. The sixth of the "it plays a whole turn"
+    # omissions looked exactly like a clean run: every step ran and every log
+    # line was there, with an upkeep trigger's answer taken after the draw. So
+    # it is counted where the steps change and it fails the run, because zero
+    # is the only reading under which the turn structure above was real.
+    if report.steps_left_owing:
+        total = sum(report.steps_left_owing.values())
+        print(
+            f"Steps that ended with something still owed: {total} "
+            "(a decision was taken in a later step than the one that asked)"
+        )
+        for what, count in report.steps_left_owing.most_common(8):
+            print(f"  {count}x {what}")
         return 1
 
     if report.issues:

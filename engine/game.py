@@ -333,6 +333,25 @@ class Game(
     # Seats controlled by a human, set by the web layer each action. Empty in
     # headless/AI play, so forced sacrifices there resolve inline without a prompt.
     interactive_seats: set[int] = field(default_factory=set)
+    # Who answers the prompts a table nobody is going to ask is owed, **at the
+    # moment the engine reaches them** (`PendingChoicesMixin.drive_owed_prompts`,
+    # asked by `_resolve_priority_window` and `_settle` between one stack object
+    # and the next). None for every game but the AI simulator's, which is what
+    # keeps a bare headless ``Game`` exactly as it was: its prompts stay queued
+    # for the caller to read and drain, and forty tests read that queue.
+    #
+    # It exists because "the caller drains afterwards" means *after the engine
+    # call returns*, and one engine call can be several steps of a turn. The
+    # simulator answered an upkeep trigger's "you may …" after the draw step it
+    # was printed to precede, and a combat trigger's after the combat was over
+    # (CR 608.2: a resolution is not finished until its last instruction is,
+    # and CR 500.2: a step does not end around one). Supplying the answer is
+    # the driver's job; knowing *when* it is owed is the engine's, and a driver
+    # that re-derives that has a turn order of its own to get wrong.
+    prompt_driver: object = field(default=None, repr=False, compare=False)
+    # True while that driver is answering — it is not re-entered (see
+    # ``drive_owed_prompts``).
+    driving_prompts: bool = field(default=False, repr=False, compare=False)
     # Replacement effects suspended on a player's decision — the optional or
     # choose-one ones (Library of Leng's discard destination, Aladdin's Lamp's
     # look-at-the-top-X, Ring of Ma'rûf's outside-the-game card). Each entry is a

@@ -435,6 +435,14 @@ class PendingChoicesMixin:
             progressed = False
             for kind in wanted if wanted is not None else self._queued_kinds():
                 for choice in self.pending_choices_of(kind, only_player_index):
+                    # Answered already, by a drain *inside* an earlier answer
+                    # of this very loop: a default can resolve something, and
+                    # at a table with a `prompt_driver` the engine drains
+                    # again from in there. The list being walked is a
+                    # snapshot, so without this the choice's default would be
+                    # applied a second time.
+                    if not any(queued is choice for queued in self.pending_choices):
+                        continue
                     self.take_choice_default(choice)
                     # Every default takes its choice off the queue; dropping it
                     # here as well is what guarantees this loop terminates even
@@ -443,6 +451,38 @@ class PendingChoicesMixin:
                     progressed = True
             if not progressed:
                 return
+
+    def drive_owed_prompts(self) -> bool:
+        """Hand every queued prompt to ``prompt_driver``; True when it answered any.
+
+        The seam a driver with no interactive seat answers through, called by
+        the engine at the two places it decides what happens next on the stack
+        (``_resolve_priority_window``, ``_settle``) — so the answer to a prompt
+        is taken before the next object resolves and before the step that
+        armed it ends, rather than whenever the driver's own loop next comes
+        round. Inert without a driver, and inert at a table with a human at
+        it: there the object is held on the stack for the answer (CR 608.2)
+        and the web layer's own loops decide who is asked.
+
+        "Answered any" is read off the queue rather than reported by the
+        driver, so a driver that declines a kind it does not know is seen as
+        having made no progress and the caller's loop ends instead of spinning.
+        """
+        driver = self.prompt_driver
+        if driver is None or self.interactive_seats or not self.pending_choices:
+            return False
+        # Not re-entrant: an answer can itself resolve something (a default
+        # that casts, a search that triggers), which comes back through here
+        # with the outer drain half-way down its list. The outer one finishes.
+        if self.driving_prompts:
+            return False
+        before = [id(choice) for choice in self.pending_choices]
+        self.driving_prompts = True
+        try:
+            driver(self)
+        finally:
+            self.driving_prompts = False
+        return [id(choice) for choice in self.pending_choices] != before
 
     def iter_pending_prompts(self):
         """Every decision anyone currently owes, as ``(spec, choice)`` pairs in
