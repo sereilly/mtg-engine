@@ -1040,6 +1040,24 @@ class SpellCastingMixin:
             self.log.append(details)
             return SimulationResult(card_name, False, None, details)
         classification = classify_card(card)
+        # **An Aura announced by id alone** (CR 601.2c, CR 400.7). The id names
+        # the object and its battlefield, so it is the whole announcement; the
+        # slot every gate and the attachment below still read is derived from
+        # it here, before any of them runs. See `Game.announced_target_slot` —
+        # until this, every Aura in the pool was refused "requires a target"
+        # when its host was named the way this engine asks for.
+        #
+        # Only where no slot was given: an index beside an id is the same
+        # choice said twice, and the caller's own spelling is left alone.
+        if (
+            target_permanent_index is None
+            and target_permanent_ids
+            and "Aura" in card.type_line
+            and card.primary_type not in ("instant", "sorcery")
+        ):
+            slot = self.announced_target_slot(target_permanent_ids)
+            if slot is not None:
+                target_player_index, target_permanent_index = slot
         extra_generic_tax = 0
         # The *coloured* half of the same taxes (Derelor's "{B}"). Its own
         # total because it is its own resource: a generic pip is payable with
