@@ -38,7 +38,8 @@ from ..enter_effects import (
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     choosable_bodies,
 )
-from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
+from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
+                     CHOSEN_PROTECTION_COLOR, aura_protection_colors,
                      auras_attached_to)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
@@ -2963,6 +2964,29 @@ class PermanentStateMixin:
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
             for word in aura_protection_colors(aura.effective_card.oracle_text):
+                if word == AMONG_CONTROLLED_PROTECTION_COLORS:
+                    # "…protection from **each color among permanents you
+                    # control**." (Pledge of Loyalty.) CR 702.16i: one
+                    # protection ability per colour in the set, and the set is
+                    # the *Aura's* controller's board (CR 109.5) read now —
+                    # through the layer-aware reader, so a gold permanent
+                    # counts for each of its colours and a colourless one for
+                    # none. The Aura itself is one of those permanents, which
+                    # is why the card goes on to say the effect doesn't remove
+                    # it (CR 702.16n, honoured by the state-based sweep).
+                    #
+                    # An Aura nobody controls contributes nothing rather than
+                    # every colour: the widest reading of a set that could not
+                    # be read is a creature no coloured thing can touch.
+                    from ..object_colors import colors_among
+
+                    aura_seat = self.controller_index_of(aura)
+                    if aura_seat is not None:
+                        for symbol in colors_among(
+                            self, self.controlled_by(aura_seat)
+                        ):
+                            qualities.add(("color", symbol))
+                    continue
                 if word == CHOSEN_PROTECTION_COLOR:
                     # "…protection from **the chosen color**." (Ward of
                     # Lights.) The choice was made as the Aura entered

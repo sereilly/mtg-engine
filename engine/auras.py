@@ -102,9 +102,16 @@ _COLORS = "white|blue|black|red|green"
 #: that decides whether the card is supported and the sentence that decides what
 #: it does have to be the same sentence. Written as a name because it is read
 #: from two patterns, which is exactly when a literal starts drifting.
-_PROTECTION_QUALITIES = (
-    rf"(?:{_COLORS}|the chosen color)(?: and from (?:{_COLORS}|the chosen color))*"
+#:
+#: "…protection from **each color among permanents you control**" (Pledge of
+#: Loyalty). CR 702.16i: shorthand for one protection ability per colour in a
+#: *set*, and here the set is read off a board — so it is a third alternative
+#: beside a printed colour and a chosen one, resolved by the reader that holds
+#: the Aura (:data:`AMONG_CONTROLLED_PROTECTION_COLORS`).
+_PROTECTION_QUALITY = (
+    rf"(?:{_COLORS}|the chosen color|each color among permanents you control)"
 )
+_PROTECTION_QUALITIES = rf"{_PROTECTION_QUALITY}(?: and from {_PROTECTION_QUALITY})*"
 
 _KEYWORDS = (
     r"flying|fear|first strike|double strike|trample|vigilance|haste|reach|"
@@ -2311,6 +2318,24 @@ def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
 #: choice was recorded on.
 CHOSEN_PROTECTION_COLOR = "chosen"
 
+#: The word a protection grant names when the colours are **computed**:
+#: "Enchanted creature has protection from **each color among permanents you
+#: control**." (Pledge of Loyalty.) A seventh value in the same channel, for
+#: the reason the sixth is one: :func:`aura_protection_colors` returns words
+#: and its caller resolves them, and that caller is the only reader holding
+#: both the Aura and the game. "You" is the Aura's controller (CR 109.5), and
+#: the set is whatever that seat's board holds when the question is asked —
+#: a static ability is not locked in (CR 611.3a), so the protection widens the
+#: moment its controller lands a permanent of a new colour and narrows when
+#: one leaves.
+AMONG_CONTROLLED_PROTECTION_COLORS = "among_controlled"
+
+#: The printed phrases that are not a colour word, as the value each travels as.
+_PROTECTION_QUALITY_WORDS = {
+    "the chosen color": CHOSEN_PROTECTION_COLOR,
+    "each color among permanents you control": AMONG_CONTROLLED_PROTECTION_COLORS,
+}
+
 #: The P/T prefix is optional for :data:`_COLOR_GRANT`'s reason exactly: one
 #: printed line can carry a layer-7c bonus and a layer-6 grant, and each half is
 #: read by the reader that owns its layer. Without it a card printing "enchanted
@@ -2438,6 +2463,8 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
     **the chosen color**" (Ward of Lights). It travels through this same
     channel for that mapping reason exactly: the caller holds the Aura, and
     the choice is recorded on it by "As this Aura enters, choose a color."
+    :data:`AMONG_CONTROLLED_PROTECTION_COLORS` is the seventh, for "each color
+    among permanents you control" (Pledge of Loyalty), resolved the same way.
     """
     found = set()
     for raw_line in oracle_text.splitlines():
@@ -2453,9 +2480,7 @@ def aura_protection_colors(oracle_text: str) -> frozenset[str]:
             # ``{"black"}``, dropping red in silence.
             for word in match.group("colors").split(" and from "):
                 word = word.strip()
-                found.add(
-                    CHOSEN_PROTECTION_COLOR if word == "the chosen color" else word
-                )
+                found.add(_PROTECTION_QUALITY_WORDS.get(word, word))
     return frozenset(found)
 
 
