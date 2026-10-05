@@ -102,6 +102,20 @@
     "Wind Drake"
   ],
   [
+    "Death Speakers",
+    "Galina's Knight",
+    "Guma",
+    "Ihsan's Shade",
+    "Karoo Meerkat",
+    "Llanowar Knight",
+    "Oraxid",
+    "Repentant Blacksmith",
+    "Scalebane's Elite",
+    "Shivan Zombie",
+    "Vodalian Zombie",
+    "Yavimaya Barbarian"
+  ],
+  [
     "Anaconda",
     "Bog Raiders",
     "Bog Smugglers",
@@ -153,15 +167,6 @@
     "Wall of Ice",
     "Wall of Stone",
     "Wall of Wood"
-  ],
-  [
-    "Death Speakers",
-    "Guma",
-    "Ihsan's Shade",
-    "Karoo Meerkat",
-    "Oraxid",
-    "Repentant Blacksmith",
-    "Scalebane's Elite"
   ],
   [
     "Archangel",
@@ -220,6 +225,14 @@
     "Unholy Strength"
   ],
   [
+    "Drowned",
+    "Metathran Zombie",
+    "Phyrexian Monitor",
+    "Restless Dead",
+    "Unworthy Dead",
+    "Walking Dead"
+  ],
+  [
     "Adventurers' Guildhouse",
     "Cathedral of Serra",
     "Mountain Stronghold",
@@ -255,6 +268,13 @@
     "Rib Cage Spider"
   ],
   [
+    "Cat Warriors",
+    "Heartwood Treefolk",
+    "Rushwood Dryad",
+    "Shanodin Dryads",
+    "Slinking Serpent"
+  ],
+  [
     "Circle of Protection: Black",
     "Circle of Protection: Blue",
     "Circle of Protection: Green",
@@ -267,13 +287,6 @@
     "Ivory Cup",
     "Throne of Bone",
     "Wooden Sphere"
-  ],
-  [
-    "Drowned",
-    "Phyrexian Monitor",
-    "Restless Dead",
-    "Unworthy Dead",
-    "Walking Dead"
   ],
   [
     "Dwarven Song",
@@ -330,12 +343,6 @@
     "Rock Badger"
   ],
   [
-    "Cat Warriors",
-    "Heartwood Treefolk",
-    "Rushwood Dryad",
-    "Shanodin Dryads"
-  ],
-  [
     "Colossal Dreadmaw",
     "Rootbreaker Wurm",
     "Wildwood Patrol",
@@ -370,6 +377,12 @@
     "Granite Gargoyle",
     "Hellkite Punisher",
     "Shivan Dragon"
+  ],
+  [
+    "Firescreamer",
+    "Flame Spirit",
+    "Ridgeline Rager",
+    "Storm Shaman"
   ],
   [
     "Laccolith Grunt",
@@ -414,6 +427,11 @@
     "Viashino Weaponsmith"
   ],
   [
+    "Charging Paladin",
+    "Hollow Dogs",
+    "Vicious Kavu"
+  ],
+  [
     "Darkness",
     "Fog",
     "Holy Day"
@@ -429,9 +447,9 @@
     "Pincher Beetles"
   ],
   [
-    "Flame Spirit",
-    "Ridgeline Rager",
-    "Storm Shaman"
+    "El-Hajj\u00e2j",
+    "Horned Cheetah",
+    "Zebra Unicorn"
   ],
   [
     "Flowstone Crusher",
@@ -490,6 +508,10 @@
     "Dragon Engine"
   ],
   [
+    "Aggressive Urge",
+    "Defiant Strike"
+  ],
+  [
     "Aladdin's Ring",
     "Rod of Ruin"
   ],
@@ -510,8 +532,16 @@
     "Tundra Wolves"
   ],
   [
+    "Ancient Kavu",
+    "Raging Spirit"
+  ],
+  [
     "Angelic Page",
     "Serra Advocate"
+  ],
+  [
+    "Arenson's Aura",
+    "Teferi's Care"
   ],
   [
     "Armor Sliver",
@@ -538,6 +568,10 @@
     "Titania's Boon"
   ],
   [
+    "Benalish Trapper",
+    "Master Decoy"
+  ],
+  [
     "Black Knight",
     "White Knight"
   ],
@@ -548,6 +582,10 @@
   [
     "Blue Elemental Blast",
     "Red Elemental Blast"
+  ],
+  [
+    "Boa Constrictor",
+    "Llanowar Vanguard"
   ],
   [
     "Bog Rats",
@@ -574,6 +612,10 @@
     "Thrull Retainer"
   ],
   [
+    "Cat Burglar",
+    "Vodalian Hypnotist"
+  ],
+  [
     "Cateran Enforcer",
     "Rathi Intimidator"
   ],
@@ -582,12 +624,12 @@
     "Wall of Light"
   ],
   [
-    "Charging Paladin",
-    "Hollow Dogs"
-  ],
-  [
     "Charging Rhino",
     "Stalking Tiger"
+  ],
+  [
+    "Civic Guildmage",
+    "Sunscape Apprentice"
   ],
   [
     "Clay Statue",
@@ -596,6 +638,10 @@
   [
     "Crazed Skirge",
     "Volcanic Dragon"
+  ],
+  [
+    "Crimson Acolyte",
+    "Obsidian Acolyte"
   ],
   [
     "Dand\u00e2n",
@@ -630,16 +676,16 @@
     "Raging Gorilla"
   ],
   [
+    "Dwarven Miner",
+    "Trench Wurm"
+  ],
+  [
     "Dwarven Nomad",
     "Dwarven Warriors"
   ],
   [
     "Eastern Paladin",
     "Western Paladin"
-  ],
-  [
-    "El-Hajj\u00e2j",
-    "Zebra Unicorn"
   ],
   [
     "Elven Cache",
@@ -690,8 +736,16 @@
     "Snow-Covered Forest"
   ],
   [
+    "Fylamarid",
+    "Metathran Transport"
+  ],
+  [
     "Fyndhorn Bow",
     "Iron Lance"
+  ],
+  [
+    "Giant Trap Door Spider",
+    "Hunting Kavu"
   ],
   [
     "Glittering Lion",
@@ -714,6 +768,10 @@
     "Sea Monster"
   ],
   [
+    "Hate Weaver",
+    "Spirit Weaver"
+  ],
+  [
     "Hawkeater Moth",
     "Zephid"
   ],
@@ -728,6 +786,10 @@
   [
     "Henge of Ramos",
     "School of the Unseen"
+  ],
+  [
+    "Heroes' Reunion",
+    "Soothing Balm"
   ],
   [
     "Hydroblast",
@@ -760,6 +822,10 @@
   [
     "Juz\u00e1m Djinn",
     "Nettletooth Djinn"
+  ],
+  [
+    "Kavu Climber",
+    "Striped Bears"
   ],
   [
     "Kjeldoran Dead",
@@ -804,6 +870,10 @@
   [
     "Mawcor",
     "Thornwind Faeries"
+  ],
+  [
+    "Merfolk Traders",
+    "Vodalian Merchant"
   ],
   [
     "Mesa Falcon",
@@ -854,8 +924,16 @@
     "Wanderlust"
   ],
   [
+    "Pegasus Charger",
+    "Razorfoot Griffin"
+  ],
+  [
     "Phantasmal Forces",
     "Spindrift Drake"
+  ],
+  [
+    "Phyrexian Battleflies",
+    "Pit Imp"
   ],
   [
     "Phyrexian Defiler",
@@ -878,8 +956,16 @@
     "Squirming Mass"
   ],
   [
+    "Reckless Ogre",
+    "Rogue Kavu"
+  ],
+  [
     "Resurrection",
     "Rise Again"
+  ],
+  [
+    "Revitalize",
+    "Reviving Dose"
   ],
   [
     "Rishadan Cutpurse",
@@ -928,6 +1014,10 @@
   [
     "Staunch Defenders",
     "Venerable Monk"
+  ],
+  [
+    "Stronghold Taskmaster",
+    "Urborg Shambler"
   ],
   [
     "Talruum Minotaur",

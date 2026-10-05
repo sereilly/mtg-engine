@@ -777,6 +777,17 @@ TRIGGERED_LABELS: dict[str, str] = {
     # in this table and filed with the *destructions*, because the label is what
     # the ability does and not which referent it does it to.
     "destroy_block_pair_partner": "triggered_destruction",
+    # --- Invasion, at its promotion ---------------------------------------
+    # Fight or Flight ("At the beginning of combat on each opponent's turn,
+    # separate all creatures that player controls into two piles. Only
+    # creatures in the pile of their choice can attack this turn.") and Stand
+    # or Fall, its mirror for blockers. The kind is CR 700.3's and is not
+    # about combat in itself - Fact or Fiction separates cards - but every
+    # *triggered* printing of it is one of these two, and what the ability
+    # does is decide who may attack or block: the bucket the block-pair rows
+    # beside it take. A triggered pile of cards, when one is printed, wants a
+    # row in TRIGGERED_LABELS_BY_CONDITION rather than a change to this one.
+    "separate_into_piles": "triggered_combat",
     "remove_keyword_from_block_pair": "triggered_combat",
     "return_source_card_to_owners_hand": "triggered_return",
     "exile_target_graveyard": "triggered_exile",

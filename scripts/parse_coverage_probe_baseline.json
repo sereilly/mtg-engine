@@ -42,6 +42,13 @@
   ]
  },
  {
+  "card": "Agonizing Demise",
+  "clause": "destroy target nonblack creature. it can't be regenerated. if this spell was kicked, agonizing demise deals damage equal to that creature's power to the creature's controller",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Aku Djinn",
   "clause": "put a +1/+1 counter on each creature each opponent controls",
   "ignored": [
@@ -247,6 +254,15 @@
   ]
  },
  {
+  "card": "Bend or Break",
+  "clause": "each player separates all nontoken lands they control into two piles. for each player, one of their piles is chosen by one of their opponents of their choice. destroy all lands in the chosen piles. tap all lands in the other piles",
+  "ignored": [
+   "all",
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Bifurcate",
   "clause": "search your library for a permanent card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle",
   "ignored": [
@@ -346,6 +362,13 @@
   ]
  },
  {
+  "card": "Breath of Darigaaz",
+  "clause": "breath of darigaaz deals 1 damage to each creature without flying and each player. if this spell was kicked, it deals 4 damage to each creature without flying and each player instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Brine Hag",
   "clause": "change the base power and toughness of all creatures that dealt damage to it this turn to 0/2",
   "ignored": [
@@ -365,6 +388,13 @@
   "ignored": [
    "all",
    "all"
+  ]
+ },
+ {
+  "card": "Canopy Surge",
+  "clause": "canopy surge deals 1 damage to each creature with flying and each player. if this spell was kicked, it deals 4 damage to each creature with flying and each player instead",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -545,6 +575,13 @@
   ]
  },
  {
+  "card": "Crypt Angel",
+  "clause": "return target blue or red creature card from your graveyard to your hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Crystal Chimes",
   "clause": "return all enchantment cards from your graveyard to your hand",
   "ignored": [
@@ -575,6 +612,13 @@
  {
   "card": "Death Pit Offering",
   "clause": "sacrifice all creatures you control",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Death or Glory",
+  "clause": "separate all creature cards in your graveyard into two piles. exile the pile of an opponent's choice and return the other to the battlefield",
   "ignored": [
    "all"
   ]
@@ -629,10 +673,25 @@
   ]
  },
  {
+  "card": "Dismantling Blow",
+  "clause": "destroy target artifact or enchantment. if this spell was kicked, draw two cards",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Disorder",
   "clause": "disorder deals 2 damage to each white creature and each player who controls a white creature",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Do or Die",
+  "clause": "separate all creatures target player controls into two piles. destroy all creatures in the pile of that player's choice. they can't be regenerated",
+  "ignored": [
+   "all",
+   "all"
   ]
  },
  {
@@ -662,6 +721,13 @@
   "clause": "return target white or black creature card from your graveyard to the battlefield. that creature gains \"cumulative upkeep {2}.\" if the creature would leave the battlefield, exile it instead of putting it anywhere else",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Dromar, the Banisher",
+  "clause": "you may pay {2}{u}. if you do, choose a color, then return all creatures of that color to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -856,6 +922,13 @@
   ]
  },
  {
+  "card": "Explosive Growth",
+  "clause": "target creature gets +2/+2 until end of turn. if this spell was kicked, that creature gets +5/+5 until end of turn instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Extinction",
   "clause": "destroy all creatures of the creature type of your choice",
   "ignored": [
@@ -924,6 +997,13 @@
   "clause": "this aura deals x damage to that player, where x is the number of infection counters on this aura",
   "ignored": [
    "aura"
+  ]
+ },
+ {
+  "card": "Fight or Flight",
+  "clause": "separate all creatures that player controls into two piles. only creatures in the pile of their choice can attack this turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1197,6 +1277,13 @@
   ]
  },
  {
+  "card": "Hanna, Ship's Navigator",
+  "clause": "return target artifact or enchantment card from your graveyard to your hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Harbinger of Night",
   "clause": "put a -1/-1 counter on each creature",
   "ignored": [
@@ -1208,6 +1295,13 @@
   "clause": "put all enchantments on top of their owners' libraries",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Hate Weaver",
+  "clause": "target blue or red creature gets +1/+0 until end of turn",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -1358,6 +1452,13 @@
   ]
  },
  {
+  "card": "Hunting Kavu",
+  "clause": "exile this creature and target creature without flying that's attacking you",
+  "ignored": [
+   "that's"
+  ]
+ },
+ {
   "card": "Hunting Moa",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
   "ignored": [
@@ -1369,6 +1470,13 @@
   "clause": "destroy all enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Hypnotic Cloud",
+  "clause": "target player discards a card. if this spell was kicked, that player discards three cards instead",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -1892,6 +2000,13 @@
   ]
  },
  {
+  "card": "Might Weaver",
+  "clause": "target red or white creature gains trample until end of turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Mind Games",
   "clause": "tap target artifact, creature, or land",
   "ignored": [
@@ -2072,6 +2187,13 @@
   ]
  },
  {
+  "card": "Obliterate",
+  "clause": "destroy all artifacts, creatures, and lands. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Omen of Fire",
   "clause": "return all islands to their owners' hands. each player sacrifices a plains or a white permanent of their choice for each white permanent they control",
   "ignored": [
@@ -2156,10 +2278,24 @@
   ]
  },
  {
+  "card": "Orim's Touch",
+  "clause": "prevent the next 2 damage that would be dealt to any target this turn. if this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Outbreak",
   "clause": "choose a creature type. all creatures of that type get -1/-1 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Overload",
+  "clause": "destroy target artifact if its mana value is 2 or less. if this spell was kicked, destroy that artifact if its mana value is 5 or less instead",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -2297,6 +2433,20 @@
   ]
  },
  {
+  "card": "Probe",
+  "clause": "draw three cards, then discard two cards. if this spell was kicked, target player discards two cards",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
+  "card": "Prohibit",
+  "clause": "counter target spell if its mana value is 2 or less. if this spell was kicked, counter that spell if its mana value is 4 or less instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Pulverize",
   "clause": "destroy all artifacts",
   "ignored": [
@@ -2308,6 +2458,13 @@
   "clause": "flip a coin. if you win the flip, destroy all creatures with power 2 or less. if you lose the flip, destroy all creatures with power 3 or greater",
   "ignored": [
    "all",
+   "all"
+  ]
+ },
+ {
+  "card": "Pure Reflection",
+  "clause": "destroy all reflections. then that player creates an x/x white reflection creature token, where x is the mana value of that spell",
+  "ignored": [
    "all"
   ]
  },
@@ -2344,6 +2501,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{w}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Rage Weaver",
+  "clause": "target black or green creature gains haste until end of turn",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -2600,6 +2764,13 @@
   ]
  },
  {
+  "card": "Rout",
+  "clause": "destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Ruination",
   "clause": "destroy all nonbasic lands",
   "ignored": [
@@ -2691,6 +2862,13 @@
   ]
  },
  {
+  "card": "Savage Offensive",
+  "clause": "creatures you control gain first strike until end of turn. if this spell was kicked, they get +1/+1 until end of turn",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Savage Twister",
   "clause": "savage twister deals x damage to each creature",
   "ignored": [
@@ -2717,6 +2895,13 @@
   "clause": "prevent the next 7 damage that would be dealt to any target this turn. if it's a creature, put a +0/+1 counter on it for each 1 damage prevented this way at the beginning of the next end step",
   "ignored": [
    "1"
+  ]
+ },
+ {
+  "card": "Scorching Lava",
+  "clause": "scorching lava deals 2 damage to any target. if this spell was kicked, that creature can't be regenerated this turn and if it would die this turn, exile it instead",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -2889,6 +3074,20 @@
   ]
  },
  {
+  "card": "Skizzik",
+  "clause": "if this creature wasn't kicked, sacrifice it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
+  "card": "Sky Weaver",
+  "clause": "target white or black creature gains flying until end of turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Skyshroud Poacher",
   "clause": "search your library for an elf permanent card, put it onto the battlefield, then shuffle",
   "ignored": [
@@ -2966,6 +3165,13 @@
   ]
  },
  {
+  "card": "Spirit Weaver",
+  "clause": "target green or blue creature gets +0/+1 until end of turn",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Spitting Slug",
   "clause": "you may pay {1}{g}. if you do, this creature gains first strike until end of turn. otherwise, each creature blocking or blocked by this creature gains first strike until end of turn",
   "ignored": [
@@ -3018,6 +3224,13 @@
   ]
  },
  {
+  "card": "Spreading Plague",
+  "clause": "destroy all other creatures that share a color with it. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Squall",
   "clause": "squall deals 2 damage to each creature with flying",
   "ignored": [
@@ -3029,6 +3242,13 @@
   "clause": "squirrel creatures get +1/+1 until end of turn",
   "ignored": [
    "creatures"
+  ]
+ },
+ {
+  "card": "Stand or Fall",
+  "clause": "for each defending player, separate all creatures that player controls into two piles and that player chooses one. only creatures in the chosen piles can block this turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -3096,6 +3316,14 @@
   ]
  },
  {
+  "card": "Tangle",
+  "clause": "each attacking creature doesn't untap during its controller's next untap step",
+  "ignored": [
+   "each",
+   "controller's"
+  ]
+ },
+ {
   "card": "Tangle Wire",
   "clause": "that player taps an untapped artifact, creature, or land they control for each fade counter on this artifact",
   "ignored": [
@@ -3106,6 +3334,13 @@
  {
   "card": "Taniwha",
   "clause": "all lands you control phase out",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tectonic Instability",
+  "clause": "tap all lands its controller controls",
   "ignored": [
    "all"
   ]
@@ -3340,6 +3575,13 @@
   ]
  },
  {
+  "card": "Tsabo's Decree",
+  "clause": "choose a creature type. target player reveals their hand and discards all creature cards of that type. then destroy all creatures of that type that player controls. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tsunami",
   "clause": "destroy all islands",
   "ignored": [
@@ -3365,6 +3607,13 @@
   "clause": "you may tap or untap target artifact, creature, or land",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Twilight's Call",
+  "clause": "each player returns all creature cards from their graveyard to the battlefield",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -3407,6 +3656,13 @@
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {6}",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Urza's Rage",
+  "clause": "urza's rage deals 3 damage to any target. if this spell was kicked, instead it deals 10 damage to that permanent or player and the damage can't be prevented",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -3473,6 +3729,13 @@
   ]
  },
  {
+  "card": "Vigorous Charge",
+  "clause": "target creature gains trample until end of turn. whenever that creature deals combat damage this turn, if this spell was kicked, you gain life equal to that damage",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Vitalize",
   "clause": "untap all creatures you control",
   "ignored": [
@@ -3482,6 +3745,13 @@
  {
   "card": "Vodalian War Machine",
   "clause": "destroy all merfolk tapped this turn to pay for its abilities",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Void",
+  "clause": "choose a number. destroy all artifacts and creatures with mana value equal to that number. then target player reveals their hand and discards all nonland cards with mana value equal to the number",
   "ignored": [
    "all"
   ]
@@ -3552,6 +3822,13 @@
   ]
  },
  {
+  "card": "Wallop",
+  "clause": "destroy target blue or black creature with flying",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Wand of Ith",
   "clause": "target player reveals a card at random from their hand. if it's a land card, that player discards it unless they pay 1 life. if it isn't a land card, the player discards it unless they pay life equal to its mana value",
   "ignored": [
@@ -3579,6 +3856,13 @@
   "ignored": [
    "each",
    "each"
+  ]
+ },
+ {
+  "card": "Wash Out",
+  "clause": "return all permanents of the color of your choice to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {

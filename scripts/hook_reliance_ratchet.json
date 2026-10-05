@@ -27,7 +27,7 @@
     },
     "<pool>": {
       "entries_per_100_supported_cards": 1.3,
-      "hooked_cards_pct_of_supported": 1.2,
+      "hooked_cards_pct_of_supported": 1.1,
       "hooked_lines_pct_of_supported": 0.7
     },
     "ALL": {
@@ -68,6 +68,11 @@
     "ICE": {
       "entries_per_100_supported_cards": 0.3,
       "hooked_cards_pct_of_supported": 0.3,
+      "hooked_lines_pct_of_supported": 0.0
+    },
+    "INV": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
       "hooked_lines_pct_of_supported": 0.0
     },
     "LEA": {

@@ -14,9 +14,10 @@ Fallen Empires (102), Fourth Edition (368), Ice Age (373), Homelands (115),
 Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
-Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143)
-and Core Set 2021 (285), 4,312 unique cards, all classified as supported.
-**Twenty-eight sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143),
+Invasion (335) and Core Set 2021 (285), 4,622 unique cards, all classified as
+supported.
+**Twenty-nine sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -71,6 +72,19 @@ promotion*, in both directions, rather than inferred from the block the way
 Stronghold's was. The rehearsal costs a minute and is the difference between
 "it looks immune" and "it is".
 
+**Invasion is that lesson a third time, down to one card again, and the first
+set to bring machinery rather than only cards.** 310 of its 335 are new and 25
+were already here, and of those 25 exactly **one** — **Opt** — has its only
+other printing in M21. Rehearsed at the wrong end with the same move script as
+the real promotion, Opt's origin read `m21` while the prefix guard stayed green
+and `test_the_shipped_sets_are_in_printing_order` failed; at index 27 it reads
+`inv`. What the set brought that no set before it had is three things the
+engine did not have at all: **kicker** (CR 702.33, 35 cards — a rewrite onto
+buyback's optional-additional-cost machinery, so no keyword flag exists),
+the pool's **first multi-face layout** (five split cards, CR 709 —
+`engine/faces.py`), and **separating into piles** (CR 700.3, six cards —
+`engine/piles.py`).
+
 **Urza's Saga is Stronghold's lesson with three cards instead of one, and it is
 the set to point at when somebody asks whether the rehearsal is worth a
 minute.** 325 of its 335 are new and it shares 17 oracle_ids (32 card *names*)
@@ -82,7 +96,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 4,312 — they are printings (6,450 of
+the per-set totals sum to far more than 4,622 — they are printings (6,785 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -106,8 +120,15 @@ and can be denied) and four went to the pile the first two waves had measured
 and declined — a colour chosen at announcement instead of at
 resolution (CR 608.2d), a copy that entered as the printed card (CR 707.5), an
 AI simulator in which nothing had ever cost mana, and cost choices the engine
-made for a human seat.
-Reliance is **1.2% of supported cards**, 52 of 4,312, down from 53 of 3,715 —
+made for a human seat — and
+**Invasion is the eleventh**, 335 of 335 across sixteen parallel groups in
+two waves and a closing round, adding none. **Four of its second wave's seven groups took no card**,
+and what they fixed was the larger half of the set's work: 182 spells castable
+with no legal target to name (CR 601.2c), 17 counterspells castable onto an
+empty stack with their second sentence resolving for free, ten shipped cards
+with a keyword they do not print (a Licid that itself flew), and about 55
+pool-wide guards that were *blind* to a split card's halves rather than red.
+Reliance is **1.1% of supported cards**, 52 of 4,622, down from 53 of 3,715 —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
 restriction pair, which that hook's own comment said no second card printed.
@@ -139,7 +160,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9%, Nemesis at 66.4% and Prophecy at 58.0%, and all twenty were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0% and Invasion at 66.0%, and all twenty-one were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -339,6 +360,21 @@ driven by `engine/ai_combat.py` as a loop over the engine's own
 `advance_combat_phase`, which returns without moving at exactly the points where
 a player owes a turn-based action — so the driver supplies declarations rather
 than re-walking the steps.
+
+**Three became seven, and the last four are why "re-walking" is the word to
+distrust.** The ending phase (Prophecy), then mana — nothing had ever cost
+anything in a simulated game (Prophecy) — then a step's prompt being answered
+in a *later* step, so an upkeep trigger's "you may" was taken after the card
+was drawn and ten prompt kinds were never answered at all, and then the turn
+order itself: the loop read `for active in (0, 1)`, so Time Walk and eight
+other cards that add or skip a turn had never done anything (both Invasion).
+Each was fixed the way combat was — by calling the engine's own stepping
+(`Game.start_turn`, `start_next_turn`, the `prompt_driver` seam that answers
+what a step owes before the next begins) instead of a copy of it — and each
+left an honesty count behind: `lands_played`, `steps_left_owing`,
+`extra_turns_taken`. What is still not there is named in ROADMAP: the AI
+casts only in its own main phases, so no counterspell and no combat trick is
+ever cast in a simulated game.
 
 The honesty checks in the report exist because "no illegal interactions" over a
 game where nothing happened is a true statement about nothing.
@@ -652,6 +688,48 @@ adding entries, not editing dispatch**:
   `Game.resolving_seats[-1]` — CR 109.5's answer, pushed around
   `_execute_oracle_instruction`. "A source you control" (Fiery Emancipation,
   Chandra's Pyreling) reads it.
+- `engine/faces.py` — multi-face cards (CR 709; split cards are the first
+  layout). **A face is a card**: each half is derived once as a normal-layout
+  `CardDefinition` of its own (name, cost, mana value, colours, type, text)
+  carrying `face_of`, and that half is what compiles and what the stack holds —
+  so CR 709.3b (on the stack only the cast half's characteristics exist) is
+  true for every stack reader with no edit, because they all already read
+  `item.card`. CR 709.4 (everywhere else the card is both halves combined) is
+  one function, `whole_card`, asked at the zone seams. A split card is cast
+  **by the name of the half**; the whole card's own program is supported only
+  if every half is and **has no instructions**. That last fact is the trap:
+  a guard or instrument whose population is "each card, compiled" passes
+  over every half without examining one — blind, not red. Anything that asks
+  about *text that compiles* iterates `faces.compilation_units(pool)` /
+  `oracle.compiled_units`; anything that asks about a *card* (one draw, one
+  deck slot, one verification row) keeps the card. Held by
+  `tests/engine/test_face_blind_guards.py`, an AST scan with a four-entry
+  allow-list of loops that really do ask about a card. A later layout joins
+  `faces.CAST_FACE_LAYOUTS` and `oracle.SUPPORTED_LAYOUTS`.
+- `engine/cast_costs.py` — additional costs to cast (CR 601.2b, 601.2f–h),
+  including the two keywords that are **rewrites onto it**: buyback
+  (CR 702.27a) and kicker (CR 702.33a: "Kicker [cost]" *means* "You may pay an
+  additional [cost] as you cast this spell"). `oracle.expand_ability_lines`
+  applies both, so neither word is in `IMPLEMENTED_KEYWORDS`; the client is
+  offered the price through `legality.cast_cost_offers`, and whether it was
+  paid survives on the stack item as `choices["additional_costs_paid"]`.
+  "Kicked" has three readers and they are at three different times: a spell's
+  resolution (`ast.WasKicked`, condition `was_kicked`), the permanent
+  afterwards (`cast_costs.KICKED` metadata — Skizzik asks at the end step,
+  turns later; a permanent that did not come from a cast was not kicked), and
+  a trigger watching casts (`cast_kicked`). A target printed only in the
+  kicked half is chosen only if kicked (CR 702.33g, `targeting._as_kicked`).
+- `engine/piles.py` — separating into piles (CR 700.3). One instruction,
+  `separate_into_piles`, over three kinds of thing (revealed cards, graveyard
+  cards, permanents): one seat separates (`pile_split`), another chooses
+  (`pile_choice`), and what happens to each pile is payload
+  (`piles.PILE_FATES`). Nothing moves until the last answer.
+- `engine/object_colors.py`, `engine/color_census.py` — colour as a relation
+  and as a count. `share_a_color`, `is_multicolored`, `colors_among`,
+  `of_each_color` are CR 105.2 over colour *sets*, so a sweep filter, a
+  prevention predicate, a cast ban and a condition all ask one function; the
+  census is "the most common color among all permanents", ties included,
+  empty when no permanent has a colour. Both read colour through the layers.
 - `engine/tokens.py` — `make_token_card(...)`, paired with the generic
   `create_token` instruction kind. A token-making card is one parse rule, never
   a bespoke handler.
@@ -681,6 +759,17 @@ adding entries, not editing dispatch**:
   before mana is spent; `legality.illegal_targets_refusal` is CR 608.2b at
   resolution — if **every** target is illegal by then, the object leaves the
   stack unresolved, above the instructions rather than inside each handler.
+  **And before either of those, whether there is anything to name at all.**
+  `legality.no_legal_cast_target_refusal` is CR 601.2c's other half — a spell
+  that must announce a target cannot be cast with none — over the picker's own
+  list, and asked by the engine, the AI and the web's castable highlight
+  alike. It replaced a per-kind arm keyed on the spell's *first* instruction,
+  which a `sequence`, `may` or `if_then` never reached: 182 spells were
+  castable at nothing, and the same arms refused eight spells that may
+  legally name nobody. A target that is **a spell on the stack** has the same
+  gate (`cast_stack_target_refusal`), and the stack picker reads every type a
+  spell has (CR 205.2) — it read `primary_type` until that list became the
+  gate, which made Annul refuse an artifact creature spell.
   A handler declining its own target is the rule's *last* sentence only, so
   "Destroy target artifact. You gain life equal to its mana value" gained the
   life for destroying nothing. Both read targets by `permanent_id`, never by
@@ -695,6 +784,19 @@ adding entries, not editing dispatch**:
   deliberately decline — a triggered ability's targets, a spell that can target
   a player, an Aura or graveyard target — are in `ROADMAP.md` with the reason
   each is a separate round.
+- `engine/stack_targets.py` — **which targets a stack object chose**, and how
+  they may be changed (CR 115.7). `chosen_targets(item)` reads every
+  announcement channel a `StackItem` carries against the object's derived
+  spec, so a chosen player and a permanent's seat — which share
+  `target_player_index` — are told apart by which channel the spec says is the
+  target. Every way an object comes to have targets announces it once through
+  `Game.announce_targets_chosen`: a cast, an activation, a trigger's target
+  whether defaulted or answered, a modal mode, a re-aimed copy, a retarget.
+  "Becomes the target of a spell or ability" and Psychic Battle's "whenever a
+  player chooses one or more targets" both hang off that seam; an object with
+  no targets, or an "up to" that named none, does not fire it. Held by
+  `tests/engine/test_stack_targets.py`, a pool-wide census in which every
+  targeted cast and activation reads back the target its own picker offered.
 - `engine/cost_modifiers.py` — text-keyed cost taxes (CR 601.2f): "<colour>
   spells cost {N} more to cast", "activated abilities of <colour> <type>s cost
   {N} more to activate". This entry read "increases only; reduction should
@@ -1051,11 +1153,12 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (611 of the 3,715 catalog cards passing — 403
-checked in-game and 208 auto-passed — with 49 more reported `equivalent`; the
+manually validated in-game (642 of the 4,622 catalog cards passing — 404
+checked in-game and 238 auto-passed — with 51 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
-Stronghold, Exodus and Urza's Saga, all promoted before their in-game pass —
+Stronghold, Exodus, Urza's Saga and every set since, Prophecy and Invasion
+included, all promoted before their in-game pass —
 have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current
