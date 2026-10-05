@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 83.5% | 80.4% | 59.6% | 108 |
+| PLS *(measured)* | 143 | 255 | 85.5% | 83.5% | 62.7% | 114 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,9 +58,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 544 | 255 | expected a subject |  |
+| 543 | 254 | expected a subject |  |
 | 152 | 79 | unrecognized effect verb |  |
-| 134 | 69 | unconsumed text |  |
+| 132 | 67 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 24 | 8 | expected what this creature can't block, or a duration |  |
@@ -75,11 +75,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
-| 4 | 3 | expected 'the number of' in a where-clause |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'of' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected 'a' |  |
 | 2 | 1 | expected 'top' |  |
@@ -2278,6 +2278,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library and graveyard for five cards and exile the rest. Put the chosen cards on top of your library in any order. You lose half your life, rounded up.`
 - **Doomsday Specter**
   - `When this creature enters, return a blue or black creature you control to its owner's hand.`
+  - `Whenever this creature deals combat damage to a player, look at that player's hand and choose a card from it. The player discards that card.`
 - **Dormant Volcano**
   - `When this land enters, sacrifice it unless you return an untapped Mountain you control to its owner's hand.`
   - `{T}: Add {C}{R}.`
@@ -5872,6 +5873,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{B}, {T}, Discard a card: Destroy target nonblack creature. It can't be regenerated.`
 - **Nova Pentacle**
   - `{3}, {T}: The next time a source of your choice would deal damage to you this turn, that damage is dealt to target creature of an opponent's choice instead.`
+- **Noxious Vapors**
+  - `Each player reveals their hand, chooses one card of each color from it, then discards all other nonland cards.`
 - **Null Brooch**
   - `{2}, {T}, Discard your hand: Counter target noncreature spell.`
 - **Nurturing Licid**
@@ -6383,6 +6386,16 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{6}, {T}: Search your library for a card, put that card into your hand, then shuffle.`
 - **Planar Void**
   - `Whenever another card is put into a graveyard from anywhere, exile that card.`
+- **Planeswalker's Favor**
+  - `{3}{G}: Target opponent reveals a card at random from their hand. Target creature gets +X/+X until end of turn, where X is the revealed card's mana value.`
+- **Planeswalker's Fury**
+  - `{3}{R}: Target opponent reveals a card at random from their hand. This enchantment deals damage equal to that card's mana value to that player. Activate only as a sorcery.`
+- **Planeswalker's Mirth**
+  - `{3}{W}: Target opponent reveals a card at random from their hand. You gain life equal to that card's mana value.`
+- **Planeswalker's Mischief**
+  - `{3}{U}: Target opponent reveals a card at random from their hand. If it's an instant or sorcery card, exile it. You may cast it without paying its mana cost for as long as it remains exiled. At the beginning of the next end step, if you haven't cast it, return it to its owner's hand. Activate only as a sorcery.`
+- **Planeswalker's Scorn**
+  - `{3}{B}: Target opponent reveals a card at random from their hand. Target creature gets -X/-X until end of turn, where X is the revealed card's mana value. Activate only as a sorcery.`
 - **Plated Rootwalla**
   - `{2}{G}: This creature gets +3/+3 until end of turn. Activate only once each turn.`
 - **Plow Under**
@@ -7468,6 +7481,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}: This creature deals 2 damage to target attacking or blocking creature. Activate only if this creature is attacking or blocking and only once each turn.`
 - **Sawtooth Loon**
   - `When this creature enters, return a white or blue creature you control to its owner's hand.`
+  - `When this creature enters, draw two cards, then put two cards from your hand on the bottom of your library.`
 - **Sawtooth Ogre**
   - `Whenever this creature blocks or becomes blocked by a creature, this creature deals 1 damage to that creature at end of combat.`
 - **Scabland**
