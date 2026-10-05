@@ -21,6 +21,7 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import OracleInstruction
+from ...piles import PILE_FATES
 from .. import ast
 from ..errors import LoweringError
 from ._common import _amount_payload, testable_filter_payload
@@ -29,14 +30,10 @@ from ._filters import chargeable_card_filter
 from ._record_keys import CHOSEN_PLAYER
 
 
-#: What a pile may be sent to do, by what it is a pile *of*. Closed, and held
-#: equal to what ``engine/piles.py`` performs: a fate named here with no
-#: performer there would be admitted and then dropped.
-_FATES: dict[str, frozenset[str]] = {
-    "library_top": frozenset({"hand", "graveyard"}),
-    "graveyard": frozenset({"exile", "battlefield"}),
-    "battlefield": frozenset({"destroy", "tap", "only_attackers", "only_blockers"}),
-}
+#: What a pile may be sent to do, by what it is a pile *of* — read from the
+#: module that performs them rather than restated here, because a fate this
+#: admitted with no performer behind it would be lowered and then dropped.
+_FATES = PILE_FATES
 
 #: Whose permanents a battlefield split may name, and what each word needs.
 _BATTLEFIELD_SEATS = frozenset({

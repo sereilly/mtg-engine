@@ -5420,7 +5420,7 @@ class PendingChoicesMixin:
         """Answer the separation. *first_pile* is the positions — into the
         items as the prompt listed them — that go into the first pile;
         everything else goes into the second. Either pile may be empty
-        (CR 700.3)."""
+        (CR 700.3d)."""
         return self.resolve_pending_choice(
             "pile_split", player_index, first_pile=first_pile
         )

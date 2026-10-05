@@ -6,7 +6,7 @@ separates it and **who chooses** a pile — and then what becomes of the chosen
 pile and of the other. Invasion prints it six times over three kinds of object
 (cards revealed from a library, cards in a graveyard, permanents on a
 battlefield), and the three differ in nothing the procedure cares about: a pile
-is not a zone (CR 700.3a), so nothing moves until a pile is acted on.
+is not a zone and its objects stay put (CR 700.3c), so nothing moves until a pile is acted on.
 
 A family of its own rather than a node in ``library`` beside
 :class:`~.library.SeparateLibraryTopIntoPiles`, which is Phyrexian Portal's

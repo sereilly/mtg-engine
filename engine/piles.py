@@ -7,7 +7,7 @@ what is separated, whose it is, who separates, who chooses, and what becomes of
 the chosen pile and of the other — and all of it arrives on the
 ``separate_into_piles`` instruction's payload.
 
-A pile is not a zone (CR 700.3a): nothing moves when the piles are made. So a
+Objects in a pile do not leave their zone (CR 700.3c): nothing moves at the split. So a
 pile here is a list of *positions* into a frozen item list, and the items stay
 exactly where they were until a fate is carried out —
 
@@ -48,6 +48,18 @@ from .search_filters import card_has_type
 #: the engine side does not import from (``handlers/_common`` spells it the
 #: same way and says why).
 _CHOSEN_PLAYER = "chosen_player"
+
+#: What a pile may be sent to do, by what it is a pile *of* — the closed
+#: vocabulary of this module, and the only copy of it: the lowering
+#: (``grammar/lowering/separations.py``) admits a printed fate only when it is
+#: listed here, and every word listed is one a performer below carries out. A
+#: fate admitted with no performer would be a pile the card names and nothing
+#: acts on.
+PILE_FATES: dict[str, frozenset[str]] = {
+    "library_top": frozenset({"hand", "graveyard"}),
+    "graveyard": frozenset({"exile", "battlefield"}),
+    "battlefield": frozenset({"destroy", "tap", "only_attackers", "only_blockers"}),
+}
 
 #: Fates that are good for the player whose objects are in the pile. The
 #: default chooser reads it: a seat choosing for itself wants the better pile
@@ -304,9 +316,13 @@ def begin_separation(game, instruction, context) -> None:
 
 def _ask_split(game, session: PileSession, group: PileGroup) -> None:
     if not group.items:
-        # CR 700.3: a pile may be empty, and with nothing to separate both
+        # CR 700.3d: a pile may be empty, and with nothing to separate both
         # are. Nobody is asked a question with one answer.
         group.piles = [[], []]
+        game.log.append(
+            f"{session.card_name}: {game.players[group.owner].name} has "
+            "nothing to separate"
+        )
         return
     game.arm_pending_choice(
         "pile_split", group.separator,
@@ -370,7 +386,7 @@ def _ask_choice(game, session: PileSession, group: PileGroup) -> None:
 
 def resolve_pile_split(game, choice, first_pile) -> bool:
     """Record the division. *first_pile* is the positions that go into the
-    first pile; everything else is the second. Either may be empty (CR 700.3)."""
+    first pile; everything else is the second. Either may be empty (CR 700.3d)."""
     session: PileSession = choice.data["_session"]
     group: PileGroup = choice.data["_group"]
     try:
