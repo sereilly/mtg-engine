@@ -216,3 +216,31 @@ def test_w1g5_the_blanket_and_the_one_shot_keep_their_own_rider_spelling():
     # …and neither narrowing the blanket does not carry is dropped
     assert not compile_line(blanket.replace("all damage", "all combat damage")).usable
     assert not compile_line(blanket.replace("to you", "to target creature")).usable
+
+
+def test_w1g5_samite_ministration_answers_a_burn_spell_on_the_stack(set_pool):
+    """Cast in response, which is how the card is played: the opponent's
+    Lightning Bolt is on the stack, the Ministration goes on top naming no
+    source, and the stated default is that spell — the topmost one an opponent
+    controls (CR 609.7a lets the choice be a spell on the stack). The Bolt then
+    resolves into the shield: three prevented, three gained, because it is
+    red."""
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    game, (bears,) = _w1g5_ministration_table(set_pool, [_w1g5_attacker("Bears", 2, ("G",))])
+    me = game.players[0]
+    game.players[1].hand.append(bolt)
+
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(0, "Samite Ministration").supported
+    assert [item.card.name for item in game.stack] == [
+        "Lightning Bolt", "Samite Ministration",
+    ]
+    _w1g5i_resolve_stack(game)
+
+    assert me.life == 23
+    assert any(
+        "prevent all damage Lightning Bolt would deal them this turn" in line
+        for line in game.log
+    )
+    # the creature it did not choose still connects
+    assert _w1g5i_damage_dealt(game, me, 2, source=bears) == 2

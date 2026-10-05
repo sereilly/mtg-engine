@@ -647,7 +647,10 @@ def default_damage_source(game, seat: int, *, colors: tuple[str, ...] = ()):
     for item in reversed(game.stack):
         if getattr(item, "caster_index", seat) == seat:
             continue
-        if getattr(item, "ability", None) is not None or item.card is None:
+        if item.ability_instruction is not None or item.card is None:
+            # An ability on the stack is not a spell: the damage it causes is
+            # dealt by the permanent it came from, which the creature scan
+            # below is what finds.
             continue
         if admitted(game._stack_item_colors(item)):
             return item.card
