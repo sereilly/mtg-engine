@@ -140,6 +140,22 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # it, and the reverse. Which member is a decision made while the effect
     # resolves (CR 601.2c chose the set, not the pick), so nothing here is
     # targeted.
+    #
+    # "Their controller chooses and sacrifices **one of them**." (Barrin's
+    # Spite.) The same member of the same set with the noun left to the
+    # sentence that chose it, exactly as ``parse_pair_ordinal_subject`` reads a
+    # bare "the other" — so the filter is empty, the quantifier is the one
+    # above, and every lowering that refuses ``one_of_those`` by default
+    # refuses this by default too. Only as the *end* of its clause: "one of
+    # them" followed by anything this reader has no word for is a phrase it has
+    # not understood ("put one of them into your hand" belongs to the library
+    # productions, which read it themselves).
+    mark_one_of_them = stream.mark()
+    if stream.accept_phrase("one", "of", "them") and (
+        stream.exhausted or stream.at_punct(".", ",", ";")
+    ):
+        return ast.TargetSpec("one_of_those", ast.ObjectFilter())
+    stream.reset(mark_one_of_them)
     mark_one_of_those = stream.mark()
     if stream.accept_phrase("one", "of", "those"):
         try:

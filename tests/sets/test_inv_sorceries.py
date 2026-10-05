@@ -1244,3 +1244,158 @@ def test_breaking_wave_is_cast_as_though_it_had_flash_for_six(set_pool):
     game, _board = _w1g8_wave_table(set_pool, active=0, blue_mana=6)
     assert game.cast_from_hand(0, "Breaking Wave").supported
     assert game.players[0].mana_pool["U"] == 2
+
+
+# --- W2G2: bound objects ---
+from engine import Game as _W2G2SGame, PlayerState as _W2G2SPlayerState
+from engine.models import Permanent as _W2G2SPermanent
+from engine.oracle import compile_card_oracle as _w2g2s_compile
+from engine.targeting import derive_cast_spec as _w2g2s_cast_spec
+from tests.helpers import resolve_stack as _w2g2s_resolve_stack
+
+
+# --- Barrin's Spite --------------------------------------------------------
+#
+# "Choose two target creatures controlled by the same player. Their controller
+# chooses and sacrifices one of them. Return the other to its owner's hand."
+#
+# Retribution (HML) with three phrases changed: the seat is named "their
+# controller", the member "one of them", and the creature left over is bounced
+# rather than marked. "The other" is the record the pick leaves behind — the
+# announcement still holds both creatures, so a bounce reading the target would
+# return the first of them, which is the sacrificed one as often as not.
+
+
+def _w2g2_spite_table(set_pool, *, victim: int = 1, interactive=()):
+    """Seat *victim* controls a Hill Giant, a Grizzly Bears and a Craw Wurm;
+    the other seat a Savannah Lions; seat 0 holds Barrin's Spite."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G2SGame(players=[
+        _W2G2SPlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(2)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    made = {}
+    for seat, name in (
+        (victim, "Hill Giant"), (victim, "Grizzly Bears"),
+        (victim, "Craw Wurm"), (1 - victim, "Savannah Lions"),
+    ):
+        permanent = _W2G2SPermanent(card=set_pool("LEA")[name])
+        game._put_permanent_onto_battlefield(seat, permanent, None)
+        made[name] = permanent
+    game.players[0].hand.append(set_pool("INV")["Barrin's Spite"])
+    w2g2_spite = (game, made)
+    return w2g2_spite
+
+
+def _w2g2_spite_names(game, seat: int) -> list[str]:
+    w2g2_names = sorted(
+        permanent.effective_card.name
+        for permanent in game.controlled_by(game.players[seat])
+    )
+    return w2g2_names
+
+
+def test_barrins_spite_their_controller_picks_and_the_other_is_bounced(set_pool):
+    """The opponent — not the caster — is asked, among exactly the two named
+    creatures; the one they keep goes back to their hand."""
+    game, made = _w2g2_spite_table(set_pool, interactive=(1,))
+    giant, bears, wurm = made["Hill Giant"], made["Grizzly Bears"], made["Craw Wurm"]
+
+    assert game.cast_from_hand(
+        0, "Barrin's Spite",
+        target_permanent_ids=[giant.permanent_id, bears.permanent_id],
+    ).supported
+
+    # No drain: the resolution is held while a seat owes its answer (CR 608.2).
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 1)
+    ]
+    offered = game.live_permanent_choices(game.pending_choices[0])
+    assert {p.permanent_id for p in offered} == {
+        giant.permanent_id, bears.permanent_id,
+    }
+    assert game.confirm_permanent_choice(1, wurm.permanent_id) is False
+
+    assert game.confirm_permanent_choice(1, bears.permanent_id)
+    game._settle()
+
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+    assert [card.name for card in game.players[1].hand] == ["Hill Giant"]
+    assert _w2g2_spite_names(game, 1) == ["Craw Wurm"]
+    assert _w2g2_spite_names(game, 0) == ["Savannah Lions"]
+
+
+def test_barrins_spite_bounces_the_one_the_pick_left_not_the_first_named(set_pool):
+    """A headless seat sacrifices its first candidate — the first creature the
+    caster named — so the bounce has to be the *second*: the record, and not
+    slot 0 of the announcement."""
+    game, made = _w2g2_spite_table(set_pool)
+    giant, bears = made["Hill Giant"], made["Grizzly Bears"]
+
+    game.cast_from_hand(
+        0, "Barrin's Spite",
+        target_permanent_ids=[giant.permanent_id, bears.permanent_id],
+    )
+    _w2g2s_resolve_stack(game)
+
+    assert [card.name for card in game.players[1].graveyard] == ["Hill Giant"]
+    assert [card.name for card in game.players[1].hand] == ["Grizzly Bears"]
+    assert not game.is_on_battlefield(giant) and not game.is_on_battlefield(bears)
+
+
+def test_barrins_spite_on_the_casters_own_pair_asks_the_caster(set_pool):
+    """"The same player" may be the caster, and then "their controller" is."""
+    game, made = _w2g2_spite_table(set_pool, victim=0, interactive=(0,))
+    giant, bears = made["Hill Giant"], made["Grizzly Bears"]
+
+    game.cast_from_hand(
+        0, "Barrin's Spite",
+        target_permanent_ids=[giant.permanent_id, bears.permanent_id],
+    )
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_choice", 0)
+    ]
+    assert game.confirm_permanent_choice(0, giant.permanent_id)
+    game._settle()
+
+    assert "Hill Giant" in [card.name for card in game.players[0].graveyard]
+    assert [card.name for card in game.players[0].hand] == ["Grizzly Bears"]
+
+
+def test_barrins_spite_refuses_a_pair_two_players_control(set_pool):
+    """CR 601.2c: "controlled by the same player" is part of the announcement,
+    so one creature from each side is refused with the card still in hand."""
+    game, made = _w2g2_spite_table(set_pool)
+    spite = set_pool("INV")["Barrin's Spite"]
+
+    assert not game.cast_from_hand(
+        0, "Barrin's Spite",
+        target_permanent_ids=[
+            made["Hill Giant"].permanent_id, made["Savannah Lions"].permanent_id,
+        ],
+    ).supported
+    assert game.players[0].hand == [spite]
+    assert _w2g2s_cast_spec(spite, _w2g2s_compile(spite)) == {
+        "kind": "creature", "max_targets": 2, "exact_targets": True,
+        "same_controller": True, "distinct_targets": True,
+    }
+
+
+def test_barrins_spite_with_one_target_gone_sacrifices_the_one_left(set_pool):
+    """CR 608.2b: a target that left is not in the set, so the pick has one
+    candidate and "the other" names nothing — nothing is bounced."""
+    game, made = _w2g2_spite_table(set_pool)
+    giant, bears = made["Hill Giant"], made["Grizzly Bears"]
+    assert game.queue_from_hand(
+        0, "Barrin's Spite",
+        target_permanent_ids=[giant.permanent_id, bears.permanent_id],
+    ).supported
+    game.remove_from_battlefield(bears)
+
+    _w2g2s_resolve_stack(game)
+
+    assert [card.name for card in game.players[1].graveyard] == ["Hill Giant"]
+    assert game.players[1].hand == []
+    assert _w2g2_spite_names(game, 1) == ["Craw Wurm"]
