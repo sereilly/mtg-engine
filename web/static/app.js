@@ -6628,7 +6628,10 @@ function applyChooseCardNamePrompt(info) {
 
   if (chooseCardNameDraft === null) chooseCardNameDraft = "";
   title.textContent = "Name a card";
-  body.textContent = `${info.card_name || "This spell"}: choose a card name.`;
+  body.textContent =
+    `${info.card_name || "This spell"}: choose a ` +
+    `${info.card_type ? info.card_type + " " : ""}card name` +
+    `${info.exclude_basic_land_names ? " other than a basic land card name" : ""}.`;
   steps.innerHTML =
     `<div class="name-strip-row"><input id="chooseCardNameInput" type="text" placeholder="Card name" value="${escapeHtml(chooseCardNameDraft)}" autocomplete="off" /><button type="button" class="prompt-choice-btn" data-choose-card-name-confirm="1">Name It</button></div>`;
 

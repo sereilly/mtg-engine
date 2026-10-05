@@ -354,9 +354,14 @@ class ChooseCardName:
     a prompt that took any name would let a player name the card they actually
     wanted and the sentence behind it would happily match it. ``None`` is
     Foreshadow's unbounded naming, which is every other printing.
+
+    ``other_than_basic_land`` is the other printed bound: "Choose a card name
+    **other than a basic land card name**" (Desperate Research). Carried for
+    the same reason and honoured in the same place.
     """
 
     card_type: str | None = None
+    other_than_basic_land: bool = False
 
 
 @dataclass(frozen=True)

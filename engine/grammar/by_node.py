@@ -203,10 +203,19 @@ _BY_NODE_TYPE: dict[type, object] = {
     # can add, carried as payload and **only when it is printed**, so
     # Foreshadow's instruction stays byte-identical and no behaviour signature
     # moves — the same rule `NameThenRevealTop`'s `miss_damage` follows.
+    #
+    # "…**other than a basic land card name**." (Desperate Research.) The
+    # other printed bound, carried the same way and for the same reason.
     ast.ChooseCardName: lambda node: (
         OracleInstruction(
             "choose_card_name", "",
-            {"card_type": node.card_type} if node.card_type else {},
+            {
+                **({"card_type": node.card_type} if node.card_type else {}),
+                **(
+                    {"exclude_basic_land_names": True}
+                    if node.other_than_basic_land else {}
+                ),
+            },
         ),
     ),
     ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,

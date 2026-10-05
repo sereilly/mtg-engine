@@ -1632,6 +1632,13 @@ class PendingChoicesMixin:
                 f"{caster.name} put a card on the bottom of their library"
             )
             return True
+        # "…You gain life equal to **that card's mana value**." (Reviving
+        # Vapors.) Read off the card as it is taken — it is about to be in a
+        # hand, where nothing can identify it again (CR 608.2h).
+        record = choice.data.get("_record_pick")
+        if record is not None:
+            record_context, record_key = record
+            record_context.results[record_key] = int(kept.cmc or 0)
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(
@@ -1660,6 +1667,13 @@ class PendingChoicesMixin:
             return
         eligible = self.live_look_top_candidates(choice)
         keep = eligible[0] if eligible else None
+        if eligible and choice.data.get("_record_pick") is not None:
+            # "…You gain life equal to that card's mana value." (Reviving
+            # Vapors.) The one printing where the sentence itself says which
+            # card is worth more, so the stated policy reads it: the greatest
+            # mana value, and the first of those.
+            pile = self.players[self.look_top_pile_index(choice)].library
+            keep = max(eligible, key=lambda index: (pile[index].cmc or 0, -index))
         if not self._resolve_look_top_pick(choice, keep):
             self.discard_pending_choice(choice)
 
@@ -3712,6 +3726,10 @@ class PendingChoicesMixin:
         bears, which simply never matches. An empty name is the honest answer
         for a seat with nothing to go on and matches nothing either.
         """
+        if self._named_card_breaks_printed_bound(choice, (card_name or "").strip()):
+            # Refused, not repaired: quietly recording something else would
+            # tell the player they had named a card they had not.
+            return False
         record = choice.data.get("record")
         if record is not None:
             record["chosen_card_name"] = (card_name or "").strip()
@@ -3721,6 +3739,49 @@ class PendingChoicesMixin:
             + ((card_name or "").strip() or "nothing")
         )
         return True
+
+    def _named_card_breaks_printed_bound(self, choice: PendingChoice, named: str) -> bool:
+        """Whether *named* is a name the printed sentence does not let this
+        seat choose.
+
+        "Choose a **creature** card name" (Wood Sage) and "Choose a card name
+        **other than a basic land card name**" (Desperate Research) each bound
+        CR 202.1's freedom, and a bound only the prompt's label states is a
+        rule nothing enforces: Wood Sage's seat could name Mountain and take
+        every Mountain off the top of its library.
+
+        A basic land card's name is a closed list (CR 205.3i's five basic land
+        types name them, with "Snow-Covered" in front or without, and Wastes).
+        A card *type* is not something a name can be asked — the engine holds
+        no catalog — so it is asked of every card this game contains with that
+        name: a name borne by a card here that is not of the type is refused,
+        and a name borne by no card here matches nothing whatever its type.
+        """
+        if not named:
+            return False
+        lowered = named.lower()
+        if choice.data.get("exclude_basic_land_names"):
+            bare = lowered.removeprefix("snow-covered ").strip()
+            if bare in BASIC_LAND_WORDS or lowered == "wastes":
+                return True
+        card_type = choice.data.get("card_type")
+        if not card_type:
+            return False
+        from ...search_filters import card_has_type
+
+        borne_by = [
+            card
+            for player in self.players
+            for zone in ("library", "hand", "graveyard", "exile")
+            for card in getattr(player, zone, ())
+            if card.name.lower() == lowered
+        ] + [
+            permanent.card for permanent in self.all_permanents()
+            if permanent.card.name.lower() == lowered
+        ]
+        return bool(borne_by) and not any(
+            card_has_type(card, str(card_type)) for card in borne_by
+        )
 
     def _default_choose_card_name(self, choice: PendingChoice) -> None:
         self._resolve_choose_card_name(choice, choice.data.get("default_name", ""))

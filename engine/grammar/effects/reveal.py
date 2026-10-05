@@ -92,6 +92,12 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     counted = _accept_counted_reveal_top(stream)
     if counted is not None:
         return counted
+    # "Reveal the top **three cards** of your library and put one of them into
+    # your hand. …" (Reviving Vapors.) The counted reveal whose pick is the
+    # revealer's own. Non-consuming on refusal, like its siblings.
+    picked = _accept_counted_reveal_pick_to_hand(stream)
+    if picked is not None:
+        return picked
     # "Reveal the top **four cards** of your library and put all of them with
     # that name into your hand. …" (Wood Sage.) A second counted reveal, whose
     # first sentence differs from the one above only in the word after
@@ -224,6 +230,12 @@ def _accept_counted_reveal_sorting_by_name(
     if not stream.accept_punct("."):
         stream.reset(mark)
         return None
+    # "**Exile the rest.**" (Desperate Research.) The verb spelling of the one
+    # rest zone that has a verb; the destination is the same closed word.
+    if stream.accept_phrase("exile", "the", "rest"):
+        return ast.RevealTopSortingByChosenName(
+            count, match_zone=match_zone, rest_zone="exile",
+        )
     if not stream.accept_phrase("put", "the", "rest", "into", "your"):
         stream.reset(mark)
         return None
@@ -564,6 +576,60 @@ def _accept_counted_reveal_top(
     return ast.RevealTopOpponentChooses(
         count, chooser, fate="graveyard", then_draw=drawn,
     )
+
+
+def _accept_counted_reveal_pick_to_hand(
+    stream: TokenStream,
+) -> "ast.Statement | None":
+    """``<N> cards of your library and put one of them into your hand. You gain
+    life equal to that card's mana value. Put all other cards revealed this way
+    into your graveyard.`` at the cursor, with "Reveal the top" already read —
+    or None with the cursor where it was. (Reviving Vapors.)
+
+    :class:`ast.LookTopPickToHand` over a revealed pile with the rest binned,
+    as Eye of Yawgmoth's reveal below is. All three sentences, because "that
+    card" and "all other cards revealed this way" bind to nothing read apart.
+    The life gain stays an ordinary statement behind the pick, reading a number
+    the pick is told to record; it runs after the rest are binned, which nobody
+    can observe — no player receives priority inside a resolution.
+    """
+    mark = stream.mark()
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "cards", "of", "your", "library", "and", "put", "one", "of", "them",
+        "into", "your", "hand",
+    ) or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    gains = stream.accept_phrase(
+        "you", "gain", "life", "equal", "to", "that", "card", "'s", "mana", "value",
+    )
+    if gains and not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "put", "all", "other", "cards", "revealed", "this", "way", "into",
+        "your", "graveyard",
+    ):
+        stream.reset(mark)
+        return None
+    pick = ast.LookTopPickToHand(
+        count, rest_destination="graveyard", revealed=True,
+        records_pick_mana_value=gains,
+    )
+    if not gains:
+        return pick
+    return ast.Sequence((
+        pick,
+        ast.GainLife(ast.PlayerRef("you"), ast.ThatMuch("its_mana_value")),
+    ))
 
 
 def _accept_reveal_number_from_top_pick(

@@ -348,6 +348,13 @@ class LookTopPickToHand:
     #: (``Game.record_reveal``) — read as a look, the opponent would never see
     #: cards the card shows them.
     revealed: bool = False
+    #: "…and put one of them into your hand. You gain life equal to **that
+    #: card's mana value**." (Reviving Vapors.) The pick writes down the mana
+    #: value of the card it took, because the sentence behind it asks about a
+    #: card that is in a hidden zone by then and that nothing on the board can
+    #: identify (CR 608.2h). Off for every other printing, so their payloads
+    #: and their records are what they were.
+    records_pick_mana_value: bool = False
 
 @dataclass(frozen=True)
 class RevealTopOpponentChooses:

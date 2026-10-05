@@ -319,6 +319,10 @@ def _choose_card_name(ctx: PromptContext, choices: list) -> dict:
     }
     if choice.data.get("card_type"):
         prompt["card_type"] = choice.data["card_type"]
+    # "…other than a basic land card name" (Desperate Research): the other
+    # printed bound, told to the player for the reason the type is.
+    if choice.data.get("exclude_basic_land_names"):
+        prompt["exclude_basic_land_names"] = True
     return prompt
 
 

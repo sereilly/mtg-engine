@@ -273,10 +273,16 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
     if (word := stream.peek_word()) in CARD_TYPES and word != "card":
         card_type = word
         stream.advance()
-    if stream.accept_phrase("card", "name") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        return ast.ChooseCardName(card_type=card_type)
+    if stream.accept_phrase("card", "name"):
+        # "…**other than a basic land card name**." (Desperate Research.) The
+        # second printed bound on CR 202.1's freedom, read whole or not at all.
+        no_basics = stream.accept_phrase(
+            "other", "than", "a", "basic", "land", "card", "name",
+        )
+        if stream.exhausted or stream.at_punct(".", ","):
+            return ast.ChooseCardName(
+                card_type=card_type, other_than_basic_land=no_basics,
+            )
     stream.reset(mark)
     return None
 

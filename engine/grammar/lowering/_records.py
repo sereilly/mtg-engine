@@ -773,6 +773,13 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
 #: already writes.
 _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     "search_library": ("destination", "exile", "exiled_cards"),
+    # "Reveal the top three cards of your library and put one of them into
+    # your hand. You gain life equal to **that card's mana value**." (Reviving
+    # Vapors.) The pick writes the taken card's mana value only when the
+    # sentence behind it asks — every other look-and-pick takes a card nobody
+    # asks about again, and a flat row would let "its mana value" behind any of
+    # them read a number no step of that card wrote.
+    "look_top_pick_to_hand": ("record_pick", "its_mana_value", "its_mana_value"),
     # "**Each player** reveals the top card of their library." (Game Preserve.)
     # A row here rather than in ``_PRODUCES`` because it is not true of every
     # step of the kind: "reveal the top card of your library" opens one library
