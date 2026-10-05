@@ -213,6 +213,67 @@ def own_chosen_color(permanent) -> str | None:
     return str(chosen)
 
 
+#: "This creature has protection from the chosen color." (Voice of All.) The
+#: second sentence that spends the entry choice on the permanent itself, one
+#: layer up from :data:`_IS_THE_CHOSEN_COLOR_RE`: CR 613 layer 6 rather than
+#: layer 5, and CR 702.16 rather than CR 105. The Wards say it of the creature
+#: they enchant ("Enchanted creature has protection from the chosen color",
+#: ``auras.CHOSEN_PROTECTION_COLOR``); this is the same grant with the
+#: permanent that chose as the permanent that has it.
+#:
+#: Whole-line, and the noun is data, for the reasons its neighbour gives.
+_HAS_PROTECTION_FROM_THE_CHOSEN_COLOR_RE = re.compile(
+    r"^this [a-z]+ has protection from the chosen color\.?$"
+)
+
+
+def has_protection_from_the_chosen_color_line(text: str) -> bool:
+    """Whether *text* is, in full, "This <permanent> has protection from the
+    chosen color."
+
+    Asked by :func:`enter_effect_line` (the claim) and by
+    :func:`own_chosen_protection_color` (the effect), so what is claimed and
+    what the protection reader is handed cannot describe different cards.
+    """
+    return bool(
+        _HAS_PROTECTION_FROM_THE_CHOSEN_COLOR_RE.match(_normalized(text or ""))
+    )
+
+
+@lru_cache(maxsize=None)
+def _says_it_has_protection_from_the_chosen_color(oracle_text: str) -> bool:
+    return any(
+        has_protection_from_the_chosen_color_line(line)
+        for line in oracle_text.splitlines()
+    )
+
+
+def own_chosen_protection_color(permanent) -> str | None:
+    """The colour *permanent*'s own "has protection from the chosen color"
+    static protects it from, or ``None`` when it prints no such line or has not
+    chosen yet.
+
+    :func:`own_chosen_color`'s contract exactly, and for its reasons: read off
+    ``effective_card`` — so a Clone of a Voice of All has protection from the
+    colour the *Clone* chose, and a Voice that has lost its abilities
+    (CR 613.1f) has none — and off the record the entry choice wrote, on every
+    ask rather than stamped into the turn-long ``protection_from_<colour>``
+    channel when the choice is answered. A stamp would outlive the ability and
+    a late answer to the entry prompt would have nothing to re-read.
+
+    No record means no protection rather than a guessed colour: a shield from
+    a colour nobody named is one the card never gave.
+    """
+    chosen = permanent.metadata.get(CHOSEN_COLOR_KEY)
+    if not chosen:
+        return None
+    if not _says_it_has_protection_from_the_chosen_color(
+        permanent.effective_card.oracle_text or ""
+    ):
+        return None
+    return str(chosen)
+
+
 #: "As this artifact enters, choose **a color and a creature type**."
 #: (Volrath's Laboratory.) Two of the qualities this one sentence can name, on
 #: one line — the pair shape ``CHOOSE_COLOR_AND_OPPONENT_ON_ENTER`` and Booby
@@ -1621,6 +1682,12 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     # learn it at once.
     if is_the_chosen_color_line(normalized):
         return "is the chosen color"
+    # "This creature has protection from the chosen color." (Voice of All.)
+    # The same arrangement one layer up: the static that spends the entry
+    # choice as a protection ability, performed by
+    # ``permanent_state._protection_qualities`` off this same reader.
+    if has_protection_from_the_chosen_color_line(normalized):
+        return "has protection from the chosen color"
     # "…choose **black or red**" / "…choose **Island or Swamp**". The same
     # choice with the offer narrowed by the sentence, so it is claimed beside
     # the catalog-named ones rather than under them — neither phrase is a

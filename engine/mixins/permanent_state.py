@@ -38,6 +38,7 @@ from ..enter_effects import (
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     choosable_bodies,
+    own_chosen_protection_color,
 )
 from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
                      CHOSEN_PROTECTION_COLOR, aura_protection_colors,
@@ -3003,6 +3004,14 @@ class PermanentStateMixin:
                     part = part.strip()
                     if part.startswith("protection from "):
                         _absorb(part[len("protection from "):].strip())
+        # "This creature has protection from **the chosen color**." (Voice of
+        # All.) The permanent's own static, spending the choice it made as it
+        # entered (CR 614.1c). **Derived**, like every grant below: read off the
+        # entry record on each ask, so a late answer to the prompt is the colour
+        # it then has, and nothing has to remove it when the ability goes.
+        own_chosen = own_chosen_protection_color(permanent)
+        if own_chosen is not None:
+            qualities.add(("color", own_chosen))
         # Two sources with different lifetimes, which is why both exist.
         #
         # An Aura's protection lasts exactly as long as it is attached, so it is

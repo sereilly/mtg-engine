@@ -364,3 +364,104 @@ def test_w1g6_root_greevil_sweeps_for_a_seat_nobody_asks(set_pool):
     assert len(gone) == 1 and gone.isdisjoint(kept), (gone, kept)
     assert kept, "enchantments of the other colour were left alone"
     assert game.pending_choices == []
+
+
+def _w1g6_cast_voice(set_pool, theirs, colour, *, interactive=(0,)):
+    """Seat 0 casts Voice of All against *theirs* and (when asked) answers the
+    entry choice with *colour*. Returns the game, the Voice and their board."""
+    game, _mine, their_side = _w1g6_table(set_pool, [], theirs, interactive=interactive)
+    game.players[0].hand.append(_w1g6_card(set_pool, "Voice of All"))
+    assert game.queue_from_hand(0, "Voice of All").supported
+    game.resolve_top_of_stack()
+    voice = next(p for p in game.controlled_by(0) if p.card.name == "Voice of All")
+    voice.metadata["summoning_sickness_turn"] = -99
+    if interactive:
+        assert [(c.kind, c.player_index) for c in game.pending_choices] == [("enter_choice", 0)]
+        assert game.confirm_enter_choice(0, mana_color=colour)
+    return game, voice, their_side  # _w1g6_cast_voice
+
+
+def _w1g6_block(game, attacker, blocker):
+    """Seat 0 attacks with *attacker*; seat 1 tries to block it with *blocker*.
+    Returns the engine's answer to the block declaration."""
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [game.battlefield_index_of(attacker)])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game.declare_blockers(1, {
+        game.battlefield_index_of(blocker): [game.battlefield_index_of(attacker)],
+    })  # _w1g6_block
+
+
+def test_w1g6_voice_of_all_has_protection_from_the_colour_its_controller_chose(set_pool):
+    """"As this creature enters, choose a color. / This creature has protection
+    from the chosen color." Its controller is asked as it enters; black is
+    answered, so a black Terror is an illegal announcement, a red Bolt is a
+    legal one, and black damage is prevented while red damage is not
+    (CR 702.16e)."""
+    voice_card = _w1g6_card(set_pool, "Voice of All")
+    assert _w1g6_compile(voice_card).supported
+    game, voice, (knight, giant) = _w1g6_cast_voice(
+        set_pool, ["Black Knight", "Hill Giant"], "B",
+    )
+    assert game._has_keyword(voice, "flying")
+    assert game._protection_colors(voice) == {"B"}
+
+    game.players[1].hand.extend(_w1g6_card(set_pool, n) for n in ("Terror", "Lightning Bolt"))
+    refused = game.queue_from_hand(1, "Terror", target_permanent_ids=[voice.permanent_id])
+    assert not refused.supported and "illegal target" in refused.details
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[voice.permanent_id],
+    ).supported
+    game.stack.clear()
+
+    from tests.helpers import _damage_dealt as _w1g6_damage_dealt
+
+    assert _w1g6_damage_dealt(game, voice, 2, source=knight) == 0
+    assert _w1g6_damage_dealt(game, voice, 3, source=giant) == 3
+
+
+def test_w1g6_voice_of_all_reads_a_blockers_colour_through_the_layers(set_pool):
+    """CR 702.16f: it can't be blocked by creatures of the chosen colour — and
+    the colour is the one the blocker has *now*. A red Roc may block a Voice
+    that chose black; the same Roc turned black for the turn may not, exactly
+    as the printed-black Vampire may not."""
+    game, voice, (vampire, roc) = _w1g6_cast_voice(
+        set_pool, ["Sengir Vampire", "Roc of Kher Ridges"], "B",
+    )
+    assert not _w1g6_block(game, voice, vampire)[0]
+
+    game, voice, (vampire, roc) = _w1g6_cast_voice(
+        set_pool, ["Sengir Vampire", "Roc of Kher Ridges"], "B",
+    )
+    assert _w1g6_block(game, voice, roc)[0]
+
+    game, voice, (vampire, roc) = _w1g6_cast_voice(
+        set_pool, ["Sengir Vampire", "Roc of Kher Ridges"], "B",
+    )
+    roc.metadata["color_override_until_eot"] = "B"
+    game._recompute_continuous_effects()
+    assert _w1g6_colors(game, roc) == ["B"]
+    assert not _w1g6_block(game, voice, roc)[0]
+
+
+def test_w1g6_voice_of_alls_protection_follows_the_record_and_the_ability(set_pool):
+    """Derived from the entry record on every ask rather than stamped once: a
+    seat nobody asks takes the default — the colour its opponents hold most of,
+    red here — with no prompt left owing; a later answer is the colour it then
+    has; and a Voice that has lost its abilities (Humility, CR 613.1f) has no
+    protection at all."""
+    game, voice, _theirs = _w1g6_cast_voice(
+        set_pool, ["Black Knight", "Hill Giant", "Goblin Balloon Brigade"], None,
+        interactive=(),
+    )
+    assert game.pending_choices == []
+    assert game._protection_colors(voice) == {"R"}
+
+    voice.metadata["chosen_color"] = "G"
+    assert game._protection_colors(voice) == {"G"}
+
+    humility = _W1G6Permanent(card=set_pool("TMP")["Humility"])
+    game._put_permanent_onto_battlefield(1, humility, None)
+    game._recompute_continuous_effects()
+    assert game._protection_colors(voice) == set()
+    assert not game._has_keyword(voice, "flying")
