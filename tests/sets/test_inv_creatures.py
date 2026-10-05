@@ -75,6 +75,7 @@ def test_pyre_zombie_returns_from_the_graveyard_for_one_black_black(set_pool):
 
     game.resolve_upkeep(0)
     _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
 
     assert [card.name for card in game.players[0].hand] == ["Pyre Zombie"]
     assert [card.name for card in game.players[0].graveyard] == ["Grizzly Bears"]
@@ -88,6 +89,7 @@ def test_pyre_zombie_stays_put_when_its_cost_cannot_be_paid(set_pool):
 
     game.resolve_upkeep(0)
     _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
 
     assert game.players[0].hand == []
     assert "Pyre Zombie" in [card.name for card in game.players[0].graveyard]
@@ -100,6 +102,7 @@ def test_pyre_zombie_does_nothing_on_an_opponents_upkeep(set_pool):
 
     game.resolve_upkeep(1)
     _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
 
     assert game.players[0].hand == []
     assert not any(land.tapped for land in lands)
