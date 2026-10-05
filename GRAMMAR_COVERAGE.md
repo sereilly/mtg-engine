@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 82.6% | 81.4% | 56.5% | 250 |
+| INV *(measured)* | 335 | 547 | 84.5% | 83.4% | 58.5% | 261 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,19 +57,19 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 534 | 251 | expected a subject |  |
-| 150 | 77 | unrecognized effect verb |  |
+| 529 | 246 | expected a subject |  |
+| 149 | 76 | unrecognized effect verb |  |
 | 133 | 68 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 18 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
-| 8 | 4 | expected 'card' |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
@@ -752,6 +752,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}, {T}: Prevent all combat damage that would be dealt by target blocked creature this turn.`
 - **Benalish Trapper**
   - `{W}, {T}: Tap target creature.`
+- **Bend or Break**
+  - `Each player separates all nontoken lands they control into two piles. For each player, one of their piles is chosen by one of their opponents of their choice. Destroy all lands in the chosen piles. Tap all lands in the other piles.`
 - **Benthic Djinn**
   - `At the beginning of your upkeep, you lose 2 life.`
 - **Benthic Explorers**
@@ -1946,6 +1948,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Regenerate target creature.`
 - **Death Watch**
   - `When enchanted creature dies, its controller loses life equal to its power and you gain life equal to its toughness.`
+- **Death or Glory**
+  - `Separate all creature cards in your graveyard into two piles. Exile the pile of an opponent's choice and return the other to the battlefield.`
 - **Death's Duet**
   - `Return two target creature cards from your graveyard to your hand.`
 - **Deathbloom Thallid**
@@ -2050,6 +2054,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each end step, each player who tapped a land for mana this turn sacrifices a land of their choice. This enchantment deals 2 damage to each player who sacrificed a Plains this way.`
 - **Desperate Gambit**
   - `Choose a source you control and flip a coin. If you win the flip, the next time that source would deal damage this turn, it deals double that damage instead. If you lose the flip, the next time it would deal damage this turn, prevent that damage.`
+- **Desperate Research**
+  - `Choose a card name other than a basic land card name. Reveal the top seven cards of your library and put all of them with that name into your hand. Exile the rest.`
 - **Despoil**
   - `Destroy target land. Its controller loses 2 life.`
 - **Despondency**
@@ -2199,6 +2205,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{B}, {T}, Discard a card: Choose a card name. Exile the top six cards of your library, then reveal cards from the top of your library until you reveal a card with the chosen name. Put that card into your hand and exile all other cards revealed this way.`
 - **Dizzying Gaze**
   - `{R}: Enchanted creature deals 1 damage to target creature with flying.`
+- **Do or Die**
+  - `Separate all creatures target player controls into two piles. Destroy all creatures in the pile of that player's choice. They can't be regenerated.`
 - **Dominate**
   - `Gain control of target creature with mana value X or less.`
 - **Dominating Licid**
@@ -2477,6 +2485,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player creates a green Elephant creature token. Those creatures have "This token's power and toughness are each equal to the number of creature cards in its controller's graveyard."`
 - **Elfhame Palace**
   - `{T}: Add {G} or {W}.`
+- **Elfhame Sanctuary**
+  - `At the beginning of your upkeep, you may search your library for a basic land card, reveal that card, put it into your hand, then shuffle. If you do, you skip your draw step this turn.`
 - **Eliminate**
   - `Destroy target creature or planeswalker with mana value 3 or less.`
 - **Elite Archers**
@@ -2714,6 +2724,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}, Sacrifice a creature: Reveal a number of cards from the top of your library equal to the sacrificed creature's power. Put one into your hand and exile the rest.`
 - **Fabled Passage**
   - `{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.`
+- **Fact or Fiction**
+  - `Reveal the top five cards of your library. An opponent separates those cards into two piles. Put one pile into your hand and the other into your graveyard.`
 - **Fade Away**
   - `For each creature, its controller sacrifices a permanent of their choice unless they pay {1}.`
 - **Faerie Conclave**
@@ -2851,6 +2863,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Fiery Mantle**
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
+- **Fight or Flight**
+  - `At the beginning of combat on each opponent's turn, separate all creatures that player controls into two piles. Only creatures in the pile of their choice can attack this turn.`
 - **Fighting Chance**
   - `For each blocking creature, flip a coin. If you win the flip, prevent all combat damage that would be dealt by that creature this turn.`
 - **Final Fortune**
@@ -6849,6 +6863,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Reviving Dose**
   - `You gain 3 life.`
   - `Draw a card.`
+- **Reviving Vapors**
+  - `Reveal the top three cards of your library and put one of them into your hand. You gain life equal to that card's mana value. Put all other cards revealed this way into your graveyard.`
 - **Rewards of Diversity**
   - `Whenever an opponent casts a multicolored spell, you gain 4 life.`
 - **Rewind**
@@ -8157,6 +8173,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stand // Deliver**
   - `Prevent the next 2 damage that would be dealt to target creature this turn.`
   - `Return target permanent to its owner's hand.`
+- **Stand or Fall**
+  - `At the beginning of combat on your turn, for each defending player, separate all creatures that player controls into two piles and that player chooses one. Only creatures in the chosen piles can block this turn.`
 - **Standing Stones**
   - `{1}, {T}, Pay 1 life: Add one mana of any color.`
 - **Stangg**
@@ -9020,6 +9038,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{B}, {T}: Destroy target legendary creature. It can't be regenerated.`
 - **Tsabo's Assassin**
   - `{T}: Destroy target creature if it shares a color with the most common color among all permanents or a color tied for most common. A creature destroyed this way can't be regenerated.`
+- **Tsabo's Decree**
+  - `Choose a creature type. Target player reveals their hand and discards all creature cards of that type. Then destroy all creatures of that type that player controls. They can't be regenerated.`
 - **Tsabo's Web**
   - `When this artifact enters, draw a card.`
 - **Tsunami**
@@ -9392,6 +9412,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap an untapped Merfolk you control: This creature can attack this turn as though it didn't have defender.`
   - `Tap an untapped Merfolk you control: This creature gets +2/+1 until end of turn.`
   - `When this creature dies, destroy all Merfolk tapped this turn to pay for its abilities.`
+- **Void**
+  - `Choose a number. Destroy all artifacts and creatures with mana value equal to that number. Then target player reveals their hand and discards all nonland cards with mana value equal to the number.`
 - **Volcanic Eruption**
   - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
   - `Destroy X target Mountains. Volcanic Eruption deals damage to each creature and each player equal to the number of Mountains put into a graveyard this way.`
