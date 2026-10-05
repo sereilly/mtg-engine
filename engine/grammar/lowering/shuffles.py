@@ -7,10 +7,11 @@ already drew in prose: everything left there answers "which zone does this
 object end up in", and a shuffle answers "what order is this library in now",
 which is a different question about a zone nothing moved into.
 
-Four shapes, and the axis between them is *what* is being shuffled in:
+Five shapes, and the axis between them is *what* is being shuffled in:
 a graveyard (Feldon's Cane), the source itself from a trigger that has already
-killed it, a hand (Winds of Change), and nothing at all — the bare "Then that
-player shuffles" every search and strip ends with.
+killed it, a chosen permanent (Rishadan Pawnshop, which arrived after this
+paragraph said four), a hand (Winds of Change), and nothing at all — the bare
+"Then that player shuffles" every search and strip ends with.
 
 `_SHUFFLE_LIBRARY_PLAYERS` travels with them; `_REVEAL_TOP_PLAYERS`, its
 identical twin, deliberately does not. The two frozensets hold the same four
@@ -23,6 +24,12 @@ No parse-side twin: the shuffle productions are spread across
 is near its guard. That is the ordinary shape here rather than a fork —
 `zones`, `library`, `mana` and `redirection` are all lowering families whose
 parse halves stayed small.
+
+The AST twin arrived at Planeshift's Phase 0: `ast/shuffles.py` holds the five
+nodes lowered here and no other, cut out of `ast/board.py` under this module's
+name. All five are *built* in `effects/zones.py`; what `effects/library.py` and
+`effects/search.py` read is the word, inside a look or a search that ends with
+one.
 """
 
 from __future__ import annotations

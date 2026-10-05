@@ -24,7 +24,7 @@ its node is in ``ast/characteristics.py``.
     records          …and what it tests about something already done
     damage           dealing it, and preventing it
     characteristics  P/T, keywords, colour, printed text, counters
-    board            destruction, bouncing, tapping, control, sacrifice
+    board            destruction, bouncing, sacrifice, exile, attaching, phasing
     cards            draw, discard, mill, search, mana
     stack            countering, choosing a modal spell's mode
     combat           can't-attack / can't-be-blocked
@@ -260,11 +260,6 @@ from .board import (
     SacrificeExpansionPermanents,
     DelayedSelfAction,
     RebalanceLands,
-    ShuffleGraveyardIntoLibrary,
-    ShuffleHandIntoLibrary,
-    ShuffleSourceIntoLibrary,
-    ShuffleTargetIntoLibrary,
-    ShuffleLibrary,
     Attach,
     PayOrSacrificeGreatestManaValue,
     Destroy,
@@ -290,6 +285,13 @@ from .board import (
     SacrificeUnlessPay,
     KeepChosenSacrificeRest,
     KeepSlot,
+)
+from .shuffles import (
+    ShuffleGraveyardIntoLibrary,
+    ShuffleHandIntoLibrary,
+    ShuffleSourceIntoLibrary,
+    ShuffleTargetIntoLibrary,
+    ShuffleLibrary,
 )
 from .control_changes import (
     GainControl,

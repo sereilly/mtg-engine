@@ -106,11 +106,6 @@ from .board import (
     DelayedSelfAction,
     RebalanceLands,
     SacrificeExpansionPermanents,
-    ShuffleGraveyardIntoLibrary,
-    ShuffleHandIntoLibrary,
-    ShuffleSourceIntoLibrary,
-    ShuffleTargetIntoLibrary,
-    ShuffleLibrary,
     Destroy,
     Exile,
     ExileUntilLeavesOrUntaps,
@@ -135,6 +130,13 @@ from .board import (
     DestroyEachUnlessPaid,
     SacrificeUnlessPay,
     KeepChosenSacrificeRest,
+)
+from .shuffles import (
+    ShuffleGraveyardIntoLibrary,
+    ShuffleHandIntoLibrary,
+    ShuffleSourceIntoLibrary,
+    ShuffleTargetIntoLibrary,
+    ShuffleLibrary,
 )
 from .control_changes import (
     GainControl,
