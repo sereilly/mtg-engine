@@ -51,6 +51,10 @@ from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
 from ...oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS)
+# The fates a ``keep_permanents`` choice performs besides its default
+# (Planar Overlay's "return those lands"); on a line of its own so the import
+# above, which every round appends to, cannot collide with it.
+from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
 from ...search_filters import landing_seat, search_matches, searched_seat
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -6947,6 +6951,7 @@ class PendingChoicesMixin:
 
     def arm_keep_permanents(
         self, player_index: int, *, pool: dict, slots: list, reason: str,
+        fate: str | None = None,
     ) -> None:
         """Ask *player_index* which of their permanents to keep, then take the
         rest (Cataclysm, Limited Resources).
@@ -6954,18 +6959,35 @@ class PendingChoicesMixin:
         A seat with nothing in the pool is not prompted and nothing is logged as
         happening to them: an empty pool has an empty complement, so there is no
         decision and no sacrifice. CR 101.3 rather than a shortcut.
+
+        *fate* is which half of the choice moves (``KEEP_FATES``). None is the
+        sentence this prompt was built for — the chosen stay and the rest are
+        sacrificed — and is not written into the prompt at all, so every prompt
+        armed before a second fate existed is unchanged. Under
+        ``RETURN_CHOSEN_TO_HAND`` (Planar Overlay) the chosen are what moves,
+        so a seat none of whose permanents fills any slot has nothing to choose
+        and nothing to return, and is not asked either.
         """
         candidates = self.keep_choice_candidates(player_index, pool)
         if not candidates:
             return
+        described = [
+            {"count": int(s.get("count", 0)), "filter": dict(s.get("filter") or {})}
+            for s in (slots or ())
+        ]
+        extra: dict = {}
+        if fate is not None:
+            if fate not in KEEP_FATES:
+                raise ValueError(f"no keep prompt performs {fate!r}")
+            if not self._match_keeps(candidates, self._keep_slot_filters(described)):
+                return
+            extra["fate"] = fate
         self.arm_pending_choice(
             "keep_permanents", player_index,
             pool=dict(pool or {}),
-            slots=[
-                {"count": int(s.get("count", 0)), "filter": dict(s.get("filter") or {})}
-                for s in (slots or ())
-            ],
+            slots=described,
             reason=reason,
+            **extra,
         )
 
     def confirm_keep_permanents(self, player_index: int, permanent_ids: list) -> bool:
@@ -7008,9 +7030,44 @@ class PendingChoicesMixin:
             # the same single slot ("an artifact, a creature" answered with two
             # plain artifacts) is a pair the card never offered.
             return False
-        self._sacrifice_the_rest(choice, live, kept)
+        # Which half of the partition moves is the sentence's, carried on the
+        # prompt. Everything above is the same question either way — who may
+        # be chosen, into which slots, and that the choice is as large as the
+        # board allows — so the two fates share one validation and cannot
+        # disagree about whether a dual land fills one slot or two.
+        if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
+            self._return_the_chosen(choice, kept)
+        else:
+            self._sacrifice_the_rest(choice, live, kept)
         self.discard_pending_choice(choice)
         return True
+
+    def _return_the_chosen(self, choice: PendingChoice, chosen: list) -> None:
+        """What was chosen goes to its owner's hand; the rest stays.
+
+        "Each player chooses a land they control of each basic land type.
+        Return those lands to their owners' hands." (Planar Overlay.) The
+        mirror of :meth:`_sacrifice_the_rest` one line down: the same
+        partition, with the other half moving. Through
+        ``return_permanent_to_owners_hand`` — the one spelling of that move —
+        so each land goes to its **owner's** hand (CR 400.3) whoever chose it,
+        a token ceases to exist, and the per-turn ledger is kept.
+
+        Every permanent was resolved by the validation above before any of
+        them leaves, which is that method's rule and for its reason.
+        """
+        from ...handlers._common import return_permanent_to_owners_hand
+
+        player = self.players[choice.player_index]
+        reason = choice.data.get("reason", "Effect")
+        for perm in chosen:
+            return_permanent_to_owners_hand(self, perm, fallback_owner=player)
+        where = "its owner's hand" if len(chosen) == 1 else "their owners' hands"
+        self.log.append(
+            f"{player.name} returned "
+            + (", ".join(perm.card.name for perm in chosen) if chosen else "nothing")
+            + f" to {where} ({reason})"
+        )
 
     def _sacrifice_the_rest(self, choice: PendingChoice, live: list, kept: list) -> None:
         """Everything in the pool that was not kept, given up together.

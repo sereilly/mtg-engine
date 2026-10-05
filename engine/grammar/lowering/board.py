@@ -45,8 +45,8 @@ ninety.
 
 import dataclasses
 
-from ...oracle_types import (X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
-                             OracleInstruction)
+from ...oracle_types import (KEEP_FATES, X_FROM_COUNT,
+                             X_FROM_COUNT_PER_RECIPIENT, OracleInstruction)
 from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -827,4 +827,17 @@ def _lower_keep_chosen_sacrifice_rest(
     seat = _KEEP_SACRIFICE_SEATS[node.chooser.kind]
     if seat is not None:
         payload["who"] = seat
+    # "…chooses a land they control of each basic land type. **Return those
+    # lands to their owners' hands.**" (Planar Overlay.) The same choice with
+    # the other half of the partition moving. Written only when it is not the
+    # default, so Cataclysm's, Limited Resources' and Global Ruin's payloads
+    # are byte-identical, and admitted only from the vocabulary the prompt's
+    # resolver performs — a fate nothing carries out is a card that asks every
+    # seat a question and then moves nothing.
+    if node.fate != "sacrifice_rest":
+        if node.fate not in KEEP_FATES:
+            raise LoweringError(
+                f"no keep prompt performs {node.fate!r}", node=node
+            )
+        payload["fate"] = node.fate
     return (OracleInstruction("keep_chosen_sacrifice_rest", "", payload),)

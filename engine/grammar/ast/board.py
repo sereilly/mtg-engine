@@ -830,7 +830,19 @@ class KeepChosenSacrificeRest:
     makes an artifact creature a choice rather than two free keeps (CR 608.2d:
     a player can't choose an option that's illegal, and a permanent already
     chosen is not available again).
+
+    ``fate`` is which half of the partition the sentence moves, and where.
+    The default is the node's name — the chosen stay and the rest are
+    sacrificed. "Each player chooses a land they control of each basic land
+    type. **Return those lands to their owners' hands.**" (Planar Overlay) is
+    the same choice over the same slots with the other half moving:
+    ``"return_chosen_to_hand"`` sends what was chosen to its owner's hand and
+    leaves the rest where it is. A field rather than a second node because
+    everything a player is asked is identical — who chooses, from what, into
+    which slots — and two nodes would be two prompts free to disagree about
+    whether a dual land fills one slot or two.
     """
     chooser: PlayerRef
     pool: ObjectFilter
     slots: tuple[KeepSlot, ...]
+    fate: str = "sacrifice_rest"
