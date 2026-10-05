@@ -366,7 +366,8 @@ REPLACED = "_replaced"
 
 
 def replacement_effect(
-    kind: str, order: int, *, applies: Applicability, redirects: bool = False
+    kind: str, order: int, *, applies: Applicability, redirects: bool = False,
+    prevents: bool = False,
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
 
@@ -395,7 +396,17 @@ def replacement_effect(
                       # changing it, which is the half of Whippoorwill's clause
                       # a replacement can be. Declared here so a new redirect
                       # cannot quietly escape the lock.
-                      prevents_or_redirects=redirects)
+                      #
+                      # *prevents* is the other half, for the one interceptor
+                      # here that is CR 615 prevention printed as such ("Prevent
+                      # all damage that would be dealt to this creature by
+                      # Deserts") and registered in this file for its
+                      # text-keyed guard. It was declared ``redirects=True`` to
+                      # get under the same lock, which was right about the lock
+                      # and wrong about the word; "the damage can't be
+                      # prevented" (Urza's Rage) needs the two apart.
+                      prevents_or_redirects=redirects or prevents,
+                      prevents=prevents)
         )
         registered.sort(key=lambda candidate: candidate.order)
         return fn
@@ -428,6 +439,7 @@ def replacement_candidates(kind: str) -> list[Candidate]:
             key=c.key, order=c.order, applies=c.applies, label=c.label,
             apply=lambda g, e, fn=c.apply: _record(g, e, fn),
             prevents_or_redirects=c.prevents_or_redirects,
+            prevents=c.prevents,
         )
         for c in REPLACEMENTS.get(kind, ())
     ]
@@ -1653,7 +1665,7 @@ def _applies_desert_shield(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield, redirects=True
+    "damage_to_creature", SOURCE_TYPE_SHIELD, applies=_applies_desert_shield, prevents=True
 )
 def _prevent_desert_damage(game, payload: dict) -> ReplacementOutcome | None:
     """Desert Nomads: "Prevent all damage that would be dealt to this

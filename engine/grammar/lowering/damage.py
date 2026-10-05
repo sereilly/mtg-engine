@@ -176,6 +176,14 @@ def _lower_damage(
             "no damage handler carries the printed can't-be-prevented lock here",
             node=node,
         )
+    if node.riders.cant_be_prevented and not _lock_survives(
+        lowered, key="cant_be_prevented"
+    ):
+        raise LoweringError(
+            "no damage handler carries the printed 'the damage can't be "
+            "prevented' here",
+            node=node,
+        )
     # "…to each player **who controls a white creature**." (Disorder.) The same
     # post-condition the riders above get, for the same reason and in the same
     # place: only two arms carry the clause, and a recipient that printed one
@@ -242,8 +250,15 @@ def _with_attached_dealer(
     )
 
 
-def _lock_survives(lowered: tuple[OracleInstruction, ...]) -> bool:
+def _lock_survives(
+    lowered: tuple[OracleInstruction, ...], key: str = "unpreventable_to_creature",
+) -> bool:
     """Whether Lava Burst's lock reaches a branch that actually applies it.
+
+    *key* is which of the two printed locks is asked about. Urza's Rage's
+    ("cant_be_prevented") is threaded to the same single-recipient branches
+    plus the one that deals to a chosen **player**, which is still "no named
+    recipient, one target" and so the same test.
 
     The same post-condition the two riders above get, spelled out separately
     because it is stricter than "the key is present". ``deal_damage`` is one
@@ -257,7 +272,7 @@ def _lock_survives(lowered: tuple[OracleInstruction, ...]) -> bool:
     if len(lowered) != 1 or lowered[0].kind != "deal_damage":
         return False
     payload = lowered[0].payload
-    if not payload.get("unpreventable_to_creature"):
+    if not payload.get(key):
         return False
     # A named recipient is a player, the source, or a per-seat sweep — none of
     # them the single chosen creature the flag is threaded to.
@@ -579,6 +594,8 @@ def _lower_damage_shape(
         payload["exile_if_dies"] = True
     if node.riders.unpreventable_to_creature:
         payload["unpreventable_to_creature"] = True
+    if node.riders.cant_be_prevented:
+        payload["cant_be_prevented"] = True
 
     # Divided damage (Fireball) picks its targets at cast time and carries them
     # on the stack item, so the noun phrase here is "any number of targets"

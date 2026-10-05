@@ -53,7 +53,7 @@ from .lexer import PT
 from .nouns import parse_object_filter
 from .effects import parse_source_damage_lock
 from .delayed import contains_flip, parse_flip_stakes_sentence
-from .phrases import _accept_number
+from .phrases import _accept_number, accept_the_damage_cant_be_prevented
 from .statements import parse_statement
 from .stream import TokenStream
 from .bounds import accept_superlative
@@ -564,12 +564,17 @@ def _attach_source_damage_lock(
     if not steps:
         return False
     mark = stream.mark()
-    if not parse_source_damage_lock(stream):
+    # "The damage can't be prevented." (Combust.) The same statement about the
+    # sentence in front, in the shorter of its two printings — prevention
+    # only, any recipient — so it is the other rider, attached the same way.
+    if accept_the_damage_cant_be_prevented(stream):
+        riders = ast.DamageRiders(cant_be_prevented=True)
+    elif parse_source_damage_lock(stream):
+        riders = ast.DamageRiders(unpreventable_to_creature=True)
+    else:
         return False
     try:
-        steps[-1] = _attach_riders(
-            steps[-1], ast.DamageRiders(unpreventable_to_creature=True)
-        )
+        steps[-1] = _attach_riders(steps[-1], riders)
     except GrammarError:
         stream.reset(mark)
         return False
@@ -588,6 +593,9 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
             unpreventable_to_creature=(
                 statement.riders.unpreventable_to_creature
                 or riders.unpreventable_to_creature
+            ),
+            cant_be_prevented=(
+                statement.riders.cant_be_prevented or riders.cant_be_prevented
             ),
         )
         return ast.DealDamage(

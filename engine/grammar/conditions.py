@@ -81,6 +81,23 @@ _PRESENT_STATES: tuple[tuple[str, str, bool], ...] = (
 #: comparison, so a card printing the other one is data, not a second branch.
 CHARACTERISTIC_WORDS: tuple[str, ...] = ("power", "toughness")
 
+#: The characteristics "…if **its** <X> is N or less" may ask about, as
+#: ``(printed words, characteristic)``. The possessive pronoun names the object
+#: the effect beside the clause targets — "Counter target spell if **its mana
+#: value** is 2 or less" (Prohibit), "Destroy target artifact if its mana value
+#: is 2 or less" (Overload) — so mana value joins the two above here and not
+#: there: a spell on the stack has one, and has neither of the others.
+_ITS_CHARACTERISTICS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("mana", "value"), "mana_value"),
+    (("power",), "power"),
+    (("toughness",), "toughness"),
+)
+
+#: The subject of that clause: a bare pronoun that is **not** the source
+#: reference (``_SOURCE_SPEC``), which is what tells the lowering to ask the
+#: guarded effect's target rather than the ability's own permanent.
+_TARGET_PRONOUN_SPEC = ast.TargetSpec("it")
+
 
 #: Whom a damage *history* clause names, longest phrase first — the same set
 #: `triggers._DAMAGE_RECIPIENTS` reads on the event side, because one printed
@@ -502,6 +519,23 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     # both mark and reset, so the order decides only which error survives, and
     # the more specific question asking first is what keeps "power" from being
     # reported as an unrecognised tapped/untapped word.
+    # "Counter target spell if **its mana value is 2 or less**." (Prohibit.)
+    # The same comparison asked of the object the guarded effect *targets*,
+    # which is CR 608.2c's reading of a trailing "if": the spell may be aimed
+    # at anything its noun phrase admits (CR 601.2c) and does nothing where
+    # the condition is false — not the targeting restriction "target spell
+    # with mana value 2 or less", which would make a three-drop an illegal
+    # target. Which object the pronoun names is the lowering's question
+    # (``pronoun_target_referent``), as it is for "if it's red" beside this.
+    its_mark = stream.mark()
+    if stream.accept_word("its"):
+        for words, characteristic in _ITS_CHARACTERISTICS:
+            if stream.accept_phrase(*words, "is"):
+                return ast.SubjectCharacteristicIs(
+                    _TARGET_PRONOUN_SPEC, characteristic, parse_comparison(stream)
+                )
+    stream.reset(its_mark)
+
     power_mark = stream.mark()
     if accept_source_reference(stream) and (
         stream.accept_word("'s") or stream.accept_word("is")

@@ -33,7 +33,7 @@ from ..phrases import (
     _accept_mana_alternatives, _accept_per_counter_multiplier,
     _parse_mana_payment, _parse_opponents_choice,
     _parse_per_each_objects, _parse_that_object, accept_or_planeswalker,
-    parse_bound_subject,
+    accept_trailing_prevention_lock, parse_bound_subject,
 )
 
 
@@ -499,6 +499,11 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     if per_each_beyond_first:
         raise stream.error("no damage clause discounts the first of a counted set")
 
+    # "…and the damage can't be prevented" (Urza's Rage). A rider on this
+    # clause's own damage, read before the "and" below can take it for a
+    # second damage clause and fail on "the".
+    if accept_trailing_prevention_lock(stream):
+        riders = dataclasses.replace(riders, cant_be_prevented=True)
     first = ast.DealDamage(
         source, amount, tuple(recipients), riders, chooser, per_each
     )

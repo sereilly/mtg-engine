@@ -123,6 +123,44 @@ _ZONES = frozenset({"battlefield", "graveyard", "hand", "library", "exile", "sta
 # sentence it printed the words in.
 
 
+def accept_the_damage_cant_be_prevented(stream: TokenStream) -> bool:
+    """``the damage can't be prevented`` — one damage event's own prevention
+    lock, with nothing about redirection (Urza's Rage, Combust).
+
+    The short clause, and **only** the short clause: when "or dealt instead to
+    another permanent or player" follows, this is Whippoorwill's eleven words
+    said about a subject this reader did not parse, and consuming the first
+    three would report the line read with the redirect half dropped. So a
+    following "or" hands the whole clause back.
+
+    Consumes nothing unless the clause is there; the caller owns whatever
+    joins it to the damage sentence ("and", a full stop).
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_phrase("the", "damage")
+        and stream.accept_phrase("can't", "be", "prevented")
+    ) or stream.at_word("or"):
+        stream.reset(mark)
+        return False
+    return True
+
+
+def accept_trailing_prevention_lock(stream: TokenStream) -> bool:
+    """``…and the damage can't be prevented`` behind a damage clause.
+
+    "…it deals 10 damage to that permanent or player **and the damage can't be
+    prevented**." (Urza's Rage.) The conjunction belongs to the clause — parsed
+    as a second statement, "the damage can't be prevented" has no damage to be
+    about — so both are read together or neither is.
+    """
+    mark = stream.mark()
+    if stream.accept_word("and") and accept_the_damage_cant_be_prevented(stream):
+        return True
+    stream.reset(mark)
+    return False
+
+
 def _parse_per_each_objects(
     stream: TokenStream,
 ) -> tuple[ast.ObjectFilter | None, bool]:

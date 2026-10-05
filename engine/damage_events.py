@@ -223,6 +223,16 @@ def event_locked(event: dict) -> bool:
     return isinstance(event.get("recipient"), Permanent)
 
 
+#: "…deals 10 damage to that permanent or player **and the damage can't be
+#: prevented**." (Urza's Rage.) The third sentence about the same registries,
+#: and narrower than both above in one way and wider in another: it names only
+#: *prevention* (CR 615), so a redirect still applies, and it names **the
+#: damage**, whoever it is dealt to — a player's Circle of Protection is as
+#: switched off as a creature's shield. On the event for ``EVENT_LOCK``'s
+#: reason: it is one spell's own damage and dies with it.
+EVENT_PREVENTION_LOCK = "cant_be_prevented"
+
+
 #: "If the creature deals damage to a creature this turn, the creature dealt
 #: damage can't be regenerated this turn. If a creature dealt damage by the
 #: targeted creature would die this turn, exile that creature instead."
@@ -297,6 +307,11 @@ def damage_candidates(recipient, event: dict | None = None) -> list[Candidate]:
     candidates = shield_candidates() + replacement_candidates(damage_kind(recipient))
     if damage_locked(recipient) or (event is not None and event_locked(event)):
         candidates = [c for c in candidates if not c.prevents_or_redirects]
+    # "…and the damage can't be prevented" (Urza's Rage): prevention alone, for
+    # any recipient. After the wider lock rather than instead of it — an event
+    # carrying both has lost its redirects above and has nothing left here.
+    if event is not None and event.get(EVENT_PREVENTION_LOCK):
+        candidates = [c for c in candidates if not c.prevents]
     return sorted(candidates, key=lambda candidate: candidate.order)
 
 
