@@ -129,7 +129,18 @@ def parse_pair_ordinal_subject(stream: TokenStream) -> "ast.TargetSpec | None":
         # this reader has no noun for is a phrase it has not understood, and
         # consuming two words of it would be the dropped-rider shape the
         # full-consumption rule exists to make loud.
-        if stream.exhausted or stream.at_punct(".", ",", ";"):
+        #
+        # "Return **the other** to its owner's hand." (Barrin's Spite.) The one
+        # position that is not the end of a clause and is still the end of the
+        # *phrase*: a verb of motion takes its destination behind its object,
+        # so "to" closes the noun phrase the way a full stop does. One word,
+        # named, rather than "anything that is not a noun" — which would be the
+        # consuming-two-words-of-it failure the rule above exists to prevent.
+        if (
+            stream.exhausted
+            or stream.at_punct(".", ",", ";")
+            or stream.at_word("to")
+        ):
             return ast.TargetSpec(ordinal, ast.ObjectFilter())
         stream.reset(mark)
         return None

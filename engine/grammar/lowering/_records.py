@@ -70,6 +70,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
@@ -274,6 +275,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
     "discard_controller_cards": "discarded_count",
+    # "Discard a card **at random**. If you discard a creature card this way,
+    # return it from your graveyard to the battlefield …" (Aether Rift.) The
+    # sample takes its cards inline, so this step knows *which* went as well as
+    # how many: see ``oracle_types.DISCARDED_THIS_WAY``. The count stays the
+    # primary, so "if you do" behind a random discard asks what it asks behind
+    # every other one.
+    "discard_x_target_cards": (
+        "discarded_count", DISCARDED_THIS_WAY, DISCARDED_INTO_GRAVEYARD,
+    ),
     # The per-seat form records the same thing, so a sentence reading "the
     # number of cards they discarded this way" has a producer to name — and
     # records it **twice**, flat and keyed by seat, which is what the prompt
@@ -513,7 +523,16 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it happened, and whose creature it was — and the second is the only place
     # the token's recipient can come from, because by then the creature is a
     # card in a graveyard.
-    "sacrifice_bound_permanent": ("sacrificed_this_way", LAST_TARGET_CONTROLLER),
+    #
+    # "At the beginning of the next end step, sacrifice it. **If you do**, you
+    # gain life equal to **its toughness**." (Spinal Embrace.) And what it
+    # *was*: a bound sacrifice names exactly one object, so the handler freezes
+    # its computed P/T as it goes (CR 608.2h) under the keys the destroy step
+    # and the chosen sacrifice write.
+    "sacrifice_bound_permanent": (
+        "sacrificed_this_way", LAST_TARGET_CONTROLLER,
+        _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+    ),
     # "Target creature you control can't be blocked this turn. **Destroy it**
     # and this creature at end of combat." (Goblin Sappers.) The grant records
     # the creature it chose, so the delayed destroy behind it has a producer to

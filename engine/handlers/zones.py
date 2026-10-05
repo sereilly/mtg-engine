@@ -41,6 +41,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             REVEALED_TOP_CARDS_BY_SEAT,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
+                            DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             SWEPT_OWNER_SEATS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -1430,9 +1431,27 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
     # RNG ``run_ai_simulation`` seeds — so a given seed still replays a run
     # exactly, which sampling from a fresh Random() would break.
     indices = random.sample(eligible, actual)
+    # What went, for the sentences behind this one — "If you discard a creature
+    # card this way, return it from your graveyard …" (Aether Rift). Written as
+    # empty lists and a zero on the path that takes nothing, for the reason
+    # ``discard_target_cards`` writes its zero: a missing key and an empty one
+    # read the same to a rider, and writing it is what says this step answered.
+    took = context.results.setdefault(DISCARDED_THIS_WAY, [])
+    landed = context.results.setdefault(DISCARDED_INTO_GRAVEYARD, [])
     for i in sorted(indices, reverse=True):
         discarded = target.hand.pop(i)
+        pile, deck = len(target.graveyard), len(target.library)
         game._discard_card(target, discarded)  # Library of Leng -> top of library
+        # CR 701.9c: a card discarded into a *hidden* zone unrevealed has
+        # undefined characteristics, so "a creature card" is not something it
+        # was. It still counts as a discard below.
+        if len(target.library) == deck:
+            took.append(discarded)
+        if len(target.graveyard) > pile and target.graveyard[-1] is discarded:
+            landed.append(discarded)
+    context.results["discarded_count"] = (
+        int(context.results.get("discarded_count") or 0) + actual
+    )
     game.log.append(f"{target.name} discarded {actual} cards at random")
     return True, "resolved"
 
@@ -5195,6 +5214,13 @@ def put_milled_card_onto_battlefield(game: Game, instruction: OracleInstruction,
     )
     if not cards:
         game.log.append(f"{context.card.name}: nothing was put there this way")
+        return True, "resolved"
+    if instruction.payload.get("the_one_card") and len(cards) != 1:
+        # "…return **it** from your graveyard to the battlefield" (Aether
+        # Rift). A singular pronoun over a record holding several cards names
+        # none of them; taking the first would be the effect acting on
+        # whichever card the sample happened to draw first.
+        game.log.append(f"{context.card.name}: \"it\" names no one card")
         return True, "resolved"
     card = cards[0]
     owner = next(

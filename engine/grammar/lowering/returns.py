@@ -17,10 +17,10 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
-from ._events import _back_reference_payload
+from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
 from ._bound_returns import lower_untargeted_return
 from ._described_returns import (_graveyard_to_hand_payload,
                                  _reads_no_return_restriction)
@@ -227,6 +227,93 @@ def _lower_return_to_zone(
     if node.also_stack:
         return (OracleInstruction("return_spell_or_creature_to_hand", "", {}),)
     subject = node.subject
+    # "Their controller chooses and sacrifices one of them. Return **the
+    # other** to its owner's hand." (Barrin's Spite.) The member of the chosen
+    # pair the sacrifice did not take, recorded by the pick that took the other
+    # — ``counters._lower_put_counter``'s reading of the same two words one
+    # verb over (Retribution), under the same producer gate: "the other" under
+    # a trigger that bound a blocking pair still means that pair, because no
+    # step of such an ability records a chosen remainder.
+    #
+    # Nothing is targeted here (CR 601.2c chose the pair two sentences ago), so
+    # the bounce reads the record and not the announcement: the announced slots
+    # still hold *both* creatures, and a target-reading bounce would return the
+    # first of them — the sacrificed one as often as not.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "other"
+        and not subject.targeted
+        and OTHER_CHOSEN_PERMANENT in produced
+    ):
+        if _restrictions_beyond(subject.filter, frozenset({"card_types"})):
+            raise LoweringError(
+                "\"the other\" carries no narrowing the return could honour",
+                node=node,
+            )
+        if not (
+            node.from_zone is None
+            and node.to.name == "hand"
+            and node.to.owner is not None
+            and node.to.owner.kind == "owner"
+            and node.repetitions is None
+            and node.actor is None
+        ):
+            raise LoweringError(
+                "the other half of a chosen pair returns to its owner's hand "
+                "and nowhere else",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "return_recorded_permanents_to_hand", "",
+                {"permanents_from": OTHER_CHOSEN_PERMANENT},
+            ),
+        )
+    # "Discard a card at random. If you discard a creature card this way,
+    # return **it from your graveyard** to the battlefield …" (Aether Rift.)
+    # The pronoun names the card the discard in front of it put into the
+    # graveyard, which only that step's record can say: nothing was targeted,
+    # and the pile holds cards this effect never touched. The reader is the
+    # one Helm of Obedience's "put one of them onto the battlefield" already
+    # uses, pointed at the discard's record instead of the mill's.
+    #
+    # Refused without the producer, and that is this branch's whole gate: a
+    # pronoun from a graveyard with no step in front that put a card there
+    # names nothing, and falling through would read "it" as the source.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and not subject.targeted
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+    ):
+        if DISCARDED_INTO_GRAVEYARD not in produced:
+            raise LoweringError(
+                '"it … from your graveyard" names a card no earlier step of '
+                "this effect put there",
+                node=node,
+            )
+        if not (
+            node.to.name == "battlefield"
+            and not node.entering_tapped
+            and not node.entering_counters
+            and node.under_control_of in (None, ast.PlayerRef("you"))
+            and node.attached_to is None
+            and not node.losing_subtypes
+            and node.repetitions is None
+            and node.actor is None
+        ):
+            raise LoweringError(
+                "a card discarded this way returns to the battlefield, with "
+                "no rider", node=node,
+            )
+        return (
+            OracleInstruction(
+                "put_milled_card_onto_battlefield", "",
+                {"cards_from": DISCARDED_INTO_GRAVEYARD,
+                 "under_your_control": True, "the_one_card": True},
+            ),
+        )
     # "Return **another** target artifact card from your graveyard to your
     # hand." (Junk Diver; Sylvan Hierophant one card type over.) CR 113.7 —
     # **not** CR 109.5, which is about the words "you" and "your" and is what

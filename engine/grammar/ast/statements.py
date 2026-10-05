@@ -449,6 +449,10 @@ class UnlessPlayerPays:
     #: What paying *buys* — "Then **if any player pays {2}**, discard three
     #: cards" (Rhystic Scrying) — the same chain with the polarity reversed.
     paid: "Statement | None" = None
+    #: "…unless any player pays **5 life**." (Aether Rift.) CR 119.4's
+    #: currency on the same chain: ``cost`` is then empty, because a toll
+    #: prints one price and a cost of one kind is not payable out of the other.
+    life: int = 0
 
 
 @dataclass(frozen=True)

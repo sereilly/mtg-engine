@@ -54,6 +54,7 @@ from __future__ import annotations
 
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
+                             DISCARDED_THIS_WAY,
                              MILLED_THIS_WAY, REVEALED_HAND_CARDS)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
@@ -487,6 +488,32 @@ def lower_record_condition(
             "kind": "sacrificed_this_way_matches",
             "key": "sacrificed_cards",
             "filter": described,
+        }
+    if isinstance(condition, ast.DiscardedThisWay) and condition.filter is not None:
+        # "If you discard a **creature** card this way" (Aether Rift). What
+        # went rather than whether anything did, so it reads the cards and not
+        # the count — and demands the step that records them, which today is
+        # the random discard alone: a chosen discard writes only its number,
+        # and against that producer the branch would never run.
+        if DISCARDED_THIS_WAY not in produced:
+            raise LoweringError(
+                "'discard a <type> card this way' with no discard before it "
+                "in this effect that records which cards went",
+                node=condition,
+            )
+        leftover = _restrictions_beyond(
+            condition.filter, {"card_types", "is_card", "type_match"}
+        )
+        if leftover:
+            raise LoweringError(
+                "the discarded-this-way test cannot ask this of a card: "
+                + ", ".join(leftover),
+                node=condition,
+            )
+        return {
+            "kind": "discarded_this_way",
+            "card_types": list(condition.filter.card_types),
+            "type_match": condition.filter.type_match,
         }
     if isinstance(condition, ast.DiscardedThisWay):
         # A back-reference names its producer or refuses, as every other "this

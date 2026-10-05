@@ -246,6 +246,20 @@ def _parse_return(
     # always a *new* clause opening with the permanent's own name. It is not one
     # here, and the flag is this production saying so — the word "to" it is
     # about to consume is the destination this very verb takes.
+    # "…return **it from your graveyard** to the battlefield …" (Aether Rift.)
+    # The source zone normally rides the noun phrase ("target creature card
+    # from your graveyard"), and a pronoun has no noun for it to ride — so it is
+    # read here, behind the bare pronoun only, and carried on the node. Which
+    # card "it" is stays the lowering's question: it names a card an earlier
+    # step of this effect put there, or it refuses.
+    pronoun_from: ast.Zone | None = None
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and not subject.targeted
+        and stream.accept_phrase("from", "your", "graveyard")
+    ):
+        pronoun_from = ast.Zone("graveyard", ast.PlayerRef("you"))
     further = _parse_further_subjects(
         stream, subject, before_destination=destination_first is None
     )
@@ -379,7 +393,7 @@ def _parse_return(
             else:
                 stream.reset(mark_as)
 
-    from_zone: ast.Zone | None = None
+    from_zone: ast.Zone | None = pronoun_from
     if isinstance(subject, ast.TargetSpec) and subject.filter.zone != "battlefield":
         from_zone = ast.Zone(subject.filter.zone, subject.filter.zone_owner)
     # "…**for each card discarded this way**." (Recall.) A repetition of the

@@ -1531,8 +1531,28 @@ def sacrifice_bound_permanent(game: Game, instruction: OracleInstruction, contex
         game.log.append(f"{context.card.name}: the creature it named is gone")
         return True, "resolved"
     seat = game.controller_index_of(victim)
+    if (
+        instruction.payload.get("sacrificed_by") == "you"
+        and seat != game.players.index(context.caster)
+    ):
+        # "…**sacrifice** it" with no other subject is this ability's
+        # controller doing the sacrificing, and CR 701.21a: "A player can't
+        # sacrifice … a permanent they don't control." A creature stolen back
+        # before the delay fires stays where it is, and "if you do" is false.
+        game.log.append(
+            f"{context.card.name}: {context.caster.name} doesn't control "
+            f"{victim.card.name} and can't sacrifice it"
+        )
+        return True, "resolved"
     if isinstance(seat, int):
         context.results[LAST_TARGET_CONTROLLER] = seat
+    # "If you do, you gain life equal to **its toughness**." (Spinal Embrace.)
+    # Last-known information (CR 608.2h), read before the sacrifice for the
+    # seat's reason one line up: a moment later it is a card in a graveyard
+    # with no computed characteristics. The keys every other step that gives
+    # up one object writes (``_record_sacrificed_card``, the destroy).
+    context.results["its_power"] = max(0, int(victim.effective_power))
+    context.results["its_toughness"] = max(0, int(victim.effective_toughness))
     game.sacrifice_permanent(victim)
     context.results["sacrificed_this_way"] = 1
     game.log.append(f"{context.card.name}: {victim.card.name} was sacrificed")

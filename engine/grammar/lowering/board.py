@@ -347,7 +347,9 @@ def _lower_sacrifice(
         return (
             OracleInstruction(
                 "sacrifice_bound_permanent", "",
-                _bound_sacrifice_filter(node.subject, produced),
+                _bound_sacrifice_filter(node.subject, produced)
+                # CR 701.21a: "you" can't sacrifice what you don't control.
+                | ({"sacrificed_by": "you"} if node.player.kind == "you" else {}),
             ),
         )
     # "**That creature's controller sacrifices it** at end of combat." (Basalt
@@ -802,10 +804,21 @@ def _lower_sacrifice_one_of_chosen(
     if not (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier == "one_of_those"
-        and node.player.kind == "that_player"
-        and node.count is None
     ):
         return None
+    # "**Their controller** chooses and sacrifices one of them." (Barrin's
+    # Spite.) The same seat by its other name: the pair was chosen "controlled
+    # by the same player", so its controller and "that player" are one answer —
+    # the one the choosing step recorded, not an event's (none fired).
+    #
+    # Any other seat **refuses** rather than declining: falling through, the
+    # generic sacrifice read the quantifier as "a" and offered the whole board.
+    if node.player.kind not in ("that_player", "controller") or node.count is not None:
+        raise LoweringError(
+            "\"one of those\" is sacrificed by the player the choosing "
+            "sentence named",
+            node=node,
+        )
     if CHOSEN_TARGET_PERMANENTS not in produced or CHOSEN_PLAYER not in produced:
         raise LoweringError(
             "\"one of those\" needs an earlier step of this effect that chose "

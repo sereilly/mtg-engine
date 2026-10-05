@@ -559,6 +559,38 @@ def _lower_gain_control(
                     "gain_control_of_all_matching", "", described
                 ),
             )
+        if (
+            subject.quantifier in ("that", "it")
+            and not subject.targeted
+            and _UNTAPPED_PERMANENTS in produced
+        ):
+            # "Untap target creature you don't control and gain control of
+            # **it**." (Spinal Embrace.) Ray of Command's sentence with no
+            # window printed, so CR 611.2a makes it last — and the same bound
+            # object, read off the same record through the same handler. The
+            # until-end-of-turn branch below has read it since Disharmony; this
+            # is that reading on the other lifetime, which is the *kind*.
+            #
+            # Producer-gated rather than raising when the record is absent, so
+            # every other untimed pronoun keeps the refusal just below.
+            if subject.quantifier == "that" and _restrictions_beyond(
+                subject.filter, frozenset({"card_types"})
+            ):
+                raise LoweringError(
+                    "a bound object carries no narrowing the record could honour",
+                    node=node,
+                )
+            if node.tap_when_lost or node.offered:
+                raise LoweringError(
+                    "no rider rides the untimed steal of a bound object",
+                    node=node,
+                )
+            return (
+                OracleInstruction(
+                    "gain_control_of_target", "",
+                    {"permanents_from": _UNTAPPED_PERMANENTS},
+                ),
+            )
         if subject.quantifier != "target":
             raise LoweringError(
                 "the indefinite control change needs a named target", node=node

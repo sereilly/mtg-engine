@@ -1085,6 +1085,30 @@ EXILED_BY_SEAT = "exiled_by_seat"
 MILLED_THIS_WAY = "milled_this_way"
 
 TAPPED_THIS_WAY = "tapped_this_way"
+
+#: "Discard a card at random. **If you discard a creature card this way,**
+#: return **it** from your graveyard to the battlefield …" (Aether Rift.) The
+#: cards a discard *nobody chose* took, in the order they went — the discard's
+#: twin of ``MILLED_THIS_WAY``, and a record for the same reason: by the next
+#: sentence the card is one of many in a graveyard, and nothing about the pile
+#: says which of them this effect put there.
+#:
+#: Beside ``discarded_count`` rather than replacing it: that key answers "did a
+#: discard happen, and how many", which is all "if you do" asks; this answers
+#: *what* went.
+DISCARDED_THIS_WAY = "discarded_this_way"
+
+#:
+#: CR 701.9c: a card a replacement put into a *hidden* zone unrevealed (Library
+#: of Leng, onto its owner's library) has undefined characteristics, so it is
+#: counted and not listed — "a creature card" is not something it was.
+#:
+#: The subset of ``DISCARDED_THIS_WAY`` that actually reached a graveyard —
+#: what "return it **from your graveyard**" may name. Its own key because the
+#: return looks the card up by identity, and two copies of a card are one
+#: ``CardDefinition``: read off the wider record, a card a replacement sent
+#: somewhere else would be answered by an *older* copy already in the pile.
+DISCARDED_INTO_GRAVEYARD = "discarded_into_graveyard"
 TAPPED_THIS_WAY_OBJECTS = "tapped_this_way_objects"
 
 #: The symbol a land-mana swap produces when the sentence prints no symbol at

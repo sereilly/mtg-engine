@@ -313,6 +313,28 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
     if stream.accept_phrase("that", "player", "discards", "a", "card", "this", "way"):
         return ast.DiscardedThisWay()
     stream.reset(this_way)
+    # "**If you discard a creature card this way,** return it from your
+    # graveyard to the battlefield …" (Aether Rift.) The same back-reference
+    # with the ability's controller as the discarder and a noun between the
+    # article and "this way": what went, where the clause above asks whether
+    # anything did. One node, because it is one record's question twice.
+    #
+    # The noun has to name a *card* with a printed type — a bare "a card" is
+    # the clause above with a different subject, and reading it here would
+    # demand the cards record of a discard that only counts.
+    if stream.accept_phrase("you", "discard") and stream.accept_word("a", "an"):
+        try:
+            discarded = parse_object_filter(stream)
+        except GrammarError:
+            discarded = None
+        if (
+            discarded is not None
+            and discarded.is_card
+            and discarded.card_types
+            and stream.accept_phrase("this", "way")
+        ):
+            return ast.DiscardedThisWay(filter=discarded)
+    stream.reset(this_way)
 
     # "if **the discarded card** was a land card" (Land's Edge). The same
     # past-tense back-reference as the clause above, naming its producer in

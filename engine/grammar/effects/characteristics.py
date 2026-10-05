@@ -139,6 +139,25 @@ def _parse_gets(
     mark = stream.mark()
     if stream.accept_word("and") and stream.at_word("gains", "gain", "has", "have"):
         stream.advance()
+        # "…gets +1/-1 and gains **"{B}: Regenerate this creature."**" — a
+        # whole printed ability (CR 113.3) where the arm below expects keyword
+        # words. `_parse_gains` has read the quote since Life Matrix; this is
+        # the same reader on the other side of a pump, so the two spellings of
+        # one grant cannot come to differ. Whichever half printed the window
+        # governs both, the rule every join in this file follows.
+        if stream.at_kind(QUOTE):
+            abilities, self_name = _parse_quoted_abilities(stream)
+            text_duration = _parse_duration(stream)
+            if duration.kind is None and text_duration.kind is not None:
+                pump = dataclasses.replace(pump, duration=text_duration)
+            elif text_duration.kind is None:
+                text_duration = duration
+            return ast.Conjunction((
+                pump,
+                ast.GainAbilityText(
+                    subject, abilities, text_duration, self_name=self_name
+                ),
+            ))
         # "gains **your choice of** deathtouch or lifelink" (Alchemist's Gift) —
         # read here as well as in the bare `gains` production, because the pump
         # conjunction is where the card actually prints it.
