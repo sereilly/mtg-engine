@@ -382,8 +382,16 @@ class ChooseColor:
     "At the beginning of each player's upkeep, **that player** chooses a color"
     (Hall of Gemstone) is the other reading: the seat the firing event froze,
     which changes every turn and is nobody's controller.
+
+    ``among`` is the printed narrowing of *which* colours may be named:
+    "Choose a color **of a permanent you control**." (Meteor Crater.) The noun
+    phrase, as the filter the noun reader made of it; the colours on offer are
+    the ones the permanents it describes have right now (CR 105.2, through the
+    layers). None is CR 105.1's five, which is every sentence printed before
+    this one.
     """
     chooser: PlayerRef | None = None
+    among: object | None = None
 
 
 @dataclass(frozen=True)

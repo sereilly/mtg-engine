@@ -228,6 +228,18 @@ class AddMana:
     #: written here at all, and the two printed spellings differ only in whether
     #: the *count* is remembered too. ``"type"`` or ``"type_and_amount"``.
     from_noted: str | None = None
+    #: "…that a **basic** land you control could produce." (Star Compass.) The
+    #: noun phrase a "could produce" clause prints, whole, as the
+    #: :class:`ObjectFilter` the noun reader made of it — set beside whichever
+    #: of the two board fields above the clause filled, and None on every
+    #: clause that names no board.
+    #:
+    #: *Whose* lands is the board those fields already name, so what this adds
+    #: is *which* of them: a supertype, a subtype, anything else the phrase
+    #: narrows by. It used to be two hard-wired sentences ("a land you
+    #: control", "a land an opponent controls"), each read word for word, so
+    #: the one adjective Star Compass prints refused the whole line.
+    could_produce_lands: object | None = None
 
 
 @dataclass(frozen=True)

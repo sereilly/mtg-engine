@@ -134,10 +134,18 @@ def test_a_colourless_land_answers_type_and_not_colour():
 @pytest.mark.cr("106.7")
 def test_which_board_a_derived_producer_reads_is_read_off_its_text():
     """The two printed phrases, and None for a land that simply says what it
-    makes."""
-    assert derived_producer_board(_card("A", "Land", _DERIVED_OWN)) == "controlled_lands"
-    assert derived_producer_board(_card("B", "Land", _DERIVED)) == "opponent_lands"
-    assert derived_producer_board(_card("C", "Land", "", produced=("G",))) is None
+    makes.
+
+    Read off the land's **compiled** mana ability since PLS W1G5 (the phrase
+    has one reader, the grammar's, so a narrowing it prints — "a *basic* land
+    you control" — is read once). The cards were named "A", "B" and "C", and a
+    card named "A" has every "a" in its text collapsed to a self-reference
+    before anything compiles: an artefact of the fixture's name, invisible to
+    the regex this replaced.
+    """
+    assert derived_producer_board(_card("Pool", "Land", _DERIVED_OWN)) == "controlled_lands"
+    assert derived_producer_board(_card("Orchard", "Land", _DERIVED)) == "opponent_lands"
+    assert derived_producer_board(_card("Wood", "Land", "", produced=("G",))) is None
 
 
 # ---------------------------------------------------------------------------

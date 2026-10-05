@@ -4541,12 +4541,22 @@ def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
     payload = free.payload or {}
     if payload.get("spend_only"):
         return True
-    return any(
+    if any(
         (step.payload or {}).get(key)
         for step in (free, *((payload.get("steps") or ())))
         for key in _BOARD_DEPENDENT_MANA_KEYS
         if hasattr(step, "payload")
-    )
+    ):
+        return True
+    # A land whose *colours* the board decides and whose amount it does not
+    # ("Choose a color of a permanent you control. Add one mana of that
+    # color.", Meteor Crater) is plannable for exactly what that board offers
+    # now — `Game._land_payment_colors` answers with it — and unplannable only
+    # where it offers nothing: `_land_symbols` would fall back to "C" for a
+    # land with no symbol, the tap would make no mana, and the cast would be
+    # refused for the same spell every turn.
+    narrowed = game.narrowed_land_mana_colors(land)
+    return narrowed is not None and not narrowed
 
 
 def _tap_alone_land_symbols(game: Game, land: Permanent) -> set[str]:
@@ -4576,6 +4586,14 @@ def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
 
     symbols = tuple(game._land_payment_colors(permanent))
     free, _priced = game._land_mana_abilities(permanent)
+    if symbols and game.narrowed_land_mana_colors(permanent) is not None:
+        # A land whose colours the board defines (Reflecting Pool, Meteor
+        # Crater): `_land_payment_colors` has already answered with exactly
+        # what that board offers. The reordering below would widen it back to
+        # every colour the compiled ability *could* name — "any color" reads
+        # as all five there — which is the summary's mistake made a second
+        # time.
+        return symbols
     if symbols and free is not None and not land_mana_swaps.payment_colors(game, permanent):
         # **Only what the tap can make.** ``_land_payment_colors`` is the
         # printed summary for an unswapped land, and the summary lists every

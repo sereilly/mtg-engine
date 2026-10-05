@@ -2291,6 +2291,14 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
     card_name = getattr(context.card, "name", "an effect")
     chooser = instruction.payload.get("chooser")
     records_on = permanent
+    # "Choose a color **of a permanent you control**." (Meteor Crater.) The
+    # sentence narrows *which* colours may be named, so the set is computed
+    # once the choosing seat is known (``_offered_colors`` below) and every
+    # exit after that is held to it: an announced colour outside it is not an
+    # answer, the default is one of its members, and the prompt offers nothing
+    # else. None is CR 105.1's five.
+    among = instruction.payload.get("among")
+    offered: "tuple[str, ...] | None" = None
     if permanent is None or chooser == "you":
         # "Choose a color. X target creatures gain protection from the chosen
         # color until end of turn." (Prismatic Boon.) / "…gains protection from
@@ -2336,8 +2344,13 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         # deterministic default — the colour the *opponents* hold most of — was the
         # mana: an invented "{T}: Choose a color. Add one mana of the chosen
         # color." land asked for {R} made {W}.
+        if among is not None and seat is not None:
+            offered = _offered_colors(game, among, seat, permanent)
         announced = instruction.payload.get("color")
-        if announced and not chooser:
+        if announced and not chooser and (
+            offered is None
+            or game._normalize_mana_color(str(announced)) in offered
+        ):
             named = game._normalize_mana_color(str(announced))
             permanent.metadata["chosen_color"] = named
             context.results[CHOSEN_COLOR_THIS_WAY] = named
@@ -2396,9 +2409,36 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         records_on = None
     if seat is None:
         return True, "resolved"
+    if among is not None:
+        if offered is None:
+            offered = _offered_colors(game, among, seat, permanent)
+        if not offered:
+            # No permanent the phrase names has a colour, so there is no colour
+            # to choose (CR 105.2c: colourless is the absence of one) and the
+            # sentence behind this adds nothing. The slot is written **empty**
+            # rather than left alone: "that color" must not read a colour some
+            # earlier resolution of the same context chose.
+            context.results[CHOSEN_COLOR_THIS_WAY] = None
+            game.log.append(f"{card_name}: there is no color to choose")
+            return True, "resolved"
+        if len(offered) == 1:
+            # One colour on offer is not a question (CR 608.2d asks for a
+            # choice only where there is one to make).
+            if records_on is not None:
+                records_on.metadata["chosen_color"] = offered[0]
+            context.results[CHOSEN_COLOR_THIS_WAY] = offered[0]
+            game.log.append(
+                f"{card_name}: {game.players[seat].name} chose {offered[0]}"
+            )
+            return True, "resolved"
     from ..ai_valuation import threatening_color
 
-    default_color = threatening_color(game, seat)
+    default_color = None if offered is not None else threatening_color(game, seat)
+    if offered is not None:
+        # The first colour on offer, in WUBRG order: a deterministic member of
+        # the set, where the unnarrowed default below is a colour the
+        # *opponents* hold — which this sentence may not let anyone name.
+        default_color = offered[0]
     if default_color is None:
         counts: dict[str, int] = {}
         for other in range(len(game.players)):
@@ -2418,9 +2458,23 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
         card_name=card_name, permanent=records_on,
         result_key=CHOSEN_COLOR_THIS_WAY, context=context,
         default=default_color,
+        colors=offered,
     )
     game.log.append(f"{card_name}: {game.players[seat].name} chooses a color")
     return True, "resolved"
+
+
+def _offered_colors(game: Game, among: dict, seat: int, source) -> tuple[str, ...]:
+    """The colours a narrowed "choose a color of <permanents>" offers *seat*.
+
+    ``object_colors.colors_among_described`` — the layers' colours over the set
+    the one subject matcher admits — so the handler, the payment planner and
+    the client's colour picker (``mana_could_produce.ability_colors_on_offer``)
+    are one reading of the phrase.
+    """
+    from ..object_colors import colors_among_described
+
+    return colors_among_described(game, among, observer=seat, source=source)
 
 
 @effect_handler("choose_card_type")
