@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**13 unclaimed sentence(s) across 12 supported card(s).**
+**11 unclaimed sentence(s) across 10 supported card(s).**
 
 - **Crosis's Catacombs**
   - `{t}: add {u}, {b}, or {r}`
@@ -35,8 +35,6 @@ anything anyone did, and every ingest would arrive red.
   - `all goblins are black and are zombies in addition to their other creature types`
 - **Dromar's Cavern**
   - `{t}: add {w}, {u}, or {b}`
-- **Lashknife Barrier**
-  - `if a source would deal damage to a creature you control, it deals that much damage minus 1 to that creature instead`
 - **Natural Emergence**
   - `lands you control are 2/2 creatures with first strike`
   - `they're still lands`
@@ -44,8 +42,6 @@ anything anyone did, and every ingest would arrive red.
   - `{t}: add {r}, {g}, or {w}`
 - **Shifting Sky**
   - `all nonland permanents are the chosen color`
-- **Skyship Weatherlight**
-  - `{4}, {t}: choose a card at random that was exiled with skyship weatherlight. put that card into its owner's hand`
 - **Skyshroud Blessing**
   - `all lands gain shroud until end of turn`
 - **Star Compass**

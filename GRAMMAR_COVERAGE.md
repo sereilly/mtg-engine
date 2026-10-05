@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 71.4% | 66.3% | 47.5% | 91 |
+| PLS *(measured)* | 143 | 255 | 72.9% | 68.2% | 49.0% | 93 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 561 | 272 | expected a subject |  |
+| 559 | 270 | expected a subject |  |
 | 155 | 82 | unrecognized effect verb |  |
 | 140 | 75 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -5262,6 +5262,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Marble Diamond**
   - `{T}: Add {W}.`
   - `{T}: Add {W}.`
+- **March of Souls**
+  - `Destroy all creatures. They can't be regenerated. For each creature destroyed this way, its controller creates a 1/1 white Spirit creature token with flying.`
 - **Marjhan**
   - `{U}{U}, Sacrifice a creature: Untap this creature. Activate only during your upkeep.`
   - `This creature can't attack unless defending player controls an Island.`
@@ -5498,6 +5500,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All combat damage that would be dealt to you this turn by target unblocked creature is dealt to its controller instead.`
 - **Mirror Universe**
   - `{T}, Sacrifice this artifact: Exchange life totals with target opponent. Activate only during your upkeep.`
+- **Mirrorwood Treefolk**
+  - `{2}{R}{W}: The next time damage would be dealt to this creature this turn, that damage is dealt to any target instead.`
 - **Miscalculation**
   - `Counter target spell unless its controller pays {2}.`
 - **Miscast**
@@ -7121,6 +7125,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rith's Charm**
   - `• Destroy target nonbasic land.`
   - `• Create three 1/1 green Saproling creature tokens.`
+  - `• Prevent all damage a source of your choice would deal this turn.`
 - **Rith's Grove**
   - `When this land enters, sacrifice it unless you return a non-Lair land you control to its owner's hand.`
 - **Rith, the Awakener**
@@ -7962,6 +7967,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this artifact: Creatures you control gain flying until end of turn.`
 - **Skyship Weatherlight**
   - `When Skyship Weatherlight enters, search your library for any number of artifact and/or creature cards, exile them, then shuffle.`
+  - `{4}, {T}: Choose a card at random that was exiled with Skyship Weatherlight. Put that card into its owner's hand.`
 - **Skyshroud Archer**
   - `{T}: Target creature with flying gets -1/-1 until end of turn.`
 - **Skyshroud Blessing**
