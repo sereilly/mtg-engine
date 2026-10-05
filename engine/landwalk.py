@@ -34,8 +34,11 @@ hold, since the ability's name *is* the printed quality.
 
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from typing import TYPE_CHECKING, NamedTuple
+
+from .oracle_types import strip_ability_word
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import Permanent
@@ -172,12 +175,131 @@ def land_satisfies(permanent: "Permanent", requirement: LandwalkRequirement) -> 
     return True
 
 
+# ---------------------------------------------------------------------------
+# A landwalk named by the board (CR 702.14a, CR 604.1)
+# ---------------------------------------------------------------------------
+#
+# "For each basic land type among lands you control, this creature has landwalk
+# of that type." (Magnigoth Treefolk.) A *static* ability whose granted words
+# are not in the text: which landwalks the creature has is a fact about its
+# controller's lands, re-read at every recompute (CR 611.3a — a static ability
+# applies whenever its criteria are met; nothing is locked in).
+#
+# The third way this pool builds a landwalk's name out of something other than
+# a printed word, after the land a cost ate (Excavator —
+# :func:`landwalk_abilities_of`) and the type an Aura chose as it entered
+# (Traveler's Cloak — ``auras.chosen_landwalk_grants``), and it follows the
+# second one's arrangement exactly: **one reader, two callers**. The support
+# gate and the grammar's registry claim ask :func:`landwalk_per_type_spec`
+# whether a line is one this can carry out, and the layer-6 pass asks
+# :func:`board_named_landwalks`, which reads the same lines through the same
+# function — so a line claimed here is a line granted here.
+#
+# What the types are counted *among* is an ordinary noun phrase in an ordinary
+# count position, so it is read by the grammar's own per-each reader
+# (``grammar.per_each_count_spec_for``) and answered by the one scan every
+# count in the engine uses (``handlers/_common.basic_land_types_among``). The
+# subject is the ability's own creature and nothing else: a sentence granting
+# the words to another object would need a recipient this reader does not
+# resolve, so it refuses rather than granting them to the source.
+_PER_TYPE_LANDWALK = re.compile(
+    r"^(?P<counted>for each .+?), this creature has landwalk of that type$"
+)
+
+#: The only characteristic "landwalk of that type" can name a landwalk from —
+#: the count aggregate ``grammar/distinct.py`` gives "basic land type[s] among".
+_LAND_TYPE_AGGREGATE = "distinct_basic_land_types"
+
+#: ``Permanent.metadata`` key holding the landwalks a permanent's own text
+#: currently names off the board, as a tuple of words. Written by
+#: ``mixins/permanent_state._refresh_dynamic_creatures`` (cleared and rebuilt on
+#: every pass, behind that pass's layer-4 refreshes) and read by
+#: ``layer_bridge.collect_ability_effects`` as a layer-6 grant. A derived value
+#: and never a record: nothing may write it but that refresh.
+BOARD_NAMED_LANDWALKS = "board_named_landwalks"
+
+
+def _static_line_text(line: str) -> str:
+    """*line* as this table reads it: no ability word (CR 207.2c), no reminder
+    text, lowercased, no full stop. Idempotent, so a caller that has already
+    normalized the line and one holding it as printed read the same thing."""
+    from .grammar.lexer import strip_reminder_text
+
+    text, _reminders = strip_reminder_text(strip_ability_word(line or ""))
+    return " ".join(text.lower().split()).rstrip(".").strip()
+
+
+@lru_cache(maxsize=None)
+def landwalk_per_type_spec(line: str) -> dict | None:
+    """The count spec whose basic land types *line* turns into landwalks on its
+    own creature — or None when the line is not that sentence in full.
+
+    None for a characteristic no landwalk can be built from ("for each creature
+    you control, this creature has landwalk of that type" names no type), and
+    for a set this cannot scope (another player's lands), because the grammar's
+    reader refuses both. The spec is the one a domain *count* carries, so the
+    types granted are exactly the types that count would have counted.
+    """
+    match = _PER_TYPE_LANDWALK.match(_static_line_text(line))
+    if match is None:
+        return None
+    from .grammar import per_each_count_spec_for
+
+    spec = per_each_count_spec_for(match.group("counted"))
+    if spec is None or spec.get("aggregate") != _LAND_TYPE_AGGREGATE:
+        return None
+    return spec
+
+
+@lru_cache(maxsize=None)
+def _per_type_landwalk_specs(oracle_text: str) -> tuple[dict, ...]:
+    """Every such spec a card's text prints, one per line that is the sentence.
+    Cached on the text because the layer-6 pass asks it of every permanent on
+    every recompute, and almost every answer is the empty tuple."""
+    return tuple(
+        spec for spec in (
+            landwalk_per_type_spec(line) for line in (oracle_text or "").splitlines()
+        )
+        if spec is not None
+    )
+
+
+def board_named_landwalks(game, seat: int, permanent: "Permanent") -> tuple[str, ...]:
+    """The landwalk abilities *permanent*'s own text gives it **right now**,
+    named by the basic land types among the lands *seat* controls.
+
+    Read off ``effective_card`` (CR 707.2: a copy of the Treefolk walks by the
+    copy's controller's lands; CR 612: a text change is the text) and counted
+    for *seat*, the permanent's current controller — the walker's lands name
+    the types, and the *defending* player's lands decide whether each one
+    applies (CR 702.14c, ``declare_blockers_step``), which are two different
+    boards. Every word is put to :func:`landwalk_requirement`, the reader that
+    enforces the ability, so a grant nothing would enforce is never made.
+    """
+    specs = _per_type_landwalk_specs(permanent.effective_card.oracle_text or "")
+    if not specs:
+        return ()
+    from .handlers._common import basic_land_types_among
+
+    owner = game.players[seat]
+    walks: list[str] = []
+    for spec in specs:
+        for land_type in basic_land_types_among(game, owner, spec, source=permanent):
+            walk = f"{land_type}walk"
+            if walk not in walks and landwalk_requirement(walk) is not None:
+                walks.append(walk)
+    return tuple(walks)
+
+
 __all__ = [
+    "BOARD_NAMED_LANDWALKS",
     "LANDWALK",
     "LandQuality",
     "LandwalkRequirement",
+    "board_named_landwalks",
     "is_landwalk",
     "landwalk_abilities_of",
+    "landwalk_per_type_spec",
     "land_satisfies",
     "landwalk_requirement",
 ]

@@ -926,6 +926,120 @@ def _resolve_chosen_card_type(filt: dict, source) -> dict:
     return resolved
 
 
+def _battlefield_matches(
+    game: "Game", owner: "PlayerState", spec: dict, filt: dict, *,
+    exclude=None, source=None,
+) -> "list[Permanent]":
+    """The permanents a battlefield count spec names, before any aggregate.
+
+    The scan :func:`evaluate_count` has always made, lifted out so the *set*
+    behind a count has a second reader: a count answers how many basic land
+    types are among them, and :func:`basic_land_types_among` answers which.
+    One scan, so the two cannot disagree about whose board is read or what a
+    printed narrowing means.
+
+    *filt* is the spec's filter as the caller has already resolved it; it is
+    consumed here (``exclude_self`` is popped), which is what the inline code
+    did to the same dict.
+    """
+    # "…the number of green creatures **on the battlefield**" (An-Havva
+    # Constable, An-Havva Inn). CR 403.1 makes the battlefield one zone
+    # shared by every player, so a phrase that scopes to it scopes to
+    # nobody — the same ``owner: "all"`` the graveyard branch below already
+    # answers for "in all graveyards" (Lhurgoyf), which is why it is one
+    # more zone reading that key rather than a second key meaning it.
+    # Through the control seam, because "on the battlefield" is every
+    # permanent in play and `all_permanents` is the one answer to that.
+    every_seat = spec.get("owner") == "all"
+    # "…the number of permanents of the chosen color **your opponents
+    # control**" (Chameleon Spirit). Which piles to scan and whose "you" the
+    # filter's seat words mean were one variable here, and this is the scope
+    # that needs them to be two: every battlefield is read, and the observer
+    # stays the counting seat so the ``controller`` key the lowering left in
+    # the payload can be answered by `subject_matches` — the same reader
+    # that answers it in every other sentence printing the phrase. ``all``
+    # is the scope that really does mean nobody (CR 403.1's shared zone),
+    # and it keeps its ``observer=None``.
+    opponents_only = spec.get("owner") == "opponents"
+    seat = None if every_seat else game.players.index(owner)
+    # "**Other** …" (CR 109.5) is an identity comparison against the ability's
+    # own source, which the matcher deliberately does not answer — it is
+    # about one permanent alone. A spec carrying the key with no source to
+    # compare against counts nothing extra rather than silently dropping it:
+    # the caller that has a source passes one, and the continuous recompute
+    # that does not never produces the key.
+    skip = exclude if filt.pop("exclude_self", False) else None
+    # "permanents **of the chosen color**" (Psychic Allergy). The colour was
+    # picked as *source* entered (CR 614.1c) and lives on that permanent, so
+    # it is resolved here — where the source is in hand — into the ordinary
+    # colour key every matcher already reads. `permanent_matches_filter`
+    # refuses the unresolved key outright, so a caller with no source
+    # counts nothing rather than counting the whole board.
+    filt = _resolve_chosen_color(filt, source)
+    # "creatures **of the chosen type**" (An-Zerrin Ruins), the same
+    # resolution one line up for the same reason: the type was picked as
+    # *source* entered and lives on that permanent, and the pure matcher
+    # refuses the unresolved key so a caller with no source counts nothing.
+    filt = _resolve_chosen_subtype(filt, source)
+    scanned = (
+        game.all_permanents() if every_seat or opponents_only
+        else game.controlled_by(seat)
+    )
+    # Through ``subject_matches`` rather than the pure half, because the
+    # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
+    # the game): "you gain 1 life for each creature you control with
+    # flying" (Aven Gagglemaster) was countable only by a hand-built
+    # payload in `lowering/life.py` that named the key on its own. This is
+    # the one place a count decides what a printed noun phrase means, so it
+    # asks the one function that answers all of it — the seat scoping the
+    # scan is the same seat CR 109.5's "you" names, and it is handed over
+    # so a phrase that carries a controller word means what it would mean
+    # anywhere else.
+    from ..subject_filters import subject_matches
+
+    matched = [
+        perm for perm in scanned
+        if perm is not skip
+        and subject_matches(game, perm, filt, observer=seat, source=source)
+    ]
+    return matched
+
+
+def basic_land_types_among(
+    game: "Game", owner: "PlayerState", spec: dict, *, source=None
+) -> tuple[str, ...]:
+    """**Which** basic land types are among the permanents *spec* names — the
+    set whose size ``aggregate: distinct_basic_land_types`` counts.
+
+    "For each basic land type among lands you control, this creature has
+    landwalk of that type." (Magnigoth Treefolk.) Every other domain card
+    spends the number; this one spends the types themselves, so it asks the
+    same scan for the set rather than re-deriving it — through the layer-4
+    accessor, like the count, because a land's basic land types are computed
+    (a Blood Moon or a Phantasmal Terrain changes the answer).
+
+    In CR 305.6's order, which is the accessor's. A spec that is not a
+    battlefield count of this aggregate names no such set and answers
+    nothing: the direction that cannot invent an ability.
+    """
+    if (
+        spec.get("zone", "battlefield") != "battlefield"
+        or spec.get("aggregate") != "distinct_basic_land_types"
+    ):
+        return ()
+    matched = _battlefield_matches(
+        game, owner, spec, dict(spec.get("filter") or {}), source=source,
+    )
+    found: list[str] = []
+    for perm in matched:
+        for land_type in perm.basic_land_types:
+            if land_type not in found:
+                found.append(land_type)
+    from ..models import _LAND_TYPE_MANA
+
+    return tuple(land_type for land_type in _LAND_TYPE_MANA if land_type in found)
+
+
 def evaluate_count(
     game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
 ) -> int:
@@ -1111,66 +1225,13 @@ def evaluate_count(
             spec,
         )
     if zone == "battlefield":
-        # "…the number of green creatures **on the battlefield**" (An-Havva
-        # Constable, An-Havva Inn). CR 403.1 makes the battlefield one zone
-        # shared by every player, so a phrase that scopes to it scopes to
-        # nobody — the same ``owner: "all"`` the graveyard branch below already
-        # answers for "in all graveyards" (Lhurgoyf), which is why it is one
-        # more zone reading that key rather than a second key meaning it.
-        # Through the control seam, because "on the battlefield" is every
-        # permanent in play and `all_permanents` is the one answer to that.
-        every_seat = spec.get("owner") == "all"
-        # "…the number of permanents of the chosen color **your opponents
-        # control**" (Chameleon Spirit). Which piles to scan and whose "you" the
-        # filter's seat words mean were one variable here, and this is the scope
-        # that needs them to be two: every battlefield is read, and the observer
-        # stays the counting seat so the ``controller`` key the lowering left in
-        # the payload can be answered by `subject_matches` — the same reader
-        # that answers it in every other sentence printing the phrase. ``all``
-        # is the scope that really does mean nobody (CR 403.1's shared zone),
-        # and it keeps its ``observer=None``.
-        opponents_only = spec.get("owner") == "opponents"
-        seat = None if every_seat else game.players.index(owner)
-        # "**Other** …" (CR 109.5) is an identity comparison against the ability's
-        # own source, which the matcher deliberately does not answer — it is
-        # about one permanent alone. A spec carrying the key with no source to
-        # compare against counts nothing extra rather than silently dropping it:
-        # the caller that has a source passes one, and the continuous recompute
-        # that does not never produces the key.
-        skip = exclude if filt.pop("exclude_self", False) else None
-        # "permanents **of the chosen color**" (Psychic Allergy). The colour was
-        # picked as *source* entered (CR 614.1c) and lives on that permanent, so
-        # it is resolved here — where the source is in hand — into the ordinary
-        # colour key every matcher already reads. `permanent_matches_filter`
-        # refuses the unresolved key outright, so a caller with no source
-        # counts nothing rather than counting the whole board.
-        filt = _resolve_chosen_color(filt, source)
-        # "creatures **of the chosen type**" (An-Zerrin Ruins), the same
-        # resolution one line up for the same reason: the type was picked as
-        # *source* entered and lives on that permanent, and the pure matcher
-        # refuses the unresolved key so a caller with no source counts nothing.
-        filt = _resolve_chosen_subtype(filt, source)
-        scanned = (
-            game.all_permanents() if every_seat or opponents_only
-            else game.controlled_by(seat)
+        # The scan itself is :func:`_battlefield_matches` — which piles are
+        # read, whose "you" the filter's seat words mean, and the resolution
+        # of the source's chosen colour and type. Lifted out when the *set*
+        # behind a count got a second reader (``basic_land_types_among``).
+        matched = _battlefield_matches(
+            game, owner, spec, filt, exclude=exclude, source=source,
         )
-        # Through ``subject_matches`` rather than the pure half, because the
-        # pure half cannot answer a **keyword** (CR 613 layer 6, which needs
-        # the game): "you gain 1 life for each creature you control with
-        # flying" (Aven Gagglemaster) was countable only by a hand-built
-        # payload in `lowering/life.py` that named the key on its own. This is
-        # the one place a count decides what a printed noun phrase means, so it
-        # asks the one function that answers all of it — the seat scoping the
-        # scan is the same seat CR 109.5's "you" names, and it is handed over
-        # so a phrase that carries a controller word means what it would mean
-        # anywhere else.
-        from ..subject_filters import subject_matches
-
-        matched = [
-            perm for perm in scanned
-            if perm is not skip
-            and subject_matches(game, perm, filt, observer=seat, source=source)
-        ]
         if aggregate == "greatest_power":
             return _scaled(max((perm.effective_power for perm in matched), default=0), spec)
         if aggregate == "distinct_colors":

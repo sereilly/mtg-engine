@@ -57,7 +57,7 @@ from .continuous import (
     switch_pt,
 )
 from .keywords import ability_effects, derived_grants, derived_removals
-from .landwalk import landwalk_requirement
+from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
 from .land_types import land_type_changes, lost_abilities_to_type_change
 from .lord_buffs import QUALIFIER_FIELDS
 
@@ -623,6 +623,22 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     if granted:
         effects.append(
             grant_abilities(only, list(granted), timestamp=0, label="lord grant")
+        )
+
+    # Landwalks the permanent's own text names off its controller's lands —
+    # "For each basic land type among lands you control, this creature has
+    # landwalk of that type." (Magnigoth Treefolk.) The words are not in the
+    # text and need the game to count, so the refresh that owns the count
+    # (``_refresh_dynamic_creatures``, behind its layer-4 passes) derives them
+    # and this collector — which is deliberately game-free — reads what it
+    # left. In front of the removal below, so "all creatures lose …" still
+    # takes a walk away.
+    named_walks = perm.metadata.get(BOARD_NAMED_LANDWALKS) or ()
+    if named_walks:
+        effects.append(
+            grant_abilities(
+                only, list(named_walks), timestamp=0, label="board-named landwalk"
+            )
         )
 
     # And the mirror: abilities a board-wide source is taking away right now

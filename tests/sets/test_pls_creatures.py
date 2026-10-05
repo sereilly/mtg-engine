@@ -368,3 +368,168 @@ def test_w1g4_a_counted_self_reduction_refuses_what_it_cannot_count():
         "where X is the total power of creatures you control.",
     ):
         assert self_cost_reduction(line) is None, line
+
+
+_W1G4_WALKS = ("plainswalk", "islandwalk", "swampwalk", "mountainwalk", "forestwalk")
+
+
+def _w1g4_walks(game, permanent):
+    return [
+        w1g4_walk for w1g4_walk in _W1G4_WALKS
+        if game._has_keyword(permanent, w1g4_walk)
+    ]  # _w1g4_walks
+
+
+def test_w1g4_magnigoth_treefolk_walks_by_its_controllers_basic_land_types(set_pool):
+    """"Domain — For each basic land type among lands you control, this
+    creature has landwalk of that type." The words are named by the walker's
+    own lands: a Forest and a Tropical Island are forestwalk and islandwalk,
+    an opponent's Swamp is nobody's swampwalk, and with no land there is no
+    walk at all."""
+    program = _w1g4_compile(set_pool("PLS")["Magnigoth Treefolk"])
+    assert program.supported, program.reason
+
+    game, mine, _theirs = _w1g4_table(
+        set_pool, mine=["Magnigoth Treefolk", "Forest", "Tropical Island"],
+        theirs=["Swamp", "Mountain"], enforce=False,
+    )
+    assert _w1g4_walks(game, mine[0]) == ["islandwalk", "forestwalk"]
+
+    game, mine, _theirs = _w1g4_table(
+        set_pool, mine=("Magnigoth Treefolk",) + _W1G4_FIVE, enforce=False,
+    )
+    assert _w1g4_walks(game, mine[0]) == list(_W1G4_WALKS)
+
+    game, mine, _theirs = _w1g4_table(
+        set_pool, mine=["Magnigoth Treefolk"], theirs=_W1G4_FIVE, enforce=False,
+    )
+    assert _w1g4_walks(game, mine[0]) == []
+
+
+def test_w1g4_magnigoth_treefolk_cannot_be_blocked_through_a_shared_land_type(set_pool):
+    """CR 702.14c: each walk is checked against the *defending* player's
+    lands. With a Forest on both sides the Bears cannot block the Treefolk;
+    with the defender's Forest swapped for an Island, forestwalk is idle and
+    the same block is legal."""
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, mine=["Magnigoth Treefolk", "Forest"],
+        theirs=["Grizzly Bears", "Forest"], enforce=False,
+    )
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    blocked, why = game.declare_blockers(1, {0: 0})
+    assert not blocked and "cannot block" in why
+
+    game, _mine, _theirs = _w1g4_table(
+        set_pool, mine=["Magnigoth Treefolk", "Forest"],
+        theirs=["Grizzly Bears", "Island"], enforce=False,
+    )
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    assert game.declare_attackers(0, [0])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0})[0], "no Forest over there"
+
+
+def test_w1g4_magnigoth_treefolk_recounts_as_the_lands_change(set_pool):
+    """A static ability locks nothing in (CR 611.3a). A land drop adds its
+    walk, a land destroyed by a spell takes its walk with it, and the types
+    are the computed ones — under Blood Moon two dual lands are Mountains and
+    the only walk is mountainwalk; once it is destroyed the four come back."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, hand=["Island", "Disenchant"],
+        mine=["Magnigoth Treefolk", "Forest", "Tropical Island"],
+        theirs=["Grizzly Bears"], enforce=False,
+    )
+    tree, _forest, tropical = mine
+    game.players[1].hand.extend(
+        [_w1g4_find(set_pool, "Stone Rain"), _w1g4_find(set_pool, "Blood Moon")]
+    )
+    assert _w1g4_walks(game, tree) == ["islandwalk", "forestwalk"]
+
+    assert game.cast_from_hand(
+        1, "Stone Rain", target_player_index=0,
+        target_permanent_ids=[tropical.permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert not game.is_on_battlefield(tropical)
+    assert _w1g4_walks(game, tree) == ["forestwalk"]
+
+    assert game.cast_from_hand(0, "Island").supported
+    _w1g4_resolve(game)
+    assert _w1g4_walks(game, tree) == ["islandwalk", "forestwalk"]
+
+    game, mine, _theirs = _w1g4_table(
+        set_pool, hand=["Disenchant"],
+        mine=["Magnigoth Treefolk", "Tropical Island", "Badlands"], enforce=False,
+    )
+    tree = mine[0]
+    game.players[1].hand.append(_w1g4_find(set_pool, "Blood Moon"))
+    assert _w1g4_walks(game, tree) == [
+        "islandwalk", "swampwalk", "mountainwalk", "forestwalk",
+    ]
+    assert game.cast_from_hand(1, "Blood Moon").supported
+    _w1g4_resolve(game)
+    assert _w1g4_walks(game, tree) == ["mountainwalk"]
+    moon = next(p for p in game.controlled_by(1) if p.card.name == "Blood Moon")
+    assert game.cast_from_hand(
+        0, "Disenchant", target_player_index=1,
+        target_permanent_ids=[moon.permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert _w1g4_walks(game, tree) == [
+        "islandwalk", "swampwalk", "mountainwalk", "forestwalk",
+    ]
+
+
+def test_w1g4_magnigoth_treefolk_walks_for_whoever_controls_it(set_pool):
+    """"Lands **you** control" is the Treefolk's controller (CR 109.5), read
+    as the walks are derived: stolen with Control Magic, it walks by its new
+    controller's Swamp and no longer by its owner's Forest."""
+    game, mine, _theirs = _w1g4_table(
+        set_pool, mine=["Magnigoth Treefolk", "Forest"], theirs=["Swamp"],
+        enforce=False,
+    )
+    tree = mine[0]
+    game.players[1].hand.append(_w1g4_find(set_pool, "Control Magic"))
+    assert _w1g4_walks(game, tree) == ["forestwalk"]
+    assert game.cast_from_hand(
+        1, "Control Magic", target_player_index=0,
+        target_permanent_ids=[tree.permanent_id],
+    ).supported
+    _w1g4_resolve(game)
+    assert game.controller_index_of(tree) == 1
+    assert _w1g4_walks(game, tree) == ["swampwalk"]
+
+
+def test_w1g4_a_board_named_landwalk_refuses_what_it_cannot_name():
+    """One reader, two callers: the support gate claims the line through the
+    function the layer-6 pass grants through. A set on another player's board,
+    a characteristic no landwalk is built from, and a grant to some other
+    object all refuse — admitted, each would be a creature that reports
+    supported and has no evasion at all."""
+    from engine.grammar import compile_line
+    from engine.landwalk import landwalk_per_type_spec
+
+    printed = (
+        "Domain — For each basic land type among lands you control, this "
+        "creature has landwalk of that type. (It can't be blocked as long as "
+        "defending player controls a land of that type.)"
+    )
+    assert landwalk_per_type_spec(printed) == {
+        "zone": "battlefield", "owner": "you",
+        "filter": {"type_filter": "land"},
+        "aggregate": "distinct_basic_land_types",
+    }
+    assert compile_line(printed).parsed
+    for line in (
+        "For each basic land type among lands your opponents control, this "
+        "creature has landwalk of that type.",
+        "For each creature you control, this creature has landwalk of that type.",
+        "For each basic land type among lands you control, target creature "
+        "has landwalk of that type.",
+        "For each basic land type among lands you control, this creature has "
+        "landwalk of that type and flying.",
+    ):
+        assert landwalk_per_type_spec(line) is None, line
+        assert not compile_line(line).usable, line
