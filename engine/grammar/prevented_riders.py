@@ -121,7 +121,15 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
     colours: tuple[str, ...] = ()
     conditional = False
     condition_mark = stream.mark()
-    if stream.accept_phrase("if", "damage", "from"):
+    # "**Whenever** damage from a black or red source is prevented this way
+    # **this turn**, you gain that much life." (Samite Ministration.) The
+    # condition below with the two words a shield that lasts all turn prints
+    # around it — see ``ast.PreventedRider.repeating``. One reader for both
+    # openers, because everything behind them is the same clause.
+    repeating = False
+    if stream.accept_phrase("whenever", "damage", "from"):
+        repeating = True
+    if repeating or stream.accept_phrase("if", "damage", "from"):
         stream.accept_word("a", "an")
         token = stream.peek()
         word = str(token.text).lower() if token is not None else ""
@@ -135,6 +143,13 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
         if not colours or not stream.accept_phrase(
             "source", "is", "prevented", "this", "way"
         ):
+            stream.reset(mark)
+            return None
+        # The two words travel together: "whenever … this turn" is the blanket's
+        # spelling and "if …" the one-shot's, and a sentence mixing them is not
+        # one this reads — so the opener without its window, or the window
+        # without its opener, refuses rather than being read as the other.
+        if stream.accept_phrase("this", "turn") != repeating:
             stream.reset(mark)
             return None
         stream.accept_punct(",")
@@ -152,7 +167,7 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
     # Only the conditional spelling: the unconditional one ("~ deals damage
     # equal to the damage prevented this way to …") is printed by no card in
     # the pool, and a row admitted for it would be a claim nothing checks.
-    if conditional:
+    if conditional and not repeating:
         reflect_mark = stream.mark()
         if accept_source_reference(stream) and stream.accept_phrase(
             "deals", "that", "much", "damage", "to", "the", "source", "'s",
@@ -169,7 +184,7 @@ def _parse_prevented_this_way_rider(stream: TokenStream) -> "ast.PreventedRider 
             # sentence whose reading depends on which branch was tried first.
             if after_condition is not None and stream.accept_phrase(*after_condition):
                 stream.accept_punct(".")
-                return ast.PreventedRider(name, colours)
+                return ast.PreventedRider(name, colours, repeating=repeating)
             continue
         if stream.accept_phrase(*printed):
             if stream.accept_phrase(

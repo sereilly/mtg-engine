@@ -200,7 +200,7 @@ def _lower_team_shield(
     payload: dict[str, object] = {"recipients": described}
     rider = node.prevented_rider
     if rider is not None:
-        if rider.effect != "gain_life":
+        if rider.effect != "gain_life" or rider.repeating:
             raise LoweringError(
                 "the team shield's interceptor gains life and nothing else",
                 node=node,

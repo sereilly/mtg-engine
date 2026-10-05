@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..shields import (
+    make_chosen_source_blanket,
     make_counting_pool,
     make_source_type_shield,
     make_targeting_source_shield,
@@ -613,6 +614,120 @@ def _arm_chosen_source_shield(
         )
     else:
         game.log.append(f"{who} {verb} dealt to them")
+    return True, "resolved"
+
+
+def default_damage_source(game, seat: int, *, colors: tuple[str, ...] = ()):
+    """The source a seat that named none is taken to choose (CR 609.7a), or
+    None when nothing on the table could be one.
+
+    The stated default for "a source of your choice" where the choice cannot
+    simply be skipped — a shield that lasts all turn has no sourceless form
+    (``shields.PREVENT_ALL_FROM_CHOSEN_SOURCE``). In order: the topmost spell
+    an opponent has on the stack (the burn spell this is being cast in
+    response to), then an opponent's attacking creature with the greatest
+    power, then an opponent's creature with the greatest power at all. Each is
+    the source most likely to deal this seat damage this turn, which is the
+    choice a player makes with the card.
+
+    *colors* narrows the candidates to sources sharing one of them, for
+    "…that shares a color with the mana spent on this activation cost"
+    (Protective Sphere): a source outside them is not one the sentence lets
+    the player choose.
+
+    A spell comes back as its ``CardDefinition`` — the object it will deal its
+    damage with (CR 109.5), and what ``chosen_shield_source`` returns for an
+    announced one.
+    """
+    from ..object_colors import share_a_color
+
+    def admitted(found: tuple[str, ...] | set[str]) -> bool:
+        return not colors or share_a_color(colors, found)
+
+    for item in reversed(game.stack):
+        if getattr(item, "caster_index", seat) == seat:
+            continue
+        if getattr(item, "ability", None) is not None or item.card is None:
+            continue
+        if admitted(game._stack_item_colors(item)):
+            return item.card
+    theirs = [
+        perm
+        for other in range(len(game.players))
+        if other != seat and not game.players[other].lost
+        for perm in game.controlled_by(other)
+        if perm.is_creature and admitted(game._effective_colors(perm))
+    ]
+    if not theirs:
+        return None
+    return max(
+        theirs,
+        key=lambda perm: (bool(perm.attacking), perm.effective_power, -perm.permanent_id),
+    )
+
+
+@effect_handler("grant_chosen_source_blanket_shield")
+def grant_chosen_source_blanket_shield(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Samite Ministration: "Prevent all damage that would be dealt to you this
+    turn by a source of your choice. Whenever damage from a black or red source
+    is prevented this way this turn, you gain that much life." Protective
+    Sphere: the same shield, "…that shares a color with the mana spent on this
+    activation cost."
+
+    The choice its one-shot siblings make — a permanent on any battlefield or a
+    spell on the stack, read by the one reader of the phrase
+    (``chosen_shield_source``) — and then the difference: the shield is never
+    used up, so it is **never armed without a source**. A seat that named none
+    takes the stated default (``default_damage_source``); with no source on the
+    table at all the effect does nothing, which is CR 609.7a's own outcome when
+    there is nothing to choose.
+
+    ``source_shares_spent_mana_color`` reads CR 107.4's symbols out of the
+    payment the activation measured (``choices["mana_spent_for_cost"]``): the
+    five colours among them are the property the shield records and rechecks
+    (CR 609.7b). Colorless or generic-only payment records none — and then the
+    shield is not armed at all, because a property no source can have is a
+    shield that prevents nothing ("Colorless mana prevents no damage").
+    """
+    from ..object_colors import ALL_COLORS
+
+    caster = context.caster
+    granted_by = context.card.name if context.card else None
+    seat = game.players.index(caster) if caster in game.players else None
+    colors: tuple[str, ...] = ()
+    if instruction.payload.get("source_shares_spent_mana_color"):
+        spent = (context.choices or {}).get("mana_spent_for_cost") or {}
+        colors = tuple(
+            symbol for symbol in ALL_COLORS if int(spent.get(symbol, 0) or 0) > 0
+        )
+        if not colors:
+            game.log.append(
+                f"{granted_by}: no colored mana was spent, so no damage is "
+                "prevented"
+            )
+            return True, "resolved"
+    chosen = chosen_shield_source(game, context)
+    if chosen is None and seat is not None:
+        chosen = default_damage_source(game, seat, colors=colors)
+    if chosen is None or seat is None:
+        game.log.append(f"{granted_by}: no source of damage to choose")
+        return True, "resolved"
+    add_shield(caster, make_chosen_source_blanket(
+        chosen, seat, granted_by, colors=colors,
+        rider_colors=tuple(instruction.payload.get("rider_colors") or ()),
+    ))
+    source_card = getattr(chosen, "card", chosen)
+    game.log.append(
+        f"{caster.name} will prevent all damage "
+        f"{getattr(source_card, 'name', 'a source')} would deal them this turn"
+        + (
+            f" while it shares a color with the mana spent ({'/'.join(colors)})"
+            if colors else ""
+        )
+        + f" ({granted_by})"
+    )
     return True, "resolved"
 
 

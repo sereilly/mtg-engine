@@ -172,6 +172,90 @@ def _lower_prevent_all_to_class(
     )
 
 
+def _lower_chosen_source_blanket(
+    node: ast.PreventDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"Prevent all damage that would be dealt to you this turn by a source of
+    your choice." (Samite Ministration, Protective Sphere.)
+
+    CR 615.8's chosen-source shield with "the next time" taken off: every
+    instance the one chosen source would deal this turn, rather than the first.
+    Its own instruction rather than a flag on the one-shot's, for the reason
+    ``Shield.kind`` exists — a shield that is never used up is consumed by a
+    different interceptor in a different band (it is free, so it runs with the
+    blankets), and a "lasts all turn" flag ignored by any of the five one-shot
+    handlers would arm a shield that prevents one event of a card that prints
+    all of them.
+
+    Every part of the sentence is checked, because each is a way it could mean
+    more than it says:
+
+    * the recipient is **you** — the shield hangs off the ability's controller,
+      and one printed for a chosen target would be armed on the wrong object;
+    * no colour or type narrows the choice (``from_filter`` is the empty
+      phrase). A narrowed one — "a red source of your choice" — is a property
+      the shield would have to recheck and this payload carries none;
+    * all damage, not combat damage alone, and for exactly this turn: the
+      cleanup sweep is what ends a ``Shield``;
+    * the rider, if printed, is the conditional life gain and is spelled for a
+      shield that lasts the turn ("whenever … this turn"). The one-shot's "if"
+      is refused rather than read as the same thing, so the two spellings
+      cannot drift into meaning each other's shield.
+    """
+    if node.from_filter != ast.ObjectFilter():
+        raise LoweringError(
+            "the chosen-source blanket names no property of its source",
+            node=node,
+        )
+    if not _is_you(node.to) or node.to_others:
+        raise LoweringError(
+            "the chosen-source blanket protects its controller", node=node
+        )
+    if (
+        node.combat_only
+        or node.dealt_by is not None
+        or node.dealt_by_others
+        or node.to_and_by
+        or node.from_targeting_source
+        or node.unaffected_if_cost_paid is not None
+        or node.division is not None
+        or node.alternate_amount is not None
+        or node.alternate_subject is not None
+    ):
+        raise LoweringError(
+            "the chosen-source blanket stops all of one source's damage and "
+            "narrows no further",
+            node=node,
+        )
+    if node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "the chosen-source blanket lasts exactly this turn", node=node
+        )
+    payload: dict[str, object] = {}
+    if node.source_shares_spent_mana_color:
+        # "…that shares a color with the mana spent on this activation cost"
+        # (Protective Sphere). The colours are read at resolution from the
+        # payment the activation measured (``choices["mana_spent_for_cost"]``),
+        # so what rides here is only that the shield must be handed them.
+        payload["source_shares_spent_mana_color"] = True
+    rider = node.prevented_rider
+    if rider is not None:
+        if (
+            rider.effect != "gain_life"
+            or not rider.source_colors
+            or not rider.repeating
+        ):
+            raise LoweringError(
+                "the chosen-source blanket's rider is the life gain for a "
+                "coloured source, printed 'whenever … this turn'",
+                node=node,
+            )
+        payload["rider_colors"] = list(rider.source_colors)
+    return (
+        OracleInstruction("grant_chosen_source_blanket_shield", "", payload),
+    )
+
+
 def _lower_prevent_all(
     node: ast.PreventDamage,
     produced: frozenset[str] = frozenset(),
@@ -196,6 +280,15 @@ def _lower_prevent_all(
     * a duration other than this turn — the flag is cleared in the cleanup step,
       so it *is* "this turn" and nothing else.
     """
+    if node.from_filter is not None:
+        # "…by **a source of your choice**" — CR 609.7a's chosen source behind
+        # the blanket. Before every branch below, each of which was written for
+        # a described or targeted source and reads no choice.
+        return _lower_chosen_source_blanket(node)
+    if node.source_shares_spent_mana_color:
+        raise LoweringError(
+            "only a chosen source is narrowed by the mana spent", node=node
+        )
     if node.from_targeting_source:
         # Silhouette. The shield hangs on the object the spell's first sentence
         # chose, so the recipient must be that bound reference and nothing else:

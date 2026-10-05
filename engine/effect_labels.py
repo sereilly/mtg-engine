@@ -487,6 +487,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # ability never does.
     "redirect_source_damage_to_target_until_eot": "activated_prevention",
     "grant_whole_prevention_shield": "activated_prevention",
+    "grant_chosen_source_blanket_shield": "activated_prevention",
     "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------
     # Same rule as M21's block above: the bucket the *ability* belongs to, not

@@ -76,6 +76,7 @@ from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_BY_RESOLVING_OBJECT,
                       PREVENT_NEXT_N, PREVENT_NEXT_N_AND_COUNTERS,
                       PREVENT_WHOLE, PREVENT_AND_EXILE,
+                      PREVENT_ALL_FROM_CHOSEN_SOURCE,
                       PREVENT_TEAM, Shield, drop_spent, shields_on)
 
 # Order bands. Protection runs first of all: it is the widest free shield on the
@@ -158,6 +159,14 @@ SMALL_EVENT_BLANKET = 32
 # narrowing is a **relation between the two ends of the event**. No charges, so
 # beside the others and ahead of every consumable, for their reason.
 SHARED_COLOR_BLANKET = 33
+# "Prevent all damage that would be dealt to you this turn by a source of your
+# choice." (Samite Ministration, Protective Sphere.) A blanket a player was
+# handed against one named source — never used up, so applying it costs its
+# holder nothing and it sits with the others here, ahead of every consumable.
+# That is the whole reason it is not the whole-instance shield at 310 with its
+# charge left on: a Reverse Damage naming the same source would be spent first
+# on damage this was always going to stop.
+CHOSEN_SOURCE_BLANKET = 34
 # "Prevent all damage that would be dealt to you this turn by attacking
 # creatures without flying." (Al-abara's Carpet.) A blanket a *player* was
 # handed rather than one a permanent prints, but a blanket all the same — no
@@ -1411,6 +1420,68 @@ def _whole_prevention_generic(game, event: dict) -> PreventionOutcome | None:
     """The same shield activated without recording a chosen source (AI /
     headless): the next damage event from any source is prevented."""
     return _spend(game, event, PREVENT_WHOLE, chosen=False, rider=_log_whole_prevention)
+
+
+def _chosen_source_blanket_rider(
+    game, event: dict, used: list[Shield], prevented: int
+) -> None:
+    """What a chosen-source blanket does after it absorbs (CR 615.5).
+
+    Always the log line; and for Samite Ministration, "whenever damage from a
+    black or red source is prevented this way this turn, you gain that much
+    life" — once per prevention event, which is what "whenever" asks of a
+    shield that outlives its first use.
+
+    The colour is rechecked against the source as it is *now* and as a source
+    of damage (CR 609.7b), through the one reader every colour question about
+    damage asks — so a source a Lace turned red since the shield was armed
+    pays, and one Ghostly Flame has made colorless does not.
+
+    No rider colours means no rider at all, unlike ``_gain_life_if_rider_colour``
+    beside this, where the empty tuple is Reverse Damage's unconditional gain:
+    nothing prints an unconditional gain on the blanket, and reading the empty
+    tuple that way would have Protective Sphere gaining life.
+    """
+    shield = used[0]
+    recipient = event["recipient"]
+    game.log.append(
+        f"{shield.source_name or 'A shield'} prevented {prevented} damage to "
+        f"{recipient_label(recipient)} from {_source_label(event.get('source'))}"
+    )
+    if not shield.rider_colors:
+        return
+    if not set(shield.rider_colors) & set(
+        damage_source_colors(game, event.get("source"), seat=event.get("source_seat"))
+    ):
+        return
+    holder = (
+        game.players[shield.filter_seat]
+        if shield.filter_seat is not None
+        and 0 <= shield.filter_seat < len(game.players)
+        else recipient
+    )
+    if isinstance(holder, PlayerState):
+        game._gain_life(holder, prevented, source_name=shield.source_name)
+
+
+@prevention_effect(
+    CHOSEN_SOURCE_BLANKET, applies=_arms(PREVENT_ALL_FROM_CHOSEN_SOURCE)
+)
+def _prevent_all_from_chosen_source(game, event: dict) -> PreventionOutcome | None:
+    """Samite Ministration: "Prevent all damage that would be dealt to you this
+    turn by a source of your choice."
+
+    Every instance the chosen source would deal to the shield's holder until
+    the cleanup sweep, combat or not. ``_live`` is what holds it to that
+    source and — for Protective Sphere — to a source that still shares a
+    colour with the mana that paid for it (CR 609.7b: the property is
+    rechecked when the damage would be dealt, and a shield whose property
+    fails is not used up, because this one never is).
+    """
+    return _spend(
+        game, event, PREVENT_ALL_FROM_CHOSEN_SOURCE,
+        rider=_chosen_source_blanket_rider,
+    )
 
 
 def _log_color_prevention(game, event: dict, used: list[Shield], prevented: int) -> None:
