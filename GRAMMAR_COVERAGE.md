@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 70.0% | 67.3% | 46.4% | 196 |
+| INV *(measured)* | 335 | 547 | 71.3% | 69.3% | 47.7% | 203 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 572 | 286 | expected a subject |  |
-| 157 | 92 | unconsumed text |  |
-| 153 | 80 | unrecognized effect verb |  |
+| 570 | 284 | expected a subject |  |
+| 156 | 91 | unconsumed text |  |
+| 150 | 77 | unrecognized effect verb |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -70,11 +70,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
-| 5 | 2 | expected a destination zone after 'return' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
+| 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 3 | expected 'a' |  |
@@ -155,6 +155,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W} or {U}. This land deals 1 damage to you.`
   - `{T}: Add {C}.`
   - `{T}: Add {W} or {U}. This land deals 1 damage to you.`
+- **Addle**
+  - `Choose a color. Target player reveals their hand and you choose a card of that color from it. That player discards that card.`
 - **Adherent of Hope**
   - `At the beginning of combat on your turn, if you control a Basri planeswalker, put a +1/+1 counter on this creature.`
 - **Adun Oakenshield**
@@ -1719,6 +1721,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Search your library for a land card, put that card onto the battlefield, then shuffle.`
 - **Crosis's Attendant**
   - `{1}, Sacrifice this creature: Add {U}{B}{R}.`
+- **Crosis, the Purger**
+  - `Whenever Crosis deals combat damage to a player, you may pay {2}{B}. If you do, choose a color, then that player reveals their hand and discards all cards of that color.`
 - **Crossbow Ambush**
   - `Creatures you control gain reach until end of turn. (They can block creatures with flying.)`
 - **Crossbow Infantry**
@@ -1838,6 +1842,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
 - **Darigaaz's Attendant**
   - `{1}, Sacrifice this creature: Add {B}{R}{G}.`
+- **Darigaaz, the Igniter**
+  - `Whenever Darigaaz deals combat damage to a player, you may pay {2}{R}. If you do, choose a color, then that player reveals their hand and Darigaaz deals damage to the player equal to the number of cards of that color revealed this way.`
 - **Daring Apprentice**
   - `{T}, Sacrifice this creature: Counter target spell.`
   - `{T}, Sacrifice this creature: Counter target spell.`
@@ -2272,6 +2278,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {W}.`
 - **Dromar's Attendant**
   - `{1}, Sacrifice this creature: Add {W}{U}{B}.`
+- **Dromar, the Banisher**
+  - `Whenever Dromar deals combat damage to a player, you may pay {2}{U}. If you do, choose a color, then return all creatures of that color to their owners' hands.`
 - **Dromosaur**
   - `Whenever this creature blocks or becomes blocked, it gets +2/-2 until end of turn.`
 - **Drop of Honey**
@@ -4387,6 +4395,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Tap an untapped snow land you control: This creature gets +1/+1 until end of turn.`
 - **Karplusan Yeti**
   - `{T}: This creature deals damage equal to its power to target creature. That creature deals damage equal to its power to this creature.`
+- **Kavu Chameleon**
+  - `{G}: This creature becomes the color of your choice until end of turn.`
 - **Kavu Climber**
   - `When this creature enters, draw a card.`
 - **Kavu Lair**
@@ -6446,6 +6456,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rain of Tears**
   - `Destroy target land.`
   - `Destroy target land.`
+- **Rainbow Crow**
+  - `{1}: This creature becomes the color of your choice until end of turn.`
 - **Rainbow Efreet**
   - `{U}{U}: This creature phases out. (While it's phased out, it's treated as though it doesn't exist. It phases in before you untap during your next untap step.)`
 - **Rainbow Vale**
@@ -9475,6 +9487,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Warrior's Honor**
   - `Creatures you control get +1/+1 until end of turn.`
   - `Creatures you control get +1/+1 until end of turn.`
+- **Wash Out**
+  - `Return all permanents of the color of your choice to their owners' hands.`
 - **Wasteland**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Destroy target nonbasic land.`

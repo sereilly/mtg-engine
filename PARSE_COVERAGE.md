@@ -25,15 +25,11 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**11 unclaimed sentence(s) across 8 supported card(s).**
+**9 unclaimed sentence(s) across 6 supported card(s).**
 
 - **Cauldron Dance**
   - `that creature gains haste`
   - `return it to your hand at the beginning of the next end step`
-- **Harsh Judgment**
-  - `if an instant or sorcery spell of the chosen color would deal damage to you, it deals that damage to its controller instead`
-- **Teferi's Moat**
-  - `creatures of the chosen color without flying can't attack you`
 - **Teferi's Response**
   - `counter target spell or ability an opponent controls that targets a land you control`
   - `if a permanent's ability is countered this way, destroy that permanent`
