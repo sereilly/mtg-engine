@@ -33,7 +33,7 @@ from .errors import GrammarError
 from .references import parse_player_ref
 from .stream import TokenStream
 from .phrases import (_accept_life_alternative, _parse_mana_payment,
-                      _parse_pay_life)
+                      _parse_pay_life, _parse_per_each_objects)
 from .sacrifices import _parse_counted_sacrifice
 from .effects import (_parse_discard, _parse_mill, _parse_put_counter,
                       _parse_put_hand_cards_on_library)
@@ -625,3 +625,53 @@ def accept_delayed_toll(
     return offer
 
 
+
+
+def _attach_toll_cost_reduction(stream: TokenStream, steps: list) -> bool:
+    """Fold "This cost is reduced by {N} for each <counted>." into the
+    pay-or-sacrifice toll before it (Draco).
+
+    "At the beginning of your upkeep, sacrifice this creature unless you pay
+    {10}. **This cost is reduced by {2} for each basic land type among lands
+    you control.**" A rider in ``riders``' own sense — it rewrites the step in
+    front of it and contributes none — and here rather than there because it
+    answers this module's question, *what price is offered*: "this cost" names
+    the price the sentence before it printed and nothing else, so on its own
+    the sentence is about nothing.
+
+    The count is ``phrases._parse_per_each_objects``, the reader every other
+    "for each" multiplier in the grammar asks, so "basic land type among"
+    (domain) is one of the things it may say and a card counting artifacts
+    instead is the same rider. The amount is ``_parse_mana_payment``, the
+    reader the toll's own price went through.
+
+    Attaches only to a node that can carry it — the fused toll with a printed
+    price and no rider yet — and rewinds on every near miss, so a card printing
+    the sentence behind anything else fails loudly rather than having it
+    consumed and dropped. "…beyond the first" refuses for the same reason: no
+    lowering here reads an offset on a price.
+    """
+    last = steps[-1] if steps else None
+    if (
+        not isinstance(last, ast.SacrificeUnlessPay)
+        or last.cost_from is not None
+        or last.cost_reduction is not None
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase("this", "cost", "is", "reduced", "by"):
+        stream.reset(mark)
+        return False
+    try:
+        amount = _parse_mana_payment(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    counted, beyond_first = _parse_per_each_objects(stream)
+    if counted is None or beyond_first:
+        stream.reset(mark)
+        return False
+    steps[-1] = dataclasses.replace(
+        last, cost_reduction=amount, cost_reduction_per_each=counted,
+    )
+    return True  # _attach_toll_cost_reduction

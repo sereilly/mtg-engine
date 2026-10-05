@@ -617,3 +617,74 @@ def parse_keep_then_sacrifice_rest(
             return None
         pool = slots[0].filter
     return ast.KeepChosenSacrificeRest(chooser, pool, tuple(slots))
+
+
+def parse_choose_each_then_return(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.KeepChosenSacrificeRest | None":
+    """``<player> chooses <a permanent> of each <characteristic>. Return those
+    <permanents> to their owners' hands.`` The subject has been read, so this
+    starts at the verb. (Planar Overlay.)
+
+    Global Ruin's choice with the other fate: that card keeps what was chosen
+    and sacrifices the rest, this one **returns what was chosen** and leaves
+    the rest alone. So it is the production above's sibling and returns that
+    production's node — same chooser, same pool, same one-slot-per-value list
+    from the one reader of "of each basic land type"
+    (``distinct.accept_one_of_each``) — with ``fate`` saying which half of the
+    partition moves and where. One prompt, one matching: a dual land is the
+    chosen land for one type or the other, exactly as it is one keep there.
+
+    A paragraph in ``paragraphs``' sense — two printed sentences that are one
+    effect — and read whole for that module's reason: "those lands" names a
+    record only the first sentence makes, and that sentence alone chooses for
+    nobody. It lives here rather than there because every word of it is this
+    family's, and its first half is the function above's slot reader.
+
+    The pool is the abbreviated keep's own noun ("a land they control"), which
+    is what the choice is made from; there is no "rest" here for it to bound.
+    "Those <noun>" must repeat that noun and add nothing — a narrower phrase
+    would name a subset of the chosen permanents, which nothing here returns.
+
+    Refuses without consuming for anything that is not this shape, and the
+    second sentence is required in full: a choice with no fate behind it is a
+    card that prompts every seat and then does nothing.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("chooses", "choose"):
+        return None
+    slot = _accept_keep_slot(stream)
+    each = (
+        accept_one_of_each(stream, slot.filter)
+        if slot is not None and slot.count == 1 else None
+    )
+    if each is None or not (
+        stream.accept_punct(".") and stream.accept_phrase("return", "those")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        named = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if named != dataclasses.replace(slot.filter, controller=None) or not (
+        stream.accept_word("to")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        zone = _parse_zone(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if zone != ast.Zone("hand", ast.PlayerRef("owner")) or not (
+        stream.exhausted or stream.at_punct(".", ";")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.KeepChosenSacrificeRest(
+        chooser, slot.filter,
+        tuple(ast.KeepSlot(1, described) for described in each),
+        fate="return_chosen_to_hand",
+    )  # parse_choose_each_then_return

@@ -540,6 +540,47 @@ def board_count_spec_for(phrase: str) -> dict | None:
     return spec
 
 
+def per_each_count_spec_for(clause: str) -> dict | None:
+    """The count spec a printed "**for each** <counted>" *clause* means, or
+    None to refuse — "for each basic land type among lands you control"
+    (Stratadon, Draco).
+
+    :func:`board_count_spec_for`'s twin for the other printed position a count
+    takes: that one reads the where-clause's "the number of …", this reads the
+    multiplier's "for each …", and both end at the one count lowering
+    (``lowering/_amounts.count_spec``) through the one reader of each phrase —
+    here ``phrases._parse_per_each_objects``, the production every "+1/+1 for
+    each", "a card for each" and "{1} for each" in the grammar already asks.
+    For a derivation table that arrives with the clause already delimited:
+    ``engine/cost_modifiers.py``'s self-reduction, whose size is a count.
+
+    **Only a count of the battlefield, scoped to "you"**, and for that
+    function's reason exactly: the caller asks while a spell is being cast
+    (CR 601.2f), where nothing has resolved and nothing was targeted, so a
+    clause needing a scratchpad, a target or "that player" would be answered
+    wrongly rather than refused. "…beyond the first" refuses too — no cost in
+    the pool prints it, and an offset nobody tested is a price nobody checked.
+    The whole clause must be consumed.
+    """
+    from .lowering._amounts import count_spec
+    from .phrases import _parse_per_each_objects
+
+    lexed = tokenize(clause.strip())
+    if not lexed.tokens:
+        return None
+    stream = TokenStream(lexed.tokens, lexed.normalized)
+    counted, beyond_first = _parse_per_each_objects(stream)
+    if counted is None or beyond_first or not stream.exhausted:
+        return None
+    try:
+        spec = count_spec(counted, None)
+    except LoweringError:
+        return None
+    if spec.get("zone") != "battlefield" or spec.get("owner") != "you":
+        return None
+    return spec
+
+
 __all__ = [
     "GRAMMAR_ONLY_PAYLOAD_KEYS",
     "behavioural_payload",
@@ -547,5 +588,6 @@ __all__ = [
     "ast", "board_count_spec_for", "card_filter_payload", "compile_line",
     "condition_payload_for",
     "graveyard_position_payload_for", "parse_line",
+    "per_each_count_spec_for",
     "subject_filter_payload",
 ]

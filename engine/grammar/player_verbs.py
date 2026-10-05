@@ -57,6 +57,7 @@ from .effects import (
     _parse_exile_entire_library,
     _parse_extra_turn,
     _parse_mill,
+    parse_choose_each_then_return,
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
@@ -351,6 +352,15 @@ def parse_player_subject_verb(
         kept = parse_keep_then_sacrifice_rest(stream, source_spec)
         if kept is not None:
             return kept
+        # "Each player **chooses a land they control of each basic land type.
+        # Return those lands to their owners' hands.**" (Planar Overlay.) The
+        # same choice with the chosen half moving, beside its sibling and
+        # ahead of the bare pick below for that arm's reason one over: the
+        # pick reads "a land they control" and then fails the line on "of
+        # each". Declines without consuming.
+        returned = parse_choose_each_then_return(stream, source_spec)
+        if returned is not None:
+            return returned
         # "That creature's controller **chooses a creature that this card
         # could enchant**." (Takklemaggot.) Read first because it declines
         # without consuming, where the paragraph below expects "a card

@@ -3541,8 +3541,17 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
         # exactly the silent failure this repo keeps finding.
         return False, "a keep-and-sacrifice keeps something"
     card_name = getattr(context.card, "name", "") or "Effect"
+    # "…Return those lands to their owners' hands." (Planar Overlay.) Which
+    # half of the choice moves, carried through to the prompt whose resolver
+    # performs it; absent is this handler's own name, the chosen kept and the
+    # rest sacrificed. The same per-seat arming either way, and for the reason
+    # the docstring gives: one seat's lands leaving cannot change what another
+    # seat controls.
+    fate = payload.get("fate")
     for seat in seats:
-        game.arm_keep_permanents(seat, pool=pool, slots=slots, reason=card_name)
+        game.arm_keep_permanents(
+            seat, pool=pool, slots=slots, reason=card_name, fate=fate,
+        )
     return True, "resolved"
 
 

@@ -2264,13 +2264,29 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     two artifact creatures fill an artifact slot and a creature slot at once,
     where two plain artifacts fill one. ``slots`` rides along so the modal can
     say what the keeps *are*; it is a label, and nothing is decided from it.
+
+    ``fate`` is sent only when the prompt carries one — Planar Overlay's
+    "Return those lands to their owners' hands", where what the seat picks is
+    what *leaves*. The modal words the choice from it, and the candidates are
+    narrowed to permanents that fill some slot: under the default fate a land
+    no slot names is still worth showing (it is about to be sacrificed), and
+    under this one it is a card the player can click and never legally choose.
     """
     choice = choices[0]
     live = ctx.game.keep_choice_candidates(
         choice.player_index, choice.data.get("pool") or {}
     )
     slot_filters = ctx.game._keep_slot_filters(choice.data.get("slots"))
+    fate = choice.data.get("fate")
+    extra: dict = {}
+    if fate is not None:
+        extra["fate"] = fate
+        live = [
+            perm for perm in live
+            if ctx.game._match_keeps([perm], slot_filters)
+        ]
     return {
+        **extra,
         "player_seat": choice.player_index,
         "card_name": choice.data.get("reason", ""),
         "keep_count": len(ctx.game._match_keeps(live, slot_filters)),

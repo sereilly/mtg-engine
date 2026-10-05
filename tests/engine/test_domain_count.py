@@ -276,6 +276,21 @@ def _census(cards):
                 ), "payload", None))
             ]
         if not carried:
+            # The two readers that hold a domain count **outside** the
+            # compiled program, asked the way the attack toll above is: a
+            # spell's own counted reduction (Stratadon — the count sizes a
+            # cost, CR 601.2f) and a landwalk named by the board (Magnigoth
+            # Treefolk — the count's *set* is the grant). Both carry the spec
+            # the evaluator will be handed, so the question is still whether
+            # the phrase was read as types.
+            from engine.cost_modifiers import self_cost_reduction
+            from engine.landwalk import landwalk_per_type_spec
+
+            carried = _specs(self_cost_reduction(card.oracle_text or "")) + [
+                found for line in (card.oracle_text or "").splitlines()
+                for found in _specs(landwalk_per_type_spec(line))
+            ]
+        if not carried:
             offenders.append(card.name)
     return examined, offenders
 

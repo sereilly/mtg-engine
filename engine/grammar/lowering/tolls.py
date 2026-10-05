@@ -27,9 +27,10 @@ import dataclasses
 
 from ...oracle_types import OracleInstruction
 from ...subject_filters import object_only_filter
-from ...upkeep_costs import SOURCE_MANA_COST
+from ...upkeep_costs import COST_REDUCED_PER_EACH, SOURCE_MANA_COST
 from .. import ast
 from ..errors import LoweringError
+from ._amounts import count_spec
 from ._common import _filter_payload, _full_mana_payload, _is_source
 from ._events import PUT_FROM_HAND_PERMANENTS
 
@@ -67,6 +68,13 @@ def _lower_sacrifice_unless_pay(
         and subject.quantifier == "it"
         and PUT_FROM_HAND_PERMANENTS in produced
     ):
+        if node.cost_reduction is not None:
+            # "This cost is reduced by … for each …" (Draco's rider) is read
+            # by the upkeep toll's own resolver and by nothing on the offer
+            # path below; admitted here it would be a price quoted whole.
+            raise LoweringError(
+                "no offer reads a per-each reduction of its price", node=node
+            )
         cost: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
         if node.cost_from == "its_mana_cost":
             # The printed number is the *reduction*; the cost itself is the
@@ -129,7 +137,47 @@ def _lower_sacrifice_unless_pay(
         # deliberately: an empty one is a cost of nothing, which a reader that
         # had not learned the new key would charge.
         return (OracleInstruction(kind, "", {"cost_from": SOURCE_MANA_COST}),)
-    return (OracleInstruction(kind, "", {"mana": _full_mana_payload(node.cost)}),)
+    payload: dict[str, object] = {"mana": _full_mana_payload(node.cost)}
+    if node.cost_reduction is not None:
+        payload[COST_REDUCED_PER_EACH] = _toll_reduction_payload(node)
+    return (OracleInstruction(kind, "", payload),)
+
+
+def _toll_reduction_payload(node: ast.SacrificeUnlessPay) -> dict[str, object]:
+    """"This cost is reduced by {2} for each basic land type among lands you
+    control." (Draco) → what ``upkeep_costs.resolved_toll_instruction`` takes
+    off the printed price when the trigger resolves (CR 608.2h).
+
+    ``generic`` is one repetition and ``count`` is the ordinary count spec
+    ``handlers/_common.evaluate_count`` answers for every other sentence that
+    spends one — so "basic land type among lands you control" means here what
+    it means on Wayfaring Giant, layers included.
+
+    Three refusals, each the direction that keeps a price from shrinking
+    unprinted. A **coloured** reduction is CR 118.7b–c's spill arithmetic once
+    per repetition, which no card prints and nothing has checked. A count this
+    resolution cannot scope is one answered on the wrong board: the two upkeep
+    handlers hold the permanent and its controller and nothing else — no
+    target, no frozen event seat, no scratchpad — so only a battlefield count
+    scoped to "you" is admitted, the same gate ``grammar.board_count_spec_for``
+    puts in front of a static's count for the same reason.
+    """
+    reduction = _full_mana_payload(node.cost_reduction)
+    generic = int(reduction.get("generic", 0) or 0)
+    if not generic or any(
+        amount for symbol, amount in reduction.items() if symbol != "generic"
+    ):
+        raise LoweringError(
+            "a per-each toll reduction takes generic mana off the price",
+            node=node,
+        )
+    spec = count_spec(node.cost_reduction_per_each, node)
+    if spec.get("zone") != "battlefield" or spec.get("owner") != "you":
+        raise LoweringError(
+            "a toll reduction counts the payer's own battlefield", node=node
+        )
+    return {"generic": generic, "count": spec}  # _toll_reduction_payload
+
 
 def _lower_pay_or_sacrifice_greatest_mana_value(
     node: "ast.PayOrSacrificeGreatestManaValue",

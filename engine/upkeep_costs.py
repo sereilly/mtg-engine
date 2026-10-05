@@ -247,11 +247,52 @@ def cost_from_payload(payload: dict) -> UpkeepCost:
 SOURCE_MANA_COST = "its_mana_cost"
 
 
-def resolved_toll_instruction(permanent, instruction):
+#: The payload key of an upkeep toll whose printed price **shrinks with the
+#: board** — "…unless you pay {10}. This cost is reduced by {2} for each basic
+#: land type among lands you control." (Draco.) Its value is ``{"generic": n,
+#: "count": <count spec>}``: one repetition, and the ordinary count spec
+#: ``handlers/_common.evaluate_count`` answers. Named here, beside
+#: :data:`SOURCE_MANA_COST`, because the lowering writes it and
+#: :func:`resolved_toll_instruction` is its one reader.
+COST_REDUCED_PER_EACH = "reduced_per_each"
+
+
+def _reduced_toll_instruction(game, permanent, instruction):
+    """*instruction* with its per-each reduction taken off the printed price.
+
+    Counted **now**, for the seat that controls *permanent* now (CR 608.2h: an
+    effect's quantity is determined once, as it is applied) and through the
+    layers, because ``evaluate_count`` asks the computed types. The arithmetic
+    is ``cost_modifiers.reduce_cost`` — CR 118.7's, in its one place — so the
+    reduction touches generic mana only and stops at zero: five basic land
+    types take Draco's {10} to a cost of **nothing**, which is a cost that is
+    paid (CR 118.5), not one that cannot be. The key is dropped from what comes
+    back, so every reader downstream sees an ordinary printed toll.
+    """
+    from dataclasses import replace
+
+    from .cost_modifiers import CostReduction, reduce_cost
+    from .handlers._common import evaluate_count
+
+    payload = dict(instruction.payload)
+    described = payload.pop(COST_REDUCED_PER_EACH)
+    payer = game.players[game.controller_index_of(permanent)]
+    repetitions = max(0, evaluate_count(
+        game, payer, described["count"], source=permanent,
+    ))
+    payload["mana"] = reduce_cost(
+        dict(payload.get("mana") or {}),
+        CostReduction(int(described["generic"]) * repetitions),
+    )
+    return replace(instruction, payload=payload)
+
+
+def resolved_toll_instruction(permanent, instruction, game=None):
     """*instruction* with a derived upkeep cost filled in, or **None when the
     cost cannot be paid at all**.
 
-    The one reader of :data:`SOURCE_MANA_COST`, asked by both pay-or-sacrifice
+    The one reader of :data:`SOURCE_MANA_COST` and of
+    :data:`COST_REDUCED_PER_EACH`, asked by both pay-or-sacrifice
     handlers and by the prompt that quotes them, so a player is never quoted
     one price and charged another. Every other instruction is returned as it
     came.
@@ -260,8 +301,18 @@ def resolved_toll_instruction(permanent, instruction):
     a copy (CR 202.1b) — has an *unpayable* cost, and so does an ability whose
     cost is based on it. The caller sacrifices without offering anything, which
     is what the rule leaves: the payment may not even be attempted.
+
+    *game* is what a board-sized price is counted on. Every caller passes it;
+    a reduction asked for without one raises rather than charging the printed
+    price whole, because a quote that ignores the rider is a different card.
     """
     payload = instruction.payload or {}
+    if COST_REDUCED_PER_EACH in payload:
+        if game is None:
+            raise ValueError(
+                "a toll reduced per object needs the game it is counted on"
+            )
+        return _reduced_toll_instruction(game, permanent, instruction)
     if payload.get("cost_from") != SOURCE_MANA_COST:
         return instruction
     from dataclasses import replace

@@ -9005,10 +9005,21 @@ function renderKeepPermanentsModal(info) {
   const slots = (info.slots || [])
     .map((slot) => `${slot.count} ${slot.type}${slot.count === 1 ? "" : "s"}`)
     .join(", ");
+  // Planar Overlay: "…chooses a land they control of each basic land type.
+  // Return those lands to their owners' hands." The same choice with the other
+  // half moving — what the seat picks is what *leaves* — so the server sends
+  // `fate` and the modal says so. Absent is the sentence this modal was built
+  // for: the picks stay and the rest is sacrificed.
+  const returning = info.fate === "return_chosen_to_hand";
+  const pickLabel = returning ? "return" : "keep";
+  const title = document.getElementById("keepPermanentsTitle");
+  if (title) title.textContent = returning ? "Return Permanents" : "Keep Permanents";
   if (subtitle) {
-    subtitle.textContent =
-      `${info.card_name}: keep ${slots || "permanents"} — choose ${keepCount}. ` +
-      `Everything else you control that it names is sacrificed.`;
+    subtitle.textContent = returning
+      ? `${info.card_name}: return ${slots || "permanents"} — choose ${keepCount}. ` +
+        `They go to their owners' hands; everything else stays.`
+      : `${info.card_name}: keep ${slots || "permanents"} — choose ${keepCount}. ` +
+        `Everything else you control that it names is sacrificed.`;
   }
   const list = document.getElementById("keepPermanentsList");
   const confirmBtn = document.getElementById("keepPermanentsConfirmBtn");
@@ -9019,9 +9030,9 @@ function renderKeepPermanentsModal(info) {
     list.innerHTML = (info.candidates || [])
       .map((entry) => {
         const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">keep</div></div>`;
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}</div></div>`;
       })
-      .join("") || `<div class="modal-empty-note">Nothing to keep.</div>`;
+      .join("") || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
       el.addEventListener("click", () => {
         const id = Number(el.dataset.id);

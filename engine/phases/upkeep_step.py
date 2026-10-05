@@ -545,7 +545,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # reader the handlers charge from. An unpayable one (CR 118.6: the
             # permanent has no mana cost) offers nothing — there is no payment
             # to quote, and the handler sacrifices without asking.
-            tolled = resolved_toll_instruction(permanent, trig.instruction)
+            tolled = resolved_toll_instruction(permanent, trig.instruction, self)
             if tolled is None:
                 continue
             cost = upcoming_cost(permanent, tolled)

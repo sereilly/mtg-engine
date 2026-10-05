@@ -5445,6 +5445,18 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # passes through, and there is nothing here to lower.
     if denies_regeneration_line(normalized):
         return True
+    # "For each basic land type among lands you control, this creature has
+    # landwalk of that type." (Magnigoth Treefolk.) A static ability whose
+    # granted words are named by the board, so it produces no instruction: the
+    # layer-6 pass re-derives the walks from the permanent's own text on every
+    # recompute through `engine/landwalk.py`. Asked of the reader that pass
+    # grants through, so a set it cannot count (another player's lands) or a
+    # characteristic no landwalk is built from keeps refusing instead of being
+    # admitted as a creature with no evasion at all.
+    from .landwalk import landwalk_per_type_spec
+
+    if landwalk_per_type_spec(normalized) is not None:
+        return True
     # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
     # permanent's own controller, enforced off the board at every cast — so
     # like every table above it produces no instruction, and a creature whose

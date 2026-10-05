@@ -102,6 +102,7 @@ from .board import (
     _parse_sacrifice,
     _parse_sacrifice_expansion_permanents,
     parse_keep_then_sacrifice_rest,
+    parse_choose_each_then_return,
     _parse_delayed_self_action,
     _parse_that_object,
 )
@@ -358,6 +359,7 @@ __all__ = [
     "parse_put_library_top_into_hand",
     "_parse_sacrifice",
     "parse_keep_then_sacrifice_rest",
+    "parse_choose_each_then_return",
     "_parse_sacrifice_expansion_permanents",
     "_parse_delayed_self_action",
     "_parse_shuffle_graveyard_into_library",

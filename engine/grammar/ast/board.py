@@ -658,6 +658,16 @@ class SacrificeUnlessPay:
     #: instead of counting it. ``cost`` then carries the *reduction*, which is
     #: the only number the card prints.
     cost_from: str | None = None
+    #: "…unless you pay {10}. **This cost is reduced by {2} for each basic land
+    #: type among lands you control.**" (Draco.) The rider sentence behind the
+    #: toll, folded in by ``tolls._attach_toll_cost_reduction``: how much comes
+    #: off per repetition, and the set the repetitions are counted over. Named
+    #: rather than counted for ``cost_from``'s reason one field up — the number
+    #: is the board's *when the trigger resolves*, which is not knowable while
+    #: the sentence is being read. Both None when the card prints no rider, and
+    #: never one without the other.
+    cost_reduction: ManaCost | None = None
+    cost_reduction_per_each: ObjectFilter | None = None
 
 
 @dataclass(frozen=True)
@@ -820,7 +830,19 @@ class KeepChosenSacrificeRest:
     makes an artifact creature a choice rather than two free keeps (CR 608.2d:
     a player can't choose an option that's illegal, and a permanent already
     chosen is not available again).
+
+    ``fate`` is which half of the partition the sentence moves, and where.
+    The default is the node's name — the chosen stay and the rest are
+    sacrificed. "Each player chooses a land they control of each basic land
+    type. **Return those lands to their owners' hands.**" (Planar Overlay) is
+    the same choice over the same slots with the other half moving:
+    ``"return_chosen_to_hand"`` sends what was chosen to its owner's hand and
+    leaves the rest where it is. A field rather than a second node because
+    everything a player is asked is identical — who chooses, from what, into
+    which slots — and two nodes would be two prompts free to disagree about
+    whether a dual land fills one slot or two.
     """
     chooser: PlayerRef
     pool: ObjectFilter
     slots: tuple[KeepSlot, ...]
+    fate: str = "sacrifice_rest"

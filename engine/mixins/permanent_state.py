@@ -50,6 +50,7 @@ from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
 from ..keywords import (add_derived_ability_line, add_derived_grant,
                         add_derived_removal, clear_derived_grants)
+from ..landwalk import BOARD_NAMED_LANDWALKS, board_named_landwalks
 from ..enter_tapped_statics import (
     ENTER_TAPPED_STATIC_KIND,
     enter_tapped_filter_from_payload,
@@ -1720,6 +1721,24 @@ class PermanentStateMixin:
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
         self._refresh_land_animation(all_permanents, animations)
+        # A landwalk **named by the board** — "For each basic land type among
+        # lands you control, this creature has landwalk of that type."
+        # (Magnigoth Treefolk.) Layer 6 reading layer 4, so it is rebuilt here,
+        # *behind* the two layer-4 refreshes above and not in
+        # ``_recalculate_lord_buffs`` beside the other derived keyword grants:
+        # ``_recompute_continuous_effects`` runs that pass first, and a Blood
+        # Moon arriving would have its Mountains read one recompute late.
+        # Its own channel for the same reason — the derived-grant channel is
+        # that pass's to clear, and a grant written from here would be wiped
+        # whenever it ran alone. Rebuilt whole every time (CR 611.3a), so a
+        # Forest that leaves takes forestwalk with it and there is nothing to
+        # find and undo; ``layer_bridge.collect_ability_effects`` reads it.
+        for lw_seat, lw_perm in self.permanents_with_controller():
+            named_walks = board_named_landwalks(self, lw_seat, lw_perm)
+            if named_walks:
+                lw_perm.metadata[BOARD_NAMED_LANDWALKS] = named_walks
+            else:
+                lw_perm.metadata.pop(BOARD_NAMED_LANDWALKS, None)
         self._refresh_mana_spending()
         self._refresh_aspect_of_wolf()
         # After the other 7c contributions, because its clamp reads the

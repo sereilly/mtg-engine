@@ -158,6 +158,50 @@ def count_filter_on_frozen_seat(
     )
 
 
+#: The player words that name a seat the spell or ability **chose** — the one a
+#: resolution carries as ``context.target``.
+_TARGETED_PLAYER_KINDS = frozenset({"target_player", "target_opponent"})
+
+
+def count_filter_on_targeted_seat(
+    filt: "ast.ObjectFilter", player: "ast.PlayerRef | None" = None
+) -> "ast.ObjectFilter":
+    """*filt* with a "they control" narrowing moved onto the axis a count reads
+    — whose zone is scanned — when the seat is the player the sentence
+    **targeted**.
+
+    "Target player draws a card for each basic land type among lands **they**
+    control." (Allied Strategies.) :func:`count_filter_on_frozen_seat`'s twin
+    one binding over: there the seat is the one an event froze (CR 603.10),
+    here it is the one the sentence chose (CR 115.1), and ``count_spec``
+    refuses a controller key for the same reason either way — the matcher
+    behind a count tests no controller. So the restriction rides
+    ``zone_owner`` as ``target_player``, the scope ``count_from_payload``
+    resolves to ``context.target``: the very seat the instruction beside it
+    acts on, so the count and the effect cannot land on two players.
+
+    The rewrite ``lowering/where_x._count_filter_for`` has made since Jovial
+    Evil ("…twice the number of white creatures **that player** controls"),
+    lifted to the floor so the amount position ("a card **for each** …") asks
+    the same function the where-clause does. That caller decides for itself
+    whether a target was named (it holds lowered instructions, not a node) and
+    passes no *player*; a caller holding the sentence's own ``PlayerRef``
+    passes it, and a player that is not a chosen target leaves the filter
+    untouched for ``count_spec`` to refuse.
+    """
+    if filt.controller != "that_player":
+        return filt
+    if player is not None and player.kind not in _TARGETED_PLAYER_KINDS:
+        return filt
+    if filt.zone_owner is not None:
+        # Two seats in one phrase name two different sets; left for
+        # ``count_spec``'s own refusal of the controller key.
+        return filt
+    return dataclasses.replace(
+        filt, controller=None, zone_owner=ast.PlayerRef("target_player")
+    )
+
+
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
     offset: int = 0,

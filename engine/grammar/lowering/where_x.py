@@ -26,6 +26,7 @@ from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
+                       count_filter_on_targeted_seat,
                        count_spec, tapped_this_way_record)
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
@@ -551,9 +552,10 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=No
         # placement reads too ("…for each untapped land that player controls",
         # Mana Cache) — one rewrite, one table of which events froze a seat.
         return count_filter_on_frozen_seat(filt, event, node)
-    return dataclasses.replace(
-        filt, controller=None, zone_owner=ast.PlayerRef("target_player")
-    )
+    # …and the targeted half lives there too, since Allied Strategies printed
+    # the same binding in the amount position ("a card **for each** … they
+    # control"): one rewrite for both spellings of the count.
+    return count_filter_on_targeted_seat(filt)
 
 
 def _lower_where_x_deaths(

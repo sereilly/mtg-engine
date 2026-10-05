@@ -65,6 +65,7 @@ from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
 from ..land_play_allowance import land_play_line
+from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
 from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
@@ -454,6 +455,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # implementing module's own matcher.
     if counter_cap_line(line, card_name) is not None:
         return CAP_CLAIM
+
+    # engine/landwalk.py — "For each basic land type among lands you control,
+    # this creature has landwalk of that type." (Magnigoth Treefolk.) A static
+    # ability whose granted words are named by the board, re-derived from the
+    # permanent's own text by the layer-6 pass on every recompute — so there is
+    # no instruction to lower, and one would freeze a set CR 611.3a says is
+    # never frozen. The claim asks the reader that pass grants through.
+    if landwalk_per_type_spec(line) is not None:
+        return "landwalk"
 
     return None
 

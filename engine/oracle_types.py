@@ -1504,6 +1504,26 @@ COUNTERED_SPELL_NAME = "countered_spell_name"
 BIDDING_WINNER = "bidding_winner"
 
 
+#: Which half of a ``keep_permanents`` choice **moves** when it is not the
+#: default one. That prompt was built for "…chooses <slots>, then sacrifices
+#: the rest" (Cataclysm, Global Ruin): the chosen stay, the complement is
+#: sacrificed, and that fate is spelled by *absence* so every payload and
+#: prompt written before a second one existed is byte-identical.
+#:
+#: "Each player chooses a land they control of each basic land type. **Return
+#: those lands to their owners' hands.**" (Planar Overlay) is the same choice
+#: over the same slots with the chosen half moving instead. One word, written
+#: by the parse onto ``ast.KeepChosenSacrificeRest.fate``, carried by the
+#: lowering under the payload key ``fate`` and performed by the prompt's own
+#: resolver (``mixins/stack/choices._return_the_chosen``).
+#:
+#: ``KEEP_FATES`` is the closed vocabulary, read by the lowering's gate and by
+#: the prompt's: a fate admitted with no performer would be a card that asks
+#: every seat a question and then moves nothing.
+RETURN_CHOSEN_TO_HAND = "return_chosen_to_hand"
+KEEP_FATES = frozenset({RETURN_CHOSEN_TO_HAND})
+
+
 #: The permanent "counter target activated ability" records: the source the
 #: countered ability came from. "**That permanent's** activated abilities can't
 #: be activated this turn" (Interdict) is the sentence that needs it, and
