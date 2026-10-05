@@ -275,13 +275,6 @@
   ]
  },
  {
-  "card": "Blood Oath",
-  "clause": "choose a card type. target opponent reveals their hand. blood oath deals 3 damage to that player for each card of the chosen type revealed this way",
-  "ignored": [
-   "oath"
-  ]
- },
- {
   "card": "Blood of the Martyr",
   "clause": "until end of turn, if damage would be dealt to any creature, you may have that damage dealt to you instead",
   "ignored": [
@@ -457,13 +450,6 @@
   "clause": "tap all lands you control. this artifact becomes a 3/3 turtle artifact creature until end of turn",
   "ignored": [
    "all"
-  ]
- },
- {
-  "card": "Cinder Cloud",
-  "clause": "destroy target creature. if a white creature dies this way, cinder cloud deals damage to that creature's controller equal to the creature's power",
-  "ignored": [
-   "cinder"
   ]
  },
  {
@@ -840,13 +826,6 @@
   ]
  },
  {
-  "card": "Eternal Flame",
-  "clause": "eternal flame deals x damage to target opponent or planeswalker and half x damage, rounded up, to you, where x is the number of mountains you control",
-  "ignored": [
-   "flame"
-  ]
- },
- {
   "card": "Eureka",
   "clause": "starting with you, each player may put a permanent card from their hand onto the battlefield. repeat this process until no one puts a card onto the battlefield",
   "ignored": [
@@ -1115,13 +1094,6 @@
   "clause": "unless you pay {r}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn",
   "ignored": [
    "creature"
-  ]
- },
- {
-  "card": "Goblin Grenade",
-  "clause": "goblin grenade deals 5 damage to any target",
-  "ignored": [
-   "grenade"
   ]
  },
  {

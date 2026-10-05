@@ -199,6 +199,92 @@ def _lower_damage(
             "no damage handler carries the printed seat narrowing here", node=node
         )
     lowered = _with_attached_dealer(node, lowered)
+    lowered = _with_foreign_dealer(node, lowered, produced)
+    return lowered
+
+
+#: The record an earlier step of the same resolution writes about **the one
+#: object it named**, which a later "that <noun> deals damage …" can be read
+#: from. The ``Permanent`` itself, frozen before the step acts on it
+#: (``handlers/destruction``: CR 608.2h, last known information) — so the
+#: dealer still has its colours, its types and its controller after it has
+#: gone to a graveyard. A tuple because the next card will name what was
+#: exiled or tapped; one entry because one card prints the shape.
+_DEALER_RECORDS = ("destroyed_target",)
+
+#: The quantifiers that make a damage sentence's printed subject a **class or
+#: a chosen object** — "creatures deal …", "each creature deals …", "target
+#: creature deals …" — rather than the ability's own source or a back-reference.
+_CLASS_DEALER_QUANTIFIERS = frozenset({"all", "each", "target"})
+
+
+def _with_foreign_dealer(
+    node: ast.DealDamage, lowered: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Destroy target artifact. **That artifact** deals damage equal to its
+    mana value to this creature." (Goblin Tinkerer.)
+
+    The third post-condition on the dealer, beside ``_with_attached_dealer``
+    and for its reason. ``_lower_damage_shape`` builds a plain ``deal_damage``
+    from the recipients and the amount and never reads the subject, so a
+    sentence whose subject is *some other object* compiled as the ability's own
+    source dealing the damage — CR 120.7's source read off the wrong object,
+    with the card reporting supported. Goblin Tinkerer, a red creature, burned
+    itself: protection from red stopped damage the card says an artifact
+    deals, protection from artifacts did not, and a lifelinking or deathtouching
+    artifact creature it destroyed did nothing on the way out.
+
+    Two answers, and never the third (dropping the subject):
+
+    * **"that <noun>"** is a back-reference, and the dealer is the object an
+      earlier step recorded. ``biter`` is the key every dealer already rides
+      (``"attached"``, ``"event_subject"``); its value here is the record the
+      handler reads it from. With no such record the line refuses — a
+      back-reference to nothing is a dealer nobody can find.
+    * **a class or a target** ("creatures deal …", "target creature deals …")
+      has no handler that makes each of them the source, so it refuses. No card
+      in the pool prints it; it was found by the deletion probe on cards whose
+      name opens with a type word — delete "Flames" from Tribal Flames and
+      "Tribal deals X damage to any target" is a class subject that used to
+      lower to the very same instruction.
+
+    Only where the dealer is certainly dropped — one plain ``deal_damage``
+    carrying no ``biter``. A fight, a bite and the per-creature sweeps lower to
+    kinds that name their own dealers and are not this function's business;
+    neither is "it", which is the source wherever the pool prints it bare
+    (Mogg Bombers: "sacrifice this creature and it deals 3 damage …").
+    """
+    source = node.source
+    if (
+        not isinstance(source, ast.TargetSpec)
+        or source.filter.is_source
+        or _is_enchanted(source)
+        or len(lowered) != 1
+        or lowered[0].kind != "deal_damage"
+        or "biter" in lowered[0].payload
+    ):
+        return lowered
+    if source.quantifier == "that":
+        record = next((key for key in _DEALER_RECORDS if key in produced), None)
+        if record is None:
+            raise LoweringError(
+                "no earlier step records the object this damage's printed "
+                "dealer refers back to",
+                node=node,
+            )
+        instruction = lowered[0]
+        return (
+            dataclasses.replace(
+                instruction, payload={**instruction.payload, "biter": record}
+            ),
+        )
+    if source.quantifier in _CLASS_DEALER_QUANTIFIERS:
+        raise LoweringError(
+            "no damage handler makes the printed class or target the source "
+            "of this damage",
+            node=node,
+        )
     return lowered
 
 

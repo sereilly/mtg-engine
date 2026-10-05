@@ -408,9 +408,20 @@ def _source_counter_spec(definition: "ast.Amount") -> dict[str, object] | None:
     if isinstance(definition, ast.Times):
         factor = definition.factor
         definition = definition.of
-    if not isinstance(definition, ast.CountersOnSource):
+    spec: dict[str, object]
+    if isinstance(definition, ast.CountersOnGranter):
+        # "…counters on the permanent with id N that granted this ability"
+        # (Archery Training). The same count of the same kind of pile on the
+        # object CR 201.5a says the granted ability names; both printed words
+        # ride the spec, and ``evaluate_count`` finds the permanent by the id.
+        spec = {
+            "granter_counters": definition.kind,
+            "granter_id": definition.permanent_id,
+        }
+    elif isinstance(definition, ast.CountersOnSource):
+        spec = {"source_counters": definition.kind}
+    else:
         return None
-    spec: dict[str, object] = {"source_counters": definition.kind}
     if factor != 1:
         spec["multiplier"] = factor
     if plus:

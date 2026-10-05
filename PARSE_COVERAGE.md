@@ -10,7 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **4310**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **513**
+- With deletion-probe findings (ignored words): **509**
 
 ## Acknowledged simplifications
 
@@ -68,7 +68,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Blazing Effigy | `it deals x damage to target creature, where x is 3 plus the amount of ` | creature |
 | Blind Fury | `all creatures lose trample until end of turn. if a creature would deal` | all |
 | Blinding Light | `tap all nonwhite creatures` | all |
-| Blood Oath | `choose a card type. target opponent reveals their hand. blood oath dea` | oath |
 | Blood of the Martyr | `until end of turn, if damage would be dealt to any creature, you may h` | any |
 | Blossoming Wreath | `you gain life equal to the number of creature cards in your graveyard` | cards |
 | Bog Glider | `search your library for a mercenary permanent card with mana value 2 o` | permanent |
@@ -94,7 +93,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Chandra, Heart of Fire | `search your graveyard and library for any number of red instant and/or` | and/or |
 | Charmed Griffin | `each other player may put an artifact or enchantment card onto the bat` | card |
 | Chimeric Idol | `tap all lands you control. this artifact becomes a 3/3 turtle artifact` | all |
-| Cinder Cloud | `destroy target creature. if a white creature dies this way, cinder clo` | cinder |
 | Cinder Giant | `this creature deals 2 damage to each other creature you control` | each |
 | Circle of Protection: Artifacts | `the next time an artifact source of your choice would deal damage to y` | source |
 | Citanul Centaurs | `if this permanent came under your control since the beginning of your ` | permanent |
@@ -148,7 +146,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Ensnare | `tap all creatures` | all |
 | Erithizon | `put a +1/+1 counter on target creature of defending player's choice` | target |
 | Errant Minion | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
-| Eternal Flame | `eternal flame deals x damage to target opponent or planeswalker and ha` | flame |
 | Eureka | `starting with you, each player may put a permanent card from their han` | permanent |
 | Evacuation | `return all creatures to their owners' hands` | all |
 | Evaporate | `evaporate deals 1 damage to each white and/or blue creature` | each and/or |
@@ -187,7 +184,6 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Glyph of Reincarnation | `destroy all creatures that were blocked by target wall this turn. they` | all |
 | Goblin Arsonist | `you may have it deal 1 damage to any target` | have |
 | Goblin Flotilla | `unless you pay {r}, whenever this creature blocks or becomes blocked b` | creature |
-| Goblin Grenade | `goblin grenade deals 5 damage to any target` | grenade |
 | Goblin Lackey | `you may put a goblin permanent card from your hand onto the battlefiel` | permanent |
 | Goblin Marshal | `if this permanent came under your control since the beginning of your ` | permanent |
 | Goblin Patrol | `if this permanent came under your control since the beginning of your ` | permanent |

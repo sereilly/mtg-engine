@@ -1010,6 +1010,26 @@ def evaluate_count(
         if maker is None or not game.is_on_battlefield(maker):
             return 0
         return max(0, _scaled(counters_on(maker, str(maker_counters)), spec))
+    # "…where X is the number of arrow counters on **Archery Training**." (The
+    # ability Archery Training gives the creature it enchants, whose text names
+    # the Aura.) The same pile again, on the one permanent CR 201.5a says a
+    # granted ability's use of its granter's name means — found by the id
+    # ``granted_abilities.bind_granter`` wrote into the sentence as it was
+    # folded onto the host. By id for ``creator_counters``' reason: an Aura
+    # that left and came back is a new object (CR 400.7) granting a new
+    # ability, and an ability already on the stack keeps naming the object that
+    # granted it, wherever that object is attached now. One that has left the
+    # battlefield holds no pile there, so the count is zero.
+    granter_counters = spec.get("granter_counters")
+    if granter_counters is not None:
+        if game is None:
+            return 0
+        from ..named_counters import counters_on
+
+        granter = game.permanent_by_id(spec.get("granter_id"))
+        if granter is None:
+            return 0
+        return max(0, _scaled(counters_on(granter, str(granter_counters)), spec))
     # "…where X is **the life paid as this artifact entered**" (Phyrexian
     # Processor). A number the permanent is carrying that is not a pile of
     # counters: it was chosen once as a CR 614.1c entry replacement and is read

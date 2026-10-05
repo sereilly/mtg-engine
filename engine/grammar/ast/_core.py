@@ -625,6 +625,26 @@ class CountersOnEventSubject:
 
 
 @dataclass(frozen=True)
+class CountersOnGranter:
+    """"the number of arrow counters on **the permanent with id N that granted
+    this ability**" (Archery Training's quote, once it is the enchanted
+    creature's own text) — how many CR 122.1 named counters are on the one
+    permanent whose effect gave the source this ability (CR 201.5a).
+
+    Its own node beside :class:`CountersOnSource` for the reason
+    :class:`CountersOnEventSubject` gives: the pile is on a *different object*
+    from the one the ability is printed on, so a referent field on the source
+    node would let every lowering written for the source's counters accept this
+    phrase and count the creature's instead. The id is part of the node because
+    it is part of the sentence — ``granted_abilities.bind_granter`` wrote it
+    there — and it is what makes two same-named Auras on one creature two
+    different abilities.
+    """
+    kind: str
+    permanent_id: int
+
+
+@dataclass(frozen=True)
 class LifePaidAsEntered:
     """"where X is **the life paid as this artifact entered**" (Phyrexian
     Processor) — the amount of life its controller chose to pay as a CR 614.1c
@@ -696,7 +716,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

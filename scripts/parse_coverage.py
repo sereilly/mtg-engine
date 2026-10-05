@@ -1214,6 +1214,18 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
             card.oracle_text or ""
         ),
     ),
+    (
+        # Archery Training: 'Enchanted creature has "{T}: … where X is the
+        # number of arrow counters on Archery Training."' The quote names its
+        # own Aura, and `aura_effect_claim` claims a quoted grant only when the
+        # host can read it — which it can only once the name is bound to the
+        # object granting it (CR 201.5a, `granted_abilities.bind_granter`). The
+        # name-free row in CHANNELS cannot make that binding, so it rightly
+        # refuses this sentence; this row asks the same reader with the name,
+        # and carries that row's label because it is that row's channel.
+        "auras.py (attached effect)",
+        lambda card, s: aura_effect_claim(s, card.name) is not None,
+    ),
 )
 
 

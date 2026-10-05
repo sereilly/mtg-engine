@@ -554,7 +554,14 @@ class Permanent:
                             aura_granted_line_derived_lines, auras_attached_to)
 
         for aura in auras_attached_to(self):
-            granted.extend(aura_granted_ability_lines(aura.effective_card.oracle_text))
+            # …bound to *this* Aura (CR 201.5a): a quote that names its own
+            # Aura means the object granting it, so the name and the id of the
+            # attachment go with the text.
+            aura_card = aura.effective_card
+            granted.extend(aura_granted_ability_lines(
+                aura_card.oracle_text, granter_name=aura_card.name,
+                granter_id=aura.permanent_id,
+            ))
             # …and the keyword grants layer 6's *word* set cannot carry —
             # rampage and flanking, whose ability the CR defines rather than
             # describes, so what a grant of one grants is the printed line.

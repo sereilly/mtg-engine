@@ -504,3 +504,187 @@ def test_goblin_festival_asks_which_opponent_at_three_seats(set_pool):
 
     assert game.confirm_player_choice(0, 2)
     assert game.controller_index_of(festival) == 2, game.log
+
+
+# --- W2G5: Archery Training, an ability that names the Aura granting it ---
+from engine import Game as _W2G5Game, PlayerState as _W2G5Player
+from engine.auras import attach_aura as _w2g5_attach
+from engine.granted_abilities import granter_phrase as _w2g5_granter_phrase
+from engine.models import Permanent as _W2G5Perm
+from engine.named_counters import add_counters as _w2g5_add_counters
+from engine.named_counters import counters_on as _w2g5_counters_on
+from engine.oracle import compile_card_oracle as _w2g5_compile
+from engine.targeting import derive_activation_spec as _w2g5_activation_spec
+from tests.helpers import _nosick as _w2g5_nosick
+from tests.helpers import resolve_stack as _w2g5_resolve
+
+
+def _w2g5_archery_board(set_pool, *, trainings=1, host="Grizzly Bears"):
+    """A host wearing *trainings* Archery Trainings, facing an attacking Hill
+    Giant and an idle Grizzly Bears, in the opponent's declare-attackers step."""
+    lea, uds = set_pool("LEA"), set_pool("UDS")
+    archer = _w2g5_nosick(_W2G5Perm(card=lea[host]))
+    auras = [_W2G5Perm(card=uds["Archery Training"]) for _ in range(trainings)]
+    giant = _w2g5_nosick(_W2G5Perm(card=lea["Hill Giant"]))
+    idle = _w2g5_nosick(_W2G5Perm(card=lea["Grizzly Bears"]))
+    forests = [lea["Forest"]] * 20
+    game = _W2G5Game(players=[
+        _W2G5Player(name="P1", battlefield=[archer, *auras], library=list(forests)),
+        _W2G5Player(name="P2", battlefield=[giant, idle], library=list(forests)),
+    ])
+    game.enforce_mana_costs = False
+    for aura in auras:
+        _w2g5_attach(aura, archer)
+    game._recompute_continuous_effects()
+    game.start_turn(1)
+    _w2g5_resolve(game)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(1, [0])[0], game.log
+    game.priority_player_index = 0
+    return game, archer, auras, giant, idle
+
+
+def test_w2g5_archery_training_is_cast_and_gathers_arrows_each_upkeep(set_pool):
+    """The Aura's own half, through the turn structure: cast onto a creature,
+    one arrow counter at each of its controller's upkeeps (the "may" taken by a
+    seat nobody is answering for), none at the opponent's."""
+    lea, uds = set_pool("LEA"), set_pool("UDS")
+    archer = _W2G5Perm(card=lea["Grizzly Bears"])
+    forests = [lea["Forest"]] * 20
+    game = _W2G5Game(players=[
+        _W2G5Player(name="P1", battlefield=[archer], hand=[uds["Archery Training"]],
+                    library=list(forests)),
+        _W2G5Player(name="P2", library=list(forests)),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    cast = game.cast_from_hand(
+        0, "Archery Training", target_permanent_index=0, target_player_index=0
+    )
+    _w2g5_resolve(game)
+    assert cast.supported, cast.details
+    aura = next(p for p in game.all_permanents() if p.card.name == "Archery Training")
+    assert aura.metadata.get("attached_to") is archer
+
+    arrows = []
+    for seat in (1, 0, 1, 0):
+        game.start_turn(seat)
+        _w2g5_resolve(game)
+        # "you may": the offer outlives the trigger's place on the stack.
+        game.auto_resolve_pending_choices()
+        arrows.append(_w2g5_counters_on(aura, "arrow"))
+    assert arrows == [0, 1, 1, 2], game.log[-12:]
+
+
+def test_w2g5_archery_training_host_shoots_for_the_auras_arrows(set_pool):
+    """'{T}: This creature deals X damage to target attacking or blocking
+    creature, where X is the number of arrow counters on Archery Training.'
+
+    The ability is the *creature's* — its cost taps the creature and the
+    creature is the damage's source — and the count is the *Aura's*. Until this
+    wave the creature's compiler met "Archery Training" as a proper noun it had
+    never heard of and the creature gained nothing.
+    """
+    game, archer, (aura,), giant, idle = _w2g5_archery_board(set_pool)
+    _w2g5_add_counters(aura, "arrow", 2)
+
+    program = _w2g5_compile(archer.effective_card)
+    assert program.supported and len(program.activated_abilities) == 1
+    assert _w2g5_granter_phrase(aura.permanent_id) in archer.effective_card.oracle_text
+    spec = _w2g5_activation_spec(program.activated_abilities[0])
+    assert spec == {"kind": "creature", "any_states": ["attacking", "blocking"]}
+
+    # The idle Bears is neither attacking nor blocking: refused, nothing paid.
+    refused = game.activate_permanent_ability(
+        0, "Grizzly Bears", ability_index=0, target_permanent_ids=[idle.permanent_id]
+    )
+    assert not refused.supported and not archer.tapped
+
+    shot = game.activate_permanent_ability(
+        0, "Grizzly Bears", ability_index=0, target_permanent_ids=[giant.permanent_id]
+    )
+    _w2g5_resolve(game)
+
+    assert shot.supported, shot.details
+    assert archer.tapped
+    assert giant.damage_marked == 2
+    assert "Grizzly Bears dealt 2 damage to Hill Giant" in game.log
+    assert idle.damage_marked == 0
+
+
+def test_w2g5_two_archery_trainings_each_count_their_own_arrows(set_pool):
+    """CR 201.5a: a granted ability naming its granter names "only the specific
+    object which is that first ability's source". Two Trainings on one creature
+    are two abilities, and each reads the pile on the Aura that granted it —
+    which is why the name is bound to an id rather than looked up by name."""
+    game, archer, (first, second), giant, _idle = _w2g5_archery_board(
+        set_pool, trainings=2
+    )
+    _w2g5_add_counters(first, "arrow", 1)
+    _w2g5_add_counters(second, "arrow", 3)
+    abilities = _w2g5_compile(archer.effective_card).activated_abilities
+    assert len(abilities) == 2
+    assert _w2g5_granter_phrase(first.permanent_id) in abilities[0].source_line
+    assert _w2g5_granter_phrase(second.permanent_id) in abilities[1].source_line
+
+    game.activate_permanent_ability(
+        0, "Grizzly Bears", ability_index=0, target_permanent_ids=[giant.permanent_id]
+    )
+    _w2g5_resolve(game)
+    assert giant.damage_marked == 1
+
+    archer.tapped = False
+    game.priority_player_index = 0
+    game.activate_permanent_ability(
+        0, "Grizzly Bears", ability_index=1, target_permanent_ids=[giant.permanent_id]
+    )
+    _w2g5_resolve(game)
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(giant), "1 + 3 is lethal to a 3/3"
+
+
+def test_w2g5_archery_training_leaves_the_host_its_own_abilities(set_pool):
+    """The unread quote did more than grant nothing: appended to the host's
+    rules text it made the whole creature unsupported, so a Prodigal Sorcerer
+    wearing Archery Training lost its own "{T}: 1 damage to any target"."""
+    game, tim, (aura,), giant, _idle = _w2g5_archery_board(
+        set_pool, host="Prodigal Sorcerer"
+    )
+    assert len(_w2g5_compile(tim.effective_card).activated_abilities) == 2
+
+    ping = game.activate_permanent_ability(
+        0, "Prodigal Sorcerer", ability_index=0, target_player_index=1
+    )
+    _w2g5_resolve(game)
+    assert ping.supported, ping.details
+    assert game.players[1].life == 19
+
+
+def test_w2g5_archery_training_takes_the_ability_with_it(set_pool):
+    """Derived from the attachment on every read (CR 611.3b): when the Aura
+    leaves, the creature has no ability left to activate — and the count an
+    ability already activated would read is of an object that is gone, which
+    is zero arrows rather than some other Archery Training's."""
+    from engine.handlers._common import evaluate_count
+
+    game, archer, (aura,), giant, _idle = _w2g5_archery_board(set_pool)
+    _w2g5_add_counters(aura, "arrow", 3)
+    ability = _w2g5_compile(archer.effective_card).activated_abilities[0]
+    spec = ability.instruction.payload["x_from_count"]
+    assert spec == {"granter_counters": "arrow", "granter_id": aura.permanent_id}
+    assert evaluate_count(game, game.players[0], spec, source=archer) == 3
+
+    game.remove_from_battlefield(aura)
+    game.players[0].graveyard.append(aura.card)
+    game._recompute_continuous_effects()
+
+    assert evaluate_count(game, game.players[0], spec, source=archer) == 0
+    assert _w2g5_compile(archer.effective_card).activated_abilities == ()
+    refused = game.activate_permanent_ability(
+        0, "Grizzly Bears", ability_index=0, target_permanent_ids=[giant.permanent_id]
+    )
+    assert not refused.supported
+    assert giant.damage_marked == 0 and not archer.tapped
