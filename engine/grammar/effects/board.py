@@ -556,11 +556,16 @@ def parse_keep_then_sacrifice_rest(
     if not stream.accept_word("chooses", "choose"):
         return None
     pool = None
-    # "…chooses **from** the lands they control" (Global Ruin) beside
-    # "…chooses **from among** the permanents they control" (Cataclysm): one
-    # clause, and the second word is the only difference.
+    # "…chooses **from among** the permanents they control" (Cataclysm) and
+    # "…chooses **from** the lands they control" (Global Ruin). The bare
+    # spelling is read only in front of an abbreviated keep — "a land of each
+    # basic land type", the one sentence that prints it — and that is a
+    # narrowing with a reason: admitted for every keep list it would make
+    # "among" a word Cataclysm's own sentence could lose with no change to its
+    # parse, which is what the deletion probe exists to report.
+    bare_from = False
     if stream.accept_word("from"):
-        stream.accept_word("among")
+        bare_from = not stream.accept_word("among")
         stream.accept_word("the")
         try:
             pool = parse_object_filter(stream)
@@ -570,7 +575,7 @@ def parse_keep_then_sacrifice_rest(
             stream.reset(mark)
             return None
     first = _accept_keep_slots(stream)
-    if first is None:
+    if first is None or (bare_from and len(first) == 1):
         stream.reset(mark)
         return None
     slots = list(first)

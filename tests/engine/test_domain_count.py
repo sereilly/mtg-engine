@@ -503,3 +503,41 @@ def test_a_keep_slot_is_labelled_by_its_narrowest_noun():
     assert _keep_slot_noun({"type_filter": "land", "subtype_filter": "plains"}) == "Plains"
     assert _keep_slot_noun({"type_filter": "artifact"}) == "artifact"
     assert _keep_slot_noun({}) == "permanent"
+
+
+# ---------------------------------------------------------------------------
+# "chooses from the …" — Global Ruin's spelling of Cataclysm's "from among the"
+# ---------------------------------------------------------------------------
+
+def test_the_bare_from_spelling_is_read_only_in_front_of_an_abbreviated_keep():
+    """"Each player chooses **from the** lands they control a land of each
+    basic land type" (Global Ruin) drops Cataclysm's "among". Reading the bare
+    spelling for *every* keep list would make "among" a word Cataclysm's own
+    sentence could lose with no change to its parse — a deletion-probe finding
+    on a shipped card — so it is admitted only where it is printed: in front of
+    an "of each" keep."""
+    tail = ", then sacrifices the rest."
+    cataclysm = (
+        "Each player chooses from among the permanents they control an "
+        "artifact, a creature, an enchantment, and a land" + tail
+    )
+    assert compile_line(cataclysm, card_name="Test").failure_reason is None
+    assert compile_line(
+        cataclysm.replace("from among", "from"), card_name="Test"
+    ).failure_reason is not None
+
+    ruin = (
+        "Each player chooses from the lands they control a land of each basic "
+        "land type" + tail
+    )
+    [keep] = compile_line(ruin, card_name="Test").instructions
+    assert keep.kind == "keep_chosen_sacrifice_rest"
+    assert keep.payload["pool"] == {"type_filter": "land"}
+    assert keep.payload["who"] == "each_player"
+    assert [slot["filter"]["subtype_filter"] for slot in keep.payload["slots"]] == [
+        "plains", "island", "swamp", "mountain", "forest",
+    ]
+    assert {slot["count"] for slot in keep.payload["slots"]} == {1}
+    # Both spellings of the pool mean the same five keeps.
+    [also] = compile_line(ruin.replace("from the", "from among the"), card_name="Test").instructions
+    assert also.payload == keep.payload
