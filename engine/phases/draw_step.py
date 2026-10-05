@@ -334,15 +334,20 @@ class DrawStepMixin:
         # exemption is one draw, not one event.
         drawn = self._draw_with_replacements(player, 1 + bonus, turn_based=True)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
-        # CR 504.2: "Second, the active player gets priority" — and CR 704.3 /
-        # CR 603.3 put the state-based check, and every ability that triggered
-        # on the draw just made, *before* that. Without it the draw sweep in
-        # ``check_state_based_actions`` had not yet read this step's draw when
-        # the window below opened on an empty stack and closed again, so
-        # "whenever a player draws a card" (Underworld Dreams, Phyrexian
-        # Tyranny) reached the stack whenever something next happened to run
-        # the sweep — a main phase later, after the drawing player had played
-        # a land they could then tap for Tyranny's {2}.
-        self.check_state_based_actions()
+        # CR 504.2: "Second, the active player gets priority" — and CR 603.3
+        # puts every ability that triggered on the draw just made onto the
+        # stack *before* that. The announcement lives on the state-based sweep,
+        # which had not yet read this step's draw when the window below opened
+        # on an empty stack and closed again, so "whenever a player draws a
+        # card" (Underworld Dreams, Phyrexian Tyranny) reached the stack
+        # whenever something next happened to run the sweep — a main phase
+        # later, after the drawing player had played a land they could then tap
+        # for Tyranny's {2}.
+        #
+        # The announcement alone, not the whole sweep: this step's own
+        # state-based check (a draw from an empty library, CR 704.5b) is still
+        # made where it always was, and moving *that* is a different change
+        # with a different blast radius.
+        self.announce_draws()
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn
