@@ -94,7 +94,7 @@ def test_every_kicker_line_is_rewritten_into_an_offer_the_reader_keys_by(kicker_
         if key is None:
             # Refused honestly: every such line must be one the gate reports.
             assert all(unread_cost_sentence(line) for line in printed), card.name
-            unread.append(card.name)
+            unread.append(card)
             continue
         offered = [
             offer.symbols
@@ -106,9 +106,19 @@ def test_every_kicker_line_is_rewritten_into_an_offer_the_reader_keys_by(kicker_
         expanded = expand_ability_lines(card.oracle_text, card_name=card.name)
         assert not any(is_kicker_line(line) for line in expanded.split("\n")), card.name
         assert any(expand_kicker_line(line) for line in printed), card.name
-    # Nothing in the pool today prints a kicker this cannot read. A set that
-    # does (Planeshift's "Kicker {A} and/or {B}") lands here by name.
-    assert unread == []
+    # A kicker this cannot read is a **refused card**, never a castable one:
+    # the gate reports the line (asserted above), so the card compiles
+    # unsupported and no player can deck it. This read "nothing in the pool
+    # prints one" until Planeshift was ingested, which prints fourteen
+    # ("Kicker—Sacrifice a land.", "Kicker {1}{G} and/or {2}{U}") -- a fact
+    # about that day's manifest written as an invariant. The invariant is that
+    # an unread kicker never rides on a supported card, and it is asked of the
+    # compiler rather than of a list of names, so the set that teaches the
+    # reader a new cost shape changes nothing here.
+    castable_unkickable = sorted(
+        card.name for card in unread if compile_card_oracle(card).supported
+    )
+    assert castable_unkickable == []
 
 
 def test_no_kicker_card_is_supported_on_a_line_that_ignores_its_kicker(kicker_cards):

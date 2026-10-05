@@ -611,6 +611,10 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",
+    # Planeshift's ingest: "you gain 2 life for each black and/or red creature
+    # *target opponent* controls" -- the target sits inside the count's noun
+    # phrase (`per_each.owner: "target_opponent"`), where no picker looks.
+    "Honorable Scout#0",
 })
 
 
