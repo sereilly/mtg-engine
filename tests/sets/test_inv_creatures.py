@@ -1728,3 +1728,26 @@ def test_pyre_zombie_is_sacrificed_to_deal_two_damage(set_pool):
     assert not game.is_on_battlefield(bears)
     assert [card.name for card in game.players[0].graveyard] == ["Pyre Zombie"]
     assert "Pyre Zombie dealt 2 damage to Grizzly Bears" in game.log
+
+
+# --- INTEGRATOR: a colour choice is not a target ---
+import pytest as _int_c_pytest
+
+from engine.oracle import compile_card_oracle as _int_c_compile
+from engine.targeting import derive_activation_spec as _int_c_activation_spec
+
+
+@_int_c_pytest.mark.parametrize("name", ["Rainbow Crow", "Kavu Chameleon"])
+def test_int_becoming_the_color_of_your_choice_points_at_nothing(set_pool, name):
+    """"{1}: This creature becomes the color of your choice until end of turn."
+    The phrase "of your choice" names a colour, chosen at resolution; the
+    permanent is the source. The activation spec says so positively
+    (``kind: none``) rather than answering None, which is what the client and
+    the activation guard read as a derivation that lost its evidence."""
+    program = _int_c_compile(set_pool("INV")[name])
+    recolor = next(
+        ability for ability in program.activated_abilities
+        if "color of your choice" in ability.source_line
+    )
+    assert _int_c_activation_spec(recolor) == {"kind": "none"}
+# --- end INTEGRATOR: a colour choice is not a target ---

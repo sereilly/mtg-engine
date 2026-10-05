@@ -848,6 +848,15 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # Shyft: the same positive "nothing to point at" — the sentence names
     # the source itself, so no picker is offered and none is missing.
     "recolor_self_chosen_color": {"kind": "none"},
+    # "{1}: This creature becomes **the color of your choice** until end of
+    # turn." (Rainbow Crow, Kavu Chameleon.) The same answer for the turn-long
+    # spelling: the colour is chosen while the effect is applied (CR 608.2d,
+    # the ``choose_color`` step in front of this one) and the permanent is the
+    # ability's own source. Without the row the ability answered None, which
+    # the activation guard reads as "the derivation lost its evidence" — it
+    # named both cards at Invasion's early promotion rehearsal, on the phrase
+    # "of your choice".
+    "recolor_self_until_eot": {"kind": "none"},
     # "This creature gains protection from **the color of your choice** until
     # end of turn." (Knight of Dawn.) The third of the same positive answer,
     # and the one that shows what the row is actually *for*: "of your choice"
