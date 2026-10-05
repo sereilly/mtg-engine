@@ -98,9 +98,19 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     if context.target_permanent_index is not None:
         new_target_player_index = game.players.index(context.target) if context.target is not None else copied.target_player_index
         new_target_permanent_index = context.target_permanent_index
+        new_target_permanent_id = None
     else:
         new_target_player_index = copied.target_player_index
         new_target_permanent_index = copied.target_permanent_index
+        # **The identity travels with the copy** (CR 707.10: "all decisions
+        # made for it, including … targets"). It was left behind: the copy took
+        # the seat and the *slot*, and an original announced by ``permanent_id``
+        # alone — which is how the web layer announces every target — has no
+        # slot. So the copy arrived holding a seat and no object, and resolved
+        # as a spell aimed at that player's face: a Forked Lightning Bolt
+        # pointed at a creature dealt its 3 to the creature's controller.
+        # ``copy_this_spell`` below has always carried it.
+        new_target_permanent_id = copied.target_permanent_id
 
     game._stack_push(
         # CR 707.10: a copy has the original's targets (or the ones the
@@ -111,6 +121,7 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
             caster_index=caster_index,
             target_player_index=new_target_player_index,
             target_permanent_index=new_target_permanent_index,
+            target_permanent_id=new_target_permanent_id,
             x_value=copied.x_value,
             # CR 707.10: the copy has the same choices as the original, so this
             # is one assignment rather than one per choice the original made.
