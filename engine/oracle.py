@@ -1480,8 +1480,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # are answered against the *source permanent's* entry record, which is why
     # they are words here and a metadata read in `engine/events.py` — nothing
     # about the payload could carry a choice made when the artifact entered.
+    # "Whenever **a player** draws a card, that player loses 2 life unless they
+    # pay {2}." (Phyrexian Tyranny.) The third value of the seat axis and not a
+    # third condition — `land_played` above reads the same three words for the
+    # same reason, and the captured word is what `events._draws_card_filter`
+    # compares: unnarrowed, so every seat's draw fires it for every watcher,
+    # the enchantment's own controller included. Captured rather than left as
+    # the absence of the group, because an absent group already means "you".
     ("draws_card",
-     r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
+     r"whenever (?:you draw|(?P<drawer>an opponent|a player) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
     # cards_drawn_this_turn record every draw path already feeds.
@@ -5291,9 +5298,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # that reader, so a card admitted here is one the counter path really
     # honours; a parsed-and-dropped "can't be countered" is worse than none,
     # because it looks like protection nobody has.
-    from .counter_conditions import uncounterable_line
+    from .counter_conditions import uncounterable_class_line, uncounterable_line
 
     if uncounterable_line(normalized):
+        return True
+    # "Creature spells can't be countered." (Gaea's Herald.) The board half of
+    # the same immunity — a static of the permanent about every spell of a
+    # type, read off the battlefield by the same counter path — and admitted
+    # for the same reason, through the reader that path enforces it with.
+    if uncounterable_class_line(normalized) is not None:
         return True
     # "<this creature> can't be the target of Aura spells" (Bartel Runeaxe,
     # Tetsuo Umezawa). Asked of the same reader `_can_be_targeted` consults, so
@@ -6606,12 +6619,25 @@ def _derived_static_claims(
     # by the counter handler at CR 608.2 — so there is no instruction, and its
     # own claim name for the reason the bans above have one: it is what the
     # *spell* says about itself, not a condition some counter carries.
-    from .counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
+    from .counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
+                                     UNCOUNTERABLE_CLAIM,
+                                     uncounterable_class_line,
+                                     uncounterable_line)
 
     if any(
         uncounterable_line(line) for line in (oracle_text or "").splitlines()
     ):
         claims.append(UNCOUNTERABLE_CLAIM)
+    # "Creature spells can't be countered." (Gaea's Herald prints it on a
+    # creature; an enchantment printing the sentence reads identically.) The
+    # board half of the same immunity, read off the battlefield by the counter
+    # handler — no instruction, so its own claim, asked through the reader that
+    # enforces it.
+    if any(
+        uncounterable_class_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(CLASS_UNCOUNTERABLE_CLAIM)
     # "Reveal the first card you draw each turn." (Rowen.) The draw seam reads
     # the permanent's own text on every draw, so there is no instruction to
     # point at — and on a card whose static half is only this sentence, no

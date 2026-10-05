@@ -211,6 +211,11 @@ def spell_cant_be_countered(card) -> bool:
     which is the only moment it can be asked: a spell has no permanent to read a
     layer off, so the printed face is the whole of what there is — and reading
     it any earlier would be reading it before the spell existed.
+
+    **Half of the question.** A spell is also uncounterable when a permanent
+    says so about its whole class (:func:`spells_made_uncounterable_by`), and
+    the counter path asks both through :func:`cant_be_countered` — this half is
+    kept on its own because it is the only one a caller with no game can ask.
     """
     return any(
         uncounterable_line(line)
@@ -218,12 +223,99 @@ def spell_cant_be_countered(card) -> bool:
     )
 
 
+# --- The board half: a permanent that says it about a class of spells -------
+#
+# "**Creature spells** can't be countered." (Gaea's Herald.) The same immunity
+# from the other direction: not a static ability of the object on the stack
+# (CR 113.6g) but of a permanent on the battlefield, naming every spell of a
+# card type — whoever is casting it, which is the whole of what separates this
+# from a "spells you control" wording that the row below does not read and
+# therefore refuses. It is to Scragnoth's line what ``cast_restrictions``'
+# board-wide "Creature spells can't be cast." is to a spell's own timing gate,
+# and it is asked at the same moment as Scragnoth's: CR 608.2, as the counter
+# resolves, of the board as it stands then — a Herald that has left by then
+# protects nothing.
+#
+# The card **type** is payload, for ``cast_restrictions._GLOBAL_CAST_BAN``'s
+# reason: "Artifact spells can't be countered." is the same sentence and must
+# need no second row.
+_UNCOUNTERABLE_SPELL_TYPES = (
+    r"(?:artifact|creature|enchantment|instant|sorcery|planeswalker|battle)"
+)
+_CLASS_UNCOUNTERABLE = re.compile(
+    rf"^(?P<type>{_UNCOUNTERABLE_SPELL_TYPES}) spells can't be countered$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own rather than :data:`UNCOUNTERABLE_CLAIM`, because that
+#: one is what a *spell* says about itself and this is what a permanent does to
+#: everybody's spells.
+CLASS_UNCOUNTERABLE_CLAIM = "class_uncounterable"
+
+
+def uncounterable_class_line(line: str) -> str | None:
+    """The card type whose spells *line* makes uncounterable, or None.
+
+    One reader, every caller: the grammar's parse claim, the two support gates
+    in ``engine/oracle.py``, ``scripts/parse_coverage.py`` and the counter path
+    below all ask it, so what is claimed and what is enforced cannot drift.
+    Anchored on the whole line — a sentence that merely contains the words
+    ("Creature spells **you control** can't be countered") names a narrower set
+    and refuses here rather than being admitted with the narrowing dropped.
+    """
+    match = _CLASS_UNCOUNTERABLE.match(_key(line))
+    return match.group("type") if match is not None else None
+
+
+def spells_made_uncounterable_by(game: "Game", card) -> str | None:
+    """The name of a permanent whose static makes *card* uncounterable, or None.
+
+    Every battlefield and no seat comparison: the sentence names nobody, so it
+    covers an opponent's creature spells as surely as its controller's.
+    ``effective_card`` rather than the printed face, because what a permanent
+    says is what layer 1 and layer 3 have made of it (CR 707.2, CR 612.1). The
+    type test is ``search_filters.card_has_type`` — a card has **every** type
+    its line names (CR 205.2), so an artifact creature spell is a creature
+    spell.
+    """
+    from .search_filters import card_has_type
+
+    for _seat, permanent in game.permanents_with_controller():
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            protected = uncounterable_class_line(raw_line)
+            if protected is not None and card_has_type(card, protected):
+                return permanent.effective_card.name
+    return None
+
+
+def cant_be_countered(game: "Game", card) -> str | None:
+    """Why the spell *card* can't be countered right now, or None if it can.
+
+    **The one question the counter path asks**, with both halves behind it: the
+    spell's own printed line (CR 113.6g) and a permanent's static about its
+    class. The return value is the reason as the log prints it, so a caller
+    cannot tell the two apart by accident and has nothing to format.
+    """
+    if spell_cant_be_countered(card):
+        return f"{getattr(card, 'name', 'that spell')} can't be countered"
+    source = spells_made_uncounterable_by(game, card)
+    if source is not None:
+        return (
+            f"{getattr(card, 'name', 'that spell')} can't be countered ({source})"
+        )
+    return None
+
+
 __all__ = [
+    "CLASS_UNCOUNTERABLE_CLAIM",
     "COUNTER_CONDITIONS",
     "UNCOUNTERABLE_CLAIM",
+    "cant_be_countered",
     "counter_condition_holds",
     "counter_condition_key",
     "counter_condition_readable",
     "spell_cant_be_countered",
+    "spells_made_uncounterable_by",
+    "uncounterable_class_line",
     "uncounterable_line",
 ]

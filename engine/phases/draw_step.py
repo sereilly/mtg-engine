@@ -334,5 +334,15 @@ class DrawStepMixin:
         # exemption is one draw, not one event.
         drawn = self._draw_with_replacements(player, 1 + bonus, turn_based=True)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
+        # CR 504.2: "Second, the active player gets priority" — and CR 704.3 /
+        # CR 603.3 put the state-based check, and every ability that triggered
+        # on the draw just made, *before* that. Without it the draw sweep in
+        # ``check_state_based_actions`` had not yet read this step's draw when
+        # the window below opened on an empty stack and closed again, so
+        # "whenever a player draws a card" (Underworld Dreams, Phyrexian
+        # Tyranny) reached the stack whenever something next happened to run
+        # the sweep — a main phase later, after the drawing player had played
+        # a land they could then tap for Tyranny's {2}.
+        self.check_state_based_actions()
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn

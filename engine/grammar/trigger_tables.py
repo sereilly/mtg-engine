@@ -313,6 +313,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # narrows on. Both spellings are listed here because both are printed, and
     # a line only one front end reads is a card refused by the other.
     ("draws_card", ("an", "opponent", "draws", "a", "card")),
+    # "Whenever **a player** draws a card" (Phyrexian Tyranny) — the unnarrowed
+    # spelling of the same event, listed for the row above's reason: the seat
+    # word is payload on ``engine/oracle.py``'s row, and a line only one front
+    # end reads is a card refused by the other.
+    ("draws_card", ("a", "player", "draws", "a", "card")),
     # "When **the chosen player draws a card with the chosen name**, …" (Booby
     # Trap.) The third spelling of the same event, and here for the reason the
     # second is: a line only one front end reads is a card the other refuses.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
-from ..counter_conditions import spell_cant_be_countered
+from ..counter_conditions import cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
@@ -737,10 +737,14 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
         # that is a `Permanent`'s accessor for what a permanent says, and this
         # object is a card on the stack (CR 613.1: its printed face is all there
         # is).
-        if spell_cant_be_countered(target.card):
-            game.log.append(
-                f"{card.name}: {target.card.name} can't be countered"
-            )
+        #
+        # …and "**Creature spells** can't be countered." (Gaea's Herald) is the
+        # same question asked of the battlefield instead of the spell — one
+        # predicate with both halves behind it, so no counter path can come to
+        # ask only one of them.
+        uncounterable = cant_be_countered(game, target.card)
+        if uncounterable is not None:
+            game.log.append(f"{card.name}: {uncounterable}")
             return True, "resolved"
         if color_filter and color_filter not in game._stack_item_colors(target):
             game.log.append(f"{card.name}: {target.card.name} is not color {color_filter}, cannot counter")

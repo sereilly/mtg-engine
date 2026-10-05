@@ -1578,6 +1578,12 @@ def _draws_card_filter(
     drawer = trig.condition.payload.get("drawer")
     if drawer == "an opponent":
         return seat != observer
+    if drawer == "a player":
+        # "Whenever **a player** draws a card" (Phyrexian Tyranny) — the
+        # unnarrowed spelling, so every seat's draw fires it, the controller's
+        # own included. The printed word is the whole narrowing, exactly as it
+        # is one event over in :func:`_land_played_filter`.
+        return True
     if drawer == "the chosen player":
         # "When **the chosen player** draws a card **with the chosen name**"
         # (Booby Trap). Both narrowings are answered off the permanent's own

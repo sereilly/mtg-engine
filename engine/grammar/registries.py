@@ -56,7 +56,10 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_free_cast_line,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
-from ..counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
+from ..counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
+                                  UNCOUNTERABLE_CLAIM,
+                                  uncounterable_class_line,
+                                  uncounterable_line)
 from ..cost_x_definitions import (cast_x_ceiling_line, cast_x_definition_line,
                                   cast_x_floor_line)
 from ..damage_source_colors import colorless_source_line
@@ -153,6 +156,14 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # reader that enforces it and the claim cannot outlive the enforcement.
     if uncounterable_line(normalized):
         return UNCOUNTERABLE_CLAIM
+
+    # engine/counter_conditions.py -- the board half of the same immunity:
+    # "Creature spells can't be countered." (Gaea's Herald.) A permanent's
+    # static about every spell of a type, read off the battlefield by the same
+    # counter path at the same moment. Claimed through the reader that enforces
+    # it, so the claim cannot outlive the enforcement.
+    if uncounterable_class_line(normalized) is not None:
+        return CLASS_UNCOUNTERABLE_CLAIM
 
     # engine/cast_restrictions.py — the *board* half of CR 601.3a: "Creature
     # spells can't be cast." (Aether Storm.) Not a gate the casting card prints
