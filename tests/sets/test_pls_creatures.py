@@ -465,3 +465,107 @@ def test_w1g6_voice_of_alls_protection_follows_the_record_and_the_ability(set_po
     game._recompute_continuous_effects()
     assert game._protection_colors(voice) == set()
     assert not game._has_keyword(voice, "flying")
+
+
+def _w1g6_elder_table(set_pool):
+    """A Samite Elder with a green, a three-coloured and a colourless
+    permanent beside it, facing a red creature."""
+    game, mine, theirs = _w1g6_table(
+        set_pool,
+        ["Samite Elder", "Grizzly Bears", "Questing Phelddagrif", "Howling Mine", "Forest"],
+        ["Hill Giant"],
+    )
+    return game, mine, theirs[0]  # _w1g6_elder_table
+
+
+def _w1g6_elder_names(game, target):
+    """Activate the Elder naming *target* and resolve it."""
+    activated = game.queue_permanent_ability(
+        0, "Samite Elder", ability_index=0, target_permanent_ids=[target.permanent_id],
+    )
+    assert activated.supported, activated.details
+    _w1g6_resolve_stack(game)
+    return activated  # _w1g6_elder_names
+
+
+def test_w1g6_samite_elder_protects_its_team_from_each_colour_of_the_chosen_permanent(set_pool):
+    """"{T}: Choose target permanent you control. Creatures you control gain
+    protection from each of that permanent's colors until end of turn."
+    CR 702.16g: one protection ability per colour. The green-white-blue
+    Phelddagrif is named, so every creature the Elder's controller has — the
+    Elder and the Phelddagrif included — has protection from all three; the
+    artifact beside them (not a creature) and the opponent's Giant have none,
+    and it is all gone at cleanup."""
+    game, mine, giant = _w1g6_elder_table(set_pool)
+    elder, bears, phelddagrif, artifact, _forest = mine
+    _ability, spec = _w1g6_ability(elder.card)
+    assert spec == {"kind": "permanent", "own_only": True}
+
+    _w1g6_elder_names(game, phelddagrif)
+    assert elder.tapped
+    for creature in (elder, bears, phelddagrif):
+        assert game._protection_colors(creature) == {"G", "U", "W"}, creature.card.name
+    assert game._protection_colors(artifact) == set()
+    assert game._protection_colors(giant) == set()
+
+    game.resolve_cleanup_step(0)
+    assert game._protection_colors(bears) == set()
+
+
+def test_w1g6_samite_elder_may_only_choose_its_controllers_own_permanent(set_pool):
+    """"…target permanent **you control**": the opponent's Giant is not a legal
+    announcement, and nothing is tapped or granted for trying."""
+    game, mine, giant = _w1g6_elder_table(set_pool)
+    refused = game.queue_permanent_ability(
+        0, "Samite Elder", ability_index=0, target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported
+    assert not mine[0].tapped and game.stack == []
+
+
+def test_w1g6_samite_elder_reads_the_chosen_permanents_colours_as_it_resolves(set_pool):
+    """The colours are the chosen permanent's own, read through layer 5 as the
+    ability resolves (CR 608.2h) — not the Elder's, and not the printed ones.
+    A colourless artifact names no colour, so nobody gains anything (the
+    permanent that is recorded is the artifact that was chosen, never the first
+    creature on the battlefield in its place); the green Bears turned black
+    for the turn give protection from black; and a permanent that has left by
+    then gives nothing."""
+    game, mine, _giant = _w1g6_elder_table(set_pool)
+    elder, bears, _phelddagrif, artifact, _forest = mine
+    _w1g6_elder_names(game, artifact)
+    assert game._protection_colors(elder) == set() == game._protection_colors(bears)
+
+    game, mine, _giant = _w1g6_elder_table(set_pool)
+    elder, bears, _phelddagrif, _artifact, _forest = mine
+    bears.metadata["color_override_until_eot"] = "B"
+    game._recompute_continuous_effects()
+    _w1g6_elder_names(game, bears)
+    assert game._protection_colors(elder) == {"B"} == game._protection_colors(bears)
+
+    game, mine, _giant = _w1g6_elder_table(set_pool)
+    elder, bears, phelddagrif, _artifact, _forest = mine
+    assert game.queue_permanent_ability(
+        0, "Samite Elder", ability_index=0, target_permanent_ids=[phelddagrif.permanent_id],
+    ).supported
+    game.remove_from_battlefield(phelddagrif)
+    _w1g6_resolve_stack(game)
+    assert game._protection_colors(elder) == set() == game._protection_colors(bears)
+
+
+def test_w1g6_samite_elders_protection_stops_a_spell_of_the_named_colour(set_pool):
+    """What the grant buys: with the green Bears named, a green Giant Growth
+    can no longer be aimed at the Elder's creatures and a red Bolt still can."""
+    game, mine, _giant = _w1g6_elder_table(set_pool)
+    elder, bears, _phelddagrif, _artifact, _forest = mine
+    _w1g6_elder_names(game, bears)
+    assert game._protection_colors(elder) == {"G"}
+
+    game.players[1].hand.extend(
+        _w1g6_card(set_pool, name) for name in ("Giant Growth", "Lightning Bolt")
+    )
+    refused = game.queue_from_hand(1, "Giant Growth", target_permanent_ids=[elder.permanent_id])
+    assert not refused.supported and "illegal target" in refused.details
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[elder.permanent_id],
+    ).supported

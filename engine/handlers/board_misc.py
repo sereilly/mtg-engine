@@ -85,8 +85,34 @@ def choose_target_permanent(game: Game, instruction: OracleInstruction, context:
 
     It still refuses when the target is gone (CR 608.2b), so the log says the
     spell found nothing rather than saying nothing at all.
+
+    **The chosen object is whatever the printed noun phrase admits.** "Choose
+    target **permanent** you control." (Samite Elder.) The resolver's default
+    asks for a creature — every card that printed this sentence before named
+    one — so an artifact or a land the player chose failed it, fell through to
+    the scan, and the first creature on that battlefield was recorded in its
+    place: the Elder's team got protection from the Elder's own colour whatever
+    was aimed at. A description that names no creature is therefore resolved
+    against itself, through ``subject_matches``; one that does keeps the
+    default, so no shipped card's resolution moves.
     """
-    chosen = resolve_target_permanent(game, context)
+    described = (instruction.payload.get("targets") or {}).get("filter") or {}
+    predicate = None
+    if described.get("type_filter") != "creature":
+        from ..subject_filters import subject_matches
+
+        observer = (
+            game.players.index(context.caster)
+            if context.caster in game.players else None
+        )
+
+        def predicate(candidate) -> bool:
+            return subject_matches(
+                game, candidate, described, observer=observer,
+                source=context.source_permanent,
+            )
+
+    chosen = resolve_target_permanent(game, context, predicate=predicate)
     if chosen is None:
         game.log.append(f"{context.card.name} had no legal target")
         return True, "no target"

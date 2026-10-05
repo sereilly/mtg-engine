@@ -105,6 +105,22 @@ def _names_the_chosen_cards(stream: TokenStream) -> bool:
     )
 
 
+def _names_that_permanents_colors(stream: TokenStream) -> bool:
+    """Whether the rest of the line says "that permanent's colors" anywhere.
+
+    :func:`_names_the_chosen_cards`' twin one characteristic over, and a token
+    scan for its reason: the binder is a phrase inside a keyword list, not a
+    production, so the question is asked over the rest of the line. "Choose
+    target permanent you control. Creatures you control gain protection from
+    each of **that permanent's colors** until end of turn." (Samite Elder.)
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        window == ("that", "permanent", "'s", "colors")
+        for window in zip(words, words[1:], words[2:], words[3:])
+    )
+
+
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":
     """``Choose target creature.`` — a sentence whose whole content is
     CR 601.2c's choosing of targets (Reincarnation, Glyph of Life).
@@ -212,6 +228,13 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # is not a production at all, so the question is asked over the rest of
         # the line exactly as the player arm asks its own.
         binds = _names_the_chosen_cards(stream)
+    if not binds:
+        # …or one reading a *characteristic* of what was chosen: "…gain
+        # protection from each of **that permanent's colors**" (Samite Elder).
+        # The fourth answer to the one question; the keyword-list reader is
+        # what consumes the words, and its lowering is what refuses them where
+        # no step in front recorded a permanent.
+        binds = _names_that_permanents_colors(stream)
     if not binds:
         # …or a loop over the set this sentence just named — "**For each of
         # those creatures,** its controller may pay …" (Winter's Chill). The

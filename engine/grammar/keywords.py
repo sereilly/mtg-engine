@@ -58,6 +58,22 @@ PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR = (
 #: lowering has to know whether to put the question in.
 PROTECTION_FROM_THE_CHOSEN_COLOR = "protection from the chosen color"
 
+#: "…protection from **each of that permanent's colors**" (Samite Elder). The
+#: fourth string, and the first whose argument is not a choice at all: it is a
+#: *set* of colours read off an object — CR 702.16g's shorthand for one
+#: protection ability per colour, with the colours taken from the permanent an
+#: earlier sentence of the same effect chose ("Choose target permanent you
+#: control.") as the effect is applied (CR 608.2h). Opal Titan prints the same
+#: shorthand about "that spell", where the object is the trigger's event and
+#: the reader is the animation's.
+#:
+#: Not a member of ``CHOSEN_COLOR_PROTECTIONS`` below: those three read one
+#: colour off the scratchpad's colour slot, and this reads a permanent off the
+#: chosen-target slot and may name none or several.
+PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS = (
+    "protection from each of that permanent's colors"
+)
+
 #: All three, for the reader that answers them alike: every one is granted from
 #: the colour this resolution's choosing step recorded
 #: (``oracle_types.CHOSEN_COLOR_THIS_WAY``), and they differ only in who asked.
@@ -155,6 +171,8 @@ def _protection_quality_name(stream: TokenStream) -> str | None:
         return PROTECTION_FROM_CHOSEN_COLOR
     if stream.accept_phrase("the", "chosen", "color"):
         return PROTECTION_FROM_THE_CHOSEN_COLOR
+    if stream.accept_phrase("each", "of", "that", "permanent", "'s", "colors"):
+        return PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS
     colour = stream.peek_word()
     if colour is None:
         return None
