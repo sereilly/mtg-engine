@@ -58,6 +58,7 @@ from ..land_animation import (
     LAND_ANIMATION_KIND,
     LandAnimation,
     land_animation_from_payload,
+    land_animation_reaches,
 )
 from ..zone_copies import (
     ZONE_TOP_COPY_KIND,
@@ -1702,12 +1703,7 @@ class PermanentStateMixin:
         # compiled program rather than matched by name. Two `card.name ==`
         # comparisons stood here; the payload carries the land type, the P/T and
         # the colour, so a third animator needs no code (engine/land_animation.py).
-        animations = [
-            land_animation_from_payload(instr.payload)
-            for perm in all_permanents
-            for instr in compile_card_oracle(perm.effective_card).instructions
-            if instr.kind == LAND_ANIMATION_KIND
-        ]
+        animations = self._board_land_animations(all_permanents)
         self._refresh_linked_tapped_pumps(all_permanents)
         self._refresh_global_statics(all_permanents)
         self._refresh_static_land_types(all_permanents)
@@ -2315,8 +2311,28 @@ class PermanentStateMixin:
                     return True
         return False
 
+    def _board_land_animations(
+        self, all_permanents: list[Permanent]
+    ) -> list[tuple[Permanent, LandAnimation]]:
+        """Every land animator on the battlefield, **with its source**.
+
+        The source travels with the animation because the template can name it:
+        "Lands **you control** are 2/2 creatures…" (Natural Emergence) is the
+        lands of whoever controls that enchantment (CR 109.5), which a bare
+        ``LandAnimation`` cannot say. Read by the layer-4 refresh below and by
+        ``_recalculate_lord_buffs``' layer-6 pass, so the two walk one list.
+        """
+        return [
+            (perm, land_animation_from_payload(instr.payload))
+            for perm in all_permanents
+            for instr in compile_card_oracle(perm.effective_card).instructions
+            if instr.kind == LAND_ANIMATION_KIND
+        ]
+
     def _refresh_land_animation(
-        self, all_permanents: list[Permanent], animations: list[LandAnimation]
+        self,
+        all_permanents: list[Permanent],
+        animations: list[tuple[Permanent, LandAnimation]],
     ) -> None:
         """Land animators turn lands of a named type into creatures while the
         source is on the battlefield (CR 613 layer 4).
@@ -2343,12 +2359,13 @@ class PermanentStateMixin:
             animation = (
                 next(
                     (
-                        a for a in animations
-                        # ``land_type`` None is the untyped printing — "All
-                        # lands are 1/1 creatures that are still lands" (Living
-                        # Plane) — which restricts nothing beyond being a land,
-                        # already established by the guard below.
-                        if a.land_type is None or permanent.has_type(a.land_type)
+                        a for source, a in animations
+                        # Which lands is ``land_animation_reaches``' answer: the
+                        # printed land type (None is the untyped "All lands
+                        # are…", Living Plane) and, since Natural Emergence,
+                        # whose lands — "Lands **you control**" is the source's
+                        # controller, which is why the source rides the list.
+                        if land_animation_reaches(self, source, a, permanent)
                     ),
                     None,
                 )
@@ -3740,6 +3757,27 @@ class PermanentStateMixin:
                         continue
                 for keyword in cs_keywords:
                     add_derived_grant(recipient, keyword)
+
+        # Step 3b: the keywords a land animator gives the lands it animates —
+        # "Lands you control are 2/2 creatures **with first strike**." (Natural
+        # Emergence.) Layer 6, and written here for step 3's reason: this pass
+        # owns the derived-grant channel's clear and rebuild, so a grant made
+        # by the layer-4 refresh would be wiped the next time this ran alone.
+        # Which lands is the same predicate that refresh asks
+        # (``land_animation_reaches``), so a land cannot have the keyword
+        # without being one the animator reaches.
+        for source_perm, animation in self._board_land_animations(all_perms):
+            if not animation.keywords:
+                continue
+            for target_perm in all_perms:
+                if target_perm.card.primary_type != "land":
+                    continue
+                if not land_animation_reaches(
+                    self, source_perm, animation, target_perm
+                ):
+                    continue
+                for keyword in animation.keywords:
+                    add_derived_grant(target_perm, keyword)
 
         # Step 4: an ability an **Aura** grants its host in quotes *while the
         # host answers a criterion* — 'As long as enchanted permanent is red or

@@ -359,16 +359,24 @@ def _lower_granted_keywords(
     # only difference — so it is a payload key rather than a second kind. The
     # key is emitted only for the wider reading, which leaves every payload
     # written before it byte-identical, and the handler defaults to creatures.
+    #
+    # "**All lands** gain shroud until end of turn." (Skyshroud Blessing.) The
+    # same grant over a board named by another card type. The handler has two
+    # widths — creatures, or every permanent — so a type that is neither is
+    # carried the way Stampede's "attacking" is: as a filter over the wider
+    # board, tested by the one subject matcher. The branch used to admit only
+    # the two widths, which left every other typed sweep at "unsupported
+    # keyword-grant subject" for a grant the handler already performs.
     if (
         isinstance(node.subject, ast.TargetSpec)
         and node.subject.quantifier == "all"
-        and node.subject.filter.card_types in ((), ("creature",))
         and node.subject.filter.controller in ("you", None)
         # The handler resolves the board once, at resolution (CR 611.2c), so a
         # duration it can end is the only requirement — which the table above
         # has already checked.
         and duration == "end_of_turn"
     ):
+        typed = node.subject.filter.card_types not in ((), ("creature",))
         # "creatures you control **blocking that creature** gain first strike"
         # (Tidal Flats). A relation to the object the loop around this sentence
         # bound, not a characteristic of the blocker — so it has no
@@ -383,7 +391,7 @@ def _lower_granted_keywords(
             frozenset({"card_types", "controller"}) | carried,
         )
         described = _filter_payload(node.subject.filter, carried_separately=carried)
-        if leftover:
+        if leftover or typed:
             # "**Attacking** creatures get +1/+0 and gain trample until end of
             # turn" (Stampede). A narrowing the *matcher* can test is carried as
             # a filter rather than refused — the P/T half of this very sentence
@@ -402,9 +410,9 @@ def _lower_granted_keywords(
         for keyword in node.keywords:
             _check_grantable(keyword, node)
         team_payload: dict[str, object] = {"keywords": tuple(node.keywords)}
-        if not node.subject.filter.card_types:
+        if typed or not node.subject.filter.card_types:
             team_payload["every_permanent"] = True
-        if leftover:
+        if leftover or typed:
             # The narrowing travels whole, and with it the fact that the
             # sentence named no controller: "attacking creatures" is every
             # attacking creature, and Stampede is castable by the defending
