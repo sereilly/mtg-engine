@@ -227,4 +227,26 @@ def test_w1g1_orims_touch_prevents_two_or_four(set_pool):
             }
             # …seat 1 was given no shield.
             assert deal_damage(game, event).dealt == survives
+
+
+def test_w1g1_a_copy_of_a_kicked_spell_is_kicked(set_pool):
+    """CR 707.10: a copy of a spell copies the choices made as it was cast, and
+    paying a kicker is one (CR 702.33d). Fork on a kicked Dismantling Blow puts
+    a kicked copy on the stack: the copy resolves first, destroys the artifact
+    and draws the two cards — and the original, its only target gone, is
+    removed by CR 608.2b and draws nothing."""
+    lea = set_pool("LEA")
+    game = _w1g1_instant_duel(set_pool, "Dismantling Blow", {"W": 3, "U": 3, "R": 2})
+    game.players[0].hand.append(lea["Fork"])
+    ring = _w1g1_onto_battlefield(game, 1, lea["Sol Ring"])
+    assert game.queue_from_hand(
+        0, "Dismantling Blow", optional_cost_payments={"{2}{U}": 1},
+        target_permanent_ids=[ring.permanent_id],
+    ).supported
+    assert game.queue_from_hand(0, "Fork").supported
+    _w1g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(ring)
+    assert [card.name for card in game.players[0].hand] == ["Forest", "Forest"]
+    assert "Dismantling Blow (copy) resolved" in game.log
 # end of the W1G1 instants block

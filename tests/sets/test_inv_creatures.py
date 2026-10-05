@@ -511,4 +511,25 @@ def test_w1g1_the_ai_does_not_kick_for_a_half_with_nothing_to_hit(set_pool):
     kicked = _w1g1_choose_cast_action(game, 0)
     assert kicked.optional_cost_payments == {"{1}{W}": 1}
     assert kicked.target_permanent_ids == [aura.permanent_id]
+
+
+def test_w1g1_a_copy_of_a_kicked_creature_was_not_kicked(set_pool):
+    """Whether a permanent was kicked is a fact about the spell that became it,
+    not a copiable value (CR 707.2): a Clone of a kicked Kavu Titan is a 2/2
+    with no trample and no counters, beside the 5/5 it copied."""
+    game = _w1g1_duel(set_pool, ["Kavu Titan"])
+    game.players[0].hand.append(set_pool("LEA")["Clone"])
+    titan = _w1g1_cast(game, "Kavu Titan", kick="{2}{G}")
+    result = game.cast_from_hand(
+        0, "Clone", target_player_index=0, target_permanent_index=0,
+        target_permanent_ids=[titan.permanent_id],
+    )
+    assert result.supported, result
+    _w1g1_resolve_stack(game)
+    clone = next(p for p in game.controlled_by(0) if p is not titan)
+
+    assert clone.effective_card.name == "Kavu Titan"
+    assert (clone.effective_power, clone.effective_toughness) == (2, 2)
+    assert not game._has_keyword(clone, "trample")
+    assert (titan.effective_power, titan.effective_toughness) == (5, 5)
 # end of the W1G1 creatures block
