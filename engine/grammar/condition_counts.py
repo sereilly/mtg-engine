@@ -512,12 +512,26 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             shared_name = bool(
                 stream.accept_phrase("with", "the", "same", "name", "as", "one", "another")
             )
+            # "…a permanent **of each color**" (Spirit of Resistance). The
+            # other relation over the counted set, read where it is printed —
+            # behind the noun — and kept off the filter for ``shared_name``'s
+            # reason. Only on the plain singular: "no creature of each color",
+            # "two or more permanents of each color" and "another permanent of
+            # each color" are sentences nothing prints, and each would need the
+            # qualifier distributed over five colours in a way the words do not
+            # settle — so they stop here with the phrase unconsumed and the
+            # line refuses.
+            each_color = False
+            if not negated and bound is None and not another and not shared_name:
+                each_color = bool(stream.accept_phrase("of", "each", "color"))
             comparison = None
             if negated:
                 comparison = ast.Comparison("eq", ast.Fixed(0))
             elif bound is not None:
                 comparison = ast.Comparison(bound[0], ast.Fixed(bound[1]))
-            first = ast.Controls(player, filt, comparison, shared_name)
+            first = ast.Controls(
+                player, filt, comparison, shared_name, of_each_color=each_color
+            )
 
             # "you control an Urza's Mine **and** an Urza's Tower" (the
             # Antiquities cycle). The conjunction shares one player and one
@@ -543,7 +557,15 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     except GrammarError:
                         stream.reset(conj)
                         break
-                    parts.append(ast.Controls(player, extra))
+                    # "…and a creature **of each color**" (Coalition Victory's
+                    # second conjunct): the relation belongs to the noun it
+                    # follows, so each conjunct reads its own.
+                    parts.append(ast.Controls(
+                        player, extra,
+                        of_each_color=bool(
+                            stream.accept_phrase("of", "each", "color")
+                        ),
+                    ))
                 if len(parts) > 1:
                     return ast.EveryOf(tuple(parts))
             return first

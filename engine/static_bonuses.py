@@ -684,6 +684,25 @@ def conditional_static_holds(
             # from inside a matcher loop that looks like it tried — but an
             # unknown seat word can only arrive from a payload no gate admitted.
             return False
+        if condition.get("of_each_color"):
+            # "As long as you control a permanent **of each color**, …"
+            # (Spirit of Resistance.) A relation over the matching set rather
+            # than a count of it, so it is answered before the comparator: the
+            # five colours must each be found among the permanents the noun
+            # names, a gold one answering for each of its own (CR 105.2b). The
+            # lowering admits the key for "you" alone; any other seat word is
+            # a payload nobody built, and it answers False rather than pooling
+            # several boards into one rainbow.
+            if who != "you":
+                return False
+            from .object_colors import of_each_color
+
+            return of_each_color(game, (
+                perm for perm in game.controlled_by(seat)
+                if subject_matches(
+                    game, perm, described, observer=seat, source=pivot
+                )
+            ))
         return _controls_count_holds(
             game, seats, described, int(wanted), op,
             # "**No** opponent controls …" (Kavu Runner) is one statement about

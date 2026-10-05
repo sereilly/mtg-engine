@@ -67,6 +67,15 @@ class Controls:
     #: bounding the whole matching set and bounds the largest same-name group
     #: within it.
     shared_name: bool = False
+    #: "…you control a permanent **of each color**" (Spirit of Resistance) /
+    #: "a creature of each color" (Coalition Victory). A relation over the
+    #: *set* the noun phrase names, for ``shared_name``'s reason exactly: no
+    #: single permanent can answer whether the five colours are all
+    #: represented, so it is not a key an ``ObjectFilter`` could carry. Set,
+    #: the clause stops asking "is there one" and asks whether every colour
+    #: (CR 105.1) is found among the matching permanents — one gold permanent
+    #: answering for each of its colours (CR 105.2b).
+    of_each_color: bool = False
 
 
 @dataclass(frozen=True)

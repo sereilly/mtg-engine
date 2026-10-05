@@ -914,6 +914,13 @@ _KIND_TO_SPEC: dict[str, dict] = {
     "grant_team_prevention_shield": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },
+    # Samite Ministration and Protective Sphere print the phrase behind a
+    # blanket — "Prevent all damage … this turn by a source of your choice" —
+    # and so run the same prompt. How long the shield then lasts is the
+    # interceptor's business, not the picker's.
+    "grant_chosen_source_blanket_shield": {
+        "kind": "permanent", "source_of_choice": True, "also_stack": True,
+    },
     "arm_mirror_damage": {
         "kind": "permanent", "source_of_choice": True, "also_stack": True,
     },

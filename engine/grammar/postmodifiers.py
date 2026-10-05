@@ -490,6 +490,19 @@ def _parse_postmodifiers(
             ):
                 d.enchanted_only = True
                 continue
+            # "…all other creatures **that share a color with it**" (Spreading
+            # Plague). CR 105.2's relation to the object a pronoun names. Both
+            # verb numbers for the "enchanted" arms' reason one screen up: the
+            # agreement is with the head noun and says nothing about the
+            # restriction. Only the pronoun — "with **target creature**" or
+            # "with the most common color" is a different far end, read by
+            # whatever owns that phrase, and this arm consumes its whole clause
+            # or nothing.
+            elif stream.accept_phrase(
+                "share", "a", "color", "with", "it"
+            ) or stream.accept_phrase("shares", "a", "color", "with", "it"):
+                d.shares_color_with_it = True
+                continue
             # "…**that doesn't have cumulative upkeep**" (Balduvian Shaman).
             # The relative-clause spelling of "without <keyword>", which
             # `with_clauses` reads — the same restriction and the same field,

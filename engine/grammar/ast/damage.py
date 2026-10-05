@@ -401,6 +401,16 @@ class PreventedRider:
 
     effect: str
     source_colors: tuple[str, ...] = ()
+    #: "**Whenever** damage from a black or red source is prevented this way
+    #: **this turn**, you gain that much life." (Samite Ministration.) The same
+    #: rider as Shadowbane's "**If** damage from a black source is prevented
+    #: this way, …", spelled for a shield that stays armed all turn: "if" is
+    #: asked of the one instance a one-shot shield absorbs, "whenever … this
+    #: turn" of each of the several a blanket does. The interceptor does the
+    #: same thing either way — run the rider after each prevention (CR 615.5) —
+    #: so this records only which spelling was printed, and the lowering holds
+    #: the spelling to the shield it belongs with.
+    repeating: bool = False
     #: "For each 1 damage prevented this way, put a **+1/+1** counter on that
     #: creature." (Temper.) Which counter the rider places — payload, because
     #: CR 122.1 lets a counter have any name and a second card printing this
@@ -493,6 +503,14 @@ class PreventDamage:
     # None is the ordinary prevention, which is every other card that prints
     # one.
     unaffected_if_cost_paid: "ObjectFilter | None" = None
+    #: "…by a source of your choice **that shares a color with the mana spent
+    #: on this activation cost**." (Protective Sphere.) A property the chosen
+    #: source must have (CR 609.7b, rechecked when the damage would be dealt),
+    #: where the colours it is tested against are not printed at all: they are
+    #: whatever CR 107.4's symbols the payer used, known only once the cost has
+    #: been paid. So it is a flag beside ``from_filter`` rather than a colour on
+    #: it — the filter holds printed words, and there is no word here to hold.
+    source_shares_spent_mana_color: bool = False
     alternate_amount: "Amount | None" = None
     alternate_subject: "ObjectFilter | None" = None
     #: "Prevent the next 5 damage that would be dealt this turn to any number

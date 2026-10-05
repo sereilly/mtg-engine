@@ -1150,6 +1150,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"whenever a player casts a (?P<cast_colors>(?:white|blue|black|red|green)"
      r"(?:,? (?:or )?(?:white|blue|black|red|green))+) spell"),
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
+    # "Whenever a player casts a **multicolored** spell". Printed where a
+    # colour word goes and not a colour (CR 105.4) — a count of them, two or
+    # more (CR 105.2b) — so it is a marker group of its own rather than a sixth
+    # word in the colour alternation above, which would be looked up in the
+    # colour table and found to name none. One narrowing on all three cast
+    # scopes, read by the one helper (`events._cast_narrowing_admits`).
+    ("spell_cast",
+     r"whenever a player casts a (?P<cast_multicolored>)multicolored spell"),
     # The same narrowing on the spell's *type* rather than its colour (Urza's
     # Chalice). Written with the group name `you_cast_spell`'s rows already use,
     # so all three cast kinds ask one helper (`events._cast_narrowing_admits`)
@@ -1222,6 +1230,10 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
      r"(?:,? (?:or )?(?:white|blue|black|red|green))+) spell"),
     ("opponent_casts_spell",
      r"whenever an opponent casts a (?P<color_word>white|blue|black|red|green) spell"),
+    # "Whenever an opponent casts a **multicolored** spell, you gain 4 life."
+    # (Rewards of Diversity.) The marker its player-scoped twin above carries.
+    ("opponent_casts_spell",
+     r"whenever an opponent casts a (?P<cast_multicolored>)multicolored spell"),
     # "…a spell **that targets you or a creature you control**"
     # (Reparations). A narrowing on the spell's *targets* rather than on the
     # spell, so it is a marker group the cast filter reads against what the
@@ -1279,6 +1291,12 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # a tribe needs `fetch_vocabulary.py` and nothing here — and matched
     # case-insensitively against the *printed subtype*, not against the whole
     # type line, so "Dog" does not answer a "Dogpile".
+    # "Whenever you cast a **multicolored** spell". **Before the subtype row
+    # below**, whose `[a-z][a-z-]+` would take the word for a creature type —
+    # and a trigger narrowed to a subtype called "multicolored" compiles,
+    # reports supported and never fires.
+    ("you_cast_spell",
+     r"whenever you cast a (?P<cast_multicolored>)multicolored spell"),
     ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     # "When **you play a card**, sacrifice this artifact." (Juju Bubble.)
@@ -6670,7 +6688,20 @@ def _derived_static_claims(
     # naming a type, read off the board at every cast — so there is no
     # instruction, and the enchantment's whole text is this sentence, which
     # means no claim is an unsupported card however well the cap works.
-    from .cast_restrictions import SPELL_CAP_CLAIM, spell_cap_line
+    from .cast_restrictions import (LAST_CAST_COLOR_BAN_CLAIM,
+                                    SPELL_CAP_CLAIM, last_cast_color_ban_line,
+                                    spell_cap_line)
+
+    # "Players can't cast spells that share a color with the spell most
+    # recently cast this turn." (Mana Maze.) Read off the board at every
+    # announcement, so there is no instruction to produce — and the
+    # enchantment's whole text is this sentence, so without a claim it reports
+    # unsupported however well the ban works.
+    if any(
+        last_cast_color_ban_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(LAST_CAST_COLOR_BAN_CLAIM)
 
     if any(
         spell_cap_line(line) is not None

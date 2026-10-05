@@ -140,7 +140,13 @@ def _lower_prevent_damage(
     counter_rider = _counted_pool_counter_rider(node)
     if counter_rider is None and node.prevented_rider is not None and (
         node.from_filter != ast.ObjectFilter()
-        or not isinstance(node.amount, ast.Fixed)
+        # A printed number, or the blanket: "Prevent **all** damage … by a
+        # source of your choice. Whenever damage from a black or red source is
+        # prevented this way this turn, …" (Samite Ministration.) The same
+        # unnarrowed chosen source with the whole turn behind it;
+        # ``_lower_chosen_source_blanket`` is what then holds the rider to the
+        # one it performs.
+        or not isinstance(node.amount, (ast.Fixed, ast.AllOf))
         or node.combat_only
         or node.dealt_by is not None
     ):

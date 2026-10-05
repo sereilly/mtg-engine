@@ -46,6 +46,20 @@ _TYPES = "noncreature|artifact|creature|enchantment|instant|sorcery|land"
 _TYPE_LIST = rf"(?:{_TYPES})(?:(?:,| and| or)+ (?:{_TYPES}))*"
 _COLOURS = "|".join(_COLOR_WORD_TO_SYMBOL)
 _MANA_SYMBOLS = frozenset({"W", "U", "B", "R", "G", "C"})
+#: "**Multicolored** spells cost {2} less to cast." (Urza's Filter.) Printed in
+#: the slot a colour word takes and answered by the same reading of the taxed
+#: object's colours, but it is not a colour (CR 105.4) — it is a count of them
+#: (CR 105.2b: two or more). So it rides ``CostModifier.colour`` as this word
+#: rather than as a mana symbol, and :func:`_subject_matches` is the one place
+#: that tells the two apart. A reader that took the field for a symbol would
+#: look for a colour called "multicolored" and tax nothing, which is the
+#: direction that fails closed.
+MULTICOLORED = "multicolored"
+#: The words the colour slot of a *spell* subject may print. The activated-
+#: ability templates below keep ``_COLOURS`` alone: nothing prints "activated
+#: abilities of multicolored creatures", and admitting it there would be a
+#: narrowing those readers charge without ever having been shown a card.
+_SPELL_COLOURS = f"{_COLOURS}|{MULTICOLORED}"
 
 
 @dataclass(frozen=True)
@@ -60,7 +74,9 @@ class CostModifier:
                   offer* and never the spell's own mana cost, so a reader of
                   either of the first two must not see it and vice versa
     reduces    -- whether this takes mana off rather than adding it
-    colour     -- mana symbol the affected object must have, or None for any
+    colour     -- mana symbol the affected object must have, or None for any;
+                  ``MULTICOLORED`` where the sentence prints that word in the
+                  colour's place (Urza's Filter) — two or more colours
     card_types -- card types the affected object must have *one of*, or empty
                   for any; a "non"-prefixed name excludes instead of requiring.
                   A list ("Instant and enchantment spells", Mana Matrix) is
@@ -242,10 +258,10 @@ class CostReduction:
 # names is not in the sentence at all, it is on the permanent (CR 614.1c).
 _CHOSEN_TYPE_TAIL = r"(?: of the chosen type)"
 _SPELL_SUBJECT_TEXT = (
-    rf"(?:(?:{_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
+    rf"(?:(?:{_SPELL_COLOURS}) )?(?:(?:{_TYPE_LIST}) )?spells?{_CHOSEN_TYPE_TAIL}?"
 )
 _SPELL_SUBJECT = re.compile(
-    rf"^(?:(?P<colour>{_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?"
+    rf"^(?:(?P<colour>{_SPELL_COLOURS}) )?(?:(?P<type>{_TYPE_LIST}) )?"
     rf"spell(?P<plural>s)?(?P<chosen>{_CHOSEN_TYPE_TAIL})?$"
 )
 # Split only where the "and" separates two *whole* subjects. `_TYPE_LIST`
@@ -262,7 +278,12 @@ _SUBJECT_SPLIT = re.compile(r"(?<=spells) and ")
 # reason directly above: who casts it and what it is called are independent
 # axes, and pairing them as templates is quadratic in the phrases that exist.
 _SPELL_TAX = re.compile(
-    rf"(?P<each>each )?"
+    # Never from the middle of a word. This pattern is *searched* over a whole
+    # text (``cost_modifiers_for``), and a colour word is a suffix of other
+    # words: "multicolo**red spells cost {2} less to cast**" (Urza's Filter)
+    # was read, from there, as a discount on red spells — by a card reporting
+    # unsupported, which is the only reason nothing was ever charged by it.
+    rf"(?<![a-z])(?P<each>each )?"
     rf"(?P<subjects>{_SPELL_SUBJECT_TEXT}(?: and {_SPELL_SUBJECT_TEXT})*)"
     r"(?: with (?P<keyword>[a-z]+))?"
     r"(?:(?P<controller> you| your opponents) cast)? cost(?P<verb_s>s)? "
@@ -609,9 +630,14 @@ def _spell_tax_modifier(match: "re.Match[str]") -> CostModifier | None:
             return None
         singular = singular or not read.group("plural")
         chosen_type = chosen_type or bool(read.group("chosen"))
+        printed_colour = read.group("colour") or ""
         subjects.append(
             (
-                _COLOR_WORD_TO_SYMBOL.get(read.group("colour") or ""),
+                # "Multicolored" stays the word (see ``MULTICOLORED``): mapped
+                # through the symbol table it would come back None, which is
+                # "any colour" — every spell in the game {2} cheaper.
+                MULTICOLORED if printed_colour == MULTICOLORED
+                else _COLOR_WORD_TO_SYMBOL.get(printed_colour),
                 _types_named(read.group("type")),
             )
         )
@@ -813,7 +839,16 @@ def _subject_matches(
     than "**white** spells cost {3} more" asks: CR 601.2f is about the spell,
     and a spell's colour is a layer-5 characteristic like any other.
     """
-    if colour and colour not in colors:
+    if colour == MULTICOLORED:
+        # "**Multicolored** spells…" (Urza's Filter). CR 105.2b through the one
+        # reader of the relation, over the same effective colours the colour
+        # test below reads — so a gold card a Celestial Dawn has made white is
+        # not multicoloured while it is being cast, and a hybrid card is.
+        from .object_colors import is_multicolored
+
+        if not is_multicolored(colors):
+            return False
+    elif colour and colour not in colors:
         return False
     if card_types and not any(
         _has_printed_type(card, wanted) for wanted in card_types

@@ -38,7 +38,8 @@ from ..enter_effects import (
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     choosable_bodies,
 )
-from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
+from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
+                     CHOSEN_PROTECTION_COLOR, aura_protection_colors,
                      auras_attached_to, conditional_ability_lines_for)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
@@ -2966,6 +2967,29 @@ class PermanentStateMixin:
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
             for word in aura_protection_colors(aura.effective_card.oracle_text):
+                if word == AMONG_CONTROLLED_PROTECTION_COLORS:
+                    # "…protection from **each color among permanents you
+                    # control**." (Pledge of Loyalty.) CR 702.16i: one
+                    # protection ability per colour in the set, and the set is
+                    # the *Aura's* controller's board (CR 109.5) read now —
+                    # through the layer-aware reader, so a gold permanent
+                    # counts for each of its colours and a colourless one for
+                    # none. The Aura itself is one of those permanents, which
+                    # is why the card goes on to say the effect doesn't remove
+                    # it (CR 702.16n, honoured by the state-based sweep).
+                    #
+                    # An Aura nobody controls contributes nothing rather than
+                    # every colour: the widest reading of a set that could not
+                    # be read is a creature no coloured thing can touch.
+                    from ..object_colors import colors_among
+
+                    aura_seat = self.controller_index_of(aura)
+                    if aura_seat is not None:
+                        for symbol in colors_among(
+                            self, self.controlled_by(aura_seat)
+                        ):
+                            qualities.add(("color", symbol))
+                    continue
                 if word == CHOSEN_PROTECTION_COLOR:
                     # "…protection from **the chosen color**." (Ward of
                     # Lights.) The choice was made as the Aura entered
@@ -3119,6 +3143,22 @@ class PermanentStateMixin:
             # has_type resolves through the layer system, so a granted or
             # layer-4 type counts exactly as a printed one.
             return source.has_type(value)
+        if kind == "typed":
+            # "protection from **legendary creatures**" (Tsabo Tavoc): a
+            # conjunction, every word of it. A supertype is not a type —
+            # ``has_type`` answers about card types and subtypes and would say
+            # no to every legend — so the supertype words go through the
+            # layer-4 supertype accessor, the same split
+            # ``_lord_buff_matches`` makes for "legendary creatures you
+            # control".
+            from ..grammar.vocabulary import TYPE_LINE_SUPERTYPES
+
+            held = source.effective_supertypes
+            return all(
+                (word in held) if word in TYPE_LINE_SUPERTYPES
+                else source.has_type(word)
+                for word in value.split()
+            )
         return False
 
     def _card_has_quality(
@@ -3164,6 +3204,12 @@ class PermanentStateMixin:
             return len(set(card_colors(self, card, seat))) >= 2
         if kind in ("card_type", "subtype"):
             return value in (card.type_line or "").lower().split()
+        if kind == "typed":
+            # The conjunction, off the printed line — a spell has no layers to
+            # ask about its types, and a supertype and a type are both words
+            # of that one line (CR 205.1).
+            printed = (card.type_line or "").lower().split()
+            return all(word in printed for word in value.split())
         return False
 
     def _source_has_quality(

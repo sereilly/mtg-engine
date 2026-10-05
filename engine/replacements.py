@@ -832,6 +832,48 @@ def chosen_color_spell_redirect(line: str) -> tuple[str, ...] | None:
     return types
 
 
+#: "If a source would deal **4** or more damage to a permanent or player, that
+#: source deals **3** damage to that permanent or player instead." (Divine
+#: Presence.) The cap above with both of its narrowings taken off: no source
+#: class, and no "you" — every source, every recipient, every seat's. The
+#: threshold and the cap are payload exactly as they are there.
+#:
+#: Its own pattern rather than two more optional groups on
+#: ``_SOURCE_DAMAGE_CAP``, because the two sentences differ in *where the board
+#: is read from* and not only in their words: "to you" is the controller of the
+#: permanent printing it (so the scan is the damaged player's own battlefield),
+#: and "to a permanent or player" names nobody (so the scan is every
+#: battlefield). One permissive pattern would have to hand that difference back
+#: out as a flag, which is the two readers again with a regex between them.
+#:
+#: The recipient phrase is spelled twice with a backreference, for
+#: ``_SOURCE_DAMAGE_DELTA``'s reason one screen down: the two halves have to
+#: name the same thing.
+_ANY_SOURCE_DAMAGE_CAP = re.compile(
+    r"^if a source would deal (?P<threshold>\d+) or more damage to a "
+    r"(?P<recipients>permanent or player|creature or player), "
+    r"(?:that source|it) deals (?P<capped>\d+) damage to that "
+    r"(?P=recipients) instead$"
+)
+
+
+def any_source_damage_cap(line: str) -> tuple[int, int] | None:
+    """``(threshold, capped amount)`` *line* imposes on every damage event, or
+    None.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is capped and what is claimed
+    cannot drift — ``source_damage_cap``'s arrangement, for its unnarrowed
+    twin.
+    """
+    match = _ANY_SOURCE_DAMAGE_CAP.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    return int(match.group("threshold")), int(match.group("capped"))
+
+
 def _capped_source_damage(game, payload: dict) -> int | None:
     """The amount a printed source cap would leave, or None when none applies.
 
@@ -839,24 +881,46 @@ def _capped_source_damage(game, payload: dict) -> int | None:
     keeps applicability *pure* (CR 616.1f re-asks the contenders after each
     applied effect, so an effect that answered "do I apply?" by applying itself
     would make them uncountable).
+
+    **Two printings, one answer.** Forethought Amulet's cap is read off the
+    damaged *player's* own battlefield (CR 109.5: "to you"); Divine Presence's
+    is read off every battlefield and covers a permanent as readily as a
+    player. Both are the sentence "deals N instead", so the lowest cap that
+    applies is the one number this event becomes — one candidate, applied once
+    (CR 614.5), rather than a second interceptor that would cap a capped event
+    again after something else had raised it.
     """
     from .prevention import source_has_type
 
     recipient = payload["recipient"]
     amount = payload["amount"]
     source = payload.get("source")
-    if amount <= 0 or not hasattr(recipient, "life"):
+    if amount <= 0:
         return None
     best: int | None = None
-    for permanent in game.controlled_by(recipient):
+    if hasattr(recipient, "life"):
+        for permanent in game.controlled_by(recipient):
+            for line in (permanent.effective_card.oracle_text or "").splitlines():
+                read = source_damage_cap(line)
+                if read is None:
+                    continue
+                types, threshold, capped = read
+                if amount < threshold or capped >= amount:
+                    continue
+                if not any(source_has_type(game, source, word) for word in types):
+                    continue
+                best = capped if best is None else min(best, capped)
+    # "…to **a permanent or player**" (Divine Presence): every battlefield,
+    # because the sentence names no controller — an opponent's Presence caps
+    # the damage their own creature would deal to yours. "A source" is every
+    # source there is, a turn-based one included, so nothing is asked of it.
+    for permanent in game.all_permanents():
         for line in (permanent.effective_card.oracle_text or "").splitlines():
-            read = source_damage_cap(line)
-            if read is None:
+            read_any = any_source_damage_cap(line)
+            if read_any is None:
                 continue
-            types, threshold, capped = read
+            threshold, capped = read_any
             if amount < threshold or capped >= amount:
-                continue
-            if not any(source_has_type(game, source, word) for word in types):
                 continue
             best = capped if best is None else min(best, capped)
     return best
@@ -869,9 +933,21 @@ def _applies_source_damage_cap(game, payload: dict) -> bool:
 @replacement_effect(
     "damage_to_player", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap
 )
+@replacement_effect(
+    "damage_to_creature", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap
+)
 def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | None:
     """Forethought Amulet: "If an instant or sorcery source would deal 3 or more
-    damage to you, it deals 2 damage to you instead."
+    damage to you, it deals 2 damage to you instead." Divine Presence: "If a
+    source would deal 4 or more damage to a permanent or player, that source
+    deals 3 damage to that permanent or player instead."
+
+    One interceptor on both recipient kinds, because "a permanent or player" is
+    one sentence — the arrangement ``_shift_spell_damage`` has one screen down.
+    A **replacement** and not a prevention (CR 614.1a: the word is "instead"),
+    which is rules-visible twice over: damage that "can't be prevented" is
+    capped all the same, and nothing downstream is told that any damage was
+    prevented.
 
     A CR 120.4b effect — it changes the damage *dealt*, not its result, so the
     capped number is what lifelink gains and what a "deals damage to a player"
@@ -883,9 +959,10 @@ def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | N
     player being burned.
     """
     capped = _capped_source_damage(game, payload)
+    recipient = payload["recipient"]
     game.log.append(
-        f"{payload['recipient'].name} takes {capped} damage instead of "
-        f"{payload['amount']} (source cap)"
+        f"{getattr(recipient, 'name', None) or recipient.card.name} takes "
+        f"{capped} damage instead of {payload['amount']} (source cap)"
     )
     return ReplacementOutcome(new_amount=capped)
 
@@ -4400,6 +4477,12 @@ def replacement_claims_line(line: str) -> bool:
     # The same arrangement again: the spell types are payload, and the reader
     # asked is the one ``damage_redirects`` derives the redirect from.
     if chosen_color_spell_redirect(normalized) is not None:
+        return True
+    # "If a source would deal 4 or more damage to a permanent or player, that
+    # source deals 3 damage to that permanent or player instead." (Divine
+    # Presence.) The same cap with neither narrowing, claimed through the
+    # reader the same interceptor asks.
+    if any_source_damage_cap(normalized) is not None:
         return True
     # "If a spell would deal damage to a permanent or player, it deals that much
     # damage minus 1 …" (Benevolent Unicorn) / "…plus 1…" for a red spell

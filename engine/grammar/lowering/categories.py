@@ -383,6 +383,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "grant_reverse_damage_shield": "prevention",
     "grant_exile_prevention_shield": "prevention",
     "grant_team_prevention_shield": "prevention",
+    # "Prevent all damage that would be dealt to you this turn by a source of
+    # your choice." (Samite Ministration, Protective Sphere.) The chosen-source
+    # shield that lasts the turn; see ``_blankets._lower_chosen_source_blanket``.
+    "grant_chosen_source_blanket_shield": "prevention",
     "prevent_all_combat_damage": "prevention",
     # The same blanket, narrowed to a printed noun phrase (Pack Leader). Same
     # category: what differs is who it covers, not what kind of effect it is.

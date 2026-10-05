@@ -673,6 +673,16 @@ def _cast_narrowing_admits(
         trig.condition.payload.get("cast_colors"), _cast_colors(game, card, caster)
     ):
         return False
+    # "…casts a **multicolored** spell" (Rewards of Diversity). CR 105.2b's
+    # count over the same effective colours the two rows above read, through
+    # the one reader of the relation — so a gold card a Celestial Dawn has made
+    # white is not multicoloured as it is cast. A marker key, so it is tested by
+    # presence: the group captures nothing and its value is the empty string.
+    if "cast_multicolored" in trig.condition.payload:
+        from .object_colors import is_multicolored
+
+        if not is_multicolored(_cast_colors(game, card, caster)):
+            return False
     # "…casts a spell **of the chosen color**" (Jeweled Torque). CR 614.1c's
     # choice, recorded on the permanent as it entered — so, unlike every
     # narrowing above, the colour is not in the trigger's text at all and the

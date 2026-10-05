@@ -39,6 +39,7 @@ from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
                                   combat_play_ban,
                                   global_play_timing,
                                   global_cast_ban, own_cast_ban,
+                                  last_cast_color_ban,
                                   spell_cap_ban)
 from ...search_filters import card_has_type
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
@@ -1154,6 +1155,21 @@ class SpellCastingMixin:
         if spell_cap is not None:
             details = (
                 f"can't cast {card.name}: {spell_cap} caps this turn's spells"
+            )
+            self.log.append(details)
+            return SimulationResult(card.name, False, classification.effect_kind, details)
+
+        # "Players can't cast spells that share a color with the spell most
+        # recently cast this turn." (Mana Maze.) The same CR 601.3a prohibition
+        # comparing the spell being announced against the last one anybody
+        # cast, so it is asked of every battlefield beside the cap above. The
+        # ledger it reads is appended to further down this function, at
+        # CR 601.2i — so "most recently cast" is the spell before this one.
+        maze = last_cast_color_ban(self, caster_index, card)
+        if maze is not None:
+            details = (
+                f"can't cast {card.name}: it shares a color with the spell "
+                f"most recently cast this turn ({maze})"
             )
             self.log.append(details)
             return SimulationResult(card.name, False, classification.effect_kind, details)

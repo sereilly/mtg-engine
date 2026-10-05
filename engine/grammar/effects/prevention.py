@@ -132,6 +132,33 @@ def _parse_prevent(stream: TokenStream) -> ast.PreventDamage:
     )
 
 
+def _accept_chosen_source(stream: TokenStream) -> "tuple[bool, bool] | None":
+    """``by a source of your choice [that shares a color with the mana spent on
+    this activation cost]``, or None with the cursor unmoved.
+
+    CR 609.7a's phrase behind a blanket: "Prevent all damage that would be dealt
+    to you this turn **by a source of your choice**" (Samite Ministration,
+    Protective Sphere). Read before the ordinary "by <noun phrase>" reader,
+    which takes "a source" for a described object and strands "of your choice".
+
+    Returns ``(True, shares)`` where *shares* is Protective Sphere's property
+    clause — a restriction on which source may be chosen, so it is consumed
+    here with the phrase it narrows or the whole clause is refused. Nothing
+    else may follow "of your choice" in this position: a colour word or a card
+    type would be printed *in front* of "source" ("a red source of your
+    choice"), which this does not read and therefore leaves to refuse.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("by", "a", "source", "of", "your", "choice"):
+        stream.reset(mark)
+        return None
+    shares = bool(stream.accept_phrase(
+        "that", "shares", "a", "color", "with", "the", "mana", "spent", "on",
+        "this", "activation", "cost",
+    ))
+    return True, shares
+
+
 def _accept_division_rider(stream: TokenStream) -> str | None:
     """``, divided as you choose`` / ``, divided evenly[, rounded down]``, or
     None with the cursor unmoved.
@@ -378,6 +405,22 @@ def _parse_prevent_all(stream: TokenStream) -> ast.PreventDamage:
     # card failing on the order its printing happens to use. Both ends may
     # appear: a shield naming who is protected *and* whose damage is stopped is
     # a narrower effect than either half, and dropping one would widen it.
+    # "…dealt to you this turn **by a source of your choice**." (Samite
+    # Ministration.) CR 609.7a's chosen source rather than a described one, so
+    # it is read ahead of the noun-phrase reader below and recorded where the
+    # one-shot shield records the same phrase — ``from_filter``, empty for "no
+    # property named". The blanket and the one-shot are then one node apart by
+    # their *amount* alone, which is the whole difference between the cards.
+    chosen_source = _accept_chosen_source(stream) if dealt_by is None else None
+    if chosen_source is not None:
+        # CR 615.5's rider, printed after the blanket exactly as it is after
+        # the one-shot (``damage_instances``) and read by the same reader.
+        return ast.PreventDamage(
+            ast.AllOf(), to=recipient, duration=duration,
+            combat_only=combat_only, from_filter=ast.ObjectFilter(),
+            source_shares_spent_mana_color=chosen_source[1],
+            prevented_rider=_parse_prevented_this_way_rider(stream),
+        )
     if dealt_by is None and stream.accept_word("by"):
         dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
         if dealt_by is None:

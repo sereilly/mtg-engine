@@ -119,6 +119,25 @@ PREVENT_AND_EXILE = "prevent_and_exile"
 #: `damage_redirects.class_redirects`, which the redirect side has had since
 #: Blood of the Martyr).
 PREVENT_TEAM = "prevent_team"
+#: "Prevent **all** damage that would be dealt to you this turn by a source of
+#: your choice." (Samite Ministration, Protective Sphere.) CR 615.8's chosen
+#: source with "the next time" taken off: every instance that one source would
+#: deal for the rest of the turn.
+#:
+#: A kind of its own rather than ``PREVENT_WHOLE`` with ``uses=None``, for the
+#: reason ``kind`` exists: it names the interceptor, and the interceptor's
+#: *band* is rules-visible (CR 616.1e's default). A shield that is never used
+#: up costs its holder nothing to apply, so it belongs with the blankets and
+#: ahead of every consumable — where ``PREVENT_WHOLE`` sits at 310, behind a
+#: Reverse Damage that would then be spent on damage this was always going to
+#: stop.
+#:
+#: **Never armed without a source.** Every one-shot above keeps a sourceless
+#: "charge" for an AI or headless activation, which is spent on one instance
+#: either way. The same fallback here would be "prevent all damage dealt to you
+#: this turn" — a different and far larger card — so the arming handler chooses
+#: a source or arms nothing.
+PREVENT_ALL_FROM_CHOSEN_SOURCE = "prevent_all_from_chosen_source"
 #: "The next time a source of your choice would deal damage to any target this
 #: turn, prevent that damage. **If damage from a red source is prevented this
 #: way, ~ deals that much damage to the source's controller.**" (Honorable
@@ -691,6 +710,40 @@ def make_chosen_source_shield(
     reaches every card that prints the sentence.
     """
     return Shield(kind=kind, uses=1, source=source, source_name=source_name, **extra)
+
+
+def make_chosen_source_blanket(
+    source, seat: int | None, source_name: str | None = None, *,
+    colors: tuple[str, ...] = (), rider_colors: tuple[str, ...] = (),
+) -> Shield:
+    """The turn-long shield against one chosen source (Samite Ministration,
+    Protective Sphere).
+
+    ``amount`` and ``uses`` are both None, which is what makes it "all":
+    :meth:`Shield.spent` can never become true, so the source's second damage
+    event this turn is prevented exactly like its first, and the cleanup sweep
+    is what ends it.
+
+    *colors* is the property CR 609.7b rechecks when the damage would be dealt
+    — "…that shares a color with the mana spent on this activation cost"
+    (Protective Sphere) — in the field every Circle of Protection keeps its own
+    colour in. *rider_colors* is CR 615.5's condition ("whenever damage from a
+    black or red source is prevented this way this turn"), deliberately not the
+    same field: this shield prevents every colour's damage and pays for some.
+
+    *seat* is who "you gain that much life" pays, captured at the arming
+    because by damage time the resolution is long over (CR 109.5).
+
+    *source* is required. See ``PREVENT_ALL_FROM_CHOSEN_SOURCE`` for why this
+    shield has no sourceless form.
+    """
+    if source is None:
+        raise ValueError("a chosen-source blanket is armed against a source")
+    return Shield(
+        kind=PREVENT_ALL_FROM_CHOSEN_SOURCE, amount=None, uses=None,
+        source=source, colors=tuple(colors), rider_colors=tuple(rider_colors),
+        filter_seat=seat, source_name=source_name,
+    )
 
 
 def make_life_gain_source(source, source_name: str | None = None) -> Shield:

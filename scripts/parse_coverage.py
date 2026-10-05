@@ -77,6 +77,7 @@ from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       global_cast_ban_line,
                                       global_play_timing_line)
 from engine.cast_restrictions import (most_permanents_play_ban_sentence,  # noqa: E402
+                                      last_cast_color_ban_line,
                                       spell_cap_line)
 from engine.combat_assignment import defender_assigns_line  # noqa: E402
 from engine.counter_conditions import uncounterable_line  # noqa: E402
@@ -377,6 +378,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # own channel beside the ban above, asking the reader that answers it.
     ("cast_restrictions.py (per-turn spell cap)",
      lambda s: spell_cap_line(s) is not None),
+    # "Players can't cast spells that share a color with the spell most
+    # recently cast this turn." (Mana Maze.) CR 601.3a comparing two spells,
+    # enforced by `cast_restrictions.last_cast_color_ban` from
+    # `mixins/stack/casting.py`. Its own channel, asking the reader that
+    # answers it.
+    ("cast_restrictions.py (last-cast colour ban)",
+     lambda s: last_cast_color_ban_line(s)),
     # "**Rather than the attacking player, you assign the combat damage of each
     # creature attacking you.** You can divide that creature's combat damage as
     # you choose among any of the creatures blocking it." (Defensive
