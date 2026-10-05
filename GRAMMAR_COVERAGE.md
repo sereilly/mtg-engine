@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 76.1% | 71.8% | 52.5% | 95 |
+| PLS *(measured)* | 143 | 255 | 80.0% | 75.7% | 56.5% | 100 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 559 | 270 | expected a subject |  |
+| 549 | 260 | expected a subject |  |
 | 154 | 81 | unrecognized effect verb |  |
 | 134 | 69 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -5813,6 +5813,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Nightscape Apprentice**
   - `{U}, {T}: Put target creature you control on top of its owner's library.`
   - `{R}, {T}: Target creature gains first strike until end of turn.`
+- **Nightscape Battlemage**
+  - `When this creature enters, if it was kicked with its {2}{U} kicker, return up to two target nonblack creatures to their owners' hands.`
+  - `When this creature enters, if it was kicked with its {2}{R} kicker, destroy target land.`
 - **Nightscape Familiar**
   - `{1}{B}: Regenerate this creature.`
 - **Nightscape Master**
@@ -8477,6 +8480,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Stormscape Apprentice**
   - `{W}, {T}: Tap target creature.`
   - `{B}, {T}: Target player loses 1 life.`
+- **Stormscape Battlemage**
+  - `When this creature enters, if it was kicked with its {W} kicker, you gain 3 life.`
+  - `When this creature enters, if it was kicked with its {2}{B} kicker, destroy target nonblack creature. That creature can't be regenerated.`
 - **Stormscape Master**
   - `{W}{W}, {T}: Target creature gains protection from the color of your choice until end of turn.`
   - `{B}{B}, {T}: Target player loses 2 life and you gain 2 life.`
@@ -8602,6 +8608,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Sunscape Apprentice**
   - `{G}, {T}: Target creature gets +1/+1 until end of turn.`
   - `{U}, {T}: Put target creature you control on top of its owner's library.`
+- **Sunscape Battlemage**
+  - `When this creature enters, if it was kicked with its {1}{G} kicker, destroy target creature with flying.`
+  - `When this creature enters, if it was kicked with its {2}{U} kicker, draw two cards.`
 - **Sunscape Master**
   - `{G}{G}, {T}: Creatures you control get +2/+2 until end of turn.`
   - `{U}{U}, {T}: Return target creature to its owner's hand.`
@@ -8932,6 +8941,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thornscape Apprentice**
   - `{R}, {T}: Target creature gains first strike until end of turn.`
   - `{W}, {T}: Tap target creature.`
+- **Thornscape Battlemage**
+  - `When this creature enters, if it was kicked with its {R} kicker, it deals 2 damage to any target.`
+  - `When this creature enters, if it was kicked with its {W} kicker, destroy target artifact.`
 - **Thornscape Master**
   - `{R}{R}, {T}: This creature deals 2 damage to target creature.`
   - `{W}{W}, {T}: Target creature gains protection from the color of your choice until end of turn.`
@@ -9010,6 +9022,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thunderscape Apprentice**
   - `{B}, {T}: Target player loses 1 life.`
   - `{G}, {T}: Target creature gets +1/+1 until end of turn.`
+- **Thunderscape Battlemage**
+  - `When this creature enters, if it was kicked with its {1}{B} kicker, target player discards two cards.`
+  - `When this creature enters, if it was kicked with its {G} kicker, destroy target enchantment.`
 - **Thunderscape Master**
   - `{B}{B}, {T}: Target player loses 2 life and you gain 2 life.`
   - `{G}{G}, {T}: Creatures you control get +2/+2 until end of turn.`
