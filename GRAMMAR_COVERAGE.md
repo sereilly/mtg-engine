@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 537 | 69.5% | 66.7% | 45.4% | 191 |
+| INV *(measured)* | 335 | 547 | 70.0% | 67.3% | 46.4% | 196 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -518,6 +518,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this artifact: Put a +1/+1 counter on target nonartifact creature. That creature becomes an artifact in addition to its other types.`
 - **Asmira, Holy Avenger**
   - `At the beginning of each end step, put a +1/+1 counter on Asmira for each creature put into your graveyard from the battlefield this turn.`
+- **Assault // Battery**
+  - `Assault deals 2 damage to any target.`
+  - `Create a 3/3 green Elephant creature token.`
 - **Assembly Hall**
   - `{4}, {T}: Reveal a creature card in your hand. Search your library for a card with the same name as that card, reveal it, put it into your hand, then shuffle.`
 - **Astrolabe**
@@ -5839,6 +5842,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pack Leader**
   - `Other Dogs you control get +1/+1.`
   - `Whenever this creature attacks, prevent all combat damage that would be dealt this turn to Dogs you control.`
+- **Pain // Suffering**
+  - `Target player discards a card.`
+  - `Destroy target land.`
 - **Painful Memories**
   - `Look at target opponent's hand and choose a card from it. Put that card on top of that player's library.`
   - `Look at target opponent's hand and choose a card from it. Put that card on top of that player's library.`
@@ -7994,6 +8000,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a spell or ability an opponent controls causes you to discard a card, you gain 2 life and you may draw a card.`
 - **Spiritual Sanctuary**
   - `At the beginning of each player's upkeep, if that player controls a Plains, they gain 1 life.`
+- **Spite // Malice**
+  - `Counter target noncreature spell.`
+  - `Destroy target nonblack creature. It can't be regenerated.`
 - **Spiteful Bully**
   - `At the beginning of your upkeep, this creature deals 3 damage to target creature you control.`
 - **Spitting Drake**
@@ -8066,6 +8075,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}, {T}, Discard a card: Creatures you control get +1/+1 and gain trample until end of turn.`
 - **Stampeding Wildebeests**
   - `At the beginning of your upkeep, return a green creature you control to its owner's hand.`
+- **Stand // Deliver**
+  - `Prevent the next 2 damage that would be dealt to target creature this turn.`
+  - `Return target permanent to its owner's hand.`
 - **Standing Stones**
   - `{1}, {T}, Pay 1 life: Add one mana of any color.`
 - **Stangg**
@@ -9482,6 +9494,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each creature deals damage to itself equal to its power.`
 - **Wave of Terror**
   - `At the beginning of your draw step, destroy each creature with mana value equal to the number of age counters on this enchantment. They can't be regenerated.`
+- **Wax // Wane**
+  - `Target creature gets +2/+2 until end of turn.`
+  - `Destroy target enchantment.`
 - **Waylay**
   - `Create three 2/2 white Knight creature tokens. Exile them at the beginning of the next cleanup step.`
 - **Wayward Soul**
