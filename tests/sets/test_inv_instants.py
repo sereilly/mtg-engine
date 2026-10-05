@@ -160,4 +160,71 @@ def test_w1g1_agonizing_demise_cannot_be_aimed_at_a_black_creature(set_pool):
     assert not refused.supported
     assert game.is_on_battlefield(knight)
     assert sum(game.players[0].mana_pool.values()) == 6
+
+
+def test_w1g1_explosive_growth_is_two_or_five_never_seven(set_pool):
+    """"Target creature gets +2/+2 until end of turn. If this spell was kicked,
+    **that creature** gets +5/+5 until end of turn **instead**." One pump on
+    the one creature the spell names, sized by the kicker — the back-reference
+    in the second sentence is the first sentence's own target, so the spell
+    still names exactly one creature (CR 601.2c)."""
+    card = set_pool("INV")["Explosive Growth"]
+    for kick, body in ((None, (4, 4)), ("{5}", (7, 7))):
+        game = _w1g1_instant_duel(set_pool, "Explosive Growth", {"G": 9})
+        bears = _w1g1_onto_battlefield(game, 0, set_pool("LEA")["Grizzly Bears"])
+        giant = _w1g1_onto_battlefield(game, 0, set_pool("LEA")["Hill Giant"])
+        spec = game.cast_target_spec(
+            0, card, optional_cost_payments={kick: 1} if kick else None
+        )
+        assert spec["kind"] == "creature" and "max_targets" not in spec
+        result = game.cast_from_hand(
+            0, "Explosive Growth",
+            optional_cost_payments={kick: 1} if kick else None,
+            target_permanent_ids=[bears.permanent_id],
+        )
+        assert result.supported, result
+        _w1g1_resolve_stack(game)
+        assert (bears.effective_power, bears.effective_toughness) == body
+        assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+        assert sum(game.players[0].mana_pool.values()) == (3 if kick else 8)
+
+
+def test_w1g1_orims_touch_prevents_two_or_four(set_pool):
+    """"Prevent the next 2 damage that would be dealt to any target this turn.
+    If this spell was kicked, prevent the next 4 damage that would be dealt to
+    **that permanent or player** this turn instead." One shield of one size on
+    the one thing the spell names, a creature or a player."""
+    from engine.damage_events import deal_damage
+
+    bolt = set_pool("LEA")["Lightning Bolt"]
+    for kick, prevented in ((None, 2), ("{1}", 4)):
+        announced = {kick: 1} if kick else None
+
+        game = _w1g1_instant_duel(set_pool, "Orim's Touch", {"W": 4})
+        giant = _w1g1_onto_battlefield(game, 0, set_pool("LEA")["Hill Giant"])
+        result = game.cast_from_hand(
+            0, "Orim's Touch", optional_cost_payments=announced,
+            target_permanent_ids=[giant.permanent_id],
+        )
+        assert result.supported, result
+        _w1g1_resolve_stack(game)
+        event = {"recipient": giant, "amount": 5, "source": bolt, "combat": False}
+        assert deal_damage(game, event).dealt == 5 - prevented
+
+        game = _w1g1_instant_duel(set_pool, "Orim's Touch", {"W": 4})
+        result = game.cast_from_hand(
+            0, "Orim's Touch", optional_cost_payments=announced,
+            target_player_index=0,
+        )
+        assert result.supported, result
+        _w1g1_resolve_stack(game)
+        # A fresh event each time: `deal_damage` writes what survived the
+        # shields back onto the one it is handed.
+        for seat, survives in ((0, 5 - prevented), (1, 5)):
+            event = {
+                "recipient": game.players[seat], "amount": 5, "source": bolt,
+                "combat": False,
+            }
+            # …seat 1 was given no shield.
+            assert deal_damage(game, event).dealt == survives
 # end of the W1G1 instants block

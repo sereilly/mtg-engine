@@ -150,4 +150,31 @@ def test_w1g1_the_instead_sweepers_deal_one_or_four(
         assert not kicked.is_on_battlefield(board[creature])
     for creature in spared:
         assert kicked.is_on_battlefield(board[creature])
+
+
+def test_w1g1_hypnotic_cloud_is_one_card_or_three_never_four(set_pool):
+    """"Target player discards a card. If this spell was kicked, **that
+    player** discards three cards **instead**." One discard of one size from
+    the one player the spell names."""
+    lea = set_pool("LEA")
+    for kick, left in ((None, 3), ("{4}", 1)):
+        game = _w1g1_sorcery_duel(set_pool, "Hypnotic Cloud", {"B": 6})
+        game.players[1].hand.extend(
+            [lea["Mountain"], lea["Island"], lea["Swamp"], lea["Plains"]]
+        )
+        spec = game.cast_target_spec(
+            0, set_pool("INV")["Hypnotic Cloud"],
+            optional_cost_payments={kick: 1} if kick else None,
+        )
+        assert spec["kind"] == "player" and "max_targets" not in spec
+        result = game.cast_from_hand(
+            0, "Hypnotic Cloud",
+            optional_cost_payments={kick: 1} if kick else None,
+            target_player_index=1,
+        )
+        assert result.supported, result
+        _w1g1_settle(game)
+        assert len(game.players[1].hand) == left
+        assert len(game.players[1].graveyard) == 4 - left
+        assert game.players[0].hand == []
 # end of the W1G1 sorceries block
