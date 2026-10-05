@@ -2970,6 +2970,18 @@ def _from_instruction(instruction) -> dict | None:
     # both.
     if instruction.payload.get("permanents_from"):
         return None
+    # **…and so does one acting on the firing event's own object.** "Whenever a
+    # permanent becomes tapped, put a wind counter on **it**" (Freyalise's
+    # Winds), "…a creature or land becomes tapped, put an hourglass counter on
+    # it" (Temporal Distortion). ``on_event_subject`` is the lowering's record
+    # that the pronoun names what the event was about, found by the id the fire
+    # site froze (CR 603.10) — the paragraph above with the record held by the
+    # trigger instead of by the resolution, and with the same consequence:
+    # read as a target, the trigger asked for a creature nobody was choosing,
+    # and on a board with **no creature** CR 603.3c removed it from the stack,
+    # so tapping a land under either enchantment put no counter on it.
+    if instruction.payload.get("on_event_subject"):
+        return None
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None
 

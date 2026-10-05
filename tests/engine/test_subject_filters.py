@@ -93,6 +93,16 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
     # and that a +1/+1 counter is not a bounty counter — are demonstrated
     # below, because both stores would pass this row.
     ("with_named_counter", {"with_named_counter": "bounty"}, "Grizzly Bears"),
+    # "each land **with an activated ability that isn't a mana ability**"
+    # (Tsabo's Web). Grizzly Bears has no ability of any kind; the two halves
+    # that matter — a permanent with such an ability *is* matched, and one
+    # whose only activated abilities are mana abilities is not — are
+    # demonstrated below.
+    (
+        "with_nonmana_activated_ability",
+        {"with_nonmana_activated_ability": True},
+        "Grizzly Bears",
+    ),
     ("with_keywords", {"with_keywords": ["flying"]}, "Grizzly Bears"),
     # The negative twin (Moat's "creatures without flying"). Air Elemental
     # prints the keyword, so a matcher that ignored the key — or one that read
@@ -189,6 +199,28 @@ def test_a_named_counter_narrowing_matches_once_one_is_placed(pool):
     assert not subject_matches(
         game, perm, {"type_filter": "creature", "with_named_counter": "magnet"}
     )
+
+
+def test_a_nonmana_activated_ability_is_cr_605_1a_s_question(pool):
+    """The positive half of ``with_nonmana_activated_ability`` (Tsabo's Web).
+
+    Prodigal Sorcerer's ping is an activated ability that adds no mana, so it
+    matches. Llanowar Elves' only activated ability is a mana ability (CR
+    605.1a), and Adarkar Wastes' second one is a mana ability *with a
+    drawback* — a matcher that asked "has an activated ability" or read the
+    drawback as a second effect would admit both.
+    """
+    described = {"with_nonmana_activated_ability": True}
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+
+    def _matches(name: str) -> bool:
+        return subject_matches(game, Permanent(card=pool[name]), described)
+
+    assert _matches("Prodigal Sorcerer")
+    assert _matches("Strip Mine")
+    assert not _matches("Llanowar Elves")
+    assert not _matches("Adarkar Wastes")
+    assert not _matches("Forest")
 
 
 def test_a_class_union_matches_on_either_axis(pool):

@@ -1544,10 +1544,18 @@ def remove_all_counters_from_matching(game: Game, instruction: OracleInstruction
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
+    # "…remove all hourglass counters from permanents **that player**
+    # controls." (Temporal Distortion.) The seat whose upkeep fired the
+    # trigger, which only the resolution holding the trigger's context can
+    # name — ``subject_matches`` refuses the word without it, so the sweep
+    # removed nothing and every permanent a player had tapped stayed tapped
+    # for the rest of the game.
+    that_player = frozen_that_player_seat(game, context)
     cleared: list[str] = []
     for perm in game.all_permanents():
         if not subject_matches(
-            game, perm, filters, observer=observer, source=context.source_permanent
+            game, perm, filters, observer=observer,
+            source=context.source_permanent, that_player=that_player,
         ):
             continue
         held = counters_on(perm, kind)

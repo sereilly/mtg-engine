@@ -145,6 +145,7 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "nontoken", "token_only",
     "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "with_named_counter",
+    "with_nonmana_activated_ability",
     "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",

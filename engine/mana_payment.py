@@ -327,6 +327,31 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
 })
 
 
+def has_nonmana_activated_ability(card) -> bool:
+    """Whether *card* has an activated ability that isn't a mana ability
+    (CR 602.1, CR 605.1a) — "each land with an activated ability that isn't a
+    mana ability" (Tsabo's Web).
+
+    Asked of the **compiled program**, which is where a keyword that is an
+    activated ability has already been written out as one: cycling is
+    CR 702.29a's "[cost], Discard this card: Draw a card", so a cycling land
+    answers yes although the ability never functions on the battlefield — the
+    rule asks what the object *has*, not what it could activate right now.
+    A basic land's intrinsic mana ability (CR 305.6) is no activated ability
+    the program carries and would be a mana ability if it were, so a Forest
+    answers no either way.
+
+    Pass a permanent's ``effective_card``, never its printed one: an ability
+    gained or lost since it entered counts as it is now.
+    """
+    from .oracle import compile_card_oracle
+
+    return any(
+        not is_mana_ability(ability)
+        for ability in compile_card_oracle(card).activated_abilities
+    )
+
+
 def is_mana_ability(ability) -> bool:
     """Whether *ability* is a mana ability (CR 605.1a).
 

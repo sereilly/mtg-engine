@@ -343,6 +343,10 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # set, for the reason its neighbour is.
     if self.with_named_counter:
         payload["with_named_counter"] = self.with_named_counter
+    # "with an activated ability that isn't a mana ability" (Tsabo's Web).
+    # Emitted only when set, for its neighbours' reason.
+    if self.with_nonmana_activated_ability:
+        payload["with_nonmana_activated_ability"] = True
     # "a **legendary** card" (Niambi), "target **legendary** creature". A
     # supertype is a restriction like any other and rides the payload like
     # any other; until this key existed it rode nothing at all, and

@@ -79,6 +79,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # is what a compiler admits a narrowed line on, so without the word the
     # whole ability refused and the card was unsupported.
     "with_named_counter",
+    # "each land **with an activated ability that isn't a mana ability**"
+    # (Tsabo's Web). Answered off the object alone — what a permanent can do
+    # is its effective card's compiled program (layer 1's copy and layer 3's
+    # text change folded in, a granted ability appended) and CR 605.1a's
+    # question is ``mana_payment.is_mana_ability``'s — so it sits in the
+    # delegated half with the counter keys beside it.
+    "with_nonmana_activated_ability",
     # "…each artifact **with mana value less than or equal to the number of
     # rust counters on it**" (Corrosion). Two characteristics of the *same*
     # object compared against each other, both read off the permanent being
