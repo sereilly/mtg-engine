@@ -51,7 +51,8 @@ anything here, which is what lets the two sit side by side as families.
 
 from __future__ import annotations
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, LAST_TARGET_CONTROLLER,
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
+                             LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY)
 from ...subject_filters import card_only_filter
@@ -65,6 +66,7 @@ from ._common import (
     _targets_only,
     dropped_narrowings,
 )
+from ._filters import chargeable_card_filter
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
@@ -511,8 +513,11 @@ def _lower_reveal_hand(
     that sentence's business, and on Inquisition that is an ordinary counted
     damage.
     """
-    if node.player.kind == "you":
-        return (OracleInstruction("reveal_hand", "", {"who": "you"}),)
+    if node.player.kind in ("you", "each_player"):
+        # "**Each player** reveals their hand, …" (Noxious Vapors.) Every
+        # living seat's, under the same ``who`` word the discard behind it
+        # carries — no target is described, because nobody was chosen.
+        return (OracleInstruction("reveal_hand", "", {"who": node.player.kind}),)
     # "Whenever Crosis deals combat damage to a player, … **that player**
     # reveals their hand …" (Crosis, the Purger; Darigaaz, the Igniter.) The
     # seat the damage froze (CR 603.10), under the word ``discard_hand`` already
@@ -727,6 +732,16 @@ def _lower_reveal_hand_and_choose(
         payload["up_to"] = True
     if not node.revealed:
         payload["looked_at"] = True
+    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+        # "Whenever this creature deals combat damage to a player, look at
+        # **that player's** hand and choose a card from it." (Doomsday
+        # Specter.) The seat the damage froze (CR 603.10), under the word the
+        # reveal above and every Specter's discard already spell it with — a
+        # different fire site from the row below and so a different record,
+        # which is why the two are told apart by the event rather than tried in
+        # turn at resolution.
+        payload["victim"] = "damaged_player"
+        return (OracleInstruction("reveal_hand_and_choose", "", payload),)
     if node.player.kind == "that_player":
         # "Look at **that player's** hand …" (Leshrac's Sigil). Nothing was
         # targeted, so there is no choice to read the seat off: it is the one
@@ -748,6 +763,62 @@ def _lower_reveal_hand_and_choose(
             node=node,
         )
     return (OracleInstruction("reveal_hand_and_choose", "", payload),)
+
+
+def _lower_keep_chosen_discard_rest(
+    node: "ast.KeepChosenDiscardRest",
+) -> tuple[OracleInstruction, ...]:
+    """"…chooses one card of each color from it, then discards all other
+    nonland cards." (Noxious Vapors.)
+
+    Two steps of kinds that already exist, composed rather than fused: the
+    per-seat hand pick Stronghold Gambit arms (``choose_cards_in_hand``), told
+    its answer is an assignment to ``slots`` rather than a count, and Amnesia's
+    narrowed discard (``discard_all_matching_cards``), told which record holds
+    the cards it must spare. The pick suspends the resolution, so the discard
+    runs once every seat has answered.
+
+    ``slots`` is ``keep_chosen_sacrifice_rest``'s own shape — one printed keep
+    per entry — so the prompt's matching reads both.
+
+    Each phrase is carried or the line refuses, through the one gate every
+    card phrase in this package goes through: a keep the matcher cannot test
+    would offer the whole hand, and a "rest" it cannot test would discard it.
+
+    Only "each player" is admitted. The pick is recorded per seat and the
+    discard reads it per seat; a single named seat is the same sentence over a
+    record of a different shape, and no card prints it.
+    """
+    if node.player.kind != "each_player":
+        raise LoweringError(
+            f"no handler keeps chosen cards and discards the rest for "
+            f"{node.player.kind!r}", node=node,
+        )
+    slots = []
+    for keep in node.keeps:
+        described = chargeable_card_filter(keep)
+        if not described:
+            raise LoweringError("no hand pick can test that keep", node=node)
+        slots.append({"count": 1, "filter": described})
+    rest = chargeable_card_filter(node.rest)
+    if rest is None:
+        raise LoweringError("no discard can test that phrase", node=node)
+    spared: dict[str, object] = {
+        "who": "each_player", "spared_from": CHOSEN_HAND_CARDS_BY_SEAT,
+    }
+    if rest:
+        spared["filter"] = rest
+    return (
+        OracleInstruction(
+            "choose_cards_in_hand", "",
+            {
+                "count": len(slots), "card_filter": {}, "drawn_this_turn": False,
+                "result_key": CHOSEN_HAND_CARDS_BY_SEAT,
+                "actor": "each_player", "slots": slots,
+            },
+        ),
+        OracleInstruction("discard_all_matching_cards", "", spared),
+    )
 
 
 def _lower_play_with_hand_revealed(

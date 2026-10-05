@@ -220,17 +220,19 @@ def _lower_cast_permission(
         )
 
     if node.what == "exiled_this_way":
-        if node.free:
-            # No card prints "you may play cards exiled this way **without
-            # paying their mana costs**", and the payload this arm builds has
-            # nowhere to carry one — so a card that did would be a permission
-            # with its waiver quietly dropped, and the player would pay for a
-            # spell the effect gave away. Refused by name rather than lowered
-            # short: the reader above accepts the phrase because Temporal
-            # Aperture's arm needs it, and that is exactly why this arm has to
-            # say it cannot honour it.
+        if node.free and not (node.mode == "cast" and node.while_exiled):
+            # "You may cast it **without paying its mana cost** for as long as
+            # it remains exiled." (Planeswalker's Mischief.) The one waiver an
+            # exiled card is printed with, and it is carried below. Every other
+            # pairing is still refused by name rather than lowered short: no
+            # card prints "you may *play* cards exiled this way without paying
+            # their mana costs", and a free land drop or a waiver on a
+            # turn-scoped grant is a sentence nobody has read — the reader
+            # above accepts the phrase because two arms need it, which is
+            # exactly why this one has to say which it honours.
             raise LoweringError(
-                "an exiled-cards permission has no cost waiver to grant",
+                "an exiled-cards permission waives the cost only of a card "
+                "cast for as long as it remains exiled",
                 node=node,
             )
         if "exiled_cards" not in produced:
@@ -269,6 +271,10 @@ def _lower_cast_permission(
             "cards_from": "exiled_cards",
             "duration": stated,
         }
+        if node.free:
+            # CR 118.9. Emitted only when the card prints the words, so every
+            # earlier exiled-cards grant keeps the payload it had.
+            payload["free"] = True
         payload.update(_grantee_payload(node, event))
         return (OracleInstruction("grant_cast_permission", "", payload),)
 

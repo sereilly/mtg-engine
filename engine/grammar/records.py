@@ -40,7 +40,16 @@ from .vocabulary import CARD_TYPES, NUMBER_WORDS
 #: "the **milled** card's mana value" — the participle a card prints for a card
 #: an earlier step of the same effect moved, and the scratchpad key that step
 #: records the cards under. A row per participle, as ``_THIS_WAY_COUNTS`` is.
-_RECORDED_CARD_PARTICIPLES: dict[str, str] = {"milled": MILLED_THIS_WAY}
+#:
+#: "the **revealed** card's mana value" (Planeswalker's Favor, Scorn) is the
+#: singular record — ``revealed_card``, the one referent this engine has for a
+#: card a step of this effect showed, whichever zone it was shown from. Not
+#: ``REVEALED_HAND_CARDS``: that is a whole hand, and "the revealed card" of
+#: several cards names none of them.
+_RECORDED_CARD_PARTICIPLES: dict[str, str] = {
+    "milled": MILLED_THIS_WAY,
+    "revealed": "revealed_card",
+}
 
 
 def accept_recorded_card_mana_value(

@@ -349,6 +349,7 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # above: what it touches is the battlefield and the exile zone.
     "exile_recorded_permanent": "zones",
     "exile_self": "zones",
+    "exile_revealed_card": "zones",
     # "Target spell's controller exiles it with X delay counters on it."
     # (Ertai's Meddling.) A zone change by this module's own line — the object
     # leaves the **stack** and arrives in exile — rather than a counterspell:

@@ -73,17 +73,27 @@ def _accept_hand_to_library_tail(
     return bool(stream.accept_phrase("in", "any", "order")) or not ordered
 
 
-def _accept_hand_to_library_bottom_tail(stream: TokenStream, possessive: str) -> bool:
+def _accept_hand_to_library_bottom_tail(
+    stream: TokenStream, possessive: str, *, ordered: bool = True
+) -> bool:
     """``… on the bottom of <possessive> library in any order``, consumed whole.
 
     Teferi's Puzzle Box. The twin of :func:`_accept_hand_to_library_tail` at the
     other end of the library, and a separate reader rather than an alternation
     inside it because the two differ in what they *require*: the top spelling is
-    printed over a whole hand with no ordering clause (Jester's Mask), and this
-    one is never printed without it — "in any order" is the whole of what the
-    player still decides once the card has named the end, so a production that
-    let the words be absent would silently drop the only choice the sentence
-    offers.
+    printed over a whole hand with no ordering clause (Jester's Mask), and the
+    Puzzle Box's is never printed without it — "in any order" is the whole of
+    what the player still decides once the card has named the end, so a
+    production that let the words be absent would silently drop the only choice
+    the sentence offers.
+
+    *ordered* is False for the one spelling that prints the end and no rider:
+    "…then put two cards from your hand on the bottom of your library."
+    (Sawtooth Loon.) Nothing is dropped by reading it, because the order was
+    never the card's to give — CR 401.4 hands it to the cards' owner whenever
+    two or more go to one position at once, and the ``hand_to_library`` prompt
+    asks for it whichever spelling armed it. A parameter for the top tail's
+    reason: a card that prints the words must still have them read.
 
     "**the** bottom" against "top" with no article is the printed wording, not a
     tolerance: reading either article on either end would let a card that
@@ -91,7 +101,7 @@ def _accept_hand_to_library_bottom_tail(stream: TokenStream, possessive: str) ->
     """
     if not stream.accept_phrase("on", "the", "bottom", "of", possessive, "library"):
         return False
-    return bool(stream.accept_phrase("in", "any", "order"))
+    return bool(stream.accept_phrase("in", "any", "order")) or not ordered
 
 
 def _accept_hand_to_either_end_tail(stream: TokenStream) -> bool:
@@ -169,12 +179,22 @@ def _parse_put_hand_cards_on_library(
         return ast.PutHandCardsOnLibrary(
             ast.PlayerRef("you"), count, destination="either_end"
         )
-    if not _accept_hand_to_library_tail(
+    if _accept_hand_to_library_tail(
         stream, possessive, ordered=_orderable(count)
     ):
-        stream.reset(mark)
-        return None
-    return ast.PutHandCardsOnLibrary(player or ast.PlayerRef("you"), count)
+        return ast.PutHandCardsOnLibrary(player or ast.PlayerRef("you"), count)
+    # "…then put two cards from your hand **on the bottom of your library**."
+    # (Sawtooth Loon.) The same move at the other end, on the node's own
+    # ``destination`` — which the lowering, the handler and the prompt have
+    # carried since Teferi's Puzzle Box, so the counted imperative was the one
+    # spelling that could not say it. The rider is optional here and only here:
+    # see ``_accept_hand_to_library_bottom_tail``.
+    if _accept_hand_to_library_bottom_tail(stream, possessive, ordered=False):
+        return ast.PutHandCardsOnLibrary(
+            player or ast.PlayerRef("you"), count, destination="bottom"
+        )
+    stream.reset(mark)
+    return None
 
 
 def _parse_player_puts_hand_cards_on_library(

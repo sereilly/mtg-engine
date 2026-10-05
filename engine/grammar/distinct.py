@@ -28,7 +28,7 @@ import dataclasses
 from . import ast
 from .nouns import parse_object_filter
 from .stream import TokenStream
-from .vocabulary import BASIC_LAND_WORDS
+from .vocabulary import BASIC_LAND_WORDS, COLOR_WORDS
 
 
 #: The characteristics a count may be taken over **instead of** the objects
@@ -59,6 +59,28 @@ _COUNTED_CHARACTERISTICS: tuple[
 )
 
 
+#: Characteristics "of each" abbreviates **only where every noun is a keep** —
+#: one object chosen per value, each filling one slot — as ``(spellings,
+#: filter field, values)``.
+#:
+#: "…chooses one card **of each color** from it" (Noxious Vapors): five picks,
+#: a white card, a blue card and so on (CR 105.1's five, in the printed order),
+#: and a gold card is the pick for one of its colours.
+#:
+#: Deliberately not a row of the table above, and the reason is on record at
+#: its other reader (``condition_counts``, Coalition Victory's second
+#: conjunct): in a *condition*, "a creature of each color" is a relation on one
+#: noun — a gold permanent answers for each of its colours at once
+#: (``Controls.of_each_color``) — so the same three words mean five slots in a
+#: choice and one relation in a question. Which is being read is the caller's
+#: to say (``keeps=True``), and a count position never reads this table at all.
+_KEPT_CHARACTERISTICS: tuple[
+    tuple[tuple[tuple[str, ...], ...], str, tuple[str, ...]], ...
+] = (
+    ((("color",),), "colors", tuple(COLOR_WORDS.values())),
+)
+
+
 def _accept_counted_characteristic(
     stream: TokenStream,
 ) -> tuple[str, str, tuple[str, ...]] | None:
@@ -72,7 +94,7 @@ def _accept_counted_characteristic(
 
 
 def accept_one_of_each(
-    stream: TokenStream, described: ast.ObjectFilter
+    stream: TokenStream, described: ast.ObjectFilter, *, keeps: bool = False,
 ) -> tuple[ast.ObjectFilter, ...] | None:
     """``of each <characteristic>`` trailing the noun phrase *described* — as
     one filter **per value**, in printed order — or None with nothing consumed.
@@ -95,12 +117,29 @@ def accept_one_of_each(
     One table with ``parse_counted_objects`` below, so "of each basic land
     type" and "for each basic land type among" cannot come to name different
     characteristics.
+
+    *keeps* is the caller saying every noun the phrase stands for is a **pick**
+    — one object per value, each filling one slot — which additionally admits
+    ``_KEPT_CHARACTERISTICS``: "one card **of each color**" (Noxious Vapors).
+    False everywhere else, so a condition keeps its own reading of those words.
     """
     mark = stream.mark()
     if stream.accept_phrase("of", "each"):
         named = _accept_counted_characteristic(stream)
         if named is not None:
             _aggregate, field, values = named
+        elif keeps:
+            field, values = next(
+                (
+                    (kept_field, kept_values)
+                    for spellings, kept_field, kept_values in _KEPT_CHARACTERISTICS
+                    if any(stream.accept_phrase(*phrase) for phrase in spellings)
+                ),
+                (None, ()),
+            )
+        else:
+            field, values = None, ()
+        if field is not None:
             return tuple(
                 dataclasses.replace(
                     described, **{field: getattr(described, field) + (value,)}

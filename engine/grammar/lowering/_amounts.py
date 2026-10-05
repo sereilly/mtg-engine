@@ -817,6 +817,19 @@ def _x_definition_spec(
                 "this effect", node=node,
             )
         return {"back_reference": definition.source}
+    if recorded is not None and isinstance(definition, ast.RecordedCardManaValue):
+        # "…gets +X/+X until end of turn, where X is **the revealed card's mana
+        # value**." (Planeswalker's Favor, Scorn.) The spec
+        # ``where_x.lower_where_x`` stamps for the same definition wrapped
+        # round a sentence (Infernal Genesis), behind the same producer gate —
+        # it reaches here instead because a P/T where-clause rides the ``Pump``
+        # node. One evaluator answers both.
+        if definition.record not in recorded:
+            raise LoweringError(
+                f"back-reference to {definition.record!r} with no producer in "
+                "this effect", node=node,
+            )
+        return {"recorded_card_mana_value": definition.record}
     raise LoweringError("only a count or a maximum can define X here", node=node)
 
 

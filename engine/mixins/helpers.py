@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
+from ..cast_permissions import end_while_exiled_grants
 from ..auras import auras_attached_to, detach_aura
 from ..control import (
     base_controller,
@@ -888,6 +889,10 @@ class GameHelpersMixin:
                 del player.exile[index]
                 if doomed is not None:
                     forget_record(self, doomed)
+                # …and what "for as long as it remains exiled" granted over it
+                # (CR 611.2b), for the record's own reason one line up: a grant
+                # left behind is a memory CR 400.7 says the card does not have.
+                end_while_exiled_grants(self, seat, card)
                 return True
         if record is not None:
             forget_record(self, record)

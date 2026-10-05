@@ -1874,6 +1874,15 @@ def _return_graveyard_card_to_owners_hand(
     return True, "resolved"
 
 
+#: The payload keys that narrow *which* creature card a graveyard return may
+#: take — everything ``handlers/_common.graveyard_card_matches`` reads beyond
+#: the card type. A return carrying one of them must never reach the generic
+#: "first creature card" scan, which reads none of them.
+_GRAVEYARD_NARROWING_KEYS = (
+    "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
+)
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     if instruction.payload.get("any_graveyard"):
@@ -2001,7 +2010,24 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # the source itself, so the slot walk above is used instead. Without one the
     # call is left exactly as it was, so every card written before this keeps
     # its behaviour byte for byte.
-    if excluded is not None:
+    #
+    # **…and the last place a printed narrowing has to be.** "Return target
+    # **Zombie** card from your graveyard to your hand" (Lord of the Undead) is
+    # ``card_type: "creature"`` plus ``graveyard_subtypes``, so it reaches this
+    # point — and the generic scan below asks only "is it a creature card?".
+    # With no slot announced (a bare activation, an AI seat, an entry trigger
+    # nothing chose a target for) or with the announced card gone, the Lord
+    # returned whichever creature card lay first in the pile: a Grizzly Bears.
+    # Three shipped cards did the same — Mtenda Griffin a non-Griffin, Strongarm
+    # Thug a non-Mercenary, Crypt Angel a green creature for "blue or red" — on
+    # the ordinary cast, because nothing announces an entry trigger's target.
+    #
+    # The keys are the ones ``graveyard_card_matches`` reads beyond the type
+    # itself, so the scan and the picker ask one predicate.
+    narrowed = any(
+        instruction.payload.get(key) for key in _GRAVEYARD_NARROWING_KEYS
+    )
+    if excluded is not None or narrowed:
         chosen_index = next(
             (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
@@ -3867,6 +3893,25 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     # carrying a target an earlier step chose, so the inference would reveal
     # whichever hand that step happened to name. The same distinction
     # ``deal_damage`` records about its own recipient.
+    if instruction.payload.get("who") == "each_player":
+        # "**Each player** reveals their hand, …" (Noxious Vapors.) Every
+        # living seat's, in APNAP order (CR 101.4) — one reveal apiece through
+        # the same feed, and one record of everything shown: "revealed this
+        # way" behind this step is all of it.
+        from .control_flow import _offered_seats
+
+        shown: list = []
+        for seat in _offered_seats(game, "each_player", context):
+            revealer = game.players[seat]
+            shown.extend(revealer.hand)
+            names = [held.name for held in revealer.hand]
+            game.record_reveal(seat, names)
+            game.log.append(
+                f"{revealer.name} reveals their hand: "
+                + (", ".join(names) or "(empty)")
+            )
+        context.results[REVEALED_HAND_CARDS] = shown
+        return True, "resolved"
     if instruction.payload.get("who") == "you":
         victim = context.caster
     elif instruction.payload.get("who") == "damaged_player":
@@ -3977,17 +4022,47 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["mana_value"] = {"op": "eq", "value": chosen_number}
-    doomed = [
-        index for index, held in enumerate(victim.hand)
-        if _card_matches_filter(held, filters, game=game, owner=victim)
-    ]
-    for index in reversed(doomed):
-        discarded = victim.hand.pop(index)
-        game._discard_card(victim, discarded)
-    game.log.append(
-        f"{victim.name} discarded {len(doomed)} card(s)"
-        if doomed else f"{victim.name} had no cards to discard"
-    )
+    victims = [victim]
+    spared_by_seat: dict = {}
+    if instruction.payload.get("who") == "each_player":
+        # "Each player …, then discards all **other** nonland cards." (Noxious
+        # Vapors.) Every living seat, in APNAP order (CR 101.4), each sparing
+        # what *it* chose: ``spared_from`` names the per-seat record the pick in
+        # front of this step wrote. An absent record spares nothing — which is
+        # what "all other" means of a player who chose no card.
+        from .control_flow import _offered_seats
+
+        victims = [
+            game.players[seat]
+            for seat in _offered_seats(game, "each_player", context)
+        ]
+        recorded = context.results.get(
+            str(instruction.payload.get("spared_from") or "")
+        )
+        spared_by_seat = recorded if isinstance(recorded, dict) else {}
+    for victim in victims:
+        # **Idiom 11, as a multiset.** Two copies of one card in a hand are one
+        # object, so "is this card one of the spared ones" is not answerable by
+        # identity alone — a player who kept one of two Lightning Bolts would
+        # keep both. Each spared entry therefore excuses exactly one slot.
+        spare = list(spared_by_seat.get(game.players.index(victim)) or ())
+        doomed = []
+        for index, held in enumerate(victim.hand):
+            excused = next(
+                (slot for slot, kept in enumerate(spare) if kept is held), None
+            )
+            if excused is not None:
+                spare.pop(excused)
+                continue
+            if _card_matches_filter(held, filters, game=game, owner=victim):
+                doomed.append(index)
+        for index in reversed(doomed):
+            discarded = victim.hand.pop(index)
+            game._discard_card(victim, discarded)
+        game.log.append(
+            f"{victim.name} discarded {len(doomed)} card(s)"
+            if doomed else f"{victim.name} had no cards to discard"
+        )
     return True, "resolved"
 
 
@@ -4017,6 +4092,17 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         seat = (context.trigger_context or {}).get("event_subject_player")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             return False, "no seat was frozen for 'that player'"
+        victim = game.players[seat]
+    elif instruction.payload.get("victim") == "damaged_player":
+        # "Whenever this creature deals combat damage to a player, look at
+        # **that player's** hand …" (Doomsday Specter.) The seat the damage
+        # went to, on the key every damage fire site stamps — read narrowly,
+        # for the branch above's reason: with none recorded the words named
+        # nobody, and the fallback below is the ability's own controller,
+        # whose hand is the one this must not open.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            return False, "no damaged player was frozen for 'that player'"
         victim = game.players[seat]
     else:
         victim = context.target if context.target is not None else context.caster
@@ -7719,6 +7805,10 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
             grant_permission(
                 game, player_index=grantee_index, zone=zone,
                 mode=payload.get("mode", "cast"), cards=held,
+                # "…**without paying its mana cost** for as long as it remains
+                # exiled." (Planeswalker's Mischief.) CR 118.9's waiver, on the
+                # flag the two grants below already carry.
+                free=bool(payload.get("free")),
                 duration=duration, source_name=source_name,
                 source_permanent_id=game.permanent_id_of(context.source_permanent),
                 zone_player_index=zone_seat,
@@ -8811,14 +8901,29 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
         )
     elif moved:
         names = ", ".join(card.name for card in moved)
+        # "…return it to its **owner's** hand" (Psychic Theft, Planeswalker's
+        # Mischief) lands in the hand of the seat whose exile held it, which is
+        # not the caster's — and the line said the caster had put it into
+        # *their* hand, in a public log, about a card that went the other way.
+        to_owner = bool(instruction.payload.get("to_owner"))
         game.log.append(
-            f"{caster.name} put {names} into their hand from exile"
+            (
+                f"{names} returned to its owner's hand from exile"
+                if to_owner
+                else f"{caster.name} put {names} into their hand from exile"
+            )
             if destination == "hand"
             else f"{names} was put into its owner's graveyard from exile"
         )
     elif instruction.payload.get("only_if_unplayed"):
+        # Two different nothings, and the log says which: a card that was
+        # played has left exile, and a conditional exile that never happened
+        # ("**If it's an instant or sorcery card**, exile it" — Planeswalker's
+        # Mischief, about a creature card) left no card to ask about.
         game.log.append(
-            f"{context.card.name}: the exiled card was played, so nothing is binned"
+            f"{context.card.name}: the exiled card was played, so nothing is "
+            "moved"
+            if cards else f"{context.card.name}: no card was exiled"
         )
     else:
         game.log.append(f"{context.card.name}: nothing was left in exile to take")
@@ -9271,6 +9376,12 @@ def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
     described = payload.get("card_filter") or {}
     drawn_this_turn = bool(payload.get("drawn_this_turn"))
     provenance = player.cards_drawn_this_turn if drawn_this_turn else ()
+    # "…chooses one card **of each color** from it" (Noxious Vapors). The pick
+    # is an assignment to printed slots, so a card is a candidate only if some
+    # slot describes it — a land or an artifact is no colour and is never
+    # offered. *Which* sets of candidates are answers is the matching's
+    # question (``Game.match_hand_slots``), not this list's.
+    slot_filters = hand_slot_filters(payload)
     return [
         index
         for index, card in enumerate(player.hand)
@@ -9279,7 +9390,33 @@ def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
             not drawn_this_turn
             or any(card is drawn for drawn in provenance)
         )
+        and (
+            slot_filters is None
+            or any(
+                _card_matches_filter(card, slot, game=game, owner=player)
+                for slot in slot_filters
+            )
+        )
     ]
+
+
+def hand_slot_filters(payload: dict) -> "list[dict] | None":
+    """The printed keeps of a slotted hand pick, one filter per keep — or
+    ``None`` for the ordinary counted pick, which has none.
+
+    ``keep_chosen_sacrifice_rest``'s shape (``[{"count": n, "filter": {…}}]``)
+    read the way ``Game._keep_slot_filters`` reads it, so one printed keep is
+    one slot whichever zone the sentence is about.
+    """
+    slots = payload.get("slots")
+    if not slots:
+        return None
+    expanded: list[dict] = []
+    for slot in slots:
+        expanded.extend(
+            [dict(slot.get("filter") or {})] * max(0, int(slot.get("count", 0)))
+        )
+    return expanded
 
 
 @effect_handler("choose_cards_in_hand")
@@ -9705,11 +9842,22 @@ def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, con
         victim = context.target if context.target is not None else context.caster
     if not victim.hand:
         game.log.append(f"{victim.name} has no cards in hand to reveal")
+        # "…equal to **that card's mana value**" (Planeswalker's Mirth) about a
+        # card nobody revealed: CR 107.2, "if anything needs to use a number
+        # that can't be determined … it uses 0 instead". Written rather than
+        # left absent because ``lowering/_records`` declares the record for the
+        # kind, and so a stale number from an earlier step cannot answer.
+        context.results["its_mana_value"] = 0
         return True, "resolved"
     index = random.randrange(len(victim.hand))
     card = victim.hand[index]
     context.results["revealed_card"] = card
     context.results[REVEALED_HAND_INDEX] = index
+    # The printed mana value (CR 202.3): a card in a hand has no computed
+    # characteristics (CR 613.1), and the number is frozen here because the
+    # sentence behind this one cannot go and look — the hand is hidden and the
+    # slot was nobody's choice (CR 608.2h).
+    context.results["its_mana_value"] = int(card.cmc or 0)
     seat = next((i for i, seated in enumerate(game.players) if seated is victim), None)
     if seat is not None:
         game.record_reveal(seat, [card.name])
@@ -9767,6 +9915,64 @@ def exile_random_card_from_hand(game: Game, instruction: OracleInstruction, cont
     game.log.append(
         f"{victim.name} exiled {card.name} at random from their hand"
     )
+    return True, "resolved"
+
+
+@effect_handler("exile_revealed_card")
+def exile_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…If it's an instant or sorcery card, **exile it**." (Planeswalker's
+    Mischief.)
+
+    "It" is the card the reveal in front of this step recorded, taken out of
+    the hand it was shown from **by slot** — ``discard_revealed_card``'s rule
+    and for its reason: a hand is the one zone where two copies of a card are
+    one object, so the index resolved at reveal time is the only thing that
+    names which of them was shown. A hand that has changed underneath exiles
+    nothing rather than guessing.
+
+    Into its **owner's** exile (CR 400.3), which is the revealing player's and
+    not the ability's controller's, and recorded under the one ``exiled_cards``
+    key every other exile writes — so "you may cast it … for as long as it
+    remains exiled" and "if you haven't cast it, return it" read the referent
+    this engine already has. The record is written even when nothing moves:
+    ``lowering/_records`` declares it for the kind, and an absent key is a
+    back-reference with no producer rather than an exile of nothing.
+
+    Whose hand is ``reveal_random_card_from_hand``'s own answer, read the same
+    way, so the two steps cannot name different players.
+
+    **A card turned up from a library is the same pronoun**, and the record is
+    the same key (``reveal_top_of_library`` writes ``revealed_card`` too), so
+    this kind answers for both zones rather than exiling nothing behind one of
+    them: with no hand slot recorded the card is where ``bin_revealed_card``
+    looks for it, still on its owner's library.
+    """
+    context.results["exiled_cards"] = []
+    card = context.results.get("revealed_card")
+    if card is None:
+        return True, "resolved"
+    index = context.results.get(REVEALED_HAND_INDEX)
+    if not isinstance(index, int):
+        for owner in game.players:
+            for slot, held in enumerate(owner.library):
+                if held is card:
+                    owner.library.pop(slot)
+                    owner.exile.append(card)
+                    context.results["exiled_cards"] = [card]
+                    game.log.append(
+                        f"{owner.name} exiles {card.name} from their library"
+                    )
+                    return True, "resolved"
+        game.log.append(f"{context.card.name}: {card.name} has already moved")
+        return True, "resolved"
+    victim = context.target if context.target is not None else context.caster
+    if not (0 <= index < len(victim.hand)) or victim.hand[index] is not card:
+        game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
+        return True, "resolved"
+    victim.hand.pop(index)
+    victim.exile.append(card)
+    context.results["exiled_cards"] = [card]
+    game.log.append(f"{victim.name} exiles {card.name} from their hand")
     return True, "resolved"
 
 

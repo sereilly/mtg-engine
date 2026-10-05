@@ -691,7 +691,23 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # "Target player reveals a card at random from their hand." (Wand of
     # Ith.) The same record, from a different zone: the sentences behind it
     # ask what "it" is, and this is what answers.
-    "reveal_random_card_from_hand": "revealed_card",
+    #
+    # …**and that card's mana value**. "Target opponent reveals a card at
+    # random from their hand. You gain life equal to **that card's mana
+    # value**." (Planeswalker's Mirth, and Fury beside it.) The same record the
+    # destroy and the reanimation rows declare, for a third reason the reader
+    # cannot go and look: the card is in a *hidden* zone, in a slot nobody
+    # chose, so the step that picked it freezes the number (CR 608.2h). The
+    # handler writes it on **both** branches — an empty hand reveals nothing and
+    # CR 107.2 makes the number 0 — because this table declares for the kind.
+    #
+    # ``revealed_card`` stays first: ``primary_produced`` reads the head as the
+    # record an "if you do" tests.
+    "reveal_random_card_from_hand": ("revealed_card", "its_mana_value"),
+    # "…If it's an instant or sorcery card, **exile it**. You may cast **it**
+    # … for as long as it remains exiled." (Planeswalker's Mischief.) The card
+    # the reveal turned up, under the key every exile a permission reads writes.
+    "exile_revealed_card": "exiled_cards",
     # "Exile it. **If you do**, create a 5/5 black Demon creature token with
     # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
     # the branch after it is the ordinary if-you-do rather than a fused kind.
