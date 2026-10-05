@@ -398,6 +398,9 @@ def test_every_target_changes_or_none_does():
         0, "Test Recall", target_permanent_ids=[bear.permanent_id, ogre.permanent_id]
     ).supported
     recall = game.stack[0]
+    # Two targets under one instance of the word are one choice, announced once.
+    assert len(chosen_targets(game, recall)) == 2
+    assert len(_arbiter_triggers(game)) == 1
     slots = change_slots(game, recall)
     # Each slot's only "other" creature is its partner, and exchanging the two
     # *is* a complete change (CR 115.7e judges the final set) — so take the
@@ -461,13 +464,20 @@ def test_the_division_stays_with_the_slot_it_was_announced_for():
     bear, wall = placed[(1, "Test Bear")][0], placed[(1, "Test Wall")][0]
     ogre = placed[(0, "Test Ogre")][0]
 
-    assert game.cast_from_hand(
+    assert game.queue_from_hand(
         0, "Test Arc",
         divided_targets=[
             (1, game.battlefield_index_of(bear), 2),
             (1, game.battlefield_index_of(wall), 1),
         ],
     ).supported
+    # A divided announcement names each target separately and is still one
+    # choice: both are read back, and the watcher triggers once.
+    assert [t.permanent_id for t in chosen_targets(game, game.stack[0])] == [
+        bear.permanent_id, wall.permanent_id,
+    ]
+    assert len(_arbiter_triggers(game)) == 1
+    game._settle()
     _answer_kind(game, "player", seat=0)
     _answer_permanent(game, ogre)
     resolve_stack(game)

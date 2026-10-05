@@ -2677,7 +2677,7 @@ class GameHelpersMixin:
         # * an object whose target prompt is **still owed** has not chosen yet;
         #   the answer announces (``_resolve_trigger_target``);
         # * an object the stack no longer holds was removed for having no legal
-        #   target or mode (CR 603.3c, CR 700.2b).
+        #   target (CR 603.3d) or mode (CR 700.2b).
         if (
             item is not None
             and not item.is_copy

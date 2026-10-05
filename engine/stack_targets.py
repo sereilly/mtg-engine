@@ -618,9 +618,13 @@ def _candidates(
     instruction's printed restriction, with the seats its firing event froze
     ("defending player controls", "that player controls") supplied on the spec
     exactly as ``_choose_trigger_targets`` supplies them. A narrowing that
-    announcement declined to enumerate is one this declines too.
+    announcement declined to enumerate is one this declines too — a printed
+    controller the spec does not carry as a flag is a phrase the enumerator
+    would ignore, and a list wider than the card prints is the one thing a
+    change must never be offered from.
     """
     from .legality import targeting_instruction
+    from .mixins.stack.resolution import _controller_narrowing_is_in
 
     spec = dict(announcement.spec)
     instruction = announcement.instruction
@@ -635,6 +639,8 @@ def _candidates(
         if that_player is not None:
             spec["that_player_index"] = that_player
         elif spec.get("that_player_only"):
+            return None
+        if triggered and not _controller_narrowing_is_in(spec, instruction):
             return None
     entries = game._enumerate_targets(
         item.caster_index, item.card, spec,
