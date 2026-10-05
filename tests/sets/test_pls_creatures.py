@@ -722,3 +722,49 @@ def test_w1g4_samite_pilgrim_prevents_its_activators_domain(set_pool):
     ).supported
     _w1g4_resolve(game)
     assert _damage_dealt(game, theirs[0], 5, source=mine[1]) == 4
+
+
+def test_w1g4_the_castable_highlight_sees_a_familiars_reduction(set_pool):
+    """The client's glow is the third reader of a price. One Forest and a
+    Sunscape Familiar make a {1}{G} Bears castable where one Forest alone
+    does not; an opponent's Familiar changes nothing for this seat, and a
+    white spell is never cheaper."""
+    from fastapi.testclient import TestClient
+
+    from web.app import app, store
+
+    client = TestClient(app)
+    hand = ("Grizzly Bears", "Craw Wurm", "Serra Angel", "Llanowar Elves")
+
+    def playable(mine, theirs=()):
+        response = client.post("/api/sessions", json={
+            "mode": "human_vs_ai", "host_name": "W1G4", "host_colors": 2,
+            "guest_colors": 2, "seed": 4104,
+            "host_deck_cards": [{"name": "Forest", "count": 40}],
+            "guest_deck_cards": [{"name": "Forest", "count": 40}],
+        })
+        assert response.status_code == 200, response.text
+        session_id = response.json()["session_id"]
+        session = store.get(session_id)
+        game = session.game
+        session.pregame_phase = None
+        session.current_turn = 0
+        game.active_player_index = 0
+        game.players[0].hand[:] = [_w1g4_find(set_pool, name) for name in hand]
+        for seat, names in enumerate((mine, theirs)):
+            for name in names:
+                game._put_permanent_onto_battlefield(
+                    seat, _W1G4Permanent(card=_w1g4_find(set_pool, name)), None
+                )
+        game.start_priority_window(0)
+        state = client.get(
+            f"/api/sessions/{session_id}/state", params={"seat": 0}
+        ).json()
+        return state["players"][0]["playable_hand_indices"]
+
+    assert playable(["Forest"]) == [3], "one Forest casts the Elves alone"
+    assert playable(["Forest", "Sunscape Familiar"]) == [0, 3]
+    assert playable(["Forest"], theirs=["Sunscape Familiar"]) == [3]
+    assert playable(["Forest"] * 5 + ["Sunscape Familiar"]) == [0, 1, 3], (
+        "the Wurm is {3}{G}{G} under the Familiar; the Angel is white and is not"
+    )

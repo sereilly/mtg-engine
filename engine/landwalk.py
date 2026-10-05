@@ -38,7 +38,7 @@ import re
 from functools import lru_cache
 from typing import TYPE_CHECKING, NamedTuple
 
-from .oracle_types import strip_ability_word
+from .oracle_types import compilation_cache, strip_ability_word
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .models import Permanent
@@ -229,6 +229,12 @@ def _static_line_text(line: str) -> str:
     return " ".join(text.lower().split()).rstrip(".").strip()
 
 
+# ``@compilation_cache``: the spec comes out of the grammar's lowering, so a
+# caller that swaps a piece of that out and back must be able to empty this
+# (``oracle_types.clear_compilation_caches``) — a None cached while the
+# aggregate was switched off would leave the card unsupported for the rest of
+# the process.
+@compilation_cache
 @lru_cache(maxsize=None)
 def landwalk_per_type_spec(line: str) -> dict | None:
     """The count spec whose basic land types *line* turns into landwalks on its
@@ -251,11 +257,13 @@ def landwalk_per_type_spec(line: str) -> dict | None:
     return spec
 
 
-@lru_cache(maxsize=None)
 def _per_type_landwalk_specs(oracle_text: str) -> tuple[dict, ...]:
     """Every such spec a card's text prints, one per line that is the sentence.
-    Cached on the text because the layer-6 pass asks it of every permanent on
-    every recompute, and almost every answer is the empty tuple."""
+
+    Not cached itself: the layer-6 pass asks it of every permanent on every
+    recompute, and each line's answer is already one lookup in the cache
+    above — a second cache over the same answers would be one more to empty
+    and nothing saved."""
     return tuple(
         spec for spec in (
             landwalk_per_type_spec(line) for line in (oracle_text or "").splitlines()

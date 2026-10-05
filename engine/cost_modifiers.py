@@ -35,7 +35,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
 
-from .oracle_types import _COLOR_WORD_TO_SYMBOL, strip_ability_word
+from .oracle_types import (_COLOR_WORD_TO_SYMBOL, compilation_cache,
+                           strip_ability_word)
 
 # Card types a cost modifier can name. "spell" is the unfiltered form; the "non"
 # forms are the printed negation (Vryn Wingmare), not a separate mechanism.
@@ -1724,6 +1725,13 @@ class SelfCostReduction:
     per_each: dict | None = None
 
 
+# ``@compilation_cache`` since a reduction may be sized by a count: the spec
+# in ``per_each`` comes out of the grammar's lowering, so a caller that swaps
+# a piece of that out and back (``tests/engine/test_domain_count.py`` swaps
+# the very line that makes a domain count a count of *types*) must be able to
+# empty this too — left holding the swapped answer, Stratadon would count
+# lands for the rest of the process with every instrument reading green.
+@compilation_cache
 @lru_cache(maxsize=None)
 def self_cost_reduction(oracle_text: str) -> SelfCostReduction | None:
     """The reduction *oracle_text*'s own first line applies to itself, if any."""

@@ -114,6 +114,13 @@ def with_and_without_grammar():
 _COMPILER_ENTRY_POINTS = frozenset({
     "compile_card_oracle", "_compile_card_oracle", "expand_ability_lines",
     "_parse_triggered_ability", "compile_line", "parse_line",
+    # The grammar's string-in door for a printed "for each <counted>" clause
+    # (``engine/grammar/__init__.py``). A count spec comes out of it, and the
+    # two caches that hold one — a spell's own counted reduction and a
+    # board-named landwalk — are swapped under by
+    # ``test_domain_count``'s backwards validation exactly as a compiled
+    # program is.
+    "per_each_count_spec_for",
 })
 
 
