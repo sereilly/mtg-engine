@@ -774,7 +774,37 @@ PARSE_LAYERS = [
     # the other inside it. `riders` keeps the third question alone — what a
     # clause says *about* the step before it — and nothing left there appends a
     # step.
+    #
+    # It gave two things back at Invasion's Phase 0 (see the entry below), and
+    # one of them went *down*: `_bind_that_creature_after_enchanted`, a rebinder
+    # that had landed beside its one caller, joined `sentence_rebinding` where
+    # the three rebinders `_attach_if_you_do` calls already were.
     "control_flow",
+    # "<statement>. If <condition>, <that statement over again> instead." —
+    # the one branch whose arm is the sentence before it printed a second time
+    # (Life Goes On, Urza's Mine, the kicker spells). Pre-split out of
+    # `control_flow` between Invasion's first two waves, with that module four
+    # lines under the guard below and the next wave's first group about to
+    # extend exactly this rider: 115 of the 169 lines that moved had arrived in
+    # wave 1, as two helpers two groups wrote for one idea.
+    #
+    # The seam is what the arm is. Every branch left in `control_flow` is a
+    # free sentence hung on something the line had already asked — an offer
+    # taken or declined, an action that happened or could not, the arm a
+    # conditional has not yet got. This one brings a condition of its own (it
+    # is the only one of the two that imports `_parse_condition`) and its arm
+    # is not free: same node type as the step it replaces, and a back-reference
+    # in it names that step's subject. The two helpers that make the arms
+    # agree came with the rider rather than going to `sentence_rebinding`,
+    # because they are the second half of its `_REPLACEABLE` table and one of
+    # them refuses the rider outright.
+    #
+    # Beside `control_flow` and not under it — neither imports the other.
+    # Above `statements`, whose `parse_statement` it re-enters, and below
+    # `sequences`, its only caller. No mirror name to reuse, for `if_openings`'
+    # reason: `ast.Conditional` lowers inline in `statement_dispatch`, so the
+    # lowering side has no module this could be the twin of.
+    "conditional_instead",
     # "Repeat this process …" — the sentence that says the sentences before it
     # happen again. Three cards print one and no two of them are the same
     # mechanism (see the module docstring), so they are one family rather than
@@ -800,7 +830,8 @@ PARSE_LAYERS = [
     #
     # Above `riders`, `repeats`, `control_flow` and `pronouns`, whose attachers
     # this loop drives: every one of them left `parser` for this same guard, and
-    # none reaches back. Below `parser`, its only caller, whose import of
+    # none reaches back. (And above `conditional_instead`, which left
+    # `control_flow` for it in turn.) Below `parser`, its only caller, whose import of
     # `_statements_from_sentences` is also that name's re-export — and only that
     # name, because `test_import_hygiene.py` reads a re-export nobody pulls as
     # the stale binding a move leaves behind. `riders`' docstring records that "the

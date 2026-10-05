@@ -26,6 +26,8 @@ the seam that sentence describes and is not true of the file. The loop is not a
 line production; it is what a line production is *handed*. Above ``riders``,
 ``repeats``, ``control_flow`` and ``pronouns`` — every attacher this loop drives
 had already left ``parser`` for this same guard, and none of them reaches back.
+(Five modules now: ``conditional_instead`` was cut out of ``control_flow`` at
+Invasion's Phase 0, and its one rider is driven from here like the rest.)
 Below ``parser``, whose import of ``_statements_from_sentences`` is also that
 name's re-export, so its old address still answers. Only that one: the five
 readers around it are pulled by nothing outside this module, and
@@ -43,10 +45,10 @@ lowering twins.
 import dataclasses
 
 from . import ast
+from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
-                          _attach_tied_life_draw,
-                          _parse_conditional_instead_rider, _parse_who_cant_rider)
+                          _attach_tied_life_draw, _parse_who_cant_rider)
 from .effects import (
     _parse_activation_restriction,
     _parse_x_spend_restriction,

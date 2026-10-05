@@ -28,6 +28,27 @@ can't** loses 3 life" (``_parse_who_cant_rider``) is ``_attach_if_you_cant``
 asked of every seat rather than of one: a step that runs only where the action
 before it could not be performed. Neither says anything *about* the step in
 front of it, which is the question ``riders`` keeps.
+
+**The first of those two has its own module now, and it is still a branch.**
+Invasion's first wave grew "… instead" by two helpers and three statement kinds
+and left this file four lines under the guard, so the Phase 0 between that
+set's waves cut it out as ``conditional_instead`` — beside this module, neither
+importing the other, both driven by ``sequences``. The seam is what the arm is.
+Every reader here hangs a **free sentence** on something the line had already
+asked — an offer taken or declined, an action that happened or could not, the
+arm a conditional has not yet got — and none of them calls the condition
+parser or asks its branch to be the same kind of sentence as the step it hangs
+on. "… instead" does both: its two arms are one action printed twice, and
+making them agree (same node, same subject, one announced target) is the part
+that was growing.
+
+One function left in the other direction at the same split.
+``_bind_that_creature_after_enchanted`` answers "which creature does 'that
+creature' name?" and never "which arm is this?"; it had landed beside its one
+caller, ``_attach_if_you_cant``, and it is ``sentence_rebinding``'s question —
+a word pointed at what an earlier clause of the same sentence named — where
+the three rebinders ``_attach_if_you_do`` calls already live. What is left
+here builds an arm or says which one a clause is, and nothing else.
 """
 
 from __future__ import annotations
@@ -40,10 +61,11 @@ from .amounts import parse_amount
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .rebinding import rebind_pronoun_to_condition_target
-from .sentence_rebinding import (rebind_first_creature_to_damage_source,
+from .sentence_rebinding import (_bind_that_creature_after_enchanted,
+                                 rebind_first_creature_to_damage_source,
                                  rebind_permanent_or_player_to_offer_target,
                                  rebind_pronoun_to_delay_target)
-from .statements import _parse_condition, parse_statement
+from .statements import parse_statement
 from .stream import TokenStream
 
 
@@ -138,177 +160,6 @@ def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> b
     )
     steps[-1] = replace(last, then=split) if target is not last else split
     return True
-
-
-def _parse_conditional_instead_rider(
-    stream: TokenStream, steps: list[ast.Statement]
-) -> bool:
-    """``You gain 4 life. If a creature died this turn, you gain 8 life
-    instead.`` (Life Goes On.) ``{T}: Add {C}. If you control an Urza's
-    Power-Plant and an Urza's Tower, add {C}{C} instead.`` (Urza's Mine.)
-
-    The second sentence *replaces* the first when its condition holds, so the
-    pair folds into one ``Conditional`` — then the bigger gain, otherwise the
-    printed base. Parsed apart, the two sentences would gain 12 life on a
-    death; the "instead" is the whole content of the sentence, so it is
-    required, and only a same-shaped statement may replace the last step.
-    """
-    # The statement kinds this rider can replace. `AddMana` joins `GainLife`
-    # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
-    # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
-    # sentence pair with a different verb. `DealDamage` joins them for
-    # Gangrenous Zombies — "…deals 1 damage to each creature and each player.
-    # If you control a snow Swamp, this creature deals 2 damage to each
-    # creature and each player instead." — which is the same pair again. The
-    # replacement must be the *same* kind as what it replaces (checked below),
-    # so widening the set cannot let one kind silently stand in for another.
-    #
-    # `Discard`, `Pump` and `PreventDamage` join them for the kicker spells --
-    # "Target player discards a card. If this spell was kicked, **that player**
-    # discards three cards instead." (Hypnotic Cloud), "Target creature gets
-    # +2/+2 until end of turn. If this spell was kicked, **that creature** gets
-    # +5/+5 until end of turn instead." (Explosive Growth), "Prevent the next 2
-    # damage that would be dealt to any target this turn. If this spell was
-    # kicked, prevent the next 4 damage that would be dealt to **that permanent
-    # or player** this turn instead." (Orim's Touch). These three name *whom*,
-    # and the second sentence names them by pointing back at the first -- see
-    # `_instead_inherits_subject`.
-    _REPLACEABLE = (
-        ast.GainLife, ast.AddMana, ast.DealDamage,
-        ast.Discard, ast.Pump, ast.PreventDamage,
-    )
-
-    last = steps[-1] if steps else None
-    if not isinstance(last, _REPLACEABLE):
-        return False
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    try:
-        condition = _parse_condition(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    try:
-        replacement = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
-    if type(replacement) is not type(last) or not stream.accept_word("instead"):
-        stream.reset(mark)
-        return False
-    # Two readers of one idea - the second sentence's back-reference names the
-    # first sentence's subject, because only one of the two ever runs - written
-    # in the same wave by two groups and disjoint by node type: the first
-    # answers for `DealDamage` ("…deals 4 damage to **it** instead", Lightning
-    # Dart), the second for the three kinds in `_INSTEAD_SUBJECT_FIELDS`, and
-    # each passes the other's kinds through untouched. Kept in sequence rather
-    # than folded at the merge, because they differ in what a mismatch does
-    # (the first leaves the sentence as written, the second refuses the rider)
-    # and choosing between those is a rules reading, not a merge.
-    replacement = _rebind_replacement_recipient(replacement, last)
-    replacement = _instead_inherits_subject(last, replacement)
-    if replacement is None:
-        stream.reset(mark)
-        return False
-    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
-    return True
-
-
-def _rebind_replacement_recipient(replacement, last):
-    """*replacement* with a pronoun recipient pointed at *last*'s one target.
-
-    "Lightning Dart deals 1 damage to **target creature**. If that creature is
-    white or blue, Lightning Dart deals 4 damage to **it** instead." The second
-    sentence replaces the first, so its "it" is the creature the first one
-    targeted — the same object, chosen once (CR 601.2c), dealt one amount or
-    the other. Written back as the first sentence's own target spec, both arms
-    of the ``Conditional`` describe one target: the picker derives one choice
-    and whichever arm runs resolves the same permanent.
-
-    Only for the shape that has an answer: one recipient on each side, the
-    first a single announced target, the second a bare "it" or a "that <noun>"
-    restating it and narrowing nothing. Anything else is returned unchanged and
-    refuses where it always did — an "it" with two targets in front of it names
-    neither, and a "that" carrying a narrowing of its own is describing some
-    other object.
-    """
-    if not isinstance(replacement, ast.DealDamage):
-        return replacement
-    if len(replacement.recipients) != 1 or len(last.recipients) != 1:
-        return replacement
-    named, chosen = replacement.recipients[0], last.recipients[0]
-    if not (
-        isinstance(named, ast.TargetSpec)
-        and isinstance(chosen, ast.TargetSpec)
-        and chosen.targeted
-        and chosen.count == 1
-        and not named.targeted
-    ):
-        return replacement
-    if named.quantifier == "that":
-        restated = replace(named.filter, card_types=())
-        if restated != ast.ObjectFilter() or not (
-            set(named.filter.card_types) <= set(chosen.filter.card_types)
-        ):
-            return replacement
-    elif named.quantifier != "it":
-        return replacement
-    return replace(replacement, recipients=(chosen,))
-
-
-#: Which field of each replaceable statement says *whom* it is done to. Only the
-#: kinds whose "instead" sentence can point back at the first one's subject;
-#: `GainLife`, `AddMana` and `DealDamage` restate theirs in full on every card
-#: that prints the pair, and are passed through untouched.
-_INSTEAD_SUBJECT_FIELDS = {
-    ast.Discard: "player",
-    ast.Pump: "subject",
-    ast.PreventDamage: "to",
-}
-
-
-def _instead_inherits_subject(last, replacement):
-    """*replacement* with a back-reference to *last*'s subject resolved, or
-    None when it points at something *last* did not name.
-
-    "…**that player** discards three cards instead": only one of the two
-    sentences ever runs (the pair folds to a `Conditional`), so the pronoun in
-    the second has nothing recorded in front of it to bind to -- its antecedent
-    is the *sentence it replaces*, never an earlier step's result. It therefore
-    takes that sentence's own subject, target and all, which is also what
-    CR 601.2c needs: the spell names one player whichever arm resolves.
-
-    A replacement that names its subject outright ("target player discards
-    three cards instead" -- not printed, and a second target if it were) is
-    kept as written. One that points back must agree with what it points at:
-    "that player" after a player, "that creature" after the same card type,
-    "that permanent or player" after any target. Anything else refuses the
-    rider, so a pronoun is never resolved onto a subject of another kind.
-    """
-    field = _INSTEAD_SUBJECT_FIELDS.get(type(last))
-    if field is None:
-        return replacement
-    named = getattr(replacement, field)
-    original = getattr(last, field)
-    if isinstance(named, ast.PlayerRef):
-        if named.kind != "that_player":
-            return replacement
-        if isinstance(original, ast.PlayerRef) and original.kind != "that_player":
-            return replace(replacement, **{field: original})
-        return None
-    if isinstance(named, ast.TargetSpec):
-        if named.targeted or named.quantifier not in ("that", "permanent_or_player"):
-            return replacement
-        if not isinstance(original, ast.TargetSpec):
-            return None
-        if named.quantifier == "permanent_or_player":
-            agrees = original.quantifier == "any_target"
-        else:
-            agrees = named.filter == original.filter
-        return replace(replacement, **{field: original}) if agrees else None
-    return replacement
 
 
 def _choice_step_index(steps: list[ast.Statement]) -> int | None:
@@ -745,46 +596,6 @@ def _attach_if_you_do(stream: TokenStream, steps: list[ast.Statement]) -> bool:
         rebuilt = replace(conditional, then=rebuilt)
     steps[-1] = rebuilt
     return True
-
-
-def _bind_that_creature_after_enchanted(branch: ast.Statement) -> ast.Statement:
-    """*branch* with a "that creature" keyword grant bound to the enchanted
-    creature an earlier step of the same branch names.
-
-    "…put a +1/+1 counter on **enchanted creature**, and **that creature**
-    gains flying." (Cocoon.) "That creature" restates the step before it, and
-    the noun parser must not learn the phrase — every sentence printing those
-    words would then lower through a filter naming a creature nobody bound. The
-    pairing is made here, where the antecedent is a fact: only a bare "that
-    creature" is rewritten, and only when an enchanted-creature step precedes
-    it in the same branch.
-    """
-    def bind(
-        statement: ast.Statement, enchanted: ast.TargetSpec | None
-    ) -> tuple[ast.Statement, ast.TargetSpec | None]:
-        # Sequences nest right-leaning ("A, B, and C" parses as (A, (B, C))),
-        # so the walk recurses instead of reading one level of steps.
-        if isinstance(statement, ast.Sequence):
-            rebuilt = []
-            for step in statement.steps:
-                step, enchanted = bind(step, enchanted)
-                rebuilt.append(step)
-            return ast.Sequence(tuple(rebuilt)), enchanted
-        if (
-            isinstance(statement, ast.GainKeyword)
-            and isinstance(statement.subject, ast.TargetSpec)
-            and statement.subject.quantifier == "that"
-            and statement.subject.filter == ast.ObjectFilter(card_types=("creature",))
-            and enchanted is not None
-        ):
-            return replace(statement, subject=enchanted), enchanted
-        subject = getattr(statement, "subject", None)
-        if isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted:
-            enchanted = subject
-        return statement, enchanted
-
-    bound, _ = bind(branch, None)
-    return bound
 
 
 def _attach_if_that_card_was_returned(

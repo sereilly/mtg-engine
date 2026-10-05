@@ -17,8 +17,10 @@ it.** The three verbs in the first one are three questions, and each has its
 own module:
 
     control_flow  *branches* — which arm of the sentence before it a clause
-                  is ("If you do, …", "Otherwise, …", "If <condition>, …
-                  instead", "Each opponent who can't …")
+                  is ("If you do, …", "Otherwise, …", "Each opponent who
+                  can't …"); and beside it since Invasion's Phase 0,
+                  ``conditional_instead``, the one branch whose arm is the
+                  sentence before it over again ("If <condition>, … instead")
     pronouns      *names* — what a pronoun or a possessive points back at
                   ("It gains …", "Its controller creates …")
     riders        *narrows* — a flag, a bound or a width folded onto the node

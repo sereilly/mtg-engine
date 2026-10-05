@@ -29,6 +29,13 @@ sentence and already play correctly, so a walk that rewrote every spec broke
 all eight. Narrowness is the recurring design problem of this half and of
 neither line of the other, which is the honest reason they are two files.
 
+``_bind_that_creature_after_enchanted`` arrived at Invasion's Phase 0 from
+``control_flow``, where it had sat beside its one caller without ever asking
+that module's question. "…put a +1/+1 counter on **enchanted creature**, and
+**that creature** gains flying" is the clause-in-front antecedent again, the
+object *named* by the earlier clause rather than targeted by it — and it is
+narrow the way everything here is: one bare phrase, after one kind of step.
+
 Above ``rebinding`` in ``PARSE_LAYERS`` because it reads ``_walk_specs`` and
 ``rebinding`` reads nothing here. Nothing is re-exported from ``rebinding``:
 the five callers import from this module directly, because a re-export would be
@@ -664,3 +671,43 @@ def rebind_first_creature_to_damage_source(
         return None
 
     return _walk_specs(branch, _rewrite)
+
+
+def _bind_that_creature_after_enchanted(branch: ast.Statement) -> ast.Statement:
+    """*branch* with a "that creature" keyword grant bound to the enchanted
+    creature an earlier step of the same branch names.
+
+    "…put a +1/+1 counter on **enchanted creature**, and **that creature**
+    gains flying." (Cocoon.) "That creature" restates the step before it, and
+    the noun parser must not learn the phrase — every sentence printing those
+    words would then lower through a filter naming a creature nobody bound. The
+    pairing is made here, where the antecedent is a fact: only a bare "that
+    creature" is rewritten, and only when an enchanted-creature step precedes
+    it in the same branch.
+    """
+    def bind(
+        statement: ast.Statement, enchanted: ast.TargetSpec | None
+    ) -> tuple[ast.Statement, ast.TargetSpec | None]:
+        # Sequences nest right-leaning ("A, B, and C" parses as (A, (B, C))),
+        # so the walk recurses instead of reading one level of steps.
+        if isinstance(statement, ast.Sequence):
+            rebuilt = []
+            for step in statement.steps:
+                step, enchanted = bind(step, enchanted)
+                rebuilt.append(step)
+            return ast.Sequence(tuple(rebuilt)), enchanted
+        if (
+            isinstance(statement, ast.GainKeyword)
+            and isinstance(statement.subject, ast.TargetSpec)
+            and statement.subject.quantifier == "that"
+            and statement.subject.filter == ast.ObjectFilter(card_types=("creature",))
+            and enchanted is not None
+        ):
+            return replace(statement, subject=enchanted), enchanted
+        subject = getattr(statement, "subject", None)
+        if isinstance(subject, ast.TargetSpec) and subject.filter.is_enchanted:
+            enchanted = subject
+        return statement, enchanted
+
+    bound, _ = bind(branch, None)
+    return bound
