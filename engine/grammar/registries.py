@@ -95,7 +95,7 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     """
     normalized = _normalized(line)
 
-    # engine/cast_restrictions.py — "Cast this spell only during …" (CR 601.3e),
+    # engine/cast_restrictions.py — "Cast this spell only during …" (CR 601.3),
     # looped by check_cast_timing() from mixins/stack/casting.cast_from_hand.
     # That consumer matches by substring against the card's whole text; the
     # equality here is deliberately stricter, so a line that is a timing

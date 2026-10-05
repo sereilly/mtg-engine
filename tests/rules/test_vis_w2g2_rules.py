@@ -299,13 +299,13 @@ def test_a_protection_quality_no_shield_can_answer_refuses_the_anthem():
 
 
 # ---------------------------------------------------------------------------
-# CR 508.1g — an attack toll priced off the attacker's own counters
+# CR 508.1h — an attack toll priced off the attacker's own counters
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("508.1g", "122.1a")
+@pytest.mark.cr("508.1h", "122.1a")
 def test_an_attack_toll_may_be_priced_by_the_attackers_own_counters():
-    """CR 508.1g's cost is determined as attackers are declared, so a price
+    """CR 508.1h's cost is determined as attackers are declared, so a price
     read off the board is answerable there and only there.
 
     Phyrexian Marauder's "{1} for each +1/+1 counter on it" is the multiplier;

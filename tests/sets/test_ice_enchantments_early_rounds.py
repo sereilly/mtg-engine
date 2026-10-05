@@ -442,7 +442,7 @@ def test_flooded_woodlands_charges_one_land_per_attacking_green_creature(set_poo
     """"Green creatures can't attack unless their controller sacrifices a land
     of their choice **for each green creature they control that's attacking**."
 
-    CR 508.1g printed on a permanent that names a *class* rather than itself,
+    CR 508.1h printed on a permanent that names a *class* rather than itself,
     with the payer being that class's controller. The "for each" tail is what
     makes it a per-attacker cost, which is the shape `_attack_costs_of` already
     returns — so the declaration sums it with no second adder to keep in step.

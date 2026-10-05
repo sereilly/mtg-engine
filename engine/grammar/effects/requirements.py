@@ -175,7 +175,7 @@ def _parse_attacks_this_turn_if_able(
     The subject has already been read, so this starts at the verb. Every word of
     the duration and the escape is required: "attacks **each combat** if able"
     is the printed static one file over, and "attacks this turn" with the "if
-    able" dropped would be a requirement CR 508.1a says a creature that cannot
+    able" dropped would be a requirement CR 508.1d says a creature that cannot
     attack must somehow meet.
 
     Refuses without consuming, so a sentence opening on the same verb keeps its

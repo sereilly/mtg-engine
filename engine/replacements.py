@@ -74,6 +74,8 @@ from .effect_ordering import (
     Candidate,
     affected_seat,
     apply_in_order,
+    CAP,
+    MULTIPLIER,
     choose_effect,
 )
 from .damage_redirects import (
@@ -366,7 +368,8 @@ REPLACED = "_replaced"
 
 
 def replacement_effect(
-    kind: str, order: int, *, applies: Applicability, redirects: bool = False
+    kind: str, order: int, *, applies: Applicability, redirects: bool = False,
+    amount_role: str = "",
 ) -> Callable[[Interceptor], Interceptor]:
     """Register an interceptor for an event kind.
 
@@ -395,7 +398,10 @@ def replacement_effect(
                       # changing it, which is the half of Whippoorwill's clause
                       # a replacement can be. Declared here so a new redirect
                       # cannot quietly escape the lock.
-                      prevents_or_redirects=redirects)
+                      prevents_or_redirects=redirects,
+                      # CR 616.1e's default needs to know a cap from a
+                      # multiplier (`effect_ordering.choose_effect`).
+                      amount_role=amount_role)
         )
         registered.sort(key=lambda candidate: candidate.order)
         return fn
@@ -428,6 +434,7 @@ def replacement_candidates(kind: str) -> list[Candidate]:
             key=c.key, order=c.order, applies=c.applies, label=c.label,
             apply=lambda g, e, fn=c.apply: _record(g, e, fn),
             prevents_or_redirects=c.prevents_or_redirects,
+            amount_role=c.amount_role,
         )
         for c in REPLACEMENTS.get(kind, ())
     ]
@@ -931,10 +938,12 @@ def _applies_source_damage_cap(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_player", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap
+    "damage_to_player", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap,
+    amount_role=CAP,
 )
 @replacement_effect(
-    "damage_to_creature", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap
+    "damage_to_creature", DAMAGE_SOURCE_CAP, applies=_applies_source_damage_cap,
+    amount_role=CAP,
 )
 def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | None:
     """Forethought Amulet: "If an instant or sorcery source would deal 3 or more
@@ -1910,10 +1919,12 @@ def _applies_damage_multiplier(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier
+    "damage_to_creature", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier,
+    amount_role=MULTIPLIER,
 )
 @replacement_effect(
-    "damage_to_player", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier
+    "damage_to_player", DAMAGE_MULTIPLIER, applies=_applies_damage_multiplier,
+    amount_role=MULTIPLIER,
 )
 def _multiply_damage_dealt(game, payload: dict) -> ReplacementOutcome | None:
     """Fiery Emancipation: "If a source **you control** would deal damage to a
@@ -1957,7 +1968,7 @@ def _applies_combat_damage_doubler(game, payload: dict) -> bool:
 
 @replacement_effect(
     "damage_to_creature", COMBAT_DAMAGE_DOUBLER,
-    applies=_applies_combat_damage_doubler,
+    applies=_applies_combat_damage_doubler, amount_role=MULTIPLIER,
 )
 def _double_combat_damage_between_creatures(
     game, payload: dict
@@ -1994,10 +2005,12 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
 
 
 @replacement_effect(
-    "damage_to_creature", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled
+    "damage_to_creature", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled,
+    amount_role=MULTIPLIER,
 )
 @replacement_effect(
-    "damage_to_player", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled
+    "damage_to_player", NEXT_DAMAGE_DOUBLED, applies=_applies_next_damage_doubled,
+    amount_role=MULTIPLIER,
 )
 def _double_next_damage_from_chosen_source(
     game, payload: dict

@@ -691,12 +691,12 @@ def test_508_1d_the_requirement_still_binds_below_the_cap():
 
 
 # ---------------------------------------------------------------------------
-# The declaration's sacrifice costs are one payment (CR 508.1g)
+# The declaration's sacrifice costs are one payment (CR 508.1h)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.cr("508.1g")
-def test_508_1g_two_attackers_sacrifice_costs_are_summed_over_the_declaration(set_pool):
+@pytest.mark.cr("508.1h")
+def test_508_1h_two_attackers_sacrifice_costs_are_summed_over_the_declaration(set_pool):
     """"This creature can't attack unless you sacrifice two Islands."
     (Leviathan.) Two of them owe **four** Islands, not two.
 
@@ -736,15 +736,16 @@ def test_508_1g_two_attackers_sacrifice_costs_are_summed_over_the_declaration(se
     assert _declare(4) == (True, 0), "four Islands pay four"
 
 
-@pytest.mark.cr("508.1g")
-def test_508_1g_the_sacrifice_plan_prefers_the_permanent_each_cost_can_only_use(set_pool):
+@pytest.mark.cr("508.1h")
+def test_508_1h_the_sacrifice_plan_prefers_the_permanent_each_cost_can_only_use(set_pool):
     """Overlapping costs are a matching, and a greedy pass gets this wrong.
 
     Flooded Woodlands wants **a land** for the attacking green creature;
     Leviathan wants **two Islands** for itself. With two Islands and one Forest
     on the board the declaration is payable — but only if the Forest answers
     "a land". A reader that spent an Island there would refuse a board that can
-    pay, which is the direction CR 508.1g's "able to" forbids.
+    pay, which is the direction CR 508.1j's "partial payments are not
+    allowed" forbids.
     """
     lea = set_pool("LEA")
     ice = set_pool("ICE")

@@ -2366,7 +2366,7 @@ class GameHelpersMixin:
         """The order a seat gives permanents up in — lowest first.
 
         Split out of :meth:`default_sacrifice_pick` because a caller that has to
-        pay **several** costs at once cannot pick them one at a time: CR 508.1g's
+        pay **several** costs at once cannot pick them one at a time: CR 508.1h's
         sacrifices are one payment, and which permanent answers which cost is a
         matching (`_declaration_sacrifice_plan`). That planner needs the policy
         as an *order* rather than as a winner, and a second ordering written
@@ -2840,6 +2840,49 @@ class GameHelpersMixin:
         seat = self.announced_target_seat(item.target_permanent_id)
         if seat is not None:
             item.target_player_index = seat
+
+    def announced_target_slot(self, permanent_ids) -> "tuple[int, int] | None":
+        """The ``(seat, battlefield index)`` a **single** announced id names
+        right now, or None where the ids do not name exactly one live
+        permanent (CR 601.2c, CR 400.7).
+
+        :meth:`announced_target_seat` with the slot beside it, for the one
+        announcement the engine still carries to resolution as a slot: an
+        **Aura spell's** enchant target. Every gate in that spell's arm of
+        ``_validate_cast_targets`` — the enchant noun, "you control", the
+        can't-be-enchanted and protection checks — is asked of
+        ``permanent_at(seat, index)``, and so is the attachment at resolution;
+        an announcement made by id reached none of them, so
+        ``cast_from_hand(seat, "Holy Strength", target_permanent_ids=[id])``
+        was refused "requires a target" for every Aura in the pool while the
+        index spelling of the same choice was accepted. The id is the complete
+        announcement (it names the object *and* its battlefield); the slot is
+        derived from it here, once, at the moment the board and the id agree —
+        which is what ``web/actions.py`` does for the wire and what a headless
+        caller was left to do by hand.
+
+        None for a list of several ids: an Aura has one target, and a caller
+        naming two is announcing something this cannot settle.
+        """
+        named = [
+            permanent_id
+            for permanent_id in (
+                permanent_ids
+                if isinstance(permanent_ids, (list, tuple))
+                else [permanent_ids]
+            )
+            if isinstance(permanent_id, int)
+        ]
+        if len(named) != 1:
+            return None
+        permanent = self.permanent_by_id(named[0])
+        if permanent is None:
+            return None
+        seat = self.controller_index_of(permanent)
+        index = self.battlefield_index_of(permanent)
+        if seat is None or index is None:
+            return None
+        return seat, index
 
     def _announce_targeting(self, item) -> None:
         """"…becomes the target of a spell or ability" (CR 603.2, Warden of the

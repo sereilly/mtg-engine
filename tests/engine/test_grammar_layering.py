@@ -393,7 +393,7 @@ PARSE_LAYERS = [
     # The seam is `parse_counted_subject`'s own docstring: these readers are the
     # shared half of one clause, read by three families that never see each
     # other (the board family's sacrifice and its "unless you sacrifice" tails,
-    # the combat family's attack cost under CR 508.1g, the stack family's
+    # the combat family's attack cost under CR 508.1h, the stack family's
     # counter tails). **Above `phrases`**, which it reads and which never reads
     # it back: a sacrifice clause is built out of noun phrases and numbers, and
     # none of those is built out of a sacrifice.
@@ -2274,7 +2274,7 @@ FAMILY_SHARED = {
     # lines past the size guard. The seam is one the rules already draw and the
     # enforcement already honours: a CR 508.1c / CR 509.1b *restriction* is
     # answered by `can_attack` / `_can_block_attacker` asking whether a
-    # declaration is legal at all, and a CR 508.1g / CR 509.1d *cost* is
+    # declaration is legal at all, and a CR 508.1h / CR 509.1d *cost* is
     # answered by the four cost readers and charged over the whole declaration.
     # Everything in the new module lowers into the second half; everything left
     # in `combat` lowers into the first.

@@ -5077,7 +5077,7 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
     {
         "dynamic_pt_bonus", "lord_buff", "conditional_static",
         # "This creature can't attack unless you sacrifice two Islands."
-        # (Leviathan.) A CR 508.1g attack cost, which is a *static* property of
+        # (Leviathan.) A CR 508.1h attack cost, which is a *static* property of
         # the creature — `declare_attackers_step` reads the compiled
         # instruction off the card at declaration, exactly as it reads the
         # text-keyed restrictions beside it. The grammar produces it rather

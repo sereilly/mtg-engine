@@ -347,6 +347,13 @@ def _card_castable_now(
         target_ok, _ = game._validate_cast_targets(card, player_index, None)
         if not target_ok:
             return False
+        # …and CR 601.2c's "no legal target exists", through the predicate the
+        # cast path itself refuses with. The arms above ask it of the kinds
+        # they name; a spell whose first instruction is a wrapper ("Destroy
+        # target artifact or enchantment. Draw two cards.") reached none of
+        # them, so it glowed on an empty board and the click was then refused.
+        if game.no_legal_cast_target_refusal(player_index, card) is not None:
+            return False
 
     # Land play restriction: CR 305.2's one per turn, plus whatever the
     # allowances on this seat's battlefield add (engine/land_play_allowance.py).

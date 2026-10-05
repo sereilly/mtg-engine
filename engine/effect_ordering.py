@@ -85,6 +85,19 @@ class Candidate:
     # is added and the failure is silent: the lock would quietly stop being a
     # lock over whatever was added last.
     prevents_or_redirects: bool = False
+    #: What this effect does to the **amount** of the event, for the two shapes
+    #: whose best order depends on each other: :data:`CAP` ("if a source would
+    #: deal 3 or more damage, it deals 2 instead" — Forethought Amulet, Divine
+    #: Presence) and :data:`MULTIPLIER` ("…it deals double that damage instead"
+    #: — Furnace of Rath, Fiery Emancipation). Empty for every other effect.
+    #: Declared at registration for ``prevents_or_redirects``' reason: read off
+    #: an order range instead, it would go stale the day a new one is added.
+    amount_role: str = ""
+
+
+#: ``Candidate.amount_role`` values. See :func:`choose_effect`.
+CAP = "cap"
+MULTIPLIER = "multiplier"
 
 
 @dataclass
@@ -140,13 +153,37 @@ SUSPENDED = object()
 
 
 def choose_effect(game, chooser_index: int | None, candidates: list[Candidate]) -> Candidate:
-    """The default choice (CR 616.1e): the lowest ``order``.
+    """The default choice (CR 616.1e): the lowest ``order`` — except that a
+    multiplier goes ahead of a cap it contends with.
 
     What a non-interactive seat takes, and what every seat takes on an event
     that cannot suspend to ask. Any single order is a legal set of 616.1e
-    choices, so this is a correct game, just not always the one the player
-    would have picked.
+    choices, so this is a correct game; the orders are picked so that it is
+    also the game the affected player would have chosen.
+
+    **One static number cannot say that for a cap and a multiplier.** A cap
+    sits at order 5, ahead of the prevention shields (a shield spent on the
+    printed damage is wasted when the cap would have taken it to 2 anyway),
+    and a multiplier at 700, behind them (a shield spent after tripling
+    absorbs its points from three times as much). Each is right against the
+    shields and together they are wrong against each other: Divine Presence
+    ("…3 or more damage … deals 3 instead") beside Furnace of Rath turned 5
+    into 3 and then into **6**, where the affected player — whose choice this
+    is — would double first and take 3.
+
+    So the default *chooses* where the numbers cannot: on a round where a cap
+    and a multiplier both apply, the multiplier is applied first. That is never
+    worse for the affected player. With the damage at or over the threshold the
+    cap's result is the same number either way, and applying it last means
+    nothing multiplies it; under the threshold the cap does not apply yet, this
+    rule is not reached, and the ordinary order runs — after which CR 616.1f
+    re-asks the cap about the multiplied amount. Shields keep their place
+    relative to both: behind the cap, so they absorb from the capped number.
     """
+    if any(candidate.amount_role == CAP for candidate in candidates):
+        multipliers = [c for c in candidates if c.amount_role == MULTIPLIER]
+        if multipliers:
+            return min(multipliers, key=lambda candidate: candidate.order)
     return min(candidates, key=lambda candidate: candidate.order)
 
 

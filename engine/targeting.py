@@ -2728,6 +2728,38 @@ def derive_cast_spec(
     return {**target_spec, "cost_spec": cost_spec}
 
 
+def cast_target_slot(
+    card, program, *, optional_cost_payments: dict | None = None,
+) -> "tuple[dict, object] | None":
+    """``(spec, instruction)`` for the target an **instant or sorcery**
+    announces as it is cast: the target half of :func:`derive_cast_spec`
+    beside the instruction that carries it, or None when the spell targets
+    nothing.
+
+    For CR 601.2c's other question. The spec says *what* may be chosen; whether
+    a choice **must** be made is that one slot's printed quantifier, which only
+    the instruction keeps — see :func:`_first_described_slot`. Read through the
+    same :func:`_as_kicked` view the spec is (CR 702.33g), so a kicked-only
+    target is a slot only for a cast that was kicked.
+
+    A permanent spell answers None: its spec is an Aura's enchant line or an
+    entry trigger's target, neither of which is a step of the spell's own
+    resolution, and each has its own gate.
+    """
+    type_line = card.type_line.lower()
+    if "instant" not in type_line and "sorcery" not in type_line:
+        return None
+    instructions = tuple(program.instructions)
+    if optional_cost_payments is not None:
+        kicker = kicker_cost(card.oracle_text or "")
+        if kicker is not None:
+            instructions = _as_kicked(
+                instructions,
+                int(optional_cost_payments.get(kicker, 0) or 0) > 0,
+            )
+    return _first_described_slot(instructions)
+
+
 def derive_cast_target(card, program, *, from_zone: str = "hand") -> str | None:
     """The cast-time target *kind* of *card*, for callers that need no flags."""
     spec = derive_cast_spec(card, program, from_zone=from_zone)
@@ -2836,6 +2868,25 @@ def _from_instructions(instructions) -> dict | None:
     and stopping at the wrapper would leave an otherwise fully-described effect
     with no prompt.
     """
+    slot = _first_described_slot(instructions)
+    return slot[0] if slot is not None else None
+
+
+def _first_described_slot(instructions) -> "tuple[dict, object] | None":
+    """``(spec, instruction)`` for the first description in *instructions*:
+    the spec :func:`_from_instructions` answers with, beside **the instruction
+    that carries it**.
+
+    One walk, two readers. The picker wants the spec; CR 601.2c's "is this
+    target one the announcement *must* make?" wants the instruction, because
+    the answer is that slot's own printed quantifier ("target" against "up to
+    one target") and a spec does not keep it. Asking the program at large
+    instead — every quantifier it carries, wherever it sits — answers about a
+    different slot the moment a spell prints two (Primal Might: "Target
+    creature you control … fights **up to one** target creature you don't
+    control"), which is how the AI's reader and the engine's came to disagree
+    about which spells need a target at all.
+    """
     for instruction in instructions:
         # "…**target opponent** loses 2 life unless… You may repeat this
         # process any number of times." (Forbidden Ritual.) A repeated process
@@ -2861,7 +2912,7 @@ def _from_instructions(instructions) -> dict | None:
             "sequence", "repeat_optional_process", "repeat_process_while",
             "repeat_process_on_request",
         ):
-            nested = _from_instructions(instruction.payload.get("steps") or ())
+            nested = _first_described_slot(instruction.payload.get("steps") or ())
             if nested is not None:
                 return nested
             continue
@@ -2872,7 +2923,7 @@ def _from_instructions(instructions) -> dict | None:
             # whichever way the coin lands — so both arms are read, and an
             # ability whose only targeting sits behind a conditional gets its
             # prompt rather than the picker's silent fallback.
-            nested = _from_instructions(
+            nested = _first_described_slot(
                 tuple(instruction.payload.get("then") or ())
                 + tuple(instruction.payload.get("else") or ())
             )
@@ -2894,7 +2945,7 @@ def _from_instructions(instructions) -> dict | None:
             # before.
             condition_spec = _condition_target_spec(instruction.payload.get("condition"))
             if condition_spec is not None:
-                return condition_spec
+                return condition_spec, instruction
             continue
         if instruction.kind == "unless_player_pays":
             # "Unless an opponent pays {2}, gain control of **target artifact**
@@ -2902,7 +2953,7 @@ def _from_instructions(instructions) -> dict | None:
             # branch, and CR 601.2c picks it as the ability is activated —
             # before anyone is offered the cost — so this branch is read where
             # an offer's declined branch deliberately is not.
-            nested = _from_instructions(
+            nested = _first_described_slot(
                 tuple(instruction.payload.get("unpaid") or ())
                 + tuple(instruction.payload.get("paid") or ())
             )
@@ -2930,12 +2981,13 @@ def _from_instructions(instructions) -> dict | None:
             # picker for a mode the player had not chosen.
             modes = instruction.payload.get("modes") or ()
             described = [
-                _from_instructions((mode.get("instruction"),))
+                _first_described_slot((mode.get("instruction"),))
                 if isinstance(mode, dict) and mode.get("instruction") is not None
                 else None
                 for mode in modes
             ]
-            if described and all(spec == described[0] for spec in described[1:]):
+            specs = [slot[0] if slot is not None else None for slot in described]
+            if specs and all(spec == specs[0] for spec in specs[1:]):
                 if described[0] is not None:
                     return described[0]
             continue
@@ -2954,7 +3006,7 @@ def _from_instructions(instructions) -> dict | None:
             # picker learns it the way it learns every other target.
             own = _from_targets_payload(instruction.payload.get("targets"))
             if own is not None:
-                return own
+                return own, instruction
             # An optional action still targets — "you may tap or untap target
             # creature" names a creature whether or not the offer is taken.
             #
@@ -2964,7 +3016,7 @@ def _from_instructions(instructions) -> dict | None:
             # report this instruction as targeting something it never picks —
             # and for the reflexive branch, at a moment when the choice has not
             # been offered yet.
-            nested = _from_instructions(
+            nested = _first_described_slot(
                 tuple(instruction.payload.get("action") or ())
                 + tuple(instruction.payload.get("then") or ())
                 # …and the **declined** branch, last. "Destroy target creature
@@ -2987,7 +3039,7 @@ def _from_instructions(instructions) -> dict | None:
             continue
         spec = _from_instruction(instruction)
         if spec is not None:
-            return spec
+            return spec, instruction
 
     return None
 

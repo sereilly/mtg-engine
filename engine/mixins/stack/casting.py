@@ -1040,6 +1040,24 @@ class SpellCastingMixin:
             self.log.append(details)
             return SimulationResult(card_name, False, None, details)
         classification = classify_card(card)
+        # **An Aura announced by id alone** (CR 601.2c, CR 400.7). The id names
+        # the object and its battlefield, so it is the whole announcement; the
+        # slot every gate and the attachment below still read is derived from
+        # it here, before any of them runs. See `Game.announced_target_slot` —
+        # until this, every Aura in the pool was refused "requires a target"
+        # when its host was named the way this engine asks for.
+        #
+        # Only where no slot was given: an index beside an id is the same
+        # choice said twice, and the caller's own spelling is left alone.
+        if (
+            target_permanent_index is None
+            and target_permanent_ids
+            and "Aura" in card.type_line
+            and card.primary_type not in ("instant", "sorcery")
+        ):
+            slot = self.announced_target_slot(target_permanent_ids)
+            if slot is not None:
+                target_player_index, target_permanent_index = slot
         extra_generic_tax = 0
         # The *coloured* half of the same taxes (Derelor's "{B}"). Its own
         # total because it is its own resource: a generic pip is payable with
@@ -1576,6 +1594,21 @@ class SpellCastingMixin:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
+        # CR 601.2c's other half, asked before what was *named*: a spell that
+        # must announce a target cannot be cast while no legal target exists.
+        # The arms above ask it of the kinds they name; this asks it of every
+        # spell, through the list the picker is handed — so "Destroy target
+        # artifact or enchantment. Draw two cards." on an empty board is an
+        # illegal announcement rather than a two-mana cantrip. Nothing has been
+        # spent yet.
+        unaimed = self.no_legal_cast_target_refusal(
+            caster_index, card,
+            optional_cost_payments=optional_paid, x_value=x_value,
+        )
+        if unaimed is not None and target_stack_item is None:
+            self.log.append(unaimed)
+            return SimulationResult(card.name, False, classification.effect_kind, unaimed)
+
         # CR 601.2c for the target the caller *named*, beside the per-kind arms
         # above rather than inside them: a spell whose primary instruction is a
         # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.
@@ -1751,6 +1784,7 @@ class SpellCastingMixin:
             # spending its cost on the wrong value rather than on a choice.
             resolved_x_value = self._x_implied_by_target(
                 card, target_player_index, target_permanent_index, target_stack_item,
+                target_permanent_ids,
             )
         if resolved_x_value is None and "{X}" in card.mana_cost.upper():
             resolved_x_value = self._infer_x_value(
@@ -3777,7 +3811,8 @@ class SpellCastingMixin:
         return {"sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled}
 
     def _x_implied_by_target(
-        self, card, target_player_index, target_permanent_index, target_stack_item
+        self, card, target_player_index, target_permanent_index, target_stack_item,
+        target_permanent_ids=None,
     ) -> int | None:
         """The X a "with mana value X" spell's chosen target fixes, or None.
 
@@ -3786,11 +3821,25 @@ class SpellCastingMixin:
         pool-based inference. The stack item is read first because a spell being
         countered is the only kind of target Spell Blast has; Detonate's is a
         permanent on some seat's battlefield.
+
+        **A permanent named by id is read before one named by slot** (CR 400.7:
+        the id is the object). This read the slot alone, so an announcement
+        made the way the engine asks for one fixed no X and was held to none:
+        Detonate cast by id with X=4 at a zero-cost artifact was accepted,
+        destroyed it and dealt 4 — the printed "with mana value X" enforced on
+        the index spelling of a target and on no other.
         """
         if not targets_mana_value_x(compile_card_oracle(card).instructions):
             return None
         if target_stack_item is not None:
             return int(getattr(target_stack_item.card, "cmc", 0) or 0)
+        named = next(
+            (pid for pid in (target_permanent_ids or ()) if isinstance(pid, int)),
+            None,
+        )
+        if named is not None:
+            chosen = self.permanent_by_id(named)
+            return None if chosen is None else int(getattr(chosen.card, "cmc", 0) or 0)
         if not isinstance(target_permanent_index, int):
             return None
         seat = target_player_index if target_player_index is not None else None
@@ -4118,6 +4167,7 @@ class SpellCastingMixin:
         if x_value is not None and targets_mana_value_x(program.instructions):
             implied = self._x_implied_by_target(
                 card, target_player_index, target_permanent_index, target_stack_item,
+                target_permanent_ids,
             )
             if implied is not None and implied != int(x_value):
                 return False, (
@@ -4129,6 +4179,17 @@ class SpellCastingMixin:
         if target_idx < 0 or target_idx >= len(self.players):
             target_idx = 1 - caster_index
         target = self.players[target_idx]
+
+        def _may_name_nobody() -> bool:
+            # CR 601.2c: "up to N target", "any number of target" and "X
+            # target" at an X of zero are legal announcements naming nobody, so
+            # the arms below must not refuse them for having nobody to name.
+            # Asked only where an arm is about to refuse an *unnamed* cast, and
+            # through the reader `no_legal_cast_target_refusal` uses, so the
+            # arms and that gate cannot disagree about which spells need one.
+            from ...legality import cast_may_name_no_target
+
+            return cast_may_name_no_target(card, program, x_value=x_value)
 
         # CR 702.16b: a spell can't be cast targeting a creature with protection
         # from the spell's quality (or with shroud). Reject the illegal target at
@@ -4211,7 +4272,7 @@ class SpellCastingMixin:
                     )
                     for p in self.all_permanents()
                 )
-                if not has_target:
+                if not has_target and not _may_name_nobody():
                     return False, f"no valid target for {card.name}"
 
         elif primary.kind == "counter_top_stack_spell":
@@ -4251,7 +4312,7 @@ class SpellCastingMixin:
                     return False, f"no valid target for {card.name}"
             elif not any(
                 _legal_bounce_target(p) for p in self.all_permanents()
-            ):
+            ) and not _may_name_nobody():
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in (
@@ -4283,7 +4344,9 @@ class SpellCastingMixin:
                     battlefield[target_permanent_index]
                 ):
                     return False, f"no valid target for {card.name}"
-            elif not any(_legal_pump_target(p) for p in self.all_permanents()):
+            elif not any(
+                _legal_pump_target(p) for p in self.all_permanents()
+            ) and not _may_name_nobody():
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind in (
@@ -4336,11 +4399,30 @@ class SpellCastingMixin:
                         return False, f"no valid target for {card.name}"
                 elif not any(
                     _legal_steal_target(p) for p in self.all_permanents()
-                ):
+                ) and not _may_name_nobody():
                     return False, f"no valid target for {card.name}"
 
         elif primary.kind in ("tap_target_permanent", "untap_target_permanent"):
-            if not target.battlefield:
+            # "Is there anything to tap?" — asked of **every** battlefield, and
+            # only of a cast that named nothing and must name something.
+            #
+            # It was ``if not target.battlefield``: the battlefield of whichever
+            # seat the caller named, or the *opposing* one by default — so it
+            # judged a board the target was not on. Burst of Energy ("Untap
+            # target permanent") aimed by id at the caster's own land was
+            # refused whenever the opponent controlled nothing, because an id
+            # names no seat and the default seat's board was empty; and "Tap
+            # **up to three** target creatures" (Tidal Surge) was refused for
+            # having nobody to name. What a *named* permanent has to be is
+            # ``cast_target_refusal``'s question, asked of the picker's list.
+            named = isinstance(target_permanent_index, (int, list)) or any(
+                isinstance(pid, int) for pid in (target_permanent_ids or ())
+            )
+            if (
+                not named
+                and not any(True for _ in self.all_permanents())
+                and not _may_name_nobody()
+            ):
                 return False, f"no valid target for {card.name}"
 
         elif primary.kind == "recolor_target_from_text":

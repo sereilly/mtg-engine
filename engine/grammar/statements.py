@@ -580,7 +580,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
 
     # "You may play up to three additional lands this turn." (Summer Bloom.)
     # Ahead of the "you may" branch below, which would read the "may" as
-    # CR 601.2's offer and wrap a permission in a prompt nobody is asked. It
+    # CR 608.2d's offer and wrap a permission in a prompt nobody is asked. It
     # refuses without consuming, so every other "you may …" sentence keeps the
     # reading it has today — including the two the land-play derivation table
     # owns, which differ from this one only in their duration clause.
@@ -631,7 +631,7 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
             # consuming "have" is the whole difference.
             #
             # "you may **choose to** have it …" (Gaze of Pain) is the same
-            # offer written out. CR 601.2 has no such step: the choosing *is*
+            # offer written out. CR 608.2d has no such step: the choosing *is*
             # the "may", so the two words say twice what one word already said,
             # and reading them as anything else would invent a decision the card
             # does not make. Consumed only in front of "have", so a sentence

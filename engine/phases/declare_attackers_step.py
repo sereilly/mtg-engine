@@ -268,7 +268,7 @@ class DeclareAttackersStepMixin:
         if band_error is not None:
             return False, band_error
 
-        # CR 508.1g, the mana half: the costs of every declared attacker are one
+        # CR 508.1h, the mana half: the costs of every declared attacker are one
         # payment, planned here - before anything is tapped and before anything
         # is committed - so the gate and the charge below read the same board.
         declaration_mana, mana_plan = self._declaration_mana_plan(
@@ -380,7 +380,7 @@ class DeclareAttackersStepMixin:
             # the question is asked.
             controller.attacked_this_turn = True
 
-        # CR 508.1g: the additional costs are paid once the declaration is
+        # CR 508.1j: the additional costs are paid once the declaration is
         # legal, and after the attackers are locked in — so the sacrifices go
         # through `Game.sacrifice_permanent` (the one seam every sacrifice
         # passes through) and the combat maps follow their creatures through
@@ -478,7 +478,7 @@ class DeclareAttackersStepMixin:
         *,
         preferred_ids: "list[int] | tuple[()]" = (),
     ) -> "list[Permanent] | None":
-        """Which permanents pay the whole declaration's CR 508.1g sacrifices,
+        """Which permanents pay the whole declaration's CR 508.1h sacrifices,
         or None when the board cannot pay them all.
 
         The sacrifice twin of :meth:`_declaration_mana_plan`, and it exists for
@@ -494,7 +494,8 @@ class DeclareAttackersStepMixin:
         A **matching**, not a greedy pass, for `plan_payment`'s reason one rule
         over: costs can overlap ("a land" beside "two Islands"), and a greedy
         assignment that spends the Island on "a land" under-reports a board that
-        could pay. CR 508.1g asks what the player is able to do.
+        could pay. CR 508.1h totals the cost and CR 508.1j allows no partial
+        payment, so the question is what the player is able to pay in full.
 
         Candidates are ordered by ``sacrifice_preference_key`` so the policy
         every other forced sacrifice follows decides *which* permanent answers a
@@ -542,7 +543,7 @@ class DeclareAttackersStepMixin:
     def _pay_declaration_sacrifices(
         self, controller_index: int, plan: list[Permanent]
     ) -> None:
-        """Sacrifice what :meth:`_declaration_sacrifice_plan` chose (CR 508.1g).
+        """Sacrifice what :meth:`_declaration_sacrifice_plan` chose (CR 508.1j).
 
         The plan is spent rather than re-derived, for the reason the mana half
         is: a second pass would read a board the first sacrifices have already
@@ -564,7 +565,7 @@ class DeclareAttackersStepMixin:
     def _attack_mana_costs_of(
         self, attacker: Permanent, attacked_seat: int | None = None
     ) -> list[dict[str, int]]:
-        """The mana costs *attacker* owes to be declared (CR 508.1g).
+        """The mana costs *attacker* owes to be declared (CR 508.1h).
 
         "Enchanted creature can't attack unless its controller pays {3}."
         (Brainwash.) Three channels, one reader: the restriction printed on the
@@ -728,7 +729,7 @@ class DeclareAttackersStepMixin:
         attackers: list[Permanent],
         attacked_seats: list[int | None] | None = None,
     ):
-        """How the whole declaration's CR 508.1g mana is paid, or None.
+        """How the whole declaration's CR 508.1h mana is paid, or None.
 
         The costs of *every* declared attacker add up into one payment, and that
         is the difference between this and ``can_attack``: a per-creature
@@ -761,7 +762,7 @@ class DeclareAttackersStepMixin:
     def _pay_declaration_mana(
         self, controller_index: int, total: dict[str, int], plan
     ) -> None:
-        """Spend the plan ``_declaration_mana_plan`` made (CR 508.1g).
+        """Spend the plan ``_declaration_mana_plan`` made (CR 508.1j).
 
         Floating mana first and then untapped lands - the stated policy every
         cost with no priority window behind it takes in this engine, because
@@ -779,7 +780,7 @@ class DeclareAttackersStepMixin:
         )
 
     def _attack_costs_of(self, attacker: Permanent) -> list[dict]:
-        """The additional costs *attacker* must pay to be declared (CR 508.1g).
+        """The additional costs *attacker* must pay to be declared (CR 508.1h).
 
         One reader for the gate in ``can_attack`` and the charge in
         ``declare_attackers``: a cost checked by one rule and paid by another is
@@ -1139,7 +1140,7 @@ class DeclareAttackersStepMixin:
                 return False
 
         # "This creature can't attack unless you sacrifice two Islands."
-        # (Leviathan.) CR 508.1g: an additional cost to attack. This is the
+        # (Leviathan.) CR 508.1h: an additional cost to attack. This is the
         # *gate* half — a cost its controller cannot pay makes the attack
         # illegal — and `_attack_costs_of` is the one reader, shared with the
         # charge in `declare_attackers`, so the declaration can never be
@@ -1345,7 +1346,7 @@ class DeclareAttackersStepMixin:
         if attacker.metadata.get("must_attack_until_eot"):
             return True
         # "**During that player's next turn**, the chosen creatures attack if
-        # able" (Oracle en-Vec). The same CR 508.1a requirement the mark above
+        # able" (Oracle en-Vec). The same CR 508.1d requirement the mark above
         # carries, over a turn that had not started when the ability resolved —
         # so it is the seat-turn stamp rather than the cleanup-swept flag, which
         # would have been gone a whole turn before the requirement applied.

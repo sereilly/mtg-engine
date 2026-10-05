@@ -236,7 +236,7 @@ def self_permission_zone(card) -> str | None:
 #: paying their mana costs and as though they had flash." (Aluren.)
 #:
 #: **Three permissions in one sentence**, and each is a different rule: *who*
-#: may cast (any player, CR 601.3a — including on somebody else's turn), *for
+#: may cast (any player, CR 601.3 — including on somebody else's turn), *for
 #: what* (CR 118.9's cost waiver) and *when* (CR 113.6b's flash timing). All
 #: three are read from this one pattern, and the line is claimed only because
 #: all three are carried out — a claim for the first two would ship an

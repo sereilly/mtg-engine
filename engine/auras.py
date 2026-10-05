@@ -2672,7 +2672,7 @@ ENFORCED_ATTACHED_COMBAT_RESTRICTIONS = frozenset({
     # Seeker and Elven Riders is whose text the sentence is printed on.
     "cant_be_blocked_except_by",
     # "Enchanted creature can't attack unless its controller pays {3}."
-    # (Brainwash.) CR 508.1g, an additional cost to declare the creature as an
+    # (Brainwash.) CR 508.1h, an additional cost to declare the creature as an
     # attacker. Its reader is
     # ``phases/declare_attackers_step._attack_mana_costs_of``, which asks this
     # channel and the creature's own compiled program together — the gate in

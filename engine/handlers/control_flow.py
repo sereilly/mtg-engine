@@ -2532,7 +2532,7 @@ def _action_is_takeable(
     withdraws an offer the card makes.
 
     **This is also the answer to "you may X. If you do, Y" on an empty X**, and
-    it is the better half of that question rather than a second one. CR 601.2
+    it is the better half of that question rather than a second one. CR 608.2d
     offers a choice; an action nobody could take is not one of the things being
     offered, so the offer is not made, the rider does not fire, and the decline
     branch (a "…unless you pay" penalty) still applies. Asking *before* the

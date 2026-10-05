@@ -561,7 +561,7 @@ class DeclareBlockersStepMixin:
         # chosen creatures become blockers. Last of the legality checks and
         # first of the commitments, because a declaration this rejects must
         # leave nothing spent - the same order the attack side takes at
-        # CR 508.1g.
+        # CR 508.1h.
         if not _camouflage_resolution:
             # CR 119.4 again, over the whole declaration: a per-pair predicate
             # can say "you could afford this one" and not "and again for the
@@ -1799,7 +1799,7 @@ class DeclareBlockersStepMixin:
         cost with no priority window behind it takes in this engine. CR 509.1e
         does give the defender a window to activate mana abilities; the engine
         takes it on their behalf rather than pausing the turn-based action,
-        which is the same shortcut the attack side takes at CR 508.1g.
+        which is the same shortcut the attack side takes at CR 508.1i.
         """
         if plan is None:
             return

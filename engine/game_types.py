@@ -249,7 +249,7 @@ class StackItem:
     # A copy of a spell (Fork): it resolves like the original but ceases to exist
     # afterward rather than going to a graveyard, and was never cast from a hand.
     is_copy: bool = False
-    # CR 601.3e-adjacent bookkeeping: which zone the card was cast from. "hand"
+    # CR 601.2a's bookkeeping: which zone the card was cast from. "hand"
     # for the ordinary case; "graveyard"/"exile" when a permission effect
     # (engine/cast_permissions.py) opened the zone. What "if this spell was
     # cast from anywhere other than your hand" reads.
