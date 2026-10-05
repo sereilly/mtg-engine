@@ -170,15 +170,57 @@ class ManaSubstitution:
     #: printed static in the pool says "type", so this is only ever set from a
     #: :class:`LandManaSwap` that carries it.
     colors_only: bool = False
+    #: "If **a basic land you control** is tapped for mana…" (Pulse of
+    #: Llanowar.) The printed noun phrase the static covers, as a filter
+    #: payload, where every earlier printing says "a land" and names no
+    #: restriction at all — ``None``. Held to what ``subject_matches`` can
+    #: test by the reader that builds it, and asked with the *static's*
+    #: controller as the observer, because "you" in a static is CR 109.5's
+    #: controller of the permanent printing it.
+    lands: "dict | None" = None
 
 
 #: "If a land is tapped for mana, it produces <mana> instead of any other
 #: type." (Ritual of Subdual, Infernal Darkness.) Anchored at both ends: a
 #: sentence saying more than this carries a rider nothing here performs.
+#:
+#: The subject is a printed noun phrase rather than the two words: "If **a
+#: basic land you control** is tapped for mana…" (Pulse of Llanowar) is the
+#: same sentence narrowed, and the narrowing is read by the grammar's noun
+#: parser (:func:`_covered_lands`), so a card printing another one needs no
+#: pattern here.
 _ANY_LAND_RE = re.compile(
-    r"^if a land is tapped for mana, it produces (?P<mana>.+?) "
-    r"instead of any other type(?P<amount> and amount)?$"
+    r"^if an? (?P<lands>[a-z' -]*?land(?: [a-z' -]+?)?) is tapped for mana, it "
+    r"produces (?P<mana>.+?) instead of any other type(?P<amount> and amount)?$"
 )
+
+
+def _covered_lands(phrase: str) -> "dict | None | bool":
+    """The filter a printed land phrase narrows the static to: ``None`` for the
+    bare "land" (every land, the reading every earlier printing has), a payload
+    for a narrowed one, and ``False`` for a phrase that cannot be read whole or
+    tested — which refuses the line, because a static over an unread narrowing
+    would cover every land on the table.
+    """
+    if phrase.strip() == "land":
+        return None
+    from .grammar.errors import GrammarError
+    from .grammar.lexer import tokenize
+    from .grammar.nouns import parse_object_filter
+    from .grammar.stream import TokenStream
+    from .subject_filters import untestable_filter_keys
+
+    stream = TokenStream(tokenize(phrase.strip()).tokens)
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        return False
+    if not stream.exhausted:
+        return False
+    payload = described.to_payload()
+    if payload.get("type_filter") != "land" or untestable_filter_keys(payload):
+        return False
+    return payload
 
 #: "If tapped for mana, Plains produce {R}, Islands produce {G}, … instead of
 #: any other type." (Naked Singularity, Reality Twist.) How *many* clauses is
@@ -230,6 +272,12 @@ def _mana_symbol(phrase: str) -> str | None:
     match = re.fullmatch(r"\{([wubrgc])\}", text)
     if match is not None:
         return match.group(1).upper()
+    # "…it produces **mana of a color of your choice** instead of any other
+    # type." (Pulse of Llanowar.) Not a symbol but the offer of five, named by
+    # the tapper for each production (CR 106.12b) — the value Harvest Mage's
+    # armed record already carries, resolved by :func:`swapped_production`.
+    if text == "mana of a color of your choice":
+        return MANA_COLOR_OF_CHOICE
     word, _, tail = text.partition(" ")
     if tail != "mana":
         return None
@@ -250,13 +298,24 @@ def substitution_line(normalized_line: str) -> "tuple[ManaSubstitution, ...] | N
     untyped = _ANY_LAND_RE.match(line)
     if untyped is not None:
         symbol = _mana_symbol(untyped.group("mana"))
-        if symbol is None:
+        lands = _covered_lands(untyped.group("lands"))
+        if symbol is None or lands is False:
+            return None
+        if symbol == MANA_COLOR_OF_CHOICE and (
+            lands is None or lands.get("controller") != "you"
+        ):
+            # "A color of **your** choice" is the static's controller's, and
+            # the colour is named by whoever taps the land — the same player
+            # only when the phrase says "you control". Over anybody else's
+            # lands the sentence would hand one seat's choice to another, and
+            # no card prints it.
             return None
         return (
             ManaSubstitution(
                 produced=symbol,
                 land_type=None,
                 replaces_amount=bool(untyped.group("amount")),
+                lands=lands,
             ),
         )
     typed = _BY_TYPE_RE.match(line)
@@ -306,8 +365,17 @@ def static_substitution_for(game, land) -> "ManaSubstitution | None":
     one legal set of those choices, and it is stated here rather than left to
     whichever scan order happened to win.
     """
+    from .subject_filters import subject_matches
+
     for source in game.all_permanents():
         for substitution in substitutions_on(source):
+            if substitution.lands is not None and not subject_matches(
+                game, land, substitution.lands,
+                observer=game.controller_index_of(source), source=source,
+            ):
+                # "…a basic land **you control**…" (Pulse of Llanowar): not
+                # this land, so this static says nothing about it.
+                continue
             if substitution.land_type is None or land.has_type(substitution.land_type):
                 return substitution
     return None
@@ -379,6 +447,18 @@ def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
     if seat is None:
         return None
     found = static_substitution_for(game, land)
+    if (
+        found is not None and found.produced == MANA_COLOR_OF_CHOICE
+        and requested is not None
+    ):
+        # "…mana of a color of your choice…" as a static (Pulse of Llanowar):
+        # named by the tapper for this one production, exactly as the armed
+        # record below is. With no request — the planner asking what the land
+        # *could* make — the offer itself is the answer.
+        found = ManaSubstitution(
+            produced=_color_of_choice(requested, land), land_type=None,
+            replaces_amount=found.replaces_amount, colors_only=found.colors_only,
+        )
     for record in swaps_on(game.players[seat]):
         if not subject_matches(game, land, record.lands, observer=seat):
             continue

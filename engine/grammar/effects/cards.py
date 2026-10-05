@@ -392,6 +392,7 @@ def _parse_reveal_hand(
     ):
         stream.reset(mark)
         return None
+    before_and = stream.mark()
     if not stream.accept_word("and"):
         return ast.RevealHand(player)
     if stream.peek_word() in ("discards", "discard"):
@@ -407,8 +408,15 @@ def _parse_reveal_hand(
     emptied = _accept_put_revealed_hand_cards(stream, player)
     if emptied is not None:
         return ast.Sequence((ast.RevealHand(player), emptied))
-    stream.reset(mark)
-    return None
+    # "…that player reveals their hand **and Darigaaz deals damage to the
+    # player** equal to …" (Darigaaz, the Igniter.) What follows the "and" has a
+    # subject of its own, so it is not a second act of this player's and not
+    # this production's to read: the reveal is whole, and the conjunction is
+    # handed back to the sentence joiner, which already reads "<clause> and
+    # <clause>". Declining the whole reveal here — what this did — left a
+    # sentence the joiner reads perfectly well refused at its first verb.
+    stream.reset(before_and)
+    return ast.RevealHand(player)
 
 
 def _accept_put_revealed_hand_cards(
@@ -524,9 +532,14 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     # and the referent is identical — "it" is the hand this sentence revealed —
     # so it is two accepted tokens here rather than a second production, which
     # would race this one for the word "reveals".
+    #
+    # "…reveals their hand **and** you choose a card of that color from it."
+    # (Addle.) The third join, and the same clause again.
     if not stream.accept_punct("."):
         if stream.accept_punct(","):
             stream.accept_word("then")
+        else:
+            stream.accept_word("and")
     if not stream.accept_phrase("you", "choose"):
         stream.reset(mark)
         return None

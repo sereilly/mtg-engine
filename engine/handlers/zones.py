@@ -2964,6 +2964,23 @@ def return_all_matching(game: Game, instruction: OracleInstruction, context: Ora
     from ..subject_filters import subject_matches
 
     swept = instruction.payload.get("filter") or {}
+    # "…all creatures **of that color**" (Dromar, the Banisher) / "…all
+    # permanents **of the color of your choice**" (Wash Out). CR 608.2d's
+    # colour, chosen by the step in front of this one and read out of the
+    # scratchpad exactly as Persecute's discard reads it.
+    #
+    # **No colour means no sweep**, and it must: an unanswered choice read as
+    # "no narrowing" is not a card that does less, it is one that returns every
+    # permanent on the table.
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen_color = context.results.get(str(color_key))
+        if not chosen_color:
+            game.log.append(
+                f"{context.card.name}: no colour was chosen, so nothing is returned"
+            )
+            return True, "resolved"
+        swept = {**swept, "color_filter": str(chosen_color)}
     observer = (
         game.players.index(context.caster) if context.caster in game.players else None
     )
@@ -3793,6 +3810,19 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     # ``deal_damage`` records about its own recipient.
     if instruction.payload.get("who") == "you":
         victim = context.caster
+    elif instruction.payload.get("who") == "damaged_player":
+        # "…**that player** reveals their hand…" (Crosis, the Purger.) The seat
+        # the damage froze (CR 603.10). No record means the words named nobody
+        # and no hand is shown — never a fall back to the ability's controller,
+        # whose hand is the one this must not open. An empty record is written
+        # all the same, so the sentence behind this one counts nothing rather
+        # than reading a back-reference with no producer.
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
+            context.results[REVEALED_HAND_CARDS] = []
+            game.log.append(f"{context.card.name}: no recorded player, no reveal")
+            return True, "resolved"
+        victim = game.players[frozen]
     else:
         victim = context.target if context.target is not None else context.caster
     seat = next(
@@ -3829,6 +3859,15 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
     scan-and-remove by value would take the wrong copy of a pair.
     """
     victim = context.target if context.target is not None else context.caster
+    if instruction.payload.get("who") == "damaged_player":
+        # "…that player reveals their hand and discards all cards of that
+        # color." (Crosis, the Purger.) The seat the damage froze; with none
+        # recorded nothing is discarded, for ``reveal_hand``'s reason.
+        frozen = frozen_that_player_seat(game, context)
+        if frozen is None:
+            game.log.append(f"{context.card.name}: no recorded player, no discard")
+            return True, "resolved"
+        victim = game.players[frozen]
     filters = instruction.payload.get("filter") or {}
     # "…discards all cards **of that color**." (Persecute.) CR 608.2d's choice,
     # made by the sentence in front of this one and read out of the scratchpad
@@ -3926,10 +3965,26 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
     excluded_supertypes = list(instruction.payload.get("exclude_supertypes") or ())
     if excluded_supertypes:
         narrowing["exclude_supertypes"] = excluded_supertypes
+    # "Choose a color. … you choose a card **of that color** from it." (Addle.)
+    # CR 608.2d's colour, read out of the scratchpad the choosing step wrote and
+    # carried on the prompt beside the three narrowings above, for their reason.
+    # **No colour means no card**: read as "no narrowing" the caster would be
+    # choosing from the whole hand.
+    any_colors: list[str] = []
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen_color = context.results.get(str(color_key))
+        if not chosen_color:
+            game.log.append(f"{card.name}: no colour was chosen, so no card is")
+            return True, "resolved"
+        any_colors = [str(chosen_color)]
+        narrowing["restrictions"] = {"any_colors": any_colors}
     legal = [
         index
         for index, held in enumerate(victim.hand)
-        if search_matches(held, narrowing)
+        # The seat is handed over for CR 202.2 alone — a card's colour in a
+        # hand is its printed one unless something on a board says otherwise.
+        if search_matches(held, narrowing, game=game, owner=victim)
     ]
     # CR 701.20 makes a reveal public where CR 701.20e's look shows the chooser
     # alone, so the line says which happened rather than saying "revealed" for
@@ -3975,6 +4030,7 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         exclude_basic_lands=narrowing["exclude_basic_lands"],
         card_types=card_types,
         exclude_supertypes=excluded_supertypes,
+        any_colors=any_colors,
         fate=str(instruction.payload.get("fate", "discard")),
         # The resolution's own scratchpad. Every pick writes the chosen card's
         # name into it — the pick *is* a chosen card, whatever becomes of it —

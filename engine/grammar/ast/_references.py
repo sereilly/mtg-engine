@@ -353,6 +353,13 @@ class ObjectFilter:
     #: lowering turns the key into a ``color_filter_from`` naming the
     #: scratchpad slot that sentence writes.
     color_chosen_this_way: bool = False
+    #: "Return all permanents **of the color of your choice** to their owners'
+    #: hands." (Wash Out.) ``creature_type_of_your_choice`` one characteristic
+    #: over, and ``color_chosen_this_way`` with the choosing step not yet
+    #: written: no earlier sentence chose, so the lowering puts the step in
+    #: front itself (``lowering/_common.split_color_choice``, CR 608.2d) and the
+    #: sweep reads the same scratchpad slot "of that color" does.
+    color_of_your_choice: bool = False
     # "Each **land** of the chosen type" (Shimmer). The same CR 614.1c choice
     # a third characteristic over, and its own field for ``chosen_color``'s
     # reason rather than a value of the one above: the *catalog* the word came

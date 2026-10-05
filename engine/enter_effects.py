@@ -164,6 +164,55 @@ def chooses_color_on_enter(text: str) -> bool:
     """
     return bool(_CHOOSE_COLOR_ON_ENTER_RE.search(text or ""))
 
+#: "This creature is the chosen color. (It's still an artifact.)" (Alloy Golem.)
+#: The sentence that *spends* the entry choice above on the permanent itself: a
+#: static ability setting its own colour (CR 613 layer 5) to whatever was
+#: recorded as it entered (CR 614.1c). Here beside the choice rather than in a
+#: module of its own, because the pair is one printed idea and this is the file
+#: that owns the record's key — and whole-line, reminder text included or not,
+#: so a sentence saying anything more is not claimed.
+#:
+#: The noun is data, for ``_CHOOSE_COLOR_ON_ENTER_RE``'s reason.
+_IS_THE_CHOSEN_COLOR_RE = re.compile(
+    r"^this [a-z]+ is the chosen color\.?(?: \(it's still an? [a-z]+\.?\))?$"
+)
+
+
+def is_the_chosen_color_line(text: str) -> bool:
+    """Whether *text* is, in full, "This <permanent> is the chosen color."
+
+    Asked by :func:`enter_effect_line` (the claim) and by
+    :func:`own_chosen_color` (the effect), so what is claimed and what layer 5
+    is handed cannot describe different cards.
+    """
+    return bool(_IS_THE_CHOSEN_COLOR_RE.match(_normalized(text or "")))
+
+
+@lru_cache(maxsize=None)
+def _says_it_is_the_chosen_color(oracle_text: str) -> bool:
+    return any(is_the_chosen_color_line(line) for line in oracle_text.splitlines())
+
+
+def own_chosen_color(permanent) -> str | None:
+    """The colour *permanent*'s own "is the chosen color" static gives it, or
+    ``None`` when it prints no such line or has not chosen yet.
+
+    Read off ``effective_card`` — layer 1's copy and layer 3's text change are
+    both below layer 5 (CR 613.1), so a Clone of an Alloy Golem is the colour
+    the *Clone* chose as it entered — and off the record the entry choice
+    wrote. Derived on every recompute rather than stamped onto the colour
+    override when the choice is answered: a stamped override would survive the
+    ability being removed, and a late answer to the entry prompt would have
+    nothing to re-read.
+    """
+    chosen = permanent.metadata.get(CHOSEN_COLOR_KEY)
+    if not chosen:
+        return None
+    if not _says_it_is_the_chosen_color(permanent.effective_card.oracle_text or ""):
+        return None
+    return str(chosen)
+
+
 #: "As this artifact enters, choose **a color and a creature type**."
 #: (Volrath's Laboratory.) Two of the qualities this one sentence can name, on
 #: one line — the pair shape ``CHOOSE_COLOR_AND_OPPONENT_ON_ENTER`` and Booby
@@ -1484,6 +1533,14 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a color and a creature type as it enters"
     if chooses_color_on_enter(normalized):
         return "chooses a color as it enters"
+    # "This creature is the chosen color." (Alloy Golem.) Not an entry phrase —
+    # nothing happens as the permanent arrives — but the static that spends the
+    # choice above, performed by ``layer_bridge.collect_color_effects`` off this
+    # same reader. Claimed here so the three gates that ask this function (the
+    # grammar's registry claim, the support gate, the per-line creature gate)
+    # learn it at once.
+    if is_the_chosen_color_line(normalized):
+        return "is the chosen color"
     # "…choose **black or red**" / "…choose **Island or Swamp**". The same
     # choice with the offer narrowed by the sentence, so it is claimed beside
     # the catalog-named ones rather than under them — neither phrase is a

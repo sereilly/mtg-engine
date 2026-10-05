@@ -280,7 +280,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     # because the node had nothing to read, and a lowering that reads its
     # node is exactly what this table is for.
     ast.RevealTop: _lower_reveal_top_of_library,
-    ast.RevealHand: _lower_reveal_hand,
     # "Reveal any number of blue cards in your hand." (Brine Seer.) The
     # chosen-subset reveal beside the whole-hand one, and a different node
     # for a different effect - see `ast.RevealCardsFromHand`.
@@ -384,6 +383,9 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # freezes none rather than copying whatever the resolution is holding.
     ast.BecomeCopy: _lower_become_copy,
     ast.Discard: _lower_discard,
+    # "…**that player** reveals their hand…" (Crosis, the Purger): the seat the
+    # damage froze, so the bare reveal joins the sentences that name it.
+    ast.RevealHand: _lower_reveal_hand,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):
     # the same seat question one zone over, and the same answer.
@@ -415,7 +417,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # lowering can only decide once it knows which event fired. It left the
     # name-only table above the moment it started deciding that.
     ast.LookAtHand: _lower_look_at_hand,
-    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     ast.PlayerGetsCounters: _lower_player_gets_counters,
     ast.LookTopPickToHand: _lower_look_top_pick,
     # Four more of the chain's `return _lower_x(statement, event)` arms, moved
@@ -471,6 +472,10 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "Choose a color. … you choose a card **of that color** from it." (Addle.)
+    # The narrowing is a record an earlier step of the same effect wrote, so
+    # the picker's lowering has to know one did — which is this table's shape.
+    ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
     # "…a card **with the same name as that creature**" (Remembrance) reads the
     # firing event's object; "…a card **with the same name as that card**"
     # (Assembly Hall) reads a card an earlier step of this same effect turned

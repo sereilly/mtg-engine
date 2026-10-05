@@ -37,8 +37,8 @@ first place: the counted amounts ask it and so does the pay-or-else prompt in
 import dataclasses
 
 from ...oracle_types import (
-    DISCARDED_BY_SEAT, OracleInstruction, REVEALED_HAND_CARDS, X_FROM_COUNT,
-    X_FROM_COUNT_PER_RECIPIENT,
+    CHOSEN_COLOR_THIS_WAY, DISCARDED_BY_SEAT, OracleInstruction,
+    REVEALED_HAND_CARDS, X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
 )
 from .. import ast
 from ..errors import LoweringError
@@ -47,7 +47,8 @@ from ._cost_records import COST_RECORD_CHANNELS
 from ._common import _describe_targets, _is_target
 from ._filters import dropped_narrowings, split_bound_card_type
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
-                      EVENT_SUBJECT_PLAYER, _EVENT_SUBJECT_PLAYERS)
+                      EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
+                      _EVENT_SUBJECT_PLAYERS)
 
 
 # Counted damage whose arithmetic a dedicated handler performs in full. Keyed
@@ -481,7 +482,8 @@ def _lower_counted_damage(
 
 
 def lower_revealed_this_way_damage(
-    node: ast.DealDamage, produced: frozenset[str], *, multiplier: int = 1
+    node: ast.DealDamage, produced: frozenset[str], *, multiplier: int = 1,
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Choose a card type. Target opponent reveals their hand. Blood Oath deals
     3 damage to that player **for each card of the chosen type revealed this
@@ -538,6 +540,21 @@ def lower_revealed_this_way_damage(
     from ...subject_filters import card_only_filter
 
     filt, bound = split_bound_card_type(node.amount.filter)
+    if filt.color_chosen_this_way:
+        # "…the number of cards **of that color** revealed this way" (Darigaaz,
+        # the Igniter). The second narrowing beyond what is printed on a card,
+        # and carried the way the first is: lifted off before the card-only
+        # gate — no card matcher holds a resolution — and put back as the key
+        # ``count_from_payload`` resolves out of the scratchpad. Admitted only
+        # behind a step that chose: with none the matcher refuses every card,
+        # which is a zero the card never printed.
+        if CHOSEN_COLOR_THIS_WAY not in produced:
+            raise LoweringError(
+                "'of that color' with no step in this effect that chose one",
+                node=node,
+            )
+        filt = dataclasses.replace(filt, color_chosen_this_way=False)
+        bound = {**bound, "color_chosen_this_way": True}
     payload_filter = filt.to_payload()
     described = card_only_filter(payload_filter)
     if described is None or dropped_narrowings(filt, payload_filter):
@@ -551,10 +568,16 @@ def lower_revealed_this_way_damage(
         # Omitted at 1 for ``count_spec``'s reason: a spec written without the
         # factor stays byte-identical.
         spec["multiplier"] = multiplier
+    # "Whenever Darigaaz deals combat damage to a player, … that player reveals
+    # their hand and Darigaaz deals damage to **the player** …". Under a damage
+    # trigger nobody targeted anyone: the player is the one the damage froze
+    # (CR 603.10), the seat the reveal in front of this sentence read under the
+    # same word — so the count and the damage cannot land on two players.
+    recipient = "damaged_player" if event in _DAMAGED_PLAYER_EVENTS else "target_player"
     return (
         OracleInstruction(
             "deal_damage", "",
-            {"amount": "x", X_FROM_COUNT: spec, "recipient": "target_player"},
+            {"amount": "x", X_FROM_COUNT: spec, "recipient": recipient},
         ),
     )
 

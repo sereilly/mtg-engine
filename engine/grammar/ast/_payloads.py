@@ -226,6 +226,9 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # lowering that reads the key and names the record the choice went into.
     if self.color_chosen_this_way:
         payload["color_chosen_this_way"] = True
+    # …and the same again for the spelling that has not chosen yet (Wash Out).
+    if self.color_of_your_choice:
+        payload["color_of_your_choice"] = True
     if self.chosen_land_type:
         payload["chosen_land_type"] = True
     if self.attacked_this_turn is True:

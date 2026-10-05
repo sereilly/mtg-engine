@@ -372,6 +372,42 @@ def count_spec(
     return spec
 
 
+def printed_count_spec(filt: "ast.ObjectFilter", node) -> dict:
+    """:func:`count_spec` for a caller holding the noun phrase **as printed**.
+
+    "…for each permanent **of that color**" (Rith, the Awakener; Treva, the
+    Renewer). CR 403.1: the battlefield is one zone every player shares, so a
+    phrase that names no seat names every permanent on it — and ``count_spec``
+    defaults the scope to "you", which is right only for the callers that have
+    *stripped* a seat word and evaluate the spec against a seat of their own
+    (``seat_scoped_count_spec`` below, the per-recipient token count). Those
+    cannot ask this; a caller that still holds the printed filter can, and the
+    difference was Rith making a Saproling for each green permanent its
+    controller had rather than each one on the table.
+
+    "…for each creature **attacking you**" (Blessed Reversal) names a seat by
+    relation instead, which the matcher needs an observer to answer — so it
+    takes the scope that scans every battlefield and keeps the counting seat,
+    rather than ``all``, which has no observer. Read on the caster's own
+    battlefield it counted the caster's attackers against themselves: zero.
+    """
+    spec = count_spec(filt, node)
+    if (
+        spec.get("owner") == "you"
+        and filt.zone == "battlefield"
+        and filt.controller is None
+        and filt.owner is None
+        and filt.owner_or_controller is None
+        and filt.zone_owner is None
+        and "attached_to" not in spec
+        and not spec.get("blocking_source")
+    ):
+        spec["owner"] = (
+            OPPONENTS_SCOPE if spec["filter"].get("attacking_you") else "all"
+        )
+    return spec
+
+
 def seat_scoped_count_spec(
     filt: "ast.ObjectFilter", node, *, multiplier: int = 1
 ) -> dict | None:

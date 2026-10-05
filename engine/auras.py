@@ -3042,6 +3042,8 @@ def aura_continuous_claim(line: str) -> str | None:
         )
     if aura_controller_cast_ban(normalized) is not None:
         return "cast restriction on the host's controller — auras.controller_cast_ban"
+    if aura_grants_chosen_landwalk(normalized):
+        return "landwalk of the chosen type (layer 6) — auras.chosen_landwalk_grants"
     return None
 
 
@@ -3102,6 +3104,56 @@ _ATTACHED_HOST_DAMAGE_TO_CONTROLLER = re.compile(
     rf"^all damage that would be dealt to {_ATTACHED} (?P<noun>{_NOUN}) is dealt "
     rf"to its controller instead$"
 )
+
+
+#: "Enchanted creature has landwalk of the chosen type." (Traveler's Cloak.)
+#: CR 702.14a builds a landwalk's name out of a land type, and here the type is
+#: not printed: it is the one this Aura recorded as it entered (CR 614.1c, "As
+#: this Aura enters, choose a land type."). So the line grants a keyword whose
+#: *word* is read off the Aura at each recompute — which is what keeps it out
+#: of ``aura_keyword_grants``, whose answer is a function of the text alone.
+#:
+#: Both attachment words are read (CR 301.5f), like every pattern in this file.
+_ATTACHED_CHOSEN_LANDWALK = re.compile(
+    rf"^{_ATTACHED} creature has landwalk of the chosen type$"
+)
+
+
+def aura_grants_chosen_landwalk(line: str) -> bool:
+    """Whether one printed line grants the host landwalk of the land type the
+    attachment chose as it entered.
+
+    One reader, two callers, which is this file's standing rule: the support
+    gate asks it through :func:`aura_continuous_claim`, and
+    :func:`chosen_landwalk_grants` asks it at each layer-6 recompute.
+    """
+    return _ATTACHED_CHOSEN_LANDWALK.match(_line_text(line)) is not None
+
+
+def chosen_landwalk_grants(aura) -> tuple[str, ...]:
+    """The landwalk ability *aura* gives its host — ``("islandwalk",)`` for an
+    Aura that chose Island — or nothing when it prints no such line, has not
+    chosen, or chose a word that names no land type.
+
+    Read off ``effective_card`` (CR 707.2: a copy of the Cloak grants what the
+    *copy* chose) and off the record the entry choice wrote. The word is put
+    to ``landwalk.landwalk_requirement`` — the reader that enforces the ability
+    at the declare-blockers step — so a grant nothing would enforce is never
+    made.
+    """
+    from .enter_effects import CHOSEN_LAND_TYPE_KEY
+    from .landwalk import landwalk_requirement
+
+    chosen = str(aura.metadata.get(CHOSEN_LAND_TYPE_KEY) or "").strip().lower()
+    if not chosen:
+        return ()
+    if not any(
+        aura_grants_chosen_landwalk(line)
+        for line in (aura.effective_card.oracle_text or "").splitlines()
+    ):
+        return ()
+    walk = f"{chosen}walk"
+    return (walk,) if landwalk_requirement(walk) is not None else ()
 
 
 def aura_redirects_host_damage_to_controller(line: str) -> bool:

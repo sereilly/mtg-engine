@@ -52,6 +52,7 @@ from ._common import (
     _filter_payload,
     _is_enchanted,
     _restrictions_beyond,
+    split_color_choice,
 )
 
 
@@ -383,13 +384,20 @@ def lower_described_return(
         unread = _restrictions_beyond(
             filt, _PAYLOAD_HONOURED_FILTER_FIELDS | {
                 "attached_to", "attached_to_target",
+                "color_chosen_this_way", "color_of_your_choice",
             }
         )
         if unread:
             raise LoweringError(
                 "the sweep bounce cannot read " + ", ".join(sorted(unread)), node=node
             )
-        swept = _filter_payload(filt)
+        # "…return all creatures **of that color**" (Dromar, the Banisher) /
+        # "…all permanents **of the color of your choice**" (Wash Out). CR
+        # 608.2d's colour, lifted out of the noun phrase before the testability
+        # gate — no matcher holds a resolution — and put back as the key the
+        # handler resolves, with the choosing step in front where the sentence
+        # itself is what chooses.
+        color_prelude, swept, color_from = split_color_choice(_filter_payload(filt))
         untestable = untestable_filter_keys(swept)
         if untestable:
             raise LoweringError(
@@ -467,7 +475,7 @@ def lower_described_return(
                 "\"to your hand\" is not \"to its owner's hand\" unless the "
                 "phrase says you own it", node=node,
             )
-        bounce_payload: dict[str, object] = {"filter": swept}
+        bounce_payload: dict[str, object] = {"filter": swept, **color_from}
         if attached_referent is not None:
             # Beside the filter, never inside it: the handler resolves the
             # referent and compares hosts by identity, and a key inside the
@@ -475,7 +483,10 @@ def lower_described_return(
             bounce_payload["attached_to"] = attached_referent
         if host_target is not None:
             bounce_payload["targets"] = host_target
-        return (OracleInstruction("return_all_matching", "", bounce_payload),)
+        return (
+            *color_prelude,
+            OracleInstruction("return_all_matching", "", bounce_payload),
+        )
     # "{3}, {T}, Sacrifice this artifact: Return **all enchantment cards** from
     # your graveyard to your hand." (Crystal Chimes.) The sweep reanimation
     # below with the other destination: same "no target, no pick, every card a

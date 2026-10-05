@@ -557,6 +557,20 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
         raise stream.error("expected a 'this way' participle after 'they controlled'")
     if stream.accept_phrase("tapped", "this", "way"):
         return ast.CountOfTapsThisWay(filt)
+    # "…equal to the number of cards **of that color revealed this way**."
+    # (Darigaaz, the Igniter.) The count Blood Oath prints as a rate ("3 damage
+    # for each card of the chosen type revealed this way"), in the other word
+    # order — one node for both, because both ask the cards a hand reveal
+    # recorded how many of them answer a noun phrase.
+    #
+    # **Only a narrowed phrase.** The bare "the number of cards revealed this
+    # way" (Cinder Seer, Scent of Ivy) is the *number* a chosen-subset reveal
+    # records, read by the named-count table behind this function — and from
+    # the where-clause front end this reader is asked first, so taking the bare
+    # words here cost those six cards their support the moment it was written.
+    # A phrase that narrows nothing is left exactly where it was.
+    if filt.to_payload() and stream.accept_phrase("revealed", "this", "way"):
+        return ast.CountOfRevealsThisWay(filt)
     # "…equal to the number of cards **they drew this way**." (Malignant
     # Growth.) The third participle, and the one whose record is a plain number
     # rather than a set - so it produces the ordinary back-reference

@@ -189,6 +189,14 @@ def accept_seat_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("of", "that", "color"):
         d.color_chosen_this_way = True
         return True
+    # "Return all permanents **of the color of your choice** to their owners'
+    # hands." (Wash Out.) The row above with nobody having chosen yet: the
+    # choice is made while this very sentence is applied (CR 608.2d), so the
+    # lowering puts the choosing step in front and the sweep spends it — the
+    # arrangement the creature-type row below has had since Extinction.
+    if stream.accept_phrase("of", "the", "color", "of", "your", "choice"):
+        d.color_of_your_choice = True
+        return True
     # "Creatures **of the chosen type**" (An-Zerrin Ruins). The same
     # CR 614.1c choice one characteristic over — a creature type recorded
     # on the source as it entered — so it is its own filter key for the

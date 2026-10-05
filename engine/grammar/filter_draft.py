@@ -179,6 +179,8 @@ class _FilterDraft:
     # "…all cards **of that color**" (Persecute) — see the field of the same
     # name on ``ast.ObjectFilter``.
     color_chosen_this_way: bool = False
+    #: See ``ast.ObjectFilter.color_of_your_choice``.
+    color_of_your_choice: bool = False
     # "Each **land** of the chosen type" (Shimmer) — see the field of the same
     # name on ``ast.ObjectFilter``.
     chosen_land_type: bool = False
@@ -331,6 +333,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         chosen_creature_type=d.chosen_creature_type,
         creature_type_of_your_choice=d.creature_type_of_your_choice,
         color_chosen_this_way=d.color_chosen_this_way,
+        color_of_your_choice=d.color_of_your_choice,
         chosen_land_type=d.chosen_land_type,
         attacked_this_turn=d.attacked_this_turn,
         could_attack_this_turn=d.could_attack_this_turn,

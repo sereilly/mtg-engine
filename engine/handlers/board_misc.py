@@ -29,7 +29,8 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       one_recorded_permanent_id,
                       per_recipient_amount,
                       permanent_matches_filter,
-                      count_from_payload, resolve_amount,
+                      count_from_payload, count_spec_in_resolution,
+                      resolve_amount,
                       resolve_target_permanent,
                       resolve_target_permanents, seats_matching_deed)
 from .registry import effect_handler
@@ -797,7 +798,7 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
     the effect still happens, which is what `resolve_target_permanents` gives
     without a per-slot fallback that would recolour the same creature twice.
     """
-    written = _colour_override_value(instruction.payload.get("target_color"))
+    written = _colour_to_write(game, instruction, context)
     if written is None:
         return True, "resolved"
     targets = resolve_target_permanents(game, context)
@@ -839,6 +840,29 @@ def _colour_override_word(written) -> str:
     return "colorless" if written == () else str(written)
 
 
+def _colour_to_write(game, instruction, context):
+    """The colour a turn-long recolour writes: the printed one, or the one the
+    step in front of it chose.
+
+    "…become **the color of your choice** until end of turn" (Sway of Illusion,
+    Kavu Chameleon, Rainbow Crow) names its colour while the effect is applied
+    (CR 608.2d), so the payload carries ``color_from`` — the scratchpad slot
+    the ``choose_color`` step wrote — where a printed colour carries
+    ``target_color``. An unanswered choice writes **nothing**, for
+    ``recolor_target_chosen_color``'s reason: a permanent that became a colour
+    nobody picked is the wrong colour.
+    """
+    chosen_from = instruction.payload.get("color_from")
+    if chosen_from is None:
+        return _colour_override_value(instruction.payload.get("target_color"))
+    symbol = game._normalize_mana_color(context.results.get(str(chosen_from)))
+    if symbol is None:
+        game.log.append(
+            f"{context.card.name}: no colour was chosen, so nothing is recoloured"
+        )
+    return symbol
+
+
 @effect_handler("recolor_self_until_eot")
 def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"{2}: This creature becomes colorless until end of turn." (Raging Spirit.)
@@ -846,7 +870,7 @@ def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     The source-subject twin of ``recolor_targets_until_eot``: same channel, same
     sweep, and no target to resolve because the sentence names none.
     """
-    written = _colour_override_value(instruction.payload.get("target_color"))
+    written = _colour_to_write(game, instruction, context)
     source = context.source_permanent
     if written is None or source is None:
         return True, "resolved"
@@ -1909,8 +1933,13 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
           )
       elif isinstance(raw_count, dict) and "per_each" in raw_count:
           owner = game.players[seat] if raw_count.get("per_recipient") else caster
+          # "…for each permanent **of that color**" (Rith, the Awakener): the
+          # colour the step in front of this one chose (CR 608.2d) is resolved
+          # into the spec first, because `evaluate_count` holds no resolution
+          # and the matcher refuses the word unresolved.
           count = evaluate_count(
-              game, owner, raw_count["per_each"],
+              game, owner,
+              count_spec_in_resolution(raw_count["per_each"], context),
               source=context.source_permanent,
           )
       for _ in range(count):

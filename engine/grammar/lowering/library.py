@@ -20,6 +20,7 @@ from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
+from ...oracle_types import CHOSEN_COLOR_THIS_WAY
 from ._cost_records import cost_record_spec
 from ._common import (
     chargeable_card_filter,
@@ -32,6 +33,7 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
+    _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
     _EVENT_SUBJECT_PLAYERS,
     EVENT_SUBJECT_PLAYER,
@@ -73,7 +75,9 @@ _REVEALED_HAND_FIELDS = frozenset(
 )
 
 
-def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
+def _lower_reveal_hand(
+    node: ast.RevealHand, event: str | None = None
+) -> tuple[OracleInstruction, ...]:
     """"Target player **reveals their hand**" (CR 701.20), on its own.
 
     The first half of Amnesia and Rag Man, lowered as its own step so the
@@ -98,6 +102,15 @@ def _lower_reveal_hand(node: ast.RevealHand) -> tuple[OracleInstruction, ...]:
     """
     if node.player.kind == "you":
         return (OracleInstruction("reveal_hand", "", {"who": "you"}),)
+    # "Whenever Crosis deals combat damage to a player, … **that player**
+    # reveals their hand …" (Crosis, the Purger; Darigaaz, the Igniter.) The
+    # seat the damage froze (CR 603.10), under the word ``discard_hand`` already
+    # spells it with — and admitted only under an event whose fire site really
+    # recorded a damaged player, the gate that sentence is held to: under any
+    # other trigger the words name nobody, and the handler's fallback is the
+    # ability's own controller.
+    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
+        return (OracleInstruction("reveal_hand", "", {"who": "damaged_player"}),)
     if node.player.kind not in ("target_player", "target_opponent"):
         raise LoweringError(
             f"no handler reveals {node.player.kind!r}'s hand", node=node
@@ -230,6 +243,7 @@ def _lower_discard_revealed_matching_unless_pay_life(
 
 def _lower_reveal_hand_and_choose(
     node: ast.RevealHandAndChoose, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """"Target opponent reveals their hand. You choose a noncreature, nonland
     card from it. That player discards that card." (Duress.)
@@ -238,7 +252,16 @@ def _lower_reveal_hand_and_choose(
     legal, and the discard is what the choice was for, so splitting them would
     put a chosen card between two instructions with nothing carrying it.
     """
-    leftover = _restrictions_beyond(node.filter, _REVEALED_HAND_FIELDS)
+    # "Choose a color. … you choose a card **of that color** from it." (Addle.)
+    # CR 608.2d's colour, admitted only behind a step that chose one and
+    # carried as the scratchpad key Persecute's discard reads.
+    of_that_color = (
+        node.filter.color_chosen_this_way and CHOSEN_COLOR_THIS_WAY in produced
+    )
+    leftover = _restrictions_beyond(
+        node.filter,
+        _REVEALED_HAND_FIELDS | ({"color_chosen_this_way"} if of_that_color else set()),
+    )
     if leftover:
         raise LoweringError(
             "the revealed-hand picker cannot narrow by: " + ", ".join(leftover),
@@ -254,6 +277,8 @@ def _lower_reveal_hand_and_choose(
             node=node,
         )
     payload: dict[str, object] = {"fate": node.fate}
+    if of_that_color:
+        payload["color_filter_from"] = CHOSEN_COLOR_THIS_WAY
     if node.filter.card_types:
         # "You choose **a creature card** from it." (Ostracize.) The positive
         # twin of ``exclude_types`` below, emitted only when the card prints it

@@ -324,7 +324,7 @@ def _lower_damage_shape(
     # reading of any zone is that set — the hand it came from goes on changing.
     if isinstance(node.amount, ast.CountOfRevealsThisWay):
         return lower_revealed_this_way_damage(
-            node, produced, multiplier=multiplier
+            node, produced, multiplier=multiplier, event=event
         )
     if isinstance(node.amount, ast.CountOf):
         # "…deals damage to **each nonblue creature without flying** equal to
