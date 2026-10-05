@@ -1,59 +1,66 @@
-"""Lowering board changes: bouncing, regeneration, sacrifice, phasing.
+"""Lowering what is done to a permanent where it stands: sacrifice (CR 701.21)
+and regeneration (CR 701.19).
 
-Regeneration, sacrifice (as an effect, as a toll, and as the complement of a
-keep), phasing out, and putting a permanent back on the bottom of a library.
+Two keyword actions, and they are what is left. To sacrifice is the
+controller's own act, so the question every branch of ``_lower_sacrifice`` asks
+is *who* owes it, *how many* and *which of theirs* — as an effect, and as the
+complement of a keep (Cataclysm, Natural Balance). To regenerate is a shield on
+a creature that has not gone anywhere.
 
-Destruction left for ``destruction`` at the thousand-line guard; tapping left
-for ``tapping`` one round earlier; Juxtapose's exchange left for
-``control_changes`` at Exodus's second wave, the round its AST node moved to
-``ast/control_changes.py`` — so the mirror re-formed on all three sides rather
-than forking. What stays is what the CR calls something else.
+**``_lower_sacrifice`` is the half that grows**, and it is one function: 107 of
+the 204 lines this module gained and kept after the tolls left were inside it —
+a payer, a count or a back-reference per set, never a verb. So when the guard
+comes near again the cut is *inside* that function's family (the seat a payer
+names, the number the prompt is sized from); there is no other verb left to cut
+along.
 
-**The "… unless <someone> pays" productions are all here**, which is the one
-place that split cut a production family in half rather than along it. All
-three are parsed in ``effects/board.py`` — "sacrifice this permanent unless you
-pay", "destroy this creature unless you pay", "for each land, destroy that land
-unless any player pays 1 life" — and they are one printed shape with three
-verbs: an *offer*, whose refusal is the effect. Two of them left with CR 701.8
-and one did not, so the mirror forked; they came back when the fused
-cost-repeated destroy pushed ``destruction`` past the thousand-line guard and
-the boundary the guard asked about turned out to be this one.
+Everything else this file once held has a family of its own, and its title went
+on naming two of them — it read "bouncing, regeneration, sacrifice, phasing"
+with no bounce lowered here (that is ``returns``') and CR 702.26 gone to
+``phasing``. Zone changes left for ``zones``, destruction for ``destruction``,
+tapping for ``tapping``, attaching for ``attachments``, the control change and
+Juxtapose's exchange for ``control_changes`` (the exchange has since gone on to
+``exchanges``), and the "… unless <someone> pays" offers for ``tolls`` at Urza's
+Saga — which this docstring went on calling "all here" until Planeshift's
+Phase 0. The last to go, at that Phase 0, was the pick of **one member of a set
+an earlier sentence chose** (``_chosen_members``): ``_lower_sacrifice`` reads
+its sacrifice half back from that floor, and its exile half was never this
+module's.
 
-Control changes lower to a *contribution* rather than a move — see
-`engine/control.py`. What lowering owes is the timestamped source, not a new
-owner.
+**Two lodgers, named so the next cut can find them.** Neither sacrifices or
+regenerates anything:
+
+* the three library-bottom lowerings — a graveyard card, a permanent, the
+  graveyard's top card — answer ``zones``' question, "which zone does this
+  object end up in", and the permanent one is the other end of the tuck
+  ``zones._lower_put_on_library_top`` lowers, down to the instruction kind;
+* ``_lower_delayed_self_action`` ("sacrifice it at the beginning of the next
+  end step") arranges for something later, which is ``delayed``'s opening
+  sentence.
+
+They stay because a lodger's home has to have room for it: ``zones`` stood at
+855 lines and ``delayed`` at 901 when this was written, and the first lodger is
+ninety.
 """
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_TARGET_PERMANENTS,
-                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
+from ...oracle_types import (X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
-from ...subject_filters import object_only_filter, untestable_filter_keys
+from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
+from ._chosen_members import _lower_sacrifice_one_of_chosen
 from ._described_returns import _graveyard_to_hand_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
                       _restrictions_beyond, player_deed_payload,
                       refuse_untestable)
-from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload, CREATED_TOKEN, _PERMANENTS_MADE_BY_THIS_EFFECT)
+from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload, CREATED_TOKEN, _PERMANENTS_MADE_BY_THIS_EFFECT)
 from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS,
                       end_step_action_on_made_permanent)
-
-
-#: Where a chosen attachment host is recorded for the step behind it to read.
-#: One name in one place, because the two instructions the lowering emits have
-#: to agree about it and a literal written twice is two chances to disagree.
-
-
-# ---------------------------------------------------------------------------
-# Destruction, tapping, zones
-# ---------------------------------------------------------------------------
-
-# "Destroy all X" shapes with a dedicated sweep handler.
 
 
 #: What a bottomed graveyard card may be narrowed by: exactly the printed
@@ -707,151 +714,6 @@ def _lower_delayed_self_action(
             # of Destruction is byte-identical.
             {"self_action": node.action}
             | ({"subject": node.subject} if node.subject != "source" else {}),
-        ),
-    )
-
-
-def _lower_exile_one_of_chosen(
-    node: "ast.Exile", subject, produced: frozenset[str]
-) -> tuple[OracleInstruction, ...] | None:
-    """"Exile **one of those creatures** and put two +1/+1 counters on the
-    other." (Cannibalize.)
-
-    ``_lower_sacrifice_one_of_chosen`` above one verb over, and the same
-    decomposition: the pick is an ordinary ``choose_permanent`` prompt whose
-    candidates are the set an *earlier sentence* chose, and the exile behind it
-    acts on the recorded id. Offered over the board instead, the caster could
-    exile any creature at all, which is a strictly better card than the printed
-    one.
-
-    **The chooser is the ability's controller** (CR 608.2c), which is the whole
-    difference from Retribution: that card says "*that player* chooses" and
-    names a seat, and this one says nothing — so no ``chooser`` rides the
-    payload and the prompt is armed on the caster, which is what an unassigned
-    choice means.
-
-    Returns None without claiming the sentence unless the subject really is one
-    member of a chosen set, so every ordinary "exile target creature" keeps its
-    own reading. With the quantifier present and no set recorded the line
-    *refuses*: "those creatures" would name nothing and the prompt would be
-    offered an empty list, which is an exile that quietly happens to nobody.
-    """
-    if not (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "one_of_those"
-    ):
-        return None
-    if CHOSEN_TARGET_PERMANENTS not in produced:
-        raise LoweringError(
-            "\"one of those\" needs an earlier step of this effect that chose "
-            "a set",
-            node=node,
-        )
-    described = _filter_payload(subject.filter)
-    if untestable_filter_keys(described):
-        raise LoweringError(
-            "the exile prompt cannot test this restriction", node=node
-        )
-    return (
-        OracleInstruction(
-            "choose_permanent", "",
-            {
-                "result_key": CHOSEN_PERMANENT,
-                # Named as a record rather than copied into a filter, because
-                # "those creatures" is an identity and no filter describes it.
-                "among_record": CHOSEN_TARGET_PERMANENTS,
-                # "…and put two +1/+1 counters on **the other**" is the step
-                # behind this one, and this is where the answer to it exists.
-                "remainder_key": OTHER_CHOSEN_PERMANENT,
-                "filter": described,
-                "prompt": "Choose a creature to exile.",
-            },
-        ),
-        OracleInstruction(
-            "exile_recorded_permanent", "",
-            {"permanents_from": CHOSEN_PERMANENT},
-        ),
-    )
-
-
-def _lower_sacrifice_one_of_chosen(
-    node: ast.Sacrifice, produced: frozenset[str]
-) -> tuple[OracleInstruction, ...] | None:
-    """"That player chooses and sacrifices **one of those creatures**."
-    (Retribution.)
-
-    Preacher's decomposition again (``destruction._lower_destroy_of_their_choice``
-    states it in full): the pick belongs to a seat that is not the effect's
-    controller, so it is the ordinary ``choose_permanent`` prompt — armed on
-    that seat, answered into the resolution's scratchpad — and the sacrifice
-    behind it acts on the recorded id. What is new is only that the candidates
-    are a set an *earlier sentence* chose rather than a battlefield the prompt
-    scans: a sacrifice offered over the board would let the player give up any
-    creature they own, which is a strictly better card than the one printed.
-
-    Returns None without claiming the sentence unless every part is there, so
-    an ordinary "sacrifices a creature" keeps its own reading:
-
-    * the subject must be one member of the chosen set (``one_of_those``);
-    * the sacrificing player must be the one the first sentence named
-      (``that_player``), and a step of this same effect must have recorded that
-      seat — with no producer "that player" names nobody and the prompt would
-      be armed on the caster, who is exactly the seat the card says must not
-      choose (idiom 7);
-    * that step must also have recorded the set, or there is nothing to offer.
-    """
-    subject = node.subject
-    if not (
-        isinstance(subject, ast.TargetSpec)
-        and subject.quantifier == "one_of_those"
-    ):
-        return None
-    # "**Their controller** chooses and sacrifices one of them." (Barrin's
-    # Spite.) The same seat by its other name: the pair was chosen "controlled
-    # by the same player", so its controller and "that player" are one answer —
-    # the one the choosing step recorded, not an event's (none fired).
-    #
-    # Any other seat **refuses** rather than declining: falling through, the
-    # generic sacrifice read the quantifier as "a" and offered the whole board.
-    if node.player.kind not in ("that_player", "controller") or node.count is not None:
-        raise LoweringError(
-            "\"one of those\" is sacrificed by the player the choosing "
-            "sentence named",
-            node=node,
-        )
-    if CHOSEN_TARGET_PERMANENTS not in produced or CHOSEN_PLAYER not in produced:
-        raise LoweringError(
-            "\"one of those\" needs an earlier step of this effect that chose "
-            "a set and named its controller",
-            node=node,
-        )
-    described = _filter_payload(subject.filter)
-    if untestable_filter_keys(described):
-        raise LoweringError(
-            "the sacrifice prompt cannot test this restriction", node=node
-        )
-    return (
-        OracleInstruction(
-            "choose_permanent", "",
-            {
-                "result_key": CHOSEN_PERMANENT,
-                # "**That player** chooses": the seat the sentence in front of
-                # this one recorded, not the ability's controller.
-                "chooser": "chosen_player",
-                # …and the candidates are that same sentence's set. Named as a
-                # record rather than copied into a filter, because "those
-                # creatures" is an identity and no filter describes it.
-                "among_record": CHOSEN_TARGET_PERMANENTS,
-                # "Put a -1/-1 counter on **the other**" is the step behind the
-                # sacrifice, and this is where the answer to it exists.
-                "remainder_key": OTHER_CHOSEN_PERMANENT,
-                "filter": described,
-                "prompt": "Choose a creature to sacrifice.",
-            },
-        ),
-        OracleInstruction(
-            "sacrifice_recorded_permanent", "",
-            {"permanents_from": CHOSEN_PERMANENT},
         ),
     )
 

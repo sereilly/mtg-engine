@@ -122,7 +122,7 @@ SWEPT_CONTROLLER_SEATS = PER_OBJECT_SEAT_RECORDS["controller"]
 
 # The scratchpad key the untap records and two later sentences read ("remove
 # **it** from combat", "gain control of **that creature**" — Disharmony). One
-# name in one place, shared by the ``board`` and ``combat`` lowering families,
+# name in one place, shared by the ``control_changes`` and ``combat`` families,
 # because a fragment two families need lives here rather than in either of
 # them — and because ``_records._PRODUCES`` writes the same string, so a
 # second spelling would make the producer gate vacuous while the handler read
@@ -168,7 +168,7 @@ CHOSEN_HAND_CARDS_RESULT = "chosen_hand_cards"
 # sentences behind it read — "attach it to **that** permanent" (Enchantment
 # Alteration), "return this card … **attached to that creature**"
 # (Takklemaggot). Named here for the reason every other key on this page is:
-# the ``board`` and ``zones`` lowering families and ``_records._PRODUCES``
+# the ``attachments`` and ``returns`` families and ``_records._PRODUCES``
 # all write the string, and a second spelling would make one producer gate
 # vacuous while the handler read an empty record.
 CHOSEN_PERMANENT = "attach_host"
