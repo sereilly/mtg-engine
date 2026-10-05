@@ -43,8 +43,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | MMQ | 335 | 465 | 91.8% | 91.6% | 66.2% | 278 |
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
-| M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 87.2% | 87.0% | 61.4% | 273 |
+| M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
+| INV *(measured)* | 335 | 547 | 87.8% | 87.8% | 62.2% | 277 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,10 +57,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 522 | 239 | expected a subject |  |
+| 521 | 238 | expected a subject |  |
 | 148 | 75 | unrecognized effect verb |  |
 | 128 | 63 | unconsumed text |  |
-| 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
+| 50 | 32 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
@@ -80,8 +80,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 2 | 1 | expected 'top' |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -174,6 +174,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aether Flash**
   - `Whenever a creature enters, this enchantment deals 2 damage to it.`
   - `Whenever a creature enters, this enchantment deals 2 damage to it.`
+- **Aether Rift**
+  - `At the beginning of your upkeep, discard a card at random. If you discard a creature card this way, return it from your graveyard to the battlefield unless any player pays 5 life.`
 - **Aether Sting**
   - `Whenever an opponent casts a creature spell, this enchantment deals 1 damage to that player.`
 - **Aether Storm**
@@ -678,6 +680,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barrin's Codex**
   - `At the beginning of your upkeep, you may put a page counter on this artifact.`
   - `{4}, {T}, Sacrifice this artifact: Draw X cards, where X is the number of page counters on this artifact.`
+- **Barrin's Spite**
+  - `Choose two target creatures controlled by the same player. Their controller chooses and sacrifices one of them. Return the other to its owner's hand.`
 - **Barrin's Unmaking**
   - `Return target permanent to its owner's hand if that permanent shares a color with the most common color among all permanents or a color tied for most common.`
 - **Barrin, Master Wizard**
@@ -2007,6 +2011,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Defiant Vanguard**
   - `When this creature blocks, at end of combat, destroy it and all creatures it blocked this turn.`
   - `{5}, {T}: Search your library for a Rebel permanent card with mana value 4 or less, put it onto the battlefield, then shuffle.`
+- **Defiling Tears**
+  - `Until end of turn, target creature becomes black, gets +1/-1, and gains "{B}: Regenerate this creature."`
 - **Deflection**
   - `Change the target of target spell with a single target.`
   - `Change the target of target spell with a single target.`
@@ -8067,6 +8073,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this creature: Counter target spell unless its controller pays {3}.`
 - **Spiketail Hatchling**
   - `Sacrifice this creature: Counter target spell unless its controller pays {1}.`
+- **Spinal Embrace**
+  - `Untap target creature you don't control and gain control of it. It gains haste until end of turn. At the beginning of the next end step, sacrifice it. If you do, you gain life equal to its toughness.`
 - **Spinal Graft**
   - `When enchanted creature becomes the target of a spell or ability, destroy that creature. It can't be regenerated.`
 - **Spinal Villain**
