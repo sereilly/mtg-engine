@@ -1881,7 +1881,7 @@ def test_layers_only_import_downward(layers):
         # `FAMILY_SHARED` has called it a floor since Tempest; it was missing
         # here only because `_common` was its one importer, and `_common` is
         # skipped. A floor reading a floor, nothing reads back.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_counted_life", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2352,6 +2352,32 @@ FAMILY_SHARED = {
     # and it reads `_amounts`, `_common` and `_events`, which is a floor
     # reading floors.
     "_counted_pumps",
+    # `_counted_life` pre-split out of `lowering/life.py` at the Phase 0 between
+    # Invasion's two waves, 21 lines under the guard below and within 35 of it
+    # since Prophecy's second wave with no group owning it. The third floor on
+    # `_counted_damage`'s line, one rule over again: a printed quantity that is
+    # **counted**, against the sentence that spends it — here CR 119.3's gain.
+    # Every reading of `_lower_gain_life` whose *size* is read off something
+    # went (the "equal to …" chain, the "for each …" chain, and the "but not
+    # more than …" ceiling only a back-referenced gain can carry), and that is
+    # the half that grows: 219 of the 372 lines `life` had gained and kept
+    # since it left `game` were one more printed shape of a gain's amount, 64
+    # were a seat.
+    #
+    # The cut that was *not* made is the one the module's shape invites — gain
+    # from loss, 270 lines for moving one function whole. `life`'s own comments
+    # argue against it: the two name their seat out of the same tables, and
+    # Forsaken Wastes is recorded there as "one module, one phrase, two
+    # answers". What separates is who from how much, and only on the gain,
+    # which settles its seat before it reads an amount; a loss's counted
+    # branches each name the losing seat as they count, so they stayed.
+    #
+    # A single-importer floor for `_counted_pumps`' reason exactly — `life`
+    # reads it and it reads nothing back — and it reads `_amounts`, `_common`,
+    # `_events`, `_deaths`, `_cost_records` and `_counted_damage` (for the one
+    # characteristic set `where_x` and `cards` also read), which is a floor
+    # reading floors.
+    "_counted_life",
     # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
     # next time that module reached the guard below. The line is the one the
     # branches had already drawn: everything left in `damage` computes a
