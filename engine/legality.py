@@ -60,6 +60,7 @@ from .targeting import (
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
     _nested_steps,
+    cast_target_slot,
     derive_activation_spec,
     derive_cast_spec,
     derive_instruction_spec,
@@ -612,6 +613,119 @@ def _announced_target_slots(instruction) -> list[tuple]:
 
     walk(instruction)
     return slots
+
+
+#: Spec kinds :func:`cast_target_obligation` does not answer for, each because
+#: another gate already owns CR 601.2c's "can it be announced at all?" for it:
+#: ``none`` / ``modal`` / ``hand_card`` choose no target; a **roles**
+#: announcement is checked whole by ``_validate_cast_targets`` (which refuses a
+#: cast naming fewer objects than the spell has roles); a **divided** spell
+#: naming nothing is CR 601.2d's refusal in ``queue_from_hand``.
+_UNOBLIGED_CAST_KINDS = frozenset({
+    "none", "modal", "hand_card", ROLES_TARGET_KIND, "divided",
+})
+
+#: Spec flags that mean the picker is **not a target** (CR 115.1): a *source of
+#: your choice* is chosen, not targeted (CR 609.7a) — Reverse Damage, Eye for an
+#: Eye; ``optional`` is Clone's "you may have this enter as a copy". A cost is
+#: asked through :func:`targeting.spec_is_a_cost` beside these.
+_UNTARGETED_SPEC_FLAGS = ("source_of_choice", "requires_source", "optional")
+
+#: The printed quantifiers that let an announcement name **nobody** (CR 601.2c:
+#: "up to one target" and "any number of target" are legal at zero).
+_ZERO_TARGET_QUANTIFIERS = frozenset({"up_to", "any_number"})
+
+
+def _inside_an_offer(instructions, wanted) -> bool:
+    """Whether *wanted* sits on the taken branch of a ``may`` in *instructions*.
+
+    Asked only of a slot that carries **no** printed quantifier, where it is
+    the one piece of evidence that separates two sentences the lowering gives a
+    single kind: "Return target instant or sorcery card from your graveyard to
+    your hand" (Relearn) and "…Then you **may** return an instant or sorcery
+    card from your graveyard to your hand" (Experimental Overload). The first
+    targets. The second chooses at resolution and targets nothing, so an empty
+    graveyard does not make it uncastable — and the engine's standing
+    approximation (it asks for the card as the spell is cast) must not be
+    promoted into a rule the card does not print.
+
+    A slot that *does* carry a quantifier is never asked: "You may tap or untap
+    **target** creature" (Twiddle) is an offer about a target CR 601.2c has
+    already chosen.
+    """
+    for instruction in instructions:
+        for step in _iter_instruction_tree(instruction):
+            if step.kind != "may":
+                continue
+            offered = tuple(step.payload.get("action") or ())
+            if any(
+                inner is wanted
+                for branch in offered
+                for inner in _iter_instruction_tree(branch)
+            ):
+                return True
+    return False
+
+
+def cast_target_obligation(
+    card: CardDefinition, program, *,
+    optional_cost_payments: dict | None = None,
+    x_value: int | None = None,
+) -> dict | None:
+    """The spec of the target an instant or sorcery **must** announce as it is
+    cast (CR 601.2c), or None when it may be announced naming none.
+
+    The one definition of "this spell needs a target", read by the cast path
+    (:meth:`LegalityMixin.no_legal_cast_target_refusal`), by the AI's proposal
+    filter and by the web's castable highlight. It was three: the cast path
+    asked a per-kind arm in ``_validate_cast_targets`` (so a spell whose first
+    instruction is a ``sequence``, a ``may`` or an ``if_then`` reached no arm
+    and was castable at nothing), the AI asked "is every quantifier in the
+    program an *up to*?", and the browser asked whether its picker was empty.
+
+    The answer is **one slot's** — the slot ``derive_cast_spec`` describes,
+    through :func:`targeting.cast_target_slot` — and it is that slot's own
+    printed quantifier:
+
+    * "target", a printed count ("two target creatures"), "one or more
+      target", "any target" — one must be named, so one must exist;
+    * "up to N target", "any number of target" — zero is a legal announcement;
+    * "**X** target creatures" — obliged only once the caster has announced an
+      X of one or more (CR 601.2b precedes 601.2c, and X may be zero);
+    * no quantifier at all (the kinds whose noun phrase is lowered into the
+      payload rather than into a ``targets`` description: a bounce, a
+      graveyard return, a Lace) — obliged, *unless* the slot is a choice the
+      spell merely offers (:func:`_inside_an_offer`).
+
+    Not answered for a **modal** spell (its spec is mode 0's whichever mode was
+    chosen; the chosen mode's arm in ``_validate_cast_targets`` judges it) or
+    for the kinds in :data:`_UNOBLIGED_CAST_KINDS`. *optional_cost_payments* is
+    CR 601.2b's answer so far, for CR 702.33g: a kicked-only target is a target
+    only of a spell that was kicked.
+    """
+    if program.modes:
+        return None
+    slot = cast_target_slot(
+        card, program, optional_cost_payments=optional_cost_payments
+    )
+    if slot is None:
+        return None
+    spec, instruction = slot
+    if spec.get("kind") in _UNOBLIGED_CAST_KINDS:
+        return None
+    if spec_is_a_cost(spec) or any(spec.get(flag) for flag in _UNTARGETED_SPEC_FLAGS):
+        return None
+    described = (getattr(instruction, "payload", None) or {}).get("targets")
+    quantifier = described.get("quantifier") if isinstance(described, dict) else None
+    if quantifier is None:
+        if _inside_an_offer(program.instructions, instruction):
+            return None
+        return spec
+    if quantifier in _ZERO_TARGET_QUANTIFIERS:
+        return None
+    if described.get("count") == "x":
+        return spec if isinstance(x_value, int) and x_value >= 1 else None
+    return spec
 
 
 def _role_object_key(obj) -> tuple:
@@ -2254,6 +2368,61 @@ class LegalityMixin:
             (t["seat"], t["index"]) for t in valid
             if t.get("kind") == "permanent" and t.get("index") is not None
         }
+
+    def no_legal_cast_target_refusal(
+        self, caster_index: int, card: CardDefinition, *,
+        optional_cost_payments: dict | None = None,
+        x_value: int | None = None,
+    ) -> str | None:
+        """CR 601.2c's first half: a spell that must announce a target cannot
+        be cast while **no legal target exists**. Returns the refusal, or None.
+
+        The cast-side twin of the last paragraph of
+        :meth:`activation_target_refusal`, and it exists for the reason that
+        method does. ``_validate_cast_targets`` answers "is there anything to
+        aim at?" in a per-kind arm keyed on the spell's *primary* instruction,
+        so the question was asked of eleven instruction kinds and of no spell
+        whose first instruction is a wrapper: "Destroy target artifact or
+        enchantment. Draw two cards." on an empty board was announced, paid
+        for, destroyed nothing and drew two — a cantrip for the price of a
+        removal spell. Disenchant, the same first sentence alone, was refused.
+
+        One predicate instead of an arm per kind: the slot the spell must fill
+        (:func:`cast_target_obligation`) against the list the picker is handed
+        (``_enumerate_targets``), so "the browser offers nothing" and "the
+        engine refuses" are one fact. The AI's proposal filter and the web's
+        castable highlight ask this same method.
+
+        What it deliberately leaves alone:
+
+        * a target **on the stack** alone (``stack``) — its "is there a spell
+          to name?" belongs to the stack gates beside
+          :meth:`cast_stack_target_refusal`. "Target spell **or permanent**"
+          (the Laces) is answered here, over both zones, because a board is
+          half of its answer;
+        * a standing **targeting ban** (Peace Talks) — ``targeting_ban_refusal``
+          already refused, and under a ban the enumeration is empty for a
+          reason that is not this rule's;
+        * everything :func:`cast_target_obligation` declines: modal spells,
+          roles, divided spells, and every announcement that may name nobody.
+
+        Whatever the caller named is not consulted. With no legal target in
+        existence a named one is illegal by construction, and
+        :meth:`cast_target_refusal` says so in its own words one call later.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        if self.targeting_bans:
+            return None
+        spec = cast_target_obligation(
+            card, compile_card_oracle(card),
+            optional_cost_payments=optional_cost_payments, x_value=x_value,
+        )
+        if spec is None or spec.get("kind") == "stack":
+            return None
+        if self._enumerate_targets(caster_index, card, dict(spec), for_cast=True):
+            return None
+        return f"no valid target for {card.name}"
 
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,

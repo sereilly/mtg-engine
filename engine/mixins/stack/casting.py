@@ -1576,6 +1576,21 @@ class SpellCastingMixin:
             self.log.append(target_reason)
             return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
+        # CR 601.2c's other half, asked before what was *named*: a spell that
+        # must announce a target cannot be cast while no legal target exists.
+        # The arms above ask it of the kinds they name; this asks it of every
+        # spell, through the list the picker is handed — so "Destroy target
+        # artifact or enchantment. Draw two cards." on an empty board is an
+        # illegal announcement rather than a two-mana cantrip. Nothing has been
+        # spent yet.
+        unaimed = self.no_legal_cast_target_refusal(
+            caster_index, card,
+            optional_cost_payments=optional_paid, x_value=x_value,
+        )
+        if unaimed is not None and target_stack_item is None:
+            self.log.append(unaimed)
+            return SimulationResult(card.name, False, classification.effect_kind, unaimed)
+
         # CR 601.2c for the target the caller *named*, beside the per-kind arms
         # above rather than inside them: a spell whose primary instruction is a
         # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.

@@ -2616,6 +2616,22 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     is the same move ``activation_target_refusal`` made when it replaced the
     per-kind if-chain in ``activation.py``.
     """
+    # **The engine's rule first, through the engine's predicate** (CR 601.2c,
+    # `legality.no_legal_cast_target_refusal`) — the very call the cast path
+    # refuses with, so a spell the engine would decline for want of a target is
+    # one this policy cannot propose, by construction rather than by two
+    # readers happening to agree. They did not: this function decided "needs a
+    # target" from every quantifier in the program, the cast path from a
+    # per-kind arm, and 182 spells sat between the two.
+    if game.no_legal_cast_target_refusal(caster_index, card) is not None:
+        return True
+    # What follows is **preference and remainder**, and is deliberately wider
+    # than the rule: the two shapes the engine's predicate leaves to another
+    # gate (a target on the stack, a modal spell's mode), and the casts that
+    # are legal and buy nothing — "X target creatures" at an X of zero, "any
+    # number of target" at none, a *source of your choice* with no source in
+    # play. Declining those is this policy's business; refusing them is not
+    # the engine's.
     program = compile_card_oracle(card)
     # A modal spell is *not* excepted here, unlike in `cast_target_refusal`
     # where the caller may have chosen any mode. This policy names no mode, so
