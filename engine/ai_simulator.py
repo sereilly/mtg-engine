@@ -717,6 +717,10 @@ def _play_one_cast(
         # the announcement, and a cast that drops it is refused now that the
         # gate asks for one.
         divided_targets=cast_action.divided_targets,
+        # CR 601.2b's optional costs (a kicker), forwarded for the same reason:
+        # the plan above tapped the lands for them, and a cast that drops the
+        # announcement pays the printed cost and leaves the rest in the pool.
+        optional_cost_payments=cast_action.optional_cost_payments,
     )
     _resolve_pending_choices(game)
     after = _snap(game)

@@ -25,7 +25,8 @@ from ...auras import aura_enchant_clause
 from ...alternative_costs import (AlternativeCost, alternative_costs,
                                   board_noun)
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
-                           buyback_cost, cast_announces_x, optional_x_offers)
+                           buyback_cost, cast_announces_x, kicked,
+                           optional_x_offers)
 from ...auras import controller_cast_ban
 # `own_cast_ban` beside `auras.controller_cast_ban` above, and named apart from
 # it deliberately: both answer "which permanent forbids this seat this spell",
@@ -2116,6 +2117,18 @@ class SpellCastingMixin:
             )
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
+            if kicked(card, spell_item.choices):
+                # CR 702.33d: the spell is kicked from the moment its
+                # controller declared the intention to pay, which is now. Said
+                # in the log because nothing else on the table shows it -- the
+                # mana is spent either way, and an opponent deciding whether to
+                # counter Kavu Titan needs to know which Kavu Titan it is.
+                self.log.append(
+                    f"{caster.name} kicked {card.name}"
+                    + (f" (X={resolved_x_value})" if optional_x_offers(
+                        card, from_zone=from_zone
+                    ) else "")
+                )
             # "Whenever a player casts a [color] spell" triggers (Rod/Cup/Sphere)
             # and "whenever you cast an X spell" triggers (Verduran Enchantress)
             # fire now, as the spell is put on the stack, and go on the stack above
