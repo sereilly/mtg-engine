@@ -1735,7 +1735,30 @@ def token_recipient_seats(
         # a seat, so a *spell* printing the same two words (Mogg Infestation)
         # still reads its own target below.
         record = payload.get("recipient_seat_record")
-        if record is not None:
+        iteration_record = payload.get("recipient_iteration_seat")
+        if iteration_record is not None:
+            # "For each creature destroyed this way, **its controller** creates
+            # a 1/1 white Spirit creature token with flying." (March of Souls.)
+            # The seat the sweep froze about the object *this iteration* is on
+            # (CR 608.2h: last known information — the creature is a card in a
+            # graveyard by now and controlled by nobody). ``for_each`` resolves
+            # the per-object record to this object's entry before the step
+            # runs, so the lookup is by the record's name and never by the
+            # object — ``draw_target_cards`` and ``gain_life`` read the same
+            # binding for the same two words.
+            #
+            # No entry means no loop is running or the sweep recorded nothing
+            # about this object, and nobody gets a token: a seat guessed here
+            # is a player the card never named.
+            seat = context.iteration_seats.get(str(iteration_record))
+            recipients = (
+                [seat]
+                if isinstance(seat, int)
+                and 0 <= seat < len(game.players)
+                and not game.players[seat].lost
+                else []
+            )
+        elif record is not None:
             seat = (context.trigger_context or {}).get(str(record))
             recipients = (
                 [seat]
