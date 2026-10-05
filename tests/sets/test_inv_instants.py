@@ -146,3 +146,144 @@ def test_w1g7_fact_or_fiction_reveals_what_a_short_library_has(set_pool):
     ]
     assert any("reveals Shivan Dragon, Forest, Lightning Bolt" in line for line in game.log)
     assert not game.pending_choices
+
+
+def _w1g7_reveal_table(set_pool, spell, library, interactive=()):
+    """Seat 0 holding *spell* over a stacked library of LEA cards."""
+    inv, lea = set_pool("INV"), set_pool("LEA")
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(
+            name="P1", hand=[inv[spell]], library=[lea[name] for name in library],
+        ),
+        _W1G7PlayerState(name="P2"),
+    ])
+    game._sync_control()
+    game.interactive_seats = set(interactive)
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    w1g7_reveal_ready = game
+    return w1g7_reveal_ready
+
+
+def test_w1g7_reviving_vapors_gains_the_mana_value_of_the_card_it_takes(set_pool):
+    """"Reveal the top three cards of your library and put one of them into
+    your hand. You gain life equal to that card's mana value. Put all other
+    cards revealed this way into your graveyard."
+
+    The pick is the caster's and the life is read off the card *taken* — six
+    for Shivan Dragon, not the Forest's zero — which is a number the pick has
+    to write down, because the card is in a hand by the time the gain asks
+    (CR 608.2h). The other two revealed cards are binned; the fourth is not
+    touched.
+    """
+    program = _w1g7_compile(set_pool("INV")["Reviving Vapors"])
+    assert program.supported, program.reason
+
+    game = _w1g7_reveal_table(
+        set_pool, "Reviving Vapors",
+        ("Forest", "Shivan Dragon", "Lightning Bolt", "Island"), interactive=[0],
+    )
+    assert game.cast_from_hand(0, "Reviving Vapors").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("look_top_pick", 0),
+    ]
+    assert any("reveals Forest, Shivan Dragon, Lightning Bolt" in line for line in game.log)
+    assert game.players[0].life == 20, "nothing is gained before the pick"
+    assert game.confirm_look_top_pick(0, 1)
+
+    caster = game.players[0]
+    assert _w1g7_zone_names(caster.hand) == ["Shivan Dragon"]
+    assert caster.life == 26, game.log
+    assert _w1g7_zone_names(caster.graveyard) == [
+        "Forest", "Lightning Bolt", "Reviving Vapors",
+    ]
+    assert _w1g7_zone_names(caster.library) == ["Island"]
+    assert not game.stack and not game.pending_choices
+
+
+def test_w1g7_reviving_vapors_headless_takes_the_card_worth_the_most_life(set_pool):
+    """A seat that is not asked takes the revealed card with the greatest mana
+    value — the one printing in the look-and-pick family whose own sentence
+    says which card is worth more — and an empty library gains nothing."""
+    game = _w1g7_reveal_table(
+        set_pool, "Reviving Vapors", ("Lightning Bolt", "Forest", "Serra Angel"),
+    )
+    game.cast_from_hand(0, "Reviving Vapors")
+    _w1g7_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    caster = game.players[0]
+    assert _w1g7_zone_names(caster.hand) == ["Serra Angel"]
+    assert caster.life == 25, game.log
+
+    empty = _w1g7_reveal_table(set_pool, "Reviving Vapors", ())
+    empty.cast_from_hand(0, "Reviving Vapors")
+    _w1g7_resolve_stack(empty)
+    empty.auto_resolve_pending_choices()
+    assert empty.players[0].life == 20
+    assert not empty.pending_choices
+
+
+def _w1g7_typed_card(name, subtypes):
+    """A 2/2 creature card of the given subtypes."""
+    from tests.helpers import _mk_card
+
+    card = _mk_card(name, "{2}", f"Creature - {subtypes}", "")
+    card.raw.update({"power": "2", "toughness": "2"})
+    w1g7_typed = card
+    return w1g7_typed
+
+
+def test_w1g7_tsabos_decree_strips_one_creature_type_from_a_hand_and_a_board(set_pool):
+    """"Choose a creature type. Target player reveals their hand and discards
+    all creature cards of that type. Then destroy all creatures of that type
+    that player controls. They can't be regenerated."
+
+    The type is chosen as the spell resolves (CR 608.2d) and read back twice:
+    by the discard — every Goblin *card*, the Goblin Warrior included, and
+    neither the Elf nor the instant — and by the destroy, which takes that
+    player's Goblins through a regeneration shield and leaves the caster's own
+    Goblin alone ("that player controls").
+    """
+    from engine import targeting
+    from engine.models import Permanent
+
+    card = set_pool("INV")["Tsabo's Decree"]
+    program = _w1g7_compile(card)
+    assert program.supported, program.reason
+    assert targeting.derive_cast_spec(card, program) == {"kind": "player"}
+
+    goblin = _w1g7_typed_card("Goblin Raider", "Goblin")
+    veteran = _w1g7_typed_card("Goblin Veteran", "Goblin Warrior")
+    elf = _w1g7_typed_card("Elf Scout", "Elf")
+    shielded = Permanent(card=goblin)
+    shielded.regeneration_shield += 1
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="P1", hand=[card], battlefield=[Permanent(card=goblin)]),
+        _W1G7PlayerState(
+            name="P2",
+            hand=[goblin, elf, veteran, set_pool("LEA")["Lightning Bolt"], goblin],
+            battlefield=[shielded, Permanent(card=elf), Permanent(card=veteran)],
+        ),
+    ])
+    game._sync_control()
+    game.interactive_seats = {0}
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Tsabo's Decree", target_player_index=1).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("creature_type_choice", 0),
+    ]
+    assert game.confirm_creature_type_choice(0, "goblin")
+
+    victim = game.players[1]
+    assert _w1g7_zone_names(victim.hand) == ["Elf Scout", "Lightning Bolt"], game.log
+    assert [p.card.name for p in game.controlled_by(1)] == ["Elf Scout"]
+    assert sorted(_w1g7_zone_names(victim.graveyard)) == [
+        "Goblin Raider", "Goblin Raider", "Goblin Raider", "Goblin Veteran",
+        "Goblin Veteran",
+    ]
+    assert [p.card.name for p in game.controlled_by(0)] == ["Goblin Raider"]
+    assert any("P2 reveals their hand" in line for line in game.log)
+    assert not game.stack and not game.pending_choices

@@ -255,3 +255,156 @@ def test_w1g7_bend_or_break_headless_everyone_loses_about_half(set_pool):
     assert [(p.card.name, p.tapped) for p in game.controlled_by(1)] == [
         ("Island", True), ("Island", True),
     ], game.log
+
+
+def _w1g7_sized_card(name, type_line, mana_value):
+    """A card with a stated mana value and no text."""
+    from engine.models import CardDefinition
+
+    raw = {"name": name, "type_line": type_line}
+    if "Creature" in type_line:
+        raw.update({"power": "2", "toughness": "2"})
+    w1g7_sized = CardDefinition(
+        name=name, mana_cost="{%d}" % mana_value if mana_value else "",
+        cmc=float(mana_value), type_line=type_line, oracle_text="", colors=(),
+        color_identity=(), keywords=(), produced_mana=(), raw=raw,
+    )
+    return w1g7_sized
+
+
+def test_w1g7_desperate_research_takes_every_copy_of_the_named_card_and_exiles_the_rest(set_pool):
+    """"Choose a card name other than a basic land card name. Reveal the top
+    seven cards of your library and put all of them with that name into your
+    hand. Exile the rest."
+
+    The name is chosen first and the printed bound on it is enforced where the
+    choice is made: a basic land's name — plain, snow-covered or Wastes — is
+    refused, not repaired. Both Shivan Dragons among the top seven go to the
+    hand, the other five are **exiled** (not binned), and the eighth card never
+    moves.
+    """
+    program = _w1g7_compile(set_pool("INV")["Desperate Research"])
+    assert program.supported, program.reason
+
+    lea = set_pool("LEA")
+    library = [
+        lea[name] for name in (
+            "Forest", "Shivan Dragon", "Lightning Bolt", "Shivan Dragon", "Island",
+            "Forest", "Serra Angel", "Mountain",
+        )
+    ]
+    game = _w1g7_table(set_pool, "Desperate Research", interactive=[0])
+    game.players[0].library = library
+    assert game.cast_from_hand(0, "Desperate Research").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    prompt = game.pending_choice_of("choose_card_name", 0)
+    assert prompt is not None and prompt.data.get("exclude_basic_land_names")
+    assert len(game.players[0].library) == 8, "nothing is revealed before the name"
+    for refused in ("Forest", "island", "Snow-Covered Mountain", "Wastes"):
+        assert not game.confirm_choose_card_name(0, refused), refused
+    assert game.confirm_choose_card_name(0, "Shivan Dragon")
+
+    caster = game.players[0]
+    assert [c.name for c in caster.hand] == ["Shivan Dragon", "Shivan Dragon"]
+    assert [c.name for c in caster.exile] == [
+        "Forest", "Lightning Bolt", "Island", "Forest", "Serra Angel",
+    ]
+    assert [c.name for c in caster.graveyard] == ["Desperate Research"]
+    assert [c.name for c in caster.library] == ["Mountain"]
+    assert not game.stack and not game.pending_choices
+
+
+def test_w1g7_void_destroys_and_discards_by_the_number_its_caster_names(set_pool):
+    """"Choose a number. Destroy all artifacts and creatures with mana value
+    equal to that number. Then target player reveals their hand and discards
+    all nonland cards with mana value equal to the number."
+
+    A *spell* choosing a number, with no printed bound (CR 107.1: any whole
+    number from zero up — a negative one is refused). Naming three takes every
+    artifact and creature of mana value three **on both sides**, leaves the
+    enchantment of the same mana value and the two-drops, and then strips the
+    targeted hand of its nonland threes.
+    """
+    card = set_pool("INV")["Void"]
+    program = _w1g7_compile(card)
+    assert program.supported, program.reason
+    assert _w1g7_targeting.derive_cast_spec(card, program) == {"kind": "player"}
+
+    three = _w1g7_sized_card("Three Drop", "Creature - Bear", 3)
+    rock = _w1g7_sized_card("Three Rock", "Artifact", 3)
+    aura = _w1g7_sized_card("Three Glyph", "Enchantment", 3)
+    two = _w1g7_sized_card("Two Drop", "Creature - Bear", 2)
+    spell3 = _w1g7_sized_card("Three Spell", "Sorcery", 3)
+    spell1 = _w1g7_sized_card("One Spell", "Instant", 1)
+    forest = set_pool("LEA")["Forest"]
+    game = _w1g7_table(
+        set_pool, "Void",
+        mine=[_W1G7Permanent(card=three), _W1G7Permanent(card=two)],
+        theirs=[
+            _W1G7Permanent(card=three), _W1G7Permanent(card=rock),
+            _W1G7Permanent(card=aura), _W1G7Permanent(card=two),
+            _W1G7Permanent(card=forest),
+        ],
+        interactive=[0],
+    )
+    game.players[1].hand = [spell3, spell1, three, forest]
+    assert game.cast_from_hand(0, "Void", target_player_index=1).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    prompt = game.pending_choice_of("number_choice", 0)
+    assert prompt is not None
+    assert (prompt.data["minimum"], prompt.data["maximum"]) == (0, None)
+    assert not game.confirm_number_choice(0, -1)
+    assert game.confirm_number_choice(0, 3)
+
+    assert _w1g7_board(game, 0) == ["Two Drop"], game.log
+    assert _w1g7_board(game, 1) == ["Three Glyph", "Two Drop", "Forest"]
+    victim = game.players[1]
+    assert [c.name for c in victim.hand] == ["One Spell", "Forest"]
+    assert sorted(c.name for c in victim.graveyard) == [
+        "Three Drop", "Three Drop", "Three Rock", "Three Spell",
+    ]
+    assert any("Void: chose 3" in line for line in game.log)
+    assert not game.stack and not game.pending_choices
+
+
+def test_w1g7_void_naming_zero_spares_lands_on_the_board_and_in_the_hand(set_pool):
+    """Zero is a number, and the two sentences each say what it does not
+    reach: a land is neither an artifact nor a creature, and the discard is of
+    **nonland** cards — so naming zero on a board of lands takes nothing."""
+    forest = set_pool("LEA")["Forest"]
+    game = _w1g7_table(
+        set_pool, "Void", theirs=[_W1G7Permanent(card=forest)], interactive=[0],
+    )
+    game.players[1].hand = [forest, _w1g7_sized_card("One Spell", "Instant", 1)]
+    game.cast_from_hand(0, "Void", target_player_index=1)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_number_choice(0, 0)
+
+    assert _w1g7_board(game, 1) == ["Forest"]
+    assert [c.name for c in game.players[1].hand] == ["Forest", "One Spell"]
+
+
+def test_w1g7_void_headless_names_the_number_that_costs_the_opponent_most(set_pool):
+    """A seat that is not asked names the mana value borne by the most
+    permanents its opponents control, net of its own — read off the
+    battlefield, which is public, and never off a hand."""
+    three = _w1g7_sized_card("Three Drop", "Creature - Bear", 3)
+    two = _w1g7_sized_card("Two Drop", "Creature - Bear", 2)
+    game = _w1g7_table(
+        set_pool, "Void",
+        mine=[_W1G7Permanent(card=two), _W1G7Permanent(card=two)],
+        theirs=[
+            _W1G7Permanent(card=three), _W1G7Permanent(card=three),
+            _W1G7Permanent(card=two),
+        ],
+    )
+    game.cast_from_hand(0, "Void", target_player_index=1)
+    _w1g7_resolve_stack(game)
+    # The number is a queued prompt for every seat; a headless table drains it
+    # the way the simulator does, and the steps behind it then run.
+    game.auto_resolve_pending_choices()
+
+    assert _w1g7_board(game, 1) == ["Two Drop"], game.log
+    assert _w1g7_board(game, 0) == ["Two Drop", "Two Drop"]

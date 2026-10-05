@@ -215,3 +215,92 @@ def test_w1g7_stand_or_fall_is_silent_on_an_opponents_turn(set_pool):
     )
     assert game.stack == []
     assert game.blocking_restrictions_until_eot == []
+
+
+def _w1g7_sanctuary_upkeep(set_pool, interactive=()):
+    """Seat 0 controlling Elfhame Sanctuary, stopped in its own upkeep on a
+    later turn (the first turn's draw is skipped by rule, CR 103.8a) with the
+    trigger on the stack."""
+    lea = set_pool("LEA")
+    sanctuary = _W1G7Permanent(card=set_pool("INV")["Elfhame Sanctuary"])
+    library = [
+        lea[name] for name in (
+            "Lightning Bolt", "Forest", "Shivan Dragon", "Island", "Serra Angel",
+        )
+    ]
+    game = _W1G7Game(players=[
+        _W1G7PlayerState(name="P1", battlefield=[sanctuary], library=library),
+        _W1G7PlayerState(name="P2"),
+    ])
+    game._sync_control()
+    game.interactive_seats = set(interactive)
+    game.enforce_mana_costs = False
+    game.turn = 4
+    game.begin_turn_bookkeeping(0)
+    game.resolve_untap_step(0)
+    game.resolve_upkeep(0)
+    w1g7_upkeep_ready = game
+    return w1g7_upkeep_ready
+
+
+def test_w1g7_elfhame_sanctuary_trades_the_draw_step_for_a_basic_land(set_pool):
+    """"At the beginning of your upkeep, you may search your library for a
+    basic land card, reveal that card, put it into your hand, then shuffle. If
+    you do, you skip your draw step this turn."
+
+    The offer is accepted, the Island the player names is fetched and revealed
+    (a nonbasic or nonland card is not a legal find), and this turn's draw step
+    never happens (CR 500.7, CR 614.10): the hand holds the Island and nothing
+    else, and the library is one card shorter, not two.
+    """
+    program = _w1g7_compile(set_pool("INV")["Elfhame Sanctuary"])
+    assert program.supported, program.reason
+
+    game = _w1g7_sanctuary_upkeep(set_pool, interactive=[0])
+    assert [item.card.name for item in game.stack] == ["Elfhame Sanctuary"]
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True)
+    search = game.pending_choice_of("search_library", 0)
+    assert search is not None
+    library = game.players[0].library
+    bolt = next(i for i, c in enumerate(library) if c.name == "Lightning Bolt")
+    island = next(i for i, c in enumerate(library) if c.name == "Island")
+    assert not game.confirm_search_library(0, bolt), "not a basic land card"
+    assert game.confirm_search_library(0, island)
+    assert not game.stack and not game.pending_choices
+
+    assert game.resolve_draw_step(0) == 0, game.log
+    caster = game.players[0]
+    assert [c.name for c in caster.hand] == ["Island"]
+    assert len(caster.library) == 4
+    assert any("revealed Island" in line for line in game.log)
+    assert game.skip_step_counts == {}, "the skip was spent on this turn's draw step"
+
+
+def test_w1g7_elfhame_sanctuary_declined_draws_as_usual(set_pool):
+    """"You **may**": declining searches nothing and skips nothing — "if you
+    do" is not met, so the draw step happens."""
+    game = _w1g7_sanctuary_upkeep(set_pool, interactive=[0])
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=False)
+    assert not game.stack and not game.pending_choices
+
+    assert game.resolve_draw_step(0) == 1
+    assert [c.name for c in game.players[0].hand] == ["Lightning Bolt"]
+
+
+def test_w1g7_a_this_turn_draw_skip_does_not_outlive_its_turn(set_pool):
+    """"…skip your draw step **this turn**" is a window, not "your next draw
+    step": a skip recorded after this turn's draw step has already happened is
+    swept at cleanup (CR 514.2) and the next turn's draw is untouched. The
+    unbounded spelling (Ivory Gargoyle's "your next draw step") is a different
+    record and waits."""
+    game = _w1g7_sanctuary_upkeep(set_pool)
+    game.pending_choices.clear()
+    game.stack.clear()
+    assert game.resolve_draw_step(0) == 1
+    # Armed late — the draw step it names is already over.
+    game.skip_next_step("draw", seat=0, on_turn=game.turn)
+    game.skip_next_step("untap", seat=1)
+    game.resolve_cleanup_step(0)
+    assert game.skip_step_counts == {(1, "untap"): 1}

@@ -286,7 +286,14 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
         no_basics = stream.accept_phrase(
             "other", "than", "a", "basic", "land", "card", "name",
         )
-        if stream.exhausted or stream.at_punct(".", ","):
+        # …and never when the sentence behind it is Necromentia's "Search
+        # target opponent's graveyard, hand, and library …": that card opens
+        # with these same eleven words and reads two more sentences as one
+        # paragraph (`naming._parse_name_and_strip`, the last resort behind
+        # this production), so taking the first sentence here strands the rest
+        # — the hazard `imperative_verbs` records beside the call.
+        strips = no_basics and stream.at_punct(".") and stream.peek_word(1) == "search"
+        if not strips and (stream.exhausted or stream.at_punct(".", ",")):
             return ast.ChooseCardName(
                 card_type=card_type, other_than_basic_land=no_basics,
             )
