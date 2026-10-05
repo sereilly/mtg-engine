@@ -116,7 +116,7 @@ def lower_where_x(
     if isinstance(node.definition, ast.CountOfDeaths):
         return _lower_where_x_deaths(node, inner, produced)
     if isinstance(node.definition, ast.CharacteristicOfSubject):
-        return _lower_where_x_characteristic(node, inner, produced)
+        return _lower_where_x_characteristic(node, inner, produced, event)
     if isinstance(node.definition, ast.CountOfDeathsThisWay):
         return _lower_where_x_this_way(node, inner, produced)
     if isinstance(node.definition, ast.CountOfTapsThisWay):
@@ -570,10 +570,17 @@ def _lower_where_x_deaths(
     return _stamp_x_from_count(inner, {"history": "creatures_died_under_your_control"})
 
 
+#: Trigger conditions whose fire site freezes the spell that was cast
+#: (``cast_card`` in the trigger's context), so "that spell" in a where-clause
+#: has an object to be a characteristic of.
+_CAST_SPELL_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
+
+
 def _lower_where_x_characteristic(
     node: ast.WhereX,
     inner: tuple[OracleInstruction, ...],
     produced: frozenset[str],
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…, where X is **its** mana value." (Great Defender, Subdue, Kry Shield.)
 
@@ -592,6 +599,33 @@ def _lower_where_x_characteristic(
     # Decided here, where both the definition and the lowered sentence are in
     # hand, rather than by a resolution-time fallback order that would have to
     # guess when a sentence has both.
+    referent = node.definition.referent
+    if (
+        referent is not None
+        and referent.zone == "stack"
+        and referent == dataclasses.replace(ast.ObjectFilter(), zone="stack")
+    ):
+        # "Whenever a player casts a creature spell, … that player creates an
+        # X/X white Reflection creature token, where X is the mana value of
+        # **that spell**." (Pure Reflection.) The spell is named outright and
+        # nothing in the sentence acts on it, so there is no ``bound_to_trigger``
+        # step to read the binding off — the firing event is what says which
+        # spell. Under any other event "that spell" names nothing frozen, and
+        # the resolver would read a zero.
+        if event not in _CAST_SPELL_EVENTS:
+            raise LoweringError(
+                "'that spell' names the spell a cast trigger fired on, and "
+                "this event freezes none", node=node,
+            )
+        if node.definition.characteristic != "mana_value":
+            raise LoweringError(
+                "a spell has no power or toughness to read", node=node
+            )
+        return _stamp_x_from_count(inner, {"object_characteristic": {
+            "object": "triggering_spell",
+            "characteristic": "mana_value",
+            "offset": node.definition.offset,
+        }})
     role = _referent_role(node, inner)
     names_a_spell = any(i.payload.get("bound_to_trigger") for i in inner)
     if names_a_spell and node.definition.characteristic != "mana_value":

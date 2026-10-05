@@ -262,3 +262,70 @@ def test_tectonic_instability_binds_its_own_controller_too(set_pool):
 
     assert all(land.tapped for land in board["mine"])
     assert not any(land.tapped for land in board["theirs"])
+
+
+def _w1g8_reflections(game, seat: int) -> list[tuple[int, int]]:
+    """The power/toughness of each Reflection *seat* controls."""
+    from engine.subject_filters import subject_matches
+
+    return [
+        (permanent.effective_power, permanent.effective_toughness)
+        for permanent in game.controlled_by(game.players[seat])
+        if subject_matches(game, permanent, {"subtype_filter": "reflection"})
+    ]
+
+
+def test_pure_reflection_gives_the_caster_a_token_sized_by_the_spell(set_pool):
+    """"Whenever a player casts a creature spell, destroy all Reflections. Then
+    that player creates an X/X white Reflection creature token, where X is the
+    mana value of that spell." The opponent's Grizzly Bears (mana value 2)
+    gives *the opponent* a white 2/2 Reflection token."""
+    pool = set_pool("LEA")
+    game = _w1g8_enchantment_duel(set_pool, active=1)
+    _w1g8_enchantment_put(game, set_pool, 0, "Pure Reflection", "INV")
+    game.players[1].hand = [pool["Grizzly Bears"]]
+
+    assert game.cast_from_hand(1, "Grizzly Bears").supported
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_reflections(game, 1) == [(2, 2)]
+    assert _w1g8_reflections(game, 0) == []
+    token = next(
+        permanent for permanent in game.controlled_by(game.players[1])
+        if permanent.card.name != "Grizzly Bears"
+    )
+    assert token.metadata.get("is_token") and tuple(token.card.colors) == ("W",)
+
+
+def test_pure_reflection_destroys_the_old_reflection_before_making_the_new(set_pool):
+    """"destroy all Reflections. **Then** …" The next creature spell — the
+    enchantment's own controller's Hill Giant, mana value 4 — sweeps the
+    opponent's 2/2 and leaves one 4/4 on the caster's side."""
+    pool = set_pool("LEA")
+    game = _w1g8_enchantment_duel(set_pool, active=1)
+    _w1g8_enchantment_put(game, set_pool, 0, "Pure Reflection", "INV")
+    game.players[1].hand = [pool["Grizzly Bears"]]
+    game.players[0].hand = [pool["Hill Giant"]]
+    assert game.cast_from_hand(1, "Grizzly Bears").supported
+    _w1g8_resolve_stack(game)
+
+    game.start_turn(0)
+    assert game.cast_from_hand(0, "Hill Giant").supported
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_reflections(game, 1) == []
+    assert _w1g8_reflections(game, 0) == [(4, 4)]
+
+
+def test_pure_reflection_ignores_a_noncreature_spell(set_pool):
+    """"a **creature** spell": a Lightning Bolt makes no token."""
+    pool = set_pool("LEA")
+    game = _w1g8_enchantment_duel(set_pool, active=1)
+    _w1g8_enchantment_put(game, set_pool, 0, "Pure Reflection", "INV")
+    game.players[1].hand = [pool["Lightning Bolt"]]
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_reflections(game, 0) == [] and _w1g8_reflections(game, 1) == []
+    assert game.players[0].life == 17
