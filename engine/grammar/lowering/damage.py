@@ -271,7 +271,13 @@ def _with_foreign_dealer(
                 instruction, payload={**instruction.payload, "biter": record}
             ),
         )
-    return lowered  # split3: class refusal follows in its own commit
+    if source.quantifier in _CLASS_DEALER_QUANTIFIERS:
+        raise LoweringError(
+            "no damage handler makes the printed class or target the source "
+            "of this damage",
+            node=node,
+        )
+    return lowered
 
 
 def _with_attached_dealer(

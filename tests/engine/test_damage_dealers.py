@@ -157,3 +157,29 @@ def test_w2g5_a_back_referenced_dealer_is_read_from_the_record():
         "{T}: That artifact deals 2 damage to you.", card_name="Probe Smith"
     )
     assert not orphan.instructions
+
+
+def test_w2g5_a_class_or_a_target_as_the_dealer_refuses():
+    """"Target creature deals 3 damage to any target" has no handler that makes
+    the creature the source, so it refuses instead of compiling as the spell
+    dealing 3.
+
+    No card prints the shape. It is how the deletion probe read four shipped
+    cards whose names open with a type word — Goblin Grenade, Blood Oath,
+    Cinder Cloud, Eternal Flame — and Invasion's Tribal Flames: delete the
+    second word of the name and what is left is a class subject, which used to
+    lower to the very instruction the whole name lowers to, so the probe
+    reported the deleted word as one no rule had read.
+    """
+    for sentence in (
+        "Target creature deals 3 damage to any target.",
+        "Each creature deals 1 damage to its controller.",
+        "Creatures deal 3 damage to any target.",
+    ):
+        assert not compile_line(sentence, card_name="Probe Card").instructions, sentence
+
+    for name, kept in (("Goblin Grenade", "Goblin"), ("Tribal Flames", "Tribal")):
+        whole = compile_line(f"{name} deals 5 damage to any target.", card_name=name)
+        assert [i.kind for i in whole.instructions] == ["deal_damage"]
+        clipped = compile_line(f"{kept} deals 5 damage to any target.", card_name=name)
+        assert not clipped.instructions, kept
