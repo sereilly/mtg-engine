@@ -48,10 +48,11 @@ from dataclasses import replace
 
 from . import ast
 from .amounts import parse_amount
+from .conditions import _parse_condition
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .effects import parse_source_damage_lock
+from .effects import _parse_damage_rider_sentence, parse_source_damage_lock
 from .delayed import contains_flip, parse_flip_stakes_sentence
 from .phrases import _accept_number, accept_the_damage_cant_be_prevented
 from .statements import parse_statement
@@ -578,6 +579,54 @@ def _attach_source_damage_lock(
     except GrammarError:
         stream.reset(mark)
         return False
+    return True
+
+
+def _attach_conditional_damage_riders(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "**If this spell was kicked,** that creature can't be regenerated
+    this turn and if it would die this turn, exile it instead." into the
+    damage sentence before it (Scorching Lava).
+
+    The riders `_parse_damage_rider_sentence` reads, printed under a condition
+    — so the damage is dealt either way and what the condition decides is
+    whether it carries them. That is one action in two forms of which exactly
+    one runs, which is the shape ``conditional_instead`` folds a pair into,
+    reached from one sentence instead of two: the step becomes a
+    ``Conditional`` whose arms are the same ``DealDamage`` with and without
+    the riders. Both arms name the one target the sentence announced
+    (CR 601.2c), so the picker asks once.
+
+    Not a field on ``DamageRiders`` ("riders only if …"), which every reader
+    of a rider would then have to learn; composed, the handler that stamps
+    them and the post-condition that proves they survive lowering are the ones
+    Disintegrate already uses.
+
+    Read after the unconditional reader — which owns "If it's a creature, it
+    can't be regenerated…" and is the sentence loop's first probe — and only
+    behind a bare damage sentence: riders under a condition, attached to a
+    step that already is one, would need a third arm nobody printed.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.DealDamage):
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    riders = _parse_damage_rider_sentence(stream)
+    if riders is None:
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.Conditional(
+        condition, then=_attach_riders(last, riders), otherwise=last
+    )
     return True
 
 

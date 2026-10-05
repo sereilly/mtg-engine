@@ -734,7 +734,7 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
 
     if stream.accept_phrase("if", "it", "'s", "a", "creature"):
         stream.accept_punct(",")
-    elif not stream.at_word("it", "if"):
+    elif not stream.at_word("it", "if", "that"):
         stream.reset(mark)
         return None
 
@@ -762,9 +762,14 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
         return True
 
     while True:
+        # "…**that creature** can't be regenerated this turn" (Scorching Lava,
+        # behind "any target"). Disintegrate's "If it's a creature, it …" in
+        # two words: the noun is the guard, and the handler asks it — the
+        # riders are stamped under an ``is_creature`` test — so a player or a
+        # planeswalker the spell was aimed at instead is simply not one.
         if stream.accept_phrase("it", "can't", "be", "regenerated") or stream.accept_phrase(
             "it", "cannot", "be", "regenerated"
-        ):
+        ) or stream.accept_phrase("that", "creature", "can't", "be", "regenerated"):
             _parse_duration(stream)
             no_regen = True
         else:

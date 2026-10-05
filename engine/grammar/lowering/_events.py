@@ -251,6 +251,11 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # does — the context its fire site froze — so it is a row here rather than
     # anything the delayed machinery answers for itself.
     "bound_permanent_dealt_damage": "damage_dealt",
+    # "Whenever that creature deals combat damage this turn, … you gain life
+    # equal to **that damage**." (Vigorous Charge.) The same seam's other
+    # delayed announcement, which has frozen the same number under the same
+    # key since Acidic Dagger — nothing read it until a card asked how much.
+    "bound_permanent_deals_combat_damage": "damage_dealt",
 }
 
 

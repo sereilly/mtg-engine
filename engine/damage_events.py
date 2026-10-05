@@ -596,6 +596,23 @@ def _announce(game, event: dict, dealt: int) -> None:
                     DELAYED_AGENT_ID: recipient.permanent_id,
                 },
             )
+    elif event.get("combat") and isinstance(source, Permanent):
+        # "Whenever that creature deals combat damage this turn, … you gain
+        # life equal to that damage." (Vigorous Charge.) The same event with a
+        # **player** on the receiving end, which the announcement above could
+        # not make from inside its not-a-player branch — so a trampler's
+        # damage to the face, the half the card is printed for, woke nothing.
+        #
+        # No agent: a player is not a permanent, so an entry that narrows what
+        # was damaged ("…to a non-Wall creature", Acidic Dagger) refuses this
+        # announcement at its own ``agent_filter``, and one that narrows
+        # nothing answers to it. No agent id either, for the same reason —
+        # there is no object for "that creature" to have been.
+        fire_delayed_triggers(
+            game, "bound_permanent_deals_combat_damage",
+            subject=source, agent=None,
+            trigger_context={"damage_dealt": dealt},
+        )
 
 
 def _process_results(game, event: dict, dealt: int) -> int:
