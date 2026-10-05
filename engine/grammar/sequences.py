@@ -82,12 +82,16 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
-    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_silent_target_change, _attach_spend_only, _attach_superlative_tie_break, _attach_tied_reveals_unchanged, _attach_unpaid_penalty, _parse_exile_instead_rider)
+    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_exile_instead_rider)
 from .statements import (
     _parse_condition,
     parse_statement,
 )
 from .stream import TokenStream
+# The two riders behind an offered change of targets (Psychic Battle). On a
+# line of their own rather than in the list above: that list is one long line
+# every round appends to, and a second import statement cannot collide with it.
+from .riders import _attach_silent_target_change, _attach_tied_reveals_unchanged
 
 
 def _parse_registry_claimed_sentence(stream: TokenStream) -> bool:
