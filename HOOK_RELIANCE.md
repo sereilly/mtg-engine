@@ -49,7 +49,7 @@ Held at this rate, supporting the 26,113-card release line would need about **32
 | PCY | 143 | 143 (100.0%) | 0 (0.0%) | 207 | 0 (0.0%) | 0 | 0.0 |
 | INV | 335 | 335 (100.0%) | 0 (0.0%) | 546 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| PLS *(measured)* | 143 | 136 (95.1%) | 0 (0.0%) | 247 | 0 (0.0%) | 0 | 0.0 |
+| PLS *(measured)* | 143 | 142 (99.3%) | 0 (0.0%) | 254 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **4622** | **4622 (100.0%)** | **52 (1.1%)** | **7148** | **48 (0.7%)** | **58** | **1.3** |
 
 *(measured)* — PLS are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.

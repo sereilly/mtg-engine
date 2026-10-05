@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 87.8% | 87.5% | 65.9% | 121 |
+| PLS *(measured)* | 143 | 255 | 90.6% | 90.2% | 67.5% | 125 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,8 +58,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 543 | 254 | expected a subject |  |
-| 152 | 79 | unrecognized effect verb |  |
+| 538 | 249 | expected a subject |  |
+| 151 | 78 | unrecognized effect verb |  |
 | 129 | 64 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -76,8 +76,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
@@ -1559,6 +1559,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever a creature you control becomes blocked, this enchantment deals 1 damage to any target.`
 - **Clot Sliver**
   - `All Slivers have "{2}: Regenerate this permanent."`
+- **Cloud Cover**
+  - `Whenever another permanent you control becomes the target of a spell or ability an opponent controls, you may return that permanent to its owner's hand.`
 - **Cloud of Faeries**
   - `When this creature enters, untap up to two lands.`
 - **Cloudchaser Eagle**
@@ -4615,6 +4617,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Keldon Necropolis**
   - `{T}: Add {C}.`
   - `{4}{R}, {T}, Sacrifice a creature: Keldon Necropolis deals 2 damage to any target.`
+- **Keldon Twilight**
+  - `At the beginning of each player's end step, if no creatures attacked this turn, that player sacrifices a creature of their choice that they controlled since the beginning of the turn.`
 - **Keldon Vandals**
   - `When this creature enters, destroy target artifact.`
 - **Kelsinko Ranger**
@@ -6313,6 +6317,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice a creature: Add {B}{B}.`
 - **Phyrexian Tribute**
   - `Destroy target artifact.`
+- **Phyrexian Tyranny**
+  - `Whenever a player draws a card, that player loses 2 life unless they pay {2}.`
 - **Phyrexian Vault**
   - `{2}, {T}, Sacrifice a creature: Draw a card.`
   - `{2}, {T}, Sacrifice a creature: Draw a card.`
@@ -9912,6 +9918,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of the upkeep of enchanted artifact's controller, this Aura deals 1 damage to that player.`
 - **Warpath**
   - `Warpath deals 3 damage to each blocking creature and each blocked creature.`
+- **Warped Devotion**
+  - `Whenever a permanent is returned to a player's hand, that player discards a card.`
 - **Warping Wurm**
   - `At the beginning of your upkeep, this creature phases out unless you pay {2}{G}{U}.`
   - `Whenever this creature phases in, put a +1/+1 counter on it.`
