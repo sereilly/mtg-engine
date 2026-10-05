@@ -499,6 +499,50 @@ def chooses_two_card_names_on_enter(text: str) -> bool:
 # chooser can see rather than one derived from the battlefield.
 CHOOSE_CARD_NAME_ON_ENTER = "as this enchantment enters, choose a card name"
 
+#: "As this **creature** enters, choose a **nonland** card name." (Meddling
+#: Mage.) Runed Halo's choice with the two words that card happens not to vary
+#: read as data: which noun the permanent names itself by, and CR 201.4a's bound
+#: on the choice ("a card name with certain characteristics"). One chooser and
+#: one name, which is what separates it from Null Chamber's pair above and from
+#: Booby Trap's seat-and-name.
+#:
+#: **Anchored on the end of the sentence**, and that is the load-bearing half:
+#: "choose a card name **other than a basic land card name**" is a different
+#: bound, and a pattern that stopped at "card name" would admit it with the
+#: exclusion dropped — a strictly better card than the one printed.
+#:
+#: Only the *excluded* type is read. "Choose a creature card name" is a real
+#: sentence (CR 201.4a's own example prints one) and no card in this pool
+#: prints it as it enters, so it refuses here rather than being admitted on a
+#: bound no test has ever seen enforced at this prompt.
+_CHOOSE_CARD_NAME_ON_ENTER_RE = re.compile(
+    r"as this [a-z]+ enters, choose a "
+    r"(?:non(?P<excluded>artifact|creature|enchantment|instant|land"
+    r"|planeswalker|sorcery) )?card name(?=\.|$)"
+)
+
+
+def chooses_card_name_on_enter(text: str) -> dict | None:
+    """What *text* bounds its one chosen card name by, or None when it asks
+    for none.
+
+    ``{}`` is the unbounded choice (Runed Halo) and ``{"excluded_card_type":
+    "land"}`` is "a **nonland** card name" (Meddling Mage) — the key
+    ``mixins/stack/choices._named_card_breaks_printed_bound`` enforces and the
+    default obeys, so the prompt, the headless seat and the answer path read
+    one bound.
+
+    A substring probe like the colour one above, because the mixin asks it of
+    the card's whole normalized text; :func:`enter_effect_line` asks the
+    whole-line question through this same matcher, so what is performed and
+    what is claimed cannot drift.
+    """
+    match = _CHOOSE_CARD_NAME_ON_ENTER_RE.search(text or "")
+    if match is None:
+        return None
+    excluded = match.group("excluded")
+    return {"excluded_card_type": excluded} if excluded else {}
+
 # "This creature enters with seven +1/+0 counters on it." (Clockwork Beast.)
 ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS = "enters with seven +1/+0 counters on it"
 
@@ -1756,6 +1800,13 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
         return "chooses a land type as it enters"
     if chooses_two_card_names_on_enter(normalized):
         return "two players each choose a card name as it enters"
+    # "As this creature enters, choose a nonland card name." (Meddling Mage.)
+    # The whole line and nothing after it: the reader's own end-of-sentence
+    # anchor is what refuses a longer bound, and the full match here is what
+    # refuses a second sentence riding on the same line.
+    named = _CHOOSE_CARD_NAME_ON_ENTER_RE.fullmatch(normalized)
+    if named is not None:
+        return "chooses a card name as it enters"
     if choose_number_on_enter(normalized) is not None:
         return "chooses a number as it enters"
     if sacrifice_any_number_on_enter(normalized) is not None:
@@ -1807,6 +1858,7 @@ __all__ = [
     "chooses_two_land_types_on_enter",
     "chooses_creature_type_on_enter",
     "chooses_land_type_on_enter",
+    "chooses_card_name_on_enter",
     "chooses_two_card_names_on_enter",
     "COPY_ARTIFACT_ON_ENTER",
     "COPY_CREATURE_ON_ENTER",

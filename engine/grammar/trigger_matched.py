@@ -247,7 +247,13 @@ def _accept_subject_becomes_target(
     ``engine/oracle.py``'s condition payload the way every trigger clause does.
     """
     mark = stream.mark()
-    if not stream.accept_word("a", "an"):
+    # "Whenever **another** permanent you control becomes the target …" (Cloud
+    # Cover). "Another" sits where the article does, so it is read here and
+    # folded onto the filter's exclusion field — ``parse_subject_filter_at``'s
+    # idiom, spelled out because this reader takes its noun through
+    # ``parse_object_filter`` and so reads its own article.
+    another = bool(stream.accept_word("another"))
+    if not another and not stream.accept_word("a", "an"):
         stream.reset(mark)
         return None
     try:
@@ -258,6 +264,8 @@ def _accept_subject_becomes_target(
     if subject is None or not stream.accept_phrase("becomes", "the", "target", "of"):
         stream.reset(mark)
         return None
+    if another:
+        subject = replace(subject, other_than_source=True)
     for obj in _BECOMES_TARGET_OBJECTS:
         if not stream.accept_phrase(*obj):
             continue

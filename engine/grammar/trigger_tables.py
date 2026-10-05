@@ -313,6 +313,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # narrows on. Both spellings are listed here because both are printed, and
     # a line only one front end reads is a card refused by the other.
     ("draws_card", ("an", "opponent", "draws", "a", "card")),
+    # "Whenever **a player** draws a card" (Phyrexian Tyranny) — the unnarrowed
+    # spelling of the same event, listed for the row above's reason: the seat
+    # word is payload on ``engine/oracle.py``'s row, and a line only one front
+    # end reads is a card refused by the other.
+    ("draws_card", ("a", "player", "draws", "a", "card")),
     # "When **the chosen player draws a card with the chosen name**, …" (Booby
     # Trap.) The third spelling of the same event, and here for the reason the
     # second is: a line only one front end reads is a card the other refuses.
@@ -434,6 +439,12 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # attached to, so the subject leads and the phrase is the narrowing — the
     # entry rows' shape, read in `engine/oracle.py`'s table under the same kind.
     (("leaves", "the", "battlefield"), "matching_permanent_leaves_battlefield"),
+    # "Whenever **a permanent** is returned to a player's hand, …" (Warped
+    # Devotion.) The departure above with its destination named: one zone
+    # change, both ends printed. Subject-led for the row above's reason, and
+    # read under the same kind `engine/oracle.py`'s table gives it.
+    (("is", "returned", "to", "a", "player", "'s", "hand"),
+     "permanent_returned_to_hand"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
     # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
     # damage" names and Binding Agony's "whenever **enchanted** creature is

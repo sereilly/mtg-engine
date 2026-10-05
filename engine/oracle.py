@@ -955,8 +955,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # narrowed spellings above and read the rest as a noun phrase, so a row
     # placed first would take the three narrower scopes' lines and answer them
     # through a filter instead of through the identity test each of them needs.
+    #
+    # "Whenever **another** permanent you control becomes the target of a spell
+    # or ability an opponent controls, you may return that permanent to its
+    # owner's hand." (Cloud Cover.) "Another" sits where the article does and
+    # is inside the delimited phrase, so the noun parser folds it into
+    # ``exclude_self`` exactly as it does for the entry rows' "another Rogue" —
+    # and ``events._self_becomes_target_filter`` hands ``subject_matches`` the
+    # watching permanent as its source, which is what the key is tested
+    # against. An alternative of the article rather than a row of its own:
+    # every axis after the noun is this row's.
     ("self_becomes_target",
-     r"whenever (?P<targeted_subject>an? [^,]+?) becomes "
+     r"whenever (?P<targeted_subject>(?:an?|another) [^,]+?) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
@@ -1380,6 +1390,30 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # *source's* departure and is dispatched off the source's own card.
     ("matching_permanent_leaves_battlefield",
      r"whenever (?P<leaver_subject>(?:a|an|another) [^,]+?) leaves the battlefield"),
+    # "Whenever **a permanent is returned to a player's hand**, that player
+    # discards a card." (Warped Devotion.) A zone change with *both* ends named:
+    # the battlefield (a "permanent" is nothing else, CR 110.1) and a hand. So
+    # it is not the row above, which is every departure, and it is not a card
+    # reaching a hand from anywhere — a draw and a Raise Dead put a card in a
+    # hand and return no permanent.
+    #
+    # Announced from ``Game.put_card_into_hand``, the one seam that is handed
+    # both halves: the hand it is going to and, as ``from_battlefield``, the
+    # permanent it is the card of. CR 603.10a makes it look back in time ("an
+    # object that all players can see is put into a hand"), which is why the
+    # announcement is made there, before the permanent is taken off the
+    # battlefield — an enchantment returned by the same effect still sees
+    # itself go.
+    #
+    # The noun phrase is delimited and read by the noun parser, exactly as the
+    # row above delimits its own, so "a creature is returned to a player's
+    # hand" is the same row with a narrower filter. "A player's" is the only
+    # hand spelling read: whose hand is the *event's* (CR 400.3 — always the
+    # owner's), and a card narrowing it ("to your hand") is a different trigger
+    # this row refuses rather than widens.
+    ("permanent_returned_to_hand",
+     r"whenever (?P<returned_subject>(?:a|an|another) [^,]+?) is returned to "
+     r"a player's hand"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt
@@ -1480,8 +1514,15 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # are answered against the *source permanent's* entry record, which is why
     # they are words here and a metadata read in `engine/events.py` — nothing
     # about the payload could carry a choice made when the artifact entered.
+    # "Whenever **a player** draws a card, that player loses 2 life unless they
+    # pay {2}." (Phyrexian Tyranny.) The third value of the seat axis and not a
+    # third condition — `land_played` above reads the same three words for the
+    # same reason, and the captured word is what `events._draws_card_filter`
+    # compares: unnarrowed, so every seat's draw fires it for every watcher,
+    # the enchantment's own controller included. Captured rather than left as
+    # the absence of the group, because an absent group already means "you".
     ("draws_card",
-     r"whenever (?:you draw|(?P<drawer>an opponent) draws) a card"),
+     r"whenever (?:you draw|(?P<drawer>an opponent|a player) draws) a card"),
     # "…your second card each turn" (Mystic Skyfish, Jolrael). Fires once per
     # turn, announced by the draw sweep in check_state_based_actions off the
     # cards_drawn_this_turn record every draw path already feeds.
@@ -5291,9 +5332,15 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # that reader, so a card admitted here is one the counter path really
     # honours; a parsed-and-dropped "can't be countered" is worse than none,
     # because it looks like protection nobody has.
-    from .counter_conditions import uncounterable_line
+    from .counter_conditions import uncounterable_class_line, uncounterable_line
 
     if uncounterable_line(normalized):
+        return True
+    # "Creature spells can't be countered." (Gaea's Herald.) The board half of
+    # the same immunity — a static of the permanent about every spell of a
+    # type, read off the battlefield by the same counter path — and admitted
+    # for the same reason, through the reader that path enforces it with.
+    if uncounterable_class_line(normalized) is not None:
         return True
     # "<this creature> can't be the target of Aura spells" (Bartel Runeaxe,
     # Tetsuo Umezawa). Asked of the same reader `_can_be_targeted` consults, so
@@ -5463,9 +5510,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # whole static half is this sentence reported "text too complex" for the one
     # line the engine could enforce end to end. Asked of the reader that
     # enforces it, so the claim cannot outlive the ban.
-    from .cast_restrictions import own_cast_ban_line
+    from .cast_restrictions import chosen_name_ban_line, own_cast_ban_line
 
     if own_cast_ban_line(normalized) is not None:
+        return True
+    # "Spells with the chosen name can't be cast." (Meddling Mage.) The same
+    # CR 601.3 prohibition keyed on a name the permanent recorded as it entered,
+    # enforced off the board at every cast — no instruction, and a *creature*
+    # is refused for any line nothing reads, so the first creature to print it
+    # has to be admitted here by the reader that enforces it.
+    if chosen_name_ban_line(normalized):
         return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),
@@ -6618,12 +6672,25 @@ def _derived_static_claims(
     # by the counter handler at CR 608.2 — so there is no instruction, and its
     # own claim name for the reason the bans above have one: it is what the
     # *spell* says about itself, not a condition some counter carries.
-    from .counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
+    from .counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
+                                     UNCOUNTERABLE_CLAIM,
+                                     uncounterable_class_line,
+                                     uncounterable_line)
 
     if any(
         uncounterable_line(line) for line in (oracle_text or "").splitlines()
     ):
         claims.append(UNCOUNTERABLE_CLAIM)
+    # "Creature spells can't be countered." (Gaea's Herald prints it on a
+    # creature; an enchantment printing the sentence reads identically.) The
+    # board half of the same immunity, read off the battlefield by the counter
+    # handler — no instruction, so its own claim, asked through the reader that
+    # enforces it.
+    if any(
+        uncounterable_class_line(line) is not None
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(CLASS_UNCOUNTERABLE_CLAIM)
     # "Reveal the first card you draw each turn." (Rowen.) The draw seam reads
     # the permanent's own text on every draw, so there is no instruction to
     # point at — and on a card whose static half is only this sentence, no

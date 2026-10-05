@@ -22,7 +22,7 @@ from ..enter_effects import (
     CHOSEN_COLOR_KEY,
     CHOSEN_LAND_TYPE_KEY,
     chooses_two_card_names_on_enter,
-    CHOOSE_CARD_NAME_ON_ENTER,
+    chooses_card_name_on_enter,
     chooses_opponent_on_enter,
     chooses_opponent_and_card_name_on_enter,
     COPY_ARTIFACT_ON_ENTER,
@@ -751,26 +751,66 @@ class PermanentStateMixin:
         # an opponent's graveyard, else one of their permanents. Naming nothing
         # would make the protection apply to nothing at all, which is a legal
         # choice no player would make and an AI seat would be stuck with.
-        if CHOOSE_CARD_NAME_ON_ENTER in text:
+        #
+        # "As this creature enters, choose a **nonland** card name." (Meddling
+        # Mage.) The same choice under CR 201.4a's bound, and the bound is
+        # data: what the reader returns is carried to the prompt, obeyed by the
+        # default and enforced on the answer
+        # (``_named_card_breaks_printed_bound``). A card's *names* are asked
+        # rather than its name (CR 201.4b): a split card is named by one of its
+        # halves and bounded by that half's characteristics, so the offer lists
+        # "Wax" and "Wane" and never the whole card's joined spelling, which is
+        # a name no spell has.
+        name_bound = chooses_card_name_on_enter(text)
+        if name_bound is not None:
+            from ..faces import castable_faces
+            from ..search_filters import card_has_type
+
+            excluded_type = name_bound.get("excluded_card_type")
             opponents = [
                 i for i, p in enumerate(self.players)
                 if i != caster_index and not p.lost
             ]
-            seen = [
-                card.name
+            visible = [
+                card
                 for seat in opponents
                 for card in reversed(self.players[seat].graveyard)
             ] + [
-                perm.card.name
+                perm.card
                 for seat in opponents
                 for perm in self.controlled_by(seat)
             ]
+            seen = [
+                named.name
+                for card in visible
+                for named in castable_faces(card)
+                if not (excluded_type and card_has_type(named, excluded_type))
+            ]
             permanent.metadata["chosen_card_name"] = seen[0] if seen else ""
+            if caster_index not in self.interactive_seats:
+                # A chosen name is public (CR 201.4: the player *chooses a
+                # card name*, out loud), and for a seat nobody asks the default
+                # stamped above is the whole choice — the prompt below is
+                # discarded the moment it is armed and says nothing. Without
+                # this line a player facing an AI's Meddling Mage learned what
+                # it had named by having a cast refused. An interactive seat's
+                # answer is logged by the resolver, in these words.
+                self.log.append(
+                    f"{self.players[caster_index].name} named "
+                    f"{permanent.metadata['chosen_card_name'] or 'nothing'} "
+                    f"for {permanent.card.name}"
+                )
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
                 needs_card_name=True, choices=sorted(set(seen)),
                 default_card_name=permanent.metadata["chosen_card_name"],
+                # Absent for Runed Halo, so the prompt that card raises is
+                # byte-identical to what it was.
+                **(
+                    {"excluded_card_type": excluded_type}
+                    if excluded_type else {}
+                ),
             )
 
         # "As this creature enters, choose a number between 0 and 7."

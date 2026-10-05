@@ -233,6 +233,13 @@ OPPONENT_CHOSE_MODE = "mode_chosen_by_opponent"
 
 _EVENT_SUBJECT_PLAYERS: frozenset[str] = frozenset({
     "upkeep_each",
+    # "Whenever a permanent is returned to a player's hand, **that player**
+    # discards a card." (Warped Devotion.) The seat whose hand it is — the
+    # permanent's owner (CR 400.3), never its controller and never whoever
+    # bounced it — frozen by ``Game.put_card_into_hand``'s announcement,
+    # because by resolution the object is a card in a hand among many and
+    # nothing on a board says which move this trigger was about.
+    "permanent_returned_to_hand",
     # "At the beginning of combat on each opponent's turn, separate all
     # creatures **that player** controls into two piles." (Fight or Flight.)
     # The seat whose combat it is, frozen by `phases/combat_phase.py`'s

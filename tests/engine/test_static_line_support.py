@@ -36,7 +36,7 @@ import pytest
 from engine.faces import compilation_units
 from engine.auras import aura_continuous_claim
 from engine.card_loader import load_catalog
-from engine.cast_restrictions import cast_timing_claims_line
+from engine.cast_restrictions import cast_timing_claims_line, chosen_name_ban_line
 from engine.characteristic_defining import dynamic_pt_for
 from engine.combat_permissions import block_permission_claims_line
 from engine.combat_restrictions import combat_restriction_for
@@ -173,6 +173,21 @@ def _derived(normalized: str) -> bool:
         # the table's own claim function rather than to add a spelling here.
         or block_permission_claims_line(normalized)
         or cast_timing_claims_line(normalized)
+        # "Spells with the chosen name can't be cast." (Meddling Mage) and Null
+        # Chamber's two-name sentence — CR 601.3 keyed on a name the permanent
+        # recorded as it entered, enforced by `cast_restrictions.chosen_name_ban`
+        # from the cast path, the AI's proposal gate and the web's castable
+        # highlight. Asked directly, for `cast_timing`'s reason one arm up: a
+        # claim in `_derived_static_claims` would move Null Chamber's compiled
+        # program for a support question its entry line already answers.
+        #
+        # The gate began admitting these when Meddling Mage arrived — the first
+        # *creature* to print one, and a creature is refused for any line
+        # nothing reads. Null Chamber had printed the sentence since Mirage and
+        # was never asked here, so this guard called its line unbacked the
+        # moment the gate widened: the third time that lesson has arrived, and
+        # found, as it was the first two, by the guard rather than by a reader.
+        or chosen_name_ban_line(normalized)
         # An **attached** permanent's continuous effect — "Enchanted creature
         # has flying", "…gets +2/+2", "…can't attack or block". The fifteenth
         # derivation table, applied by `engine/layer_bridge.py` off the Aura's

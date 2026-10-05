@@ -1857,6 +1857,22 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         )
         return (not added) if payload.get("negated", True) else added
 
+    if kind == "creatures_attacked_this_turn":
+        # "…**if no creatures attacked this turn**" (Keldon Twilight). CR
+        # 603.4's intervening-if, read off the per-seat record the
+        # declare-attackers step stamps (``PlayerState.attacked_this_turn``,
+        # CR 508.1) and never off the board: an attacker that has died, left
+        # or untapped since is still a creature that attacked this turn, and
+        # reading the creatures would forget exactly that one.
+        #
+        # Every seat is asked, because the sentence names none — in a
+        # multiplayer game a creature another player attacked *with* during
+        # this turn is still one that attacked (CR 508.1 makes only the active
+        # player an attacker, so in practice this is that seat's stamp; asking
+        # all of them is what keeps it true if that ever stops being so).
+        attacked = any(player.attacked_this_turn for player in game.players)
+        return (not attacked) if payload.get("negated") else attacked
+
     if kind == "returned_to_hand_this_turn":
         # "a permanent was put into your hand from the battlefield this turn"
         # (Barrin). "Your" is the ability's controller; the bounce paths feed

@@ -1270,6 +1270,26 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         target = game.players[seat]
+    if instruction.payload.get("who") in ("event_subject_player", "damaged_player"):
+        # "Whenever a permanent is returned to a player's hand, **that player**
+        # discards a card." (Warped Devotion); "Whenever a player casts a
+        # spell, **that player** discards a card." (Oppression); "…deals damage
+        # to a player, **that player** discards a card." (Abyssal Specter.) The
+        # seat the firing event was about, through the one reader of the phrase
+        # — the same one the random half of this sentence
+        # (``discard_x_target_cards``) asks, so a chosen and a random discard
+        # behind the same words name the same player.
+        seat = frozen_that_player_seat(game, context)
+        if seat is None:
+            # Ending the effect is the honest direction: falling back to
+            # ``context.target`` is exactly the wrong-hand discard this key
+            # exists to stop.
+            game.log.append(
+                f"{context.card.name if context.card else 'the ability'}: "
+                "no player was named to discard"
+            )
+            return True, "resolved"
+        target = game.players[seat]
     actual = min(
         resolve_amount(instruction.payload.get("amount", 0), context.x_value), len(target.hand)
     )

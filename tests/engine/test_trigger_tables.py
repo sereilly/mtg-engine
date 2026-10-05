@@ -240,6 +240,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "matching_permanent_leaves_battlefield": (
         "whenever a nontoken creature leaves the battlefield"
     ),
+    # Warped Devotion. The departure above with its destination named, and its
+    # own kind for the reason that row is its own: a different fire site
+    # (`Game.put_card_into_hand`, the one seam handed both the hand and the
+    # permanent). Neither pattern is the other's prefix — "leaves the
+    # battlefield" against "is returned to a player's hand" — and the example
+    # is what holds that.
+    "permanent_returned_to_hand": (
+        "whenever a permanent is returned to a player's hand"
+    ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     # Both printed seats, because one pattern names both and the narrowing is
     # payload: an example per spelling is what the shadowing guard needs to see
@@ -247,6 +256,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "draws_card": (
         "whenever you draw a card",
         "whenever an opponent draws a card",
+        # The third value of the seat axis (Phyrexian Tyranny): unnarrowed, so
+        # every seat's draw fires it.
+        "whenever a player draws a card",
         # …and the "when" table's row (Booby Trap), whose two narrowings are
         # records the permanent made as it entered rather than payload the
         # announcement carries. A third example rather than a third kind, for
@@ -296,6 +308,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever this creature becomes the target of a spell or ability",
         "whenever this creature becomes the target of a spell or ability "
         "an opponent controls",
+        # The board-wide row under "another" (Cloud Cover): the word sits where
+        # the article does, inside the delimited subject.
+        "whenever another permanent you control becomes the target of a spell "
+        "or ability an opponent controls",
     ),
     # CR 702.26's two events (Teferi's Imp, Warping Wurm). One example per
     # printed noun would be three each; the creature spelling is the one the

@@ -625,6 +625,28 @@ class AttackedOrBlockedThisCombat:
 class PaidCost:
     cost: Cost | None = None
 @dataclass(frozen=True)
+class CreaturesAttackedThisTurn:
+    """"At the beginning of each player's end step, **if no creatures attacked
+    this turn**, that player sacrifices a creature …" (Keldon Twilight, CR 603.4
+    intervening-if).
+
+    A history like :class:`DiedThisTurn`, and for its reason: no read of the
+    board at the end step can answer it. A creature that attacked and has since
+    died, been bounced or simply untapped looks exactly like one that stayed
+    home, so the answer is the per-seat record the declare-attackers step
+    stamps on whoever declared (``PlayerState.attacked_this_turn``, CR 508.1)
+    and the turn boundary clears.
+
+    Game-wide, with no seat: the sentence asks whether *any* creature attacked,
+    whoever controlled it. ``negated`` is the printed "no", carried rather than
+    baked into the kind so the affirmative spelling is this node with the flag
+    the other way round the day a card prints it.
+    """
+
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class ReturnedToHandThisTurn:
     """"if a permanent was put into your hand from the battlefield this turn"
     (Barrin, Tolarian Archmage's end-step trigger, CR 603.4 intervening-if).

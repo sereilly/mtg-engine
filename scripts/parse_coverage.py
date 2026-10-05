@@ -81,7 +81,8 @@ from engine.cast_restrictions import (most_permanents_play_ban_sentence,  # noqa
                                       last_cast_color_ban_line,
                                       spell_cap_line)
 from engine.combat_assignment import defender_assigns_line  # noqa: E402
-from engine.counter_conditions import uncounterable_line  # noqa: E402
+from engine.counter_conditions import (uncounterable_class_line,  # noqa: E402
+                                       uncounterable_line)
 
 
 #: "Rather than the attacking player, you assign …" and the sentence behind it.
@@ -372,6 +373,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # handler at CR 608.2, so it carries no instruction. Asked of the reader
     # that enforces it.
     ("counter_conditions.py (uncounterable spell)", uncounterable_line),
+    # The board half of the same immunity -- "Creature spells can't be
+    # countered." (Gaea's Herald.) A permanent's static about every spell of a
+    # type, read off the battlefield by the same counter handler at the same
+    # moment. Its own channel, asking the reader that answers it.
+    ("counter_conditions.py (uncounterable spell class)",
+     lambda s: uncounterable_class_line(s) is not None),
     # The *other* board half of CR 601.3a — "Creature spells can't be cast."
     # (Aether Storm.) Not a gate the casting card prints about itself but a
     # prohibition a permanent imposes on every player, enforced by

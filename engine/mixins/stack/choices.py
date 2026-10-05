@@ -3893,23 +3893,50 @@ class PendingChoicesMixin:
             bare = lowered.removeprefix("snow-covered ").strip()
             if bare in BASIC_LAND_WORDS or lowered == "wastes":
                 return True
-        card_type = choice.data.get("card_type")
-        if not card_type:
-            return False
+        from ...faces import castable_faces, is_multi_face
         from ...search_filters import card_has_type
 
-        borne_by = [
+        held_cards = [
             card
             for player in self.players
             for zone in ("library", "hand", "graveyard", "exile")
             for card in getattr(player, zone, ())
-            if card.name.lower() == lowered
-        ] + [
-            permanent.card for permanent in self.all_permanents()
-            if permanent.card.name.lower() == lowered
+        ] + [permanent.card for permanent in self.all_permanents()]
+        # CR 201.4b: "If a player wants to choose the name of a split card, the
+        # player must choose the name of one of its halves, **but not both**."
+        # The joined spelling ("Stand // Deliver") is how a card file and a
+        # decklist write the card and is the name of no spell, so recording it
+        # would be a choice that silently matches nothing — refused, for the
+        # reason every bound here is refused rather than repaired.
+        if any(
+            is_multi_face(card) and card.name.lower() == lowered
+            for card in held_cards
+        ):
+            return True
+        card_type = choice.data.get("card_type")
+        # "Choose a **nonland** card name" (Meddling Mage) — the same bound
+        # stated as the type the named card must *not* have. CR 201.4a makes
+        # both a question about the named card's own characteristics.
+        excluded_type = choice.data.get("excluded_card_type")
+        if not card_type and not excluded_type:
+            return False
+        # CR 201.4b again: "use only that half's characteristics" — so each
+        # card this game holds is asked as the spells it can be cast as, and
+        # the half called *named* is the one whose type line is read.
+        borne_by = [
+            named_card
+            for held in held_cards
+            for named_card in castable_faces(held)
+            if named_card.name.lower() == lowered
         ]
-        return bool(borne_by) and not any(
+        if not borne_by:
+            return False
+        if card_type and not any(
             card_has_type(card, str(card_type)) for card in borne_by
+        ):
+            return True
+        return bool(excluded_type) and all(
+            card_has_type(card, str(excluded_type)) for card in borne_by
         )
 
     def _default_choose_card_name(self, choice: PendingChoice) -> None:
@@ -4350,7 +4377,14 @@ class PendingChoicesMixin:
         # the bottom, which writes both — the same early-return rule the colour
         # branch below follows, and for its reason: this prompt asks one
         # question in several shapes and only some of them name a seat.
-        if choice.data.get("needs_card_name") and not choice.data["opponents"]:
+        #
+        # ``.get``, and it is not style: Runed Halo's arming passes
+        # ``needs_card_name`` and no ``opponents`` key at all, so the subscript
+        # this used to be raised ``KeyError`` on the one shape the branch
+        # exists for — an interactive seat could be *shown* Runed Halo's prompt
+        # and could not answer it. The renderer was fixed for the same missing
+        # keys a set earlier; the answer path was not.
+        if choice.data.get("needs_card_name") and not choice.data.get("opponents"):
             from ...cast_restrictions import CHOSEN_CARD_NAMES
 
             permanent = choice.data["permanent"]
@@ -4387,6 +4421,15 @@ class PendingChoicesMixin:
                     f"{card_name or 'nothing'} for {choice.data['card_name']}"
                 )
                 return True
+            # "…choose a **nonland** card name." (Meddling Mage.) CR 201.4a's
+            # bound, through the one reader the spell-side "choose a card name"
+            # prompt already refuses with — so the two prompts cannot come to
+            # disagree about what a printed bound admits. Refused rather than
+            # repaired, for the reason the slot branch above gives.
+            if card_name and self._named_card_breaks_printed_bound(
+                choice, str(card_name).strip()
+            ):
+                return False
             if card_name:
                 permanent.metadata["chosen_card_name"] = card_name
             self.discard_pending_choice(choice)

@@ -923,13 +923,63 @@ class GameHelpersMixin:
         # each place a spell can be sent, which is the reason these are seams.
         card = whole_card(card)
         if is_token_card(card):
+            # CR 111.7's own parenthesis: "if a token changes zones, applicable
+            # triggered abilities will trigger before the token ceases to
+            # exist." A bounced token *is* returned to its owner's hand — it is
+            # the state-based action that then removes it — so the move is
+            # announced even though no card is left to record.
+            self._announce_permanent_returned_to_hand(from_battlefield, seat)
             return False  # CR 111.7 / 704.5d: it ceases to exist instead
         if self._leaving_battlefield_replaced(from_battlefield, owner, "hand"):
             return False
         if self.commander_zone_change(seat, card, "hand"):
             return False
         self.players[seat].hand.append(card)
+        self._announce_permanent_returned_to_hand(from_battlefield, seat)
         return True
+
+    def _announce_permanent_returned_to_hand(self, permanent, seat: int) -> None:
+        """Announce a permanent moving from the battlefield to a hand
+        ("whenever a permanent is returned to a player's hand", Warped
+        Devotion).
+
+        **Here because this is the one place both halves are known.** Leaving
+        the battlefield is one transition (``remove_from_battlefield``) and
+        where the card goes next is its caller's business; arriving in a hand
+        is this seam, and what the card came *from* is its ``from_battlefield``
+        argument. A bounce spell, a gating creature's entry trigger, a land
+        returned as a cost, an upkeep "return a creature" and a sweep all meet
+        only here, so an announcement at any one of them is an announcement the
+        others forget.
+
+        Nothing is announced where no permanent was named — a card drawn, or
+        returned from a graveyard, reaches a hand without anything having been
+        *returned from the battlefield* — and nothing where the move did not
+        happen: a commander diverted to the command zone (CR 903.9b) or a
+        CR 614 replacement that sent the permanent elsewhere was not returned
+        to a hand, and the two early returns above are those cases.
+
+        Made **before** the caller takes the permanent off the battlefield,
+        which is CR 603.10a's look-back spelled as an order of operations: the
+        noun phrase is asked of the permanent as it last existed there, and a
+        watcher returned by the same effect is still on the battlefield to see
+        it — and to see itself.
+
+        *seat* is the hand's — the owner's (CR 400.3) — frozen as the seat the
+        event is about, because "that player" has nothing else to mean by the
+        time the ability resolves.
+        """
+        if permanent is None:
+            return
+        from ..events import emit
+
+        emit(
+            self, "permanent_returned_to_hand",
+            subject=permanent,
+            seat=seat, event_subject_player=seat,
+            event_subject_permanent_id=getattr(permanent, "permanent_id", None),
+            event_subject_name=permanent.effective_card.name,
+        )
 
     def put_card_into_library(
         self, owner, card, position: str = "bottom", *, from_battlefield=None

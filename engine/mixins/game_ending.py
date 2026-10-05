@@ -108,6 +108,86 @@ class GameEndingMixin:
         self.stack = survivors
         self.log.append(f"{player.name} has left the game (CR 800.4a)")
 
+    def announce_draws(self) -> None:
+        """Announce every card drawn since the last announcement (CR 121.2).
+
+        The two draw events — "whenever you draw your second card each turn"
+        and the per-card "whenever <someone> draws a card" — read off the
+        record every draw path already feeds, ``cards_drawn_this_turn``.
+        Idempotent: the once-per-turn flag and the per-seat announced count are
+        what a second call finds already spent.
+
+        **Its own method because it has two callers.** The state-based sweep
+        below is the general one: there is no single draw seam, so a site every
+        action already passes through cannot be forgotten by the next card. The
+        draw step is the other, and the reason this was lifted out of that
+        sweep: CR 504.2 gives the active player priority *after* the turn-based
+        draw, and CR 603.3 puts a trigger on the stack the next time a player
+        would receive priority — but the step went from its draw straight to an
+        empty priority window, so "whenever a player draws a card" off the
+        draw step's own draw (Underworld Dreams, Phyrexian Tyranny) reached
+        the stack a phase late, after the drawing player had played a land
+        they could then tap for Tyranny's {2}. The step asks for the
+        announcement alone rather than the whole state-based check, because
+        that is the whole of what was missing there.
+        """
+        from ..events import emit
+
+        # "Whenever you draw your second card each turn" (Mystic Skyfish).
+        # Announced here rather than at each draw site because there is no one
+        # draw seam — a dozen paths append to ``cards_drawn_this_turn`` — and a
+        # site every action already passes through cannot be forgotten by the
+        # next one. The once-per-turn flag is what makes the sweep idempotent,
+        # and the trigger still enqueues before any player next gets priority,
+        # which is when a triggered ability is noticed anyway (CR 603.3b).
+        for seat, player in enumerate(self.players):
+            if seat in self.second_draw_fired_this_turn or player.lost:
+                continue
+            if len(player.cards_drawn_this_turn) < 2:
+                continue
+            self.second_draw_fired_this_turn.add(seat)
+            emit(self, "draws_second_card", seat=seat)
+
+        # "Whenever you draw a card" (Lorescale Coatl, Burlfist Oak) — the same
+        # sweep off the same record, counting instead of flagging, because
+        # CR 121.2 makes drawing N cards N individual draws and this one fires
+        # per card.
+        #
+        # It belongs here for a reason the second-card trigger only half shows:
+        # the condition parsed on **both** sides of the pipeline and had no
+        # dispatcher at all, so two cards compiled supported, entered play and
+        # did nothing. A per-draw-site announcement would have had the same fate
+        # as the replacements do — three handlers reach ``player.draw``
+        # directly, and a list of fire sites is only ever as complete as the
+        # last card that touched it.
+        for seat, player in enumerate(self.players):
+            if player.lost:
+                continue
+            announced = int(self.draws_announced_this_turn.get(seat, 0))
+            drawn = len(player.cards_drawn_this_turn)
+            if drawn <= announced:
+                continue
+            self.draws_announced_this_turn[seat] = drawn
+            for index in range(announced, drawn):
+                # The drawing seat travels twice, under two names and for two
+                # readers: `seat` is what the event filter narrows on ("you" or
+                # "an opponent"), and `event_subject_player` is what a "that
+                # player" in the effect resolves to (CR 603.10 — the trigger
+                # freezes it, because by resolution the turn may have moved on).
+                #
+                # …and so does **which card** it was: "when the chosen player
+                # draws a card **with the chosen name**" (Booby Trap) narrows on
+                # the drawn card, and the record this sweep walks is the only
+                # place that card can be read from — by resolution it is one
+                # card in a hand among many. Carried as the name rather than the
+                # object, because that is the whole of what a name comparison
+                # needs and a card object on an event outlives the zone it was
+                # read in.
+                emit(
+                    self, "draws_card", seat=seat, event_subject_player=seat,
+                    drawn_card_name=player.cards_drawn_this_turn[index].name,
+                )
+
     def check_state_based_actions(self) -> bool:
         """Check and apply all state-based actions per CR 704. Returns True if any action fired."""
         any_changed = False
@@ -1039,63 +1119,14 @@ class GameEndingMixin:
         # (life, empty library, poison), so settle it once the game is decided.
         self._maybe_award_ante()
 
-        # "Whenever you draw your second card each turn" (Mystic Skyfish).
-        # Announced here rather than at each draw site because there is no one
-        # draw seam — a dozen paths append to ``cards_drawn_this_turn`` — and a
-        # site every action already passes through cannot be forgotten by the
-        # next one. The once-per-turn flag is what makes the sweep idempotent,
-        # and the trigger still enqueues before any player next gets priority,
-        # which is when a triggered ability is noticed anyway (CR 603.3b).
         from ..events import emit
         from ..named_counters import EMPTIED_KINDS_MARK, counters_on
 
-        for seat, player in enumerate(self.players):
-            if seat in self.second_draw_fired_this_turn or player.lost:
-                continue
-            if len(player.cards_drawn_this_turn) < 2:
-                continue
-            self.second_draw_fired_this_turn.add(seat)
-            emit(self, "draws_second_card", seat=seat)
-
-        # "Whenever you draw a card" (Lorescale Coatl, Burlfist Oak) — the same
-        # sweep off the same record, counting instead of flagging, because
-        # CR 121.2 makes drawing N cards N individual draws and this one fires
-        # per card.
-        #
-        # It belongs here for a reason the second-card trigger only half shows:
-        # the condition parsed on **both** sides of the pipeline and had no
-        # dispatcher at all, so two cards compiled supported, entered play and
-        # did nothing. A per-draw-site announcement would have had the same fate
-        # as the replacements do — three handlers reach ``player.draw``
-        # directly, and a list of fire sites is only ever as complete as the
-        # last card that touched it.
-        for seat, player in enumerate(self.players):
-            if player.lost:
-                continue
-            announced = int(self.draws_announced_this_turn.get(seat, 0))
-            drawn = len(player.cards_drawn_this_turn)
-            if drawn <= announced:
-                continue
-            self.draws_announced_this_turn[seat] = drawn
-            for index in range(announced, drawn):
-                # The drawing seat travels twice, under two names and for two
-                # readers: `seat` is what the event filter narrows on ("you" or
-                # "an opponent"), and `event_subject_player` is what a "that
-                # player" in the effect resolves to (CR 603.10 — the trigger
-                # freezes it, because by resolution the turn may have moved on).
-                #
-                # …and so does **which card** it was: "when the chosen player
-                # draws a card **with the chosen name**" (Booby Trap) narrows on
-                # the drawn card, and the record this sweep walks is the only
-                # place that card can be read from — by resolution it is one
-                # card in a hand among many. Carried as the name rather than the
-                # object, because that is the whole of what a name comparison
-                # needs and a card object on an event outlives the zone it was
-                # read in.
-                emit(
-                    self, "draws_card", seat=seat, event_subject_player=seat,
-                    drawn_card_name=player.cards_drawn_this_turn[index].name,
-                )
+        # The two draw announcements — "your second card each turn" and CR
+        # 121.2's per-card event — are one method, because the draw step asks
+        # for exactly them and nothing else of this sweep (see
+        # :meth:`announce_draws`).
+        self.announce_draws()
 
         # "Whenever you lose life" (Oath of Lim-Dûl) — the same sweep off the
         # one record every path already writes: the life total itself.

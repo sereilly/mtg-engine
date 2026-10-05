@@ -624,6 +624,13 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         _parse_duration(stream)
         return ast.DiedThisTurn(ast.ObjectFilter(card_types=("creature",)))
 
+    # "if **no creatures attacked this turn**" (Keldon Twilight). The turn's
+    # attack record asked game-wide and in the negative. Every word is read:
+    # "this turn" is the window the record is kept for, and a sentence naming
+    # another one has to fail here rather than borrow it.
+    if stream.accept_phrase("no", "creatures", "attacked", "this", "turn"):
+        return ast.CreaturesAttackedThisTurn(negated=True)
+
     # "if a permanent was put into your hand from the battlefield this turn"
     # (Barrin, Tolarian Archmage). Every word is read: "from the battlefield"
     # is what keeps a draw or a graveyard return from satisfying it.
