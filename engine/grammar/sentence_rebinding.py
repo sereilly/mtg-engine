@@ -432,6 +432,112 @@ def _rebind_source_watching_delay(node, bound: "ast.TargetSpec"):
     return node
 
 
+#: The delayed-ability openers that name a **step** and no object: "at the
+#: beginning of the next end step", "at end of combat", "at the beginning of the
+#: next cleanup step". The step says *when*; what the ability is about is left
+#: to the sentence behind the comma, and to the one in front of the delay.
+_STEP_DELAYS = frozenset({
+    "next_end_step", "next_end_of_combat", "next_cleanup_step",
+})
+
+
+def _permanent_the_sentence_leaves(
+    step, found: "ast.TargetSpec"
+) -> "ast.TargetSpec | None":
+    """The "that <noun>" a later sentence would call the permanent *step* was
+    about, or None when it leaves no permanent to be about.
+
+    Two shapes do. The sentence **targeted a permanent** ("Untap target
+    creature you don't control and gain control of it" — Spinal Embrace), or it
+    targeted a card and **put it onto the battlefield** ("Return target
+    creature card from your graveyard to the battlefield" — Apprentice
+    Necromancer), where CR 400.7 makes the permanent a new object and the
+    lowering reads it off the reanimation's record rather than the target.
+
+    Only the head noun survives, which is exactly what the printed
+    back-reference "that creature" carries: the narrowing chose the object
+    once, and "that creature **you don't control**" would be false of a
+    creature the sentence has just stolen.
+    """
+    if found.quantifier != "target" or found.count != 1:
+        # "Prevent the next 7 damage that would be dealt to **any target** …
+        # put a +0/+1 counter on it … at the beginning of the next end step."
+        # (Scars of the Veteran.) What was chosen may be a player, and that
+        # card's handler reads its own shield's record; a singular pronoun
+        # needs exactly one *object* in front of it.
+        return None
+    filt = found.filter
+    on_battlefield = filt.zone == "battlefield" and not filt.is_card
+    if not on_battlefield and not _returns_to_battlefield(step):
+        return None
+    return ast.TargetSpec("that", ast.ObjectFilter(card_types=filt.card_types))
+
+
+def _returns_to_battlefield(node) -> bool:
+    """Whether any part of *node* moves a card onto the battlefield."""
+    if isinstance(node, ast.ReturnToZone):
+        return node.to.name == "battlefield"
+    if isinstance(node, (ast.Sequence, ast.Conjunction)):
+        parts = node.steps if isinstance(node, ast.Sequence) else node.effects
+        return any(_returns_to_battlefield(part) for part in parts)
+    return False
+
+
+def _rebind_step_delay(node, bound: "ast.TargetSpec"):
+    """*node* with a step delay's bare pronoun pointed at *bound*.
+
+    "Untap target creature you don't control and gain control of it. … **At
+    the beginning of the next end step, sacrifice it.**" (Spinal Embrace.)
+    "Return target creature card from your graveyard to the battlefield. That
+    creature gains haste. **At the beginning of the next end step, sacrifice
+    it.**" (Apprentice Necromancer.)
+
+    :func:`_rebind_source_watching_delay`'s twin for the opener that watches
+    *nothing*. There the opener spent the source reference, so the pronoun
+    behind the comma could not mean it; here the opener names only a step, and
+    the pronoun's antecedent is the permanent the sentence in front was about —
+    the nearest noun, which is how the cards are read and how the trailing
+    spelling ("Sacrifice it at the beginning of the next end step") has always
+    been lowered. Read as the source, a spell sacrifices nothing at all, and
+    the Necromancer — whose cost has already sacrificed it — kept every
+    creature it raised for the rest of the game.
+
+    Narrow in the same three ways: one node type, an opener that is a bare
+    step (no watched object, no target of its own, nothing already bound), and
+    only the bare pronoun — "sacrifice **this creature**" is a different spec
+    and is not rewritten.
+    """
+    if (
+        isinstance(node, ast.CreateDelayedTrigger)
+        and node.event in _STEP_DELAYS
+        and node.watches is None
+        and node.target is None
+        and not node.binds_target
+    ):
+        rebound = _walk_specs(
+            node.effect,
+            lambda spec: (
+                bound
+                if spec.quantifier == "it"
+                and spec.filter.is_source
+                and spec.filter.to_payload() == {}
+                else None
+            ),
+        )
+        if rebound is not node.effect:
+            # CR 603.7c, as the twin above states it: the ability is now about
+            # an object the creating effect chose (or made — the lowering
+            # prefers the maker's record when there is one).
+            return replace(node, effect=rebound, binds_target=True)
+        return node
+    if isinstance(node, ast.Sequence):
+        walked = tuple(_rebind_step_delay(step, bound) for step in node.steps)
+        if all(a is b for a, b in zip(walked, node.steps)):
+            return node
+        return replace(node, steps=walked)
+    return node
+
+
 def rebind_delayed_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Statement:
     """"{T}: For as long as this creature remains tapped, **target tapped
     creature** doesn't untap … . When this creature leaves the battlefield or
@@ -466,10 +572,13 @@ def rebind_delayed_pronoun_to_sentence_target(statement: ast.Statement) -> ast.S
     if not isinstance(statement, ast.Sequence):
         return statement
     announced: "ast.TargetSpec | None" = None
+    permanent: "ast.TargetSpec | None" = None
     steps: list[ast.Statement] = []
     for step in statement.steps:
         if announced is not None:
             step = _rebind_source_watching_delay(step, announced)
+            if permanent is not None:
+                step = _rebind_step_delay(step, permanent)
         elif (found := _announced_target(step)) is not None:
             # The bound spec keeps the sentence's noun phrase and **stops being
             # a target**: CR 601.2c chose the object once, when the ability was
@@ -477,6 +586,7 @@ def rebind_delayed_pronoun_to_sentence_target(statement: ast.Statement) -> ast.S
             # The same choice :func:`rebind_pronoun_to_delay_target` makes, and
             # the opposite of the pump one — a delayed ability fires later.
             announced = replace(found, quantifier="that", targeted=False)
+            permanent = _permanent_the_sentence_leaves(step, found)
         steps.append(step)
     if all(a is b for a, b in zip(steps, statement.steps)):
         return statement

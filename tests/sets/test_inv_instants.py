@@ -1868,3 +1868,119 @@ def test_defiling_tears_minus_one_toughness_kills_a_one_toughness_creature(set_p
 def test_defiling_tears_offers_one_creature_target(set_pool):
     tears = set_pool("INV")["Defiling Tears"]
     assert _w2g2_cast_spec(tears, _w2g2_compile(tears)) == {"kind": "creature"}
+
+
+# --- Spinal Embrace --------------------------------------------------------
+#
+# "Cast this spell only during combat.
+#  Untap target creature you don't control and gain control of it. It gains
+#  haste until end of turn. At the beginning of the next end step, sacrifice it.
+#  If you do, you gain life equal to its toughness."
+#
+# Every "it" after the first clause names the creature the first clause took:
+# the steal reads the untap's record, the delayed sacrifice is bound to the
+# target, and the life is the toughness it had as it was sacrificed.
+
+
+def _w2g2_embrace_table(set_pool):
+    """Seat 0 at its own beginning of combat with Spinal Embrace in hand and a
+    Grizzly Bears; seat 1 with a tapped Craw Wurm (6/4)."""
+    game = _w2g2_instant_duel(set_pool)
+    wurm = _w2g2_instant_put(game, set_pool, 1, "Craw Wurm")
+    wurm.tapped = True
+    bears = _w2g2_instant_put(game, set_pool, 0, "Grizzly Bears")
+    game.players[0].hand.append(set_pool("INV")["Spinal Embrace"])
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    w2g2_embrace = (game, wurm, bears)
+    return w2g2_embrace
+
+
+def test_spinal_embrace_untaps_steals_and_hastens_the_one_creature(set_pool):
+    game, wurm, _bears = _w2g2_embrace_table(set_pool)
+
+    assert game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w2g2_resolve_stack(game)
+
+    assert not wurm.tapped
+    assert game.controller_index_of(wurm) == 0
+    assert game._has_keyword(wurm, "haste")
+    # The steal is untimed (CR 611.2a): cleanup ends the haste and not the
+    # control change, so only the delayed sacrifice gives the creature up.
+    assert [entry.event for entry in game.delayed_triggers] == ["next_end_step"]
+
+
+def test_spinal_embrace_sacrifices_it_at_the_end_step_and_gains_its_toughness(set_pool):
+    """The stolen creature — not the spell, not the caster's own creature — is
+    sacrificed, it goes to its **owner's** graveyard, and the caster gains its
+    toughness (Craw Wurm, 6/4)."""
+    game, wurm, bears = _w2g2_embrace_table(set_pool)
+    game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[wurm.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+
+    game.resolve_end_step(0)
+    _w2g2_resolve_stack(game)
+
+    assert not game.is_on_battlefield(wurm)
+    assert game.is_on_battlefield(bears)
+    assert [card.name for card in game.players[1].graveyard] == ["Craw Wurm"]
+    assert game.players[0].life == 24
+    assert game.players[1].life == 20
+
+
+def test_spinal_embrace_gains_nothing_when_it_cannot_sacrifice(set_pool):
+    """"If you do": a creature its owner has taken back by the end step is not
+    the caster's to sacrifice (CR 701.21a), so it stays and no life is gained."""
+    from engine.control import change_control
+
+    game, wurm, bears = _w2g2_embrace_table(set_pool)
+    game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[wurm.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+    change_control(wurm, 1, source=bears)
+    game._sync_control()
+
+    game.resolve_end_step(0)
+    _w2g2_resolve_stack(game)
+
+    assert game.is_on_battlefield(wurm)
+    assert game.controller_index_of(wurm) == 1
+    assert game.players[0].life == 20
+
+
+def test_spinal_embrace_gains_nothing_when_the_creature_is_gone(set_pool):
+    game, wurm, _bears = _w2g2_embrace_table(set_pool)
+    game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[wurm.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+    game.remove_from_battlefield(wurm)
+
+    game.resolve_end_step(0)
+    _w2g2_resolve_stack(game)
+
+    assert game.players[0].life == 20
+
+
+def test_spinal_embrace_is_cast_only_during_combat_at_a_creature_you_dont_control(set_pool):
+    game, wurm, bears = _w2g2_embrace_table(set_pool)
+    embrace = set_pool("INV")["Spinal Embrace"]
+    assert _w2g2_cast_spec(embrace, _w2g2_compile(embrace)) == {
+        "kind": "creature", "opponent_only": True,
+    }
+
+    # "…target creature you don't control": the caster's own is no target.
+    assert not game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    refused = game.cast_from_hand(
+        0, "Spinal Embrace", target_permanent_ids=[wurm.permanent_id],
+    )
+    assert not refused.supported
+    assert game.players[0].hand == [embrace]
+    assert game.controller_index_of(wurm) == 1

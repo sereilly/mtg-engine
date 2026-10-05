@@ -347,7 +347,9 @@ def _lower_sacrifice(
         return (
             OracleInstruction(
                 "sacrifice_bound_permanent", "",
-                _bound_sacrifice_filter(node.subject, produced),
+                _bound_sacrifice_filter(node.subject, produced)
+                # CR 701.21a: "you" can't sacrifice what you don't control.
+                | ({"sacrificed_by": "you"} if node.player.kind == "you" else {}),
             ),
         )
     # "**That creature's controller sacrifices it** at end of combat." (Basalt

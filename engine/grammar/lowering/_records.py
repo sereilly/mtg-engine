@@ -509,7 +509,16 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it happened, and whose creature it was — and the second is the only place
     # the token's recipient can come from, because by then the creature is a
     # card in a graveyard.
-    "sacrifice_bound_permanent": ("sacrificed_this_way", LAST_TARGET_CONTROLLER),
+    #
+    # "At the beginning of the next end step, sacrifice it. **If you do**, you
+    # gain life equal to **its toughness**." (Spinal Embrace.) And what it
+    # *was*: a bound sacrifice names exactly one object, so the handler freezes
+    # its computed P/T as it goes (CR 608.2h) under the keys the destroy step
+    # and the chosen sacrifice write.
+    "sacrifice_bound_permanent": (
+        "sacrificed_this_way", LAST_TARGET_CONTROLLER,
+        _EVENT_SUBJECT_POWER_RECORD, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+    ),
     # "Target creature you control can't be blocked this turn. **Destroy it**
     # and this creature at end of combat." (Goblin Sappers.) The grant records
     # the creature it chose, so the delayed destroy behind it has a producer to
