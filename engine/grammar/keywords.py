@@ -248,6 +248,25 @@ def parse_keyword_list(stream: TokenStream) -> tuple[tuple[str, ...], bool]:
             # into two words ("controller" + "'s"), so the phrase is seven
             # tokens rather than six.
             name = _protection_quality_name(stream) or name
+            # "…protection from black **and from** red" (Questing Phelddagrif).
+            # CR 702.16g: "protection from [A] and from [B]" is shorthand for
+            # two protection abilities, so the list holds two items and the
+            # keyword word is simply left unprinted on the second — the "or
+            # from" spelling below with the other connective, and granting
+            # both rather than one. The keyword *line* and the Aura grant
+            # already read it (`oracle._protection_qualities`, `auras.py`);
+            # this is the list every one-shot grant reads, which did not, so
+            # the tail was unconsumed text and the whole ability refused.
+            while True:
+                both = stream.mark()
+                if not stream.accept_phrase("and", "from"):
+                    break
+                another = _protection_quality_name(stream)
+                if another is None:
+                    stream.reset(both)
+                    break
+                keywords.append(name)
+                name = another
             # "…protection from artifacts **or from** the color of your choice"
             # (Jeweled Spirit). The list's own "or" with the keyword word left
             # unprinted: two protection abilities, one of which is chosen as the
