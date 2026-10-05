@@ -3149,6 +3149,35 @@ def _offered_seats(
     return [game.players.index(context.caster if actor == "you" else context.target)]
 
 
+def _derived_cost_is_unpayable(printed, context: OracleExecutionContext, game) -> bool:
+    """Whether an offer's cost is read off a permanent that **has no mana
+    cost** — CR 118.6's unpayable cost.
+
+    "…unless they pay that creature's mana cost" (Tariff) asked of a token or
+    an animated land: CR 202.1b gives such an object no mana cost, and a cost
+    based on it may not be paid at all. :func:`_derived_cost` answers that
+    object with an empty dict, which every reader downstream takes for "no
+    cost" — so the offer was made for free and the creature kept, the opposite
+    of the rule.
+
+    Asked through ``mana_payment.permanent_mana_cost``, the reader the upkeep
+    toll of the same printed words ("unless you pay its mana cost", Pendrell
+    Flux) uses, so ``{0}`` — a mana cost, and a payable one — is not caught by
+    it. Nothing recorded is not this question: that is an offer with no
+    permanent behind it, which keeps the answer :func:`_derived_cost` gives.
+    """
+    key = dict(printed or {}).get("cost_from")
+    if key is None or game is None:
+        return False
+    recorded = context.results.get(key)
+    permanent = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    if permanent is None:
+        return False
+    from ..mana_payment import permanent_mana_cost
+
+    return permanent_mana_cost(permanent) is None
+
+
 def _offer_to_seat(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
     player_index: int, rebind: bool = False,
@@ -3246,6 +3275,15 @@ def _offer_to_seat(
     # only the ones this resolution already has — and this trigger fired on a
     # card being drawn, which named nothing at all.
     on_reflexive = _steps(instruction, "reflexive")
+
+    # CR 118.6: a cost based on the mana cost of an object that has none is
+    # unpayable, so the offer is not made and the penalty applies — the same
+    # outcome as the unaffordable offer below, reached before an empty cost can
+    # be read as a free one.
+    if _derived_cost_is_unpayable(instruction.payload.get("cost"), context, game):
+        if on_decline:
+            _run(game, on_decline, context)
+        return
 
     # An offer the player cannot afford is never made; its decline branch (a
     # "…unless you pay" penalty) still applies. The alternative payment is part
