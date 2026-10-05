@@ -199,8 +199,8 @@ class SameNamedObject:
     #: "…if **another** permanent with the same name is on the battlefield"
     #: (Winnow). The article is what moves the comparison: "a" compares against
     #: what the firing event named, "another" against the object *this effect
-    #: targets* — and "another" is CR 109.1's identity, so the target is never
-    #: the second object it is compared with. A field rather than a node
+    #: targets* — and "another" is identity, so the target is never the second
+    #: object it is compared with. A field rather than a node
     #: because the question is still "does an object of this name exist over
     #: there"; only where the name comes from differs, and the lowering refuses
     #: each spelling wherever its referent is not in view.

@@ -50,7 +50,7 @@ def _w1g8_instant_put(game, set_pool, seat: int, name: str, code: str = "LEA"):
     """*name* on *seat*'s battlefield, free of summoning sickness."""
     permanent = _W1G8Permanent(card=set_pool(code)[name])
     game._put_permanent_onto_battlefield(seat, permanent, None)
-    permanent.summoning_sick = False
+    permanent.metadata["summoning_sickness_turn"] = -99
     return permanent
 
 
@@ -248,3 +248,112 @@ def test_teferis_response_does_not_resolve_once_its_target_is_illegal(set_pool):
     assert game.players[0].hand == []
     assert [item.card.name for item in game.stack] == ["Stone Rain"]
     assert any("608.2b" in line for line in game.log)
+
+
+def _w1g8_dance_table(set_pool, *, in_hand=("Serra Angel",)):
+    """Seat 0 in its own combat with Cauldron Dance in hand, Hill Giant and
+    Craw Wurm in the graveyard, and *in_hand* beside the spell."""
+    game = _w1g8_instant_duel(set_pool)
+    game.interactive_seats = set()
+    game.start_turn(0)
+    pool = set_pool("LEA")
+    _w1g8_instant_put(game, set_pool, 0, "Scryb Sprites")
+    _w1g8_instant_put(game, set_pool, 1, "Grizzly Bears")
+    game.players[0].graveyard.extend([pool["Hill Giant"], pool["Craw Wurm"]])
+    game.players[0].hand = [set_pool("INV")["Cauldron Dance"]]
+    game.players[0].hand.extend(pool[name] for name in in_hand)
+    game._set_phase_and_step("combat", "beginning_of_combat")
+    return game
+
+
+def _w1g8_dance_cast(game, graveyard_slot: int):
+    """Cast Cauldron Dance at *graveyard_slot* and settle everything it asks."""
+    result = game.cast_from_hand(
+        0, "Cauldron Dance", target_permanent_index=graveyard_slot,
+    )
+    _w1g8_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    return result
+
+
+def test_cauldron_dance_is_cast_only_during_combat(set_pool):
+    """"Cast this spell only during combat." Refused in a main phase with the
+    card still in hand; its picker is the caster's own graveyard."""
+    dance = set_pool("INV")["Cauldron Dance"]
+    assert _w1g8_cast_spec(dance, _w1g8_compile(dance)) == {
+        "kind": "graveyard_creature", "own_graveyard_only": True,
+    }
+    game = _w1g8_dance_table(set_pool)
+    game._set_phase_and_step("precombat_main", "precombat_main")
+
+    assert not game.cast_from_hand(
+        0, "Cauldron Dance", target_permanent_index=0,
+    ).supported
+    assert dance in game.players[0].hand
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Hill Giant", "Craw Wurm",
+    ]
+
+
+def test_cauldron_dance_returns_one_creature_and_puts_in_another_with_haste(set_pool):
+    """Both paragraphs: the targeted Hill Giant comes back from the graveyard,
+    the Serra Angel comes in from the hand, and both have haste."""
+    game = _w1g8_dance_table(set_pool)
+
+    assert _w1g8_dance_cast(game, 0).supported
+
+    assert _w1g8_instant_names(game, 0) == [
+        "Hill Giant", "Scryb Sprites", "Serra Angel",
+    ]
+    arrived = {
+        permanent.card.name: permanent
+        for permanent in game.controlled_by(game.players[0])
+    }
+    assert game._has_keyword(arrived["Hill Giant"], "haste")
+    assert game._has_keyword(arrived["Serra Angel"], "haste")
+    assert not game._has_keyword(arrived["Scryb Sprites"], "haste")
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Craw Wurm", "Cauldron Dance",
+    ]
+
+
+def test_cauldron_dance_bounces_the_first_and_sacrifices_the_second_at_end_step(set_pool):
+    """"Return it to your hand at the beginning of the next end step." / "Its
+    controller sacrifices it at the beginning of the next end step." Each
+    pronoun names the creature its own paragraph made: the Hill Giant goes to
+    hand, the Serra Angel to the graveyard, and neither bystander is touched."""
+    game = _w1g8_dance_table(set_pool)
+    _w1g8_dance_cast(game, 0)
+
+    game.resolve_end_step(0)
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_instant_names(game, 0) == ["Scryb Sprites"]
+    assert _w1g8_instant_names(game, 1) == ["Grizzly Bears"]
+    assert [card.name for card in game.players[0].hand] == ["Hill Giant"]
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Craw Wurm", "Cauldron Dance", "Serra Angel",
+    ]
+
+
+def test_cauldron_dance_with_an_empty_hand_sacrifices_nothing(set_pool):
+    """"You **may** put a creature card from your hand…" With none to put, the
+    second paragraph's delayed sacrifice is about no object and arms nothing —
+    it must not fall back to the reanimated creature or to a bystander. The
+    target here is graveyard slot 1, the number that used to be read as a
+    battlefield slot."""
+    game = _w1g8_dance_table(set_pool, in_hand=())
+
+    assert _w1g8_dance_cast(game, 1).supported
+    assert _w1g8_instant_names(game, 0) == ["Craw Wurm", "Scryb Sprites"]
+    assert len(
+        [entry for entry in game.delayed_triggers if entry.event == "next_end_step"]
+    ) == 1
+
+    game.resolve_end_step(0)
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_instant_names(game, 0) == ["Scryb Sprites"]
+    assert _w1g8_instant_names(game, 1) == ["Grizzly Bears"]
+    assert [card.name for card in game.players[0].hand] == ["Craw Wurm"]
+    assert "Craw Wurm" not in [card.name for card in game.players[0].graveyard]

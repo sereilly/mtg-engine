@@ -42,6 +42,7 @@ from ...oracle_types import CHOSEN_TARGET_GRAVEYARD_SLOTS
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import _EVENT_SUBJECT_OBJECTS
+from ._record_keys import _PERMANENTS_MADE_BY_THIS_EFFECT
 from ._described_returns import lower_described_return
 from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 from ._common import (
@@ -174,6 +175,62 @@ def lower_untargeted_return(
                 {"tapped": True} if node.entering_tapped else {},
             ),
         )
+    # "Return target creature card from your graveyard to the battlefield. …
+    # **Return it to your hand** at the beginning of the next end step."
+    # (Cauldron Dance.) Shallow Grave's "Exile it at the beginning of the next
+    # end step" with the other verb: the pronoun reads as the source everywhere
+    # else, and here the source is a spell — so what it names is the permanent
+    # an earlier step of this same resolution **made**, which the delayed entry
+    # freezes by id as it is created (CR 603.7c; ``lowering/delayed`` reads
+    # this kind and binds the record).
+    #
+    # ``produced`` is the whole gate, as it is for the exile: behind a step
+    # that made no permanent the words keep whatever reading they had. And the
+    # narrower set on purpose — a step that merely *acted on* a permanent
+    # leaves "it" naming the ability's target, which is the branch further
+    # down.
+    #
+    # "**Your** hand" and "its owner's hand" are both admitted and mean one
+    # zone: CR 400.3 sends an object bound for any hand but its owner's to its
+    # owner's, and the handler moves the card through the seam that does. Any
+    # other possessive is a seat nothing here resolves.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+        and (produced & _PERMANENTS_MADE_BY_THIS_EFFECT)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and (
+            (subject.quantifier == "it" and subject.filter.is_source)
+            or (subject.quantifier == "that" and not subject.filter.is_card)
+        )
+    ):
+        if node.to.owner is None or node.to.owner.kind not in ("owner", "you"):
+            raise LoweringError(
+                "a permanent this effect made returns to its owner's hand",
+                node=node,
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "under_control_of", "repetitions", "actor", "attached_to",
+                "losing_subtypes", "losing_abilities", "gaining_abilities",
+                "also_stack",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread:
+            raise LoweringError(
+                "the bound-permanent bounce honours no further rider", node=node
+            )
+        if _restrictions_beyond(
+            subject.filter, frozenset({"is_source", "card_types"})
+        ):
+            raise LoweringError(
+                "the bound-permanent bounce honours no further narrowing",
+                node=node,
+            )
+        return (OracleInstruction("return_bound_permanent_to_hand", "", {}),)
     # "Whenever a creature becomes the target of a spell or ability, **return
     # that creature to its owner's hand**." (Cowardice.)
     #

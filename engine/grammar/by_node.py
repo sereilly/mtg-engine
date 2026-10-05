@@ -224,7 +224,6 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.SetLifeTotal: _lower_set_life_total,
     ast.LoseAbilityText: _lower_lose_ability_text,
     ast.PayLife: _lower_pay_life,
-    ast.DelayedSelfAction: _lower_delayed_self_action,
     ast.DamageReducedByPaidMana: _lower_damage_reduced_by_paid_mana,
     ast.SkipStep: _lower_skip_step,
     ast.SkipTurn: _lower_skip_turn,
@@ -559,6 +558,11 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # above's reason: the source of an ability an earlier step countered, which
     # with no such record names nothing.
     ast.DestroyCounteredAbilitySource: _lower_destroy_countered_ability_source,
+    # "Create a … token. **Sacrifice it** at the beginning of the next end
+    # step." (Balduvian Dead.) It left the name-only table when the pronoun
+    # was found naming the ability's own source behind a step that *made* a
+    # permanent: only the producer set says which object "it" is.
+    ast.DelayedSelfAction: _lower_delayed_self_action,
     # "Search that player's graveyard, hand, and library for all cards with the
     # same name as **the chosen card**…" (Lobotomy.) Here for the two rows
     # above's reason: the description is a record an earlier step of the same
