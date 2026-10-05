@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 75.3% | 73.9% | 51.0% | 220 |
+| INV *(measured)* | 335 | 547 | 77.5% | 76.1% | 53.2% | 232 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 563 | 277 | expected a subject |  |
 | 150 | 77 | unrecognized effect verb |  |
-| 142 | 77 | unconsumed text |  |
+| 132 | 67 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -77,10 +77,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 3 | unrecognized "can't be" restriction |  |
-| 3 | 3 | expected 'a' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 | 2 | 1 | expected 'top' |  |
 
 ## Cards executing through the grammar
@@ -1526,6 +1526,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, destroy target enchantment.`
 - **Coal Golem**
   - `{3}, Sacrifice this creature: Add {R}{R}{R}.`
+- **Coalition Victory**
+  - `You win the game if you control a land of each basic land type and a creature of each color.`
 - **Coastal Hornclaw**
   - `Sacrifice a land: This creature gains flying until end of turn.`
 - **Coastal Piracy**
@@ -1559,6 +1561,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Cold Storage**
   - `{3}: Exile target creature you control.`
   - `Sacrifice this artifact: Return each creature card exiled with this artifact to the battlefield under your control.`
+- **Collapsing Borders**
+  - `Domain — At the beginning of each player's upkeep, that player gains 1 life for each basic land type among lands they control. Then this enchantment deals 3 damage to that player.`
 - **Collective Unconscious**
   - `Draw a card for each creature you control.`
 - **Colos Yearling**
@@ -2672,6 +2676,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Exile target nonwhite attacking creature. You gain life equal to its toughness.`
 - **Exorcist**
   - `{1}{W}, {T}: Destroy target black creature.`
+- **Exotic Curse**
+  - `Domain — Enchanted creature gets -1/-1 for each basic land type among lands you control.`
 - **Expendable Troops**
   - `{T}, Sacrifice this creature: It deals 2 damage to target attacking or blocking creature.`
 - **Experimental Overload**
@@ -3356,6 +3362,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: Until end of turn, this creature loses "Prevent all damage that would be dealt to this creature." Any player may activate this ability.`
 - **Glittering Lynx**
   - `{2}: Until end of turn, this creature loses "Prevent all damage that would be dealt to this creature." Any player may activate this ability.`
+- **Global Ruin**
+  - `Each player chooses from the lands they control a land of each basic land type, then sacrifices the rest.`
 - **Gloom Sower**
   - `Whenever this creature becomes blocked by a creature, that creature's controller loses 2 life and you gain 2 life.`
 - **Glorious Anthem**
@@ -4411,6 +4419,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever another Kavu enters, put a +1/+1 counter on this creature.`
 - **Kavu Runner**
   - `This creature has haste as long as no opponent controls a white or blue creature.`
+- **Kavu Scout**
+  - `Domain — This creature gets +1/+0 for each basic land type among lands you control.`
 - **Kaysa**
   - `Green creatures you control get +1/+1.`
 - **Keen Glidemaster**
@@ -5819,6 +5829,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}: This creature gets +1/+0 until end of turn.`
   - `{W}: This creature gains first strike until end of turn.`
   - `{W}{W}: This creature gets +1/+0 until end of turn.`
+- **Ordered Migration**
+  - `Domain — Create a 1/1 blue Bird creature token with flying for each basic land type among lands you control.`
 - **Orgg**
   - `This creature can't attack if defending player controls an untapped creature with power 3 or greater.`
   - `This creature can't block creatures with power 3 or greater.`
@@ -6189,6 +6201,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Powder Keg**
   - `At the beginning of your upkeep, you may put a fuse counter on this artifact.`
   - `{T}, Sacrifice this artifact: Destroy each artifact and creature with mana value equal to the number of fuse counters on this artifact.`
+- **Power Armor**
+  - `Domain — {3}, {T}: Target creature gets +1/+1 until end of turn for each basic land type among lands you control.`
 - **Power Leak**
   - `At the beginning of the upkeep of enchanted enchantment's controller, that player may pay any amount of mana. This Aura deals 2 damage to that player. Prevent X of that damage, where X is the amount of mana that player paid this way.`
   - `At the beginning of the upkeep of enchanted enchantment's controller, that player may pay any amount of mana. This Aura deals 2 damage to that player. Prevent X of that damage, where X is the amount of mana that player paid this way.`
@@ -8208,6 +8222,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player gains X life.`
   - `Target player gains X life.`
   - `Target player gains X life.`
+- **Strength of Unity**
+  - `Domain — Enchanted creature gets +1/+1 for each basic land type among lands you control.`
 - **Strip Mine**
   - `{T}: Add {C}.`
   - `{T}, Sacrifice this land: Destroy target land.`
@@ -8945,6 +8961,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Put a hatchling counter on this artifact.`
   - `• You may put a creature card from your hand onto the battlefield.`
   - `• Return target creature card from your graveyard to the battlefield.`
+- **Tribal Flames**
+  - `Domain — Tribal Flames deals X damage to any target, where X is the number of basic land types among lands you control.`
 - **Trickster Mage**
   - `{U}, {T}, Discard a card: You may tap or untap target artifact, creature, or land.`
 - **Triskelion**
@@ -9472,6 +9490,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, Pay 1 life: Prevent the next 2 damage that would be dealt to target creature this turn.`
   - `{U}: Prevent the next 1 damage that would be dealt to target Cleric or Wizard creature this turn.`
   - `{B}, Put a -1/-1 counter on a creature you control: Prevent the next 2 damage that would be dealt to target player or planeswalker this turn.`
+- **Wandering Stream**
+  - `Domain — You gain 2 life for each basic land type among lands you control.`
 - **Wanderlust**
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
   - `At the beginning of the upkeep of enchanted creature's controller, this Aura deals 1 damage to that player.`
@@ -9544,6 +9564,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Wax // Wane**
   - `Target creature gets +2/+2 until end of turn.`
   - `Destroy target enchantment.`
+- **Wayfaring Giant**
+  - `Domain — This creature gets +1/+1 for each basic land type among lands you control.`
 - **Waylay**
   - `Create three 2/2 white Knight creature tokens. Exile them at the beginning of the next cleanup step.`
 - **Wayward Soul**
@@ -9735,6 +9757,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return target creature and all white Auras you own attached to it to their owners' hands.`
 - **Workhorse**
   - `Remove a +1/+1 counter from this creature: Add {C}.`
+- **Worldly Counsel**
+  - `Domain — Look at the top X cards of your library, where X is the number of basic land types among lands you control. Put one of those cards into your hand and the rest on the bottom of your library in any order.`
 - **Worldly Tutor**
   - `Search your library for a creature card, reveal it, then shuffle and put the card on top.`
   - `Search your library for a creature card, reveal it, then shuffle and put the card on top.`
