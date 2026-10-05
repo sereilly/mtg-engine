@@ -208,7 +208,8 @@ _ROLE_STRUCTURAL_KEYS = frozenset({"quantifier", "roles", "role"})
 
 
 def _sequence_role_name(
-    described: dict, taken: set, *, another: bool = False
+    described: dict, taken: set, *, another: bool = False,
+    typeless: str | None = None,
 ) -> str | None:
     """What the picker calls one step's slot, or None when it has no name.
 
@@ -226,6 +227,15 @@ def _sequence_role_name(
     another target creature"), which qualifies a repeated noun exactly as a
     printed controller does below — it is the word that tells the two slots
     apart, so it is the word the key carries.
+
+    *typeless* is the key for an object slot whose noun phrase prints **no**
+    card type or subtype at all — "target **nonland permanent**" (Rushing
+    River), whose whole narrowing is an exclusion. Given only by the caller
+    that has other proof the sentence names two objects
+    (:func:`plan_another_target_roles`, whose proof is the printed "another"):
+    :func:`describe_sequence_target_roles` reads a missing name as one more
+    reason to hand the line back, and a default here would have it claim
+    announcements it declines today.
     """
     from ...targeting import SEAT_ROLE_KINDS
 
@@ -233,7 +243,7 @@ def _sequence_role_name(
     if described.get("kind") in SEAT_ROLE_KINDS:
         name = "player"
     else:
-        name = filt.get("type_filter") or filt.get("subtype_filter")
+        name = filt.get("type_filter") or filt.get("subtype_filter") or typeless
     # **A repeat of a name already taken is qualified by the seat the slot
     # names, not refused.** "Destroy target creature an opponent controls …
     # destroy target creature you control" (Crooked Scales) prints one noun
@@ -579,7 +589,14 @@ def plan_another_target_roles(steps) -> "AnotherTargetRoles | None":
     for position, described in enumerate(slots):
         if not isinstance(described, dict) or described.get("kind") != "object":
             return None
-        name = _sequence_role_name(described, names, another=position == 1)
+        # "Return target **nonland permanent** … return another target nonland
+        # permanent" (Rushing River): no card type to name the slot by, and the
+        # role name is a key rather than a label (the client shows a battlefield
+        # role by its ``kind``), so CR 110.1's word for anything on the
+        # battlefield is the name.
+        name = _sequence_role_name(
+            described, names, another=position == 1, typeless="permanent",
+        )
         narrowing = described.get("filter") or {}
         if (
             name is None

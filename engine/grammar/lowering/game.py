@@ -485,6 +485,13 @@ def _lower_cant_cast_spell_types(
             f"no handler stops {node.player.kind!r} casting spells", node=node
         )
     payload: dict[str, object] = {"card_types": list(node.card_types)}
+    if not node.card_types:
+        # "Target player can't cast **spells** this turn." (Orim's Chant.) The
+        # unnarrowed word, written down: an empty ``card_types`` alone would be
+        # indistinguishable from a payload that lost its list, and the handler
+        # refuses that one by design ("a ban naming nothing is a ban on
+        # nothing").
+        payload["any_spell"] = True
     _describe_targets(payload, node.player)
     return (
         OracleInstruction("forbid_casting_types_this_turn", "", payload),

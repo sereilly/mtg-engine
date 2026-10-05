@@ -7,6 +7,7 @@ import re
 
 from .ai_valuation import (
     OFFER_ALTERS,
+    OFFER_KICKS,
     OFFER_RETURNS_SPELL,
     SPELL_TYPES,
     CastOffer,
@@ -49,6 +50,7 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .auras import controller_cast_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_restrictions import global_cast_ban, last_cast_color_ban
+from .spell_prohibitions import casting_forbidden_this_turn
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
@@ -69,7 +71,9 @@ from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
 from .targeting import (bounce_subject_filter, derive_activation_spec,
-                        derive_cast_spec, derive_instruction_spec, spec_roles,
+                        derive_cast_spec, derive_instruction_spec,
+                        instructions_as_announced, spec_is_a_cost,
+                        spec_roles,
                         usable_activated_abilities)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -562,7 +566,17 @@ def _times_worth_taking(
     if offer.buys == OFFER_ALTERS:
         return 0
     if offer.price is not None:
-        if offer.buys != OFFER_RETURNS_SPELL:
+        # A price that is not mana: a buyback's ("Buyback—Sacrifice a land")
+        # or a kicker's ("Kicker—Sacrifice two lands", "Kicker—Pay 3 life").
+        # One test for both, because it asks about the *resource* and not
+        # about what it buys: a land, a creature, a card or life is spare when
+        # the reserve still stands after it is spent, whichever keyword is
+        # selling. That is deliberately the conservative end for a kicker — a
+        # seat with four lands does not give up two of them to make Magma
+        # Burst hit a second target — and a seat that cannot spare the price
+        # simply casts the spell unkicked: the announcements run down to `{}`,
+        # so declining here is never a card left in hand.
+        if offer.buys not in (OFFER_RETURNS_SPELL, OFFER_KICKS):
             return 0
         return 1 if _buyback_price_is_worth_paying(
             game, player_index, card, hand_index, offer, from_zone
@@ -679,7 +693,9 @@ def _paid_for_half_names_nothing(
         return False
     if taken.get("kind") in ("none", "modal") or spec_roles(taken):
         return False
-    return not game._enumerate_targets(player_index, card, taken, for_cast=True)
+    return not game._enumerate_targets(
+        player_index, card, taken, for_cast=True, optional_cost_payments=offers,
+    )
 
 
 def _paid_for_trigger_has_nothing_to_hit(
@@ -928,6 +944,21 @@ def _cast_candidate_announcing(
         return None
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
+        # mana clause of a price that is not only mana, which `_offers_taken`
+        # does not list — it is one clause of an offer, not an offer. Planned
+        # with the spell's own mana for the reason the offers below are: the
+        # cast folds it into the one payment, so a plan without it taps three
+        # lands for a six-mana announcement and is refused.
+        for cost in additional_costs(card):
+            if (
+                cost.mana_symbols
+                and cost.from_zone in (None, from_zone)
+                and int((offers or {}).get(cost.optional_key, 0) or 0) > 0
+            ):
+                required = dict(required)
+                for symbol, amount in cost.mana_cost.items():
+                    required[symbol] = required.get(symbol, 0) + amount
         if taken_offers:
             # The offers' mana on top of the spell's, planned as one payment
             # because it is paid as one (`casting.queue_from_hand` folds an
@@ -2827,6 +2858,17 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         # what `simulate_ai_games.py`'s `refused_casts` counts.
         return False
 
+    if casting_forbidden_this_turn(game, caster_index, card) is not None:
+        # "Target player can't cast spells this turn." (Orim's Chant) / "Until
+        # end of turn, target player can't cast instant or sorcery spells."
+        # (Abeyance.) The one ban on this list that is a *record* rather than a
+        # board scan, and on it for the reason every other is: the cast path
+        # refuses, nothing is spent, and a seat that goes on proposing its hand
+        # into the ban is refused once per card per decision. A land is not
+        # stopped by the untyped sentence (CR 305.1), which the record's own
+        # reader already knows.
+        return False
+
     if targeting_ban_refusal(game, card) is not None:
         # "This turn and next turn, ... players and permanents can't be the
         # targets of spells or activated abilities." (Peace Talks, CR 113.3c.)
@@ -2945,7 +2987,18 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # readers happening to agree. They did not: this function decided "needs a
     # target" from every quantifier in the program, the cast path from a
     # per-kind arm, and 182 spells sat between the two.
-    if game.no_legal_cast_target_refusal(caster_index, card) is not None:
+    #
+    # Asked about the candidate being built (`_OFFERS_ANNOUNCED`): CR 702.33g
+    # makes a kicked-only target a target of the kicked cast alone, so the
+    # obligation — and, below, the enumeration that probes each candidate
+    # against the spell's own spec — is a different one per announcement. Read
+    # as the card's every arm, an unkicked Rushing River was a two-target spell
+    # with one target named for it, which no list is ever legal for: the seat
+    # held it until it could spare a land for the kicker.
+    announced = _OFFERS_ANNOUNCED.get()
+    if game.no_legal_cast_target_refusal(
+        caster_index, card, optional_cost_payments=announced,
+    ) is not None:
         return True
     # What follows is **preference and remainder**, and is deliberately wider
     # than the rule: the two shapes the engine's predicate leaves to another
@@ -2969,7 +3022,9 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     if _targets_are_optional(program):
         # "Up to one target" is castable with none (CR 601.2c).
         return False
-    return not game._enumerate_targets(caster_index, card, spec, for_cast=True)
+    return not game._enumerate_targets(
+        caster_index, card, spec, for_cast=True, optional_cost_payments=announced,
+    )
 
 
 def _targets_are_optional(program) -> bool:
@@ -3122,10 +3177,20 @@ def choose_divided_targets(
       candidate on the named side is announced and the even split does the rest.
     """
     program = compile_card_oracle(card)
-    shape = divided_shape(program)
+    # The candidate being built's own answer to CR 601.2b (`_OFFERS_ANNOUNCED`):
+    # which step divides, and over how many targets, may turn on it. A kicked
+    # Magma Burst divides over two where the unkicked one names a single target
+    # the ordinary way, and Pollen Remedy's shares total 3 or 6 (CR 702.33g).
+    # Read off the card's every arm, neither has a divided step this could find
+    # — both keep it under a `was_kicked` arm — so both were proposed with one
+    # bare target and refused.
+    offers = _OFFERS_ANNOUNCED.get()
+    shape = divided_shape(
+        program, instructions_as_announced(card, program, offers or {})
+    )
     if shape is None:
         return None
-    spec = game.cast_target_spec(caster_index, card)
+    spec = game.cast_target_spec(caster_index, card, optional_cost_payments=offers)
     if spec.get("kind") != "divided":
         # A modal or otherwise re-derived spec that does not describe the
         # division. Nothing to announce, and the cast gate reads the same spec.
@@ -3274,7 +3339,13 @@ def _choose_role_targets(
     """
     if not spec_roles(_cast_spec(card, compile_card_oracle(card))):
         return None
-    options = game.cast_target_spec(caster_index, card).get("valid_targets") or []
+    # Under the same announcement the roles test above read (CR 702.33g): a
+    # kicked Falling Timber names two creatures and an unkicked one names one,
+    # and a chain walked off the other cast's spec is a list of the wrong
+    # length — proposed, refused, and proposed again next turn.
+    options = game.cast_target_spec(
+        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+    ).get("valid_targets") or []
     picks: list[dict] = []
     while options:
         pick = _preferred_role_option(options, caster_index, card, game)
@@ -3507,9 +3578,21 @@ def _choose_single_object_target(
         or spec.get("kind") in _NOT_OBJECT_SPECS
         or spec_roles(spec)
         or _targets_are_optional(program)
+        # A spell with **no target**, whose derived spec is the picker for its
+        # printed cost ("…, sacrifice a creature. Draw two cards."). A payment
+        # is not a target (CR 601.2b vs 601.2c): naming the creature here put
+        # an id on the *target* channel for a spell that has none, which is not
+        # where the cost path reads its payer from — and the permanent named is
+        # the one about to leave.
+        or spec_is_a_cost(spec)
     ):
         return None
-    legal = game._enumerate_targets(caster_index, card, spec, for_cast=True)
+    legal = game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        # The announcement *spec* was derived under (CR 702.33g), so the
+        # per-candidate probe judges each permanent against that same spec.
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+    )
     if not legal or any(entry.get("kind") != "permanent" for entry in legal):
         return None
     if spell_denies_its_own_target(card):

@@ -79,6 +79,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from . import ast
+from .amounts import parse_amount
 from .conditions import _parse_condition
 from .errors import GrammarError
 from .sentence_rebinding import restates_target
@@ -117,11 +118,17 @@ def _parse_conditional_instead_rider(
     # the same pair, and required exactly once — below — so neither spelling
     # can be read with the word missing or doubled.
     fronted = bool(stream.accept_word("instead"))
-    try:
-        replacement = parse_statement(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return False
+    # "…, prevent the next 6 damage **this way** instead." (Pollen Remedy.)
+    # The replaced sentence said again by reference, with one number changed —
+    # read before the statement parser, which has no antecedent to give the
+    # two words.
+    replacement = _accept_resized_this_way(stream, replaced)
+    if replacement is None:
+        try:
+            replacement = parse_statement(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return False
     if type(replacement) is not type(replaced):
         stream.reset(mark)
         return False
@@ -160,6 +167,43 @@ def _parse_conditional_instead_rider(
     return True
 
 
+def _accept_resized_this_way(stream: TokenStream, replaced):
+    """``prevent the next <N> damage this way`` as *replaced* at another size,
+    or None with the cursor unmoved.
+
+    "Prevent the next 3 damage that would be dealt this turn to any number of
+    targets, divided as you choose. If this spell was kicked, prevent the next
+    6 damage **this way** instead." (Pollen Remedy.) The second sentence names
+    no recipient, no window and no division: "this way" is all three, and its
+    antecedent is the sentence being replaced — the only prevention in the
+    pair, of which exactly one ever happens. So the replacement *is* that
+    sentence with the printed number in it, which also keeps the announcement
+    one list of targets and one division whichever arm resolves (CR 601.2c,
+    CR 601.2d).
+
+    Read here rather than by the prevention production, because that
+    production has no replaced sentence to point at: a free-standing "prevent
+    the next 6 damage this way" names a prevention nothing made, and refusing
+    it there is the reading it already has. Only a counted shield is restated
+    — "prevent all damage … this way" would have no number to change.
+    """
+    if not isinstance(replaced, ast.PreventDamage):
+        return None
+    mark = stream.mark()
+    if not stream.accept_phrase("prevent", "the", "next"):
+        stream.reset(mark)
+        return None
+    try:
+        amount = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("damage", "this", "way"):
+        stream.reset(mark)
+        return None
+    return replace(replaced, amount=amount)
+
+
 #: The statement kinds the rider can replace. `AddMana` joined `GainLife` for
 #: the Antiquities land cycle -- "{T}: Add {C}. If you control an Urza's
 #: Power-Plant and an Urza's Tower, add {C}{C} instead." -- which is the same
@@ -180,10 +224,18 @@ def _parse_conditional_instead_rider(
 #: `Destroy` a wave later for Prohibit and Overload. All but the first two name
 #: *whom*, and the second sentence names them by pointing back at the first:
 #: see `_INSTEAD_SUBJECT_FIELDS`.
+#:
+#: `SearchLibrary` joined them for Planeshift's Primal Growth -- "Search your
+#: library for a basic land card, put that card onto the battlefield, then
+#: shuffle. If this spell was kicked, **instead** search your library for up to
+#: two basic land cards, put them onto the battlefield, then shuffle." -- the
+#: fronted spelling Urza's Rage already reads, over a sentence that names
+#: nobody: the searcher is the spell's controller in both, so it has no row in
+#: `_INSTEAD_SUBJECT_FIELDS` and needs none.
 _REPLACEABLE = (
     ast.GainLife, ast.AddMana, ast.DealDamage,
     ast.Discard, ast.Pump, ast.PreventDamage,
-    ast.CounterSpell, ast.Destroy,
+    ast.CounterSpell, ast.Destroy, ast.SearchLibrary,
 )
 
 

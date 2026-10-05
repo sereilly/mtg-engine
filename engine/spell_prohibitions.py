@@ -48,6 +48,20 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
 
 
+#: The record entry for "can't cast **spells** this turn" with no type printed
+#: (Orim's Chant). One entry beside the card types rather than every type
+#: listed out, because it is a different question: a spell is whatever is
+#: *cast* (CR 601.1), whatever its types are — and the one thing that reaches
+#: the cast path without being cast is a land drop (CR 305.1: "playing a land
+#: is a special action", not a spell), which this sentence leaves alone. A list
+#: of types would have to leave "land" out to get that right and would then be
+#: wrong about an artifact land, in the direction of a ban wider than printed.
+#:
+#: Spelled as the word the refusal reads with: "can't cast **any** spells this
+#: turn".
+ANY_SPELL = "any"
+
+
 def forbid_casting_this_turn(game: "Game", seat: int, card_types) -> None:
     """*seat* can't cast spells of *card_types* for the rest of this turn.
 
@@ -70,6 +84,13 @@ def casting_forbidden_this_turn(game: "Game", seat: int, card) -> str | None:
     from .search_filters import card_has_type
 
     for card_type in game.spell_types_forbidden_this_turn.get(int(seat), ()):
+        if card_type == ANY_SPELL:
+            # Every spell, and nothing that is not one. A land reaches the
+            # cast path to be *played*, which is the same test that path makes
+            # before it asks about the land drop.
+            if getattr(card, "primary_type", None) != "land":
+                return ANY_SPELL
+            continue
         if card_has_type(card, card_type):
             return card_type
     return None
@@ -124,6 +145,7 @@ def clear_turn_spell_prohibitions(game: "Game") -> None:
 
 
 __all__ = [
+    "ANY_SPELL",
     "casting_forbidden_this_turn",
     "clear_turn_spell_prohibitions",
     "forbid_casting_this_turn",

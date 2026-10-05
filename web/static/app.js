@@ -13224,7 +13224,12 @@ function startCastCostPrompt(card, castAction = "cast") {
   // (Phyrexian Tribute): a set, which the one-click canvas picker below cannot
   // collect — it answered the first creature and the default ate the second.
   // The set picker the activation side uses, its answer on `pendingCastCost`.
-  if (costSpec.sacrifice_cost && Number(costSpec.count || 1) > 1) {
+  //
+  // "Kicker—**Return a creature you control to its owner's hand**" (Arctic
+  // Merfolk): the same set picker for a set of one, because the canvas picker
+  // below is a *sacrifice* picker — it says "sacrifice" and answers on
+  // `cost_permanent_index`, which the engine's return charger does not read.
+  if ((costSpec.sacrifice_cost && Number(costSpec.count || 1) > 1) || costSpec.return_cost) {
     if ((pendingCastCost || {}).cost_permanent_ids) return false;
     return startCastPermanentSetCostPrompt(card, castAction, costSpec);
   }
@@ -13251,7 +13256,9 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
   pendingPermanentCost = {
     card,
     cardName,
-    verb: "sacrifice",
+    // The verb the cost prints (`permanentCostVerb`): "sacrifice" for every
+    // cast cost before Arctic Merfolk's kicker, "return" for that one.
+    verb: permanentCostVerb(costSpec),
     noun: costSpec.kind || "permanent",
     count,
     announcesX: false,
@@ -13261,7 +13268,9 @@ function startCastPermanentSetCostPrompt(card, castAction, costSpec) {
     cast: { castAction, thenTarget: castCostIsSeparate(card) },
   };
   renderActivationPrompt();
-  updateActionHint(`Choose what ${cardName} will sacrifice to pay its cost.`);
+  updateActionHint(
+    `Choose what ${cardName} will ${permanentCostVerb(costSpec)} to pay its cost.`,
+  );
   return true;
 }
 

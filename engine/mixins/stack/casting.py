@@ -74,8 +74,8 @@ from ...subject_filters import card_matches_any, filter_head_noun, subject_match
 from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
                           enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
-                          enchant_subject_seat, role_is_seat, spec_roles,
-                          targets_mana_value_x)
+                          enchant_subject_seat, instructions_as_announced,
+                          role_is_seat, spec_roles, targets_mana_value_x)
 
 def _optional_cost_offers(
     costs: "tuple[AdditionalCost, ...]",
@@ -1507,6 +1507,19 @@ class SpellCastingMixin:
                     extra_pip_tax[symbol] = (
                         extra_pip_tax.get(symbol, 0) + count * times
                     )
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
+        # mana clause of an optional price that is not only mana: folded into
+        # the same payment as the offers above, and only for the caster who
+        # took the price — through the one reader the gate and the collector
+        # below skip an untaken offer by, so the mana and the discard are
+        # charged together or not at all.
+        for cost in cast_costs:
+            if cost.mana_symbols and optional_cost_taken(cost, optional_paid):
+                for symbol, count in cost.mana_cost.items():
+                    if symbol == "generic":
+                        extra_generic_tax += count
+                    else:
+                        extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
 
         # Resolve the named discard **here**, while `cost_hand_index` still
         # indexes the hand the caster was looking at. The spell leaves that hand
@@ -1592,6 +1605,9 @@ class SpellCastingMixin:
             card, caster_index, target_player_index, target_permanent_index, target_stack_item,
             mode_index=mode_index, x_value=x_value,
             target_permanent_ids=target_permanent_ids,
+            # CR 601.2b is answered above; CR 702.33g makes the targets this
+            # gate counts depend on it.
+            optional_cost_payments=optional_paid,
         )
         if not target_ok:
             self.log.append(target_reason)
@@ -1847,7 +1863,17 @@ class SpellCastingMixin:
         # proposal, and the refusal has to be here rather than at resolution
         # because CR 601.2e returns the game to before a proposal and a
         # resolution-time answer would already have spent the mana.
-        found = divided_description(compile_card_oracle(card).instructions)
+        #
+        # **Of the steps this announcement will run** (CR 702.33g): a kicked
+        # Magma Burst divides over two targets and an unkicked one names one
+        # the ordinary way, and Pollen Remedy's shares total 3 or 6 — so which
+        # divided step is the spell's is CR 601.2b's answer, read through the
+        # same view the picker's spec is.
+        found = divided_description(
+            instructions_as_announced(
+                card, compile_card_oracle(card), optional_paid
+            )
+        )
         if found is not None:
             division = found[1].get("division", EVENLY)
             total = _divided_total(found[0], resolved_x_value)
@@ -2181,6 +2207,12 @@ class SpellCastingMixin:
                             stack_index=chosen_source_stack_index,
                         ),
                         "sacrificed_for_cost": sacrificed_for_cost,
+                        # …the cards a *discard* cost took, on the channel the
+                        # activation path records them on and for its reason:
+                        # the card is in a graveyard by now (CR 400.7: a
+                        # different object), so the announcement is the only
+                        # thing that can say which of that pile's cards it was.
+                        "discarded_for_cost": cost_spoils["discarded_for_cost"],
                         # …and what an *exile* cost ate, on the channel the
                         # activation path already records it on. Last-known
                         # information for the same reason (CR 608.2h): the
@@ -3554,6 +3586,11 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
+        # Every card a printed discard took, in the order it took them — the
+        # channel an activation's discard cost has recorded on since Land's
+        # Edge, written here for the first spell that reads it back: "…where X
+        # is **the discarded card's mana value**" (Dralnu's Pet).
+        discarded_cards: list[CardDefinition] = []
         # The named discards, in the order they were named; each pays one card.
         named_discards = list(cost_hand_cards or ())
         for cost in costs:
@@ -3806,12 +3843,16 @@ class SpellCastingMixin:
                         )
                     discarded = caster.hand.pop(index)
                     self._discard_card(caster, discarded)
+                    discarded_cards.append(discarded)
                     self.log.append(
                         f"{caster.name} discarded {discarded.name} to cast {card.name}"
                     )
                     # One named index pays one card; the rest take the default.
                     cost_hand_index = None
-        return {"sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled}
+        return {
+            "sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled,
+            "discarded_for_cost": discarded_cards,
+        }
 
     def _x_implied_by_target(
         self, card, target_player_index, target_permanent_index, target_stack_item,
@@ -3977,6 +4018,7 @@ class SpellCastingMixin:
         mode_index: int | None = None,
         x_value: int | None = None,
         target_permanent_ids: list[int | None] | None = None,
+        optional_cost_payments: dict | None = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -3985,6 +4027,16 @@ class SpellCastingMixin:
 
         For a "Choose one —" modal spell, the chosen mode's instruction (not the
         first one) determines what the spell targets.
+
+        *optional_cost_payments* is CR 601.2b's answer so far, for CR 702.33g:
+        "If this spell was kicked, prevent all combat damage **another target
+        creature** would deal this turn" (Falling Timber) announces its second
+        target only when the kicker was. This gate re-derives the spell's spec
+        to count its roles, so it has to derive the one the *announcement*
+        describes — read as the card's whole program, an unkicked Falling
+        Timber was refused "requires 2 targets" and one named with two was
+        accepted. None reads every arm, which is the question a caller with no
+        announcement in hand is asking.
         """
         # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
         # player can't be chosen as a target, which under CR 601.2c makes the
@@ -4131,10 +4183,37 @@ class SpellCastingMixin:
             if isinstance(target_permanent_index, list)
             else None
         )
-        cast_spec = derive_cast_spec(card, program) or {}
+        cast_spec = derive_cast_spec(
+            card, program, optional_cost_payments=optional_cost_payments,
+        ) or {}
         maximum = cast_spec.get("max_targets")
         if isinstance(maximum, int) and announced is not None and announced > maximum:
             return False, f"too many targets for {card.name}"
+        # CR 702.33g's other direction: a target printed only in the kicked
+        # half is not chosen by a cast that was not kicked. The roles gate
+        # below counts the slots a kicked cast names; this is the same count
+        # for the cast that declined, whose spec has no roles left to count
+        # against — so without it an unkicked Falling Timber naming two
+        # creatures was simply accepted, the second one recorded on the stack
+        # item as a target the spell does not have.
+        if (
+            optional_cost_payments is not None
+            and not spec_roles(cast_spec)
+            and spec_roles(derive_cast_spec(card, program) or {})
+        ):
+            named = (
+                [pid for pid in target_permanent_ids if pid is not None]
+                if target_permanent_ids
+                else (
+                    target_permanent_index
+                    if isinstance(target_permanent_index, list) else []
+                )
+            )
+            if len(named) > 1:
+                return False, (
+                    f"{card.name} names one target unless it was kicked "
+                    f"(CR 702.33g)"
+                )
 
         # A spell naming several targets of **different kinds** (Glyph of
         # Delusion). Gated here, above every per-kind arm below, because none of

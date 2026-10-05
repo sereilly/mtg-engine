@@ -95,6 +95,7 @@ from .damage import (
     _lower_damage,
     _lower_damage_dealt_riders,
     _lower_damage_conjunction,
+    kicked_second_damage_target,
 )
 from .upkeep import (
     _lower_damage_reduced_by_paid_mana,
@@ -482,6 +483,7 @@ __all__ = [
     "_lower_upkeep_damage_unless_cost",
     "_lower_damage_dealt_riders",
     "_lower_damage_conjunction",
+    "kicked_second_damage_target",
     "_lower_coin_flip_damage_loop",
     "_lower_coin_flip_stakes_loop",
     "_lower_damage_this_game_history",

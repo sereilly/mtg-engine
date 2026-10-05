@@ -757,6 +757,107 @@ def _lower_damage_shape(
     )
 
 
+def _names_the_source(spec: "ast.TargetSpec | None") -> bool:
+    """Whether a damage clause's *source* is the object printing it — the card's
+    own name or "this spell" in the first sentence, "it" in the second."""
+    return isinstance(spec, ast.TargetSpec) and spec.filter.is_source
+
+
+def kicked_second_damage_target(
+    steps: tuple[ast.Statement, ...],
+) -> "ast.Conditional | None":
+    """"Magma Burst deals 3 damage to any target. **If this spell was kicked,
+    it deals 3 damage to another target.**" as one two-armed sentence, or None.
+
+    CR 702.33g: the second target is chosen only if the spell was kicked, and
+    the printed "another" (CR 601.2c) makes it a *different* one. So the kicked
+    spell deals its amount to each of two targets and the unkicked one to one —
+    which is the sentence "…deals 3 damage to **each of two targets**" already
+    lowers, behind the same condition the card prints. Returned as that
+    ``Conditional`` for the dispatcher to lower: then = the damage over two
+    targets, otherwise = the printed first sentence.
+
+    **Why not a slot per clause**, which is what Rushing River's identical
+    sentence over permanents gets (``_roles.plan_another_target_roles``): "any
+    target" is a seat *or* an object (CR 115.4), and an ordered-roles
+    announcement decides which of the two a slot is from its *kind*, before
+    anything is chosen — its seat rides the one ``target_player_index`` a stack
+    item has. Two "any target" slots may both be players, which that channel
+    cannot say. The card-divided list is the engine's one announcement of
+    targets spanning both battlefields and the players' faces
+    (``_targets.card_divided_target_description``), so the kicked arm goes
+    there, and ``targeting._as_kicked`` already collapses the pair to the arm a
+    given cast will run.
+
+    Nothing observable is lost by the two damages sharing one step: no player
+    receives priority inside a resolution (CR 117.3b) and state-based actions
+    wait for it to end (CR 704.3), so the only order a spell's own steps can
+    expose is one reading what an earlier one did — and neither damage reads
+    the other.
+
+    Narrow, for the cards this must not claim:
+
+    * the condition is "was kicked", un-negated, with no other arm. Any other
+      condition leaves both targets announced whichever way it resolves
+      (CR 601.2c exempts only a mode and a cost), which is a different
+      announcement;
+    * both clauses are one plain "any target" dealt by the source itself, the
+      second printing "another";
+    * **the same amount and the same riders.** Different amounts would be a
+      card-dictated *share* per target, which is Cone of Flame's lowering and
+      not this one's; a rider on one clause alone has no payload to ride.
+
+    None hands the sentence on to the roles planner and, past it, to
+    ``_refuse_unfused_distinctness``.
+    """
+    if len(steps) != 2:
+        return None
+    first, guarded = steps
+    if not isinstance(first, ast.DealDamage) or not isinstance(guarded, ast.Conditional):
+        return None
+    condition = guarded.condition
+    if (
+        not isinstance(condition, ast.WasKicked)
+        or condition.negated
+        or guarded.negated
+        or guarded.otherwise is not None
+    ):
+        return None
+    again = guarded.then
+    if not isinstance(again, ast.DealDamage):
+        return None
+    if len(first.recipients) != 1 or len(again.recipients) != 1:
+        return None
+    target, other = first.recipients[0], again.recipients[0]
+    for spec in (target, other):
+        if not (
+            isinstance(spec, ast.TargetSpec)
+            and spec.quantifier == "any_target"
+            and spec.targeted
+            and spec.count == 1
+            and not spec.count_from_x
+        ):
+            return None
+    if target.distinct_from_prior or not other.distinct_from_prior:
+        return None
+    if dataclasses.replace(other, distinct_from_prior=False) != target:
+        return None
+    if not (_names_the_source(first.source) and _names_the_source(again.source)):
+        return None
+    if (
+        again.amount != first.amount
+        or again.riders != first.riders
+        or again.chooser != first.chooser
+        or again.per_each != first.per_each
+        or first.riders.divided
+    ):
+        return None
+    both = dataclasses.replace(
+        first, recipients=(dataclasses.replace(target, count=2),)
+    )
+    return ast.Conditional(condition, then=both, otherwise=first)
+
+
 
 
 def _lower_damage_conjunction(

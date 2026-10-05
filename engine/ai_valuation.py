@@ -1368,13 +1368,23 @@ class DividedShape:
     whole_board: bool = False
 
 
-def divided_shape(program) -> DividedShape | None:
-    """*program*'s divided step described, or None when it divides nothing."""
+def divided_shape(program, instructions=None) -> DividedShape | None:
+    """*program*'s divided step described, or None when it divides nothing.
+
+    *instructions* is the program as one particular cast will run it
+    (``targeting.instructions_as_announced``), for a caller that has CR 601.2b's
+    answer in hand: a card whose divided step sits under a ``was_kicked`` arm
+    (Magma Burst, Pollen Remedy) divides for one announcement and not for
+    another, and its card-wide reading finds nothing. None reads the program's
+    own steps, which is every caller asking about the card.
+    """
     from .divided_damage import CHOSEN, divided_instruction
     from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
     from .pt import pt_counter_deltas
 
-    instruction = divided_instruction(program.instructions)
+    instruction = divided_instruction(
+        program.instructions if instructions is None else instructions
+    )
     if instruction is None:
         return None
     described = instruction.payload.get("targets") or {}

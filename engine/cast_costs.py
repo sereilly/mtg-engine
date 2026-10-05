@@ -316,6 +316,31 @@ class AdditionalCost:
     #: the cast of a caster who declined (an offer is not a price, CR 601.2b),
     #: and ``_pay_additional_costs`` must not collect one.
     optional_key: str | None = None
+    #: "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The mana
+    #: half of an optional price that is not *only* mana, as the canonical
+    #: spelling ``mana_cost_label`` produces; empty for every other cost.
+    #:
+    #: Its own field rather than a member of :attr:`optional_mana`, because
+    #: those are **offers** — each taken or declined on its own, each with its
+    #: own key and count — and this is one clause of a single offer whose key
+    #: is :attr:`optional_key`: the {2}{B} and the discard are paid together or
+    #: not at all, and "kicked" is one answer. Folded into ``optional_mana`` it
+    #: would be a second announcement the caster could take without the
+    #: discard.
+    #:
+    #: Only ever set on a cost that carries an ``optional_key`` (the reader
+    #: refuses the clause anywhere else): a *mandatory* additional cost in mana
+    #: is a sentence no card prints, and admitting one here would charge it
+    #: through a path that reads this field only for an offer that was taken.
+    mana_symbols: str = ""
+
+    @property
+    def mana_cost(self) -> dict[str, int]:
+        """What :attr:`mana_symbols` charges, as the symbol dict every payment
+        in this engine speaks. Empty for a cost with no mana clause."""
+        from .mana_payment import mana_cost_from_symbols
+
+        return (mana_cost_from_symbols(self.mana_symbols) or {}) if self.mana_symbols else {}
 
     def life_charged(self, x_value: int | None) -> int:
         """How much life this cost takes, given the announced X.
@@ -383,6 +408,8 @@ class AdditionalCost:
                 f"you may pay {offer.symbols}"
                 + (" any number of times" if offer.repeatable else "")
             )
+        if self.mana_symbols:
+            parts.append(f"pay {self.mana_symbols}")
         if self.sacrifice_all_filter is not None:
             parts.append(
                 f"sacrifice all {filter_head_noun(self.sacrifice_all_filter)}s "
@@ -504,6 +531,14 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # Above the life rows only in source order; no row in this table shares a
     # first word with it.
     (re.compile(r"^choose a creature type$"), "choose_creature_type"),
+    # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) A run of
+    # mana symbols as *one clause among several* of an optional price — the
+    # reader admits it only under an ``optional_key`` (see
+    # ``AdditionalCost.mana_symbols``). A sentence that is nothing but "you may
+    # pay {2}{B}" never reaches this row: the offer row at the top of the table
+    # claims it whole, which is what keeps an ordinary mana kicker an offer
+    # with a count rather than a clause.
+    (re.compile(r"^(?:pay )?(?P<mana>(?:\{[^{}]+\})+)$"), "mana"),
     (re.compile(r"^(?:pay )?x life$"), "pay_life_x"),
     (re.compile(r"^(?:pay )?(\d+) life$"), "pay_life"),
     # "discard a card", and its **narrowed** spelling: "discard a red or green
@@ -855,6 +890,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "optional_mana": (),
         "optional_key": None,
         "choose_creature_type": False,
+        "mana_symbols": "",
     }
     # CR 601.2b's optional non-mana price. Tested **after** the mana-offer row,
     # which claims "you may pay {1}{R} …" whole: stripping the prefix first
@@ -893,6 +929,23 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 fields["optional_mana"] = fields["optional_mana"] + offers
             elif field == "choose_creature_type":
                 fields["choose_creature_type"] = True
+            elif field == "mana":
+                from .mana_payment import (mana_cost_from_symbols,
+                                           mana_cost_label)
+
+                if fields["optional_key"] is None or fields["mana_symbols"]:
+                    # A mana clause outside an offer (no card prints a
+                    # mandatory one, and nothing would charge it), or a second
+                    # one, which one field cannot hold. Refused whole.
+                    return None
+                if _X_SYMBOL.search(found.group("mana")):
+                    # An {X} in a compound price has nowhere to be announced:
+                    # the X machinery is the mana offers' (``x_count``).
+                    return None
+                symbols = mana_cost_from_symbols(found.group("mana"))
+                if not symbols:
+                    return None
+                fields["mana_symbols"] = mana_cost_label(symbols)
             elif field == "pay_life_x":
                 fields["pay_life_x"] = True
             elif field == "pay_life":
@@ -1276,21 +1329,51 @@ def _buyback_line_offer(line: str) -> tuple[str, str] | None:
     match = _BUYBACK_COST_LINE.match(stripped)
     if match is None:
         return None
-    # The printed clause opens a line, so it is capitalized ("Sacrifice a
-    # land"); mid-sentence it is not. Only the first letter is touched — a
-    # wholesale lowercasing would eat a printed subtype ("sacrifice a Goblin"),
-    # which the noun reader needs the case of.
-    #
-    # **Every clause, not only the first.** A buyback cost is a *list* — "Pay 3
-    # life, Discard a card at random" (Flowstone Flood) — and Magic capitalizes
-    # each item of it, because each opens where a sentence would. Lowering only
-    # the leading letter of the whole line left "Discard" capitalized in the
-    # middle of the rewritten sentence, where ``_COST_CLAUSES``' rows are
-    # lowercase and match nothing: the clause went unread and, by
-    # ``_read_cost_clauses``' all-or-nothing rule, took the whole cost with it.
-    # The split is the same one that reader splits on, so a clause boundary
-    # cannot mean two things.
-    clause = match.group("cost").strip().rstrip(".")
+    return _optional_cost_phrase_offer(match.group("cost"))
+
+
+def _optional_cost_phrase_offer(printed_cost: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for a keyword's printed
+    **non-mana** cost — the words behind the em dash of "Buyback—Sacrifice a
+    land." and "Kicker—Sacrifice a land." — or None when the table cannot
+    charge it.
+
+    One reader for both keywords, which is the point: CR 702.27a and CR 702.33a
+    define their keyword as the *same* sentence ("You may pay an additional
+    [cost] as you cast this spell"), so the rewrite of a cost phrase cannot
+    depend on which word stood in front of it. This was the tail of
+    ``_buyback_line_offer`` until Planeshift printed the phrase behind
+    "Kicker", and a second copy there would have been two answers to "what is
+    this cost's key" — the one question :func:`kicked` and :func:`buyback_paid`
+    cannot afford two answers to.
+
+    The printed clause opens a line, so it is capitalized ("Sacrifice a land");
+    mid-sentence it is not. Only the first letter is touched — a wholesale
+    lowercasing would eat a printed subtype ("sacrifice a Goblin"), which the
+    noun reader needs the case of.
+
+    **Every clause, not only the first.** Such a cost is a *list* — "Pay 3 life,
+    Discard a card at random" (Flowstone Flood) — and Magic capitalizes each
+    item of it, because each opens where a sentence would. Lowering only the
+    leading letter of the whole line left "Discard" capitalized in the middle
+    of the rewritten sentence, where ``_COST_CLAUSES``' rows are lowercase and
+    match nothing: the clause went unread and, by ``_read_cost_clauses``'
+    all-or-nothing rule, took the whole cost with it. The split is the same one
+    that reader splits on, so a clause boundary cannot mean two things.
+
+    The key is read **back off** the :class:`AdditionalCost` the sentence
+    produces rather than normalized a second time here: a second normalization
+    is a second answer, and the two disagreeing is a spell that paid its kicker
+    and resolved unkicked.
+    """
+    clause = printed_cost.strip().rstrip(".")
+    if clause.startswith("{"):
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) A list
+        # that opens on mana prints no verb for it — the reminder text supplies
+        # one, "You may pay {2}{B} and discard a creature card" — so the
+        # rewrite does too, and the sentence it builds is one a card could
+        # print.
+        clause = "pay " + clause
     sentence = BUYBACK_COST_RULES_TEXT.format(cost=_lowered_clauses(clause))
     read = _printed_additional_cost(sentence)
     if read is None or read.optional_key is None:
@@ -1424,6 +1507,26 @@ KICKED = "kicked"
 #: Battlemage -- cast as a Clone, which prints no kicker) was never stamped.
 KICKED_WITH = "kicked_with"
 
+#: The permanent-metadata key holding the mana value of the card a permanent
+#: spell's **cost** discarded, for the entry replacement that is sized by it:
+#: "…it enters with flying and with X +1/+1 counters on it, where X is the
+#: discarded card's mana value." (Dralnu's Pet, whose kicker is "{2}{B},
+#: Discard a creature card".)
+#:
+#: Beside :data:`KICKED` and stamped at the same place for the same reason
+#: (``resolution._resolve_card``): the cost was paid at CR 601.2h, the card it
+#: took is in a graveyard and a different object by resolution (CR 400.7), and
+#: the permanent that asks is a new object too — so the number rides the stack
+#: item's ``discarded_for_cost`` record onto the permanent before it enters,
+#: where CR 614.1c's entry replacement reads it. A **number** rather than the
+#: card: a mana value is read off the card as printed (CR 202.3), nothing can
+#: change it afterwards, and permanent metadata is plain data everywhere else.
+#:
+#: Stamped only when the cost took exactly one card, which is the only number
+#: "the discarded card" can mean; absent otherwise, and absent on a permanent
+#: nothing cast.
+CAST_COST_DISCARD_MANA_VALUE = "cast_cost_discard_mana_value"
+
 #: "Kicker {2}", "Kicker {1}{G}", "Kicker {X}{2}". One run of mana symbols.
 #:
 #: "Kicker {1}{G} and/or {2}{U}" (Planeshift's two-kicker cards) is
@@ -1466,6 +1569,20 @@ _KICKER_PAIR_LINE = re.compile(
 #: cost {1} less" -- a static ability *about* kicker -- out of it.
 _KICKER_SHAPE = re.compile(r"^(?:multi)?kicker\s*(?:[—–-]|\{)", re.IGNORECASE)
 
+#: "**Kicker—Sacrifice a land.**" (Falling Timber, and eight more Planeshift
+#: cards.) CR 702.33a's cost is any cost, not a run of mana symbols, and the
+#: printed form for a non-mana one puts it behind an em dash rather than a
+#: space -- ``_BUYBACK_COST_LINE``'s shape with the other keyword in front, and
+#: read by the same function (:func:`_optional_cost_phrase_offer`).
+#:
+#: Its own pattern beside :data:`_KICKER_LINE` rather than a widening of it:
+#: that one is a run of mana symbols the cast folds into its mana payment, this
+#: one is a price ``_pay_additional_costs`` collects, and the announcement key
+#: of each is read back off a different field of the cost it produces.
+_KICKER_COST_LINE = re.compile(
+    r"^kicker\s*[—–-]\s*(?P<cost>.+)$", re.IGNORECASE
+)
+
 
 def _kicker_line_offer(line: str) -> tuple[str, str] | None:
     """``(announcement key, rules sentence)`` for one kicker line, or None.
@@ -1481,7 +1598,7 @@ def _kicker_line_offer(line: str) -> tuple[str, str] | None:
     stripped = stripped.strip().rstrip(".")
     match = _KICKER_LINE.match(stripped)
     if match is None:
-        return None
+        return _kicker_cost_line_offer(stripped)
     read = _printed_additional_cost(
         BUYBACK_RULES_TEXT.format(cost=match.group("cost"))
     )
@@ -1531,6 +1648,24 @@ def _kicker_line_offers(line: str) -> tuple[tuple[str, ...], str] | None:
         return None
     keys = tuple(offer.symbols for offer in read.optional_mana)
     return keys, BUYBACK_RULES_TEXT.format(cost=" and/or ".join(keys))
+
+
+def _kicker_cost_line_offer(stripped: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for a kicker line whose cost is
+    **not mana** ("Kicker—Sacrifice a land."), or None.
+
+    *stripped* is the line with its reminder text and full stop already off,
+    which is how :func:`_kicker_line_offer` hands it over. The key is the
+    ``optional_key`` of the :class:`AdditionalCost` the rewritten sentence
+    produces -- the string ``_optional_cost_announcement`` accepts the
+    announcement under, ``optional_cost_taken`` charges by and :func:`kicked`
+    reads back, all three off the one object, so a kicker that was paid cannot
+    resolve unkicked for want of a spelling.
+    """
+    match = _KICKER_COST_LINE.match(stripped)
+    if match is None:
+        return None
+    return _optional_cost_phrase_offer(match.group("cost"))
 
 
 def is_kicker_line(line: str) -> bool:
@@ -1910,6 +2045,7 @@ __all__ = [
     "is_buyback_line",
     "KICKED",
     "KICKED_WITH",
+    "CAST_COST_DISCARD_MANA_VALUE",
     "expand_kicker_line",
     "expand_kicker_lines",
     "is_kicker_line",

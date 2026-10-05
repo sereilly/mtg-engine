@@ -719,6 +719,15 @@ class CantCastSpellTypes:
     "can't cast **creature** spells" is the same sentence, and a second node for
     it would be a second gate free to drift from this one.
 
+    **An empty type list is the sentence with no type printed**: "Target player
+    can't cast spells this turn." (Orim's Chant.) Every spell, and the same
+    node rather than a second one for the reason the types are payload at all
+    — the gate is one gate and the record is one record. It is not a list of
+    every card type: a spell is what is *cast* (CR 601.1), so the unnarrowed
+    sentence stops no land drop (CR 305.1: playing a land is not casting a
+    spell), and a list that happened to contain every type but "land" would be
+    wrong about the next type Magic prints.
+
     *duration* is a field rather than payload so a window printed in **front**
     of the clause reaches it — ``sentence_clauses._distribute_duration``
     attaches a leading prefix by ``dataclasses.replace``, and Abeyance prints

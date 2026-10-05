@@ -12,7 +12,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
-from ...cast_costs import (KICKED, KICKED_WITH, buyback_paid, kicked,
+from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
+                           KICKED_WITH, buyback_paid, kicked,
                            kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
@@ -1334,6 +1335,17 @@ class StackResolutionMixin:
                 # above is. A tuple of the recorded keys, so the entry trigger
                 # and the announcement that paid name a cost by one string.
                 permanent.metadata[KICKED_WITH] = kickers_paid(card, choices)
+            # "…where X is **the discarded card's mana value**." (Dralnu's
+            # Pet.) What the spell's cost discarded, as the one number an entry
+            # replacement may read back — see
+            # ``cast_costs.CAST_COST_DISCARD_MANA_VALUE`` for why it is the
+            # number and why it is stamped here. Exactly one card, or no
+            # stamp: "the discarded card" names nothing else.
+            cost_discards = (choices or {}).get("discarded_for_cost") or ()
+            if len(cost_discards) == 1:
+                permanent.metadata[CAST_COST_DISCARD_MANA_VALUE] = int(
+                    getattr(cost_discards[0], "cmc", 0) or 0
+                )
             # "…the controller of **the permanent it becomes** sacrifices it at
             # the beginning of the next cleanup step" (Mirage's flash Auras).
             # The answer was frozen as the spell was announced, because that is

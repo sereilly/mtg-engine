@@ -517,6 +517,24 @@ def parse_cant_cast_spell_types(
     if not stream.accept_word("cast"):
         stream.reset(mark)
         return None
+    # "Target player **can't cast spells this turn**." (Orim's Chant.) The
+    # sentence with no type printed at all: every spell, which the node says
+    # with an empty type list (see :class:`ast.CantCastSpellTypes`).
+    #
+    # **The window is required here, in the parse**, where the typed spelling
+    # leaves it to the lowering: "Players can't cast spells that share a color
+    # with the spell most recently cast this turn" (Mana Maze) opens on these
+    # same three words and is a permanent's static ability a derivation table
+    # reads. A table is reached only where every production refuses the line
+    # in full, so a reading that stopped after "spells" must not be offered
+    # for a sentence that goes on — and the trailing duration is what tells
+    # the one-shot from the static.
+    if stream.accept_word("spells"):
+        window = _parse_duration(stream)
+        if window.kind != "this_turn":
+            stream.reset(mark)
+            return None
+        return ast.CantCastSpellTypes(subject, (), window)
     types: list[str] = []
     while True:
         word = stream.peek_word()

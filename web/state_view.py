@@ -56,7 +56,10 @@ from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
-from engine.targeting import usable_activated_abilities
+from engine.cast_costs import additional_costs
+from engine.spell_prohibitions import casting_forbidden_this_turn
+from engine.targeting import (derive_cast_spec, spec_roles,
+                              usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
 from .prompts import PromptContext, render_prompts
@@ -257,6 +260,13 @@ def _casting_window(session: Session, player_index: int) -> _CastingWindow | Non
     )
 
 
+#: CR 601.2b's answer for the highlight: every optional additional cost
+#: declined. "Castable now" is the cheapest cast the card allows, so the gates
+#: below are asked about that announcement — never mutated, so one mapping
+#: serves every call.
+_NO_OFFERS: dict = {}
+
+
 def _card_castable_now(
     session: Session,
     player_index: int,
@@ -297,6 +307,15 @@ def _card_castable_now(
 
     classification = classify_card(card)
     if not classification.supported:
+        return False
+
+    # "Target player can't cast spells this turn." (Orim's Chant) / "Until end
+    # of turn, target player can't cast instant or sorcery spells." (Abeyance.)
+    # CR 601.3: a prohibited spell cannot begin to be cast, so it is not
+    # castable *now* — asked of the record the cast path itself refuses by, so
+    # a card that glows is one the click will not be refused for. The untyped
+    # sentence stops no land drop (CR 305.1), which that reader already knows.
+    if casting_forbidden_this_turn(game, player_index, card) is not None:
         return False
 
     # CR 702.8b: flash casts any time an instant could be cast, so both timing
@@ -343,8 +362,30 @@ def _card_castable_now(
         # that would judge the cast.
         if not game.cast_target_spec(player_index, card).get("valid_targets"):
             return False
+    elif card.primary_type in ("instant", "sorcery") and spec_roles(
+        derive_cast_spec(
+            card, compile_card_oracle(card), optional_cost_payments=_NO_OFFERS,
+        )
+    ):
+        # A spell naming several **roles** ("Return target creature to its
+        # owner's hand. Then return another target creature…", Withdraw) is in
+        # the Aura's position exactly: ``_validate_cast_targets`` counts the
+        # targets named against the roles, this call names none, and so the
+        # answer was "requires 2 targets" for every roles spell in every hand
+        # — ten shipped cards that never glowed on a board holding a full
+        # chain of legal targets. The question is the Aura's too: is there a
+        # chain the picker would offer?
+        if not game.cast_target_spec(player_index, card).get("valid_targets"):
+            return False
     else:
-        target_ok, _ = game._validate_cast_targets(card, player_index, None)
+        # ``_NO_OFFERS``: castable *now* means castable at its cheapest, with
+        # every optional cost declined (CR 601.2b) — and CR 702.33g makes that
+        # a different announcement from the card's every arm. An unkicked
+        # Falling Timber names one creature; read as the whole card it named
+        # two, and never glowed.
+        target_ok, _ = game._validate_cast_targets(
+            card, player_index, None, optional_cost_payments=_NO_OFFERS,
+        )
         if not target_ok:
             return False
         # …and CR 601.2c's "no legal target exists", through the predicate the
@@ -352,8 +393,27 @@ def _card_castable_now(
         # they name; a spell whose first instruction is a wrapper ("Destroy
         # target artifact or enchantment. Draw two cards.") reached none of
         # them, so it glowed on an empty board and the click was then refused.
-        if game.no_legal_cast_target_refusal(player_index, card) is not None:
+        if game.no_legal_cast_target_refusal(
+            player_index, card, optional_cost_payments=_NO_OFFERS,
+        ) is not None:
             return False
+
+    # CR 601.2h: "As an additional cost to cast this spell, sacrifice a
+    # creature." (Village Rites, Death Bomb.) A printed cost the board cannot
+    # pay is a spell that cannot be cast, through the gate the cast path
+    # refuses with — 27 shipped spells glowed with nothing to pay with and
+    # every click was refused. Only the costs every zone charges (a cost
+    # naming a zone belongs to a cast from that zone, which this function is
+    # not told), and only the mandatory ones: an offer nobody takes is not a
+    # price. An announced X reads as 0 here, as it does for the mana below.
+    printed_costs = tuple(
+        cost for cost in additional_costs(card) if cost.from_zone is None
+    )
+    if printed_costs and game._unpayable_additional_cost(
+        player_index, card, printed_costs,
+        spell_hand_index=hand_index, from_zone="hand", taken=_NO_OFFERS,
+    ) is not None:
+        return False
 
     # Land play restriction: CR 305.2's one per turn, plus whatever the
     # allowances on this seat's battlefield add (engine/land_play_allowance.py).
