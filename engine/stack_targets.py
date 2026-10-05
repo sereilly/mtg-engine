@@ -470,15 +470,21 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
 
     permanents = _permanents(holder, mode)
     if kind in _PLAYER_TARGET_SPEC_KINDS and not spec.get("land_filter"):
-        # A face *or* an object: the permanent ids decide, and only without any
-        # is the seat a chosen player rather than a battlefield.
-        if permanents:
+        # A face *or* an object ("any target", "player or planeswalker"): the
+        # permanent ids decide, and only without any is the seat a chosen
+        # player rather than a battlefield.
+        #
+        # A spec that is a **player and nothing else** never reads an id. One
+        # can be there all the same — a combat fire site threads the trigger's
+        # own source through the target fields so the resolution can find it
+        # again ("target opponent gains control of **it**", Goblin Cadets) —
+        # and that is a reference, not something "target opponent" chose.
+        if permanents and kind != "player":
             return permanents
         seat = _seat(game, holder)
         if seat is None:
             return []
-        found = [ChosenTarget("player", seat=seat, channel="player", mode=mode)]
-        return found
+        return [ChosenTarget("player", seat=seat, channel="player", mode=mode)]
     return permanents
 
 
