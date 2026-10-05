@@ -2270,6 +2270,12 @@ class PermanentStateMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        if static.applies_to == "nonland_permanent":
+            # "All **nonland** permanents are the chosen color." (Shifting Sky.)
+            # The branch above with no seat to compare: every battlefield's
+            # nonland permanents, through the same layer accessor and for the
+            # same reason — an animated land is still a land and stays out.
+            return not permanent.has_type("land")
         if static.applies_to == "permanent":
             # "**All permanents** are colorless." (Thran Lens.) The widest noun
             # this table prints, and the one scope with nothing to test:

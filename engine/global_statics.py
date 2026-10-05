@@ -82,6 +82,13 @@ class GlobalStatic:
     # every recompute. So the word cannot ride the template the way a colour
     # word does, and what the table can say is only that this static sets one.
     sets_creature_type: bool = False
+    # "All nonland permanents **are the chosen color**." (Shifting Sky.) The
+    # colour row above with ``sets_creature_type``'s reason for being a flag:
+    # the colour this static sets is not on the card at all — it is the one the
+    # source permanent chose as it entered (CR 614.1c), read off that permanent
+    # at every recompute. So ``sets_colors`` cannot carry it, and what the
+    # table can say is only that this static sets one.
+    sets_chosen_color: bool = False
     # "**The same is true** for spells you control and nonland cards you own
     # that aren't on the battlefield." The rest of the same sentence, and a flag
     # rather than a second static because it names no new effect -- it says the
@@ -303,6 +310,25 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
             r"(?P<sets>white|blue|black|red|green|colorless)$"
         ),
         GlobalStatic(name="board_wide_color", applies_to=""),
+    ),
+    (
+        # Shifting Sky. Darkest Hour's sentence with the colour chosen as the
+        # enchantment entered instead of printed, and Celestial Dawn's noun with
+        # no controller narrowing: every player's nonland permanents, the Sky
+        # itself among them (it is a nonland permanent, and no template here
+        # exempts its own source unless the card says "other").
+        #
+        # Its own row rather than a seventh word in the alternation above,
+        # because "the chosen color" is not a colour word: the row above reads
+        # its colour off the sentence and this one reads it off a record, and a
+        # reader handed ``sets_colors=("the chosen color",)`` would look the
+        # phrase up in a map of five words.
+        re.compile(r"^all nonland permanents are the chosen color$"),
+        GlobalStatic(
+            name="board_wide_chosen_color",
+            applies_to="nonland_permanent",
+            sets_chosen_color=True,
+        ),
     ),
     (
         re.compile(

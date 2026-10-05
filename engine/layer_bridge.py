@@ -37,7 +37,7 @@ from .auras import (
 )
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
-from .enter_effects import own_chosen_color
+from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
 from .global_statics import (global_static_sources, global_statics_applying_to,
                              removes_all_abilities)
 from .continuous import (
@@ -1126,6 +1126,33 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 [_COLOR_WORD_SYMBOLS[word] for word in static.sets_colors],
                 timestamp=2,
                 label="board-wide colour",
+            )
+        )
+
+    # "All nonland permanents are **the chosen color**." (Shifting Sky.) The
+    # same channel with the colour read off the **source** rather than off the
+    # sentence — chosen as that permanent entered (CR 614.1c) and recorded on
+    # it — so this walks the source/static *pairs*, the way layer 4 reads
+    # Conspiracy's chosen creature type. Derived on every recompute like the
+    # rest of the family: a second answer to the entry prompt is the colour the
+    # board then is, and the source leaving ends the effect by dropping out of
+    # the list.
+    for source, static in global_static_sources(
+        perm.metadata.get("global_static_sources") or ()
+    ):
+        if not static.sets_chosen_color:
+            continue
+        chosen = source.metadata.get(CHOSEN_COLOR_KEY)
+        if not chosen:
+            # The source is still entering, or the choice was never made. No
+            # contribution rather than an empty set: turning every nonland
+            # permanent colourless on the strength of an unanswered choice is
+            # the card doing something it does not say.
+            continue
+        effects.append(
+            set_colors(
+                scope_only(oid), [str(chosen)], timestamp=2,
+                label="board-wide chosen colour",
             )
         )
 
