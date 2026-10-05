@@ -50,7 +50,8 @@ from ._common import (_REST_OF_TURN, _describe_targets,
 # "The next **N** damage …" (Daughter of Autumn, Zhalfirin Crusader): the
 # counted half of the one production, a floor this module hands the sentence
 # down to the moment the printed quantity is a number.
-from ._counted_redirects import _lower_next_damage_redirect
+from ._counted_redirects import (_lower_next_damage_redirect,
+                                 _lower_next_damage_redirect_from_source)
 # "The next time **this creature** / **target attacking creature** would deal
 # damage …" (Soltari Guerrillas, Shield Dancer): CR 615.8's instance named by
 # the sentence, a floor this module hands those two shapes down to.
@@ -156,6 +157,21 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
         # announced, and the sentence names no source at all — so every
         # source's damage moves, which is what "all damage" says.
         return _lower_redirect_off_target(node)
+    if (
+        node.one_shot
+        and _is_source(node.to)
+        and node.dealt_by is None
+        and not node.from_chosen_source
+    ):
+        # "{2}{R}{W}: **The next time damage would be dealt to this creature**
+        # this turn, that damage is dealt to any target instead." (Mirrorwood
+        # Treefolk.) The protected recipient is the ability's own permanent and
+        # the sentence names no source, so every source's next damage moves.
+        # Zhalfirin Crusader's sentence with CR 615.8's instance where that
+        # prints CR 615.7's point pool — which is one lowering with the
+        # quantity as payload, so it is handed to the function that already
+        # reads the pool rather than given a second one here.
+        return _lower_next_damage_redirect_from_source(node)
     if not _is_you(node.to):
         raise LoweringError(
             "a redirect is armed on its controller; no handler protects "

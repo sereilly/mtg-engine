@@ -152,7 +152,35 @@ def _lower_next_damage_redirect_from_source(
     already does. Held to what ``subject_matches`` can test for that twin's
     reason: a narrowing the matcher would drop is a redirect that moves the
     damage onto a creature the card never offered.
+
+    **Both printed quantities.** "The next **1 damage**" is a point pool
+    (``amount``); "**The next time** damage would be dealt to this creature this
+    turn, that damage is dealt to any target instead" (Mirrorwood Treefolk) is
+    CR 615.8's one instance however large it is (``uses``). One instruction and
+    one record carry both, because ``DamageRedirect`` has always had both
+    counters and the two sentences differ in nothing else — so the instance
+    form is read here, by the function whose sentence it is, rather than by a
+    module of its own. The checks the counted caller made before handing its
+    sentence down are made here for the instance form, which arrives straight
+    from the dispatcher.
     """
+    if node.amount is None:
+        if (
+            not node.one_shot
+            or node.chooser is not None
+            or node.combat_only
+            or node.optional
+        ):
+            raise LoweringError(
+                "a redirect off the ability's own source moves a point pool or "
+                "the next instance, with no other chooser, combat scope or "
+                "offer",
+                node=node,
+            )
+        if node.duration.kind not in _REST_OF_TURN:
+            raise LoweringError(
+                "a recorded redirect lasts exactly this turn", node=node
+            )
     spec = node.new_recipient
     if (
         not isinstance(spec, ast.TargetSpec)
@@ -164,7 +192,12 @@ def _lower_next_damage_redirect_from_source(
             "chosen target",
             node=node,
         )
-    payload: dict[str, object] = {"amount": _amount_payload(node.amount)}
+    # Exactly one of the two counters, so Zhalfirin Crusader's and the en-Kor
+    # creatures' payloads stay byte-identical.
+    payload: dict[str, object] = (
+        {"uses": 1} if node.amount is None
+        else {"amount": _amount_payload(node.amount)}
+    )
     _describe_targets(payload, spec)
     if spec.quantifier == "target":
         untestable = untestable_filter_keys(

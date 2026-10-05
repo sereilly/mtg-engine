@@ -82,6 +82,50 @@ def _accept_redirect_tail(
     return new_recipient, chooser
 
 
+def _accept_unsourced_instance_redirect(
+    stream: TokenStream,
+) -> "ast.RedirectDamage | None":
+    """``damage would be dealt to <recipient> <duration>, that damage is dealt
+    to <recipient> instead`` — with "The next time" already read by the caller.
+
+    "The next time **damage would be dealt to this creature** this turn, that
+    damage is dealt to any target instead." (Mirrorwood Treefolk.) CR 615.8's
+    one instance in the passive, naming **no source at all**: every other
+    branch of the production it is called from names whose damage moves, and
+    this one names only who it was headed for — so whatever would deal the
+    Treefolk its next damage, that event moves. The source-free twin of
+    Zhalfirin Crusader's "The next 1 damage that would be dealt to this
+    creature this turn is dealt to any target instead", with an instance where
+    that prints a point pool.
+
+    A redirect and nothing else: the shield ending ("…, prevent that damage")
+    with no source and one instance is a sentence no card prints, so past the
+    six opening words the tail is required. Refuses with the cursor untouched,
+    so every sourced "the next time …" keeps the branch that reads it.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("damage", "would", "be", "dealt", "to"):
+        return None
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    tail = _accept_redirect_tail(stream)
+    if tail is None:
+        stream.reset(mark)
+        return None
+    new_recipient, chooser = tail
+    return ast.RedirectDamage(
+        to=recipient,
+        new_recipient=new_recipient,
+        duration=duration,
+        one_shot=True,
+        chooser=chooser,
+    )
+
+
 def _finish_named_source_effect(
     stream: TokenStream, source: "ast.TargetSpec", mark, combat_only: bool
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -203,6 +247,9 @@ def _parse_source_of_choice_effect(
     if not stream.accept_phrase("the", "next", "time"):
         stream.reset(mark)
         return None
+    unsourced = _accept_unsourced_instance_redirect(stream)
+    if unsourced is not None:
+        return unsourced
     colours: list[str] = []
     card_type = None
     if not (stream.accept_word("a") or stream.accept_word("an")):

@@ -2708,6 +2708,30 @@ def redirect_next_damage_from_source_until_eot(
     if taker is None or getattr(taker, "lost", False):
         game.log.append(f"{card_name}: its target is gone, nothing is redirected")
         return True, "resolved"
+    taker_name = getattr(taker, "name", None) or taker.card.name
+    uses = instruction.payload.get("uses")
+    if uses is not None:
+        # "**The next time** damage would be dealt to this creature this turn,
+        # that damage is dealt to any target instead." (Mirrorwood Treefolk.)
+        # CR 615.8's one instance in place of the point pool: the whole of the
+        # next event moves however large it is, and then the record is spent.
+        # No ``amount`` at all, which is what "the whole event" means on a
+        # ``DamageRedirect`` — and no source, so combat damage, a burn spell
+        # and the controller's own sources are all the next time.
+        add_redirect(
+            protected,
+            DamageRedirect(
+                new_recipient=taker,
+                uses=int(uses),
+                source_name=card_name or None,
+            ),
+        )
+        game.log.append(
+            f"{card_name}: the next time damage would be dealt to "
+            f"{protected.card.name} this turn, it is dealt to {taker_name} "
+            "instead"
+        )
+        return True, "resolved"
     amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
     if amount <= 0:
         game.log.append(f"{card_name}: no damage to move")
@@ -2721,7 +2745,6 @@ def redirect_next_damage_from_source_until_eot(
             source_name=card_name or None,
         ),
     )
-    taker_name = getattr(taker, "name", None) or taker.card.name
     game.log.append(
         f"{card_name}: the next {amount} damage that would be dealt to "
         f"{protected.card.name} this turn is dealt to {taker_name} instead"
