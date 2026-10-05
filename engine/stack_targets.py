@@ -518,12 +518,23 @@ def target_label(game: "Game", target: ChosenTarget) -> str:
         return game.players[target.seat].name if target.seat is not None else "a player"
     if target.kind == "permanent":
         permanent = game.permanent_by_id(target.permanent_id)
-        return permanent.card.name if permanent is not None else "a permanent that has left"
+        if permanent is None:
+            return "a permanent that has left"
+        # Whose it is, because a re-aim is usually between two look-alikes and
+        # "from Grizzly Bears to Grizzly Bears" says nothing.
+        seat = game.controller_index_of(permanent)
+        name = permanent.effective_card.name
+        return name if seat is None else f"{game.players[seat].name}'s {name}"
     if target.kind == "stack":
         card = getattr(target.stack_item, "card", None)
         return card.name if card is not None else "a spell"
     card = getattr(target.stamp, "card", None)
-    return f"{card.name} (graveyard)" if card is not None else "a card in a graveyard"
+    if card is None:
+        return "a card in a graveyard"
+    seat = getattr(target.stamp, "seat", None)
+    if isinstance(seat, int) and 0 <= seat < len(game.players):
+        return f"{card.name} in {game.players[seat].name}'s graveyard"
+    return f"{card.name} in a graveyard"
 
 
 def _printed_target_instances(item: "StackItem") -> int | None:

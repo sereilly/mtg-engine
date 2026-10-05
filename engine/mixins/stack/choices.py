@@ -7480,7 +7480,9 @@ class PendingChoicesMixin:
         # original's target is declining the offer — nothing was chosen — so
         # only an answer that moved the copy announces a choice.
         if chosen_targets(self, copy_item) != before:
-            self.announce_targets_chosen(copy_item, chooser=choice.player_index)
+            self.announce_targets_chosen(
+                copy_item, chooser=choice.player_index, newly_targeted=True,
+            )
         return True
 
     def _default_copy_spell_target(self, choice: PendingChoice) -> None:
@@ -7745,7 +7747,15 @@ class PendingChoicesMixin:
         :meth:`_choice_is_queued`); the seat that answered is the chooser,
         which is the ability's controller unless the card names another
         ("**that player** chooses target player who…", the Exodus Oaths).
+
+        **"Becomes the target" is announced either way** (CR 603.2). The object
+        was pushed before this answer existed, so ``_stack_push_object``'s
+        announcement saw no target on it at all — whether the answer then came
+        from a player or from a default taken at arm. What it must not do twice
+        is the *choice* announcement, which ``_stack_push`` makes at its own
+        end for the at-arm case.
         """
+        self._announce_targeting(item)
         if queued:
             self.announce_targets_chosen(item, chooser=choice.player_index)
 

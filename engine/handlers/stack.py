@@ -125,6 +125,9 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         # CR 707.10c: "You may choose new targets for the copy" — and this
         # caster did. A copy that kept the original's targets chose nothing,
         # which is why ``_stack_push`` announces no copy on its own.
+        #
+        # No ``newly_targeted``: this copy was *pushed* with its new target,
+        # so ``_stack_push_object`` has already announced it.
         game.announce_targets_chosen(game.stack[-1], chooser=caster_index)
     return True, "resolved"
 
@@ -1537,8 +1540,11 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
             f"{card_name}: {item.card.name} now targets {permanent.card.name}"
         )
         # CR 115.7a: the retargeting effect's controller chose a new target for
-        # the object, which is a player choosing a target.
-        game.announce_targets_chosen(item, chooser=game.seat_index(context.caster))
+        # the object, which is a player choosing a target — and the permanent
+        # it now points at has become the target of a spell (CR 603.2).
+        game.announce_targets_chosen(
+            item, chooser=game.seat_index(context.caster), newly_targeted=True,
+        )
         return True, "resolved"
     seat = chosen.get("seat")
     if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -1561,7 +1567,9 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
     game.log.append(
         f"{card_name}: {item.card.name} now targets {game.players[seat].name}"
     )
-    game.announce_targets_chosen(item, chooser=game.seat_index(context.caster))
+    game.announce_targets_chosen(
+        item, chooser=game.seat_index(context.caster), newly_targeted=True,
+    )
     return True, "resolved"
 
 
@@ -1646,13 +1654,10 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
         return True, "resolved"
     subject = item.card.name
     unchanged = f"{card_name}: {subject}'s targets remain unchanged"
-    slots = change_slots(game, item)
-    if isinstance(slots, str):
-        game.log.append(f"{unchanged} ({slots})")
-        return True, "resolved"
-    if not change_options(slots, []):
-        game.log.append(f"{unchanged} (it has no other legal targets)")
-        return True, "resolved"
+    # Who chooses first, because it is the half the sentence leads with and
+    # the half every player was just shown the evidence for: "the player who
+    # reveals the card with the greatest mana value" is decided by the reveal
+    # whether or not there turns out to be anything to change.
     who = instruction.payload.get("chooser", "you")
     if who == "you":
         chooser = game.seat_index(context.caster)
@@ -1664,6 +1669,13 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
             game.log.append(unchanged)
             return True, "resolved"
         chooser = seats[0]
+    slots = change_slots(game, item)
+    if isinstance(slots, str):
+        game.log.append(f"{unchanged} ({slots})")
+        return True, "resolved"
+    if not change_options(slots, []):
+        game.log.append(f"{unchanged} (it has no other legal targets)")
+        return True, "resolved"
     optional = bool(instruction.payload.get("optional"))
     chooser_name = game.players[chooser].name
     picks: list = []
@@ -1687,7 +1699,9 @@ def change_event_object_targets(game: Game, instruction: OracleInstruction, cont
             silently_for = (
                 source.effective_card.name if source is not None else card_name
             )
-        game.announce_targets_chosen(item, chooser=chooser, silently_for=silently_for)
+        game.announce_targets_chosen(
+            item, chooser=chooser, silently_for=silently_for, newly_targeted=True,
+        )
 
     if chooser not in game.interactive_seats:
         from ..ai_policy import choose_target_change

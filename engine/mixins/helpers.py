@@ -3024,6 +3024,7 @@ class GameHelpersMixin:
     def announce_targets_chosen(
         self, item, *, chooser: int | None = None,
         silently_for: str | None = None,
+        newly_targeted: bool = False,
     ) -> int:
         """"Whenever a player chooses one or more targets" (Psychic Battle) --
         the one announcement of CR 601.2c's choice, for every way a stack
@@ -3064,11 +3065,27 @@ class GameHelpersMixin:
         CR 603.10's "looks back" for this event is at the object the targets
         were chosen for, several look-alikes may be on the stack at once, and a
         ``StackItem`` compares by value.
+
+        *newly_targeted* is the other announcement the same moment owes, for
+        every caller but the first: "…**becomes the target** of a spell or
+        ability" (CR 603.2, Skulking Ghost). ``_stack_push_object`` announces
+        that for the targets an object is *pushed* with, and until this seam
+        existed that was the only site — so a triggered ability whose
+        controller was asked for its target, a copy that was re-aimed and a
+        spell Deflection moved all pointed at a permanent that never heard
+        about it. A Man-o'-War entering from a graveyard bounced a Skulking
+        Ghost it should have made its controller sacrifice. Same shape as the
+        defect that method's docstring records, one layer up: one event,
+        several ways in, the fire site wired into one of them.
         """
         from ..events import emit
         from ..stack_targets import TARGETS_CHOSEN_ITEM, TARGETS_CHANGED_SILENTLY_FOR, has_targets
 
-        if item is None or not has_targets(self, item):
+        if item is None:
+            return 0
+        if newly_targeted:
+            self._announce_targeting(item)
+        if not has_targets(self, item):
             return 0
         seat = item.caster_index if chooser is None else chooser
         payload = {

@@ -3620,16 +3620,20 @@ def _target_change_side(game: Game, item) -> str | None:
         return ability_target_side(instruction) or activation_target_side(instruction)
     if getattr(item, "is_ability", False):
         return None
-    side = spell_target_side(item.card)
+    spell = item.card
+    side = spell_target_side(spell)
     if side is not None:
         return side
     # A spell whose steps carry no ``targets`` description for that reader
     # ("any target", Lightning Bolt) is still read by its instruction's family,
-    # exactly as an ability of the same effect is one branch up.
-    if item.card.primary_type not in ("instant", "sorcery"):
+    # exactly as an ability of the same effect is one branch up. An instant or
+    # sorcery only: a permanent spell's instructions are a mirror of what the
+    # permanent does, not a program the spell runs.
+    printed_types = (spell.type_line or "").lower()
+    if "instant" not in printed_types and "sorcery" not in printed_types:
         return None
     executed = game._select_executable_instruction(
-        item.card, getattr(item, "chosen_mode_index", None)
+        spell, getattr(item, "chosen_mode_index", None)
     )
     if executed is None:
         return None
