@@ -123,6 +123,50 @@ sibling had since removed (a card it special-cased as unsupported was
 supported), which is a decision for the integrator, not something `git merge`
 will ever show.
 
+**Invasion ran sixteen groups through two waves and produced each of those
+shapes again, with three things worth adding.**
+
+*The same idea was written twice in one wave three times, and a conflict is
+the cheap place to find it.* W1G3 and W1G5 each read "a <noun> of each <kind>"
+at the same line of `condition_counts.py`; W1G4 and W1G1 each resolved an
+"…instead" sentence's back-reference at the same line of a rider; W1G2 and
+W1G8 each built CR 601.2c for a spell that targets a spell as a method at the
+same spot. All three surfaced as conflicts, which is luck — the name sweep
+found none of them, because each pair had different names. Two rules came out
+of it. **Reconcile at the merge only when the answer is not a rules reading**:
+the first pair was (one reader per characteristic, and it landed Coalition
+Victory, which neither branch could), the other two were kept side by side and
+handed to wave-2 groups by name, and the group that folded the "instead" pair
+found that one of the two behaviours was simply wrong. And **when two methods
+conflict through their identical middle lines, rebuild the region from each
+side's whole functions** rather than hunk by hunk — git interleaves the bodies,
+and a hunk-wise union splices one signature onto the other's body.
+
+*A gate that trusts a list makes the list load-bearing, and the sweep written
+with the gate cannot see it.* W1G2 made the stack picker's list the
+announcement gate; the picker read a spell's type off `primary_type`, so from
+that merge Annul refused an artifact creature spell — a regression the
+integrator merged with a green suite, because every victim in the new sweep
+had one card type and a gate that *is* the picker agrees with the picker by
+construction. It was found only because a sibling group had built the same
+gate, measured the picker against the handler, and scoped around the
+disagreement. **A sweep that holds a gate to its source needs a second sweep
+holding the source to what acts** (here: turn the gate off, resolve, and name
+anything the handler acted on that the picker did not offer).
+
+*An integrator's own commit between merges gets the gate a merge gets.* That
+fix shipped with a misplaced import and broke four tests; the targeted run it
+was committed on had not included either card that reached the branch. The
+next full gate caught it, one merge late. Nothing a group is asked to do is
+optional for the integrator.
+
+**And one that is new: a guard written on one branch that is *right* about a
+sibling's work.** Prophecy's collisions were guards asserting too much. W2G4's
+face-blind guard (below) fired at three later merges, naming six sweeps five
+other groups had written in parallel over the raw pool — and each time the
+guard was right and the loops were converted. Read which it is before touching
+either side; the test is still "drive the card".
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -2121,6 +2165,13 @@ is green, the trackers carry its row, and the census is in hand.
    Read a high arrival number as "the last set did this already", and check which
    of the census's big rocks are already-built rewrites before sizing anything.
 
+   **A card that is supported on arrival has not been run, and a brief must not
+   cite it as working.** Invasion's colour brief said "two of the dragons
+   already work" because Rith and Treva compiled; driven, both ignored the
+   colour they asked for and counted their controller's permanents alone. The
+   group found it by doing what the brief told it to do with a card it
+   distrusted. Write "compiles" when you mean compiles.
+
 6. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -2193,6 +2244,15 @@ provides?* Three sweeps, in order of blast radius:
    reach eight of them and needed four different mechanisms, because "prevent"
    is a verb rather than a template. The bucket that actually paid was the one
    where nineteen cards printed *the same sentence with one word changed*.
+
+**Invasion is the set with machinery in it, and the census sized it right by
+probing rather than reading.** Kicker (35 cards) is CR 702.33a's rewrite onto
+buyback's optional-cost machinery — one group built it and landed 30 cards,
+eight of them spells held back as "fourteen different second sentences".
+Split cards were a subsystem and five cards, and the group's design — **a face
+is a card**, so every stack reader is right with no edit — is the precedent for
+every later layout. What the census could not size was the *other* half of a
+new layout: see Phase 4, "blind, not red".
 
 Optional tactic, recorded because it worked: fan out read-only subagents to
 classify the unsupported cards into *implementable now* (recipe steps 2–3),
@@ -2704,6 +2764,25 @@ production touched, because that row is printing-weighted; `HOOK_RELIANCE.md`'s
 is deduped and did not move at all. Neither is a bug and the ratchets are
 re-accepted at every promotion anyway — the trap is reading the diff as
 progress. Ask what changed in the *membership* before crediting the parser.
+
+**Rehearse early, in a throwaway worktree, while the last wave runs.** Invasion
+moved its entry to `sets` twice before the real promotion — once with twelve
+cards unsupported, once with one — in `git worktree add` trees that were
+deleted afterwards. The first run separated the thirteen red guards into the
+state of the work, the ratchets, and five findings that could be worked in
+parallel (one was the integrator's, one went to a wave-2 group by message);
+the real promotion then had only its own delta to read. It costs one suite.
+
+**A new layout makes guards blind, not red.** A split card's whole-card
+program is supported and has no instructions, so every guard and instrument
+whose population is "each card, compiled" walks past both halves and reports
+the card clean. About 55 test files and one script were reading it that way,
+and a grep for `compile_card_oracle(` in a catalog loop under-counted by half
+(the rest scan `oracle_text`). What found them was a scratch pytest plugin that
+promoted the measured set in memory and recorded every site handed a
+multi-face card whole; what holds them is `tests/engine/test_face_blind_guards.py`.
+**The next layout owes the same census before its promotion**, and it is a
+group's work, not a rehearsal finding.
 
 The checklist, each line naming its guard:
 
@@ -3894,3 +3973,26 @@ made with the same move script as the real one and the order guard was the
 only thing that fired, as Nemesis' entry asked. Zero hooks added. Nothing
 drained from Known gaps; what the wave measured and left is one ROADMAP entry
 with its parts named.
+
+### INV — 2026-10-05
+
+*Two waves, fifteen groups and a closer, on the first set to bring machinery
+the engine did not have: kicker, the pool's first multi-face layout, piles.*
+Wave 1's eight groups took 221 to 323 with no hook; wave 2 spent three groups
+on the twelve cards left and four on the pile wave 1 had measured, and the pile
+was again the larger half — 182 spells castable with no legal target, 17
+counterspells castable onto an empty stack, ten cards with an unprinted
+keyword, the simulator's sixth and seventh missing pieces of a turn.
+`oracle_diff` read 0 on three of wave 2's seven merges and 1 on two more -
+the four pile groups moved two compiled programs between them. The closer was
+one card, Psychic Battle, declined twice with its parts named, and it landed on a fact the engine was missing rather than on grammar: which targets a stack object chose (`engine/stack_targets.py`).
+
+*Edits in place:* Integration gains the wave's three written-twice ideas and
+the rules that came out (reconcile only where it is not a rules reading;
+rebuild interleaved methods whole), "a gate that trusts a list" with its second
+sweep, the integrator's own commits getting a merge's gate, and a guard that is
+right about a sibling. *Phase 1:* supported on arrival is not driven. *Phase 2:*
+the set's machinery, sized by probing. *Phase 4:* rehearse early in a throwaway
+worktree; a new layout makes guards blind, not red. Briefs now tell an agent
+not to end its turn waiting on a background suite. Nothing drained from Known
+gaps; what the set left is one ROADMAP entry with its parts named.

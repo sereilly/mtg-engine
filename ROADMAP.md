@@ -474,6 +474,79 @@ one card prints this") reads as a work item long after it stopped being true.
   creature cards leave (CR 601.2b lets them), and the top-down default is the
   floor until there is one. (FEM, WTH; re-verified 2026-09-07.)
 
+- **What Invasion measured and left** (2026-10-05; each part is named in the
+  commit or report that declined it, which is what makes it a brief). Wave 1's
+  eight groups left a pile; wave 2 spent four groups on it and left this:
+
+  * *The web AI seat takes a prompt a step late.* `Game.prompt_driver` is the
+    simulator's only. A census driving `ai_vs_ai` sessions through `ai_step`
+    found 8 step changes in 4,152 that left a priority-holding prompt owed
+    (Hasran Ogress, Ferocity, Goblin Arsonist; once a Tombstone Stairwell
+    trigger still on the stack at cleanup). Parts: a driver on web games for
+    AI-owned prompts; `drive_owed_prompts` at a table with interactive seats,
+    for the non-interactive seats' prompts; `web/turn_steps._end_turn` draining
+    the end step's window before `close_end_step`;
+    `combat_phase._combat_awaits_an_answer` waits only for interactive seats.
+  * *Word of Command under mana enforcement never plays a costed card* — every
+    real web game. `_finish_word_of_command` calls `queue_from_hand`, which
+    spends only the pool. Parts: tap the forced player's lands for the spell's
+    effective cost first (`mana_payment.plan_payment`); a test with
+    enforcement on (the existing UI test turns it off).
+  * *The AI casts everything in its own main phase.* No cast pass during combat
+    or in response: 0 casts of Spinal Embrace in 18 pinned games, no
+    counterspell ever cast in a simulated game, ~21 shipped lines with a
+    combat-only cast window, and every shield or Fog mistimed even when
+    correctly aimed.
+  * *About 40 activated abilities print a plain "target" with no quantifier the
+    mandatory-target walk reads*, so `activation_target_refusal` neither refuses
+    them with nothing to target nor checks a named one — 14 of 14 driven accept
+    an activation naming an opponent's Island and pay for nothing (CR 602.2b).
+    Parts: every such lowering writes a `targets` description, or the gate
+    falls back to "the spec names an object kind".
+  * *Modal spells are still castable bare*: 19 of 45 targeted, non-player modes
+    across 31 modal spells. Parts: `cast_target_obligation` needs a mode index;
+    `_enumerate_targets(for_cast=True)` probes with no mode; the web derives
+    per-mode kinds separately (`web/serialization._mode_target_kind`) — unify
+    those first, or the engine refuses a cast the browser offers. Beside it:
+    no target *count* beyond a floor of one ("two target creatures" naming
+    fewer), and conditional-branch targets the announcement walk skips on
+    purpose (Goblin Artisans; `_NAMES_NOTHING`).
+  * *CR 615.12 is half-implemented* for the three lock cards (Whippoorwill,
+    Lava Burst, Urza's Rage): a "next time" shield should be used up while
+    preventing nothing; the contenders are dropped and the shield stays armed.
+  * *A split card's abilities outside the stack (CR 709.4c)*: a half printing
+    cycling cannot be cycled. No card in the pool. Parts:
+    `activation.activate_from_hand`, `trigger_utils.matching_triggers`,
+    `special_actions.special_actions_for`, `ante._oracle_text_of`,
+    `library_top.top_castable`, the hand payload's ability menu. And
+    `primary_type` on a mixed "Instant // Sorcery" answers one type.
+  * *A phantom "becomes the target".* The push-time announcement names a
+    permanent the object did not target in 47 of 580 announcements across 22
+    simulated games: a sacrificed cost (Burnt Offering, Village Rites), a
+    chosen source (Eye for an Eye, the Circles), a combat trigger's own source
+    (flanking, Goblin Elite Infantry, Spirit Link). With Cowardice out, a
+    blocking Goblin Elite Infantry is bounced. Part: gate
+    `_announce_targeting` on `stack_targets.chosen_targets` — it changes all
+    17 "becomes the target" watchers, which is why the closing round left it.
+    Beside it: 38 triggered abilities print a target and carry none as a
+    stack object (17 graveyard targets found at resolution, 7 with no picker,
+    14 narrowed by a seat only a real fire supplies), pinned in
+    `_UNANNOUNCED_TRIGGER_TARGETS`; and Psychic Battle leaves the targets
+    alone where it cannot change them soundly — a modal spell (the cast gate
+    reads mode 0) and an object printing "target" twice (9 casts, 3
+    activations) — and pushes its trigger above each object rather than
+    after a simultaneous batch (CR 603.3b).
+  * *Smaller, each with its parts in `git log --grep "INV W"`*: Mages' Contest
+    and Illicit Auction — a non-interactive seat always passes, and life is
+    lost by direct subtraction (no life-loss seam); Sulfuric Vapors' "plus 1"
+    against a multiplier has the cap's one-number problem; the optional-pay
+    default always accepts (a seat with Elfhame Sanctuary skips every draw);
+    Magical Hack and Sleight of Mind derive a `permanent` spec though they
+    print "spell or permanent"; `web/serialization._gloom_white_tax` reads a
+    card name outside the engine guard's scope; and outside the 701 block
+    nothing checks a CR citation's *subject* (a keyword screen over the 508 and
+    601 blocks flagged 56 of 1,505 and 23 were wrong).
+
 - **What Prophecy's third wave measured and left** (2026-10-04; each part is
   named in the commit that declined it, which is what makes it a brief):
 
@@ -933,9 +1006,13 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-04, with Prophecy shipped, it
-answers **Invasion** (INV, 2000-10-02, 335 cards), then Planeshift — and then
-Seventh Edition, the next reprint-shaped set, whose sources are the pool's own.
+Run against `set_progress.json` on 2026-10-05, with Invasion shipped, it
+answers **Planeshift** (PLS, 2001-02-05, 143 cards) — and then Seventh Edition,
+the next reprint-shaped set, whose sources are the pool's own. **Planeshift is
+Invasion's block-mate, so read its arrival number as inheritance**: kicker,
+split cards, domain and the colour relations are built, which is Urza's
+Legacy's 80.4% again. On 2026-10-04, with Prophecy shipped, it answered
+Invasion, which has since shipped.
 On 2026-10-02, with Nemesis shipped, it answered Prophecy, which has since
 shipped. On 2026-09-09, with 6ED shipped, the same rule answered Urza's
 Destiny, then Mercadian Masques, Nemesis and Prophecy, and the first three of
@@ -1048,6 +1125,7 @@ a wave is five parallel worktree groups integrated serially.
 | MMQ | 335 | 73.7% | 3 waves + 1 closer |
 | NEM | 143 | 66.4% | 1 wave + 1 closer |
 | PCY | 143 | 58.0% | 3 waves (the third on one card and four piles) |
+| INV | 335 | 66.0% | 2 waves + 1 closer (four of wave 2's seven groups on the pile) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -1063,19 +1141,20 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-04, at Prophecy's close): 4,312 unique cards over 28 sets, 6,450
-printings, 100% supported. Grammar parses 90.6% of lines, lowers 89.9% and
-executes 61.1% (`GRAMMAR_COVERAGE.md`; the executed row fell 0.1pp on
-Prophecy's *membership*, not on any production). **1.2%** of supported cards
-carry a name-keyed hook — 52 cards, 58 entries in 6 registries
-(`HOOK_RELIANCE.md`) — and the projection that implies for the release line
-has fallen from 1,195 hand-written entries to **351**, across fifteen
-consecutive sets that added no hook and retired several. That is the measure
-moving the way the architecture needs it to. Parse coverage: 4,310 of 4,312
-supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+2026-10-05, at Invasion's close): 4,622 unique cards over 29 sets, 6,785
+printings, 100% supported. Grammar parses 90.4% of lines, lowers 89.8% and
+executes 61.2% (`GRAMMAR_COVERAGE.md`; parsed fell 0.2pp and lowered 0.1pp on
+Invasion's *membership* — its own row is 87.9% parsed, a set read more by
+`cast_costs` and the text-keyed tables than the average — and no shipped set's
+row fell). **1.1%** of supported cards carry a name-keyed hook — 52 cards, 58
+entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that implies
+for the release line has fallen from 1,195 hand-written entries to **328**,
+across sixteen consecutive sets that added no hook and retired several. That
+is the measure moving the way the architecture needs it to. Parse coverage:
+4,620 of 4,622 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
 (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker.
-`CARD_VERIFICATION.md` is a log, not a target: 631 passed (403 in-game, 228
-auto), 50 equivalent, 0 failed, 3,631 untested.
+`CARD_VERIFICATION.md` is a log, not a target: 642 passed (404 in-game, 238
+auto), 51 equivalent, 0 failed, 3,929 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
