@@ -348,6 +348,13 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # ``_amounts.count_spec`` reads it, because it is the one reader with
     # somewhere to put a scope (``owner: "all"``).
     "on_the_battlefield": "on_the_battlefield",
+    # "…for each **basic land type among** lands you control" (domain). Not a
+    # narrowing of the set at all but a statement about what a *count* of it
+    # counts, so ``to_payload`` emits nothing — and a lowering that built a
+    # payload and did not know the field would count the lands instead of the
+    # types among them, which is a Wayfaring Giant that grows with every Plains.
+    # Only ``_amounts.count_spec`` reads it, as the spec's ``aggregate``.
+    "distinct": "distinct",
 }
 
 

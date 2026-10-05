@@ -49,7 +49,7 @@ from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
 from .oracle import compile_card_oracle, expand_ability_lines
 from .mana_payment import (mana_cost_from_symbols, plan_payment, total_pips,
                           untapped_mana_lands)
-from .oracle_types import cost_target_count
+from .oracle_types import cost_target_count, strip_ability_word
 from .player_statics import seat_has_player_keyword
 from .resolution_overrides import resolves_with_illegal_targets
 from .static_bonuses import conditional_static_holds
@@ -124,6 +124,23 @@ def _oracle_lines(card: CardDefinition) -> list[str]:
     ).split("\n")
 
 
+def _is_activated_line(line: str) -> bool:
+    """Whether a printed line is an activated ability (CR 602.1).
+
+    Asked of the line **without its ability word**. "Domain — {3}, {T}: Target
+    creature gets …" (Power Armor) is an activated ability with an italic word
+    in front of it, and CR 207.2c gives that word no rules meaning — the
+    compiler drops it through the same ``strip_ability_word`` before it
+    classifies anything. Asked of the raw line the anchor fails on "Domain",
+    the ability reads as a cast-time effect, and the guard asking "does this
+    card name a target as it is cast?" answers yes about an artifact that
+    chooses nothing until its ability is activated. Power Armor is the first
+    card in the pool to print the pair; the other ability words here all sit in
+    front of triggers and statics.
+    """
+    return bool(_ACTIVATED_LINE_RE.match(strip_ability_word(line)))
+
+
 def _cast_lines(card: CardDefinition) -> list[str]:
     """Lowercased oracle lines that are *not* activated abilities (cast effects).
 
@@ -132,12 +149,12 @@ def _cast_lines(card: CardDefinition) -> list[str]:
     needs the same split to ask "does this card name a target as it is cast?",
     and defining it twice is how the two would come to disagree.
     """
-    return [line.lower() for line in _oracle_lines(card) if not _ACTIVATED_LINE_RE.match(line)]
+    return [line.lower() for line in _oracle_lines(card) if not _is_activated_line(line)]
 
 
 def _activated_lines(card: CardDefinition) -> list[str]:
     """Lowercased oracle lines that *are* activated abilities."""
-    return [line.lower() for line in _oracle_lines(card) if _ACTIVATED_LINE_RE.match(line)]
+    return [line.lower() for line in _oracle_lines(card) if _is_activated_line(line)]
 
 
 def _type_line(card: CardDefinition) -> str:

@@ -51,6 +51,7 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
+from .distinct import accept_one_of_each
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
@@ -545,8 +546,21 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # distributed over each conjunct to stay faithful, and no card in
             # the pool prints one — so it refuses to widen instead of guessing
             # which of the two readings was meant.
+            #
+            # "…you control a land **of each basic land type** and a creature
+            # of each color" (Coalition Victory). The same conjunction with one
+            # of its nouns abbreviated: ``accept_one_of_each`` hands back the
+            # five noun phrases the words stand for, and each becomes the
+            # conjunct it would have been written out — so the abbreviation
+            # needs no node and no evaluator, and a Tropical Island answers
+            # two of the five exactly as it would answer "a Forest and an
+            # Island".
             if not negated and bound is None and not shared_name:
-                parts = [first]
+                expanded = None if another else accept_one_of_each(stream, filt)
+                parts = (
+                    [ast.Controls(player, each) for each in expanded]
+                    if expanded else [first]
+                )
                 while True:
                     conj = stream.mark()
                     if not stream.accept_word("and"):
@@ -560,12 +574,33 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
                     # "…and a creature **of each color**" (Coalition Victory's
                     # second conjunct): the relation belongs to the noun it
                     # follows, so each conjunct reads its own.
-                    parts.append(ast.Controls(
-                        player, extra,
-                        of_each_color=bool(
-                            stream.accept_phrase("of", "each", "color")
-                        ),
-                    ))
+                    #
+                    # **Two readers, one per characteristic, and neither is a
+                    # second answer to the other's phrase.** "Of each basic
+                    # land type" is an abbreviation of five nouns and is read
+                    # as them (``accept_one_of_each`` — a Tropical Island
+                    # answers two conjuncts, as it would answer "a Forest and
+                    # an Island"). "Of each color" is not five nouns: a gold
+                    # permanent answers for each of its colours and no noun
+                    # phrase names "a white permanent" the way one names a
+                    # Plains, so it stays a relation on the one conjunct
+                    # (``of_each_color``, Spirit of Resistance's). W1G3 and
+                    # W1G5 each built one of these at this line in the same
+                    # wave; the colour row W1G3 measured and did not add to
+                    # ``distinct._COUNTED_CHARACTERISTICS`` stays out, which is
+                    # what keeps this from being two spellings of one fact.
+                    expanded_extra = accept_one_of_each(stream, extra)
+                    if expanded_extra:
+                        parts.extend(
+                            ast.Controls(player, each) for each in expanded_extra
+                        )
+                    else:
+                        parts.append(ast.Controls(
+                            player, extra,
+                            of_each_color=bool(
+                                stream.accept_phrase("of", "each", "color")
+                            ),
+                        ))
                 if len(parts) > 1:
                     return ast.EveryOf(tuple(parts))
             return first

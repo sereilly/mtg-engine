@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from .grammar.vocabulary import (COLOR_WORDS, CREATURE_TYPES,
                                  IMPLEMENTED_KEYWORDS, KEYWORD_ABILITIES)
 from .mana_payment import mana_cost_from_symbols
+from .oracle_types import X_FROM_COUNT
 
 # Basic land types a "controls a <type>" clause can name. Five, because a regex
 # has to name what it matches — **not** because the engine can only enforce
@@ -288,11 +289,24 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # "creatures", which is a filter matching every creature. One row rather
         # than two, because the narrowing is data — a card printing any other
         # colour, type or keyword needs no pattern here.
+        #
+        # "…pays **{X}** for each creature they control that's attacking you,
+        # **where X is the number of basic land types among lands you
+        # control**." (Collective Restraint.) The same toll with a counted
+        # price, and one row rather than two for the reason the narrowed
+        # subject is one: what the clause defines is data. The definition is
+        # read by the grammar's own where-clause reader
+        # (``grammar.board_count_spec_for``) and evaluated at the declaration
+        # for the toll's controller (CR 109.5: a static ability's "you"), so
+        # the price follows the board up to the declaration and is then the
+        # total CR 508.1h locks in — computed at the one reader both the gate
+        # and the charge go through.
         re.compile(
             r"^(?P<attack_pay_subject>[a-z' -]*creatures) can't attack you "
             r"unless their controller pays "
             r"(?P<attack_mana>(?:\{[^}]+\})+) for each creature they control "
-            r"that's attacking you$"
+            r"that's attacking you"
+            r"(?:, where x is (?P<attack_x_definition>.+))?$"
         ),
         "creatures_cant_attack_you_unless_pay",
     ),
@@ -1531,7 +1545,23 @@ def combat_restriction_for(
         if per_counter is not None:
             payload["per_counter"] = per_counter
         printed_cost = payload.pop("attack_mana", None) or payload.pop("block_mana", None)
-        if printed_cost is not None:
+        # "…pays {X} …, where X is the number of <counted>." (Collective
+        # Restraint.) The two halves are admitted together or not at all: an
+        # {X} with no definition is a price nobody can name, and a definition
+        # over a printed number defines an X nothing reads — the same pair of
+        # refusals ``lowering/where_x`` makes for a sentence. The price travels
+        # as ``{"generic": "x"}``, the spelling every other payable X in this
+        # engine uses, with the count beside it under the shared key.
+        x_definition = payload.pop("attack_x_definition", None)
+        if x_definition is not None or (printed_cost or "").lower() == "{x}":
+            from .grammar import board_count_spec_for
+
+            spec = board_count_spec_for(x_definition or "")
+            if spec is None or (printed_cost or "").lower() != "{x}":
+                return None
+            payload["mana"] = {"generic": "x"}
+            payload[X_FROM_COUNT] = spec
+        elif printed_cost is not None:
             cost = mana_cost_from_symbols(printed_cost)
             if cost is None:
                 return None

@@ -462,7 +462,26 @@ def _parse_look_other_library_tail(
 
 
 def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
-    """``Look at <player>'s hand.`` (Glasses of Urza.)
+    """``Look at <player>'s hand.`` (Glasses of Urza.) — and every other look.
+
+    "Look at the top X cards of your library**, where X is the number of basic
+    land types among lands you control**. Put one of those cards into your hand
+    …" (Worldly Counsel.) The clause is printed in the *middle* of the
+    paragraph, at the end of the sentence whose X it defines, and the
+    productions below read both sentences as one — so the statement-level
+    where-clause reader never sees it. It is read where it is printed and
+    wrapped around **whichever** tail the look turned out to have, here, once:
+    the body has eleven endings and a definition carried to ten of them would
+    be an X silently left to mean the cast's on the eleventh.
+    """
+    defined: list = []
+    node = _parse_look_statement(stream, defined)
+    return _with_where_x(node, defined[0] if defined else None)
+
+
+def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
+    """The look itself. *defined* receives a mid-paragraph where-clause's
+    definition, for :func:`_parse_look_at_hand` to wrap the result in.
 
     Both the possessive marker and the zone noun are expected rather than
     skipped. "Look at" heads a family of information effects that differ only in
@@ -528,6 +547,14 @@ def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
         stream.expect_word("library")
         if owner.kind != "you":
             return _parse_look_other_library_tail(stream, count, owner)
+        # "…of your library**, where X is the number of basic land types among
+        # lands you control**." (Worldly Counsel.) Read through the one
+        # where-clause reader and handed up; absent, nothing is consumed. A
+        # clause over a look that reads no X refuses in the lowering
+        # (``lowering/where_x``: a definition nothing reads).
+        clause = parse_where_x_definition(stream)
+        if clause is not None:
+            defined.append(clause)
         # Lim-Dul's Vault: the look is the *first* of three sentences and the
         # two behind it bind its pile. Tried before the sorting sentence below,
         # and declining without consuming, so every card in that family keeps

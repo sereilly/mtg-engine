@@ -185,12 +185,32 @@ def count_spec(
     # permanent, which the matcher cannot test and the evaluator resolves.
     dropped = tuple(
         field for field in dropped_narrowings(filt, payload)
-        if field not in ("blocking_source", "on_the_battlefield")
+        if field not in ("blocking_source", "on_the_battlefield", "distinct")
     )
     if dropped:
         raise LoweringError(
             f"a count cannot test {', '.join(dropped)}", node=node
         )
+    # "…for each **basic land type among** lands you control" (domain). The
+    # phrase names what is counted rather than narrowing the set, so it becomes
+    # the spec's aggregate — the same key "the greatest power among" and "for
+    # each color among" already ride, which is why one evaluator answers it for
+    # every sentence that spends a count. Two aggregates over one set is not a
+    # phrase Magic prints, and reading either would be reading half of it.
+    if filt.distinct is not None:
+        if aggregate != "count":
+            raise LoweringError(
+                f"a count cannot take both {aggregate} and {filt.distinct}",
+                node=node,
+            )
+        if filt.zone != "battlefield":
+            # A land's basic land types are computed (CR 305.6, CR 613 layer
+            # 4) and a card in another zone has only its printed line, which
+            # is a different question no card in the pool asks.
+            raise LoweringError(
+                f"no count reads {filt.distinct} in the {filt.zone}", node=node
+            )
+        aggregate = filt.distinct
     if filt.zone != "battlefield" and set(payload) - _CARD_ZONE_KEYS:
         raise LoweringError(
             f"a {filt.zone} count cannot test {sorted(set(payload) - _CARD_ZONE_KEYS)}",

@@ -21,6 +21,7 @@ from ..records import accept_as_many_as, parse_for_each_sacrificed_this_way
 
 from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
+from ..distinct import parse_counted_objects
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -151,7 +152,7 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     # the whole clause is handed back, exactly as `_parse_per_each_objects`
     # hands it back one module over.
     try:
-        counted = parse_object_filter(stream)
+        counted = parse_counted_objects(stream)
     except GrammarError:
         stream.reset(mark)
         return None

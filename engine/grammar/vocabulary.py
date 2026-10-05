@@ -65,6 +65,22 @@ COLOR_WORDS: dict[str, str] = {
     "white": "W", "blue": "U", "black": "B", "red": "R", "green": "G",
 }
 
+#: The five types CR 205.3i calls **basic** land types, in the printed order
+#: (WUBRG) every card that lists them uses. Not read out of
+#: ``data/vocabulary/land_types.json``: that catalog holds every land subtype
+#: Magic prints, and "a basic land type" is a strictly smaller question with a
+#: fixed answer the rules give (CR 305.6) rather than a set that grows with
+#: each release.
+#:
+#: Defined here and re-exported by ``phrases`` under the name every caller
+#: already imports. It moved down the day a reader below ``phrases`` needed
+#: it — "a land **of each basic land type**" (Global Ruin, Coalition Victory)
+#: is read in ``distinct``, which ``phrases`` imports and so cannot be
+#: imported by.
+BASIC_LAND_WORDS: tuple[str, ...] = (
+    "plains", "island", "swamp", "mountain", "forest",
+)
+
 NUMBER_WORDS: dict[str, int] = {
     "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
@@ -245,7 +261,8 @@ def display_type_word(word: str) -> str:
 
 
 __all__ = [
-    "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "CARD_TYPES",
+    "ABILITY_WORDS", "ALL_SUBTYPES", "ARTIFACT_TYPES", "BASIC_LAND_WORDS",
+    "CARD_TYPES",
     "COLOR_WORDS", "CREATURE_TYPES", "ENCHANTMENT_TYPES", "IMPLEMENTED_KEYWORDS",
     "KEYWORD_ABILITIES", "KEYWORD_ACTIONS", "KEYWORD_FAMILIES", "KEYWORD_INDEX",
     "LAND_TYPES",
