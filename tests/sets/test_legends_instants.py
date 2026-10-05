@@ -536,8 +536,7 @@ def test_avoid_fate_counters_an_instant_aimed_at_your_permanent(set_pool):
 def test_avoid_fate_leaves_a_spell_aimed_at_a_permanent_you_do_not_control(set_pool):
     """The narrowing is the card. A counter that ignored it would counter every
     instant on the stack, which is a strictly better and different card — so the
-    spell has to *resolve*, and its effect has to land. Refused at announcement
-    (CR 601.2c) since INV W1G8: the spell is not a legal target at all."""
+    spell *resolves* and its effect lands; the cast is refused (CR 601.2c)."""
     game, p1, p2 = _avoid_fate_game(set_pool, "Transmutation", 1)
     theirs = p2.battlefield[0]
 
