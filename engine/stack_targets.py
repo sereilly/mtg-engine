@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
@@ -169,12 +170,21 @@ def names_a_target(text: str | None) -> bool:
     the engine models the choice — because the strong one is the compiled
     spec's, and the two are only ever read together.
     """
-    if not text:
-        return False
+    return bool(text) and _target_instances(text) > 0
+
+
+@lru_cache(maxsize=None)
+def _target_instances(text: str) -> int:
+    """How many times *text* prints the word about a choice of its own.
+
+    Cached on the line: this is asked every time an object is put on the stack
+    (``Game.announce_targets_chosen``), the lines are a few thousand immutable
+    strings, and three regex passes per push is the whole cost of the reader.
+    """
     line = _REMINDER_TEXT.sub("", text.lower())
     line = _QUOTED_ABILITY.sub("", line)
     line = _NOT_A_CHOICE.sub("", line)
-    return bool(_TARGET_WORD.search(line))
+    return len(_TARGET_WORD.findall(line))
 
 
 # ---------------------------------------------------------------------------
@@ -559,11 +569,7 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     from .oracle import compile_card_oracle
 
     def count(text: str | None) -> int:
-        if not text:
-            return 0
-        line = _REMINDER_TEXT.sub("", text.lower())
-        line = _NOT_A_CHOICE.sub("", _QUOTED_ABILITY.sub("", line))
-        return len(_TARGET_WORD.findall(line))
+        return _target_instances(text) if text else 0
 
     if getattr(item, "is_ability", False):
         modes = modal_trigger_modes(getattr(item, "ability_instruction", None))

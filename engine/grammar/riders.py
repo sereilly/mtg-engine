@@ -649,7 +649,7 @@ def _attach_new_target_bound(
     return True
 
 
-def _offered_target_change(step: ast.Statement) -> "ast.ChangeEventTargets | None":
+def _target_change_offered_by(step: ast.Statement) -> "ast.ChangeEventTargets | None":
     """The "change the target or targets" *step* offers, or None.
 
     One guard for the two riders below, because both are sentences about the
@@ -684,7 +684,7 @@ def _attach_tied_reveals_unchanged(
     more".
     """
     last = steps[-1] if steps else None
-    if _offered_target_change(last) is None:
+    if _target_change_offered_by(last) is None:
         return False
     if last.actor.kind != "revealed_greatest_mana_value":
         return False
@@ -723,7 +723,7 @@ def _attach_silent_target_change(
     and it refuses.
     """
     last = steps[-1] if steps else None
-    change = _offered_target_change(last)
+    change = _target_change_offered_by(last)
     if change is None:
         return False
     mark = stream.mark()
