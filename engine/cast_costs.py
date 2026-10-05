@@ -1610,8 +1610,8 @@ def kicker_cost(oracle_text: str) -> str | None:
 
 def kickers_paid(card: CardDefinition, choices: dict | None) -> tuple[str, ...]:
     """The kicker costs of *card* this cast paid, by key, in printed order
-    (CR 702.33d: "declared the intention to pay **any or all** of its kicker
-    costs").
+    (CR 702.33d: "If a spell's controller declares the intention to pay
+    **any** of that spell's kicker costs, that spell has been 'kicked.'").
 
     *choices* is the spell's own stack record, where the announcement survives
     (the pool that paid is empty by resolution, CR 500.5). Empty for a card
@@ -1641,7 +1641,7 @@ def kicked(card: CardDefinition, choices: dict | None) -> bool:
     """Whether this cast of *card* was kicked (CR 702.33d).
 
     *choices* is the spell's own stack record. CR 702.33d settles the answer at
-    the announcement ("declared the intention to pay **any or all** of its
+    the announcement ("declares the intention to pay **any** of that spell's
     kicker costs"), and ``choices`` is where the announcement survives: the
     pool that paid is empty by resolution (CR 500.5).
 
@@ -1656,8 +1656,9 @@ def kicked(card: CardDefinition, choices: dict | None) -> bool:
 
 def kicked_with(card: CardDefinition, choices: dict | None, key: str) -> bool:
     """Whether this cast of *card* paid the kicker cost *key* (CR 702.33f:
-    "if it was kicked with its [A] kicker" is linked to one specific kicker
-    cost, and "refers only to that kicker ability").
+    an ability reading "if it was kicked with its [A] kicker" corresponds to
+    one specific kicker cost and "is linked to the appropriate kicker
+    ability").
 
     *key* is the canonical spelling the offer is recorded under -- what
     ``lowering/_cost_records.optional_cost_key`` makes of the printed symbols,

@@ -440,8 +440,8 @@ class WasKicked:
     *kicker* is "…if it was kicked **with its {1}{G} kicker**" (the five
     Battlemages): the printed symbols of the one kicker cost the sentence is
     linked to (CR 702.33f — a card printing "Kicker {1}{G} and/or {2}{U}" has
-    two, CR 702.33b, and each such ability "refers only to that kicker
-    ability"). ``None`` is the unqualified question, true for any of them
+    two, CR 702.33b, and each such ability "is linked to the appropriate
+    kicker ability"). ``None`` is the unqualified question, true for any of them
     (CR 702.33d). Carried **as printed**, for :class:`EachAdditionalCostPaid`'s
     reason: one function (``lowering/_cost_records.optional_cost_key``) turns
     it into the key the payment was recorded under.

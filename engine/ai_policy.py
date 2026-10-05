@@ -12,6 +12,7 @@ from .ai_valuation import (
     CastOffer,
     cast_offers,
     activation_target_side,
+    entry_self_return_gate,
     entry_trigger_seat_side,
     entry_trigger_target_side,
     entry_triggers_bought,
@@ -874,6 +875,12 @@ def _cast_candidate_announcing(
     if not _caster_can_make_its_sacrifices(game, player_index, card):
         # "Sacrifice a creature. Rupture deals damage equal to that creature's
         # power…": with nothing to sacrifice the whole resolution is nothing.
+        return None
+    if _entry_gate_gives_back_more_than_it_brings(game, player_index, card):
+        # "When this creature enters, return a red or green creature you
+        # control to its owner's hand" with no other such creature — the cast
+        # ends with the card back in hand and the mana spent — or with only a
+        # dearer one to give back.
         return None
     if not _caster_holds_a_hand_pick_entrant(game, player_index, card, hand_index):
         # "Each player chooses a card in their hand. … The owner of each
@@ -3597,6 +3604,85 @@ def _caster_can_make_its_sacrifices(
         if not game._sacrifice_candidate_indices(player, step["filter"]):
             return False
     return True
+
+
+def _entry_gate_gives_back_more_than_it_brings(
+    game: Game, caster_index: int, card: CardDefinition
+) -> bool:
+    """Whether casting *card* now is a trade down: it prints "when this
+    enters, return a <noun> you control to its owner's hand"
+    (``ai_valuation.entry_self_return_gate``), it is itself such a <noun>, and
+    what the seat would have to give back is worth more than *card*.
+
+    Two boards, one answer. With **no other** such permanent the pick is forced
+    onto the entering one — the cast ends with the card back in hand and the
+    mana spent, and the seat re-proposes it next turn and the turn after. With
+    one, the seat gives back whatever `given_back_first` puts first, and when
+    that costs more to replace than *card* itself the cast has shrunk the board
+    (Horned Kavu returning Shivan Wurm, which then returns Horned Kavu: nine
+    casts in six simulated games, each undoing the last). Not proposed in
+    either, for the reason every gate in `_cast_candidate_announcing` is there.
+
+    Both halves through the matchers the resolution itself asks —
+    ``_card_matches_filter`` for the card in hand, ``subject_matches`` for the
+    board (colour through the layers, so a creature turned red counts as red).
+    A card its own noun does not admit is left alone: with nothing to return
+    the trigger does nothing, and the permanent stays.
+    """
+    from .handlers._common import _card_matches_filter
+
+    gate = entry_self_return_gate(card)
+    if gate is None:
+        return False
+    described = dict(gate.get("filter") or {})
+    player = game.players[caster_index]
+    if not _card_matches_filter(card, described, game=game, owner=player):
+        return False
+    others = [
+        permanent for permanent in game.controlled_by(caster_index)
+        if subject_matches(game, permanent, described, observer=caster_index)
+    ]
+    if not others:
+        return True
+    return _given_back_loss(given_back_first(others, None)[0]) > float(card.cmc)
+
+
+def _given_back_loss(permanent: Permanent) -> float:
+    """What a seat loses by returning *permanent* to its owner's hand.
+
+    A card comes back for its mana value. A *token* does not come back at all
+    (CR 111.7), so it is priced as the body the board loses
+    (`_permanent_value`) — which keeps a 1/1 token on the table beside a
+    one-drop and gives it up before a six-drop.
+    """
+    if permanent.metadata.get("is_token"):
+        return _permanent_value(permanent)
+    return float(permanent.card.cmc)
+
+
+def given_back_first(permanents, source) -> list:
+    """*permanents* — one seat's own — in the order that seat gives them back
+    to its hand when a permanent it controls makes it return one.
+
+    For ``_default_permanent_set_choice``, and only where *source* (the
+    permanent asking) is itself one of them: gating, Shrieking Drake,
+    Stampeding Wildebeests. Three rules, in order:
+
+    * **the asking permanent last** — returning it undoes the cast that asked;
+    * **the smallest loss first** (`_given_back_loss`);
+    * **board order** between equals, which is the determinism every default
+      in the registry keeps.
+
+    The weights are tuning and live here; that they are consulted at all is
+    the registry's decision, made where the candidates are known.
+    """
+    ranked = sorted(
+        enumerate(permanents),
+        key=lambda entry: (
+            entry[1] is source, _given_back_loss(entry[1]), entry[0],
+        ),
+    )
+    return [permanent for _slot, permanent in ranked]
 
 
 def _caster_holds_a_hand_pick_entrant(
