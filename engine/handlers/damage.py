@@ -51,7 +51,7 @@ def _record_damage_recipient(context, permanent, player=None) -> None:
 
     ``kind`` travels with the number because the three printed terms are about
     three different kinds of recipient, and a card may print only some of them
-    (``lowering/game._life_gain_cap_payload``).
+    (``lowering/_counted_life._life_gain_cap_payload``).
     """
     if permanent is not None and permanent.is_creature:
         kind, capacity = "creature", permanent.effective_toughness

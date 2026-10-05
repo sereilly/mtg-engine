@@ -252,7 +252,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "target_loses_life": "life",
     # "Pay 4 life." (Sylvan Library.) CR 119.4 makes paying life a loss of
     # that life, so the family is the same one; what it is not is the same
-    # *kind* — see ``lowering/game._lower_pay_life``.
+    # *kind* — see ``lowering/life._lower_pay_life``.
     "pay_life": "life",
     "destroy_target_permanent": "destruction",
     "destroy_all_artifacts": "destruction",
