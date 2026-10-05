@@ -32,7 +32,7 @@ from ._events import (
 #: Trigger events whose fire site stamps the *blocked* creatures onto the
 #: stack item (``blocked_permanent_ids``), so an effect may say "that creature"
 #: about the other half of the blocking pair and mean it. The block-pair
-#: destroy events (`_BLOCK_PAIR_EVENTS`, lowering/board.py) are a different
+#: destroy events (`_BLOCK_PAIR_EVENTS`, lowering/_events.py) are a different
 #: binding — those push the paired creature as the item's *target* — which is
 #: why this is its own set rather than a reuse of that one.
 _BLOCKED_SUBJECT_EVENTS = frozenset({"creature_blocks"})

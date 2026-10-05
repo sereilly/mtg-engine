@@ -1940,7 +1940,11 @@ def test_layers_only_import_downward(layers):
         # imports as one call. Listed here as well as in `FAMILY_SHARED`
         # because the two answer different questions — that set says it is not
         # a family, this tuple says a family may import it.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
+        #
+        # `_chosen_members` joins at Planeshift's Phase 0, for that reason:
+        # `board` imports the sacrifice half of the "one of those" pick it
+        # used to define.
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2467,6 +2471,37 @@ FAMILY_SHARED = {
     # itself be one, and the alternative was `board` and `damage` importing
     # each other.
     "_sacrifices",
+    # `_chosen_members` pre-split out of `lowering/board.py` at Planeshift's
+    # Phase 0, 32 lines under the guard below: a shared module two groups had
+    # added to in each of the last three sets. The seam handed to the split was
+    # `board`'s own docstring — "the '… unless <someone> pays' productions are
+    # all here" — and that sentence had been false since Urza's Saga. The tolls
+    # are `lowering/tolls.py`'s, and the bounce and the phasing its title still
+    # named had gone the same way, to `returns` and `phasing`. What was
+    # actually there to cut was the pair that reads **one member of a set an
+    # earlier sentence chose**: "that player chooses and sacrifices one of
+    # those creatures" (Retribution) and "exile one of those creatures"
+    # (Cannibalize), one noun phrase under two verbs and one `choose_permanent`
+    # over a record. The exile half had been sent to `board` at Exodus because
+    # `lowering/exile.py` was at the guard, on the stated grounds that its
+    # shape was not `exile`'s but a pick among the set an earlier sentence
+    # chose — which named this pair as a family a set before it had a file.
+    #
+    # Measured, as the seam rule asks: neither function calls another name
+    # `board` defines, the five imports only they read left with them, and of
+    # the 204 lines `board` gained and kept after the tolls left, thirteen were
+    # in these two against 107 in `_lower_sacrifice`. So the half that stands
+    # still moved and the room is the growing half's — `exchanges`' decision.
+    #
+    # The name is the parse side's word for the phrase
+    # (`choices._names_a_chosen_member`), as `_superlatives` beside it is named
+    # for the other phrase that picks one object out of a set. A floor for
+    # `_bound_exiles`' reason: `board` reads the sacrifice from inside
+    # `_lower_sacrifice`, where its place in the order is part of the
+    # production, and a family may not import a sibling;
+    # `statement_dispatch` reads the exile directly, as it already did.
+    # Nothing reads back.
+    "_chosen_members",
     # `_seats` arrived at the `life` split, holding the one thing the two
     # halves shared: which recipient key a printed player reference becomes.
     # A floor for `_amounts`' reason exactly -- `game` asks it for CR 407's

@@ -18,10 +18,10 @@ half a sentence in each module. Which flow it lowers to is decided by the
 trigger, which is what its own docstring says.
 
 The **sacrifice** half of the same family (``upkeep_pay_or_sacrifice_*``) is
-still in `board`, where it is one branch of the sacrifice production that reads
-the whole sentence. Moving it would fork that production rather than complete
-this family; it belongs here the day it stops being one branch of another
-reader.
+in `tolls`, with the other two verbs of that offer. It left `board` at Urza's
+Saga; this paragraph went on saying "still in `board`" until Planeshift's
+Phase 0. It was not brought here, for the reason it never was: it is one
+reading of a sentence whose other readings are not the upkeep registry's.
 
 A family in the layer order's sense — it imports only the floors (`_common`,
 `_events`, `_amounts`, `_sacrifices`) and no sibling family, which is what

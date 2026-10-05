@@ -16,7 +16,7 @@ template has one home on each side — prowess parses in
     tapping          CR 701.26, the keyword action itself
     untap_restrictions
                      CR 502.3, what keeps a permanent from untapping
-    board            destruction, bouncing, tapping, control, exile
+    board            sacrifice (CR 701.21) and regeneration (CR 701.19)
     cards            draw, mill, scry
     hand             discard, and the other moves that start in a hand
     library          CR 701.20e's look — at a hand, at a library's top — and
