@@ -121,3 +121,87 @@ def test_w1g6_singe_recolours_its_casters_own_creature_and_kills_a_one_toughness
     game.check_state_based_actions()
     assert [card.name for card in game.players[1].graveyard] == ["Llanowar Elves"]
     assert _w1g6_colors(game, giant) == ["R"] and giant.damage_marked == 0
+
+
+def _w1g6_judgment(set_pool, lands, *, creatures=("Grizzly Bears", "Savannah Lions")):
+    """Seat 0 with *lands* and *creatures* casts Dominaria's Judgment and it
+    resolves. Returns the game and seat 0's creatures."""
+    game, mine, _theirs = _w1g6_table(
+        set_pool, [*lands, *creatures], ["Hill Giant", "Swamp", "Island"],
+        hand=["Dominaria's Judgment"],
+    )
+    cast = game.queue_from_hand(0, "Dominaria's Judgment")
+    assert cast.supported, cast.details
+    _w1g6_resolve_stack(game)
+    return game, mine[len(lands):]  # _w1g6_judgment
+
+
+@_w1g6_pytest.mark.parametrize("lands, colours", [
+    (["Plains"], {"W"}),
+    (["Island", "Mountain"], {"U", "R"}),
+    (["Plains", "Island", "Swamp", "Mountain", "Forest"], {"W", "U", "B", "R", "G"}),
+    (["Plains", "Plains", "Forest"], {"W", "G"}),
+    ([], set()),
+])
+def test_w1g6_dominarias_judgment_gives_one_protection_per_basic_land_type_controlled(
+    set_pool, lands, colours,
+):
+    """"Until end of turn, creatures you control gain protection from white if
+    you control a Plains, from blue if you control an Island, from black if you
+    control a Swamp, from red if you control a Mountain, and from green if you
+    control a Forest." Five grants, each behind its own condition, and each
+    asked of its *caster's* lands: the opponent's Swamp and Island buy nothing.
+    Every creature the caster controls gets exactly the colours earned."""
+    assert _w1g6_compile(_w1g6_card(set_pool, "Dominaria's Judgment")).supported
+    game, creatures = _w1g6_judgment(set_pool, lands)
+    for creature in creatures:
+        assert game._protection_colors(creature) == colours, creature.card.name
+    giant = next(p for p in game.controlled_by(1) if p.card.name == "Hill Giant")
+    assert game._protection_colors(giant) == set()
+
+
+def test_w1g6_dominarias_judgment_locks_in_its_creatures_and_ends_with_the_turn(set_pool):
+    """CR 611.2c: the creatures are the ones there as it resolves — one that
+    enters afterwards gains nothing — and the protection ends at cleanup. It
+    costs {2}{W}: with no mana the spell is not cast at all."""
+    game, mine, _theirs = _w1g6_table(
+        set_pool, ["Plains", "Grizzly Bears"], [], hand=["Dominaria's Judgment"], mana=True,
+    )
+    bears = mine[1]
+    assert not game.queue_from_hand(0, "Dominaria's Judgment").supported
+    game.players[0].mana_pool.update({"W": 1, "G": 2})
+    assert game.queue_from_hand(0, "Dominaria's Judgment").supported
+    _w1g6_resolve_stack(game)
+    assert game._protection_colors(bears) == {"W"}
+
+    late = _W1G6Permanent(card=_w1g6_card(set_pool, "Llanowar Elves"))
+    game._put_permanent_onto_battlefield(0, late, None)
+    assert game._protection_colors(late) == set()
+
+    game.resolve_cleanup_step(0)
+    assert game._protection_colors(bears) == set()
+
+
+def test_w1g6_dominarias_judgment_reads_land_types_through_the_layers(set_pool):
+    """The lands are asked what they *are* (CR 613 layer 4), not what they
+    print: a Forest an Evil Presence has made a Swamp earns protection from
+    black and none from green. And the protection is real — a black Terror may
+    not then name the caster's creature."""
+    game, mine, _theirs = _w1g6_table(
+        set_pool, ["Forest", "Grizzly Bears"], [],
+        hand=["Evil Presence", "Dominaria's Judgment"],
+    )
+    forest, bears = mine
+    assert game.queue_from_hand(
+        0, "Evil Presence", target_permanent_ids=[forest.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert forest.has_type("swamp") and not forest.has_type("forest")
+
+    assert game.queue_from_hand(0, "Dominaria's Judgment").supported
+    _w1g6_resolve_stack(game)
+    assert game._protection_colors(bears) == {"B"}
+
+    game.players[1].hand.append(_w1g6_card(set_pool, "Terror"))
+    refused = game.queue_from_hand(1, "Terror", target_permanent_ids=[bears.permanent_id])
+    assert not refused.supported and "illegal target" in refused.details
