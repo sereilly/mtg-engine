@@ -304,12 +304,14 @@ def _lower_skip_step(node: "ast.SkipStep") -> tuple[OracleInstruction, ...]:
         raise LoweringError(
             f"no handler skips a step for {who!r}", node=node
         )
-    return (
-        OracleInstruction(
-            "skip_next_step", "",
-            {"step": node.step, "seat": who, "count": int(node.count)},
-        ),
-    )
+    payload: dict[str, object] = {
+        "step": node.step, "seat": who, "count": int(node.count),
+    }
+    # "…skip your draw step **this turn**" (Elfhame Sanctuary): the window,
+    # emitted only when printed so Ivory Gargoyle's payload is unchanged.
+    if node.this_turn:
+        payload["this_turn"] = True
+    return (OracleInstruction("skip_next_step", "", payload),)
 
 
 def _lower_skip_phase(

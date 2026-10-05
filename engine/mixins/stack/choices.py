@@ -40,6 +40,7 @@ from ...oracle_types import (CLAIMABLE_EXILED_CARDS, DISCARDED_BY_SEAT,
                              EXILED_THIS_WAY_OBJECTS)
 from ...grammar.lowering._events import PUT_FROM_HAND_PERMANENTS
 from ... import land_mana_swaps
+from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
                                 spec_for)
@@ -1632,6 +1633,13 @@ class PendingChoicesMixin:
                 f"{caster.name} put a card on the bottom of their library"
             )
             return True
+        # "…You gain life equal to **that card's mana value**." (Reviving
+        # Vapors.) Read off the card as it is taken — it is about to be in a
+        # hand, where nothing can identify it again (CR 608.2h).
+        record = choice.data.get("_record_pick")
+        if record is not None:
+            record_context, record_key = record
+            record_context.results[record_key] = int(kept.cmc or 0)
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
         self.log.append(
@@ -1660,6 +1668,13 @@ class PendingChoicesMixin:
             return
         eligible = self.live_look_top_candidates(choice)
         keep = eligible[0] if eligible else None
+        if eligible and choice.data.get("_record_pick") is not None:
+            # "…You gain life equal to that card's mana value." (Reviving
+            # Vapors.) The one printing where the sentence itself says which
+            # card is worth more, so the stated policy reads it: the greatest
+            # mana value, and the first of those.
+            pile = self.players[self.look_top_pile_index(choice)].library
+            keep = max(eligible, key=lambda index: (pile[index].cmc or 0, -index))
         if not self._resolve_look_top_pick(choice, keep):
             self.discard_pending_choice(choice)
 
@@ -3387,6 +3402,10 @@ class PendingChoicesMixin:
             # The number *defines* a characteristic (CR 604.3), so the P/T that
             # reads it is stale until the layers are recomputed.
             self._refresh_dynamic_creatures()
+        else:
+            # A spell's number (Void): nothing but the scratchpad keeps it, so
+            # the log is the only place the table can read what was named.
+            self.log.append(f"{choice.data.get('card_name')}: chose {value}")
         self.discard_pending_choice(choice)
         return True
 
@@ -3721,6 +3740,10 @@ class PendingChoicesMixin:
         bears, which simply never matches. An empty name is the honest answer
         for a seat with nothing to go on and matches nothing either.
         """
+        if self._named_card_breaks_printed_bound(choice, (card_name or "").strip()):
+            # Refused, not repaired: quietly recording something else would
+            # tell the player they had named a card they had not.
+            return False
         record = choice.data.get("record")
         if record is not None:
             record["chosen_card_name"] = (card_name or "").strip()
@@ -3730,6 +3753,49 @@ class PendingChoicesMixin:
             + ((card_name or "").strip() or "nothing")
         )
         return True
+
+    def _named_card_breaks_printed_bound(self, choice: PendingChoice, named: str) -> bool:
+        """Whether *named* is a name the printed sentence does not let this
+        seat choose.
+
+        "Choose a **creature** card name" (Wood Sage) and "Choose a card name
+        **other than a basic land card name**" (Desperate Research) each bound
+        CR 202.1's freedom, and a bound only the prompt's label states is a
+        rule nothing enforces: Wood Sage's seat could name Mountain and take
+        every Mountain off the top of its library.
+
+        A basic land card's name is a closed list (CR 205.3i's five basic land
+        types name them, with "Snow-Covered" in front or without, and Wastes).
+        A card *type* is not something a name can be asked — the engine holds
+        no catalog — so it is asked of every card this game contains with that
+        name: a name borne by a card here that is not of the type is refused,
+        and a name borne by no card here matches nothing whatever its type.
+        """
+        if not named:
+            return False
+        lowered = named.lower()
+        if choice.data.get("exclude_basic_land_names"):
+            bare = lowered.removeprefix("snow-covered ").strip()
+            if bare in BASIC_LAND_WORDS or lowered == "wastes":
+                return True
+        card_type = choice.data.get("card_type")
+        if not card_type:
+            return False
+        from ...search_filters import card_has_type
+
+        borne_by = [
+            card
+            for player in self.players
+            for zone in ("library", "hand", "graveyard", "exile")
+            for card in getattr(player, zone, ())
+            if card.name.lower() == lowered
+        ] + [
+            permanent.card for permanent in self.all_permanents()
+            if permanent.card.name.lower() == lowered
+        ]
+        return bool(borne_by) and not any(
+            card_has_type(card, str(card_type)) for card in borne_by
+        )
 
     def _default_choose_card_name(self, choice: PendingChoice) -> None:
         self._resolve_choose_card_name(choice, choice.data.get("default_name", ""))
@@ -5419,6 +5485,26 @@ class PendingChoicesMixin:
         pile = list(choice.data.get("_pile") or ())
         if not self._resolve_pile_search(choice, 0 if pile else None):
             self.discard_pending_choice(choice)
+
+    # -- Two face-up piles (CR 700.3: Fact or Fiction and its siblings) ------
+    #
+    # The procedure and both resolvers are ``engine/piles.py``; these are the
+    # two answers an interactive seat gives.
+
+    def confirm_pile_split(self, player_index: int, first_pile) -> bool:
+        """Answer the separation. *first_pile* is the positions — into the
+        items as the prompt listed them — that go into the first pile;
+        everything else goes into the second. Either pile may be empty
+        (CR 700.3d)."""
+        return self.resolve_pending_choice(
+            "pile_split", player_index, first_pile=first_pile
+        )
+
+    def confirm_pile_choice(self, player_index: int, pile_index: int) -> bool:
+        """Answer which of the two piles (0 or 1) is the chosen one."""
+        return self.resolve_pending_choice(
+            "pile_choice", player_index, pile_index=pile_index
+        )
 
     # -- The repeated look-and-bottom offer (Lim-Dul's Vault) ----------------
 
@@ -9895,6 +9981,41 @@ register_choice(
     blocked_detail="search the pile before other actions",
     suspends=True,
     default_at_arm=True,
+)
+
+register_choice(
+    "pile_split",
+    resolve=lambda game, choice, r: piles.resolve_pile_split(
+        game, choice, r.get("first_pile")
+    ),
+    default=lambda game, choice: piles.default_pile_split(game, choice),
+    action="pile_split_confirm",
+    prompt_key="pile_split",
+    blocked_detail="separate the piles before other actions",
+    # The choice between the piles is a later step of this same resolution
+    # (CR 608.2), and it is between what this answer made.
+    suspends=True,
+    # A non-interactive separator answers at once, or the resolution stops on
+    # a prompt nobody owes an answer to.
+    default_at_arm=True,
+    # The piles are face up (CR 700.3) — unlike Phyrexian Portal's, every
+    # player sees them — so the prompt is the separator's but hides nothing.
+    spectator_visible=True,
+)
+
+register_choice(
+    "pile_choice",
+    resolve=lambda game, choice, r: piles.resolve_pile_choice(
+        game, choice, r.get("pile_index")
+    ),
+    default=lambda game, choice: piles.default_pile_choice(game, choice),
+    action="pile_choice_confirm",
+    prompt_key="pile_choice",
+    blocked_detail="choose a pile before other actions",
+    # What becomes of each pile is the next step of the same resolution.
+    suspends=True,
+    default_at_arm=True,
+    spectator_visible=True,
 )
 
 register_choice(

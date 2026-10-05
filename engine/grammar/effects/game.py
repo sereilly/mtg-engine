@@ -193,6 +193,13 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
             # answer is one above the printed number — the floor the prompt
             # offers and the resolver enforces.
             bounds = (floor.value + 1, None)
+    elif stream.accept_phrase("choose", "a", "number") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        # "Choose a number." (Void.) No bound printed at all, which CR 107.1
+        # reads as any whole number from zero up: the floor is the rule's and
+        # the missing ceiling is the card's own answer.
+        bounds = (0, None)
     if bounds is None:
         stream.reset(mark)
         return None
@@ -273,10 +280,23 @@ def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
     if (word := stream.peek_word()) in CARD_TYPES and word != "card":
         card_type = word
         stream.advance()
-    if stream.accept_phrase("card", "name") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        return ast.ChooseCardName(card_type=card_type)
+    if stream.accept_phrase("card", "name"):
+        # "…**other than a basic land card name**." (Desperate Research.) The
+        # second printed bound on CR 202.1's freedom, read whole or not at all.
+        no_basics = stream.accept_phrase(
+            "other", "than", "a", "basic", "land", "card", "name",
+        )
+        # …and never when the sentence behind it is Necromentia's "Search
+        # target opponent's graveyard, hand, and library …": that card opens
+        # with these same eleven words and reads two more sentences as one
+        # paragraph (`naming._parse_name_and_strip`, the last resort behind
+        # this production), so taking the first sentence here strands the rest
+        # — the hazard `imperative_verbs` records beside the call.
+        strips = no_basics and stream.at_punct(".") and stream.peek_word(1) == "search"
+        if not strips and (stream.exhausted or stream.at_punct(".", ",")):
+            return ast.ChooseCardName(
+                card_type=card_type, other_than_basic_land=no_basics,
+            )
     stream.reset(mark)
     return None
 
@@ -756,6 +776,19 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     apart in the token stream.
     """
     stream.expect_word("skips", "skip")
+    # "…you skip your **draw step this turn**." (Elfhame Sanctuary.) The same
+    # step skip with its step named by the turn it belongs to instead of as
+    # "your next" — read whole (possessive, step, "step", window) or not at
+    # all, so "skip your draw steps" and every other unbounded spelling keeps
+    # the refusal below.
+    mark = stream.mark()
+    if stream.accept_word("your", "their"):
+        named = _SKIPPABLE_STEPS.get(stream.peek_word() or "")
+        if named is not None:
+            stream.advance()
+            if stream.accept_phrase("step", "this", "turn"):
+                return ast.SkipStep(subject, named, this_turn=True)
+    stream.reset(mark)
     if not (stream.accept_phrase("your", "next") or stream.accept_phrase("their", "next")):
         raise stream.error("expected 'your next' after 'skip'")
     word = stream.peek_word()

@@ -710,6 +710,16 @@ def _lower_look_top_pick(
     # payload in the family stays byte-identical.
     if node.revealed:
         payload["revealed"] = True
+    # "…You gain life equal to **that card's mana value**." (Reviving Vapors.)
+    # The record the pick is asked to write, named by the key the sentence
+    # behind it reads — see ``_records._PRODUCES_FOR_PAYLOAD``.
+    if node.records_pick_mana_value:
+        if picks != 1 or node.pick_destination != "hand":
+            raise LoweringError(
+                "only a single card taken into a hand has one mana value to record",
+                node=node,
+            )
+        payload["record_pick"] = "its_mana_value"
     # Who looks, when the sentence names them. Only the one seat this handler
     # can find without a second question: "target player" is chosen as the
     # ability is activated (CR 602.2b) and arrives as ``context.target``.

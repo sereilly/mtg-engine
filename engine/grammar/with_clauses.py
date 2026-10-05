@@ -284,6 +284,20 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
             if source_counters is not None:
                 d.mana_value_equals_source_counters = source_counters
                 return True
+            # "…**equal to that number**" / "…**equal to the number**" (Void,
+            # which prints both). The number a "Choose a number." sentence in
+            # front of this one recorded — read here for the reason the two
+            # bounds above are, and never when "of" follows: "equal to the
+            # number of <things>" is a count, which is `parse_comparison`'s.
+            chosen_probe = stream.mark()
+            if stream.accept_phrase("equal", "to") and (
+                stream.accept_phrase("that", "number")
+                or stream.accept_phrase("the", "chosen", "number")
+                or stream.accept_phrase("the", "number")
+            ) and not stream.at_word("of"):
+                d.mana_value_equals_chosen_number = True
+                return True
+            stream.reset(chosen_probe)
             d.mana_value = parse_comparison(stream)
             return True
         # "…**with protection from white**" (Escaped Shapeshifter). Read

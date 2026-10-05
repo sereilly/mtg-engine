@@ -243,6 +243,7 @@ from .characteristics import (
     BecomeAura,
     BecomeCreature,
 )
+from .separations import SeparateIntoPiles
 from .tapping import (
     Tap,
     Untap,
@@ -732,6 +733,7 @@ __all__ = [
     "Discard",
     "LookTopCycleForLife",
     "SeparateLibraryTopIntoPiles",
+    "SeparateIntoPiles",
     "Mill",
     "MillUntil",
     "PutMilledCardOntoBattlefield",

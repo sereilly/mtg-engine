@@ -90,6 +90,7 @@ from .characteristics import (
     RemoveCounter,
     SetBasePT,
 )
+from .separations import SeparateIntoPiles
 from .tapping import (
     Tap,
     Untap,
@@ -297,7 +298,7 @@ Effect = Union[
     DamageRidersUntilEndOfTurn,
     DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
-    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice, SacrificeAndReturnTargets,
+    GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice, SacrificeAndReturnTargets,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
     ShuffleSourceIntoLibrary,
     ShuffleTargetIntoLibrary,

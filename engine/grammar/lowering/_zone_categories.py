@@ -329,6 +329,10 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     "mill_target_player": "zones",
     "look_top_cycle_and_stack": "zones",
     "separate_library_top_into_piles": "zones",
+    # CR 700.3's face-up split (Fact or Fiction and its five Invasion
+    # siblings): the same family as the face-down one above, for its reason —
+    # what the piles are *for* is where their objects end up.
+    "separate_into_piles": "zones",
     "mill_until_matching": "zones",
     "put_milled_card_onto_battlefield": "zones",
     "put_hand_cards_on_library": "zones",

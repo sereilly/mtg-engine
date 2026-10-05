@@ -265,10 +265,19 @@ def test_a_head_choosing_one_or_more_is_carried():
 @pytest.mark.parametrize(
     "line",
     [
-        # Necromentia. Opens with the same two tokens as a modal head, and is a
-        # different effect entirely — so the head production must decline
-        # quietly and leave this line's own failure reason alone.
-        "Choose a card name other than a basic land card name.",
+        # Necromentia, cut short. Opens with the same two tokens as a modal
+        # head, and is a different effect entirely — so the head production
+        # must decline quietly and leave this line's own failure reason alone.
+        #
+        # This row was the opening sentence on its own until Invasion, when
+        # Desperate Research printed exactly that sentence as a whole one
+        # ("Choose a card name other than a basic land card name. Reveal the
+        # top seven cards …") and it became a line the grammar reads. What the
+        # row is *for* has not changed — a "choose" line that is no modal head
+        # and still refuses for its own reason — so it now carries enough of
+        # Necromentia's second sentence to be that card's paragraph, truncated.
+        "Choose a card name other than a basic land card name. Search target "
+        "opponent's graveyard.",
         # A head is the whole clause; the modes are the lines below it. Anything
         # trailing means this is not that sentence.
         "Choose one — and draw a card.",

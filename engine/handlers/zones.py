@@ -792,10 +792,15 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     """
     seat = game.players.index(context.caster)
     card_type = instruction.payload.get("card_type") or None
+    # "…other than a basic land card name" (Desperate Research): the other
+    # printed bound, carried to the prompt and obeyed by the default exactly as
+    # the type is.
+    no_basics = bool(instruction.payload.get("exclude_basic_land_names"))
     game.arm_pending_choice(
         "choose_card_name", seat,
         card_name=context.card.name if context.card is not None else "",
         card_type=card_type,
+        **({"exclude_basic_land_names": True} if no_basics else {}),
         # A non-interactive seat names the commonest card it may legally look
         # at — the opponents' graveyards, which CR 400.2 makes public. Naming
         # from a library or a hand would be the AI reading hidden information.
@@ -803,7 +808,7 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
         default_name=_commonest_visible_name(
             game,
             next(iter(game.opponents_of(seat)), seat),
-            ("graveyard",), exclude_basics=False, card_type=card_type,
+            ("graveyard",), exclude_basics=no_basics, card_type=card_type,
         ),
         record=context.results,
     )
@@ -3889,6 +3894,35 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["color_filter"] = str(chosen)
+    # "…discards all creature cards **of that type**." (Tsabo's Decree.) The
+    # colour's sibling: a creature type an earlier step of this resolution
+    # chose (CR 608.2d), resolved into the ordinary ``subtype_filter`` the card
+    # matcher reads. No word means no discard, for the reason given above.
+    subtype_key = instruction.payload.get("subtype_filter_from")
+    if subtype_key is not None:
+        chosen_type = context.results.get(str(subtype_key))
+        if not chosen_type:
+            game.log.append(
+                f"{context.card.name}: no creature type was chosen, so nothing "
+                "is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["subtype_filter"] = str(chosen_type)
+    # "…discards all nonland cards with mana value **equal to the number**."
+    # (Void.) The third record, a number this time, resolved into the ordinary
+    # ``mana_value`` comparison. Zero is a legal number, so the test is for the
+    # record rather than for its truth.
+    number_key = instruction.payload.get("mana_value_from")
+    if number_key is not None:
+        chosen_number = context.results.get(str(number_key))
+        if not isinstance(chosen_number, int) or isinstance(chosen_number, bool):
+            game.log.append(
+                f"{context.card.name}: no number was chosen, so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["mana_value"] = {"op": "eq", "value": chosen_number}
     doomed = [
         index for index, held in enumerate(victim.hand)
         if _card_matches_filter(held, filters, game=game, owner=victim)
@@ -7818,6 +7852,11 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     else:
         amount = resolve_amount(payload.get("amount", 0), context.x_value)
     top_count = min(amount, len(caster.library))
+    # Written before anything can end the step early: a pick that takes no
+    # card (an empty library) took a card with no mana value, and the gain
+    # behind it reads zero rather than whatever an earlier step left.
+    if payload.get("record_pick"):
+        context.results[str(payload["record_pick"])] = 0
     if top_count <= 0:
         game.log.append(f"{caster.name} has no cards to look at")
         return True, "resolved"
@@ -7860,6 +7899,13 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         # answer path re-arms the prompt while more are owed — see
         # `_resolve_look_top_pick`.
         remaining=max(1, int(payload.get("pick_count", 1))),
+        # "…You gain life equal to that card's mana value." (Reviving Vapors.)
+        # Where the answer writes the taken card's mana value, for the step of
+        # this same resolution that reads it. Absent for every other printing.
+        **(
+            {"_record_pick": (context, str(payload["record_pick"]))}
+            if payload.get("record_pick") else {}
+        ),
     )
     game.log.append(
         f"{chooser.name} is looking at the top {top_count} cards of "

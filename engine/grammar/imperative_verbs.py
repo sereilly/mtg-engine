@@ -109,6 +109,9 @@ from .effects import (
     _parse_reveal_hand,
     _parse_reveal_top,
     parse_reveal_any_number_from_hand,
+    parse_each_player_separates,
+    parse_reveal_top_and_separate,
+    parse_separate_into_piles,
     _parse_sacrifice,
     _parse_scry,
     _parse_search_library,
@@ -136,6 +139,27 @@ def parse_imperative_verb(
         flip = _parse_flip_coin(stream)
         if flip is not None:
             return flip
+    # "Separate all <objects> into two piles. …" (CR 700.3 — Do or Die, Death
+    # or Glory, Fight or Flight), its "For each defending player, separate …"
+    # spelling (Stand or Fall), "Each player separates …" (Bend or Break) and
+    # "Reveal the top five cards of your library. An opponent separates those
+    # cards into two piles. …" (Fact or Fiction). Each is a whole paragraph —
+    # the fate sentences name the piles the first one made — and each declines
+    # without consuming, so every other sentence opening on one of these four
+    # words keeps the reading it has: the reveal-top family below, the leading
+    # "for each" iteration, and the each-player subject reader above.
+    if stream.at_word("separate", "for"):
+        piles = parse_separate_into_piles(stream)
+        if piles is not None:
+            return piles
+    if stream.at_word("each"):
+        piles = parse_each_player_separates(stream)
+        if piles is not None:
+            return piles
+    if stream.at_word("reveal"):
+        piles = parse_reveal_top_and_separate(stream)
+        if piles is not None:
+            return piles
     # A bare imperative verb has an implied "you"/the source as subject.
     if stream.at_word("destroy"):
         return _parse_destroy(stream)

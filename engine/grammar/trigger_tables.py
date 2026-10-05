@@ -511,6 +511,10 @@ _AT_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("end_step", ("the", "beginning", "of", "each", "player", "'s", "end", "step")),
     # The narrowed form precedes its own prefix, per the rule above.
     ("combat_your_turn", ("the", "beginning", "of", "combat", "on", "your", "turn")),
+    # "…on **each opponent's** turn" (Fight or Flight) — the same step's other
+    # narrowing, for the reason engine/oracle.py's table states beside it.
+    ("combat_opponent_turn",
+     ("the", "beginning", "of", "combat", "on", "each", "opponent", "'s", "turn")),
     # "…of **each** combat" (Goblin Flotilla) — one event, two spellings, for
     # the reason engine/oracle.py's table states beside the same pair.
     ("combat", ("the", "beginning", "of", "each", "combat")),

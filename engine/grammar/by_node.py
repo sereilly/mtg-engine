@@ -156,7 +156,8 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_remove_from_combat,
                        _lower_put_library_top_into_hand,
                        _lower_put_exiled_with_source,
-                       _lower_each_player_claims_exiled_card)
+                       _lower_each_player_claims_exiled_card,
+                       _lower_separate_into_piles)
 
 
 #: The node types whose lowering is *only* a name — one AST class, one
@@ -202,10 +203,19 @@ _BY_NODE_TYPE: dict[type, object] = {
     # can add, carried as payload and **only when it is printed**, so
     # Foreshadow's instruction stays byte-identical and no behaviour signature
     # moves — the same rule `NameThenRevealTop`'s `miss_damage` follows.
+    #
+    # "…**other than a basic land card name**." (Desperate Research.) The
+    # other printed bound, carried the same way and for the same reason.
     ast.ChooseCardName: lambda node: (
         OracleInstruction(
             "choose_card_name", "",
-            {"card_type": node.card_type} if node.card_type else {},
+            {
+                **({"card_type": node.card_type} if node.card_type else {}),
+                **(
+                    {"exclude_basic_land_names": True}
+                    if node.other_than_basic_land else {}
+                ),
+            },
         ),
     ),
     ast.DamageRidersUntilEndOfTurn: _lower_damage_dealt_riders,
@@ -382,7 +392,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # the lowering has to know which event fired — and refuses under one that
     # freezes none rather than copying whatever the resolution is holding.
     ast.BecomeCopy: _lower_become_copy,
-    ast.Discard: _lower_discard,
     # "…**that player** reveals their hand…" (Crosis, the Purger): the seat the
     # damage froze, so the bare reveal joins the sentences that name it.
     ast.RevealHand: _lower_reveal_hand,
@@ -392,6 +401,11 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     ast.ExileRandomFromHand: _lower_exile_random_from_hand,
     ast.ExileCardsFromHand: _lower_exile_cards_from_hand,
     ast.Mill: _lower_mill,
+    # "…separate all creatures **that player** controls into two piles."
+    # (Fight or Flight.) CR 700.3's paragraph, whose seat word is the firing
+    # event's in two of its six printings — so the lowering has to know which
+    # event fired, and refuses "that player" under one that froze no seat.
+    ast.SeparateIntoPiles: _lower_separate_into_piles,
     # "…**that player** skips their next combat phase" (Blinding Angel): the
     # seat the damage event froze, so the lowering has to know which event
     # fired. It left the name-only table above the moment it started deciding
@@ -476,6 +490,12 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # The narrowing is a record an earlier step of the same effect wrote, so
     # the picker's lowering has to know one did — which is this table's shape.
     ast.RevealHandAndChoose: _lower_reveal_hand_and_choose,
+    # "…**that player** discards a card" (Anvil of Bogardan) names the seat the
+    # fire site froze; "…discards all creature cards **of that type**" (Tsabo's
+    # Decree) names a creature type an earlier step of this same effect chose.
+    # One node, two back-references, two places to look — the row moved here
+    # from the event-only table above when the second arrived.
+    ast.Discard: _lower_discard,
     # "…a card **with the same name as that creature**" (Remembrance) reads the
     # firing event's object; "…a card **with the same name as that card**"
     # (Assembly Hall) reads a card an earlier step of this same effect turned

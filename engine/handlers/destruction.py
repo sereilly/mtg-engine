@@ -226,6 +226,10 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # earlier step of this same resolution wrote, resolved just below
             # into the ordinary ``subtype_filter`` every matcher already reads.
             "subtype_filter_from",
+            # "…with mana value **equal to that number**" (Void). The same
+            # arrangement for a *number* an earlier step chose, resolved below
+            # into the ordinary ``mana_value`` comparison.
+            "mana_value_from",
         )
     }
     # CR 608.2d's choice, spent. The word is read out of the scratchpad rather
@@ -247,6 +251,19 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         filters["subtype_filter"] = str(chosen)
+    # "Choose a number. Destroy all artifacts and creatures with mana value
+    # **equal to that number**." (Void.) CR 608.2d's choice one characteristic
+    # over, and the same direction on an absent record: no number means no
+    # sweep, because the phrase read as no narrowing is every artifact and
+    # creature on the table. Zero is a number — it is the answer that takes
+    # the tokens — so the test is for the record, not for its truth.
+    number_key = instruction.payload.get("mana_value_from")
+    if number_key is not None:
+        chosen_number = context.results.get(str(number_key))
+        if not isinstance(chosen_number, int) or isinstance(chosen_number, bool):
+            game.log.append(f"{context.card.name}: no number was chosen")
+            return True, "resolved"
+        filters["mana_value"] = {"op": "eq", "value": chosen_number}
     # "…all creatures that were blocked by **that creature** this turn."
     # (Glyph of Doom.) A relation, resolved here for the reason `attached_to`
     # below is: the record lives on the blocker the delayed ability was bound

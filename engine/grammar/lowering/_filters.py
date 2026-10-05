@@ -318,6 +318,11 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # The one admitting lowering strips the field and carries the relation as
     # its own key; every other lowering refuses the phrase by name.
     "of_bound_type": "of_bound_type",
+    # "…with mana value **equal to that number**" (Void). A number the
+    # resolution chose, so no payload form, for ``of_bound_type``'s reason: the
+    # two lowerings written for it (the destroy sweep and the discard-all)
+    # strip the field and carry the record's name as ``mana_value_from``.
+    "mana_value_equals_chosen_number": "mana_value_equals_chosen_number",
     # "creatures blocking **target attacking creature**" / "each creature
     # blocking **it**" (Feint). The blocked object is not the source, so
     # `blocking_source` above cannot carry it; it is another object *this same

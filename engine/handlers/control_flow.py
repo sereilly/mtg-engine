@@ -2019,6 +2019,29 @@ def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: O
     return True, "resolved"
 
 
+def _most_telling_mana_value(game: Game, seat: int, low: int, high) -> int:
+    """The number a seat that is not asked names for a spell's "choose a
+    number": the mana value borne by the most nonland permanents its opponents
+    control, net of its own, within the printed range. Ties go to the larger
+    number; a board that offers nothing names the floor.
+
+    A stated policy over public information (CR 400.2 — the battlefield),
+    deliberately blind to hands: a number chosen by reading one would be the
+    seat looking at hidden cards.
+    """
+    tally: dict[int, int] = {}
+    for controller, permanent in game.permanents_with_controller():
+        if permanent.has_type("land"):
+            continue
+        value = int(getattr(permanent.effective_card, "cmc", 0) or 0)
+        if value < low or (high is not None and value > high):
+            continue
+        tally[value] = tally.get(value, 0) + (-1 if controller == seat else 1)
+    if not tally:
+        return low
+    return max(tally, key=lambda value: (tally[value], value))
+
+
 @effect_handler("choose_number")
 def choose_number(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a number between 0 and 7." (Shapeshifter.)
@@ -2054,12 +2077,30 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     would refuse.
     """
     permanent = context.source_permanent
-    if permanent is None:
-        game.log.append(f"{context.card.name}: no permanent to choose a number for")
-        return True, "resolved"
     low = int(instruction.payload.get("minimum", 0))
     printed_high = instruction.payload.get("maximum")
     high = None if printed_high is None else int(printed_high)
+    if permanent is None:
+        # "Choose a number. Destroy all artifacts and creatures with mana value
+        # equal to that number." (Void.) A *spell* choosing a number: there is
+        # no permanent to keep a standing answer on and nothing reads one — the
+        # only reader is a later step of this same resolution, which asks the
+        # scratchpad. The same prompt, the same record, and the default a seat
+        # that is not asked takes is the number that names the most of what the
+        # other players control and the least of its own.
+        if context.caster not in game.players:
+            game.log.append(f"{context.card.name}: nobody to choose a number")
+            return True, "resolved"
+        seat = game.players.index(context.caster)
+        default = _most_telling_mana_value(game, seat, low, high)
+        context.results[CHOSEN_NUMBER_THIS_WAY] = default
+        game.arm_pending_choice(
+            "number_choice", seat,
+            card_name=context.card.name if context.card is not None else "",
+            permanent=None, minimum=low, maximum=high, default_number=default,
+            result_key=CHOSEN_NUMBER_THIS_WAY, _context=context,
+        )
+        return True, "resolved"
     seat = game.controller_index_of(permanent)
     if seat is None:
         return True, "resolved"

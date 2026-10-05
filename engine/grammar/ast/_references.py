@@ -189,6 +189,14 @@ class ObjectFilter:
     #: that field's reason. "On it" is refused by the parse and belongs to the
     #: field above: the pronoun names the candidate.
     mana_value_equals_source_counters: str | None = None
+    #: "…with mana value **equal to that number**" / "…**equal to the number**"
+    #: (Void). The same comparison against a number an earlier step of this
+    #: resolution *chose* (CR 608.2d). It has no ``to_payload`` form — no read
+    #: of the candidate can supply a number that lives in the resolution's
+    #: scratchpad — so every lowering that builds a payload from a filter
+    #: refuses it by name, and the ones written for it carry the record's name
+    #: as their own key (``mana_value_from``).
+    mana_value_equals_chosen_number: bool = False
     #: "…target creature **with power less than or equal to the number of
     #: treasure counters on this enchantment**" (Legacy's Allure). The bound
     #: above one characteristic over: a count on the ability's *source*

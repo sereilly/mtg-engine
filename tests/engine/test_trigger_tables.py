@@ -429,6 +429,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     # `main_phase_first_each` fires precombat on everybody's turn.
     "main_phase_each_yours": "at the beginning of each of your main phases",
     "combat_your_turn": "at the beginning of combat on your turn",
+    # The same step's other narrowing (Fight or Flight), its own kind for the
+    # reason combat_your_turn is.
+    "combat_opponent_turn": "at the beginning of combat on each opponent's turn",
     "combat": "at the beginning of combat",
     # CR 511.1 — the end of combat step (The Wretched).
     "end_of_combat": (

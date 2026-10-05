@@ -339,6 +339,13 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         "library_pile_split",
         "pile_exile_choice",
         "pile_search",
+        # CR 700.3's face-up pair (Fact or Fiction and its five Invasion
+        # siblings). The separation decides what the chooser is choosing
+        # between and the choice decides what becomes of each pile — and with
+        # several players' piles (Bend or Break) every split and every choice
+        # is a step of one loop whose last step acts on all of them at once.
+        "pile_split",
+        "pile_choice",
         # "As many times as you choose, you may pay 1 life…" (Lim-Dul's Vault).
         # The answer decides whether the *next* step is another round of the
         # same offer or the shuffle that ends the card, and both are steps of

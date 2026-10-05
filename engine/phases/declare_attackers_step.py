@@ -1215,6 +1215,16 @@ class DeclareAttackersStepMixin:
             # (CR 400.7).
             if attacker.permanent_id in (entry.get("except_permanent_ids") or ()):
                 continue
+            # "**Only** creatures in the pile of their choice can attack this
+            # turn." (Fight or Flight.) A restriction on one player's
+            # creatures — the player whose creatures were separated — so the
+            # entry names that seat and is inert for everybody else's. A seat
+            # rather than a ``controller`` key in the filter, for the reason
+            # the toll reader below gives: the entry is a record on the game,
+            # so there is no observer whose "you" the phrase could mean.
+            scoped_seat = entry.get("controller_seat")
+            if scoped_seat is not None and self.controller_index_of(attacker) != scoped_seat:
+                continue
             if subject_matches(self, attacker, dict(entry.get("filter") or {})):
                 return False
 

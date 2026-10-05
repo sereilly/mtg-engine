@@ -922,6 +922,24 @@ def skip_next_step(game: Game, instruction: OracleInstruction, context: OracleEx
         if chosen not in game.players:
             return False, f"no player was chosen for {who!r}"
         seat = game.players.index(chosen)
+    # "…you skip your draw step **this turn**." (Elfhame Sanctuary.) The
+    # printed window, carried as a turn stamp the way a phase skip's is: on a
+    # turn that is not this seat's there is no such step to skip, and a record
+    # left waiting would eat a draw step a turn after the card said.
+    if instruction.payload.get("this_turn"):
+        if game.active_player_index != seat:
+            game.log.append(
+                f"{game.players[seat].name} has no {step} step this turn to skip"
+            )
+            return True, "resolved"
+        game.skip_next_step(
+            step, int(instruction.payload.get("count", 1) or 1), seat=seat,
+            on_turn=game.turn,
+        )
+        game.log.append(
+            f"{game.players[seat].name} will skip their {step} step this turn"
+        )
+        return True, "resolved"
     game.skip_next_step(step, int(instruction.payload.get("count", 1) or 1), seat=seat)
     game.log.append(
         f"{game.players[seat].name} will skip their next {step} step"
