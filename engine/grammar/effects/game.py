@@ -762,6 +762,19 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     apart in the token stream.
     """
     stream.expect_word("skips", "skip")
+    # "…you skip your **draw step this turn**." (Elfhame Sanctuary.) The same
+    # step skip with its step named by the turn it belongs to instead of as
+    # "your next" — read whole (possessive, step, "step", window) or not at
+    # all, so "skip your draw steps" and every other unbounded spelling keeps
+    # the refusal below.
+    mark = stream.mark()
+    if stream.accept_word("your", "their"):
+        named = _SKIPPABLE_STEPS.get(stream.peek_word() or "")
+        if named is not None:
+            stream.advance()
+            if stream.accept_phrase("step", "this", "turn"):
+                return ast.SkipStep(subject, named, this_turn=True)
+    stream.reset(mark)
     if not (stream.accept_phrase("your", "next") or stream.accept_phrase("their", "next")):
         raise stream.error("expected 'your next' after 'skip'")
     word = stream.peek_word()

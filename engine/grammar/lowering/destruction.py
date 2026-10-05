@@ -383,12 +383,32 @@ def _lower_destroy(
         # is the same handler "Destroy all Equipment attached to that creature"
         # already uses; refused when the narrowing is one the matcher cannot
         # test, for the reason `object_only_filter` exists.
+        #
+        # "Choose a creature type. … destroy all creatures **of that type** that
+        # player controls." (Tsabo's Decree.) "That type" is the word a sentence
+        # in front of this one recorded (CR 608.2d): taken off the filter and
+        # carried as the scratchpad slot the handler resolves, the arrangement
+        # Outbreak's pump (`lowering/characteristics`) has and the key
+        # Extinction's sweep below already reads. Only behind the step that
+        # writes it — an unresolved "that type" read as no narrowing is a sweep
+        # over every creature on the battlefield.
+        bound_type: dict[str, object] = {}
+        if filt.of_bound_type:
+            from ...oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY
+
+            if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                raise LoweringError(
+                    "'of that type' names a creature type no step of this "
+                    "effect chose", node=node,
+                )
+            filt = dataclasses.replace(filt, of_bound_type=False)
+            bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
         described = _filter_payload(filt)
         narrowing = {
             key: value for key, value in described.items()
             if key not in ("type_filter", "type_filter_all")
         }
-        if narrowing:
+        if narrowing or bound_type:
             # "Destroy all creatures **of the creature type of your choice**."
             # (Extinction.) CR 608.2d's choice, lifted out of the noun phrase
             # into a step of its own in front of the sweep — the sweep then
@@ -399,8 +419,23 @@ def _lower_destroy(
             prelude, described, chosen_type = split_creature_type_choice(described)
             if untestable_filter_keys(described):
                 raise LoweringError("no sweep handler for this narrowing", node=node)
+            # "**Target player** reveals their hand … Then destroy all creatures
+            # of that type **that player** controls." (Tsabo's Decree.) In a
+            # spell no event froze a seat, and the phrase still has an
+            # antecedent: the player an earlier sentence of this same effect
+            # *targeted* (CR 601.2c). That is the seat the handler already reads
+            # for "target player controls" (Mogg Infestation), so the word is
+            # rewritten to it — and only behind a step that recorded a creature
+            # type, which is the one shape this sentence has been read in. Every
+            # other unfrozen "that player" keeps the refusal below.
+            if (
+                bound_type
+                and event is None
+                and described.get("controller") == "that_player"
+            ):
+                described = {**described, "controller": "target_player"}
             _refuse_unfrozen_that_player(described, event, node)
-            narrowed_payload = {**described, **chosen_type}
+            narrowed_payload = {**described, **chosen_type, **bound_type}
             if node.no_regen:
                 narrowed_payload["bypass_regeneration"] = True
             return (

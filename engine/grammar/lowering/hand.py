@@ -43,7 +43,8 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, X_FROM_COUNT_PER_RECIPIENT,
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
@@ -282,7 +283,10 @@ def _with_that_many_draw(
     )
 
 
-def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleInstruction, ...]:
+def _lower_discard(
+    node: ast.Discard, event: str | None = None,
+    produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
     """"Target player discards N cards [at random]."
 
     Only the targeted form has a handler; "you discard" and "each player
@@ -349,6 +353,22 @@ def _lower_discard(node: ast.Discard, event: str | None = None) -> tuple[OracleI
                     described_filter, color_chosen_this_way=False
                 )
                 carried["color_filter_from"] = CHOSEN_COLOR_THIS_WAY
+            # "…discards all creature cards **of that type**." (Tsabo's Decree.)
+            # The colour's sibling one characteristic over, split off for its
+            # reason and carried under the key the destroy sweep in the same
+            # card reads. Only behind the step that chose a creature type: with
+            # no producer the words name nothing, and "all creature cards" is a
+            # wider discard than the card prints.
+            if described_filter.of_bound_type:
+                if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+                    raise LoweringError(
+                        "'of that type' names a creature type no step of this "
+                        "effect chose", node=node,
+                    )
+                described_filter = dataclasses.replace(
+                    described_filter, of_bound_type=False
+                )
+                carried["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
             described = chargeable_card_filter(described_filter)
             if described is None:
                 raise LoweringError(

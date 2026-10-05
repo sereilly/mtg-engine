@@ -575,6 +575,11 @@ class SkipStep:
     subject: "PlayerRef"
     step: str
     count: int = 1
+    #: "…you skip your draw step **this turn**." (Elfhame Sanctuary.) The step
+    #: is named by the turn it belongs to rather than as "your next": a window,
+    #: which :class:`SkipPhase` below has carried since Moment of Silence. A
+    #: skip that lost it would wait for a draw step on some later turn.
+    this_turn: bool = False
 
 
 @dataclass(frozen=True)

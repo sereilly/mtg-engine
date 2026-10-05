@@ -312,7 +312,9 @@ class PhaseStepsMixin:
         # 500.11
         self.skip_turn_counts[player_index] = self.skip_turn_counts.get(player_index, 0) + max(0, count)
 
-    def skip_next_step(self, step_name: str, count: int = 1, *, seat=None) -> None:
+    def skip_next_step(
+        self, step_name: str, count: int = 1, *, seat=None, on_turn: int | None = None
+    ) -> None:
         """CR 500.7 / CR 614.10: skip the next *step_name*, once per *count*.
 
         *seat* makes it **that player's** next such step ("you skip your next
@@ -321,8 +323,17 @@ class PhaseStepsMixin:
         opponent's turn is the wrong player's — so a seated skip gets its own
         key and the two live in the same bucket, read by the same
         :meth:`_consume_skip`.
+
+        *on_turn* is the window :meth:`skip_next_phase` has carried since
+        Moment of Silence, one level of the turn structure down: "you skip your
+        draw step **this turn**" (Elfhame Sanctuary) names a step of one turn,
+        so the record is stamped with it, is inert on every other turn and is
+        swept at that turn's cleanup.
         """
-        key = step_name if seat is None else (self.seat_index(seat), step_name)
+        if on_turn is not None:
+            key = (None if seat is None else self.seat_index(seat), step_name, on_turn)
+        else:
+            key = step_name if seat is None else (self.seat_index(seat), step_name)
         self.skip_step_counts[key] = self.skip_step_counts.get(key, 0) + max(0, count)
 
     def skip_next_phase(
@@ -398,6 +409,18 @@ class PhaseStepsMixin:
                 and key[2] <= self.turn
             )
         }
+        # The step bucket's stamped records (Elfhame Sanctuary), for the same
+        # reason and by the same test. A seated, unstamped step key is a
+        # two-tuple, so the length is what tells the two apart.
+        self.skip_step_counts = {
+            key: count for key, count in self.skip_step_counts.items()
+            if not (
+                isinstance(key, tuple)
+                and len(key) == 3
+                and isinstance(key[2], int)
+                and key[2] <= self.turn
+            )
+        }
 
     def _consume_step_skip(self, step: str, seat) -> bool:
         """Whether *seat*'s *step* is skipped, spending one record if so.
@@ -407,6 +430,13 @@ class PhaseStepsMixin:
         one leaves the other to eat a step nobody named. Both consumers of the
         bucket ask through here, so "who is skipped" has one answer.
         """
+        # A record stamped for this turn first (Elfhame Sanctuary's "this
+        # turn"), for :meth:`_consume_phase_skip`'s reason: it is the narrowest,
+        # and spending a wider one in its place leaves it to expire unused
+        # while the wider one's step is taken.
+        seat_index = None if seat is None else self.seat_index(seat)
+        if self._consume_skip(self.skip_step_counts, (seat_index, step, self.turn)):
+            return True
         if seat is not None and self._consume_skip(
             self.skip_step_counts, (self.seat_index(seat), step)
         ):

@@ -393,7 +393,6 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
     # the lowering has to know which event fired — and refuses under one that
     # freezes none rather than copying whatever the resolution is holding.
     ast.BecomeCopy: _lower_become_copy,
-    ast.Discard: _lower_discard,
     ast.ExileEntireLibrary: _lower_exile_entire_library,
     # "…**that player** exiles a card at random from their hand" (Elkin Lair):
     # the same seat question one zone over, and the same answer.
@@ -486,6 +485,12 @@ _BY_NODE_TYPE_WITH_EVENT: dict[type, object] = {
 #: the three above like every other pair of them.
 _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     ast.BlocksThisTurnIfAble: _lower_blocks_this_turn_if_able,
+    # "…**that player** discards a card" (Anvil of Bogardan) names the seat the
+    # fire site froze; "…discards all creature cards **of that type**" (Tsabo's
+    # Decree) names a creature type an earlier step of this same effect chose.
+    # One node, two back-references, two places to look — the row moved here
+    # from the event-only table above when the second arrived.
+    ast.Discard: _lower_discard,
     # "…a card **with the same name as that creature**" (Remembrance) reads the
     # firing event's object; "…a card **with the same name as that card**"
     # (Assembly Hall) reads a card an earlier step of this same effect turned

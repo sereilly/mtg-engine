@@ -3851,6 +3851,21 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["color_filter"] = str(chosen)
+    # "…discards all creature cards **of that type**." (Tsabo's Decree.) The
+    # colour's sibling: a creature type an earlier step of this resolution
+    # chose (CR 608.2d), resolved into the ordinary ``subtype_filter`` the card
+    # matcher reads. No word means no discard, for the reason given above.
+    subtype_key = instruction.payload.get("subtype_filter_from")
+    if subtype_key is not None:
+        chosen_type = context.results.get(str(subtype_key))
+        if not chosen_type:
+            game.log.append(
+                f"{context.card.name}: no creature type was chosen, so nothing "
+                "is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["subtype_filter"] = str(chosen_type)
     doomed = [
         index for index, held in enumerate(victim.hand)
         if _card_matches_filter(held, filters, game=game, owner=victim)
