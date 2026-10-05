@@ -15,14 +15,36 @@ from each other and from nothing else; ``_parse_look_at_hand`` and its six
 tails are reached from the look dispatcher and from each other. Neither module
 imports the other.
 
-**No lowering twin, and that is deliberate.** ``RevealTop``,
-``RevealTopToHandOrBottom``, ``RevealTopOpponentChooses`` and ``RevealUntil``
-all lower in ``lowering/library.py``, a few lines apart from the look-at
-lowerings, because what a reveal *costs* to lower is one instruction however
-elaborately its sentence is printed — the words are where the work is. That is
-the asymmetry ``search`` carried until Visions and ``text_changes`` still
-carries: a near-empty ``lowering/reveal.py`` would buy back the symmetry and
-cost the thing symmetry is for.
+**The lowering twin is ``lowering/reveal.py``**, and the paragraph that stood
+here said there was none and that the absence was deliberate — "what a reveal
+*costs* to lower is one instruction however elaborately its sentence is
+printed", so the four nodes of the day lowered in ``lowering/library.py`` beside
+the look-at lowerings. That was a claim about a size, and it was out of date
+within the wave that wrote it: ``lowering/library.py`` crossed the guard the
+same day and the mirror formed under this module's name — which that module's
+docstring has recorded ever since and this one went on denying until Invasion.
+Not everything built here lowers there — ``RevealTop`` lowers in ``zones``, the
+random hand reveal and the revealed picks (``LookTopPickToHand``) in
+``library`` — so the mirror is a family name, not a list of nodes.
+
+**One thing a card reveals is read one module down**, in ``_reveal_until``: the
+*run*, "reveal cards from the top of your library until you reveal a <filter>".
+Pre-split out between Invasion's two waves, with this module ten lines under
+the guard, along the fork ``_parse_reveal_top`` takes on the word after the
+verb — an unbounded run that stops on a match, against everything left here,
+which reveals a pile the sentence bounds outright (the top card, the top N, a
+number equal to something, cards out of a hand) and then says what becomes of
+it. A floor rather than a family because the verb keeps one entry point: this
+module imports ``_accept_reveal_until_from_top`` and tries it first, and
+nothing there reads back.
+
+**Two productions here open with no reveal at all**, and stay for the mirror's
+reason rather than the first sentence's: ``parse_graveyard_top_opponent_chooses``
+(a graveyard is public, CR 400.2, so its pile needs none) is Thran Tome's
+paragraph asked of another zone, and ``parse_bin_revealed_card`` moves the card
+a *look* turned up. Both nodes sit beside the reveals' in ``ast/library.py`` and
+both lower in ``lowering/reveal.py``, so moving either would fork a family that
+agrees on all three sides.
 """
 
 from .. import ast
@@ -32,6 +54,7 @@ from ..nouns import parse_object_filter
 from ..phrases import accept_a_card_at_random_from_hand
 from ..references import parse_player_ref
 from ..stream import TokenStream
+from ._reveal_until import _accept_reveal_until_from_top
 
 
 def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
@@ -321,215 +344,6 @@ def _accept_counted_reveal_sorting_by_filter(
     return ast.RevealTopSortingByFilter(
         count, filt, match_zone=match_zone, rest_zone=rest_zone,
     )
-
-
-#: What the cards a reveal-until turned over *before* the match may be printed
-#: to do. A closed list, for ``naming._REVEAL_DESTINATIONS``'
-#: reason: each of these is something ``reveal_until_match`` actually performs,
-#: and a word outside it refuses the line rather than lowering onto a fate
-#: nobody carries out.
-_REVEAL_UNTIL_REST: dict[str, str] = {
-    "exile": "exile",
-    "graveyard": "graveyard",
-}
-
-def _accept_reveal_until_from_top(
-    stream: TokenStream,
-) -> "ast.RevealUntil | None":
-    """``cards from the top of your library until you reveal a <filter>. Put
-    that card into your hand and exile all other cards revealed this way.`` at
-    the cursor, with "Reveal" already read — or None with the cursor where it
-    was. (Sacred Guide.)
-
-    ``…until they reveal a creature card. If the first player does, that player
-    puts that card onto the battlefield and all other cards revealed this way
-    into their graveyard.`` (Oath of Druids; Avenging Druid prints the same
-    procedure with "you"/"your" and its own verb before the rest.)
-
-    Both sentences, for :func:`_parse_reveal_top`'s reason and
-    :class:`ast.RevealUntil`'s: "that card" is what the run stopped on and "all
-    other cards revealed this way" is exactly what it turned over first, so
-    apart they dangle referents nothing binds.
-
-    **Three things are read rather than assumed, and each is a different
-    card.** The destination — a hand or the battlefield. The rest's fate —
-    Transmogrify shuffles its pile back, Sacred Guide exiles it and these two
-    bin it, which is the whole difference between a card that costs its
-    controller a library and one that does not. And the **possessive**, which
-    agrees with the sentence's subject: "your"/"you" where the performer is the
-    resolving player and "their"/"they" where an enclosing offer named somebody
-    else (``effects/search`` reads its own the same way, and for the same
-    reason — a "may" parses its action as a bare imperative with no subject in
-    it). Both spellings mean "whoever is performing this sentence", which is
-    what ``whose="you"`` says to the handler, and the pronoun has to agree at
-    every one of its printed positions or the line refuses.
-
-    Only the reader's own library, whichever pronoun says so: a run off
-    somebody else's deck would move a card out of that library into this seat's
-    hand, and a card printing that is a different card.
-    """
-    mark = stream.mark()
-    possessive = "their" if stream.peek_word(5) == "their" else "your"
-    pronoun = "they" if possessive == "their" else "you"
-    if not stream.accept_phrase(
-        "cards", "from", "the", "top", "of", possessive, "library", "until",
-        pronoun, "reveal",
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_word("a", "an")
-    try:
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not filt.is_card:
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    # "**If you do,** put that card onto the battlefield…" (Avenging Druid);
-    # "**If the first player does,** that player puts…" (Oath of Druids). The
-    # offer above this production is what the clause points back at — the run
-    # only happens if the seat took it, and the whole procedure is one node
-    # inside that offer — so the words are a restatement and are consumed.
-    # Optional: Sacred Guide and Hermit Druid print no offer and no clause.
-    _accept_did_clause(stream)
-    # "…**that player** puts that card…" — the subject the offer named, in the
-    # third person because the sentence names it rather than addressing it.
-    # Consumed here so the destination clause below is one production either
-    # way; it is the same seat the pronoun above already agreed with.
-    if possessive == "their":
-        stream.accept_phrase("that", "player")
-    if not stream.accept_word("put", "puts"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("that", "card"):
-        stream.reset(mark)
-        return None
-    # Every word of the destination, for the reason the rider one module over
-    # gives about its own: a printing that put the found card somewhere else is
-    # a different card and nothing before this sentence shows the difference.
-    if stream.accept_word("into"):
-        if not stream.accept_phrase(possessive, "hand"):
-            stream.reset(mark)
-            return None
-        destination = "hand"
-    elif stream.accept_phrase("onto", "the", "battlefield"):
-        destination = "battlefield"
-    else:
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("and"):
-        stream.reset(mark)
-        return None
-    rest = _accept_reveal_until_rest(stream, possessive)
-    if rest is None:
-        stream.reset(mark)
-        return None
-    return ast.RevealUntil("you", filt, destination=destination, rest=rest)
-
-
-def _accept_did_clause(stream: TokenStream) -> bool:
-    """``If you do,`` / ``If the first player does,`` — the offer restated.
-
-    Consumed rather than lowered because the offer it points back at is the one
-    this production already sits inside: nothing happens unless the seat took
-    it, so the clause repeats a condition the ``may`` above already enforces.
-    Every word of both spellings is required — a conditional naming some *other*
-    fact would be a card this production is not.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("if"):
-        return False
-    if not (
-        stream.accept_phrase("you", "do")
-        or stream.accept_phrase("the", "first", "player", "does")
-        or stream.accept_phrase("that", "player", "does")
-    ):
-        stream.reset(mark)
-        return False
-    stream.accept_punct(",")
-    return True
-
-
-def _accept_reveal_until_rest(
-    stream: TokenStream, possessive: str,
-) -> "str | None":
-    """Where the cards turned over before the match go, or None.
-
-    **Three printed word orders for one clause**, read here rather than in
-    three productions because every word in front of them is identical and a
-    production that differed only in a tail would be this sentence written
-    three times. Sacred Guide puts a verb in front of the pile ("and *exile*
-    all other cards revealed this way"); Hermit Druid and Oath of Druids elide
-    it and name a destination instead ("and all other cards revealed this way
-    *into your graveyard*") — the same "put" the clause before it already
-    carries, distributed across both objects; Avenging Druid prints that verb
-    again ("and *put* all other cards revealed this way into your graveyard").
-    """
-    mark = stream.mark()
-    # "…and **shuffle all other cards revealed this way into your library**."
-    # (Thicket Elemental.) The fate Transmogrify prints as "then shuffles the
-    # rest into their library", on this production's own sentence -- so it
-    # reaches the handler branch that card already uses, and the pile is put
-    # back and shuffled once (CR 701.24) rather than binned. A verb of its own
-    # rather than a row of ``_REVEAL_UNTIL_REST``, because that table maps a
-    # *zone word* and the zone here is the library the cards came from: only
-    # the verb says they are shuffled in rather than put back in order. Every
-    # word required, the possessive agreeing with the sentence's subject as it
-    # does at every other position.
-    if stream.accept_word("shuffle"):
-        if stream.accept_phrase(
-            "all", "other", "cards", "revealed", "this", "way", "into",
-            possessive, "library",
-        ):
-            return "shuffle_into_library"
-        stream.reset(mark)
-        return None
-    # Avenging Druid's repeated verb. Read before the pile so the two elided
-    # spellings below are one branch.
-    stream.accept_word("put")
-    # "…and **the rest** into your graveyard." (Foster.) A fourth printed
-    # spelling of the same pile — what the run turned over before it stopped —
-    # and read here beside the other three for this function's stated reason:
-    # every word in front of it is identical, and a production differing only
-    # in a tail would be one sentence written four times.
-    rest_mark = stream.mark()
-    if stream.accept_phrase("the", "rest"):
-        if stream.accept_word("into"):
-            stream.accept_word(possessive)
-            rest_zone = stream.peek_word()
-            if rest_zone in _REVEAL_UNTIL_REST:
-                stream.advance()
-                return _REVEAL_UNTIL_REST[rest_zone]
-        stream.reset(rest_mark)
-    if stream.accept_phrase("all", "other", "cards", "revealed", "this", "way"):
-        if not stream.accept_word("into"):
-            stream.reset(mark)
-            return None
-        # "into **your** graveyard" has the possessive and "into exile" does
-        # not; it is the same seat either way, since the run reads this seat's
-        # own library.
-        stream.accept_word(possessive)
-        rest_zone = stream.peek_word()
-        if rest_zone not in _REVEAL_UNTIL_REST:
-            stream.reset(mark)
-            return None
-        stream.advance()
-        return _REVEAL_UNTIL_REST[rest_zone]
-    stream.reset(mark)
-    rest = stream.peek_word()
-    if rest not in _REVEAL_UNTIL_REST:
-        return None
-    stream.advance()
-    if not stream.accept_phrase(
-        "all", "other", "cards", "revealed", "this", "way"
-    ):
-        stream.reset(mark)
-        return None
-    return _REVEAL_UNTIL_REST[rest]
 
 
 def _accept_counted_reveal_top(

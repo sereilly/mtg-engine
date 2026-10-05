@@ -1873,7 +1873,16 @@ def test_layers_only_import_downward(layers):
         # `_strips`, so `search` now imports `_other_libraries` and
         # `_other_libraries` imports `_strips`. A floor reading a floor, as
         # `_roles` reads `_targets` on the lowering side; nothing reads back.
-        ("effects", ("_strips", "_other_libraries"), ()),
+        #
+        # `_reveal_until` is the third, pre-split out of `reveal` between
+        # Invasion's two waves with that module ten lines under the guard: the
+        # run, "reveal cards from the top of your library until you reveal a
+        # <filter>". `reveal` is its one importer, for `_other_libraries`'
+        # reason exactly — the printed verb keeps one entry point,
+        # `_parse_reveal_top`, which has read "Reveal" before the run is tried,
+        # and a family may not be called from another one. It reads the noun
+        # parser one layer down and no sibling; nothing reads back.
+        ("effects", ("_strips", "_other_libraries", "_reveal_until"), ()),
         # `_targets` joins the lowering floors at Prophecy's wave 2, when
         # `_roles` — split out of it at Mercadian Masques — first read it back:
         # a printed "another target" is planned as two roles from the
@@ -2239,6 +2248,17 @@ FAMILY_SHARED = {
     # had in fact since it was written: the strip is tried from inside this
     # production and from nowhere else.
     "_other_libraries",
+    # `effects/_reveal_until`, pre-split out of `effects/reveal.py` between
+    # Invasion's two waves — the reveal that has no printed size and stops on a
+    # match (Sacred Guide, Oath of Druids, Foster, Thicket Elemental). The seam
+    # is the fork `_parse_reveal_top`'s own comment drew on the word after the
+    # verb: "this one reads an unbounded run off the top and stops on a match,
+    # where everything below reads a fixed number of them". One node
+    # (`ast.RevealUntil`), one lowering, one instruction kind, and a call graph
+    # with one edge in and none out.
+    # A single-importer floor like the two above it. No mirror to fork:
+    # `lowering/reveal.py` lowers the node in one function and has not split.
+    "_reveal_until",
     # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that
     # module sat 24 lines under the size guard with a new counted-amount branch
     # to land. The seam is the one that module's own docstring already drew
