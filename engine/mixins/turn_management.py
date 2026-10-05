@@ -859,7 +859,22 @@ class TurnManagementMixin:
                     # the same kind of choice at the same moment. It is
                     # normalized rather than trusted, because it arrives off the
                     # wire.
-                    extra = self._normalize_mana_color(chosen_color) or "G"
+                    #
+                    # **A land asked for {C} has named no colour for the Aura.**
+                    # "Any color" is one of the five (CR 105.1), never
+                    # colourless, so `{C}` is the land's own answer and says
+                    # nothing here - the same case as a call that named no
+                    # colour at all, and it takes the same default. Handed to
+                    # the normalizer it raised: a Mishra's Factory or an
+                    # Archaeological Dig under a Fertile Ground, tapped for the
+                    # `{C}` the AI's plan counted, ended the game with a
+                    # ValueError. Anything else that is not a colour is still
+                    # refused.
+                    asked = (chosen_color or "").strip().upper()
+                    extra = (
+                        None if asked == "C"
+                        else self._normalize_mana_color(chosen_color)
+                    ) or "G"
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 
