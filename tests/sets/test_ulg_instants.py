@@ -312,3 +312,38 @@ def test_w1g5_repopulate_offers_a_seat_picker(set_pool):
     card = set_pool("ULG")["Repopulate"]
 
     assert derive_cast_spec(card, compile_card_oracle(card)) == {"kind": "player"}
+
+
+# --- INV W1G6: a count of "each creature attacking you" ---
+# Found by Invasion's colour-choice round: a count whose noun phrase names no
+# controller was scoped to the caster's own battlefield.
+from engine import Game as _W1G6Game
+from engine import PlayerState as _W1G6PlayerState
+from engine.models import Permanent as _W1G6Permanent
+
+
+def test_w1g6_blessed_reversal_counts_the_creatures_attacking_its_caster(set_pool):
+    """A shipped card this round's count fix found (Urza's Legacy): "You gain 3
+    life for each creature attacking you." The count was scoped to the
+    caster's own battlefield, where nothing attacking the caster ever is, so
+    it gained nothing. Two attackers and one creature that stayed home: 6."""
+    lea = set_pool("LEA")
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="A", life=20), _W1G6PlayerState(name="B", life=20),
+    ])
+    game.enforce_mana_costs = False
+    for seat, names in ((0, ["Grizzly Bears", "Hill Giant", "Llanowar Elves"]), (1, ["Grizzly Bears"])):
+        for name in names:
+            perm = _W1G6Permanent(card=lea[name])
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            perm.metadata["summoning_sickness_turn"] = -99
+    game.active_player_index = 0
+    game.current_turn_phase, game.current_step = "combat", "declare_attackers"
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.players[1].hand.append(set_pool("ULG")["Blessed Reversal"])
+    from tests.helpers import resolve_stack
+
+    assert game.queue_from_hand(1, "Blessed Reversal").supported
+    resolve_stack(game)
+
+    assert (game.players[0].life, game.players[1].life) == (20, 26)
