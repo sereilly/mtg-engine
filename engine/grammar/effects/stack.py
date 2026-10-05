@@ -26,7 +26,8 @@ from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
-                       _parse_mana_payment, _parse_zone)
+                       _parse_mana_payment, _parse_zone,
+                       accept_bidding_procedure)
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
@@ -849,3 +850,58 @@ def _parse_put_exiled_card_on_stack_as_copy(
         stream.reset(mark)
         return None
     return ast.PutExiledCardOnStackAsCopy(player=player)
+
+
+def _parse_bid_life_contest(stream: TokenStream) -> ast.Statement | None:
+    """``You and <player> bid life. You start the bidding with a bid of N. In
+    turn order, each player may top the high bid. The bidding ends if the high
+    bid stands. The high bidder loses life equal to the high bid. If you win
+    the bidding, counter that spell.`` (Mages' Contest.)
+
+    Illicit Auction's paragraph with a different pair of bidders and a
+    different stake, so the three sentences of procedure in the middle go
+    through the reader that card's production uses
+    (``phrases.accept_bidding_procedure``) and only the two ends are read here.
+
+    In this family rather than beside the other auction because of what the
+    two ends say: that one is about who ends up controlling a permanent, this
+    one about whether a spell is countered. The procedure they share is in
+    ``phrases`` for exactly that reason — a fragment two families read is not
+    one family's — and it is why this is not in ``paragraphs`` with the other
+    "You and <player> …" openers: that module sits below ``phrases``.
+
+    The rival is whatever player the opener names; lowering refuses every one
+    but ``target spell's controller``, because the closing sentence says
+    "**that spell**" and only that seat brings a spell for the words to name.
+
+    The closer is expected word for word, like every fixed sentence of a
+    paragraph here: a contest whose winner draws, or whose *loser's* spell is
+    countered, is a different card and must fail the line rather than be read
+    as this one.
+
+    Returns None without consuming when the line does not open "You and
+    <player> bid life" — Mana Clash, Juxtapose and Reins of Power open with
+    the same two words and keep their own readers.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("you", "and"):
+        stream.reset(mark)
+        return None
+    rival = parse_player_ref(stream)
+    if rival is None or not stream.accept_phrase("bid", "life"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that opens the bidding")
+    starting_bid = accept_bidding_procedure(stream)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that names the stake")
+    if not stream.accept_phrase("if", "you", "win", "the", "bidding"):
+        raise stream.error("expected 'if you win the bidding, …'")
+    stream.accept_punct(",")
+    if not stream.accept_phrase("counter", "that", "spell"):
+        raise stream.error("expected 'counter that spell'")
+    stream.accept_punct(".")
+    return ast.BidLifeContest(
+        (ast.PlayerRef("you"), rival), starting_bid=starting_bid
+    )

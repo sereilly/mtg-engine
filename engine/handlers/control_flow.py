@@ -29,7 +29,8 @@ from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ..faces import has_name
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
-from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
+from ..oracle_types import (BIDDING_WINNER,
+                            CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, CLAIMABLE_EXILED_CARDS,
                             EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
                             SWEPT_OWNER_SEATS,
@@ -1012,6 +1013,14 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         return _compare_count(
             int(context.results["counted_number"]), str(payload.get("op", "")), None
         )
+
+    if kind == "won_bidding":
+        # "If **you** win the bidding, …" (Mages' Contest.) The auction wrote
+        # the seat its high bid stood for; "you" is the resolving seat
+        # (CR 109.5). An absent record is False rather than a guess — the
+        # auction did not run (its spell's controller was gone), so nobody won.
+        winner = context.results.get(BIDDING_WINNER)
+        return winner is not None and winner == game.players.index(context.caster)
 
     if kind == "coin_flip":
         # CR 705.2. The flip recorded its result; asking again would flip a

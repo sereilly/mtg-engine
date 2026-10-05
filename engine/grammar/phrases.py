@@ -44,7 +44,7 @@ from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
                       accept_counters_on_source, parse_amount)
 from .durations import _parse_duration
 from .errors import GrammarError
-from .lexer import GToken, tokenize
+from .lexer import NUMBER, GToken, tokenize
 from .distinct import parse_counted_objects
 from .nouns import parse_object_filter
 # Re-exported under the name this module's callers already use — the
@@ -749,3 +749,73 @@ def accept_a_card_at_random_from_hand(stream: TokenStream) -> bool:
         return True
     stream.reset(mark)
     return False
+
+
+def accept_bidding_procedure(stream: TokenStream) -> int:
+    """``You start the bidding with a bid of N. In turn order, each player may
+    top the high bid. The bidding ends if the high bid stands. The high bidder
+    loses life equal to the high bid`` — an auction's rules, returning N.
+
+    The words every printed auction shares (Illicit Auction, Mages' Contest),
+    read once: what the cards differ in is who bids (the sentence in front of
+    this) and what the winner gets (the words behind it), and each of those is
+    its own production's. The cursor is left *after* "…equal to the high bid",
+    in front of whatever joins the prize on — "and gains control of the
+    creature" on one card, a full stop and "If you win the bidding, …" on the
+    other.
+
+    These are not effects — "the bidding ends if the high bid stands" changes
+    no board — they are the procedure the ``bid_life`` prompt chain performs,
+    so every one is **required**, in the printed order. An auction whose bids
+    go round differently, or whose winner pays something other than the high
+    bid, is a different card, and admitting it here would be the dropped-rider
+    bug with a whole paragraph in it.
+
+    Raises rather than returning a sentinel: both callers have already read
+    the sentence that opens the bidding, so what follows is this or an error.
+
+    Here because two families read it (``effects/control_changes`` and
+    ``paragraphs``), which is this module's test for a fragment.
+    """
+    # "You start the bidding with a bid of **0**." The opening bid is the
+    # printed number, not a constant — Illicit Auction prints 0 and Mages'
+    # Contest 1 — and the handler reads the value off the payload.
+    if not stream.accept_phrase(
+        "you", "start", "the", "bidding", "with", "a", "bid", "of"
+    ):
+        raise stream.error("expected 'you start the bidding with a bid of N'")
+    token = stream.peek()
+    if token is not None and token.kind == NUMBER:
+        stream.advance()
+        starting_bid = int(token.text)
+    else:
+        word = NUMBER_WORDS.get(stream.peek_word() or "")
+        if word is None:
+            raise stream.error("expected the number the bidding starts at")
+        stream.advance()
+        starting_bid = int(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that orders the bidding")
+    if not stream.accept_phrase("in", "turn", "order"):
+        raise stream.error("expected 'in turn order'")
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "each", "player", "may", "top", "the", "high", "bid"
+    ):
+        raise stream.error("expected 'each player may top the high bid'")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that ends the bidding")
+    if not stream.accept_phrase(
+        "the", "bidding", "ends", "if", "the", "high", "bid", "stands"
+    ):
+        raise stream.error("expected 'the bidding ends if the high bid stands'")
+    if not stream.accept_punct("."):
+        raise stream.error("expected the sentence that settles the bidding")
+    if not stream.accept_phrase(
+        "the", "high", "bidder", "loses", "life", "equal", "to", "the", "high",
+        "bid",
+    ):
+        raise stream.error(
+            "expected 'the high bidder loses life equal to the high bid'"
+        )
+    return starting_bid

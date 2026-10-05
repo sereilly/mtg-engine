@@ -2485,6 +2485,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # spell"), so it derives the same picker — the spec is about what is
     # being *chosen*, not about what is then done to it.
     "prevent_damage_by_target_spell_until_eot": _counter_spec,
+    # "You and **target spell's controller** bid life." (Mages' Contest.) The
+    # seat is read off a spell, so what the announcement chooses is the spell
+    # (CR 115.1) — any spell, the paragraph narrows nothing — and the picker is
+    # a counterspell's. The counter the bidding decides sits behind this step
+    # and names the same object by back-reference, so this is the one row that
+    # says the card targets.
+    "bid_life": _counter_spec,
     "return_creature_from_graveyard_to_hand": _graveyard_return_spec,
     # "Choose two target creature cards in your graveyard." (Victimize.) The
     # same picker as the return above and derived by the same builder, because

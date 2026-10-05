@@ -13,7 +13,8 @@ of modes the engine can carry out.
 
 import dataclasses
 
-from ...oracle_types import COUNTERED_ABILITY_SOURCE, OracleInstruction
+from ...oracle_types import (BIDDING_WINNER, COUNTERED_ABILITY_SOURCE,
+                             OracleInstruction)
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
@@ -885,3 +886,63 @@ def _lower_put_exiled_card_on_stack_as_copy(
     return (
         OracleInstruction("put_exiled_card_onto_stack_as_copy", "", {}),
     )
+
+
+#: The instruction an auction of life lowers to when nothing is handed to the
+#: winner by the auction itself. Who bids and the opening number are payload;
+#: what winning buys is the *next* step of the sequence, read off the record.
+BID_LIFE_KIND = "bid_life"
+
+#: The condition "if you win the bidding" lowers to. Named beside its producer
+#: so the handler side imports one spelling.
+WON_BIDDING_CONDITION = "won_bidding"
+
+
+def _lower_bid_life_contest(
+    node: ast.BidLifeContest,
+) -> tuple[OracleInstruction, ...]:
+    """``You and target spell's controller bid life. … If you win the bidding,
+    counter that spell.`` (Mages' Contest.)
+
+    **Two steps and a condition, not a fused kind.** The auction is one
+    instruction (``bid_life``): it runs the bidding among the printed seats,
+    takes the high bid off the high bidder and records who that was
+    (``BIDDING_WINNER``). What winning buys is an ordinary ``if_then`` behind
+    it holding an ordinary ``counter_top_stack_spell`` — the instruction every
+    counterspell in the pool resolves through, so "can't be countered", the
+    graveyard it goes to and the triggers that watch it are all that one
+    handler's. A card whose winner draws four cards instead (Pain's Reward)
+    would be this lowering with a different second step.
+
+    The ``targets`` description rides the **auction**, because that is where
+    the paragraph prints the word — "target spell's controller" — and the
+    counter names the same object by back-reference ("that spell"):
+    ``bound_to_target`` tells its handler to counter the announced object or
+    nothing, never the top of the stack in its place.
+
+    Refuses every pair of bidders but the printed one. "You" has to be first,
+    since the procedure says "**you** start the bidding" and the handler opens
+    it with the resolving seat; and the rival has to be the target spell's
+    controller, because that seat is what gives "that spell" its referent.
+    """
+    kinds = tuple(bidder.kind for bidder in node.bidders)
+    if kinds != ("you", "target_spells_controller"):
+        raise LoweringError(
+            "the only contest the engine runs is between you and target "
+            "spell's controller",
+            node=node,
+        )
+    auction = OracleInstruction(BID_LIFE_KIND, "", {
+        "bidders": list(kinds),
+        "starting_bid": int(node.starting_bid),
+        "targets": {"quantifier": "target", "kind": "spell"},
+    })
+    counter = OracleInstruction(
+        "counter_top_stack_spell", "", {"bound_to_target": True},
+    )
+    won = OracleInstruction("if_then", "", {
+        "condition": {"kind": WON_BIDDING_CONDITION, "record": BIDDING_WINNER},
+        "then": (counter,),
+        "else": (),
+    })
+    return (OracleInstruction("sequence", "", {"steps": (auction, won)}),)

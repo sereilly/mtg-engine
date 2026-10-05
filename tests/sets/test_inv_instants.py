@@ -1743,3 +1743,342 @@ def test_liberate_cannot_target_a_creature_its_caster_does_not_control(set_pool)
     ).supported
     assert game.is_on_battlefield(giant)
     assert game.players[0].hand == [liberate]
+
+
+# --- W2G3: the stack ---
+#
+# Two things. Mages' Contest — the pool's second auction, Illicit Auction's
+# round of offers with two bidders and a spell for a stake. And the one
+# CR 601.2c gate for a spell that targets an object on the stack, where the
+# first wave left two (W1G2's for a named spell, W1G8's for Teferi's Response
+# above): what it means for the Invasion counterspells whose counter is the
+# first of two sentences.
+
+import pytest as _w2g3_pytest
+
+from engine import Game as _W2G3Game
+from engine.models import Permanent as _W2G3Permanent
+from engine.models import PlayerState as _W2G3PlayerState
+from engine.oracle import compile_card_oracle as _w2g3_compile
+from engine.targeting import derive_cast_spec as _w2g3_cast_spec
+from tests.helpers import resolve_stack as _w2g3_resolve_stack
+
+
+def _w2g3_table(set_pool, *, seats: int = 2, interactive=None, library: int = 6):
+    """*seats* players at 20 life, costs off; every seat answers its own
+    prompts unless *interactive* names the ones that do."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G3Game(players=[
+        _W2G3PlayerState(name=f"P{seat}", life=20, library=[island] * library)
+        for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = (
+        set(range(seats)) if interactive is None else set(interactive)
+    )
+    return game
+
+
+def _w2g3_cast(game, set_pool, seat: int, name: str, code: str = "LEA", **announced):
+    """*seat* casts *name* out of *code*; returns the result."""
+    game.players[seat].hand.append(set_pool(code)[name])
+    outcome = game.queue_from_hand(seat, name, **announced)
+    return outcome
+
+
+def _w2g3_contest(set_pool, *, seats: int = 2, rival: int = 1, interactive=None):
+    """Seat *rival* has a Lightning Bolt on the stack aimed at seat 0, and seat
+    0 has answered it with Mages' Contest, now resolving the way the app
+    resolves it (the object held while the bidding runs). Returns
+    ``(game, bolt_item)``."""
+    game = _w2g3_table(set_pool, seats=seats, interactive=interactive)
+    game.active_player_index = rival
+    assert _w2g3_cast(
+        game, set_pool, rival, "Lightning Bolt", target_player_index=0,
+    ).supported
+    bolt = game.stack[0]
+    assert _w2g3_cast(
+        game, set_pool, 0, "Mages' Contest", "INV", target_stack_index=0,
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    return game, bolt
+
+
+def _w2g3_asked(game) -> "tuple[int, int, int] | None":
+    """``(seat asked, high bid, high bidder)`` of the bid owed now, or None."""
+    if not game.pending_choices:
+        return None
+    choice = game.pending_choices[0]
+    assert choice.kind == "bid_life"
+    asked = (
+        choice.player_index, choice.data["high_bid"], choice.data["high_bidder"],
+    )
+    return asked
+
+
+def _w2g3_names(game, seat: int, zone: str) -> list[str]:
+    cards = getattr(game.players[seat], zone)
+    return [card.name for card in cards]
+
+
+def test_mages_contest_targets_a_spell_and_compiles_to_an_auction_and_a_counter(set_pool):
+    """"You and **target spell's** controller bid life." The one instance of
+    the word names a spell, so the picker is a counterspell's; and the program
+    is the auction followed by an ordinary conditional counter, not a fused
+    kind."""
+    card = set_pool("INV")["Mages' Contest"]
+    program = _w2g3_compile(card)
+    assert program.supported
+    assert _w2g3_cast_spec(card, program) == {"kind": "stack"}
+    (sequence,) = program.instructions
+    auction, won = sequence.payload["steps"]
+    assert auction.kind == "bid_life"
+    assert auction.payload["bidders"] == ["you", "target_spells_controller"]
+    assert auction.payload["starting_bid"] == 1
+    assert won.kind == "if_then" and won.payload["condition"]["kind"] == "won_bidding"
+    assert [step.kind for step in won.payload["then"]] == ["counter_top_stack_spell"]
+
+
+def test_mages_contest_counters_the_spell_when_its_opening_bid_stands(set_pool):
+    """"You start the bidding with a bid of 1." The rival passes, so the high
+    bid stands at 1: the caster loses 1 life and the spell is countered."""
+    game, bolt = _w2g3_contest(set_pool)
+    assert [item.card.name for item in game.stack] == [
+        "Lightning Bolt", "Mages' Contest",
+    ], "the Contest is still resolving while a bid is owed (CR 608.2)"
+    assert _w2g3_asked(game) == (1, 1, 0)
+
+    assert game.confirm_bid_life(1, None)
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [player.life for player in game.players] == [19, 20]
+    assert _w2g3_names(game, 1, "graveyard") == ["Lightning Bolt"]
+    assert _w2g3_names(game, 0, "graveyard") == ["Mages' Contest"]
+
+
+def test_mages_contest_does_not_counter_when_the_spells_controller_wins(set_pool):
+    """"The high bidder loses life equal to the high bid. **If you win** the
+    bidding, counter that spell." The rival tops the bid and the caster lets
+    it stand: the rival pays 3 life, the Bolt is not countered and goes on to
+    resolve."""
+    game, bolt = _w2g3_contest(set_pool)
+
+    assert game.confirm_bid_life(1, 3)
+    assert _w2g3_asked(game) == (0, 3, 1)
+    assert game.confirm_bid_life(0, None)
+
+    assert len(game.stack) == 1 and game.stack[0] is bolt
+    assert [player.life for player in game.players] == [20, 17]
+    _w2g3_resolve_stack(game)
+    assert [player.life for player in game.players] == [17, 17]
+
+
+def test_mages_contest_bidding_goes_round_until_the_high_bid_stands(set_pool):
+    """"In turn order, each player may top the high bid. The bidding ends if
+    the high bid stands." Three raises and a pass; only the last bid is paid,
+    and only by the seat that made it."""
+    game, _bolt = _w2g3_contest(set_pool)
+
+    assert game.confirm_bid_life(1, 3)
+    assert game.confirm_bid_life(0, 5)
+    assert _w2g3_asked(game) == (1, 5, 0)
+    assert not game.confirm_bid_life(1, 5), "a bid has to top the high bid"
+    assert _w2g3_asked(game) == (1, 5, 0)
+    assert game.confirm_bid_life(1, 6)
+    assert game.confirm_bid_life(0, 9)
+    assert game.confirm_bid_life(1, None)
+
+    assert game.stack == []
+    assert [player.life for player in game.players] == [11, 20]
+    assert _w2g3_names(game, 1, "graveyard") == ["Lightning Bolt"]
+
+
+def test_mages_contest_is_between_two_seats_in_a_three_seat_game(set_pool):
+    """"**You and target spell's controller** bid life" — not each player. In
+    a three-seat game the seat in between is never asked."""
+    game, bolt = _w2g3_contest(set_pool, seats=3, rival=2)
+    asked = [_w2g3_asked(game)[0]]
+
+    assert game.confirm_bid_life(2, 4)
+    asked.append(_w2g3_asked(game)[0])
+    assert game.confirm_bid_life(0, None)
+
+    assert asked == [2, 0] and game.pending_choices == []
+    assert [player.life for player in game.players] == [20, 20, 16]
+    assert len(game.stack) == 1 and game.stack[0] is bolt
+
+
+def test_mages_contest_against_a_seat_nobody_asks_is_won_at_the_opening_bid(set_pool):
+    """A seat the engine plays passes where the offer stands (the auction's
+    registered default: a default never bids life nobody decided to spend), so
+    nothing is left owed and the whole resolution finishes at once."""
+    game, _bolt = _w2g3_contest(set_pool, interactive={0})
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [player.life for player in game.players] == [19, 20]
+    assert _w2g3_names(game, 1, "graveyard") == ["Lightning Bolt"]
+
+
+def test_mages_contest_over_its_casters_own_spell_is_an_auction_of_one(set_pool):
+    """"You and target spell's controller" are one player, who bids once: the
+    opening bid stands unopposed."""
+    game = _w2g3_table(set_pool)
+    assert _w2g3_cast(
+        game, set_pool, 0, "Lightning Bolt", target_player_index=1,
+    ).supported
+    assert _w2g3_cast(
+        game, set_pool, 0, "Mages' Contest", "INV", target_stack_index=0,
+    ).supported
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [player.life for player in game.players] == [19, 20]
+    assert _w2g3_names(game, 0, "graveyard") == ["Lightning Bolt", "Mages' Contest"]
+
+
+def test_mages_contest_winning_does_not_counter_an_uncounterable_spell(set_pool):
+    """The counter is the ordinary one, so "This spell can't be countered"
+    (Scragnoth) answers it: the bid is still lost — the two sentences are
+    separate — and the creature resolves."""
+    game = _w2g3_table(set_pool)
+    assert _w2g3_cast(game, set_pool, 1, "Scragnoth", "TMP").supported
+    assert _w2g3_cast(
+        game, set_pool, 0, "Mages' Contest", "INV", target_stack_index=0,
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.confirm_bid_life(1, None)
+
+    assert [item.card.name for item in game.stack] == ["Scragnoth"]
+    assert [player.life for player in game.players] == [19, 20]
+    assert any("can't be countered" in line for line in game.log)
+
+
+def test_mages_contest_cannot_be_cast_without_a_spell_to_target(set_pool):
+    """CR 601.2c: no spell on the stack, no target, no cast — and an ability
+    is not a spell (CR 113.7a)."""
+    game = _w2g3_table(set_pool)
+    contest = set_pool("INV")["Mages' Contest"]
+    game.players[0].hand.append(contest)
+
+    assert not game.queue_from_hand(0, "Mages' Contest").supported
+
+    sorcerer = _W2G3Permanent(card=set_pool("LEA")["Prodigal Sorcerer"])
+    game._put_permanent_onto_battlefield(1, sorcerer, None)
+    sorcerer.metadata["summoning_sickness_turn"] = -99
+    assert game.queue_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0,
+    ).supported
+    assert not game.queue_from_hand(
+        0, "Mages' Contest", target_stack_index=0,
+    ).supported
+    assert game.players[0].hand == [contest] and len(game.stack) == 1
+
+
+def test_mages_contest_does_not_resolve_once_its_spell_has_left_the_stack(set_pool):
+    """CR 608.2b: the Bolt is countered in response, so the Contest's only
+    target is gone and there is no bidding at all — nobody loses life."""
+    game = _w2g3_table(set_pool)
+    assert _w2g3_cast(
+        game, set_pool, 1, "Lightning Bolt", target_player_index=0,
+    ).supported
+    assert _w2g3_cast(
+        game, set_pool, 0, "Mages' Contest", "INV", target_stack_index=0,
+    ).supported
+    assert _w2g3_cast(
+        game, set_pool, 1, "Counterspell", target_stack_index=0,
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [item.card.name for item in game.stack] == ["Mages' Contest"]
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [player.life for player in game.players] == [20, 20]
+    assert any("608.2b" in line for line in game.log)
+
+
+def test_illicit_auction_still_hands_the_creature_to_the_high_bidder(set_pool):
+    """The auction the Contest's round was built from, driven beside it: the
+    loop now carries a second outcome and the first must not have moved. Three
+    seats, each asked in turn order; the high bidder pays and takes it."""
+    game = _w2g3_table(set_pool, seats=3)
+    bears = _W2G3Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(2, bears, None)
+    assert _w2g3_cast(
+        game, set_pool, 0, "Illicit Auction", "MIR",
+        target_permanent_ids=[bears.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w2g3_asked(game) == (1, 0, 0)
+    assert game.confirm_bid_life(1, 2)
+    assert game.confirm_bid_life(2, None)
+    assert game.confirm_bid_life(0, None)
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [player.life for player in game.players] == [20, 18, 20]
+    assert game.controller_index_of(bears) == 1
+
+
+@_w2g3_pytest.mark.parametrize(
+    "name", ["Absorb", "Exclude", "Undermine", "Mages' Contest"],
+)
+def test_an_invasion_counterspell_cannot_be_cast_onto_an_empty_stack(set_pool, name):
+    """CR 601.2c. Absorb and Undermine compile to a ``sequence``, which no
+    per-kind arm read, so both were castable with nothing to counter and
+    resolved their second sentence alone — Absorb for 3 life."""
+    game = _w2g3_table(set_pool)
+    card = set_pool("INV")[name]
+    game.players[0].hand.append(card)
+
+    refused = game.queue_from_hand(0, name)
+
+    assert not refused.supported
+    assert refused.details == f"no valid target for {name}"
+    assert game.players[0].hand == [card] and game.stack == []
+    assert game.players[0].life == 20
+
+
+def test_absorb_counters_and_gains_three_when_it_has_a_spell(set_pool):
+    game = _w2g3_table(set_pool)
+    assert _w2g3_cast(
+        game, set_pool, 1, "Lightning Bolt", target_player_index=0,
+    ).supported
+    assert _w2g3_cast(
+        game, set_pool, 0, "Absorb", "INV", target_stack_index=0,
+    ).supported
+    _w2g3_resolve_stack(game)
+
+    assert game.stack == []
+    assert [player.life for player in game.players] == [23, 20]
+    assert _w2g3_names(game, 1, "graveyard") == ["Lightning Bolt"]
+
+
+def test_exclude_cast_bare_is_aimed_at_the_creature_spell_not_the_spell_on_top(set_pool):
+    """"Counter target **creature** spell. Draw a card." A caller that names
+    nothing is given the topmost spell the phrase admits — the Bears under the
+    Bolt — and with only the Bolt there the cast is refused."""
+    game = _w2g3_table(set_pool)
+    assert _w2g3_cast(game, set_pool, 1, "Grizzly Bears").supported
+    assert _w2g3_cast(
+        game, set_pool, 1, "Lightning Bolt", target_player_index=0,
+    ).supported
+    bears, bolt = game.stack
+    hand = len(game.players[0].hand)
+
+    assert _w2g3_cast(game, set_pool, 0, "Exclude", "INV").supported
+    assert game.stack[-1].target_stack_item is bears
+    game.resolve_top_of_stack()
+
+    assert len(game.stack) == 1 and game.stack[0] is bolt
+    assert _w2g3_names(game, 1, "graveyard") == ["Grizzly Bears"]
+    assert len(game.players[0].hand) == hand + 1
+
+    lone = _w2g3_table(set_pool)
+    assert _w2g3_cast(
+        lone, set_pool, 1, "Lightning Bolt", target_player_index=0,
+    ).supported
+    assert not _w2g3_cast(lone, set_pool, 0, "Exclude", "INV").supported
+    assert _w2g3_names(lone, 0, "hand") == ["Exclude"]

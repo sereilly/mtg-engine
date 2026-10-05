@@ -40,6 +40,7 @@ from .paragraphs import (
 from .stream import TokenStream
 from .upkeep import parse_upkeep_paragraph
 from .effects import (
+    _parse_bid_life_contest,
     parse_simultaneous_phasing,
     parse_land_type_swap,
     _parse_damage_becomes_counter_removal,
@@ -113,6 +114,14 @@ def parse_imperative(
     flip_loop = _parse_coin_flip_damage_loop(stream)
     if flip_loop is not None:
         return flip_loop
+    # Mages' Contest's six sentences, the fourth of the "You and <player> …"
+    # openers here and read here for their reason. A production of the stack
+    # family rather than a paragraph beside the three above: it shares its
+    # procedure with Illicit Auction through ``phrases``, which ``paragraphs``
+    # sits below. Refuses without consuming.
+    contest = _parse_bid_life_contest(stream)
+    if contest is not None:
+        return contest
     # Every paragraph whose frame is an upkeep obligation — Mishra's War
     # Machine's damage-unless-cost, Power Leak's bounded payment, Phantasmal
     # Sphere's counter toll. Each is several printed sentences answering one

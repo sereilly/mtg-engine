@@ -15,11 +15,10 @@ where these two only ever answer "and whose is it now?".
 from __future__ import annotations
 
 from .. import ast
-from ..lexer import NUMBER
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
-from ..phrases import _accept_self_reference, _parse_that_object
-from ..vocabulary import NUMBER_WORDS
+from ..phrases import (_accept_self_reference, _parse_that_object,
+                       accept_bidding_procedure)
 
 
 def _parse_gain_control(
@@ -175,47 +174,12 @@ def _parse_bid_life_for_control(
         raise stream.error("expected what the bidding is for")
     if not stream.accept_punct("."):
         raise stream.error("expected the sentence that opens the bidding")
-    # "You start the bidding with a bid of **0**." The opening bid is the
-    # printed number, not a constant: a card that started the bidding at 3
-    # would be this same auction, and the handler reads the value off the
-    # payload rather than assuming zero.
-    if not stream.accept_phrase("you", "start", "the", "bidding", "with", "a", "bid", "of"):
-        raise stream.error("expected 'you start the bidding with a bid of N'")
-    token = stream.peek()
-    if token is not None and token.kind == NUMBER:
-        stream.advance()
-        starting_bid = int(token.text)
-    else:
-        word = NUMBER_WORDS.get(stream.peek_word() or "")
-        if word is None:
-            raise stream.error("expected the number the bidding starts at")
-        stream.advance()
-        starting_bid = int(word)
-    if not stream.accept_punct("."):
-        raise stream.error("expected the sentence that orders the bidding")
-    # The three procedural sentences, in the printed order. Each is spelled out
-    # rather than skipped to the end of the line: what the handler implements is
-    # this procedure, and a line that says something else about the order, the
-    # ending or the price must fail loudly.
-    if not stream.accept_phrase("in", "turn", "order"):
-        raise stream.error("expected 'in turn order'")
-    stream.accept_punct(",")
-    if not stream.accept_phrase(
-        "each", "player", "may", "top", "the", "high", "bid"
-    ):
-        raise stream.error("expected 'each player may top the high bid'")
-    if not stream.accept_punct("."):
-        raise stream.error("expected the sentence that ends the bidding")
-    if not stream.accept_phrase(
-        "the", "bidding", "ends", "if", "the", "high", "bid", "stands"
-    ):
-        raise stream.error("expected 'the bidding ends if the high bid stands'")
-    if not stream.accept_punct("."):
-        raise stream.error("expected the sentence that pays for the creature")
-    if not stream.accept_phrase(
-        "the", "high", "bidder", "loses", "life", "equal", "to", "the", "high",
-        "bid", "and", "gains", "control", "of", "the",
-    ):
+    # The opening bid and the three sentences of procedure, through the one
+    # reader of them (``phrases.accept_bidding_procedure``) — Mages' Contest
+    # prints the same paragraph with a different stake. The number is payload:
+    # the handler reads it rather than assuming zero.
+    starting_bid = accept_bidding_procedure(stream)
+    if not stream.accept_phrase("and", "gains", "control", "of", "the"):
         raise stream.error(
             "expected 'the high bidder loses life equal to the high bid and "
             "gains control of the …'"
