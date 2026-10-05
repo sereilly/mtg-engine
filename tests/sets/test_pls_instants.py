@@ -205,3 +205,106 @@ def test_w1g6_dominarias_judgment_reads_land_types_through_the_layers(set_pool):
     game.players[1].hand.append(_w1g6_card(set_pool, "Terror"))
     refused = game.queue_from_hand(1, "Terror", target_permanent_ids=[bears.permanent_id])
     assert not refused.supported and "illegal target" in refused.details
+
+
+# -- arrival cards: supported on the day of the ingest, never run until now --
+
+
+def _w1g6_turn(game, perm, colour):
+    """Turn *perm* *colour* for the turn through layer 5's turn-long channel."""
+    perm.metadata["color_override_until_eot"] = colour
+    game._recompute_continuous_effects()
+    return perm  # _w1g6_turn (instants)
+
+
+def test_w1g6_slay_destroys_only_a_creature_that_is_green_right_now_and_draws(set_pool):
+    """"Destroy target green creature. It can't be regenerated. / Draw a card."
+    The red Giant is not a legal announcement and the green Bears are; with the
+    two swapped through the layers it is the Giant that dies. A regeneration
+    shield does not save the creature, and the caster draws exactly one."""
+    slay = _w1g6_card(set_pool, "Slay")
+    assert _w1g6_targeting.derive_cast_spec(slay, _w1g6_compile(slay)) == {
+        "kind": "creature", "color_filter": "G",
+    }
+    for swapped in (False, True):
+        game, _mine, theirs = _w1g6_table(
+            set_pool, [], ["Grizzly Bears", "Hill Giant"], hand=["Slay", "Slay"],
+        )
+        game.players[0].library.extend([_w1g6_card(set_pool, "Forest")] * 3)
+        bears, giant = theirs
+        if swapped:
+            _w1g6_turn(game, bears, "R")
+            _w1g6_turn(game, giant, "G")
+        legal, illegal = (giant, bears) if swapped else (bears, giant)
+        legal.regeneration_shield = 1
+
+        assert not game.queue_from_hand(0, "Slay", target_permanent_ids=[illegal.permanent_id]).supported
+        assert game.queue_from_hand(0, "Slay", target_permanent_ids=[legal.permanent_id]).supported
+        _w1g6_resolve_stack(game)
+
+        assert not game.is_on_battlefield(legal) and game.is_on_battlefield(illegal)
+        assert [card.name for card in game.players[0].hand] == ["Slay", "Forest"]
+
+
+def test_w1g6_gainsay_counters_a_blue_spell_and_cannot_be_aimed_at_another(set_pool):
+    """"Counter target blue spell." A red Bolt on the stack is not a legal
+    target; a blue creature spell is, and is countered into its owner's
+    graveyard. With nothing on the stack Gainsay cannot be cast at all."""
+    game, _mine, _theirs = _w1g6_table(set_pool, [], [], hand=["Gainsay"])
+    game.players[1].hand.extend(
+        _w1g6_card(set_pool, name) for name in ("Lightning Bolt", "Merfolk of the Pearl Trident")
+    )
+    assert not game.queue_from_hand(0, "Gainsay").supported, "an empty stack"
+
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert not game.queue_from_hand(0, "Gainsay", target_stack_index=0).supported
+    game.stack.clear()
+
+    assert game.queue_from_hand(1, "Merfolk of the Pearl Trident").supported
+    assert game.queue_from_hand(0, "Gainsay", target_stack_index=0).supported
+    _w1g6_resolve_stack(game)
+    assert [card.name for card in game.players[1].graveyard] == ["Merfolk of the Pearl Trident"]
+    assert list(game.controlled_by(1)) == []
+
+
+@_w1g6_pytest.mark.parametrize("blocker, recolour, may_block", [
+    ("Grizzly Bears", None, False),
+    ("Grizzly Bears", "B", True),
+    ("Scathe Zombies", None, True),
+    ("Scathe Zombies", "G", False),
+    ("Howling Mine", None, None),
+])
+def test_w1g6_shriek_of_dread_gives_fear_that_reads_the_blockers_current_colour(
+    set_pool, blocker, recolour, may_block,
+):
+    """"Target creature gains fear until end of turn." CR 702.36b: it can't be
+    blocked except by artifact creatures and/or black creatures — black as the
+    layers have it when blocks are declared. Green Bears may not block and the
+    same Bears turned black may; black Zombies may and the same Zombies turned
+    green may not. The keyword is gone at cleanup."""
+    if may_block is None:
+        game, mine, _theirs = _w1g6_table(set_pool, ["Hill Giant"], [], hand=["Shriek of Dread"])
+        giant = mine[0]
+        assert game.queue_from_hand(
+            0, "Shriek of Dread", target_permanent_ids=[giant.permanent_id],
+        ).supported
+        _w1g6_resolve_stack(game)
+        assert game._has_keyword(giant, "fear")
+        game.resolve_cleanup_step(0)
+        assert not game._has_keyword(giant, "fear")
+        return
+    game, mine, theirs = _w1g6_table(set_pool, ["Hill Giant"], [blocker], hand=["Shriek of Dread"])
+    giant, defender = mine[0], theirs[0]
+    assert game.queue_from_hand(
+        0, "Shriek of Dread", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+    if recolour is not None:
+        _w1g6_turn(game, defender, recolour)
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [game.battlefield_index_of(giant)])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    declared = game.declare_blockers(1, {
+        game.battlefield_index_of(defender): [game.battlefield_index_of(giant)],
+    })
+    assert declared[0] is may_block, declared

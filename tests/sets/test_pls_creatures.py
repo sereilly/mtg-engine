@@ -647,3 +647,308 @@ def test_w1g6_guard_dogs_resolves_whole_for_a_seat_nobody_asks(set_pool):
     game, owed = _w1g6_dogs_combat(set_pool, None, interactive=())
     assert owed == [] and game.pending_choices == []
     assert game.players[0].life == 17
+
+
+# -- arrival cards: supported on the day of the ingest, never run until now --
+
+
+def _w1g6_turn(game, perm, colour):
+    """Turn *perm* *colour* for the turn through layer 5's turn-long channel —
+    what Aurora Griffin's "becomes white until end of turn" writes."""
+    perm.metadata["color_override_until_eot"] = colour
+    game._recompute_continuous_effects()
+    return perm  # _w1g6_turn
+
+
+def test_w1g6_honorable_scout_announces_the_opponent_its_count_is_taken_over(set_pool):
+    """"When this creature enters, you gain 2 life for each black and/or red
+    creature **target opponent** controls." The target sits inside the count's
+    noun phrase; the trigger used to reach the stack with no target at all.
+    It is announced now ("targets B"), a black-and-red creature counts once
+    (CR 105.2: one object of two colours), and the count reads colour through
+    the layers — a green creature turned red for the turn is one more."""
+    scout = _w1g6_card(set_pool, "Honorable Scout")
+    trigger = _w1g6_compile(scout).triggered_abilities[0]
+    assert _w1g6_targeting.derive_instruction_spec((trigger.instruction,)) == {
+        "kind": "player", "opponents_only": True,
+    }
+
+    for recoloured, life in ((False, 26), (True, 28)):
+        game, _mine, theirs = _w1g6_table(
+            set_pool, ["Scathe Zombies"],
+            ["Scathe Zombies", "Hill Giant", "Shivan Zombie", "Grizzly Bears", "Mountain"],
+        )
+        if recoloured:
+            _w1g6_turn(game, theirs[3], "R")
+        game.players[0].hand.append(scout)
+        assert game.queue_from_hand(0, "Honorable Scout").supported
+        _w1g6_resolve_stack(game)
+        assert game.players[0].life == life
+        assert any(line == "Honorable Scout: targets B" for line in game.log), game.log[-5:]
+
+
+def test_w1g6_honorable_scouts_controller_chooses_which_opponent_at_three_seats(set_pool):
+    """CR 603.3d: the target is chosen as the trigger is put on the stack, and
+    with two opponents that is a choice. Both are offered; the one answered —
+    C, with three black and/or red creatures to B's one — is the one counted."""
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name=name, life=20) for name in ("A", "B", "C")
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.active_player_index = 0
+    for seat, names in ((1, ["Scathe Zombies"]), (2, ["Hill Giant", "Scathe Zombies", "Shivan Zombie"])):
+        for name in names:
+            game._put_permanent_onto_battlefield(
+                seat, _W1G6Permanent(card=_w1g6_card(set_pool, name)), None,
+            )
+    game.players[0].hand.append(_w1g6_card(set_pool, "Honorable Scout"))
+
+    assert game.queue_from_hand(0, "Honorable Scout").supported
+    game.resolve_top_of_stack()
+    (prompt,) = game.pending_choices
+    assert prompt.kind == "trigger_target"
+    assert [entry["seat"] for entry in prompt.data["targets"]] == [1, 2]
+    assert game.confirm_trigger_target(0, seat=2)
+    _w1g6_resolve_stack(game)
+    assert game.players[0].life == 26
+
+
+@_w1g6_pytest.mark.parametrize("pool_code, name, index, written", [
+    ("PLS", "Aurora Griffin", 0, ["W"]),
+    ("MIR", "Ersatz Gnomes", 1, []),
+])
+@_w1g6_pytest.mark.parametrize("target", ["Hill Giant", "Bad Moon", "Howling Mine", "Mountain"])
+def test_w1g6_target_permanent_becomes_a_colour_reaches_a_permanent_that_is_no_creature(
+    set_pool, pool_code, name, index, written, target,
+):
+    """"{W}: Target **permanent** becomes white until end of turn." (Aurora
+    Griffin.) "{T}: Target permanent becomes colorless until end of turn."
+    (Ersatz Gnomes, shipped since Mirage.) The picker offers any permanent and
+    the resolver held the choice to a creature: an enchantment, an artifact or
+    a land was paid for and then dropped as "no creature to recolour". Every
+    kind of permanent is recoloured now, and is its own colour again at
+    cleanup."""
+    game = _W1G6Game(players=[
+        _W1G6PlayerState(name="A", life=20), _W1G6PlayerState(name="B", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    source = _W1G6Permanent(card=set_pool(pool_code)[name])
+    aimed = _W1G6Permanent(card=_w1g6_card(set_pool, target))
+    game._put_permanent_onto_battlefield(0, source, None)
+    game._put_permanent_onto_battlefield(1, aimed, None)
+    source.metadata["summoning_sickness_turn"] = -99
+    printed = _w1g6_colors(game, aimed)
+    _ability, spec = _w1g6_ability(source.card, index)
+    assert spec == {"kind": "permanent"}
+
+    assert game.queue_permanent_ability(
+        0, name, ability_index=index, target_permanent_ids=[aimed.permanent_id],
+    ).supported
+    _w1g6_resolve_stack(game)
+    assert _w1g6_colors(game, aimed) == written
+
+    game.resolve_cleanup_step(0)
+    assert _w1g6_colors(game, aimed) == printed
+
+
+def test_w1g6_slingshot_goblin_may_only_shoot_a_creature_that_is_blue_right_now(set_pool):
+    """"{R}, {T}: This creature deals 2 damage to target blue creature." The
+    picker's colour is layer 5's: a red Giant is refused and the blue Elemental
+    takes 2; with the two colours swapped for the turn, it is the Giant that
+    may be named and the Elemental that may not."""
+    _ability, spec = _w1g6_ability(_w1g6_card(set_pool, "Slingshot Goblin"))
+    assert spec == {"kind": "creature", "color_filter": "U"}
+    for swapped in (False, True):
+        game, mine, theirs = _w1g6_table(
+            set_pool, ["Slingshot Goblin"], ["Water Elemental", "Hill Giant"],
+        )
+        elemental, giant = theirs
+        if swapped:
+            _w1g6_turn(game, elemental, "R")
+            _w1g6_turn(game, giant, "U")
+        legal, illegal = (giant, elemental) if swapped else (elemental, giant)
+        assert not game.queue_permanent_ability(
+            0, "Slingshot Goblin", ability_index=0, target_permanent_ids=[illegal.permanent_id],
+        ).supported
+        assert not mine[0].tapped
+        assert game.queue_permanent_ability(
+            0, "Slingshot Goblin", ability_index=0, target_permanent_ids=[legal.permanent_id],
+        ).supported
+        _w1g6_resolve_stack(game)
+        assert (legal.damage_marked, illegal.damage_marked) == (2, 0)
+
+
+def test_w1g6_hunting_drake_tucks_a_creature_that_is_red_or_green_right_now(set_pool):
+    """"When this creature enters, put target red or green creature on top of
+    its owner's library." With a red Giant and white Lions it takes the Giant;
+    with their colours swapped through the layers the Lions are the only legal
+    target and are the ones on top of the library."""
+    for swapped, tucked in ((False, "Hill Giant"), (True, "Savannah Lions")):
+        game, _mine, theirs = _w1g6_table(
+            set_pool, [], ["Hill Giant", "Savannah Lions"], interactive=(),
+        )
+        if swapped:
+            _w1g6_turn(game, theirs[0], "W")
+            _w1g6_turn(game, theirs[1], "G")
+        game.players[0].hand.append(_w1g6_card(set_pool, "Hunting Drake"))
+        assert game.queue_from_hand(0, "Hunting Drake").supported
+        _w1g6_resolve_stack(game)
+        assert [card.name for card in game.players[1].library] == [tucked]
+        assert len(list(game.controlled_by(1))) == 1
+
+
+def test_w1g6_radiant_kavu_prevents_combat_damage_from_whatever_is_blue_or_black_as_it_is_dealt(set_pool):
+    """"{R}{G}{W}: Prevent all combat damage blue creatures and black creatures
+    would deal this turn." A blue 1/1, a black 2/2 and a red 3/3 attack
+    unblocked: 3 of the 6 is prevented. The shield names a class, not a set
+    locked in as it resolves (it changes no characteristic, so CR 611.2c does
+    not fix one) — the red Giant turned blue afterwards is prevented too."""
+    for late_blue, life in ((False, 17), (True, 20)):
+        game, _mine, theirs = _w1g6_table(
+            set_pool, ["Radiant Kavu"],
+            ["Merfolk of the Pearl Trident", "Scathe Zombies", "Hill Giant"], mana=True,
+        )
+        game.active_player_index = 1
+        game._set_phase_and_step("combat", "declare_attackers")
+        assert game.declare_attackers(1, [game.battlefield_index_of(p) for p in theirs])[0]
+        assert not game.queue_permanent_ability(0, "Radiant Kavu", ability_index=0).supported
+        game.players[0].mana_pool.update({"R": 1, "G": 1, "W": 1})
+        assert game.queue_permanent_ability(0, "Radiant Kavu", ability_index=0).supported
+        _w1g6_resolve_stack(game)
+        if late_blue:
+            _w1g6_turn(game, theirs[2], "U")
+        game._set_phase_and_step("combat", "declare_blockers")
+        assert game.declare_blockers(0, {})[0]
+        for _ in range(4):
+            game.advance_combat_phase()
+        assert game.players[0].life == life
+
+
+@_w1g6_pytest.mark.parametrize("blockers, recolour, size", [
+    (["Merfolk of the Pearl Trident"], None, (5, 5)),
+    (["Grizzly Bears"], None, (2, 2)),
+    (["Merfolk of the Pearl Trident", "Scathe Zombies"], None, (5, 5)),
+    (["Grizzly Bears"], "U", (5, 5)),
+    (["Merfolk of the Pearl Trident"], "G", (2, 2)),
+])
+def test_w1g6_amphibious_kavu_grows_once_when_a_blue_or_black_creature_blocks_it(
+    set_pool, blockers, recolour, size,
+):
+    """"Whenever this creature blocks or becomes blocked by one or more blue
+    and/or black creatures, this creature gets +3/+3 until end of turn."
+    "One or more": two such blockers are one trigger and +3/+3, not +6/+6. And
+    the blocker's colour is the one it has as blocks are declared — green
+    Bears turned blue set it off, a Merfolk turned green does not."""
+    game, mine, theirs = _w1g6_table(set_pool, ["Amphibious Kavu"], blockers)
+    kavu = mine[0]
+    if recolour is not None:
+        _w1g6_turn(game, theirs[0], recolour)
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [game.battlefield_index_of(kavu)])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    assert game.declare_blockers(1, {
+        game.battlefield_index_of(blocker): [game.battlefield_index_of(kavu)]
+        for blocker in theirs
+    })[0]
+    assert len(game.stack) == (1 if size == (5, 5) else 0)
+    _w1g6_resolve_stack(game)
+    assert (kavu.effective_power, kavu.effective_toughness) == size
+
+
+def test_w1g6_amphibious_kavu_grows_when_it_blocks_a_creature_that_is_black_right_now(set_pool):
+    """The *blocks* half: blocking a red Giant does nothing, and blocking the
+    same Giant turned black for the turn is +3/+3."""
+    for recolour, size in ((None, (2, 2)), ("B", (5, 5))):
+        game, mine, theirs = _w1g6_table(set_pool, ["Amphibious Kavu"], ["Hill Giant"])
+        kavu, giant = mine[0], theirs[0]
+        if recolour is not None:
+            _w1g6_turn(game, giant, recolour)
+        game.active_player_index = 1
+        game._set_phase_and_step("combat", "declare_attackers")
+        assert game.declare_attackers(1, [game.battlefield_index_of(giant)])[0]
+        game._set_phase_and_step("combat", "declare_blockers")
+        assert game.declare_blockers(0, {
+            game.battlefield_index_of(kavu): [game.battlefield_index_of(giant)],
+        })[0]
+        _w1g6_resolve_stack(game)
+        assert (kavu.effective_power, kavu.effective_toughness) == size
+
+
+def test_w1g6_quirion_dryad_grows_once_for_each_of_its_controllers_nongreen_spells(set_pool):
+    """"Whenever you cast a spell that's white, blue, black, or red, put a
+    +1/+1 counter on this creature." (Shipped since M21.) A red Bolt and a
+    white creature spell each grow it; a mono-green Growth and a colourless
+    artifact do not; a red-**and**-green spell is one spell and one counter;
+    and an opponent's red spell is not "you cast"."""
+    game, mine, theirs = _w1g6_table(set_pool, ["Quirion Dryad"], ["Hill Giant"])
+    dryad, giant = mine[0], theirs[0]
+    for name, announced, grows in (
+        ("Lightning Bolt", {"target_player_index": 1}, 1),
+        ("Giant Growth", {"target_permanent_ids": [dryad.permanent_id]}, 0),
+        ("Shivan Wurm", {}, 1),
+        ("Howling Mine", {}, 0),
+        ("Disciple of Kangee", {}, 1),
+    ):
+        game.players[0].hand.append(_w1g6_card(set_pool, name))
+        before = dryad.effective_power
+        assert game.queue_from_hand(0, name, **announced).supported, name
+        _w1g6_resolve_stack(game)
+        game.resolve_cleanup_step(0)
+        assert dryad.effective_power - before == grows, name
+
+    game.players[1].hand.append(_w1g6_card(set_pool, "Lightning Bolt"))
+    before = dryad.effective_power
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g6_resolve_stack(game)
+    assert dryad.effective_power == before
+
+
+@_w1g6_pytest.mark.parametrize("recolour, drawn", [
+    (None, 2), (("Hill Giant", "B"), 3), (("Scathe Zombies", "G"), 1),
+])
+def test_w1g6_pygmy_kavu_draws_for_each_creature_an_opponent_has_that_is_black_right_now(
+    set_pool, recolour, drawn,
+):
+    """"When this creature enters, draw a card for each black creature your
+    opponents control." Two black creatures across the table (the black
+    enchantment and its controller's own Zombies are not counted); a Giant
+    turned black is a third, and a Zombie turned green is one fewer."""
+    game, _mine, theirs = _w1g6_table(
+        set_pool, ["Scathe Zombies"],
+        ["Scathe Zombies", "Drudge Skeletons", "Hill Giant", "Bad Moon"],
+    )
+    if recolour is not None:
+        _w1g6_turn(game, next(p for p in theirs if p.card.name == recolour[0]), recolour[1])
+    game.players[0].library.extend([_w1g6_card(set_pool, "Forest")] * 6)
+    game.players[0].hand.append(_w1g6_card(set_pool, "Pygmy Kavu"))
+    assert game.queue_from_hand(0, "Pygmy Kavu").supported
+    _w1g6_resolve_stack(game)
+    assert len(game.players[0].hand) == drawn
+
+
+def test_w1g6_caldera_kavu_pumps_for_black_and_takes_a_colour_chosen_at_resolution(set_pool):
+    """"{1}{B}: This creature gets +1/+1 until end of turn. / {G}: This
+    creature becomes the color of your choice until end of turn." Each ability
+    costs what it prints; the colour is asked as the second resolves
+    (CR 608.2d), not read off the activation; both wear off at cleanup."""
+    game, mine, _theirs = _w1g6_table(set_pool, ["Caldera Kavu"], [], mana=True)
+    kavu = mine[0]
+    assert not game.queue_permanent_ability(0, "Caldera Kavu", ability_index=0).supported
+    game.players[0].mana_pool.update({"B": 1, "R": 1, "G": 1})
+    assert game.queue_permanent_ability(0, "Caldera Kavu", ability_index=0).supported
+    _w1g6_resolve_stack(game)
+    assert (kavu.effective_power, kavu.effective_toughness) == (3, 3)
+
+    assert game.queue_permanent_ability(
+        0, "Caldera Kavu", ability_index=1, mana_color="W",
+    ).supported
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("color_choice", 0)]
+    assert game.confirm_color_choice(0, "U")
+    assert _w1g6_colors(game, kavu) == ["U"]
+
+    game.resolve_cleanup_step(0)
+    assert _w1g6_colors(game, kavu) == ["R"]
+    assert (kavu.effective_power, kavu.effective_toughness) == (2, 2)

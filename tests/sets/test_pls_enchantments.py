@@ -387,3 +387,82 @@ def test_w1g6_heroic_defiance_gives_nothing_to_a_creature_of_the_leading_colour(
     game._put_permanent_onto_battlefield(1, extra, None)
     game._recompute_continuous_effects()
     assert (giant.effective_power, giant.effective_toughness) == (6, 6), "green leads alone"
+
+
+# -- arrival cards: supported on the day of the ingest, never run until now --
+
+
+def test_w1g6_sinister_strength_makes_its_creature_black_for_as_long_as_it_is_attached(set_pool):
+    """"Enchanted creature gets +3/+1 and is black." Layer 5 beside layer 7c,
+    both derived from the Aura: the green Bears are a black 5/3 that a Terror
+    ("nonblack") may not name, and green 2/2 Bears again the moment the Aura
+    is gone."""
+    game, mine, _theirs = _w1g6_table(set_pool, ["Grizzly Bears"], [], hand=["Terror"])
+    bears = mine[0]
+    aura = _w1g6_enchant(game, set_pool, "Sinister Strength", bears)
+    assert _w1g6_colors(game, bears) == ["B"]
+    assert (bears.effective_power, bears.effective_toughness) == (5, 3)
+    assert not game.queue_from_hand(0, "Terror", target_permanent_ids=[bears.permanent_id]).supported
+
+    game.remove_from_battlefield(aura)
+    game.check_state_based_actions()
+    game._recompute_continuous_effects()
+    assert _w1g6_colors(game, bears) == ["G"]
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+def test_w1g6_sisays_ingenuity_grants_a_recolour_whose_colour_is_asked_at_resolution(set_pool):
+    """"When this Aura enters, draw a card. / Enchanted creature has "{2}{U}:
+    Target creature becomes the color of your choice until end of turn.""
+    The Aura's caster draws; the *creature* has the ability and it costs
+    {2}{U}; the colour is asked of its activator as it resolves (CR 608.2d) —
+    the white sent with the activation is not read — and wears off at
+    cleanup."""
+    game, mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], ["Hill Giant"], mana=True)
+    bears, giant = mine[0], theirs[0]
+    game.players[0].library.extend([_w1g6_card(set_pool, "Forest")] * 3)
+    game.players[0].mana_pool["U"] = 1
+    _w1g6_enchant(game, set_pool, "Sisay's Ingenuity", bears)
+    assert [card.name for card in game.players[0].hand] == ["Forest"]
+
+    announced = {"ability_index": 0, "target_permanent_ids": [giant.permanent_id], "mana_color": "W"}
+    assert not game.queue_permanent_ability(0, "Grizzly Bears", **announced).supported
+    game.players[0].mana_pool.update({"U": 1, "G": 2})
+    assert game.queue_permanent_ability(0, "Grizzly Bears", **announced).supported
+    assert game.players[0].mana_pool["U"] + game.players[0].mana_pool["G"] == 0
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("color_choice", 0)]
+    assert _w1g6_colors(game, giant) == ["R"]
+    assert game.confirm_color_choice(0, "G")
+    _w1g6_resolve_stack(game)
+    assert _w1g6_colors(game, giant) == ["G"]
+
+    game.resolve_cleanup_step(0)
+    assert _w1g6_colors(game, giant) == ["R"]
+
+
+def test_w1g6_escape_routes_returns_only_its_controllers_creature_that_is_white_or_black_now(set_pool):
+    """"{2}{U}: Return target white or black creature you control to its
+    owner's hand." The colour union is layer 5's and the seat is enforced:
+    white Lions go home and green Bears may not be named; with the two swapped
+    for the turn it is the Bears; and an opponent's white creature is never a
+    legal target."""
+    for swapped in (False, True):
+        game, mine, theirs = _w1g6_table(
+            set_pool, ["Escape Routes", "Savannah Lions", "Grizzly Bears"], ["Savannah Lions"],
+        )
+        _routes, lions, bears = mine
+        if swapped:
+            _w1g6_recolor(game, lions, "G")
+            _w1g6_recolor(game, bears, "W")
+        legal, illegal = (bears, lions) if swapped else (lions, bears)
+        for refused in (illegal, theirs[0]):
+            assert not game.queue_permanent_ability(
+                0, "Escape Routes", ability_index=0, target_permanent_ids=[refused.permanent_id],
+            ).supported
+        assert game.queue_permanent_ability(
+            0, "Escape Routes", ability_index=0, target_permanent_ids=[legal.permanent_id],
+        ).supported
+        _w1g6_resolve_stack(game)
+        assert [card.name for card in game.players[0].hand] == [legal.card.name]
+        assert game.is_on_battlefield(illegal) and game.is_on_battlefield(theirs[0])

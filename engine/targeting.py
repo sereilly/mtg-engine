@@ -1418,6 +1418,20 @@ def _life_gain_spec(payload: dict) -> dict | None:
     "any target".
     """
     if payload.get("recipient") != "target":
+        # "…**you** gain 2 life for each black and/or red creature **target
+        # opponent** controls." (Honorable Scout.) Who gains the life is fixed
+        # and something is chosen all the same: the seat sits inside the
+        # *count's* noun phrase, which ``count_spec`` lifts onto the spec's
+        # ``owner`` exactly as it does for a counted draw
+        # (:func:`_counted_scope_spec`, Theft of Dreams). That function reads
+        # ``x_from_count``; a per-each life gain carries the same spec under
+        # ``per_each``, and with nobody reading it there the trigger went on the
+        # stack with no target — right in a duel, no choice of opponent at three
+        # seats, and invisible to "becomes the target of". The shared pronoun
+        # reader answers None for every owner the rules already fix.
+        counted = payload.get("per_each")
+        if isinstance(counted, dict):
+            return player_pronoun_spec(counted.get("owner"))
         return None
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
