@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 80.0% | 75.7% | 56.5% | 100 |
+| PLS *(measured)* | 143 | 255 | 81.6% | 78.0% | 58.4% | 105 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,7 +58,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 549 | 260 | expected a subject |  |
+| 546 | 257 | expected a subject |  |
 | 154 | 81 | unrecognized effect verb |  |
 | 134 | 69 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -5128,6 +5128,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Magistrate's Scepter**
   - `{4}, {T}: Put a charge counter on this artifact.`
   - `{T}, Remove three charge counters from this artifact: Take an extra turn after this one.`
+- **Magma Burst**
+  - `Magma Burst deals 3 damage to any target. If this spell was kicked, it deals 3 damage to another target.`
 - **Magma Mine**
   - `{4}: Put a pressure counter on this artifact.`
   - `{T}, Sacrifice this artifact: It deals damage equal to the number of pressure counters on it to any target.`
@@ -6027,6 +6029,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `This creature can't block creatures with power 3 or greater.`
   - `This creature can't attack if defending player controls an untapped creature with power 3 or greater.`
   - `This creature can't block creatures with power 3 or greater.`
+- **Orim's Chant**
+  - `Target player can't cast spells this turn. If this spell was kicked, creatures can't attack this turn.`
 - **Orim's Cure**
   - `Prevent the next 4 damage that would be dealt to any target this turn.`
 - **Orim's Prayer**
@@ -6379,6 +6383,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Put two target lands on top of their owners' libraries.`
 - **Political Trickery**
   - `Exchange control of target land you control and target land an opponent controls. (This effect lasts indefinitely.)`
+- **Pollen Remedy**
+  - `Prevent the next 3 damage that would be dealt this turn to any number of targets, divided as you choose. If this spell was kicked, prevent the next 6 damage this way instead.`
 - **Polluted Mire**
   - `{T}: Add {B}.`
 - **Polymorph**
@@ -6465,6 +6471,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {G} for each Elf on the battlefield.`
 - **Priest of Yawgmoth**
   - `{T}, Sacrifice an artifact: Add an amount of {B} equal to the sacrificed artifact's mana value.`
+- **Primal Growth**
+  - `Search your library for a basic land card, put that card onto the battlefield, then shuffle. If this spell was kicked, instead search your library for up to two basic land cards, put them onto the battlefield, then shuffle.`
 - **Primal Might**
   - `Target creature you control gets +X/+X until end of turn. Then it fights up to one target creature you don't control. (Each deals damage equal to its power to the other.)`
 - **Primal Order**
@@ -7294,6 +7302,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: Target attacking creature gets +2/+0 until end of turn. When that creature leaves the battlefield this turn, sacrifice this artifact. If the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. If a creature dealt damage by the targeted creature would die this turn, exile that creature instead.`
 - **Rupture**
   - `Sacrifice a creature. Rupture deals damage equal to that creature's power to each creature without flying and each player.`
+- **Rushing River**
+  - `Return target nonland permanent to its owner's hand. If this spell was kicked, return another target nonland permanent to its owner's hand.`
 - **Rushwood Elemental**
   - `At the beginning of your upkeep, you may put a +1/+1 counter on this creature.`
 - **Rushwood Grove**
