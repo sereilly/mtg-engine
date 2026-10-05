@@ -55,6 +55,7 @@ from __future__ import annotations
 # `oracle_types` names and `_deaths`' two); `_events` is read only for the two
 # keys it defines itself.
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                             BIDDING_WINNER,
                              CHOSEN_COLOR_THIS_WAY,
                              CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY,
@@ -248,6 +249,9 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # it and the conditionals after it read the record, rather than each
     # sentence flipping a coin of its own.
     "flip_coin": "coin_flip",
+    # "…**If you win the bidding**, counter that spell." (Mages' Contest.) The
+    # seat the high bid stood for, written when the last offer is answered.
+    "bid_life": BIDDING_WINNER,
     # "…Search that player's library for **that many** cards." (Jester's Mask.)
     # See ``oracle_types.HAND_CARDS_TO_LIBRARY``; by then the hand is empty and
     # nothing else records how many went.

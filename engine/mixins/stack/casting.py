@@ -1597,22 +1597,13 @@ class SpellCastingMixin:
         if named_refusal is not None:
             self.log.append(named_refusal)
             return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
-        # …and the same rule for a target **on the stack** that prints a
-        # description no arm above reads ("…an opponent controls that targets a
-        # land you control", Teferi's Response). Its own call because the named
-        # object is a stack item rather than a battlefield slot.
-        stack_refusal = self.described_stack_target_refusal(
-            caster_index, card, target_stack_item, from_zone=from_zone,
-        )
-        if stack_refusal is not None:
-            self.log.append(stack_refusal)
-            return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
-
-        # …and the same rule for a named **spell on the stack**, which the gate
-        # above does not read (its slots are battlefield slots). See
-        # `legality.cast_stack_target_refusal`: without it "counter target
+        # …and the same rule for a target **on the stack**, which the gate
+        # above does not read (its slots are battlefield slots). One call
+        # where Invasion's first wave left two: see
+        # `legality.cast_stack_target_refusal`. Without it "counter target
         # creature spell" was announceable at any spell, paid for, and then
-        # declined by its own handler.
+        # declined by its own handler — and a bare cast was accepted with
+        # nothing on the stack its phrase admits.
         stack_refusal = self.cast_stack_target_refusal(
             caster_index, card, target_stack_item, from_zone=from_zone,
         )
@@ -2062,7 +2053,24 @@ class SpellCastingMixin:
             # (target_stack_item) wins; otherwise fall back to the topmost legal
             # spell so AI and untargeted casts still work.
             target_stack_item_val = target_stack_item
-            if target_stack_item_val is None and self.stack and "counter target" in card.oracle_text.lower():
+            enumerated = False
+            if target_stack_item_val is None:
+                # The gate's own enumeration first (`default_stack_target`):
+                # the topmost object the printed phrase admits, so the default
+                # is a target `cast_stack_target_refusal` would have accepted
+                # by name. The text reading below is what is left for the
+                # shapes that gate declines — a modal spell, whose spec is
+                # mode 0's — and it is not consulted where the enumeration
+                # answered, an answer of "nothing" included.
+                enumerated, target_stack_item_val = self.default_stack_target(
+                    caster_index, card, from_zone=from_zone,
+                )
+            if (
+                not enumerated
+                and target_stack_item_val is None
+                and self.stack
+                and "counter target" in card.oracle_text.lower()
+            ):
                 color_match = re.search(r"counter target (\w+) spell", card.oracle_text.lower())
                 color_filter: str | None = None
                 if color_match:

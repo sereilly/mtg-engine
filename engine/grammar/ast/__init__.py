@@ -383,6 +383,7 @@ from .exile import (
     CastFromExiledWith,
 )
 from .stack import (
+    BidLifeContest,
     ChangeTarget,
     ChooseTarget,
     CopySpell,
@@ -808,6 +809,7 @@ __all__ = [
     "RevealUntil",
     "RevealTopToHandOrBottom",
     # stack
+    "BidLifeContest",
     "CopySpell",
     "CopyThatSpell",
     "CounterAbility",

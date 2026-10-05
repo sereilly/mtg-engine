@@ -34,7 +34,8 @@ from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
 from ...linked_exile import link_exiled_card, shuffle_linked_pile
 from ...models import CardDefinition, Permanent
-from ...oracle_types import (CLAIMABLE_EXILED_CARDS, DISCARDED_BY_SEAT,
+from ...oracle_types import (BIDDING_WINNER, CLAIMABLE_EXILED_CARDS,
+                             DISCARDED_BY_SEAT,
                              DREW_BY_SEAT, EXILED_THIS_WAY,
                              MANA_PAID_BY_SEAT,
                              EXILED_THIS_WAY_OBJECTS)
@@ -139,6 +140,16 @@ class PendingChoicesMixin:
         ``auto_resolve_pending_choices``."""
         spec = spec_for(kind)
         choice = PendingChoice(kind=kind, player_index=player_index, data=dict(data))
+        # A prompt being armed has not been answered, whatever its data was
+        # copied from. A chain of prompts carries one payload forward from
+        # answer to answer (the auction's round, ``_offer_next_bid``), and the
+        # answer path stamps ``_answered`` on a choice *before* its resolver
+        # runs — so the copy the resolver took carried the stamp into the next
+        # prompt, which then did not suspend. Nothing read that while an
+        # auction was the last step of its spell (Illicit Auction); Mages'
+        # Contest has a step behind it, and "if you win the bidding" ran after
+        # the first raise, before anybody had won.
+        choice.data.pop("_answered", None)
         if spec.default_at_arm and player_index not in self.interactive_seats:
             spec.default(self, choice)
             return None
@@ -3421,10 +3432,22 @@ class PendingChoicesMixin:
     # -- "Each player may bid life for control of ..." -----------------------
 
     def begin_life_auction(
-        self, *, card_name: str, permanent_id: int, opening_bidder: int,
-        starting_bid: int, order: list[int],
+        self, *, card_name: str, permanent_id: "int | None", opening_bidder: int,
+        starting_bid: int, order: list[int], results: "dict | None" = None,
     ) -> None:
-        """Open Illicit Auction's round of offers.
+        """Open an auction's round of offers (Illicit Auction, Mages' Contest).
+
+        **Two outcomes, one round.** What every printed auction shares is the
+        procedure — who is asked, in what order, when it stops, and that the
+        high bidder loses the high bid — and that is everything from here to
+        ``_settle_life_auction``. What they differ in is the stake, and it is
+        data: *permanent_id* is the permanent the winner takes control of
+        (Illicit Auction), or None when the auction hands nothing over itself;
+        *results* is the resolution's scratchpad, where the winning seat is
+        written (``BIDDING_WINNER``) for the step behind the auction to read
+        ("If you win the bidding, counter that spell", Mages' Contest). *order*
+        is the seats that bid — every seat for "each player", two for "you and
+        target spell's controller".
 
         The whole auction is a **chain of prompts**, not a loop inside a
         handler, and that is what makes it work at all: a bid is a decision one
@@ -3440,7 +3463,8 @@ class PendingChoicesMixin:
         """
         self._offer_next_bid({
             "card_name": card_name,
-            "permanent_id": int(permanent_id),
+            "permanent_id": None if permanent_id is None else int(permanent_id),
+            "_results": results,
             "high_bid": int(starting_bid),
             "high_bidder": int(opening_bidder),
             "order": [int(seat) for seat in order],
@@ -3569,6 +3593,19 @@ class PendingChoicesMixin:
                 f"{card_name}: {winner.name} loses {amount} life "
                 f"({before} -> {winner.life})"
             )
+        # Who won, for the step behind the auction ("If you win the bidding,
+        # …"). Written after the life is lost and before anything is handed
+        # over, so a reader of the record sees the auction finished.
+        results = data.get("_results")
+        if results is not None:
+            results[BIDDING_WINNER] = winner_index
+        if data.get("permanent_id") is None:
+            # An auction with nothing of its own to hand over (Mages'
+            # Contest): what winning buys is the next instruction's business.
+            self.log.append(
+                f"{card_name}: {winner.name} wins the bidding at {amount}"
+            )
+            return
         permanent = self.permanent_by_id(int(data.get("permanent_id", -1)))
         if permanent is None:
             self.log.append(f"{card_name}: the creature is no longer there")
@@ -9640,7 +9677,9 @@ register_choice(
     default_at_arm=True,
     # The two printed sentences behind the bidding -- the life loss and the
     # control change -- are performed by the *last* answer, so no later step of
-    # this resolution may run before it (CR 608.2).
+    # this resolution may run before it (CR 608.2). Mages' Contest is the card
+    # with a later step: "If you win the bidding, counter that spell" reads who
+    # won, and waits here for the answer that decides it.
     suspends=True,
 )
 

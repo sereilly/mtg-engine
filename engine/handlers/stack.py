@@ -614,6 +614,20 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: the spell it would counter is no longer on the stack"
                 )
                 return True, "resolved"
+        if instruction.payload.get("bound_to_target"):
+            # "…If you win the bidding, counter **that spell**." (Mages'
+            # Contest.) A back-reference to the object the announcement chose,
+            # not a second choice — so it is that object or nothing. The
+            # fallback below takes the top of the stack when the chosen spell
+            # is gone, which is right for a caller that named none and wrong
+            # here: by identity (``StackItem`` compares by value, and two
+            # casts of one card at one target are equal), and with no
+            # substitute.
+            if chosen is None or not any(item is chosen for item in game.stack):
+                game.log.append(
+                    f"{card.name}: the spell it would counter is no longer on the stack"
+                )
+                return True, "resolved"
         target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
         # **The one place this engine decides which kind of object it
         # countered.** CR 701.6a counters a spell and an ability alike, and
@@ -1073,6 +1087,76 @@ def _redirect_countered_card(
             f"{countered.card.name} was countered by {card.name} and put on "
             f"{where} instead of into their graveyard"
         )
+
+
+@effect_handler("bid_life")
+def bid_life(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"You and target spell's controller bid life." (Mages' Contest.)
+
+    Illicit Auction's round of offers among the seats the payload names, with
+    nothing handed over at the end of it: the high bidder loses the high bid
+    and the seat is **recorded** (``BIDDING_WINNER``), which is what the next
+    step of the sequence — "if you win the bidding, …" — reads.
+
+    The round itself is not run here, for ``bid_life_for_control``'s reason: a
+    bid is a decision a seat owes, so the auction is a chain of prompts
+    (``Game.begin_life_auction``) and this step ends after arming the first.
+    The prompt kind ``suspends``, so the steps behind this one wait for the
+    last answer (``engine/resumption.py``).
+
+    **Who bids.** ``you`` is the resolving seat (CR 109.5). ``target spell's
+    controller`` is read off the object the announcement chose, by identity,
+    and a spell that has left the stack has no controller to ask — CR 608.2b
+    has already taken a spell whose only target is gone off the stack above
+    this handler, so that branch is the headless path's backstop. A seat named
+    twice bids once: Mages' Contest aimed at its caster's own spell is an
+    auction of one, which the opening bid wins.
+
+    **The order** is CR 101.4's turn order (``_offered_seats``, the one reader
+    of it) narrowed to those seats. "**You** start the bidding" makes the
+    resolving seat the opening high bidder at the printed number, and the
+    round goes on from the seat after it.
+    """
+    from .control_flow import _offered_seats
+
+    card_name = context.card.name
+    caster = game.players.index(context.caster)
+    bidders: list[int] = []
+    for who in instruction.payload.get("bidders") or ():
+        if who == "you":
+            seat = caster
+        elif who == "target_spells_controller":
+            target = context.stack_target
+            if target is None or not any(item is target for item in game.stack):
+                game.log.append(
+                    f"{card_name}: the spell whose controller would bid is no "
+                    "longer on the stack"
+                )
+                return True, "resolved"
+            seat = int(target.caster_index)
+        else:
+            # The lowering admits exactly the two seats above; a third is a
+            # payload nothing here can seat, and bidding without it would be
+            # an auction among the wrong players.
+            game.log.append(f"{card_name}: no seat for bidder {who!r}")
+            return True, "resolved"
+        if seat not in bidders and not game.players[seat].lost:
+            bidders.append(seat)
+    order = [
+        seat for seat in _offered_seats(game, "each_player", context)
+        if seat in bidders
+    ]
+    if caster not in order:  # pragma: no cover - the resolving seat has lost
+        return True, "resolved"
+    game.begin_life_auction(
+        card_name=card_name,
+        permanent_id=None,
+        opening_bidder=caster,
+        starting_bid=int(instruction.payload.get("starting_bid", 0)),
+        order=order,
+        results=context.results,
+    )
+    return True, "resolved"
 
 
 @effect_handler("copy_this_spell")

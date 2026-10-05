@@ -423,3 +423,31 @@ class PutExiledCardOnStackAsCopy:
     """
 
     player: PlayerRef
+
+
+@dataclass(frozen=True)
+class BidLifeContest:
+    """``You and target spell's controller bid life. … If you win the bidding,
+    counter that spell.`` (Mages' Contest, CR 701.6.)
+
+    The pool's second auction, and the paragraph is Illicit Auction's with two
+    things changed — which is why those two things are this node's fields and
+    the procedure between them is not:
+
+    ``bidders`` — who bids, in the printed order. Illicit Auction offers its
+    bidding to each player; this one names two seats, one of them read off the
+    spell the announcement chose (``target_spells_controller``, CR 109.5). That
+    seat is the paragraph's only instance of the word "target", so the object
+    the spell targets is the *spell* and the player comes with it.
+
+    ``starting_bid`` — the printed opening number ("…with a bid of 1"), data
+    for :class:`BidLifeForControl`'s reason.
+
+    The stake is fixed by the sentence that closes the paragraph, "If you win
+    the bidding, counter that spell", read word for word: lowering spells it
+    out as the auction followed by an ordinary conditional counter, so the
+    counter is the same instruction every counterspell resolves through.
+    """
+
+    bidders: tuple[PlayerRef, ...]
+    starting_bid: int = 1

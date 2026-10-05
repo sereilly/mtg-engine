@@ -1463,6 +1463,14 @@ COUNTERED_SPELL_CONTROLLER = "countered_spell_controller_seat"
 COUNTERED_SPELL_NAME = "countered_spell_name"
 
 
+#: The seat that won an auction of life (``bid_life``): the high bidder when
+#: the high bid stood. "**If you win the bidding**, counter that spell" (Mages'
+#: Contest) is the sentence that reads it, and it has to be a record — the
+#: bidding is a chain of prompts, so by the time anybody has won, the step that
+#: opened it has long returned.
+BIDDING_WINNER = "bidding_winner"
+
+
 #: The permanent "counter target activated ability" records: the source the
 #: countered ability came from. "**That permanent's** activated abilities can't
 #: be activated this turn" (Interdict) is the sentence that needs it, and

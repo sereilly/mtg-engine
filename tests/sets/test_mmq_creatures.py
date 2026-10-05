@@ -1802,7 +1802,9 @@ def test_diplomatic_escort_is_refused_against_an_object_targeting_a_player(set_p
     assert not escort.tapped
 
 
-def test_a_plain_counterspell_over_an_ability_conjures_no_card(set_pool):
+def test_a_plain_counterspell_over_an_ability_conjures_no_card(
+    set_pool, monkeypatch
+):
     """The half of the union that is a *regression*, and it predates both cards.
 
     "Counter target spell." names no ability, but the counter flow falls back to
@@ -1812,6 +1814,13 @@ def test_a_plain_counterspell_over_an_ability_conjures_no_card(set_pool):
     permanent stayed on the battlefield: a card made out of nothing. The
     countering itself is wrong too (the card named a spell), so the answer is to
     counter nothing at all.
+
+    **Two answers now, and the first is the rule.** CR 601.2c refuses the cast
+    outright -- an ability is not a spell, so a stack holding one ability holds
+    nothing "target spell" admits (INV W2G3: the announcement gate asks a bare
+    cast whether there is anything to name, where the counter arm asked only
+    whether the stack was empty). The handler's own guard is what this test was
+    written for and is still asked, with the gate out of the way.
     """
     pool = set_pool("MMQ")
     game, p1, p2 = _w3g2_table()
@@ -1822,6 +1831,14 @@ def test_a_plain_counterspell_over_an_ability_conjures_no_card(set_pool):
     game.queue_permanent_ability(
         1, "Battle Rampart", target_player_index=1,
         target_permanent_ids=[creature.permanent_id],
+    )
+    refused = game.cast_from_hand(0, "Counterspell")
+    assert not refused.supported
+    assert refused.details == "no valid target for Counterspell"
+    assert p1.hand == [pool["Counterspell"]] and len(game.stack) == 1
+
+    monkeypatch.setattr(
+        Game, "cast_stack_target_refusal", lambda self, *args, **kwargs: None,
     )
     cast = game.cast_from_hand(0, "Counterspell")
     assert cast.supported, cast
