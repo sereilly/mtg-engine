@@ -34,6 +34,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from .object_colors import share_a_color
+
 
 def color_counts(game, permanents: Iterable | None = None) -> dict[str, int]:
     """How many of *permanents* are each colour (CR 105.2 — one per colour held).
@@ -96,7 +98,10 @@ def shares_most_common_color(game, permanent, *, permanents: Iterable | None = N
     if permanent is None:
         return False
     leaders = most_common_colors(game, permanents)
-    return bool(leaders & set(game._effective_colors(permanent)))
+    # ``object_colors.share_a_color``, the one reading of CR 105.2's "shares a
+    # color" — this spelled the intersection itself, the day W1G5 gave the
+    # relation a home one module over.
+    return share_a_color(leaders, game._effective_colors(permanent))
 
 
 __all__ = [
