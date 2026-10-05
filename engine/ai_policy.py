@@ -676,7 +676,9 @@ def _paid_for_half_names_nothing(
         return False
     if taken.get("kind") in ("none", "modal") or spec_roles(taken):
         return False
-    return not game._enumerate_targets(player_index, card, taken, for_cast=True)
+    return not game._enumerate_targets(
+        player_index, card, taken, for_cast=True, optional_cost_payments=offers,
+    )
 
 
 def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
@@ -2907,7 +2909,18 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # readers happening to agree. They did not: this function decided "needs a
     # target" from every quantifier in the program, the cast path from a
     # per-kind arm, and 182 spells sat between the two.
-    if game.no_legal_cast_target_refusal(caster_index, card) is not None:
+    #
+    # Asked about the candidate being built (`_OFFERS_ANNOUNCED`): CR 702.33g
+    # makes a kicked-only target a target of the kicked cast alone, so the
+    # obligation — and, below, the enumeration that probes each candidate
+    # against the spell's own spec — is a different one per announcement. Read
+    # as the card's every arm, an unkicked Rushing River was a two-target spell
+    # with one target named for it, which no list is ever legal for: the seat
+    # held it until it could spare a land for the kicker.
+    announced = _OFFERS_ANNOUNCED.get()
+    if game.no_legal_cast_target_refusal(
+        caster_index, card, optional_cost_payments=announced,
+    ) is not None:
         return True
     # What follows is **preference and remainder**, and is deliberately wider
     # than the rule: the two shapes the engine's predicate leaves to another
@@ -2931,7 +2944,9 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     if _targets_are_optional(program):
         # "Up to one target" is castable with none (CR 601.2c).
         return False
-    return not game._enumerate_targets(caster_index, card, spec, for_cast=True)
+    return not game._enumerate_targets(
+        caster_index, card, spec, for_cast=True, optional_cost_payments=announced,
+    )
 
 
 def _targets_are_optional(program) -> bool:
@@ -3488,7 +3503,12 @@ def _choose_single_object_target(
         or spec_is_a_cost(spec)
     ):
         return None
-    legal = game._enumerate_targets(caster_index, card, spec, for_cast=True)
+    legal = game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        # The announcement *spec* was derived under (CR 702.33g), so the
+        # per-candidate probe judges each permanent against that same spec.
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+    )
     if not legal or any(entry.get("kind") != "permanent" for entry in legal):
         return None
     if spell_denies_its_own_target(card):

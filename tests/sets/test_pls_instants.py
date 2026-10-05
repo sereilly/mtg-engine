@@ -33,6 +33,8 @@ a prompt.
 # Bomb's mandatory twin of the same cost. Imports are in this block, per the
 # header's parallel-authorship convention.
 
+import pytest as _w1g1_pytest
+
 from engine import Game as _W1G1Game
 from engine import PlayerState as _W1G1PlayerState
 from engine.ai_policy import choose_cast_action as _w1g1_choose_cast_action
@@ -268,6 +270,63 @@ def test_w1g1_a_kicked_river_whose_first_target_left_still_bounces_the_second(se
     _w1g1_resolve_stack(game)
     assert [c.name for c in game.players[1].hand] == ["Sol Ring"]
     assert _w1g1_names(game, 1) == ["Forest"]
+
+
+def _w1g1_ai_table(set_pool, name, land, lands):
+    """Seat 0 on its own main phase holding *name* with *lands* untapped copies
+    of *land* and an empty pool, a creature on each side and an artifact."""
+    lea = set_pool("LEA")
+    game = _w1g1_duel(set_pool, [name], pool={})
+    for _ in range(lands):
+        _w1g1_put(game, 0, lea[land])
+    _w1g1_put(game, 0, lea["Grizzly Bears"])
+    _w1g1_put(game, 1, lea["Hill Giant"])
+    _w1g1_put(game, 1, lea["Sol Ring"])
+    game.active_player_index = 0
+    game.current_phase = "main"
+    return game  # _w1g1_ai_table
+
+
+@_w1g1_pytest.mark.parametrize(
+    "name,land", [("Rushing River", "Island"), ("Falling Timber", "Forest")]
+)
+def test_w1g1_the_ai_casts_the_plain_spell_when_it_cannot_spare_the_kick(
+    set_pool, name, land
+):
+    """It must not stall. With four lands the seat declines the kicker — and
+    then has to be able to build the *unkicked* cast, whose one target the
+    engine's enumeration probes against the unkicked spec. Probed against the
+    card's every arm (two roles) no single target was ever legal, so the seat
+    held both cards until it had a land to spare; and the cast it proposes is
+    one the engine accepts."""
+    game = _w1g1_ai_table(set_pool, name, land, lands=4)
+    action = _w1g1_choose_cast_action(game, 0)
+    assert action is not None and action.card_name == name
+    assert not action.optional_cost_payments
+    assert len(action.target_permanent_ids) == 1
+
+    from engine.ai_policy import tap_planned_lands
+
+    tap_planned_lands(game, 0, action)
+    result = game.cast_from_hand(
+        0, name, target_player_index=action.target_player_index,
+        target_permanent_index=action.target_permanent_index,
+        target_permanent_ids=action.target_permanent_ids,
+    )
+    assert result.supported, result.details
+
+
+@_w1g1_pytest.mark.parametrize(
+    "name,land", [("Rushing River", "Island"), ("Falling Timber", "Forest")]
+)
+def test_w1g1_the_ai_names_two_targets_for_the_spell_it_kicks(set_pool, name, land):
+    """…and with nine it kicks, walking the *kicked* spec's chain of two
+    roles rather than the unkicked picker's flat list."""
+    game = _w1g1_ai_table(set_pool, name, land, lands=9)
+    action = _w1g1_choose_cast_action(game, 0)
+    assert action is not None and action.card_name == name
+    assert action.optional_cost_payments == {_w1g1_key(set_pool, name): 1}
+    assert len(set(action.target_permanent_ids)) == 2
 
 
 # -- Magma Burst -------------------------------------------------------------
