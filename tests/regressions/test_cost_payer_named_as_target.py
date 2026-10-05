@@ -25,12 +25,17 @@ import pytest
 from engine import Game, PlayerState
 from engine.ai_policy import _choose_single_object_target
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec, spec_is_a_cost
 from tests.helpers import resolve_stack
 
-_POOL = {card.name: card for card in load_catalog()}
+# Each card whose text compiles (`faces.compilation_units`): a split card's
+# half is a spell of its own, cast by its own name, and the whole card compiles
+# to no instructions at all — so a census over the raw catalog would pass over
+# a half that pays a cost without ever asking about it.
+_POOL = {card.name: card for card in compilation_units(load_catalog())}
 
 #: What the rig puts on the caster's battlefield: something for every head
 #: noun a printed cost in the pool names (a creature, each basic land, an
@@ -67,7 +72,12 @@ def _cost_only_spells() -> list[str]:
 def _table(name: str):
     forest = _POOL["Forest"]
     game = Game(players=[
-        PlayerState("Caster", library=[forest] * 10, hand=[_POOL[name]]),
+        # A half is cast by its own name out of the card that prints it
+        # (CR 709.3a), so the hand holds the whole card.
+        PlayerState(
+            "Caster", library=[forest] * 10,
+            hand=[_POOL[name].face_of or _POOL[name]],
+        ),
         PlayerState("Bystander", library=[forest] * 10),
     ])
     game.enforce_mana_costs = False
