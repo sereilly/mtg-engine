@@ -451,7 +451,13 @@ def lower_bite(
         and isinstance(node.recipients[0], ast.PlayerRef)
         and node.riders == ast.DamageRiders()
     ):
-        if node.recipients[0].kind != "that_player":
+        if node.recipients[0].kind not in ("that_player", "controller"):
+            # "…deals damage equal to its power to **its controller**."
+            # (Backlash.) The seat Delirium reaches by inference, printed
+            # outright: "its" is the biter, so the possessive names exactly the
+            # seat the handler reads off it, and the two spellings are one
+            # payload.
+            #
             # Every other seat this engine can name is one the sentence would
             # have had to say — "you", "each opponent", the seat a trigger
             # froze. None of them is a bare "the player", and lowering one of

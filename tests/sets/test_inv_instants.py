@@ -357,3 +357,56 @@ def test_cauldron_dance_with_an_empty_hand_sacrifices_nothing(set_pool):
     assert _w1g8_instant_names(game, 1) == ["Grizzly Bears"]
     assert [card.name for card in game.players[0].hand] == ["Craw Wurm"]
     assert "Craw Wurm" not in [card.name for card in game.players[0].graveyard]
+
+
+def test_backlash_taps_a_creature_and_has_it_hit_its_own_controller(set_pool):
+    """"Tap target untapped creature. That creature deals damage equal to its
+    power to its controller." The Hill Giant is tapped and deals 3 to the seat
+    that controls it — and the creature is the source of that damage
+    (CR 120.7), not the spell."""
+    game = _w1g8_instant_duel(set_pool)
+    giant = _w1g8_instant_put(game, set_pool, 1, "Hill Giant")
+    game.players[0].hand.append(set_pool("INV")["Backlash"])
+
+    assert game.cast_from_hand(
+        0, "Backlash", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+
+    assert giant.tapped
+    assert [player.life for player in game.players] == [20, 17]
+    assert "Hill Giant deals 3 damage to P1" in game.log
+
+
+def test_backlash_aimed_at_its_casters_own_creature_hits_the_caster(set_pool):
+    """"**its** controller" is the creature's, whoever cast the spell."""
+    game = _w1g8_instant_duel(set_pool)
+    wurm = _w1g8_instant_put(game, set_pool, 0, "Craw Wurm")
+    game.players[0].hand.append(set_pool("INV")["Backlash"])
+
+    assert game.cast_from_hand(
+        0, "Backlash", target_permanent_ids=[wurm.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+
+    assert wurm.tapped
+    assert [player.life for player in game.players] == [14, 20]
+
+
+def test_backlash_cannot_target_a_tapped_creature(set_pool):
+    """"target **untapped** creature" narrows the picker and the announcement:
+    a creature already tapped is not offered and cannot be named."""
+    backlash = set_pool("INV")["Backlash"]
+    assert _w1g8_cast_spec(backlash, _w1g8_compile(backlash)) == {
+        "kind": "creature", "filter": {"untapped_only": True},
+    }
+    game = _w1g8_instant_duel(set_pool)
+    bears = _w1g8_instant_put(game, set_pool, 1, "Grizzly Bears")
+    bears.tapped = True
+    game.players[0].hand.append(backlash)
+
+    assert not game.cast_from_hand(
+        0, "Backlash", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert game.players[1].life == 20
+    assert game.players[0].hand == [backlash]
