@@ -217,3 +217,48 @@ def test_yawgmoths_agenda_exiles_what_would_reach_its_controllers_graveyard(set_
     assert [card.name for card in game.players[1].graveyard] == [
         "Lightning Bolt", "Healing Salve",
     ]
+
+
+def _w1g8_instability_table(set_pool, *, active: int):
+    """Seat 0 controls Tectonic Instability; each seat has two untapped basic
+    lands and seat 1 a Grizzly Bears. *active* holds a Mountain to play."""
+    game = _w1g8_enchantment_duel(set_pool, active=active)
+    _w1g8_enchantment_put(game, set_pool, 0, "Tectonic Instability", "INV")
+    board = {
+        "mine": [_w1g8_enchantment_put(game, set_pool, 0, "Island") for _ in range(2)],
+        "theirs": [_w1g8_enchantment_put(game, set_pool, 1, "Forest") for _ in range(2)],
+        "bears": _w1g8_enchantment_put(game, set_pool, 1, "Grizzly Bears"),
+    }
+    game.players[active].hand = [set_pool("LEA")["Mountain"]]
+    return game, board
+
+
+def test_tectonic_instability_taps_the_entering_lands_controllers_lands(set_pool):
+    """"Whenever a land enters, tap all lands its controller controls." The
+    opponent plays a Mountain: their Forests and the Mountain itself are
+    tapped, their creature is not, and the enchantment's own controller's
+    Islands stay untapped — "its controller" is the entering land's."""
+    game, board = _w1g8_instability_table(set_pool, active=1)
+
+    assert game.cast_from_hand(1, "Mountain").supported
+    _w1g8_resolve_stack(game)
+
+    mountain = next(
+        permanent for permanent in game.controlled_by(game.players[1])
+        if permanent.card.name == "Mountain"
+    )
+    assert all(land.tapped for land in board["theirs"]) and mountain.tapped
+    assert not board["bears"].tapped
+    assert not any(land.tapped for land in board["mine"])
+
+
+def test_tectonic_instability_binds_its_own_controller_too(set_pool):
+    """The trigger watches every battlefield: the enchantment's controller
+    playing a land taps their own lands and leaves the opponent's alone."""
+    game, board = _w1g8_instability_table(set_pool, active=0)
+
+    assert game.cast_from_hand(0, "Mountain").supported
+    _w1g8_resolve_stack(game)
+
+    assert all(land.tapped for land in board["mine"])
+    assert not any(land.tapped for land in board["theirs"])

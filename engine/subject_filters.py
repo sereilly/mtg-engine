@@ -1059,6 +1059,16 @@ def subject_matches(
         elif controller in ("target_opponent", "target_player"):
             if targeted_player is None or not game.controls(targeted_player, obj):
                 return False
+        # "…all lands **its controller controls**" (Tectonic Instability). The
+        # controller of the object the firing event was about, which no read of
+        # the board can make and no caller argument carries: the handler holding
+        # the trigger's context rewrites the word into "you" against the frozen
+        # seat before asking. Reaching here with it unrewritten means nobody
+        # did, so the answer is no — without this branch the word fell into
+        # the relative comparison at the bottom and read as "an opponent
+        # controls".
+        elif controller == "event_subject_controller":
+            return False
         # "Non-Wall creatures **the active player** controls" (Maddening Imp,
         # Siren's Call). CR 102.1's seat, and the one seat word on this list
         # that needs nothing from the caller: whose turn it is, is a fact about

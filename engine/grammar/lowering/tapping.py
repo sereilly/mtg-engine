@@ -33,7 +33,8 @@ from ._common import (
 )
 from ._filters import split_bound_card_type
 from ._record_keys import REMOVED_FROM_COMBAT_PERMANENTS
-from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
+from ._events import (EVENT_SUBJECT_CONTROLLER, _EVENT_SUBJECT_CONTROLLERS,
+                      _EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       CHOSEN_PERMANENT, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
 
@@ -542,6 +543,18 @@ def _lower_tap(
             ),
             **bound,
         }
+        if (
+            described.get("controller") == EVENT_SUBJECT_CONTROLLER
+            and event not in _EVENT_SUBJECT_CONTROLLERS
+        ):
+            # "…all lands **its controller controls**" (Tectonic Instability).
+            # The seat is the one the fire site froze beside the object the
+            # event was about; outside such an event "its" names nothing, and
+            # the handler would end the effect having tapped nothing.
+            raise LoweringError(
+                "'its controller' names the controller of the firing event's "
+                "object, and this event freezes none", node=node,
+            )
         kind = "tap_all_matching" if isinstance(node, ast.Tap) else "untap_all_matching"
         # "**Target player** untaps all basic lands they control." (Early
         # Harvest.) The printed subject is a *chosen seat* (CR 601.2c) and the
