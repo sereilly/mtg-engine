@@ -296,7 +296,13 @@ def _sweep_casts(pool, by_name, only=None) -> _Sweep:
 
 def _sweep_activations(pool, by_name, only=None) -> _Sweep:
     sweep = _Sweep()
-    for card in pool:
+    # Face by face, as the cast sweep reads them: a split card compiled whole
+    # is a supported program with nothing in it, so a loop over whole cards
+    # would report its halves clean without looking. No half in the pool has
+    # an activated ability today, which is exactly when the loop is cheapest
+    # to get right.
+    units = [face for card in pool for face in (faces.face_cards(card) or [card])]
+    for card in units:
         if only is not None and card.name not in only:
             continue
         program = compile_card_oracle(card)
@@ -616,7 +622,8 @@ def test_a_triggered_ability_that_prints_a_target_has_one_on_the_stack(pool, by_
     pinned list above."""
     targeted, removed, bare = 0, 0, set()
     untargeted_wrong = []
-    for card in pool:
+    units = [face for card in pool for face in (faces.face_cards(card) or [card])]
+    for card in units:
         program = compile_card_oracle(card)
         if not program.supported:
             continue
