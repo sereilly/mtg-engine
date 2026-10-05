@@ -1060,7 +1060,17 @@ class PermanentStateMixin:
                 if entry is None:
                     continue
                 count, kind = entry["counters"]
-                if kind == "+1/+1":
+                # "…with X +1/+1 counters on it, where X is the discarded
+                # card's mana value" (Dralnu's Pet): the count is not printed,
+                # it is the number the resolving spell stamped beside the
+                # kicked stamp. Absent — nothing discarded, or not exactly one
+                # card — it is 0, which places nothing and leaves the keyword.
+                counted_from = entry.get("counters_from")
+                if counted_from is not None:
+                    count = max(0, int(permanent.metadata.get(counted_from, 0) or 0))
+                if count <= 0:
+                    pass
+                elif kind == "+1/+1":
                     self.place_plus1_counters(permanent, count)
                 elif kind == "+1/+0":
                     permanent.power_bonus += count

@@ -598,7 +598,51 @@ KICKED_ENTRY = re.compile(
     r"(?: and with (?P<grant>.+))?$"
 )
 
+#: "If this creature was kicked, it enters with **flying and with X +1/+1
+#: counters on it, where X is the discarded card's mana value**." (Dralnu's
+#: Pet.) :data:`KICKED_ENTRY`'s sentence with its two halves in the other
+#: order and its count not printed: the number is a characteristic of the card
+#: the spell's own kicker discarded (CR 601.2b; "Kicker—{2}{B}, Discard a
+#: creature card."), which the resolving spell stamps on the permanent beside
+#: the kicked stamp itself (``resolution._resolve_card``,
+#: ``cast_costs.CAST_COST_DISCARD_MANA_VALUE``).
+#:
+#: Its own pattern rather than a widening of the one above: that one reads a
+#: *printed* count through ``enters_with_pt_counters``, which refuses an X
+#: outright, and the where-clause here is the whole of what says where the
+#: number comes from — so every word of it is matched. A different
+#: where-clause is a different record and refuses.
+KICKED_ENTRY_SIZED_BY_DISCARD = re.compile(
+    r"^if this [a-z]+ was kicked, it enters with (?P<grant>[a-z ]+?) and with "
+    r"x (?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it, "
+    r"where x is the discarded card(?:'|’)s mana value$"
+)
+
 _QUOTED = re.compile(r'"([^"]+)"')
+
+
+def _kicked_entry_sized_by_discard(normalized: str) -> "dict | None":
+    """:func:`kicked_entry`'s answer for the discard-sized sentence, or None.
+
+    ``counters_from`` names the permanent-metadata key the count is read off as
+    the permanent enters; ``counters`` keeps its ``(count, kind)`` shape with a
+    count of 0, which is what a permanent with no such stamp places.
+    """
+    from .cast_costs import CAST_COST_DISCARD_MANA_VALUE
+    from .grammar.vocabulary import IMPLEMENTED_KEYWORDS
+
+    match = KICKED_ENTRY_SIZED_BY_DISCARD.match(normalized)
+    if match is None:
+        return None
+    grant = match.group("grant")
+    if grant not in IMPLEMENTED_KEYWORDS:
+        return None
+    return {
+        "counters": (0, match.group("counter")),
+        "counters_from": CAST_COST_DISCARD_MANA_VALUE,
+        "keywords": (grant,),
+        "ability_lines": (),
+    }
 
 
 def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
@@ -615,7 +659,16 @@ def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
     entered with the counters alone -- the dropped-rider failure, on the half
     of the card the kicker was paid *for*.
     """
-    match = KICKED_ENTRY.match(_self_normalized(line, card_name))
+    normalized = _self_normalized(line, card_name)
+    # "…it enters with flying and with X +1/+1 counters on it, where X is the
+    # discarded card's mana value." (Dralnu's Pet.) Asked first: the pattern
+    # below would also take these words — its lazy "<entry> on it" stops at the
+    # same "on it" — and then refuse them at the count, which is the right
+    # answer for an X it cannot size and the wrong one for this sentence.
+    sized = _kicked_entry_sized_by_discard(normalized)
+    if sized is not None:
+        return sized
+    match = KICKED_ENTRY.match(normalized)
     if match is None:
         return None
     placement = enters_with_pt_counters(f"this creature {match.group('entry')}")
@@ -1698,6 +1751,7 @@ __all__ = [
     "ENTERS_WITH_SEVEN_PLUS_1_0_COUNTERS",
     "enters_with_pt_counters",
     "KICKED_ENTRY",
+    "KICKED_ENTRY_SIZED_BY_DISCARD",
     "kicked_entry",
     "enters_with_named_counter",
     "ENTERS_WITH_X_PT_COUNTERS",

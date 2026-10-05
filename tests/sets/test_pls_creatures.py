@@ -276,3 +276,180 @@ def test_w1g1_the_ai_kicks_a_scuta_only_with_life_to_spare(set_pool):
     )
     assert hurt is not None and hurt.card_name == "Phyrexian Scuta"
     assert not hurt.optional_cost_payments
+
+
+# -- Dralnu's Pet: a kicker with two clauses, and a count read off the cost --
+
+
+def _w1g1_pet_duel(set_pool, others, pool):
+    """Seat 0 holds Dralnu's Pet and *others* (LEA names) with *pool* floating."""
+    lea = set_pool("LEA")
+    game = _w1g1_duel(set_pool, ["Dralnu's Pet"], pool=pool)
+    game.players[0].hand.extend(lea[name] for name in others)
+    return game  # _w1g1_pet_duel
+
+
+_W1G1_PET_POOL = {"U": 10, "B": 10}
+
+
+def test_w1g1_dralnus_pet_kicker_is_one_offer_of_mana_and_a_creature_card(set_pool):
+    """"Kicker—{2}{B}, Discard a creature card." One offer with two clauses:
+    the mana is a clause of the price, not a second offer a caster could take
+    without the discard — so it is ``mana_symbols`` on the cost that carries
+    the key, and ``optional_mana`` stays empty."""
+    card = set_pool("PLS")["Dralnu's Pet"]
+    (cost,) = _w1g1_additional_costs(card)
+    assert cost.optional_key == _w1g1_kicker_cost(card.oracle_text)
+    assert cost.mana_symbols == "{2}{B}" and cost.mana_cost == {"generic": 2, "B": 1}
+    assert (cost.discard_cards, cost.discard_filters) == (1, ({"type_filter": "creature"},))
+    assert not cost.optional_mana
+
+
+def test_w1g1_dralnus_pet_kicked_flies_with_the_discarded_cards_mana_value(set_pool):
+    """Kicked by discarding Hill Giant (mana value 4): six mana in all, the
+    Giant in the graveyard — the card the caster **named**, with a cheaper
+    creature card beside it — and a 6/6 flier with four real counters that
+    still flies after the turn ends."""
+    card = set_pool("PLS")["Dralnu's Pet"]
+    key = _w1g1_kicker_cost(card.oracle_text)
+    game = _w1g1_pet_duel(
+        set_pool, ["Lightning Bolt", "Grizzly Bears", "Hill Giant"], _W1G1_PET_POOL
+    )
+
+    result = game.queue_from_hand(
+        0, "Dralnu's Pet", optional_cost_payments={key: 1}, cost_hand_index=3,
+    )
+    assert result.supported, result.details
+    assert [c.name for c in game.players[0].graveyard] == ["Hill Giant"]
+    _w1g1_resolve_stack(game)
+
+    pet = _w1g1_named(game, 0, "Dralnu's Pet")
+    assert (pet.effective_power, pet.effective_toughness) == (6, 6)
+    assert int(pet.metadata.get("plus_counters", 0)) == 4
+    assert game._has_keyword(pet, "flying")
+    assert sum(_W1G1_PET_POOL.values()) - _w1g1_floating(game) == 6
+    assert [c.name for c in game.players[0].hand] == ["Lightning Bolt", "Grizzly Bears"]
+
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+    assert game._has_keyword(pet, "flying"), "no duration: it lasts while the Pet does"
+    assert "flying" not in {k.lower() for k in pet.card.keywords}, "a grant, not the card"
+
+
+def test_w1g1_dralnus_pet_unkicked_is_a_two_two_that_does_not_fly(set_pool):
+    """The word "flying" sits in a line about being kicked. An unkicked Pet
+    must not have it (the failure Invasion's Faerie Squadron had), discards
+    nothing and costs {1}{U}{U}."""
+    game = _w1g1_pet_duel(set_pool, ["Hill Giant"], _W1G1_PET_POOL)
+    assert game.cast_from_hand(0, "Dralnu's Pet").supported
+    _w1g1_resolve_stack(game)
+
+    pet = _w1g1_named(game, 0, "Dralnu's Pet")
+    assert (pet.effective_power, pet.effective_toughness) == (2, 2)
+    assert not game._has_keyword(pet, "flying")
+    assert [c.name for c in game.players[0].hand] == ["Hill Giant"]
+    assert sum(_W1G1_PET_POOL.values()) - _w1g1_floating(game) == 3
+
+    put = _w1g1_put(game, 1, set_pool("PLS")["Dralnu's Pet"])
+    assert (put.effective_power, put.effective_toughness) == (2, 2)
+    assert not game._has_keyword(put, "flying"), "not cast, so not kicked"
+
+
+def test_w1g1_dralnus_pet_kicked_with_a_free_creature_flies_and_gets_nothing(set_pool):
+    """X is the discarded card's mana value, and 0 is a mana value: the Pet
+    still flies (the keyword is not sized by X) and gets no counter."""
+    card = set_pool("PLS")["Dralnu's Pet"]
+    key = _w1g1_kicker_cost(card.oracle_text)
+    game = _w1g1_pet_duel(set_pool, [], _W1G1_PET_POOL)
+    free = next(
+        c for c in set_pool("ATQ").values()
+        if c.primary_type == "creature" and not int(c.cmc)
+    )
+    game.players[0].hand.append(free)
+    assert game.cast_from_hand(
+        0, "Dralnu's Pet", optional_cost_payments={key: 1}
+    ).supported
+    _w1g1_resolve_stack(game)
+
+    pet = _w1g1_named(game, 0, "Dralnu's Pet")
+    assert (pet.effective_power, pet.effective_toughness) == (2, 2)
+    assert game._has_keyword(pet, "flying")
+
+
+def test_w1g1_dralnus_pets_kicker_is_all_or_nothing(set_pool):
+    """Every way the price cannot be met is a refused cast with nothing spent
+    and nothing discarded (CR 601.2h): no creature card to discard, a card
+    named that is not one, the mana short, and the {B} missing."""
+    card = set_pool("PLS")["Dralnu's Pet"]
+    key = _w1g1_kicker_cost(card.oracle_text)
+    kick = {"optional_cost_payments": {key: 1}}
+
+    no_creature = _w1g1_pet_duel(set_pool, ["Lightning Bolt"], _W1G1_PET_POOL)
+    refused = no_creature.cast_from_hand(0, "Dralnu's Pet", **kick)
+    assert not refused.supported and "601.2h" in refused.details
+
+    wrong_card = _w1g1_pet_duel(
+        set_pool, ["Lightning Bolt", "Hill Giant"], _W1G1_PET_POOL
+    )
+    assert not wrong_card.cast_from_hand(
+        0, "Dralnu's Pet", cost_hand_index=1, **kick
+    ).supported
+
+    for pool in ({"U": 3}, {"U": 5, "G": 3}):
+        short = _w1g1_pet_duel(set_pool, ["Hill Giant"], pool)
+        assert not short.cast_from_hand(0, "Dralnu's Pet", **kick).supported
+        assert sum(short.players[0].mana_pool.values()) == sum(pool.values())
+        assert not short.players[0].graveyard, "the discard is not paid first"
+        [offer] = short.cast_cost_offers(0, card, spell_hand_index=0)
+        assert offer["max_times"] == 0, "nor is it offered"
+
+    for game in (no_creature, wrong_card):
+        assert not game.players[0].graveyard
+        assert _w1g1_floating(game) == sum(_W1G1_PET_POOL.values())
+        assert game.players[0].hand[0].name == "Dralnu's Pet"
+
+    payable = _w1g1_pet_duel(set_pool, ["Hill Giant"], {"U": 5, "B": 1})
+    [offer] = payable.cast_cost_offers(0, card, spell_hand_index=0)
+    assert (offer["label"], offer["max_times"]) == ("kicker", 1)
+
+
+def test_w1g1_the_kicked_pet_asks_which_creature_card_to_discard(set_pool):
+    card = set_pool("PLS")["Dralnu's Pet"]
+    key = _w1g1_kicker_cost(card.oracle_text)
+    game = _w1g1_pet_duel(
+        set_pool, ["Lightning Bolt", "Grizzly Bears", "Hill Giant"], _W1G1_PET_POOL
+    )
+    plain = game.cast_target_spec(0, card, optional_cost_payments={})
+    assert plain["kind"] == "none"
+    kicked = game.cast_target_spec(0, card, optional_cost_payments={key: 1})
+    assert kicked["discard_cost"] and kicked["kind"] == "hand_card"
+    assert [t["name"] for t in kicked["valid_targets"]] == ["Grizzly Bears", "Hill Giant"]
+
+
+def test_w1g1_the_ai_plans_the_pets_whole_price_or_declines_it(set_pool):
+    """A hand big enough to spare a card (the buyback reserve) and six lands of
+    the right colours: the AI kicks, and the lands it plans pay all six mana.
+    With only Islands the {B} is not there, so it casts the plain Pet — never
+    an announcement the engine then refuses."""
+    lea = set_pool("LEA")
+    card = set_pool("PLS")["Dralnu's Pet"]
+    key = _w1g1_kicker_cost(card.oracle_text)
+
+    def board(swamps):
+        game = _w1g1_pet_duel(set_pool, ["Hill Giant"] + ["Forest"] * 9, {})
+        for name, count in (("Island", 3), ("Swamp", swamps)):
+            for _ in range(count):
+                _w1g1_put(game, 0, lea[name])
+        game.active_player_index = 0
+        game.current_phase = "main"
+        game.lands_played_this_turn[0] = 1
+        return game
+
+    kicked = _w1g1_choose_cast_action(board(3), 0)
+    assert kicked.card_name == "Dralnu's Pet"
+    assert kicked.optional_cost_payments == {key: 1}
+    assert len(kicked.land_tap_indices) == 6
+
+    plain = _w1g1_choose_cast_action(board(0), 0)
+    assert plain.card_name == "Dralnu's Pet" and not plain.optional_cost_payments
+    assert len(plain.land_tap_indices) == 3

@@ -864,6 +864,21 @@ def _cast_candidate_announcing(
         return None
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
+        # mana clause of a price that is not only mana, which `_offers_taken`
+        # does not list — it is one clause of an offer, not an offer. Planned
+        # with the spell's own mana for the reason the offers below are: the
+        # cast folds it into the one payment, so a plan without it taps three
+        # lands for a six-mana announcement and is refused.
+        for cost in additional_costs(card):
+            if (
+                cost.mana_symbols
+                and cost.from_zone in (None, from_zone)
+                and int((offers or {}).get(cost.optional_key, 0) or 0) > 0
+            ):
+                required = dict(required)
+                for symbol, amount in cost.mana_cost.items():
+                    required[symbol] = required.get(symbol, 0) + amount
         if taken_offers:
             # The offers' mana on top of the spell's, planned as one payment
             # because it is paid as one (`casting.queue_from_hand` folds an

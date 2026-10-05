@@ -1507,6 +1507,19 @@ class SpellCastingMixin:
                     extra_pip_tax[symbol] = (
                         extra_pip_tax.get(symbol, 0) + count * times
                     )
+        # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) The
+        # mana clause of an optional price that is not only mana: folded into
+        # the same payment as the offers above, and only for the caster who
+        # took the price — through the one reader the gate and the collector
+        # below skip an untaken offer by, so the mana and the discard are
+        # charged together or not at all.
+        for cost in cast_costs:
+            if cost.mana_symbols and optional_cost_taken(cost, optional_paid):
+                for symbol, count in cost.mana_cost.items():
+                    if symbol == "generic":
+                        extra_generic_tax += count
+                    else:
+                        extra_pip_tax[symbol] = extra_pip_tax.get(symbol, 0) + count
 
         # Resolve the named discard **here**, while `cost_hand_index` still
         # indexes the hand the caster was looking at. The spell leaves that hand
@@ -2194,6 +2207,12 @@ class SpellCastingMixin:
                             stack_index=chosen_source_stack_index,
                         ),
                         "sacrificed_for_cost": sacrificed_for_cost,
+                        # …the cards a *discard* cost took, on the channel the
+                        # activation path records them on and for its reason:
+                        # the card is in a graveyard by now (CR 400.7: a
+                        # different object), so the announcement is the only
+                        # thing that can say which of that pile's cards it was.
+                        "discarded_for_cost": cost_spoils["discarded_for_cost"],
                         # …and what an *exile* cost ate, on the channel the
                         # activation path already records it on. Last-known
                         # information for the same reason (CR 608.2h): the
@@ -3567,6 +3586,11 @@ class SpellCastingMixin:
         caster = self.players[caster_index]
         sacrificed: Permanent | None = None
         exiled: Permanent | None = None
+        # Every card a printed discard took, in the order it took them — the
+        # channel an activation's discard cost has recorded on since Land's
+        # Edge, written here for the first spell that reads it back: "…where X
+        # is **the discarded card's mana value**" (Dralnu's Pet).
+        discarded_cards: list[CardDefinition] = []
         # The named discards, in the order they were named; each pays one card.
         named_discards = list(cost_hand_cards or ())
         for cost in costs:
@@ -3819,12 +3843,16 @@ class SpellCastingMixin:
                         )
                     discarded = caster.hand.pop(index)
                     self._discard_card(caster, discarded)
+                    discarded_cards.append(discarded)
                     self.log.append(
                         f"{caster.name} discarded {discarded.name} to cast {card.name}"
                     )
                     # One named index pays one card; the rest take the default.
                     cost_hand_index = None
-        return {"sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled}
+        return {
+            "sacrificed_for_cost": sacrificed, "exiled_for_cost": exiled,
+            "discarded_for_cost": discarded_cards,
+        }
 
     def _x_implied_by_target(
         self, card, target_player_index, target_permanent_index, target_stack_item,

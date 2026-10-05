@@ -1337,6 +1337,27 @@ class LegalityMixin:
         for cost in charged:
             if cost.optional_key is None:
                 continue
+            payable = self._unpayable_additional_cost(
+                caster_index, card, (cost,),
+                spell_hand_index=spell_hand_index, from_zone=from_zone,
+                taken={cost.optional_key: 1},
+            ) is None
+            if payable and cost.mana_symbols and self.enforce_mana_costs:
+                # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's
+                # Pet.) A price with a mana clause is payable only if the mana
+                # is too — on top of the spell's own, out of the pool and the
+                # untapped lands, which is the question the mana offers below
+                # ask of themselves. The gate above cannot see it: CR 601.2h
+                # leaves an unpayable *mana* cost to the payment, so without
+                # this the prompt offered a kicker the cast then refused.
+                wanted = dict(mana_cost_from_symbols(card.mana_cost or "") or {})
+                for symbol, amount in cost.mana_cost.items():
+                    wanted[symbol] = wanted.get(symbol, 0) + amount
+                payable = plan_payment(
+                    dict(caster.mana_pool),
+                    untapped_mana_lands(self.controlled_by(caster_index)),
+                    wanted,
+                ) is not None
             offers.append({
                 "kind": "optional_cost",
                 # The same field name the mana offers carry, because it is the
@@ -1357,11 +1378,7 @@ class LegalityMixin:
                 # CR 601.2h through the gate itself rather than a second board
                 # reading: an offer this shows as payable is one the cast will
                 # accept, priced by the function that would refuse it.
-                "max_times": 1 if self._unpayable_additional_cost(
-                    caster_index, card, (cost,),
-                    spell_hand_index=spell_hand_index, from_zone=from_zone,
-                    taken={cost.optional_key: 1},
-                ) is None else 0,
+                "max_times": 1 if payable else 0,
                 "times": answered.get(cost.optional_key, 0),
             })
 
