@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 81.6% | 78.0% | 58.4% | 105 |
+| PLS *(measured)* | 143 | 255 | 83.5% | 80.4% | 59.6% | 108 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -58,8 +58,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 546 | 257 | expected a subject |  |
-| 154 | 81 | unrecognized effect verb |  |
+| 544 | 255 | expected a subject |  |
+| 152 | 79 | unrecognized effect verb |  |
 | 134 | 69 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -67,7 +67,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 19 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 7 | 3 | expected 'card' |  |
+| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -256,6 +256,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target enchantment.`
 - **Alley Grifters**
   - `Whenever this creature becomes blocked, defending player discards a card.`
+- **Allied Strategies**
+  - `Domain — Target player draws a card for each basic land type among lands they control.`
 - **Alms**
   - `{1}, Exile the top card of your graveyard: Prevent the next 1 damage that would be dealt to target creature this turn.`
 - **Alpha Kavu**
@@ -2288,6 +2290,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice this enchantment: It deals 2 damage to each creature with flying.`
 - **Downhill Charge**
   - `Target creature gets +X/+0 until end of turn, where X is the number of Mountains you control.`
+- **Draco**
+  - `Domain — At the beginning of your upkeep, sacrifice this creature unless you pay {10}. This cost is reduced by {2} for each basic land type among lands you control.`
 - **Draconian Cylix**
   - `{2}, {T}, Discard a card at random: Regenerate target creature.`
 - **Dracoplasm**
@@ -6373,6 +6377,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Return all basic land cards from all graveyards to the battlefield tapped under their owners' control.`
 - **Planar Collapse**
   - `At the beginning of your upkeep, if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. They can't be regenerated.`
+- **Planar Overlay**
+  - `Each player chooses a land they control of each basic land type. Return those lands to their owners' hands.`
 - **Planar Portal**
   - `{6}, {T}: Search your library for a card, put that card into your hand, then shuffle.`
 - **Planar Void**
