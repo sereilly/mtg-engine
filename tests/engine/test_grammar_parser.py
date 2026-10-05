@@ -795,3 +795,154 @@ def test_the_all_attack_trigger_needs_its_verb():
 
     with pytest.raises(GrammarError):
         parse_line("whenever all creatures you control are tapped, draw a card")
+
+
+# ---------------------------------------------------------------------------
+# "A. If <condition>, B instead." — whom B is done to
+# ---------------------------------------------------------------------------
+#
+# One reader (`conditional_instead._instead_inherits_subject`) since Invasion's
+# second wave, where there had been two with opposite answers to a mismatch.
+# These hold the fold to its one rule over invented lines, because the pool
+# prints only the cells that already agreed: a back-reference takes the
+# replaced sentence's subject, or is that subject verbatim, or the pair is not
+# formed at all.
+
+
+def _instead_pair(line: str) -> ast.Conditional:
+    pair = _statement(line)
+    assert isinstance(pair, ast.Conditional) and pair.otherwise is not None, pair
+    return pair
+
+
+@pytest.mark.parametrize("line, field", [
+    # "it" after one announced target (Lightning Dart's spelling, on a pump).
+    ("Target creature gets +1/+1 until end of turn. If you control a Swamp, "
+     "it gets +2/+2 until end of turn instead.", "subject"),
+    # "that <noun>" never repeats the narrowing it points back at.
+    ("Target creature with flying gets +1/+1 until end of turn. If you control "
+     "a Swamp, that creature gets +2/+2 until end of turn instead.", "subject"),
+    # …and may be the shorter name of a conjoined type.
+    ("Target artifact creature gets +1/+1 until end of turn. If you control a "
+     "Swamp, that creature gets +2/+2 until end of turn instead.", "subject"),
+    ("Target player discards a card. If you control a Swamp, that player "
+     "discards two cards instead.", "player"),
+    ("This creature deals 1 damage to target creature. If you control a Swamp, "
+     "this creature deals 4 damage to it instead.", "recipients"),
+    ("This creature deals 1 damage to any target. If you control a Swamp, "
+     "this creature deals 4 damage to that permanent or player instead.",
+     "recipients"),
+    # The word in front of the sentence it marks (Urza's Rage).
+    ("This creature deals 1 damage to any target. If you control a Swamp, "
+     "instead this creature deals 4 damage to that permanent or player.",
+     "recipients"),
+    # Named outright: kept as written, which here is the same words.
+    ("This creature deals 1 damage to each creature and each player. If you "
+     "control a Swamp, this creature deals 2 damage to each creature and each "
+     "player instead.", "recipients"),
+])
+def test_an_instead_pair_names_one_subject_in_both_arms(line, field):
+    """CR 601.2c: the spell announces one object whichever arm resolves, so
+    the replacement's back-reference *is* the replaced sentence's subject —
+    target and all, the same spec on both arms."""
+    pair = _instead_pair(line)
+    assert getattr(pair.then, field) == getattr(pair.otherwise, field)
+
+
+def test_an_instead_pair_keeps_it_where_the_sentence_announced_nothing():
+    """"This creature gets +1/+1 … it gets +2/+2 instead": nothing in the pair
+    chose an object, so the pronoun is the one every sentence of that ability
+    prints — the source — and is left for the reader that owns it."""
+    pair = _instead_pair(
+        "This creature gets +1/+1 until end of turn. If you control a Swamp, "
+        "it gets +2/+2 until end of turn instead."
+    )
+    assert pair.then.subject.quantifier == "it"
+    assert pair.then.subject.filter.is_source
+
+
+@pytest.mark.parametrize("line", [
+    # "that creature" after a target that may not be one.
+    "Target artifact or creature gets +1/+1 until end of turn. If you control "
+    "a Swamp, that creature gets +2/+2 until end of turn instead.",
+    # A noun the target is not.
+    "Target creature gets +1/+1 until end of turn. If you control a Swamp, "
+    "that artifact gets +2/+2 until end of turn instead.",
+    # "It" after a set names none of its members.
+    "Creatures you control get +1/+1 until end of turn. If you control a "
+    "Swamp, it gets +2/+2 until end of turn instead.",
+    # "That permanent or player" needs an "any target" to restate.
+    "This creature deals 1 damage to target creature. If you control a Swamp, "
+    "this creature deals 4 damage to that permanent or player instead.",
+    # Two recipients in front, one pronoun behind.
+    "This creature deals 1 damage to target creature and 1 damage to you. If "
+    "you control a Swamp, this creature deals 4 damage to it instead.",
+    # "Instead" printed twice, and a guarded sentence replaced by an unguarded
+    # one (or the reverse, or by a guard of another kind).
+    "This creature deals 1 damage to any target. If you control a Swamp, "
+    "instead this creature deals 4 damage to that permanent or player instead.",
+    "Destroy target artifact if its mana value is 2 or less. If you control a "
+    "Swamp, destroy that artifact instead.",
+    "Destroy target artifact. If you control a Swamp, destroy that artifact if "
+    "its mana value is 5 or less instead.",
+    "Counter target spell if its mana value is 2 or less. If you control a "
+    "Swamp, counter that spell if it's red instead.",
+])
+def test_an_instead_pair_refuses_a_back_reference_it_cannot_place(line):
+    """The mismatch rule, and the half of the fold that was a decision: a word
+    pointing at something the replaced sentence did not name refuses the line.
+    Left as written it compiled — the bare pronoun lowers as the ability's own
+    source — and the replacement arm acted on a different object than the
+    sentence it replaces."""
+    with pytest.raises(GrammarError):
+        parse_line(line)
+
+
+def test_a_guarded_instead_pair_replaces_the_action_and_the_guard_together():
+    """"Counter target spell if its mana value is 2 or less. If this spell was
+    kicked, counter that spell if its mana value is 4 or less instead."
+    (Prohibit.) Each arm keeps its own bound and both name the one spell."""
+    pair = _instead_pair(
+        "Counter target spell if its mana value is 2 or less. If this spell "
+        "was kicked, counter that spell if its mana value is 4 or less instead."
+    )
+    assert isinstance(pair.condition, ast.WasKicked)
+    kicked, plain = pair.then, pair.otherwise
+    assert (kicked.condition.comparison.value, plain.condition.comparison.value) == (
+        ast.Fixed(4), ast.Fixed(2),
+    )
+    assert kicked.then.subject == plain.then.subject
+    assert kicked.then.subject.targeted
+
+
+@pytest.mark.parametrize("named, bound, restates", [
+    ("that creature", "target creature", True),
+    ("that creature", "target creature with flying", True),
+    ("that creature", "target artifact creature", True),
+    ("that creature", "target artifact or creature", False),
+    ("that artifact", "target creature", False),
+])
+def test_restating_a_target_is_entailment(named, bound, restates):
+    """`sentence_rebinding.restates_target`, the one answer three readers each
+    had their own spelling of: the demonstrative carries nothing but its head
+    noun, and every type it names is one the target must have."""
+    from engine.grammar.sentence_rebinding import restates_target
+
+    def _subject(phrase):
+        return _statement(f"destroy {phrase}").subject
+
+    assert restates_target(_subject(named), _subject(bound)) is restates
+
+
+def test_a_narrowed_demonstrative_restates_nothing():
+    """"That creature **you control**" chose for itself: rewriting it onto the
+    bound target would throw the narrowing away, so it is never a restatement
+    — even of a target carrying the identical narrowing."""
+    from engine.grammar.sentence_rebinding import restates_target
+
+    narrowed = ast.ObjectFilter(card_types=("creature",), controller="you")
+    bound = ast.TargetSpec("target", narrowed, targeted=True)
+    assert not restates_target(ast.TargetSpec("that", narrowed), bound)
+    assert restates_target(
+        ast.TargetSpec("that", ast.ObjectFilter(card_types=("creature",))), bound
+    )

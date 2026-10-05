@@ -1743,3 +1743,389 @@ def test_liberate_cannot_target_a_creature_its_caster_does_not_control(set_pool)
     ).supported
     assert game.is_on_battlefield(giant)
     assert game.players[0].hand == [liberate]
+
+
+# --- W2G1: kicker spells ---
+import pytest as _w2g1_pytest
+
+from engine import Game as _W2G1Game
+from engine import PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from tests.helpers import _nosick as _w2g1_nosick
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_duel(set_pool, name, pool, *, theirs=()):
+    """Seat 0 holds the INV instant *name* with *pool* floating; seat 1 holds
+    the LEA cards *theirs*. Costs are charged: a kicker is a price, and a rig
+    that waives mana cannot tell a kicked cast from a free one."""
+    lea = set_pool("LEA")
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(
+            "Caster", library=[lea["Forest"]] * 10, hand=[set_pool("INV")[name]],
+        ),
+        _W2G1PlayerState(
+            "Victim", library=[lea["Forest"]] * 10,
+            hand=[lea[other] for other in theirs],
+        ),
+    ])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool.update(pool)
+    return game  # _w2g1_duel
+
+
+def _w2g1_put(game, seat, card):
+    permanent = _W2G1Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, permanent, None)
+    return permanent  # _w2g1_put
+
+
+def _w2g1_names(cards):
+    return [card.name for card in cards]  # _w2g1_names
+
+
+# --- Prohibit ---------------------------------------------------------------
+
+
+@_w2g1_pytest.mark.parametrize("spell, mana, x_value, kicked, countered", [
+    ("Lightning Bolt", {"R": 1}, None, False, True),    # mana value 1 <= 2
+    ("Hill Giant", {"R": 4}, None, False, False),       # 4 > 2
+    ("Hill Giant", {"R": 4}, None, True, True),         # 4 <= 4, kicked
+    ("Craw Wurm", {"G": 6}, None, True, False),         # 6 > 4
+    # CR 202.3b: on the stack an X in the cost is the announced value.
+    ("Fireball", {"R": 4}, 1, False, True),             # {X}{R}, X=1: 2
+    ("Fireball", {"R": 4}, 3, False, False),            # X=3: 4
+    ("Fireball", {"R": 4}, 3, True, True),
+])
+def test_w2g1_prohibit_counters_by_the_spells_mana_value(
+    set_pool, spell, mana, x_value, kicked, countered,
+):
+    """"Counter target spell if its mana value is 2 or less. If this spell was
+    kicked, counter that spell if its mana value is 4 or less instead."
+
+    The clause is a condition on the *effect* (CR 608.2c), not a targeting
+    restriction: every row is a legal announcement, paid for in full, and the
+    rows that are not countered resolve as if Prohibit had not been cast."""
+    game = _w2g1_duel(set_pool, "Prohibit", {"U": 4}, theirs=[spell])
+    game.players[1].mana_pool.update(mana)
+    is_creature = "Creature" in set_pool("LEA")[spell].type_line
+    announced = {} if is_creature else {"target_player_index": 0}
+    if x_value is not None:
+        announced["x_value"] = x_value
+    assert game.queue_from_hand(1, spell, **announced).supported
+
+    result = game.queue_from_hand(
+        0, "Prohibit", target_stack_index=0,
+        optional_cost_payments={"{2}": 1} if kicked else None,
+    )
+    assert result.supported, result
+    assert sum(game.players[0].mana_pool.values()) == (0 if kicked else 2)
+    _w2g1_resolve_stack(game)
+
+    assert _w2g1_names(game.players[0].graveyard) == ["Prohibit"]
+    on_their_board = _w2g1_names(p.card for p in game.controlled_by(1))
+    if countered:
+        assert _w2g1_names(game.players[1].graveyard) == [spell]
+        assert game.players[0].life == 20 and on_their_board == []
+        assert any("countered by Prohibit" in line for line in game.log)
+    elif is_creature:
+        assert on_their_board == [spell]
+    else:
+        assert game.players[0].life == 20 - (x_value or 3), game.log
+
+
+def test_w2g1_prohibit_offers_every_spell_whatever_it_costs(set_pool):
+    """CR 601.2c reads the printed target phrase, which is "target spell": a
+    six-drop is offered to the picker exactly as a one-drop is."""
+    game = _w2g1_duel(set_pool, "Prohibit", {"U": 4}, theirs=["Craw Wurm"])
+    game.players[1].mana_pool.update({"G": 6})
+    assert game.queue_from_hand(1, "Craw Wurm").supported
+
+    spec = game.cast_target_spec(0, set_pool("INV")["Prohibit"])
+    assert spec["requires_target"]
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Craw Wurm"]
+
+
+# --- Overload ---------------------------------------------------------------
+
+
+@_w2g1_pytest.mark.parametrize("artifact, kicked, destroyed", [
+    ("Sol Ring", False, True),              # 1 <= 2
+    ("Jayemdae Tome", False, False),        # 4 > 2
+    ("Jayemdae Tome", True, True),          # 4 <= 5, kicked
+    ("Colossus of Sardia", True, False),    # 9 > 5
+])
+def test_w2g1_overload_destroys_by_the_artifacts_mana_value(
+    set_pool, artifact, kicked, destroyed,
+):
+    """"Destroy target artifact if its mana value is 2 or less. If this spell
+    was kicked, destroy that artifact if its mana value is 5 or less instead."
+    One artifact is announced whichever arm resolves, and "that artifact" is
+    it."""
+    game = _w2g1_duel(set_pool, "Overload", {"R": 3})
+    pool = {**set_pool("LEA"), **set_pool("ATQ")}
+    victim = _w2g1_put(game, 1, pool[artifact])
+    bystander = _w2g1_put(game, 1, set_pool("LEA")["Mox Ruby"])
+
+    result = game.cast_from_hand(
+        0, "Overload", target_permanent_ids=[victim.permanent_id],
+        optional_cost_payments={"{2}": 1} if kicked else None,
+    )
+    assert result.supported, result
+    _w2g1_resolve_stack(game)
+
+    assert game.is_on_battlefield(victim) is (not destroyed), game.log
+    assert game.is_on_battlefield(bystander), "a zero-drop nobody aimed at"
+    assert sum(game.players[0].mana_pool.values()) == (0 if kicked else 2)
+
+
+def test_w2g1_overload_may_be_aimed_at_any_artifact_and_at_nothing_else(set_pool):
+    """The mana value is asked at resolution, so a nine-drop is a legal target
+    the spell simply does nothing to; a creature is not an artifact and the
+    cast is refused with nothing spent."""
+    game = _w2g1_duel(set_pool, "Overload", {"R": 3})
+    colossus = _w2g1_put(game, 1, set_pool("ATQ")["Colossus of Sardia"])
+    giant = _w2g1_put(game, 1, set_pool("LEA")["Hill Giant"])
+
+    spec = game.cast_target_spec(0, set_pool("INV")["Overload"])
+    assert [entry["name"] for entry in spec["valid_targets"]] == ["Colossus of Sardia"]
+
+    refused = game.cast_from_hand(
+        0, "Overload", target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported
+    assert sum(game.players[0].mana_pool.values()) == 3
+    assert game.is_on_battlefield(colossus)
+
+
+# --- Scorching Lava ---------------------------------------------------------
+
+
+@_w2g1_pytest.mark.parametrize("kicked", [False, True])
+def test_w2g1_scorching_lava_exiles_what_it_kills_only_when_kicked(set_pool, kicked):
+    """"…If this spell was kicked, that creature can't be regenerated this
+    turn and if it would die this turn, exile it instead." Two points to a 2/2
+    either way; the kick decides which zone it ends up in."""
+    game = _w2g1_duel(set_pool, "Scorching Lava", {"R": 3})
+    bears = _w2g1_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+
+    assert game.cast_from_hand(
+        0, "Scorching Lava", target_permanent_ids=[bears.permanent_id],
+        optional_cost_payments={"{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert not game.is_on_battlefield(bears)
+    assert _w2g1_names(game.players[1].exile) == (["Grizzly Bears"] if kicked else [])
+    assert _w2g1_names(game.players[1].graveyard) == ([] if kicked else ["Grizzly Bears"])
+
+
+@_w2g1_pytest.mark.parametrize("kicked", [False, True])
+def test_w2g1_scorching_lava_kicked_beats_a_regeneration_shield(set_pool, kicked):
+    """"…can't be regenerated this turn" (CR 701.19c). The same shield saves
+    the creature from the unkicked spell, which is what shows the kicked run
+    measured the rider rather than a shield that never worked."""
+    game = _w2g1_duel(set_pool, "Scorching Lava", {"R": 3})
+    bears = _w2g1_put(game, 1, set_pool("LEA")["Grizzly Bears"])
+    bears.regeneration_shield = 1
+
+    assert game.cast_from_hand(
+        0, "Scorching Lava", target_permanent_ids=[bears.permanent_id],
+        optional_cost_payments={"{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    assert game.is_on_battlefield(bears) is (not kicked), game.log
+    if kicked:
+        assert _w2g1_names(game.players[1].exile) == ["Grizzly Bears"]
+    else:
+        assert bears.tapped and bears.damage_marked == 0
+
+
+def test_w2g1_scorching_lava_marks_a_survivor_for_the_turn_and_spares_a_player(set_pool):
+    """The riders last "this turn", so a creature that survives the two points
+    carries them until cleanup; "that creature" is the guard, so a kicked Lava
+    aimed at a player is two damage and nothing else."""
+    game = _w2g1_duel(set_pool, "Scorching Lava", {"R": 3})
+    giant = _w2g1_put(game, 1, set_pool("LEA")["Hill Giant"])
+    assert game.cast_from_hand(
+        0, "Scorching Lava", target_permanent_ids=[giant.permanent_id],
+        optional_cost_payments={"{R}": 1},
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert giant.damage_marked == 2
+    assert giant.metadata.get("cant_be_regenerated_this_turn")
+    assert giant.metadata.get("exile_if_dies_this_turn")
+
+    game = _w2g1_duel(set_pool, "Scorching Lava", {"R": 3})
+    assert game.cast_from_hand(
+        0, "Scorching Lava", optional_cost_payments={"{R}": 1},
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 18
+
+
+# --- Urza's Rage ------------------------------------------------------------
+
+
+@_w2g1_pytest.mark.parametrize("kicked, damage", [(False, 3), (True, 10)])
+def test_w2g1_urzas_rage_deals_three_or_ten(set_pool, kicked, damage):
+    """"Urza's Rage deals 3 damage to any target. If this spell was kicked,
+    **instead** it deals 10 damage to **that permanent or player** …" One
+    target, announced once; the fronted "instead" replaces the three rather
+    than adding to it (thirteen is the two sentences read as steps)."""
+    game = _w2g1_duel(set_pool, "Urza's Rage", {"R": 12})
+    assert game.cast_from_hand(
+        0, "Urza's Rage", optional_cost_payments={"{8}{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 20 - damage
+    assert sum(game.players[0].mana_pool.values()) == (0 if kicked else 9)
+
+    game = _w2g1_duel(set_pool, "Urza's Rage", {"R": 12})
+    wurm = _w2g1_put(game, 1, set_pool("LEA")["Craw Wurm"])      # 6/4
+    elemental = _w2g1_put(game, 1, set_pool("LEA")["Force of Nature"])  # 8/8
+    assert game.cast_from_hand(
+        0, "Urza's Rage", target_permanent_ids=[elemental.permanent_id],
+        optional_cost_payments={"{8}{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 20, "a creature was named, not the face"
+    assert game.is_on_battlefield(elemental) is (not kicked)
+    assert game.is_on_battlefield(wurm) and wurm.damage_marked == 0
+
+
+@_w2g1_pytest.mark.parametrize("kicked, life", [(False, 20), (True, 10)])
+def test_w2g1_urzas_rage_kicked_goes_through_a_players_shield(set_pool, kicked, life):
+    """"…and the damage can't be prevented." A Circle-shaped shield on the
+    player swallows the three and does nothing to the ten — any recipient, not
+    only a creature, which is what separates this clause from Lava Burst's."""
+    from engine.shields import PREVENT_NEXT_N, Shield, add_shield
+
+    game = _w2g1_duel(set_pool, "Urza's Rage", {"R": 12})
+    add_shield(game.players[1], Shield(kind=PREVENT_NEXT_N, amount=10, uses=None))
+    assert game.cast_from_hand(
+        0, "Urza's Rage", optional_cost_payments={"{8}{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == life, game.log
+
+
+@_w2g1_pytest.mark.parametrize("kicked", [False, True])
+def test_w2g1_urzas_rage_kicked_goes_through_a_creatures_shield(set_pool, kicked):
+    """The same clause about a permanent: a ten-point shield on a 9/9 absorbs
+    the unkicked three whole, and absorbs none of the kicked ten."""
+    from engine.shields import PREVENT_NEXT_N, Shield, add_shield
+
+    game = _w2g1_duel(set_pool, "Urza's Rage", {"R": 12})
+    colossus = _w2g1_put(game, 1, set_pool("ATQ")["Colossus of Sardia"])   # 9/9
+    add_shield(colossus, Shield(kind=PREVENT_NEXT_N, amount=10, uses=None))
+    assert game.cast_from_hand(
+        0, "Urza's Rage", target_permanent_ids=[colossus.permanent_id],
+        optional_cost_payments={"{8}{R}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+
+    if kicked:
+        assert not game.is_on_battlefield(colossus), game.log
+    else:
+        assert game.is_on_battlefield(colossus) and colossus.damage_marked == 0
+
+
+def test_w2g1_urzas_rage_cant_be_countered(set_pool):
+    """"This spell can't be countered." A Counterspell aimed at it resolves
+    and the Rage resolves after it."""
+    game = _w2g1_duel(set_pool, "Urza's Rage", {"R": 3}, theirs=["Counterspell"])
+    game.players[1].mana_pool.update({"U": 2})
+    assert game.queue_from_hand(0, "Urza's Rage").supported
+    game.queue_from_hand(1, "Counterspell", target_stack_index=0)
+    _w2g1_resolve_stack(game)
+    assert game.players[1].life == 17, game.log
+
+
+def test_w2g1_urzas_rage_program_carries_the_printed_lock_on_one_arm(set_pool):
+    """The rider is written into the kicked arm's payload and nowhere else:
+    an unkicked Rage is an ordinary three-damage spell."""
+    program = _w2g1_compile(set_pool("INV")["Urza's Rage"])
+    branch = next(i for i in program.instructions if i.kind == "if_then")
+    kicked, plain = branch.payload["then"][0], branch.payload["else"][0]
+    assert (kicked.payload["amount"], plain.payload["amount"]) == (10, 3)
+    assert kicked.payload.get("cant_be_prevented") is True
+    assert "cant_be_prevented" not in plain.payload
+    assert kicked.payload["targets"] == plain.payload["targets"]
+
+
+# --- Vigorous Charge --------------------------------------------------------
+
+
+def _w2g1_charge(set_pool, *, kicked, blocker=None, second_attacker=False):
+    """Vigorous Charge on a 6/4 that then attacks, through to the end of the
+    combat damage step. Returns the game."""
+    lea = set_pool("LEA")
+    game = _w2g1_duel(set_pool, "Vigorous Charge", {})
+    game.interactive_seats = set()
+    wurm = _w2g1_nosick(_w2g1_put(game, 0, lea["Craw Wurm"]))
+    if second_attacker:
+        _w2g1_nosick(_w2g1_put(game, 0, lea["Hill Giant"]))
+    if blocker:
+        _w2g1_nosick(_w2g1_put(game, 1, lea[blocker]))
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.players[0].mana_pool.update({"G": 1, "W": 1})
+    assert game.cast_from_hand(
+        0, "Vigorous Charge", target_permanent_ids=[wurm.permanent_id],
+        optional_cost_payments={"{W}": 1} if kicked else None,
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert game._has_keyword(wurm, "trample")
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1] if second_attacker else [0])[0]
+    game.advance_combat_phase()
+    if blocker:
+        assert game.declare_blockers(1, {0: 0})[0]
+    _w2g1_resolve_stack(game)
+    game.advance_combat_phase()
+    _w2g1_resolve_stack(game)
+    return game  # _w2g1_charge
+
+
+def test_w2g1_vigorous_charge_unkicked_is_trample_and_nothing_else(set_pool):
+    """"…if this spell was kicked, you gain life equal to that damage." The
+    gate is asked as the delayed ability would be created: unkicked, none is,
+    and six combat damage gains nobody anything."""
+    game = _w2g1_charge(set_pool, kicked=False)
+    assert game.delayed_triggers == []
+    assert (game.players[0].life, game.players[1].life) == (20, 14)
+
+
+def test_w2g1_vigorous_charge_kicked_gains_the_damage_dealt_to_a_player(set_pool):
+    game = _w2g1_charge(set_pool, kicked=True)
+    assert (game.players[0].life, game.players[1].life) == (26, 14), game.log
+
+
+def test_w2g1_vigorous_charge_counts_trample_damage_on_both_sides_of_a_block(set_pool):
+    """"Whenever that creature deals combat damage this turn" — to anything.
+    Blocked by a 2/2, the 6/4 trampler assigns two to the blocker and four to
+    the player, and the life gained is all six."""
+    game = _w2g1_charge(set_pool, kicked=True, blocker="Grizzly Bears")
+    assert game.players[1].life == 16
+    assert game.players[0].life == 26, game.log
+
+
+def test_w2g1_vigorous_charge_watches_only_the_creature_it_named(set_pool):
+    """Another attacker's three points are not "that creature"'s damage, and
+    the ability is gone with the turn (CR 603.7b)."""
+    game = _w2g1_charge(set_pool, kicked=True, second_attacker=True)
+    assert game.players[1].life == 11
+    assert game.players[0].life == 26, game.log
+
+    from engine.delayed_triggers import expire_delayed_triggers
+
+    assert [entry.event for entry in game.delayed_triggers] == [
+        "bound_permanent_deals_combat_damage"
+    ]
+    expire_delayed_triggers(game)
+    assert game.delayed_triggers == []
+# end of the W2G1 instants block

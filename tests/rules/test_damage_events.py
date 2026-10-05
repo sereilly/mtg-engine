@@ -855,3 +855,77 @@ def test_the_mirror_finds_the_caster_and_not_the_lowest_seated_opponent():
     assert game.players[0].life == 17, game.log
     assert game.players[1].life == 20
     assert game.players[2].life == 17
+
+
+# ---------------------------------------------------------------------------
+# CR 615.12 — damage that "can't be prevented" is not damage that can't be moved
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("615.12")
+def test_615_12_unpreventable_damage_to_a_player_spends_no_shield():
+    """"…and the damage can't be prevented." (Urza's Rage.) The lock rides the
+    event and names no kind of recipient: a player's prevention pool is as
+    switched off as a creature's shield, and CR 615.12's last sentence — an
+    existing shield is not reduced by damage it cannot prevent — holds."""
+    game, p1 = _player_with_a_floor_and_a_pool(life=20, pool=2)
+
+    game._deal_damage_to_player(p1, 3, cant_be_prevented=True)
+
+    assert p1.life == 17
+    assert p1.damage_prevention_pool == 2
+
+
+@pytest.mark.cr("615.1")
+def test_the_same_pool_prevents_the_same_damage_without_the_lock():
+    """The control: the pool is a real shield, so what the test above measured
+    is the lock and not a pool that never worked."""
+    game, p1 = _player_with_a_floor_and_a_pool(life=20, pool=2)
+
+    game._deal_damage_to_player(p1, 3)
+
+    assert p1.life == 19
+    assert p1.damage_prevention_pool == 0
+
+
+@pytest.mark.cr("615.12", "614.9")
+def test_615_12_unpreventable_damage_is_still_redirected():
+    """A redirect is a replacement (CR 614.9), not prevention (CR 615), and the
+    printed clause stops at "prevented" — so the damage that no shield can stop
+    is moved exactly as any other damage is. This is the whole difference from
+    the eleven-word lock ("…or dealt instead to another permanent or player",
+    Whippoorwill, Lava Burst), which switches both off."""
+    game, p1, _p2, taker, pinger = _redirect_board()
+
+    game._deal_damage_to_player(p1, 3, source=pinger, cant_be_prevented=True)
+
+    assert p1.life == 20
+    assert taker.damage_marked == 3
+
+
+@pytest.mark.cr("615.12", "614.9")
+def test_every_prevention_contender_is_dropped_by_both_locks():
+    """``Candidate.prevents`` is the narrower flag and must stay inside the
+    wider one: a contender that prevents and is not also dropped by "can't be
+    prevented or dealt instead …" would be a shield the stronger lock lets
+    through. And each lock drops exactly its own set — the shorter one leaves
+    the redirects standing."""
+    from engine.damage_events import EVENT_LOCK, EVENT_PREVENTION_LOCK
+
+    victim = Permanent(card=_mk_creature_card("Victim", 2, 5))
+    game = Game(players=[PlayerState(name="P1", battlefield=[victim]), PlayerState(name="P2")])
+    event = {"recipient": victim, "amount": 3, "source": None, "combat": False}
+
+    everything = damage_candidates(victim, event)
+    preventers = [c for c in everything if c.prevents]
+    movers = [c for c in everything if c.prevents_or_redirects and not c.prevents]
+    assert preventers and movers, "the board has both kinds to tell apart"
+    assert all(c.prevents_or_redirects for c in preventers)
+
+    short = damage_candidates(victim, {**event, EVENT_PREVENTION_LOCK: True})
+    assert [c.key for c in short] == [c.key for c in everything if not c.prevents]
+    assert {c.key for c in movers} <= {c.key for c in short}
+
+    long = damage_candidates(victim, {**event, EVENT_LOCK: True})
+    assert not any(c.prevents_or_redirects for c in long)
+    assert game.is_on_battlefield(victim)
