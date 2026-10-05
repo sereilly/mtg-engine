@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from ..oracle_types import OracleInstruction
 from . import ast
-from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tapped_land, _lower_activate_each_lands_mana_ability, _lower_lose_unspent_mana,
+from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discard_rest, _lower_add_mana_for_tapped_land, _lower_activate_each_lands_mana_ability, _lower_lose_unspent_mana,
                        _lower_discard, _lower_exile_entire_library,
                        _lower_exile_random_from_hand, _lower_mill,
                        _lower_exile_cards_from_hand,
@@ -276,6 +276,7 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.LandTypeSwap: _lower_land_type_swap,
     ast.SimultaneousPhasing: _lower_simultaneous_phasing,
     ast.ChooseCardsInHand: _lower_choose_cards_in_hand,
+    ast.KeepChosenDiscardRest: _lower_keep_chosen_discard_rest,
     ast.PutIteratedCardOnLibrary: _lower_put_iterated_card_on_library,
     ast.PutOnLibraryBottom: _lower_put_on_library_bottom,
     ast.PutGraveyardTopOnLibraryBottom: _lower_put_graveyard_top_on_library_bottom,

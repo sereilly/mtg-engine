@@ -7144,6 +7144,9 @@ function applyChooseCardsInHandPrompt(info) {
   body.textContent = anyNumber
     ? `${verb === "reveal" ? "Reveal" : "Choose"} any number of the cards in your hand (up to ${wanted}).`
     : `${verb === "reveal" ? "Reveal" : "Choose"} ${wanted} card${wanted === 1 ? "" : "s"} in your hand.`;
+  // Noxious Vapors: the pick is one card per printed slot, so the count is not
+  // the whole rule — say what the engine will hold the answer to.
+  if (info.rule) body.textContent += ` (${info.rule}.)`;
   const buttons = info.choices
     .map(
       (c) =>

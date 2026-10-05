@@ -711,6 +711,28 @@ class RevealChosenHandCards:
 
 
 @dataclass(frozen=True)
+class KeepChosenDiscardRest:
+    """``<player> … chooses one card of each color from it, then discards all
+    other nonland cards.`` (Noxious Vapors.)
+
+    :class:`KeepChosenSacrificeRest` one zone over, and one node for its
+    reason: "all **other** … cards" is a complement and only the first half of
+    the sentence says what of. Parsed apart, the discard would name every
+    nonland card in the hand and the choice would be a record nothing reads.
+
+    ``keeps`` is one filter per card kept — "one card **of each color**" is
+    five keeps printed as one (``distinct.accept_one_of_each``), and a card
+    fills at most one of them, which is what makes a gold card a choice between
+    its colours rather than two keeps at once. ``rest`` is the printed phrase
+    behind "all other": what is discarded is every card it describes that was
+    not kept, so a land is neither chosen away nor discarded.
+    """
+    player: PlayerRef
+    keeps: tuple[ObjectFilter, ...]
+    rest: ObjectFilter
+
+
+@dataclass(frozen=True)
 class PutIteratedCardOnLibrary:
     """"put the card on top of your library" (Sylvan Library).
 

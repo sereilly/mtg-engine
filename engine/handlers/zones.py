@@ -3866,6 +3866,25 @@ def reveal_hand(game: Game, instruction: OracleInstruction, context: OracleExecu
     # carrying a target an earlier step chose, so the inference would reveal
     # whichever hand that step happened to name. The same distinction
     # ``deal_damage`` records about its own recipient.
+    if instruction.payload.get("who") == "each_player":
+        # "**Each player** reveals their hand, …" (Noxious Vapors.) Every
+        # living seat's, in APNAP order (CR 101.4) — one reveal apiece through
+        # the same feed, and one record of everything shown: "revealed this
+        # way" behind this step is all of it.
+        from .control_flow import _offered_seats
+
+        shown: list = []
+        for seat in _offered_seats(game, "each_player", context):
+            revealer = game.players[seat]
+            shown.extend(revealer.hand)
+            names = [held.name for held in revealer.hand]
+            game.record_reveal(seat, names)
+            game.log.append(
+                f"{revealer.name} reveals their hand: "
+                + (", ".join(names) or "(empty)")
+            )
+        context.results[REVEALED_HAND_CARDS] = shown
+        return True, "resolved"
     if instruction.payload.get("who") == "you":
         victim = context.caster
     elif instruction.payload.get("who") == "damaged_player":
@@ -3976,17 +3995,47 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["mana_value"] = {"op": "eq", "value": chosen_number}
-    doomed = [
-        index for index, held in enumerate(victim.hand)
-        if _card_matches_filter(held, filters, game=game, owner=victim)
-    ]
-    for index in reversed(doomed):
-        discarded = victim.hand.pop(index)
-        game._discard_card(victim, discarded)
-    game.log.append(
-        f"{victim.name} discarded {len(doomed)} card(s)"
-        if doomed else f"{victim.name} had no cards to discard"
-    )
+    victims = [victim]
+    spared_by_seat: dict = {}
+    if instruction.payload.get("who") == "each_player":
+        # "Each player …, then discards all **other** nonland cards." (Noxious
+        # Vapors.) Every living seat, in APNAP order (CR 101.4), each sparing
+        # what *it* chose: ``spared_from`` names the per-seat record the pick in
+        # front of this step wrote. An absent record spares nothing — which is
+        # what "all other" means of a player who chose no card.
+        from .control_flow import _offered_seats
+
+        victims = [
+            game.players[seat]
+            for seat in _offered_seats(game, "each_player", context)
+        ]
+        recorded = context.results.get(
+            str(instruction.payload.get("spared_from") or "")
+        )
+        spared_by_seat = recorded if isinstance(recorded, dict) else {}
+    for victim in victims:
+        # **Idiom 11, as a multiset.** Two copies of one card in a hand are one
+        # object, so "is this card one of the spared ones" is not answerable by
+        # identity alone — a player who kept one of two Lightning Bolts would
+        # keep both. Each spared entry therefore excuses exactly one slot.
+        spare = list(spared_by_seat.get(game.players.index(victim)) or ())
+        doomed = []
+        for index, held in enumerate(victim.hand):
+            excused = next(
+                (slot for slot, kept in enumerate(spare) if kept is held), None
+            )
+            if excused is not None:
+                spare.pop(excused)
+                continue
+            if _card_matches_filter(held, filters, game=game, owner=victim):
+                doomed.append(index)
+        for index in reversed(doomed):
+            discarded = victim.hand.pop(index)
+            game._discard_card(victim, discarded)
+        game.log.append(
+            f"{victim.name} discarded {len(doomed)} card(s)"
+            if doomed else f"{victim.name} had no cards to discard"
+        )
     return True, "resolved"
 
 
@@ -9257,6 +9306,12 @@ def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
     described = payload.get("card_filter") or {}
     drawn_this_turn = bool(payload.get("drawn_this_turn"))
     provenance = player.cards_drawn_this_turn if drawn_this_turn else ()
+    # "…chooses one card **of each color** from it" (Noxious Vapors). The pick
+    # is an assignment to printed slots, so a card is a candidate only if some
+    # slot describes it — a land or an artifact is no colour and is never
+    # offered. *Which* sets of candidates are answers is the matching's
+    # question (``Game.match_hand_slots``), not this list's.
+    slot_filters = hand_slot_filters(payload)
     return [
         index
         for index, card in enumerate(player.hand)
@@ -9265,7 +9320,33 @@ def chosen_hand_card_candidates(game, payload: dict, player) -> list[int]:
             not drawn_this_turn
             or any(card is drawn for drawn in provenance)
         )
+        and (
+            slot_filters is None
+            or any(
+                _card_matches_filter(card, slot, game=game, owner=player)
+                for slot in slot_filters
+            )
+        )
     ]
+
+
+def hand_slot_filters(payload: dict) -> "list[dict] | None":
+    """The printed keeps of a slotted hand pick, one filter per keep — or
+    ``None`` for the ordinary counted pick, which has none.
+
+    ``keep_chosen_sacrifice_rest``'s shape (``[{"count": n, "filter": {…}}]``)
+    read the way ``Game._keep_slot_filters`` reads it, so one printed keep is
+    one slot whichever zone the sentence is about.
+    """
+    slots = payload.get("slots")
+    if not slots:
+        return None
+    expanded: list[dict] = []
+    for slot in slots:
+        expanded.extend(
+            [dict(slot.get("filter") or {})] * max(0, int(slot.get("count", 0)))
+        )
+    return expanded
 
 
 @effect_handler("choose_cards_in_hand")

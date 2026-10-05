@@ -5952,7 +5952,44 @@ class PendingChoicesMixin:
         live = len(self.live_choose_cards_in_hand(choice))
         if self._may_choose_fewer_cards_in_hand(choice):
             return live
+        # "…chooses one card **of each color** from it" (Noxious Vapors). The
+        # number owed is not printed and is not the hand's size: it is how many
+        # of the printed slots this hand can fill at once, each with a card of
+        # its own — a maximum matching, for ``_match_keeps``' reason.
+        slotted = self.match_hand_slots(choice)
+        if slotted is not None:
+            return len(slotted)
         return min(int(choice.data.get("count", 1)), live)
+
+    def match_hand_slots(
+        self, choice: PendingChoice, hand_indices: "list[int] | None" = None,
+    ) -> "dict[int, int] | None":
+        """``{slot: hand index}`` for a slotted hand pick, or ``None`` when the
+        pick is an ordinary counted one.
+
+        Over *hand_indices* when given — an answer being checked — and over
+        every live candidate otherwise, which is the most the card lets this
+        seat keep. Assigned by hand **slot**, never by card: two copies of one
+        card in a hand are one object, and a red pick naming one Lightning Bolt
+        must not be read as naming both.
+        """
+        from ...handlers._common import _card_matches_filter
+        from ...handlers.zones import hand_slot_filters
+
+        slot_filters = hand_slot_filters(choice.data.get("_payload") or {})
+        if slot_filters is None:
+            return None
+        player = self.players[choice.player_index]
+        candidates = (
+            self.live_choose_cards_in_hand(choice)
+            if hand_indices is None else list(hand_indices)
+        )
+        return self._match_keeps(
+            candidates, slot_filters,
+            lambda index, described: _card_matches_filter(
+                player.hand[index], described, game=self, owner=player
+            ),
+        )
 
     def _may_choose_fewer_cards_in_hand(self, choice: PendingChoice) -> bool:
         """Whether the printed offer is "any number of …" rather than a count.
@@ -6020,6 +6057,13 @@ class PendingChoicesMixin:
             return False
         if any(index not in live for index in picks):
             return False
+        # A slotted pick is an *assignment*: as many cards as the hand can fill
+        # slots with (checked above, through ``_how_many_cards_to_choose``) and
+        # each in a slot of its own — two red cards are not "one card of each
+        # color", however many colours the hand could have kept.
+        slotted = self.match_hand_slots(choice, picks)
+        if slotted is not None and len(slotted) != len(picks):
+            return False
         cards = [player.hand[index] for index in picks]
         self._record_chosen_cards_in_hand(choice, cards)
         name = choice.data.get("card_name", "Effect")
@@ -6060,7 +6104,14 @@ class PendingChoicesMixin:
         # sentence in the pool that reads the count reads it upward. Stated here
         # so a seat that should reveal fewer needs a weight in
         # ``engine/ai_valuation.py`` and not a branch in this method.
-        if not self._resolve_choose_cards_in_hand(choice, live[:wanted]):
+        answer = live[:wanted]
+        # A slotted pick's first *wanted* candidates need not be assignable
+        # (two red cards ahead of the hand's one blue), so the default is the
+        # matching itself, in hand order — ``_default_keep_permanents``' policy.
+        slotted = self.match_hand_slots(choice)
+        if slotted is not None:
+            answer = sorted(slotted.values())
+        if not self._resolve_choose_cards_in_hand(choice, answer):
             self._record_chosen_cards_in_hand(choice, [])
 
     # -- Exiling cards out of a named player's graveyard ---------------------
@@ -6915,7 +6966,9 @@ class PendingChoicesMixin:
             expanded.extend([described] * max(0, int(slot.get("count", 0))))
         return expanded
 
-    def _match_keeps(self, candidates: list, slot_filters: list[dict]) -> dict:
+    def _match_keeps(
+        self, candidates: list, slot_filters: list[dict], matches=None,
+    ) -> dict:
         """Assign as many of *candidates* to distinct slots as possible.
 
         Kuhn's augmenting-path matching, for ``mana_payment.plan_payment``'s
@@ -6928,12 +6981,21 @@ class PendingChoicesMixin:
 
         Returns ``{slot index: permanent}``; its *size* is how many the card
         lets that seat keep, which is what the answer below is checked against.
+
+        *matches* is ``(candidate, slot filter) -> bool`` for a caller whose
+        candidates are not permanents — the cards of a hand (Noxious Vapors,
+        ``match_hand_slots``), which no read of the battlefield can describe.
+        Absent, a candidate is a permanent and the question is the one
+        ``subject_matches`` answers.
         """
         taken: dict[int, object] = {}
+        if matches is None:
+            def matches(perm, described):
+                return subject_matches(self, perm, described)
 
         def assign(perm, seen: set[int]) -> bool:
             for index, described in enumerate(slot_filters):
-                if index in seen or not subject_matches(self, perm, described):
+                if index in seen or not matches(perm, described):
                     continue
                 seen.add(index)
                 if index not in taken or assign(taken[index], seen):

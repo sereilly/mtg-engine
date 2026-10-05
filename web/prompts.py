@@ -1581,10 +1581,22 @@ def _choose_cards_in_hand(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]
     owner = ctx.game.players[choice.player_index]
     live = ctx.game.live_choose_cards_in_hand(choice)
+    # "…chooses one card **of each color** from it" (Noxious Vapors). The pick
+    # is an assignment to printed slots, so ``count`` alone under-describes it:
+    # two red cards are the right number and the wrong answer. The line the
+    # panel shows is why the engine would refuse them.
+    slots = (choice.data.get("_payload") or {}).get("slots") or ()
+    by_color = bool(slots) and all(
+        set(slot.get("filter") or {}) == {"color_filter"} for slot in slots
+    )
     return {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "count": ctx.game._how_many_cards_to_choose(choice),
+        "rule": (
+            "one card of each color — a multicolored card counts for one of its colors"
+            if by_color else "one card for each kind the card names" if slots else ""
+        ),
         # "Reveal **any number of** blue cards in your hand." (Brine Seer and
         # the eleven cards printed with it.) The count above is then a ceiling
         # rather than a debt, and nought is a legal answer — so the board needs

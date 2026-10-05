@@ -328,6 +328,7 @@ from .library import (
 from .reveal import (
     _lower_discard_revealed_matching_unless_pay_life,
     _lower_discard_revealed_unless_pay_life,
+    _lower_keep_chosen_discard_rest,
     _lower_play_with_hand_revealed,
     _lower_reveal_hand,
     _lower_reveal_random_from_hand,
@@ -619,6 +620,7 @@ __all__ = [
     "_lower_put_exiled_this_way",
     "_lower_discard_revealed_matching_unless_pay_life",
     "_lower_discard_revealed_unless_pay_life",
+    "_lower_keep_chosen_discard_rest",
     "_lower_play_with_hand_revealed",
     "_lower_reveal_hand",
     "_lower_reveal_random_from_hand",

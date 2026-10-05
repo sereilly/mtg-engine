@@ -21,7 +21,7 @@ from ..records import accept_as_many_as, parse_for_each_sacrificed_this_way
 
 from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
-from ..distinct import parse_counted_objects
+from ..distinct import accept_one_of_each, parse_counted_objects
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
@@ -393,6 +393,13 @@ def _parse_reveal_hand(
     ):
         stream.reset(mark)
         return None
+    # "…reveals their hand**, chooses one card of each color from it, then
+    # discards all other nonland cards**." (Noxious Vapors.) The third act this
+    # reader carries, joined by a comma where the two below are joined by
+    # "and" — and the same subject throughout, for the discard's reason.
+    kept = _accept_keep_then_discard_rest(stream, player)
+    if kept is not None:
+        return ast.Sequence((ast.RevealHand(player), kept))
     before_and = stream.mark()
     if not stream.accept_word("and"):
         return ast.RevealHand(player)
@@ -418,6 +425,59 @@ def _parse_reveal_hand(
     # sentence the joiner reads perfectly well refused at its first verb.
     stream.reset(before_and)
     return ast.RevealHand(player)
+
+
+def _accept_keep_then_discard_rest(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.KeepChosenDiscardRest | None":
+    """``, chooses one <card> of each <characteristic> from it, then discards
+    all other <cards>`` — or None with nothing consumed. (Noxious Vapors.)
+
+    One reader and one node for both verbs, because "all **other**" is a
+    complement of the choice in front of it (see the node). Every word is
+    required: "from it" is what says the picks come out of the revealed hand,
+    and "all other" is what says the discard spares them — a reader that let
+    either be absent would discard the cards the sentence kept.
+
+    Only the abbreviated keep is read. "Chooses a creature card and an
+    artifact card from it, then discards all other cards" is the same node
+    with a printed list, and no card prints it; when one does, the list goes
+    where ``effects/board._accept_keep_slots`` reads Cataclysm's.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_punct(",")
+        and stream.accept_word("chooses", "choose")
+        and stream.accept_word("one")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    keeps = accept_one_of_each(stream, described, keeps=True)
+    if not keeps or not described.is_card or not stream.accept_phrase("from", "it"):
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(",")
+        and stream.accept_word("then")
+        and stream.accept_word("discards", "discard")
+        and stream.accept_phrase("all", "other")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        rest = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not rest.is_card:
+        stream.reset(mark)
+        return None
+    return ast.KeepChosenDiscardRest(player, keeps, rest)
 
 
 def _accept_put_revealed_hand_cards(
