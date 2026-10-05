@@ -527,6 +527,23 @@ def conditional_static_holds(
             game, str(condition.get("color") or ""),
             tied=bool(condition.get("tied", True)),
         )
+    if kind == "shares_most_common_color":
+        # "…unless **it shares a color with the most common color among all
+        # permanents** or a color tied for most common." (Heroic Defiance.)
+        # The same census asked of one permanent's own colours — the two
+        # spells that print the clause ask it of their target, and here "it" is
+        # the sentence's subject: the enchanted creature for an Aura, the
+        # source itself otherwise. Colourless shares nothing (CR 105.2), and a
+        # board with no coloured permanent has no most common colour.
+        from .color_census import shares_most_common_color
+        from .handlers._common import attached_host
+
+        subject = source
+        if condition.get("subject") == "attached":
+            subject = attached_host(game, source, last_known=False)
+        if subject is None:
+            return False
+        return shares_most_common_color(game, subject)
     if kind == "all_share_a_color":
         # "Nonartifact creatures get +2/+2 **as long as they all share a
         # color**." (Common Cause.) CR 105.2 makes an object's colours a set, so

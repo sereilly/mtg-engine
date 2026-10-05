@@ -1238,6 +1238,15 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # the P/T refresh asks the condition on every recompute.
         if re.match(r"(?:for )?as long as\b", tail):
             continue
+        # "…gets +3/+3 **unless it shares a color with the most common color**
+        # …" (Heroic Defiance). "As long as" with the polarity printed the
+        # other way round, and the same decline for the same reason: the line
+        # lowers to a ``conditional_static`` whose complement arm carries the
+        # delta, so answering the prefix here grants a flat +3/+3 on top of it
+        # — the bonus the card says it does *not* give is given, and the one it
+        # does give is doubled.
+        if re.match(r"unless\b", tail):
+            continue
         # "...gets +1/+1 **for each other creature you control**" (Vampirism).
         # A *counted* grant, which is a different kind of answer from the
         # constant this function knows how to give - and this pattern matches
@@ -2527,6 +2536,45 @@ def aura_counter_untap_condition(line: str) -> tuple[str, str] | None:
     return match.group("kind"), holder
 
 
+#: "Enchanted creature can't block **if it's black**." (Hobble.) A combat ban
+#: that holds only while the host is a colour — the conditioned twin of the
+#: plain ``cant_attack`` / ``cant_block`` rows in ``_RESTRICTIONS``, read by the
+#: same predicate under the same two names, so the two steps that enforce those
+#: rows need no new question: a conditioned row whose condition holds is simply
+#: the restriction being active this declaration. That is the arrangement the
+#: counter-conditioned "doesn't untap" rows above already have.
+#:
+#: **One pattern over two axes**, for the reason that pattern gives: the verb is
+#: printed two ways and the colour five, and a row per pairing would leave the
+#: nine nobody listed *unenforced* rather than dead. Hobble prints one crossing;
+#: the other nine are the same sentence.
+#:
+#: The colour is the host's as the layers currently have it (CR 613 layer 5),
+#: asked when combat asks — a creature turned black stops being able to block,
+#: and one turned another colour can block again, with nothing to clear.
+_COLOR_CONDITIONED_COMBAT_BAN = re.compile(
+    rf"^{_ATTACHED} {_NOUN} can't (?P<verb>attack|block) "
+    rf"if it's (?P<color>{_COLORS})$"
+)
+
+#: The restriction name each printed verb is enforced under.
+_COMBAT_BAN_NAMES = {"attack": "cant_attack", "block": "cant_block"}
+
+
+def aura_color_conditioned_combat_ban(line: str) -> tuple[str, str] | None:
+    """``(restriction name, colour word)`` for a colour-conditioned combat ban,
+    or None.
+
+    The colour is the printed *word*, for :func:`aura_protection_colors`'
+    reason: the caller maps it, and layer 3's text change (Sleight of Mind) has
+    already rewritten the word by the time it is read off ``effective_card``.
+    """
+    match = _COLOR_CONDITIONED_COMBAT_BAN.match(_line_text(line))
+    if match is None:
+        return None
+    return _COMBAT_BAN_NAMES[match.group("verb")], match.group("color")
+
+
 #: The word a protection grant names when the colour was **chosen** rather
 #: than printed: "Enchanted creature has protection from **the chosen
 #: color**." (Ward of Lights.)
@@ -2950,6 +2998,22 @@ def aura_restriction_active(
         text = aura.effective_card.oracle_text
         if name in aura_restrictions(text):
             return True
+        if name in ("cant_attack", "cant_block"):
+            # "Enchanted creature can't block **if it's black**." (Hobble.) The
+            # colour-conditioned rows: active exactly while the host is that
+            # colour, read through layer 5 at ask time.
+            from .grammar.vocabulary import COLOR_WORDS
+
+            colors_now = permanent.effective_colors
+            for raw_line in (text or "").splitlines():
+                ban = aura_color_conditioned_combat_ban(raw_line)
+                if (
+                    ban is not None
+                    and ban[0] == name
+                    and COLOR_WORDS[ban[1]] in colors_now
+                ):
+                    return True
+            continue
         if name != "doesnt_untap":
             continue
         # The conditioned rows: the restriction is active exactly while the
@@ -3254,6 +3318,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "counter-conditioned untap restriction — auras.aura_restriction_active"
     if aura_attacked_untap_condition(normalized):
         return "attack-conditioned untap restriction — auras.aura_restriction_active"
+    if aura_color_conditioned_combat_ban(normalized) is not None:
+        return "colour-conditioned combat ban — auras.aura_restriction_active"
     if aura_combat_restriction(normalized) is not None:
         return "attached combat restriction — auras.attached_combat_restrictions"
     if aura_block_permission(normalized):

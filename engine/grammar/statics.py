@@ -514,6 +514,13 @@ def _lower_self_conditional_static(
     # layers, and an Aura on a creature something has recoloured switches arms
     # by itself.
     colour = _attached_colour_condition(node.condition) if attached else None
+    # "…unless **it shares a color with the most common color among all
+    # permanents** or a color tied for most common" (Heroic Defiance). The
+    # second pronoun-about-the-subject clause, and unreadable by the general
+    # lowering for the first one's reason: there "it" is a chosen target, and a
+    # static chooses nothing. Asked here with the subject in hand.
+    if colour is None and isinstance(node.condition, ast.SharesMostCommonColor):
+        colour = {"kind": "shares_most_common_color"}
     condition = colour if colour is not None else _lower_anthem_condition(
         node.condition, node
     )
@@ -542,17 +549,48 @@ def _lower_self_conditional_static(
     # battlefield rather than about your board or the creature, a condition
     # that table has no row for and could not write one for without a second
     # reader of the clause the two census *spells* go through the grammar for.
-    counted = condition.get("kind") in ("source_counter_count", "color_is_most_common")
+    counted = condition.get("kind") in (
+        "source_counter_count", "color_is_most_common",
+        # …and the census asked *of the subject* (Heroic Defiance): the same
+        # whole-battlefield count, with the subject's own colours as the thing
+        # compared against it.
+        "shares_most_common_color",
+    )
     if not attached and not counted and condition.get("who") not in (
         "opponent", "each_opponent",
     ):
         raise LoweringError(
+            # The table has no "unless" row at all, so naming it for that
+            # spelling would point the next reader at a file that cannot help.
+            "no reader applies a self bonus while a condition about your own "
+            "board is false"
+            if node.unless else
             "a conditional static bonus about your own board is derived by "
             "engine/static_bonuses.py",
             node=node,
         )
     payload: dict[str, object] = {"condition": condition}
-    if power or toughness:
+    if node.unless:
+        # "…gets +3/+3 **unless** <condition>" (Heroic Defiance). The delta
+        # goes on the *complement* arm — the one "Otherwise, it gets -1/-2"
+        # (Phyrexian Boon) already fills — so the criteria are asked once and
+        # the answer selects the arm, rather than a negated copy of the
+        # condition somebody has to keep exact. The refresh reads an arm that
+        # is 0/0 beside a complement that is not as a live effect, which is
+        # exactly this.
+        #
+        # A keyword behind the word, or a printed "Otherwise" beside it,
+        # refuses: the keyword pass reads no complement arm, and two sentences
+        # both claiming the false side is a card nobody prints.
+        if keywords or node.otherwise is not None or not (power or toughness):
+            raise LoweringError(
+                "an 'unless' static carries one P/T delta on its complement "
+                "arm and nothing else",
+                node=node,
+            )
+        payload["otherwise_power"] = power
+        payload["otherwise_toughness"] = toughness
+    elif power or toughness:
         payload["power"] = power
         payload["toughness"] = toughness
     if keywords:
@@ -671,7 +709,10 @@ def _condition_about_the_host(condition: dict) -> dict:
                 for part in condition.get("conditions") or ()
             ],
         }
-    if condition.get("kind") == "is_state":
+    if condition.get("kind") in ("is_state", "shares_most_common_color"):
+        # "…unless **it** shares a color with the most common color" (Heroic
+        # Defiance) is the same pronoun: the colours compared against the
+        # census are the enchanted creature's, never the Aura's.
         return {**condition, "subject": "attached"}
     # Two parts of a ``controls`` clause are pronouns like ``is_state``'s, and
     # only these two: "**its** controller" (``who: "controller"``) and
@@ -779,6 +820,14 @@ def _lower_static_ability(node: ast.StaticAbilityNode) -> tuple[OracleInstructio
         # as long as it's untapped" — still belongs to engine/static_bonuses.py,
         # whose derivation the compiler consults after this refusal.
         subject = getattr(effects[0], "subject", None) if effects else None
+        if node.unless and not (_is_source(subject) or _is_enchanted(subject)):
+            # An anthem behind "unless" has no reader: the lord-buff recompute
+            # asks its condition and applies the buff while it holds, with no
+            # complement arm to put the delta on. Refused rather than lowered
+            # as "as long as", which is the card's opposite.
+            raise LoweringError(
+                "no anthem applies while its condition is false", node=node
+            )
         if _is_source(subject) or _is_enchanted(subject):
             # "This creature gets +1/+1 as long as **an opponent** controls a
             # nontoken white permanent." (Beasts of Bogardan.) The same

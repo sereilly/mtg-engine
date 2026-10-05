@@ -260,3 +260,130 @@ def test_w1g6_dralnus_crusade_reads_goblin_through_the_layers(set_pool):
     game.remove_from_battlefield(conspiracy)
     game._recompute_continuous_effects()
     assert _w1g6_shape(game, bears) == (["G"], False, False, 2, 2)
+
+
+def _w1g6_declare_block(game, attacker, blocker):
+    """Seat 0 attacks with *attacker* and seat 1 offers *blocker*; returns the
+    engine's answer to the block."""
+    game.active_player_index = 0
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert game.declare_attackers(0, [game.battlefield_index_of(attacker)])[0]
+    game._set_phase_and_step("combat", "declare_blockers")
+    return game.declare_blockers(1, {
+        game.battlefield_index_of(blocker): [game.battlefield_index_of(attacker)],
+    })  # _w1g6_declare_block
+
+
+def test_w1g6_hobble_draws_a_card_and_stops_its_creature_attacking(set_pool):
+    """"Enchant creature / When this Aura enters, draw a card. / Enchanted
+    creature can't attack." Cast on the opponent's white Lions: its caster
+    draws one card, and on the Lions' own turn the declaration naming them is
+    refused while the Giant beside them attacks freely."""
+    hobble = _w1g6_card(set_pool, "Hobble")
+    assert _w1g6_compile(hobble).supported
+    game, _mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], ["Savannah Lions", "Hill Giant"])
+    lions, giant = theirs
+    game.players[0].library.extend([_w1g6_card(set_pool, "Forest")] * 3)
+
+    _w1g6_enchant(game, set_pool, "Hobble", lions)
+    assert [card.name for card in game.players[0].hand] == ["Forest"]
+
+    game.active_player_index = 1
+    game._set_phase_and_step("combat", "declare_attackers")
+    assert not game.declare_attackers(1, [game.battlefield_index_of(lions)])[0]
+    assert game.declare_attackers(1, [game.battlefield_index_of(giant)])[0]
+
+
+def test_w1g6_hobbles_block_ban_follows_the_creatures_colour_through_the_layers(set_pool):
+    """"Enchanted creature can't block if it's black." A condition, re-read
+    whenever combat asks (CR 613 layer 5): the white Lions under Hobble may
+    block; the same Lions turned black for the turn may not; and once the turn
+    is over and they are white again, they may. A printed-black creature under
+    it can never block."""
+    for blocker, may_block in (("Scathe Zombies", False), ("Savannah Lions", True)):
+        game, mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], [blocker])
+        _w1g6_enchant(game, set_pool, "Hobble", theirs[0])
+        assert _w1g6_declare_block(game, mine[0], theirs[0])[0] is may_block, blocker
+
+    game, mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], ["Savannah Lions"])
+    bears, lions = mine[0], theirs[0]
+    _w1g6_enchant(game, set_pool, "Hobble", lions)
+    _w1g6_recolor(game, lions, "B")
+    refused = _w1g6_declare_block(game, bears, lions)
+    assert not refused[0], refused
+
+    game, mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], ["Savannah Lions"])
+    bears, lions = mine[0], theirs[0]
+    _w1g6_enchant(game, set_pool, "Hobble", lions)
+    _w1g6_recolor(game, lions, "B")
+    game.resolve_cleanup_step(0)
+    assert _w1g6_colors(game, lions) == ["W"]
+    assert _w1g6_declare_block(game, bears, lions)[0]
+
+
+def test_w1g6_a_black_creature_without_hobble_blocks_as_it_always_did(set_pool):
+    """The ban is the Aura's: a black creature nothing enchants blocks, and so
+    does a black creature wearing a different Aura."""
+    game, mine, theirs = _w1g6_table(set_pool, ["Grizzly Bears"], ["Scathe Zombies"])
+    assert _w1g6_declare_block(game, mine[0], theirs[0])[0]
+
+
+def _w1g6_defiance(set_pool, mine, theirs):
+    """Heroic Defiance cast on seat 0's first permanent. Returns the game and
+    that creature."""
+    game, my_side, their_side = _w1g6_table(set_pool, mine, theirs)
+    host = my_side[0]
+    _w1g6_enchant(game, set_pool, "Heroic Defiance", host)
+    return game, host, their_side  # _w1g6_defiance
+
+
+def test_w1g6_heroic_defiance_pumps_a_creature_that_is_not_the_most_common_colour(set_pool):
+    """"Enchanted creature gets +3/+3 unless it shares a color with the most
+    common color among all permanents or a color tied for most common." Two red
+    permanents lead the census (the white Aura, the green Bears and a black
+    creature are one each), so the green Bears are 5/5 — once, not twice."""
+    assert _w1g6_compile(_w1g6_card(set_pool, "Heroic Defiance")).supported
+    game, bears, _theirs = _w1g6_defiance(
+        set_pool, ["Grizzly Bears"], ["Hill Giant", "Mons's Goblin Raiders", "Scathe Zombies"],
+    )
+    assert (bears.effective_power, bears.effective_toughness) == (5, 5)
+
+
+def test_w1g6_heroic_defiance_follows_the_census_and_the_creatures_colour(set_pool):
+    """Continuous, and both halves are layer-5 reads. The Bears turned red for
+    the turn share the leading colour and are 2/2; at cleanup they are green
+    and 5/5 again. With one red creature gone every colour is level, green is
+    "a color tied for most common", and the bonus is off; and a creature made
+    colourless shares no colour at all (CR 105.2) and has it."""
+    game, bears, theirs = _w1g6_defiance(
+        set_pool, ["Grizzly Bears"], ["Hill Giant", "Mons's Goblin Raiders", "Scathe Zombies"],
+    )
+    _w1g6_recolor(game, bears, "R")
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+    game.resolve_cleanup_step(0)
+    assert _w1g6_colors(game, bears) == ["G"]
+    assert (bears.effective_power, bears.effective_toughness) == (5, 5)
+
+    game.remove_from_battlefield(theirs[1])
+    game._recompute_continuous_effects()
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2), "all tied"
+
+    bears.metadata["color_override"] = ()
+    game._recompute_continuous_effects()
+    assert _w1g6_colors(game, bears) == []
+    assert (bears.effective_power, bears.effective_toughness) == (5, 5)
+
+
+def test_w1g6_heroic_defiance_gives_nothing_to_a_creature_of_the_leading_colour(set_pool):
+    """Cast on a red creature while red leads, it is +0/+0 — and the bonus
+    arrives the moment red stops leading, with nothing re-cast."""
+    game, giant, theirs = _w1g6_defiance(
+        set_pool, ["Hill Giant", "Mons's Goblin Raiders"], ["Grizzly Bears", "Llanowar Elves"],
+    )
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3), "red and green tie"
+
+    extra = _W1G6Permanent(card=_w1g6_card(set_pool, "Giant Spider"))
+    game._put_permanent_onto_battlefield(1, extra, None)
+    game._recompute_continuous_effects()
+    assert (giant.effective_power, giant.effective_toughness) == (6, 6), "green leads alone"
