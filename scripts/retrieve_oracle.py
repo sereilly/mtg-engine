@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards
+from engine.faces import card_names, face_cards, has_name
 from engine.models import CardDefinition
 from set_argument import add_set_argument, resolve_set
 
@@ -35,15 +36,17 @@ def retrieve_oracle_text(
     fuzzy_cutoff: float = 0.6,
 ) -> Tuple[Optional[CardDefinition], List[str]]:
     norm = name.strip()
-    # 1. exact
+    # 1. exact — by any name the card has (CR 709.4a: a split card has its
+    # halves' names as well as the spelling a list writes it with, so "Battery"
+    # is an exact match for Assault // Battery rather than a substring guess).
     if mode in (None, "exact"):
         for c in cards:
-            if c.name == norm:
+            if has_name(c, norm):
                 return c, []
     # 2. case-insensitive exact
     if mode in (None, "ci", "case_insensitive"):
         for c in cards:
-            if c.name.lower() == norm.lower():
+            if norm.lower() in {c.name.lower(), *(n.lower() for n in card_names(c))}:
                 return c, []
     # 3. substring
     if mode in (None, "substring"):
@@ -76,7 +79,13 @@ def _print_card(card: CardDefinition) -> None:
         # leaving the reader to guess which printing they are looking at.
         print(f"Printings: {', '.join(p.upper() for p in card.printings)}")
     print("Oracle text:")
-    print(card.oracle_text)
+    # Every face's text for a split card, whose own text box is empty — a
+    # lookup that printed the top-level field would answer a rules question
+    # about a two-spell card with a blank.
+    for face in face_cards(card):
+        print(f"[{face.name} — {face.mana_cost} — {face.type_line}] {face.oracle_text}")
+    if not face_cards(card):
+        print(card.oracle_text)
 
 
 def build_parser() -> argparse.ArgumentParser:

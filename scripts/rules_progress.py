@@ -153,6 +153,12 @@ SCOPE: dict[str, str | tuple[str, ...]] = {
     "704": "all",  # State-Based Actions
     "705": "all",  # Flipping a Coin (ARN: Bottle of Suleiman, ...)
     "707": "all",  # Copying Objects (LEA: Vesuvan Doppelganger, ...)
+    # Split Cards, joined with Invasion's five (``engine/faces.py``). 709.1-
+    # 709.4 only: 709.5 is the shared type line of a split *permanent* (Rooms),
+    # a mechanic this engine does not have and no card in the pool prints.
+    # 709.3c (casting a copy of a split card) and 709.4d (a fused split spell)
+    # stay in the denominator and show as untested, which is the honest reading.
+    "709": ("709.1", "709.2", "709.3", "709.4"),
     # Handling Illegal Actions. Both rules are live: every refusal this engine
     # returns is CR 733.1's reversal (``_activate_onto_stack`` and
     # ``queue_from_hand`` check each cost where it is announced and pay it
