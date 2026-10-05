@@ -339,6 +339,9 @@ def test_w1g7_meddling_mage_names_something_for_a_seat_nobody_asks(set_pool):
         p for p in duel.players[0].battlefield if p.card.name == "Meddling Mage"
     )
     assert entered.metadata["chosen_card_name"] == "Lightning Bolt"
+    # A chosen name is public: the log says it, because for this seat no prompt
+    # is ever answered and nothing else would.
+    assert "P1 named Lightning Bolt for Meddling Mage" in duel.log
     refused = duel.cast_from_hand(1, "Lightning Bolt", target_player_index=0)
     assert not refused.supported
 

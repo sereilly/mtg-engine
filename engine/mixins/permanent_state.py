@@ -784,6 +784,19 @@ class PermanentStateMixin:
                 if not (excluded_type and card_has_type(named, excluded_type))
             ]
             permanent.metadata["chosen_card_name"] = seen[0] if seen else ""
+            if caster_index not in self.interactive_seats:
+                # A chosen name is public (CR 201.4: the player *chooses a
+                # card name*, out loud), and for a seat nobody asks the default
+                # stamped above is the whole choice — the prompt below is
+                # discarded the moment it is armed and says nothing. Without
+                # this line a player facing an AI's Meddling Mage learned what
+                # it had named by having a cast refused. An interactive seat's
+                # answer is logged by the resolver, in these words.
+                self.log.append(
+                    f"{self.players[caster_index].name} named "
+                    f"{permanent.metadata['chosen_card_name'] or 'nothing'} "
+                    f"for {permanent.card.name}"
+                )
             self.arm_pending_choice(
                 "enter_choice", caster_index,
                 card_name=permanent.card.name, permanent=permanent,
