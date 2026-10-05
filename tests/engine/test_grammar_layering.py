@@ -1340,12 +1340,15 @@ LOWERING_FAMILIES = [
         # the tapper. The guard that made it a parse family fired on the
         # *productions*; `lowering/mana.py` is 750 lines and crossed nothing.
         "production_changes",
-        # `retargeting` is that reason a third time in the same Phase 0:
-        # `_lower_change_target` is one function in `lowering/stack.py` (752
-        # lines), because all three printed arrangements build one
-        # `ast.ChangeTarget` and there is nothing for a second lowering to do.
-        # The guard fired on the productions; the lowering crossed nothing.
-        "retargeting",
+        # `retargeting` was here for that reason a third time — "one function
+        # in `lowering/stack.py` (752 lines) … there is nothing for a second
+        # lowering to do" — and left at Invasion's closing round, when both
+        # halves of that sentence had stopped being true: Psychic Battle's
+        # "change the target or targets" is a second lowering, and
+        # `lowering/stack.py` stood at 981. So `lowering/retargeting.py` now
+        # holds both, reusing the name the parse side has carried since Urza's
+        # Destiny, and the family arrives from `EFFECT_FAMILIES` above like
+        # `search` and `reveal` before it.
     )
 # `base_pt` was appended here when it was a lowering family with no parse twin.
 # Tempest's first wave gave it one — `effects/characteristics.py` crossed the

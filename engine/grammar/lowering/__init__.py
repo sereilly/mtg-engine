@@ -350,13 +350,12 @@ from .search import (
     _lower_search_reveal_opponent_chooses,
     _lower_strip_cards_with_chosen_name,
 )
+from .retargeting import _lower_change_event_targets, _lower_change_target
 from .stack import (
     _COUNTER_HONOURED_FILTER_FIELDS,
     _COUNTER_UNLESS_PAYS_X,
     _COUNTER_PERFORMED_PENALTIES,
     _fused_conditional_counter,
-    _lower_change_event_targets,
-    _lower_change_target,
     _lower_counter_ability,
     _lower_counter_spell,
     _lower_bid_life_contest,
