@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**417 / 622 tracked rules covered (67%)** — 2655 tests, 0 unannotated.
+**417 / 622 tracked rules covered (67%)** — 2664 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -950,8 +950,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **709.1** Split cards have two card faces on a single card. The back of a split card is the normal Magic ca... *(1 tests)*
 - [x] **709.2** Although split cards have two castable halves, each split card is only one card. For example, a p... *(2 tests)*
-- [x] **709.3** A player chooses which half of a split card they are casting before putting it onto the stack. *(9 tests, subrules ab)*
-- [x] **709.4** In every zone except the stack, the characteristics of a split card are those of its two halves c... *(9 tests, subrules abc)*
+- [x] **709.3** A player chooses which half of a split card they are casting before putting it onto the stack. *(20 tests, subrules ab)*
+- [x] **709.4** In every zone except the stack, the characteristics of a split card are those of its two halves c... *(10 tests, subrules abc)*
 
 ### 724. Ending Turns and Phases
 
@@ -1015,3 +1015,4 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 ## Cited outside tracked scope (consider widening SCOPE)
 
 - **702.33** Keyword Abilities (2 tests)
+- **723.5** Controlling Another Player (3 tests)
