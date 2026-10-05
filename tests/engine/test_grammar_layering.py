@@ -1266,6 +1266,16 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # Scroll Rack's library-to-hand took `lowering/library.py` to 1,001 lines before
 # the wave was over. `lowering/reveal.py` reuses the name the parse side had
 # carried for an hour, so the mirror formed rather than forked.
+# That cut took the reveals of a library's *top* and left every reveal of a
+# *hand* in `lowering/library.py` — six lowerings and the picker's field table,
+# a third of the module — while `lowering/reveal.py`'s docstring went on saying
+# "everything left in `library` is a look". They followed at the Phase 0 between
+# Invasion's two waves (970 lines, two groups' additions, one to each half), so
+# no family was added and none was renamed: the line stayed where the CR drew
+# it and the code that had been on the wrong side of it moved. It is drawn per
+# node, which is why each side keeps one flagged form of the other —
+# `RevealHandAndChoose`'s `looked_at` in `reveal`, `LookTopPickToHand`'s
+# `revealed` in `library` — and neither module imports the other.
 # `text_changes` joins `search` in having no twin on the lowering side: the
 # instruction one produces (`mark_text_modified`) lowers in
 # `lowering/characteristics.py` beside the colour and P/T changes it sits
