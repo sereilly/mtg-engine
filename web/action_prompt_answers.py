@@ -8,6 +8,7 @@ effect began) and hands it to the engine's confirm entry point.
 from __future__ import annotations
 
 from fastapi import HTTPException
+from engine.faces import choose_a_face_refusal, spell_named
 from engine.text_changes import LAND_TYPE_WORDS
 from .action_registry import action_handler
 from .turn_steps import _begin_turn, _start_next_turn
@@ -1471,7 +1472,19 @@ def _action_word_of_command_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="hand_index is required")
     else:
         hand_index = req.hand_index
-    ok = session.game.confirm_word_of_command(req.seat, hand_index, defer_resolution=True)
+    # `card_name` is the spell the chosen card is to be cast as — which half,
+    # for a split card (CR 709.3; the caster chooses, CR 723.5). The prompt
+    # lists each half under the card's `faces`.
+    pending = session.game.pending_word_of_command
+    if pending is not None and pending.get("caster_index") == req.seat and hand_index >= 0:
+        hand = session.game.players[pending["target_index"]].hand
+        if hand_index < len(hand):
+            refusal = choose_a_face_refusal(hand[hand_index])
+            if refusal is not None and spell_named(hand[hand_index], req.card_name or "") is None:
+                raise HTTPException(status_code=400, detail=refusal)
+    ok = session.game.confirm_word_of_command(
+        req.seat, hand_index, defer_resolution=True, spell_name=req.card_name,
+    )
     if not ok:
         raise HTTPException(status_code=400, detail="no Word of Command pending for you")
 

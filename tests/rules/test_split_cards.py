@@ -430,3 +430,113 @@ def test_every_chosen_name_comparison_over_a_zone_asks_for_either_name():
         source = inspect.getsource(module)
         assert ".name == named" not in source, module.__name__
         assert ".name != named" not in source, module.__name__
+
+
+# ---------------------------------------------------------------------------
+# W2G4 — CR 709.3 under another player's control (CR 723.5)
+# ---------------------------------------------------------------------------
+#
+# Word of Command forces the target to play a card the caster chose from their
+# hand. For a split card "which card" is half an answer: CR 709.3 has the
+# player casting choose the half, and CR 723.5 hands every choice the
+# controlled player would make to the player controlling them. The forced cast
+# used to name the whole card, which names no spell, so it was refused with
+# "choose which half" and nothing was played — the choice had no channel.
+
+
+def _w2g4_command(game, p0, p1, held):
+    p0.hand.append(_POOL["Word of Command"])
+    p1.hand.extend(held)
+    assert game.cast_from_hand(0, "Word of Command", target_player_index=1).supported
+    pending = game.pending_word_of_command
+    assert pending is not None
+    return pending
+
+
+@pytest.mark.cr("709.3", "723.5")
+def test_w2g4_the_controller_names_the_half_a_forced_split_card_is_cast_as():
+    game, p0, p1 = _duel()
+    _w2g4_command(game, p0, p1, [BURN_GROW])
+
+    # Burn: the target's own instant, turned on them (the forced spell's target
+    # defaults to the forced player).
+    assert game.confirm_word_of_command(0, 0, spell_name="Burn") is True
+    assert p1.life == 18 and p0.life == 20
+    assert p1.hand == [] and BURN_GROW in p1.graveyard
+    assert _no_half_is_loose(game)
+    assert any("forced to play Burn" in line for line in game.log)
+    assert game.pending_word_of_command is None
+
+
+@pytest.mark.cr("709.3", "723.5")
+def test_w2g4_the_other_half_is_the_other_spell():
+    game, p0, p1 = _duel()
+    _w2g4_command(game, p0, p1, [BURN_GROW])
+
+    assert game.confirm_word_of_command(0, 0, spell_name="Grow") is True
+    assert p1.life == 20, "Grow deals no damage — the half was not defaulted to the first"
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Elephant Token"]
+    assert BURN_GROW in p1.graveyard and _no_half_is_loose(game)
+
+
+@pytest.mark.cr("709.3")
+def test_w2g4_a_forced_split_card_named_whole_is_not_an_answer():
+    """No half named, or a name that is neither half: the prompt stays owed and
+    nothing is played. There is no pick the engine could make here that is not
+    the engine choosing for the caster."""
+    game, p0, p1 = _duel()
+    _w2g4_command(game, p0, p1, [BURN_GROW, _POOL["Lightning Bolt"]])
+
+    for bad in (None, "Burn // Grow", "Lightning Bolt"):
+        assert game.confirm_word_of_command(0, 0, spell_name=bad) is False
+        assert game.pending_word_of_command is not None
+        assert p1.hand == [BURN_GROW, _POOL["Lightning Bolt"]] and p1.life == 20
+
+    # A card with one face needs no half, and a name sent with it is ignored.
+    assert game.confirm_word_of_command(0, 1, spell_name="Burn") is True
+    assert p1.life == 17 and p1.hand == [BURN_GROW]
+
+
+@pytest.mark.cr("709.3", "723.5")
+def test_w2g4_a_deferred_choice_remembers_the_half_across_a_priority_round():
+    """The interactive path records the choice and lets the spell wait on the
+    stack; the half has to wait with it."""
+    game, p0, p1 = _duel()
+    p0.hand.append(_POOL["Word of Command"])
+    p1.hand.extend([_POOL["Forest"], BURN_GROW])
+    game.interactive_seats = {0, 1}
+    assert game.queue_from_hand(0, "Word of Command", target_player_index=1).supported
+    game.resolve_top_of_stack()
+    assert game.pending_word_of_command is not None
+
+    assert game.confirm_word_of_command(0, 1, defer_resolution=True) is False
+    assert game.confirm_word_of_command(0, 1, defer_resolution=True, spell_name="Grow") is True
+    assert BURN_GROW in p1.hand, "recorded, not yet played"
+
+    # The target's hand changes while the spell waits: the card is re-found by
+    # name and still cast as the half that was chosen.
+    game.take_card_from_hand(p1, _POOL["Forest"])
+    game.interactive_seats = set()
+    resolve_stack(game)
+
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Elephant Token"]
+    assert p1.life == 20 and BURN_GROW in p1.graveyard
+    assert _no_half_is_loose(game)
+
+
+@pytest.mark.cr("709.3")
+def test_w2g4_a_seat_that_is_not_asked_forces_the_first_half():
+    """The default answer is the first card in the hand; for a split card it is
+    that card's first half — the same deterministic default one level down,
+    rather than a forced cast that names no spell and plays nothing."""
+    game, p0, p1 = _duel()
+    game.interactive_seats = {1}  # the caster's seat is not interactive
+    p0.hand.append(_POOL["Word of Command"])
+    p1.hand.append(BURN_GROW)
+
+    assert game.cast_from_hand(0, "Word of Command", target_player_index=1).supported
+    resolve_stack(game)
+
+    assert game.pending_word_of_command is None
+    assert p1.life == 18 and BURN_GROW in p1.graveyard
+    assert not any("choose which half" in line for line in game.log)
