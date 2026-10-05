@@ -48,6 +48,14 @@ class DamageRiders:
     #: rather than a node of its own for the same reason ``no_regen`` is one:
     #: the sentence deals no damage and modifies the one that does.
     unpreventable_to_creature: bool = False
+    #: "…deals 10 damage to that permanent or player **and the damage can't be
+    #: prevented**." (Urza's Rage); "The damage can't be prevented." (Combust.)
+    #: Not the flag above with a shorter name: this sentence stops at
+    #: "prevented", so a redirect still applies, and it says "the damage"
+    #: rather than "damage to a creature", so a player's shields are switched
+    #: off too. Two printed clauses, two fields — folding them would make one
+    #: of the two cards the other.
+    cant_be_prevented: bool = False
 
 
 @dataclass(frozen=True)

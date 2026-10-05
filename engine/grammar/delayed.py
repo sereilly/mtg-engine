@@ -273,6 +273,18 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 agent = None
             if agent is not None and stream.accept_phrase("this", "turn"):
                 event, binds, once = "bound_permanent_dealt_damage", True, False
+        elif subject is not None and stream.accept_phrase(
+            "deals", "combat", "damage", "this", "turn"
+        ):
+            # "Whenever **that creature** deals combat damage this turn, …"
+            # (Vigorous Charge.) Acidic Dagger's event with the two things its
+            # opener adds taken away: the creature is one an earlier sentence
+            # of the same spell chose rather than a target of the opener, and
+            # no noun phrase narrows what it damaged — so a player counts,
+            # which is the whole point of printing it beside trample. No agent
+            # means no ``agent_filter``, and an entry without one answers to
+            # every recipient the fire site announces.
+            event, binds, once = "bound_permanent_deals_combat_damage", True, False
         if event is None:
             # "…whenever **this creature** blocks or becomes blocked by a
             # creature this combat, …" (Goblin Flotilla). The joined block event
@@ -332,6 +344,23 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
+    # "…, **if this spell was kicked,** you gain life equal to that damage."
+    # (Vigorous Charge.) See ``CreateDelayedTrigger.created_if``: the one kind
+    # of intervening "if" this node can carry, because it is the one whose
+    # answer is settled before the ability exists. Any other condition is
+    # CR 603.4's — asked as the event happens and again as the ability
+    # resolves — and reading it here would ask it once, at the wrong time; the
+    # probe rewinds and the effect parser refuses the "if" where it stands.
+    created_if = None
+    gate_at = stream.mark()
+    if stream.accept_word("if"):
+        try:
+            created_if = _parse_condition(stream)
+        except GrammarError:
+            created_if = None
+        if not isinstance(created_if, ast.WasKicked) or not stream.accept_punct(","):
+            created_if = None
+            stream.reset(gate_at)
     try:
         effect = parse_statement(stream, top_level=False)
     except GrammarError:
@@ -378,7 +407,7 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
             else delay_binds_an_object(binds, effect)
         ),
         subject=subject, agent=agent,
-        watches=watches, target=target,
+        watches=watches, target=target, created_if=created_if,
     )
 
 

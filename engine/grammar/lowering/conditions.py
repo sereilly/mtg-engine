@@ -504,23 +504,57 @@ def _lower_condition(
         # permanent nothing looks up, so it refuses rather than being answered
         # about whichever object the resolver happened to hold.
         subject = condition.subject
+        pronoun_referent = None
         if isinstance(subject, ast.TargetSpec) and subject.targeted:
             asked = "target"
         elif isinstance(subject, ast.TargetSpec) and subject.filter.is_source:
             asked = "source"
+        elif isinstance(subject, ast.TargetSpec) and subject.quantifier == "it":
+            # "Counter target spell if **its** mana value is 2 or less."
+            # (Prohibit, Overload.) The third object a resolution can name
+            # without a second choice: the target of the effect this guards,
+            # :class:`ItIsColor`'s referent and refused for that clause's two
+            # reasons — under a trigger the pronoun most often names the
+            # event's subject, and with no single target beside it there is no
+            # object to ask.
+            if event is not None:
+                raise LoweringError(
+                    "'its' names no chosen target under this trigger",
+                    node=condition,
+                )
+            if referent is None:
+                raise LoweringError(
+                    "'its' needs the one target of the effect it guards",
+                    node=condition,
+                )
+            # A spell has a mana value and no power: CR 208.3 gives a
+            # noncreature object none, and a creature *spell*'s is not the
+            # layer-7 number the permanent branch reads.
+            if referent == "spell" and condition.characteristic != "mana_value":
+                raise LoweringError(
+                    "only a spell's mana value is asked on the stack",
+                    node=condition,
+                )
+            asked, pronoun_referent = "target", referent
         else:
             raise LoweringError(
                 "a characteristic gate asks about the source or about its own "
                 "target",
                 node=condition,
             )
-        return {
+        payload = {
             "kind": "subject_characteristic_is",
             "subject": asked,
             "characteristic": condition.characteristic,
             "op": condition.comparison.op,
             "count": condition.comparison.value.value,
         }
+        if pronoun_referent is not None:
+            # Which half of the resolution context holds the target. Written
+            # only by the pronoun spelling: a clause that announced its own
+            # target (Blood Lust) names a permanent and always did.
+            payload["target"] = pronoun_referent
+        return payload
     if isinstance(condition, ast.IsState):
         payload = {
             "kind": "is_state",

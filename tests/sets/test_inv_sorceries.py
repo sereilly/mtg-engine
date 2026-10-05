@@ -1244,3 +1244,83 @@ def test_breaking_wave_is_cast_as_though_it_had_flash_for_six(set_pool):
     game, _board = _w1g8_wave_table(set_pool, active=0, blue_mana=6)
     assert game.cast_from_hand(0, "Breaking Wave").supported
     assert game.players[0].mana_pool["U"] == 2
+
+
+# --- W2G1: kicker spells ---
+import pytest as _w2g1_pytest
+
+from engine import Game as _W2G1Game
+from engine import PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_offensive(set_pool, *, kicked):
+    """Savage Offensive resolved with two creatures on its caster's side and
+    one across the table. Returns ``(game, mine, theirs)``."""
+    lea = set_pool("LEA")
+    game = _W2G1Game(players=[
+        _W2G1PlayerState(
+            "Caster", library=[lea["Forest"]] * 10,
+            hand=[set_pool("INV")["Savage Offensive"]],
+        ),
+        _W2G1PlayerState("Victim", library=[lea["Forest"]] * 10),
+    ])
+    game.enforce_mana_costs = True
+    game.players[0].mana_pool.update({"R": 2, "G": 1})
+    mine = []
+    for name in ("Grizzly Bears", "Hill Giant"):
+        permanent = _W2G1Permanent(card=lea[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        mine.append(permanent)
+    theirs = _W2G1Permanent(card=lea["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    result = game.cast_from_hand(
+        0, "Savage Offensive",
+        optional_cost_payments={"{G}": 1} if kicked else None,
+    )
+    assert result.supported, result
+    _w2g1_resolve_stack(game)
+    return game, mine, theirs  # _w2g1_offensive
+
+
+def _w2g1_stats(game, permanent):
+    return (
+        permanent.effective_power, permanent.effective_toughness,
+        game._has_keyword(permanent, "first strike"),
+    )  # _w2g1_stats
+
+
+@_w2g1_pytest.mark.parametrize("kicked, bears, giant", [
+    (False, (2, 2, True), (3, 3, True)),
+    (True, (3, 3, True), (4, 4, True)),
+])
+def test_w2g1_savage_offensive_pumps_the_same_creatures_only_when_kicked(
+    set_pool, kicked, bears, giant,
+):
+    """"Creatures you control gain first strike until end of turn. If this
+    spell was kicked, **they** get +1/+1 until end of turn." The pronoun is the
+    set the first sentence described — the caster's creatures, and nobody
+    else's."""
+    game, mine, theirs = _w2g1_offensive(set_pool, kicked=kicked)
+
+    assert _w2g1_stats(game, mine[0]) == bears
+    assert _w2g1_stats(game, mine[1]) == giant
+    assert _w2g1_stats(game, theirs) == (2, 2, False)
+    assert sum(game.players[0].mana_pool.values()) == (0 if kicked else 1)
+
+
+def test_w2g1_savage_offensive_fixes_its_set_and_ends_with_the_turn(set_pool):
+    """CR 611.2c: both effects lock in the creatures on the battlefield as the
+    spell resolves, so one that arrives afterwards has neither; and both say
+    "until end of turn"."""
+    game, mine, _theirs = _w2g1_offensive(set_pool, kicked=True)
+    late = _W2G1Permanent(card=set_pool("LEA")["Craw Wurm"])
+    game._put_permanent_onto_battlefield(0, late, None)
+    assert _w2g1_stats(game, late) == (6, 4, False)
+
+    game.resolve_end_step(0)
+    game.resolve_cleanup_step(0)
+    assert _w2g1_stats(game, mine[0]) == (2, 2, False)
+    assert _w2g1_stats(game, mine[1]) == (3, 3, False)
+# end of the W2G1 sorceries block

@@ -682,6 +682,16 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     if stream.accept_phrase("life", "lost", "this", "way"):
         return ast.ThatMuch(LIFE_LOST_THIS_WAY)
 
+    # "…you gain life equal to **that damage**." (Vigorous Charge.) "That much"
+    # with the noun said out loud: the damage the firing event dealt, or the
+    # damage an earlier step of this same effect dealt. A bare back-reference
+    # for the reason "that much" is one — the words do not say which, and the
+    # lowering refuses where neither offers a number.
+    mark_that = stream.mark()
+    if stream.accept_phrase("that", "damage"):
+        return ast.ThatMuch(None)
+    stream.reset(mark_that)
+
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
         # says the number is the one *this effect* produced rather than any

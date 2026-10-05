@@ -1040,32 +1040,63 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # shrinks its own source, and Blood Lust must see a creature another
         # spell already pumped. Nothing to ask about answers False — a source
         # that has left (CR 608.2b) and a target that is no longer legal both.
-        from ._common import resolve_target_permanent
+        from ._common import _comparison_holds, resolve_target_permanent
 
-        if payload.get("subject") == "target":
-            # Through the same resolver the arms use, so the branch and the
-            # effect cannot disagree about which creature the sentence meant.
-            subject = resolve_target_permanent(
-                game, context, fallback_on_invalid_choice=False
-            )
+        characteristic = payload.get("characteristic")
+        if payload.get("target") == "spell":
+            # "Counter target spell **if its mana value is 2 or less**."
+            # (Prohibit.) CR 608.2c: asked while the instruction is followed,
+            # of the spell the counter beside it will act on — the reader that
+            # effect uses, so the two mean one object. CR 202.3b: on the stack
+            # an X in the cost is the announced value, which is
+            # ``stack_object_mana_value``'s whole difference from a card's
+            # printed number. A target that has left the stack has no mana
+            # value to ask about and answers False.
+            from ..targeting import stack_object_mana_value
+
+            chosen = context.stack_target
+            if chosen is None or chosen not in game.stack:
+                return False
+            value = stack_object_mana_value(chosen)
         else:
-            subject = context.source_permanent
-        if subject is None:
-            return False
-        value = (
-            subject.effective_toughness
-            if payload.get("characteristic") == "toughness"
-            else subject.effective_power
+            if payload.get("target") == "permanent":
+                # "Destroy target artifact **if its mana value is 2 or less**."
+                # (Overload.) The pronoun spelling, whose target is whatever
+                # permanent the effect beside it chose — so no type is asked
+                # here (the resolver's default predicate is "a creature", which
+                # answered None for every artifact and made the spell do
+                # nothing) and no other battlefield is scanned for a stand-in:
+                # the same call the colour clauses make, for their reason.
+                subject = resolve_target_permanent(
+                    game, context,
+                    predicate=lambda perm: True,
+                    fallback_players=(),
+                    fallback_on_invalid_choice=False,
+                )
+            elif payload.get("subject") == "target":
+                # Through the same resolver the arms use, so the branch and the
+                # effect cannot disagree about which creature the sentence
+                # meant.
+                subject = resolve_target_permanent(
+                    game, context, fallback_on_invalid_choice=False
+                )
+            else:
+                subject = context.source_permanent
+            if subject is None:
+                return False
+            if characteristic == "mana_value":
+                # CR 202.3: off the mana cost, read through layer 1 so a copy
+                # has the copied card's; a token's is 0. The number the
+                # "with mana value N or less" filter key reads.
+                value = int(getattr(subject.effective_card, "cmc", 0) or 0)
+            elif characteristic == "toughness":
+                value = subject.effective_toughness
+            else:
+                value = subject.effective_power
+        return _comparison_holds(
+            {"op": payload.get("op", "eq"), "value": int(payload.get("count", 0))},
+            value,
         )
-        wanted = int(payload.get("count", 0))
-        op = payload.get("op", "eq")
-        if op == "eq":
-            return value == wanted
-        if op == "le":
-            return value <= wanted
-        if op == "ge":
-            return value >= wanted
-        return False
 
     if kind == "is_state":
         source = context.source_permanent

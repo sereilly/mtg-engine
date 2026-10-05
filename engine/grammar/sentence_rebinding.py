@@ -271,26 +271,59 @@ def rebind_pump_pronoun_to_sentence_target(statement: ast.Statement) -> ast.Stat
     return replace(statement, steps=tuple(steps))
 
 
-def _is_clause_back_reference(spec, bound: "ast.TargetSpec") -> bool:
-    """Whether *spec* is the bare "that <noun>" naming *bound*.
+def restates_target(spec, bound: "ast.TargetSpec") -> bool:
+    """Whether *spec* is a bare "that <noun>" *bound* is guaranteed to be.
 
-    Narrow in the same two ways :func:`_rebind_pump_subject` is, and for its
-    reason: the quantifier must be the demonstrative, and the noun phrase must
-    carry **nothing but its head noun**. "That creature" is a back-reference;
-    "that creature you control" is a narrowed one the clause chose for itself,
-    and rewriting it would throw the narrowing away.
+    **The one answer to "does this demonstrative restate that target?"** Three
+    readers each had their own until Invasion's second wave — this module's
+    clause binder asked for the card types to be *equal*, Lightning Dart's
+    "instead" reader for a *subset*, the kicker spells' for the *whole filter*
+    to be equal (and :func:`_rebind_bound_noun` for the whole payload) — and
+    each was right about the card in front of it and wrong about the next:
 
-    Plus a third: the head noun must be one the bound target could be, so a
-    clause that chose a land and then talks about a creature keeps its own
-    refusal rather than being pointed at the land.
+    * equal filters refuse "**target creature with flying** … **that
+      creature**" (Burning Palm Efreet prints exactly that), because the
+      back-reference does not repeat the narrowing — it never does;
+    * a subset accepts "**target artifact or creature** … **that creature**",
+      which is not a restatement at all: the artifact a player chose is not a
+      creature, and the sentence is a condition on which kind was chosen
+      (Scorching Lava's "that creature" after "any target");
+    * equal card types refuse "**target artifact creature** … **that
+      creature**", where the noun is simply the shorter name of the same
+      object.
+
+    So the question is **entailment**, the way the printed words mean it. The
+    demonstrative must carry nothing but its head noun — "that creature you
+    control" chose for itself and rewriting it would throw the narrowing away
+    — and every type it names must be one the target *must* have: any of them
+    where the target's types are conjoined ("artifact creature") or single,
+    all of them where they are alternatives ("artifact or creature"). A noun
+    that names no type ("that spell", "that card") restates anything.
+
+    The zone is not compared: a back-reference is parsed with no zone in view
+    ("counter **that spell**" carries the battlefield default) and it is the
+    bound target's zone that survives the rewrite.
     """
-    return (
+    if not (
         isinstance(spec, ast.TargetSpec)
         and spec.quantifier == "that"
         and not spec.targeted
-        and set(spec.filter.to_payload()) <= {"type_filter"}
-        and spec.filter.card_types == bound.filter.card_types
+    ):
+        return False
+    head_only = replace(
+        spec.filter, card_types=(), type_match=bound.filter.type_match,
+        zone=bound.filter.zone,
     )
+    if head_only != replace(
+        ast.ObjectFilter(), type_match=bound.filter.type_match,
+        zone=bound.filter.zone,
+    ):
+        return False
+    named = set(spec.filter.card_types)
+    chosen = set(bound.filter.card_types)
+    if bound.filter.type_match == "all" or len(chosen) == 1:
+        return named <= chosen
+    return named == chosen
 
 
 def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
@@ -321,10 +354,10 @@ def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
         # it on the one card in the pool that prints the shape.
         return node
     if isinstance(node, ast.LoseKeyword):
-        if _is_clause_back_reference(node.subject, bound):
+        if restates_target(node.subject, bound):
             return replace(node, subject=bound)
     if isinstance(node, ast.DealDamage) and len(node.recipients) == 1:
-        if _is_clause_back_reference(node.recipients[0], bound):
+        if restates_target(node.recipients[0], bound):
             return replace(node, recipients=(bound,))
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         changes = {
@@ -492,12 +525,7 @@ def _rebind_bound_noun(node, bound: "ast.TargetSpec"):
     "that creature you control" is a narrowed one the sentence chose for
     itself, and rewriting it would throw the narrowing away.
     """
-    if (
-        isinstance(node, ast.TargetSpec)
-        and node.quantifier == "that"
-        and not node.targeted
-        and node.filter.to_payload() == bound.filter.to_payload()
-    ):
+    if restates_target(node, bound):
         return bound
     if dataclasses.is_dataclass(node) and not isinstance(node, type):
         changes = {

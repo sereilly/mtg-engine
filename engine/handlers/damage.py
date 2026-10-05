@@ -203,6 +203,12 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # Emitted by the lowering only for a single-recipient clause, which is the
     # single-target branch below and the object branch beside it.
     unpreventable = bool(instruction.payload.get("unpreventable_to_creature"))
+    # "…and the damage can't be prevented." (Urza's Rage.) The narrower lock —
+    # prevention only — and the wider recipient: a player as much as a
+    # creature. Threaded to the three branches that deal to **one chosen
+    # recipient** (the two below and the face at the end), which is exactly
+    # what the lowering admits the rider on.
+    cant_be_prevented = bool(instruction.payload.get("cant_be_prevented"))
 
     # "…deals damage to each opponent equal to the number of Islands **that
     # player** controls" (Typhoon). One number per seat, so it cannot have been
@@ -844,6 +850,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
             asks=True,
             unpreventable=unpreventable,
+            cant_be_prevented=cant_be_prevented,
         )
     elif several.get("kind") == "object":
         from ..subject_filters import subject_matches
@@ -872,6 +879,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
             then=lambda dealt: context.results.__setitem__("damage_dealt", dealt),
             asks=True,
             unpreventable=unpreventable,
+            cant_be_prevented=cant_be_prevented,
         )
     else:
         def _report(damage: int) -> None:
@@ -883,7 +891,8 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
 
         _record_damage_recipient(context, None, target)
         game._deal_damage_to_player(
-            target, damage, source=source_permanent or card, then=_report, asks=True
+            target, damage, source=source_permanent or card, then=_report, asks=True,
+            cant_be_prevented=cant_be_prevented,
         )
     return True, "resolved"
 

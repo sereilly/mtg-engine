@@ -48,12 +48,13 @@ from dataclasses import replace
 
 from . import ast
 from .amounts import parse_amount
+from .conditions import _parse_condition
 from .errors import GrammarError
 from .lexer import PT
 from .nouns import parse_object_filter
-from .effects import parse_source_damage_lock
+from .effects import _parse_damage_rider_sentence, parse_source_damage_lock
 from .delayed import contains_flip, parse_flip_stakes_sentence
-from .phrases import _accept_number
+from .phrases import _accept_number, accept_the_damage_cant_be_prevented
 from .statements import parse_statement
 from .stream import TokenStream
 from .bounds import accept_superlative
@@ -564,15 +565,68 @@ def _attach_source_damage_lock(
     if not steps:
         return False
     mark = stream.mark()
-    if not parse_source_damage_lock(stream):
+    # "The damage can't be prevented." (Combust.) The same statement about the
+    # sentence in front, in the shorter of its two printings — prevention
+    # only, any recipient — so it is the other rider, attached the same way.
+    if accept_the_damage_cant_be_prevented(stream):
+        riders = ast.DamageRiders(cant_be_prevented=True)
+    elif parse_source_damage_lock(stream):
+        riders = ast.DamageRiders(unpreventable_to_creature=True)
+    else:
         return False
     try:
-        steps[-1] = _attach_riders(
-            steps[-1], ast.DamageRiders(unpreventable_to_creature=True)
-        )
+        steps[-1] = _attach_riders(steps[-1], riders)
     except GrammarError:
         stream.reset(mark)
         return False
+    return True
+
+
+def _attach_conditional_damage_riders(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """Fold "**If this spell was kicked,** that creature can't be regenerated
+    this turn and if it would die this turn, exile it instead." into the
+    damage sentence before it (Scorching Lava).
+
+    The riders `_parse_damage_rider_sentence` reads, printed under a condition
+    — so the damage is dealt either way and what the condition decides is
+    whether it carries them. That is one action in two forms of which exactly
+    one runs, which is the shape ``conditional_instead`` folds a pair into,
+    reached from one sentence instead of two: the step becomes a
+    ``Conditional`` whose arms are the same ``DealDamage`` with and without
+    the riders. Both arms name the one target the sentence announced
+    (CR 601.2c), so the picker asks once.
+
+    Not a field on ``DamageRiders`` ("riders only if …"), which every reader
+    of a rider would then have to learn; composed, the handler that stamps
+    them and the post-condition that proves they survive lowering are the ones
+    Disintegrate already uses.
+
+    Read after the unconditional reader — which owns "If it's a creature, it
+    can't be regenerated…" and is the sentence loop's first probe — and only
+    behind a bare damage sentence: riders under a condition, attached to a
+    step that already is one, would need a third arm nobody printed.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.DealDamage):
+        return False
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    riders = _parse_damage_rider_sentence(stream)
+    if riders is None:
+        stream.reset(mark)
+        return False
+    steps[-1] = ast.Conditional(
+        condition, then=_attach_riders(last, riders), otherwise=last
+    )
     return True
 
 
@@ -589,10 +643,17 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
                 statement.riders.unpreventable_to_creature
                 or riders.unpreventable_to_creature
             ),
+            cant_be_prevented=(
+                statement.riders.cant_be_prevented or riders.cant_be_prevented
+            ),
         )
-        return ast.DealDamage(
-            statement.source, statement.amount, statement.recipients, merged, statement.chooser
-        )
+        # ``replace``, not a fresh node from five named fields: that spelling
+        # rebuilt the statement without ``per_each`` (Baki's Curse's "for each
+        # Aura attached to that creature"), so a rider sentence behind a
+        # multiplied damage clause deleted the multiplier and the line
+        # compiled dealing the flat amount. No card prints the two together,
+        # which is the only reason nothing had moved.
+        return replace(statement, riders=merged)
     if isinstance(statement, ast.Sequence) and statement.steps:
         steps = list(statement.steps)
         steps[-1] = _attach_riders(steps[-1], riders)

@@ -33,14 +33,33 @@ names its subject by pointing back — "it", "that creature", "that player",
 "that permanent or player" — the antecedent is the replaced sentence's own
 subject, so that the spell still announces one target whichever arm resolves
 (CR 601.2c). That agreement between the arms is most of this file and it is
-the half that grows: both helpers and three of the six replaceable kinds
-arrived in Invasion's first wave, 115 of the 169 lines that moved.
+the half that grows.
 
-The helpers stay with the rider rather than joining ``sentence_rebinding``,
+**One reader of that agreement, and one answer to a mismatch.** Invasion's
+first wave wrote it twice, in two groups, disjoint by node type —
+``_rebind_replacement_recipient`` for a ``DealDamage`` ("…deals 4 damage to
+**it** instead", Lightning Dart), which left a back-reference it could not
+place *as written*, and ``_instead_inherits_subject`` for the kinds in
+``_INSTEAD_SUBJECT_FIELDS``, which *refused the rider*. The merge kept both in
+sequence and the second wave folded them on Urza's Rage, which needed the one
+cell neither had: a ``DealDamage`` whose replacement says "that permanent or
+player". There is one table now (``DealDamage`` is a row of it) and one
+function, and the mismatch rule is the second reader's: **a back-reference
+that cannot name the replaced sentence's subject refuses the rider.** Leaving
+it as written was never a reading — the word then meant whatever the lowering
+made of a bare pronoun, which for "it" is the ability's own source, and a
+replacement arm that pumps or burns the source is a different card compiled
+supported. See ``_instead_subject`` for the one case where the printed word is
+kept, and why that is agreement rather than a mismatch.
+
+The helper stays with the rider rather than joining ``sentence_rebinding``,
 whose question ("which target the sentence itself announced does this word
-name?") they also answer. They are the second half of the rider's own table —
-for each kind in ``_REPLACEABLE``, which field says whom it is done to — and
-one of them answers by **refusing the rider**, which is an admission decision
+name?") it also answers — and whose own answer to "does this bare *that
+<noun>* restate that target?" it now **shares**
+(``sentence_rebinding.restates_target``; the three spellings of that test
+disagreed until the same fold). It is the second half of the rider's own
+table — for each kind in ``_REPLACEABLE``, which field says whom it is done
+to — and it answers by **refusing the rider**, which is an admission decision
 of this production rather than a rewrite applied after it. A rebinder with no
 such tie (``sentence_rebinding._bind_that_creature_after_enchanted``, which
 left ``control_flow`` at the same split) went there.
@@ -62,6 +81,7 @@ from dataclasses import replace
 from . import ast
 from .conditions import _parse_condition
 from .errors import GrammarError
+from .sentence_rebinding import restates_target
 from .statements import parse_statement
 from .stream import TokenStream
 
@@ -79,33 +99,9 @@ def _parse_conditional_instead_rider(
     death; the "instead" is the whole content of the sentence, so it is
     required, and only a same-shaped statement may replace the last step.
     """
-    # The statement kinds this rider can replace. `AddMana` joins `GainLife`
-    # for the Antiquities land cycle — "{T}: Add {C}. If you control an Urza's
-    # Power-Plant and an Urza's Tower, add {C}{C} instead." — which is the same
-    # sentence pair with a different verb. `DealDamage` joins them for
-    # Gangrenous Zombies — "…deals 1 damage to each creature and each player.
-    # If you control a snow Swamp, this creature deals 2 damage to each
-    # creature and each player instead." — which is the same pair again. The
-    # replacement must be the *same* kind as what it replaces (checked below),
-    # so widening the set cannot let one kind silently stand in for another.
-    #
-    # `Discard`, `Pump` and `PreventDamage` join them for the kicker spells --
-    # "Target player discards a card. If this spell was kicked, **that player**
-    # discards three cards instead." (Hypnotic Cloud), "Target creature gets
-    # +2/+2 until end of turn. If this spell was kicked, **that creature** gets
-    # +5/+5 until end of turn instead." (Explosive Growth), "Prevent the next 2
-    # damage that would be dealt to any target this turn. If this spell was
-    # kicked, prevent the next 4 damage that would be dealt to **that permanent
-    # or player** this turn instead." (Orim's Touch). These three name *whom*,
-    # and the second sentence names them by pointing back at the first -- see
-    # `_instead_inherits_subject`.
-    _REPLACEABLE = (
-        ast.GainLife, ast.AddMana, ast.DealDamage,
-        ast.Discard, ast.Pump, ast.PreventDamage,
-    )
-
     last = steps[-1] if steps else None
-    if not isinstance(last, _REPLACEABLE):
+    last_guard, replaced = _guarded(last)
+    if not isinstance(replaced, _REPLACEABLE):
         return False
     mark = stream.mark()
     if not stream.accept_word("if"):
@@ -116,122 +112,219 @@ def _parse_conditional_instead_rider(
         stream.reset(mark)
         return False
     stream.accept_punct(",")
+    # "…, **instead** it deals 10 damage to that permanent or player" (Urza's
+    # Rage). The word in front of the sentence it marks rather than behind it:
+    # the same pair, and required exactly once — below — so neither spelling
+    # can be read with the word missing or doubled.
+    fronted = bool(stream.accept_word("instead"))
     try:
         replacement = parse_statement(stream)
     except GrammarError:
         stream.reset(mark)
         return False
-    if type(replacement) is not type(last) or not stream.accept_word("instead"):
+    if type(replacement) is not type(replaced):
         stream.reset(mark)
         return False
-    # Two readers of one idea - the second sentence's back-reference names the
-    # first sentence's subject, because only one of the two ever runs - written
-    # in the same wave by two groups and disjoint by node type: the first
-    # answers for `DealDamage` ("…deals 4 damage to **it** instead", Lightning
-    # Dart), the second for the three kinds in `_INSTEAD_SUBJECT_FIELDS`, and
-    # each passes the other's kinds through untouched. Kept in sequence rather
-    # than folded at the merge, because they differ in what a mismatch does
-    # (the first leaves the sentence as written, the second refuses the rider)
-    # and choosing between those is a rules reading, not a merge.
-    replacement = _rebind_replacement_recipient(replacement, last)
-    replacement = _instead_inherits_subject(last, replacement)
+    # "Counter target spell **if its mana value is 2 or less**. If this spell
+    # was kicked, counter that spell **if its mana value is 4 or less**
+    # instead." (Prohibit, Overload.) The replaced sentence carries a trailing
+    # condition of its own, so the replacement must carry one too — and one of
+    # the same kind, for `_REPLACEABLE`'s reason one level in: a guard of
+    # another kind would be a different sentence standing in for this one. The
+    # sentence loop is what reads a trailing "if" (it modifies a whole
+    # sentence, so no production owns it), and `parse_statement` above never
+    # reaches that loop; read here, it is the same reader at the same position.
+    guard = None
+    if last_guard is not None:
+        if not stream.accept_word("if"):
+            stream.reset(mark)
+            return False
+        try:
+            guard = _parse_condition(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return False
+        if type(guard) is not type(last_guard):
+            stream.reset(mark)
+            return False
+    if fronted == bool(stream.accept_word("instead")):
+        stream.reset(mark)
+        return False
+    replacement = _instead_inherits_subject(replaced, replacement)
     if replacement is None:
         stream.reset(mark)
         return False
+    if guard is not None:
+        replacement = ast.Conditional(guard, replacement)
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
     return True
 
 
-def _rebind_replacement_recipient(replacement, last):
-    """*replacement* with a pronoun recipient pointed at *last*'s one target.
+#: The statement kinds the rider can replace. `AddMana` joined `GainLife` for
+#: the Antiquities land cycle -- "{T}: Add {C}. If you control an Urza's
+#: Power-Plant and an Urza's Tower, add {C}{C} instead." -- which is the same
+#: sentence pair with a different verb. `DealDamage` joined them for Gangrenous
+#: Zombies -- "…deals 1 damage to each creature and each player. If you control
+#: a snow Swamp, this creature deals 2 damage to each creature and each player
+#: instead." The replacement must be the *same* kind as what it replaces, so
+#: widening the set cannot let one kind silently stand in for another.
+#:
+#: `Discard`, `Pump` and `PreventDamage` joined them for Invasion's kicker
+#: spells -- "Target player discards a card. If this spell was kicked, **that
+#: player** discards three cards instead." (Hypnotic Cloud), "Target creature
+#: gets +2/+2 until end of turn. If this spell was kicked, **that creature**
+#: gets +5/+5 until end of turn instead." (Explosive Growth), "Prevent the next
+#: 2 damage that would be dealt to any target this turn. If this spell was
+#: kicked, prevent the next 4 damage that would be dealt to **that permanent or
+#: player** this turn instead." (Orim's Touch) -- and `CounterSpell` and
+#: `Destroy` a wave later for Prohibit and Overload. All but the first two name
+#: *whom*, and the second sentence names them by pointing back at the first:
+#: see `_INSTEAD_SUBJECT_FIELDS`.
+_REPLACEABLE = (
+    ast.GainLife, ast.AddMana, ast.DealDamage,
+    ast.Discard, ast.Pump, ast.PreventDamage,
+    ast.CounterSpell, ast.Destroy,
+)
 
-    "Lightning Dart deals 1 damage to **target creature**. If that creature is
-    white or blue, Lightning Dart deals 4 damage to **it** instead." The second
-    sentence replaces the first, so its "it" is the creature the first one
-    targeted — the same object, chosen once (CR 601.2c), dealt one amount or
-    the other. Written back as the first sentence's own target spec, both arms
-    of the ``Conditional`` describe one target: the picker derives one choice
-    and whichever arm runs resolves the same permanent.
 
-    Only for the shape that has an answer: one recipient on each side, the
-    first a single announced target, the second a bare "it" or a "that <noun>"
-    restating it and narrowing nothing. Anything else is returned unchanged and
-    refuses where it always did — an "it" with two targets in front of it names
-    neither, and a "that" carrying a narrowing of its own is describing some
-    other object.
+def _guarded(statement):
+    """``(guard, action)`` for a sentence that ends in its own "if", else
+    ``(None, statement)``.
+
+    "Destroy target artifact **if its mana value is 2 or less**" is a
+    :class:`ast.Conditional` with one arm, built by the sentence loop from the
+    trailing clause. The rider replaces the *action* and re-reads the guard,
+    so it needs the two apart. A conditional that already has a second arm, or
+    whose body sits on the false branch ("unless"), is some other sentence and
+    is handed back whole -- where its type is not one the rider replaces.
     """
-    if not isinstance(replacement, ast.DealDamage):
-        return replacement
-    if len(replacement.recipients) != 1 or len(last.recipients) != 1:
-        return replacement
-    named, chosen = replacement.recipients[0], last.recipients[0]
-    if not (
-        isinstance(named, ast.TargetSpec)
-        and isinstance(chosen, ast.TargetSpec)
-        and chosen.targeted
-        and chosen.count == 1
-        and not named.targeted
+    if (
+        isinstance(statement, ast.Conditional)
+        and statement.otherwise is None
+        and not statement.negated
     ):
-        return replacement
-    if named.quantifier == "that":
-        restated = replace(named.filter, card_types=())
-        if restated != ast.ObjectFilter() or not (
-            set(named.filter.card_types) <= set(chosen.filter.card_types)
-        ):
-            return replacement
-    elif named.quantifier != "it":
-        return replacement
-    return replace(replacement, recipients=(chosen,))
+        return statement.condition, statement.then
+    return None, statement
 
 
-#: Which field of each replaceable statement says *whom* it is done to. Only the
-#: kinds whose "instead" sentence can point back at the first one's subject;
-#: `GainLife`, `AddMana` and `DealDamage` restate theirs in full on every card
-#: that prints the pair, and are passed through untouched.
+#: Which field of each replaceable statement says *whom* it is done to -- the
+#: rider's second table, one row per kind whose "instead" sentence can point
+#: back at the first one's subject. `GainLife` and `AddMana` have none: every
+#: card that prints the pair says "you" and the mana outright.
+#:
+#: `DealDamage` names a *tuple* (its recipients) where the rest name one
+#: subject; `_instead_inherits_subject` reads either through one comparison,
+#: position by position.
 _INSTEAD_SUBJECT_FIELDS = {
     ast.Discard: "player",
     ast.Pump: "subject",
     ast.PreventDamage: "to",
+    ast.DealDamage: "recipients",
+    ast.CounterSpell: "subject",
+    ast.Destroy: "subject",
 }
 
+#: The object back-references: a pronoun, a demonstrative, and the marker
+#: ``parse_recipient`` reads for "that permanent or player".
+_BACK_REFERENCES = ("it", "that", "permanent_or_player")
 
-def _instead_inherits_subject(last, replacement):
-    """*replacement* with a back-reference to *last*'s subject resolved, or
-    None when it points at something *last* did not name.
+#: The quantifiers under which an unannounced subject is still **one object**
+#: the surrounding ability already has in hand -- its own source, or what its
+#: trigger's event named.
+_ONE_UNANNOUNCED_OBJECT = ("this", "it", "that")
 
-    "…**that player** discards three cards instead": only one of the two
-    sentences ever runs (the pair folds to a `Conditional`), so the pronoun in
-    the second has nothing recorded in front of it to bind to -- its antecedent
-    is the *sentence it replaces*, never an earlier step's result. It therefore
-    takes that sentence's own subject, target and all, which is also what
-    CR 601.2c needs: the spell names one player whichever arm resolves.
 
-    A replacement that names its subject outright ("target player discards
-    three cards instead" -- not printed, and a second target if it were) is
-    kept as written. One that points back must agree with what it points at:
-    "that player" after a player, "that creature" after the same card type,
-    "that permanent or player" after any target. Anything else refuses the
-    rider, so a pronoun is never resolved onto a subject of another kind.
+def _points_back(named) -> bool:
+    """Whether *named* names its object by pointing at an earlier one."""
+    if isinstance(named, ast.PlayerRef):
+        return named.kind == "that_player"
+    return (
+        isinstance(named, ast.TargetSpec)
+        and not named.targeted
+        and named.quantifier in _BACK_REFERENCES
+    )
+
+
+def _instead_subject(named, original):
+    """What *named* means in a sentence replacing one whose subject is
+    *original* -- or None when it cannot mean that subject.
+
+    Only one of the two sentences ever runs (the pair folds to a
+    ``Conditional``), so a back-reference in the second has nothing recorded
+    in front of it to bind to: its antecedent is the *sentence it replaces*,
+    never an earlier step's result. Four answers, in order:
+
+    * **Named outright** ("…deals 2 damage to each creature and each player
+      instead", Gangrenous Zombies) -- kept as written.
+    * **The identical words** ("that creature" in both sentences of a
+      trigger's effect) -- kept: whatever binds the first binds the second.
+    * **An announced target, or a seat, it can name** -- it takes that
+      subject, target and all, which is also what CR 601.2c needs: the spell
+      names one object whichever arm resolves. "That player" after a player;
+      "it" after any one target; "that <noun>" after a target that must be one
+      (``sentence_rebinding.restates_target``); "that permanent or player"
+      after "any target".
+    * **"It" after one object the sentence did not announce** -- its own
+      source, or the event's subject. Kept as written, and this is agreement
+      rather than a tolerated mismatch: nothing in the pair chose an object,
+      so the pronoun is the one every other sentence of that ability prints
+      and the rebinders that own it read it here as they do there.
+
+    Anything else is a word pointing at something the replaced sentence did
+    not name -- a creature after a player, "that creature" after "target
+    artifact or creature", "it" after "each creature" -- and refuses.
     """
-    field = _INSTEAD_SUBJECT_FIELDS.get(type(last))
+    if not _points_back(named) or named == original:
+        return named
+    if isinstance(named, ast.PlayerRef):
+        if isinstance(original, ast.PlayerRef) and original.kind != "that_player":
+            return original
+        return None
+    if not isinstance(original, ast.TargetSpec):
+        return None
+    announced = original.targeted and original.count == 1
+    if named.quantifier == "permanent_or_player":
+        return original if announced and original.quantifier == "any_target" else None
+    if named.quantifier == "it":
+        if announced:
+            return original
+        if not original.targeted and original.quantifier in _ONE_UNANNOUNCED_OBJECT:
+            return named
+        return None
+    return original if announced and restates_target(named, original) else None
+
+
+def _instead_inherits_subject(replaced, replacement):
+    """*replacement* with every back-reference to *replaced*'s subject
+    resolved, or None when one points at something *replaced* did not name.
+
+    "…**that player** discards three cards instead" (Hypnotic Cloud),
+    "…deals 4 damage to **it** instead" (Lightning Dart), "…it deals 10 damage
+    to **that permanent or player**" (Urza's Rage), "…counter **that spell** if
+    its mana value is 4 or less instead" (Prohibit). One reader for every
+    kind in ``_INSTEAD_SUBJECT_FIELDS``; ``_instead_subject`` is what each
+    word means and what a mismatch does.
+
+    A kind with no row names no subject a second sentence could point back
+    at, and is passed through.
+    """
+    field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
     if field is None:
         return replacement
-    named = getattr(replacement, field)
-    original = getattr(last, field)
-    if isinstance(named, ast.PlayerRef):
-        if named.kind != "that_player":
-            return replacement
-        if isinstance(original, ast.PlayerRef) and original.kind != "that_player":
-            return replace(replacement, **{field: original})
-        return None
-    if isinstance(named, ast.TargetSpec):
-        if named.targeted or named.quantifier not in ("that", "permanent_or_player"):
-            return replacement
-        if not isinstance(original, ast.TargetSpec):
+    named, original = getattr(replacement, field), getattr(replaced, field)
+    if not isinstance(named, tuple):
+        resolved = _instead_subject(named, original)
+        if resolved is None:
             return None
-        if named.quantifier == "permanent_or_player":
-            agrees = original.quantifier == "any_target"
-        else:
-            agrees = named.filter == original.filter
-        return replace(replacement, **{field: original}) if agrees else None
-    return replacement
+        return replacement if resolved is named else replace(replacement, **{field: resolved})
+    # A recipient list, compared position by position. A list of another
+    # length restates nothing position by position, so it is legal only when
+    # no word in it points back.
+    if len(named) != len(original):
+        return None if any(_points_back(each) for each in named) else replacement
+    resolved = tuple(_instead_subject(n, o) for n, o in zip(named, original))
+    if any(each is None for each in resolved):
+        return None
+    if all(a is b for a, b in zip(resolved, named)):
+        return replacement
+    return replace(replacement, **{field: resolved})

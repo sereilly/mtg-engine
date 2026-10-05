@@ -814,6 +814,20 @@ class CreateDelayedTrigger:
     #: own ``targets`` description, and here the opener is the only place the
     #: target is named — so this is what the picker has to learn it from.
     target: TargetSpec | None = None
+    #: "Whenever that creature deals combat damage this turn, **if this spell
+    #: was kicked,** you gain life equal to that damage." (Vigorous Charge.) A
+    #: condition printed where an intervening "if" goes (CR 603.4) and asked
+    #: when the ability is **created** instead — legal only for a condition
+    #: whose answer cannot change between the two, which is why the parser
+    #: admits one kind (:class:`WasKicked`: a fact about the creating spell's
+    #: own casting) and refuses the rest. Created-or-not is then the whole of
+    #: it: no entry waits, so nothing has to carry a spell's history to a fire
+    #: site that runs after the spell has left the stack.
+    #:
+    #: A field rather than a ``Conditional`` around the node, because the
+    #: callers that ask a delay what it binds (``choices``, the trailing-delay
+    #: wrapper) read this node's own fields and a wrapper would hide them.
+    created_if: "Condition | None" = None
 
 
 # ``UnlessPlayerPays`` is a *statement*, not an effect, for the reason ``May``

@@ -33,7 +33,7 @@ from ..phrases import (
     _accept_mana_alternatives, _accept_per_counter_multiplier,
     _parse_mana_payment, _parse_opponents_choice,
     _parse_per_each_objects, _parse_that_object, accept_or_planeswalker,
-    parse_bound_subject,
+    accept_trailing_prevention_lock, parse_bound_subject,
 )
 
 
@@ -499,6 +499,11 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
     if per_each_beyond_first:
         raise stream.error("no damage clause discounts the first of a counted set")
 
+    # "…and the damage can't be prevented" (Urza's Rage). A rider on this
+    # clause's own damage, read before the "and" below can take it for a
+    # second damage clause and fail on "the".
+    if accept_trailing_prevention_lock(stream):
+        riders = dataclasses.replace(riders, cant_be_prevented=True)
     first = ast.DealDamage(
         source, amount, tuple(recipients), riders, chooser, per_each
     )
@@ -729,7 +734,7 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
 
     if stream.accept_phrase("if", "it", "'s", "a", "creature"):
         stream.accept_punct(",")
-    elif not stream.at_word("it", "if"):
+    elif not stream.at_word("it", "if", "that"):
         stream.reset(mark)
         return None
 
@@ -757,9 +762,14 @@ def _parse_damage_rider_sentence(stream: TokenStream) -> ast.DamageRiders | None
         return True
 
     while True:
+        # "…**that creature** can't be regenerated this turn" (Scorching Lava,
+        # behind "any target"). Disintegrate's "If it's a creature, it …" in
+        # two words: the noun is the guard, and the handler asks it — the
+        # riders are stamped under an ``is_creature`` test — so a player or a
+        # planeswalker the spell was aimed at instead is simply not one.
         if stream.accept_phrase("it", "can't", "be", "regenerated") or stream.accept_phrase(
             "it", "cannot", "be", "regenerated"
-        ):
+        ) or stream.accept_phrase("that", "creature", "can't", "be", "regenerated"):
             _parse_duration(stream)
             no_regen = True
         else:

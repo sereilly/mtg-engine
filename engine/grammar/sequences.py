@@ -66,6 +66,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
+                       _parse_conditional_set_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider,
                        _parse_that_controller_reveals_rider)
 from .sentence_rebinding import (
@@ -82,7 +83,7 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
-    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_exile_instead_rider)
+    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_conditional_damage_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_exile_instead_rider)
 from .statements import (
     _parse_condition,
     parse_statement,
@@ -319,10 +320,27 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # for and the table does the work.
             if _parse_registry_claimed_sentence(stream):
                 continue
+            riders_at = stream.mark()
+            restated = stream.at_word("that")
             riders = _parse_damage_rider_sentence(stream)
             if riders is not None:
-                steps[-1] = _attach_riders(steps[-1], riders)
-                continue
+                # "**That creature** can't be regenerated this turn" behind a
+                # step that deals no damage is another reader's sentence (the
+                # ``CantBe`` production's, which names the creature rather
+                # than riding a damage event), so that spelling rewinds and
+                # the loop goes on. The pronoun spelling does **not**: "Tap
+                # target creature. It can't be regenerated this turn." fails
+                # here and must keep failing — let through, the bare "it"
+                # lowers as the ability's own source and the line compiles
+                # denying regeneration to the wrong permanent.
+                try:
+                    steps[-1] = _attach_riders(steps[-1], riders)
+                except GrammarError:
+                    if not restated:
+                        raise
+                    stream.reset(riders_at)
+                else:
+                    continue
             penalty = _parse_unpaid_penalty_sentence(stream)
             if penalty is not None:
                 steps[-1] = _attach_unpaid_penalty(steps[-1], penalty)
@@ -467,6 +485,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if plural_pump is not None:
                 steps.append(plural_pump)
                 continue
+            # "Creatures you control gain first strike until end of turn. **If
+            # this spell was kicked, they get +1/+1 until end of turn.**"
+            # (Savage Offensive.) The plural again, with a *set* for an
+            # antecedent rather than several targets.
+            set_pump = _parse_conditional_set_pump_rider(stream, steps)
+            if set_pump is not None:
+                steps.append(set_pump)
+                continue
             # "…and put a -1/-0 counter on **it**." (Jabari's Influence.) The
             # counter's own pronoun, beside the imperative one above: parsed
             # fresh, "it" is the ability's source and the counter lands on the
@@ -511,6 +537,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             if _parse_exile_instead_rider(stream, steps):
                 continue
             if _parse_conditional_instead_rider(stream, steps):
+                continue
+            # "If this spell was kicked, that creature can't be regenerated
+            # this turn and if it would die this turn, exile it instead."
+            # (Scorching Lava.) The damage riders the loop's first probe reads,
+            # under a condition; beside the "instead" pair because it builds
+            # the same two-armed step from one sentence.
+            if _attach_conditional_damage_riders(stream, steps):
                 continue
             # "If <the source> would deal damage to a creature, that damage
             # can't be prevented or dealt instead to another permanent or

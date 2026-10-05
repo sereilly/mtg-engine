@@ -1537,6 +1537,7 @@ def apply_damage_to_creature(
     then: Callable[[int], None] | None = None,
     asks: bool = False,
     unpreventable: bool = False,
+    cant_be_prevented: bool = False,
 ) -> int:
     """Mark non-combat damage on a single creature and fire its "dealt damage"
     triggers.
@@ -1570,7 +1571,7 @@ def apply_damage_to_creature(
 
     return game._mark_damage_on_permanent(
         perm, amount, source=source, then=finish, asks=asks,
-        unpreventable=unpreventable,
+        unpreventable=unpreventable, cant_be_prevented=cant_be_prevented,
     )
 
 

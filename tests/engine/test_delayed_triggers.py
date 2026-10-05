@@ -95,3 +95,61 @@ def test_an_undurationed_entry_outlives_the_turn():
     assert [entry.event for entry in game.delayed_triggers] == [
         "controllers_next_main_phase"
     ]
+
+
+def test_a_damaged_player_wakes_only_an_entry_that_narrows_nothing():
+    """``bound_permanent_deals_combat_damage`` is announced for a damaged
+    **player** too, with no agent: "Whenever that creature deals combat damage
+    this turn, …" (Vigorous Charge) is about damage to anything, and before
+    that card the announcement was made only from inside the damaged-permanent
+    branch — so a trampler's damage to the face woke nothing.
+
+    The entry that narrows what was damaged — "…to **a non-Wall creature**"
+    (Acidic Dagger) — must keep refusing it: a player is not a creature of any
+    kind, and ``subject_matches`` answers False for an absent object against a
+    non-empty filter. Both entries are bound to the same damager here, so the
+    only thing separating them is that narrowing.
+    """
+    from engine import Game, PlayerState
+    from engine.damage_events import deal_damage
+    from engine.delayed_triggers import matching_delayed_triggers
+    from engine.models import Permanent
+    from engine.oracle_types import OracleInstruction
+    from tests.helpers import _mk_creature_card
+
+    game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
+    attacker = Permanent(card=_mk_creature_card("Ogre", 3, 3))
+    game._put_permanent_onto_battlefield(0, attacker, None)
+    assert attacker.permanent_id is not None
+    event = "bound_permanent_deals_combat_damage"
+    gain = OracleInstruction(
+        "target_gains_life", "",
+        {"amount_from_trigger": "damage_dealt", "recipient": "caster"},
+    )
+    # ``card`` is the creating spell: an entry with none has nothing to put on
+    # the stack and is dropped at the enqueue, which would make the two
+    # counts below pass about nothing.
+    spell = _mk_creature_card("Creating Spell", 0, 0)
+    narrows = DelayedTrigger(
+        0, event, gain, card=spell, bound_permanent_id=attacker.permanent_id,
+        once=False, agent_filter={"type_filter": "creature", "exclude_subtypes": ["wall"]},
+    )
+    plain = DelayedTrigger(
+        0, event, gain, card=spell, bound_permanent_id=attacker.permanent_id,
+        once=False,
+    )
+    game.delayed_triggers = [narrows, plain]
+
+    assert matching_delayed_triggers(game, event, subject=attacker, agent=None) == [plain]
+
+    # …and the seam really makes that announcement: three combat damage to the
+    # face puts exactly the un-narrowed ability on the stack.
+    deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": attacker, "combat": True,
+    })
+    assert len(game.stack) == 1
+    # Noncombat damage from the same creature is not this event at all.
+    deal_damage(game, {
+        "recipient": game.players[1], "amount": 3, "source": attacker, "combat": False,
+    })
+    assert len(game.stack) == 1

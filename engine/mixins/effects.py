@@ -8,7 +8,9 @@ from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..control import base_controller
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
-from ..damage_events import EVENT_LOCK, damage_source_seat, deal_damage, lifelink_life_gained
+from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
+                             damage_source_seat, deal_damage,
+                             lifelink_life_gained)
 from ..events import emit
 from ..life_prohibitions import life_gain_banned
 from ..cast_restrictions import most_permanents_land_ban
@@ -522,6 +524,7 @@ class EffectsMixin:
     def _mark_damage_on_permanent(
         self, permanent, amount: int, source=None, combat: bool = False, *, then=None,
         restart=None, asks: bool = False, unpreventable: bool = False,
+        cant_be_prevented: bool = False,
     ) -> int:
         """Mark *amount* damage on a creature after applying its prevention
         shields. Returns the damage actually marked (0 if fully prevented).
@@ -532,6 +535,9 @@ class EffectsMixin:
         (``engine/damage_events.EVENT_LOCK``). A flag on the event and not on
         the creature, because the printed sentence is about the source's damage
         and Whippoorwill's marker would outlive it by a turn.
+        *cant_be_prevented* is the narrower sentence — "…and the damage can't
+        be prevented" (Urza's Rage) — which switches off prevention alone and
+        is not limited to a creature (``EVENT_PREVENTION_LOCK``).
 
         ``then`` is what the caller would otherwise do with the returned number
         — see ``_deal_damage_to_player`` for why it is a callback and not a
@@ -550,6 +556,7 @@ class EffectsMixin:
                 self._mark_damage_on_permanent(
                     permanent, amount, source=source, combat=combat, then=then,
                     asks=True, unpreventable=unpreventable,
+                    cant_be_prevented=cant_be_prevented,
                 )
 
         event = {
@@ -558,6 +565,8 @@ class EffectsMixin:
         }
         if unpreventable:
             event[EVENT_LOCK] = True
+        if cant_be_prevented:
+            event[EVENT_PREVENTION_LOCK] = True
         outcome = deal_damage(self, event, restart=restart)
         if outcome.suspended:
             return 0
@@ -1409,7 +1418,7 @@ class EffectsMixin:
 
     def _deal_damage_to_player(
         self, target: PlayerState, amount: int, source=None, *, then=None, restart=None,
-        asks: bool = False,
+        asks: bool = False, cant_be_prevented: bool = False,
     ) -> int:
         """Deal damage to a player and fire 'whenever you're dealt damage'
         triggers (e.g. Lich). ``source`` (a Permanent or spell CardDefinition)
@@ -1443,6 +1452,11 @@ class EffectsMixin:
         the event. Pass ``restart`` yourself when the re-run has to be wider
         than this call: the combat damage step does, because it applies the life
         loss and tallies lifelink from the same outcome.
+
+        ``cant_be_prevented`` marks the event as one no prevention effect may
+        apply to — "…and the damage can't be prevented" (Urza's Rage) — through
+        ``damage_events.EVENT_PREVENTION_LOCK``. The creature seam takes the
+        same flag; a sentence about "the damage" is about both recipients.
         """
         # Protection from the source's *name* (Runed Halo, CR 702.16i) used to be
         # read here, ahead of the face-up flip and ahead of every shield, under
@@ -1466,14 +1480,14 @@ class EffectsMixin:
             # not recorded anywhere and would be lost.
             def restart():
                 self._deal_damage_to_player(
-                    target, amount, source, then=then, asks=True
+                    target, amount, source, then=then, asks=True,
+                    cant_be_prevented=cant_be_prevented,
                 )
 
-        outcome = deal_damage(
-            self,
-            {"recipient": target, "amount": amount, "source": source, "combat": False},
-            restart=restart,
-        )
+        event = {"recipient": target, "amount": amount, "source": source, "combat": False}
+        if cant_be_prevented:
+            event[EVENT_PREVENTION_LOCK] = True
+        outcome = deal_damage(self, event, restart=restart)
         if outcome.suspended:
             return 0
         if outcome.dealt > 0:

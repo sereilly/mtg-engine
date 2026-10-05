@@ -504,12 +504,23 @@ def lower_statement(
     if isinstance(statement, ast.GainKeyword):
         return _lower_gain_keyword(statement, event, event_subject, produced)
     if isinstance(statement, ast.CreateDelayedTrigger):
-        return _lower_create_delayed_trigger(statement, lower_statement(
+        created = _lower_create_delayed_trigger(statement, lower_statement(
             # The delay's own noun phrase is the created ability's narrowing —
             # its ``agent`` where the phrase names the pair's *other* half.
             statement.effect, produced, event=statement.event, whole_effect=True,
             event_subject=statement.subject or statement.agent,
         ), produced, creating_event=event, creating_event_subject=event_subject)
+        if statement.created_if is None:
+            return created
+        # "…, **if this spell was kicked,** you gain life equal to that
+        # damage." (Vigorous Charge.) Asked as the ability is created, under
+        # the *creating* effect's event: the condition is a fact about the
+        # spell resolving now, not about the damage the entry will wait for.
+        return (OracleInstruction("if_then", "", {
+            "condition": _lower_condition(statement.created_if, produced, event),
+            "then": created,
+            "else": (),
+        }),)
 
     if isinstance(statement, ast.NextDrawReplacement):
         # The inner sentence is lowered under *this* line's event, not the

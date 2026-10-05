@@ -330,6 +330,7 @@ def shield_candidates() -> list[Candidate]:
             # Every entry in this file is CR 615 prevention by construction,
             # which is what "can't be prevented" (Whippoorwill) switches off.
             prevents_or_redirects=True,
+            prevents=True,
         )
         for c in PREVENTION_EFFECTS
     ]

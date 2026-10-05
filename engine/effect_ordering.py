@@ -85,6 +85,12 @@ class Candidate:
     # is added and the failure is silent: the lock would quietly stop being a
     # lock over whatever was added last.
     prevents_or_redirects: bool = False
+    # The narrower half of the same clause, for the sentence that prints only
+    # that half: "…and the damage **can't be prevented**" (Urza's Rage) switches
+    # off CR 615 prevention and leaves a CR 614.9 redirect standing — Jade
+    # Monolith may still take the ten. Every ``prevents`` contender is also a
+    # ``prevents_or_redirects`` one; the reverse is what this field is for.
+    prevents: bool = False
     #: What this effect does to the **amount** of the event, for the two shapes
     #: whose best order depends on each other: :data:`CAP` ("if a source would
     #: deal 3 or more damage, it deals 2 instead" — Forethought Amulet, Divine
