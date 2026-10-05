@@ -259,6 +259,53 @@ def test_w1g5_the_animation_table_reads_every_printed_word(set_pool):
     assert _w1g5_shape(game, 1)["Forest"][0] is False
 
 
+def test_w1g5_multanis_harmony_gives_its_creature_a_mana_ability(set_pool):
+    """'Enchanted creature has "{T}: Add one mana of any color."' Supported on
+    arrival and never run. The creature — not the Aura — taps for the colour
+    named, as a mana ability (no stack), and the ability is gone with the
+    Aura (CR 611.3b)."""
+    from engine.targeting import usable_activated_abilities
+
+    pls, lea = set_pool("PLS"), set_pool("LEA")
+    me = _W1G5PlayerState(
+        name="W1G5-A",
+        battlefield=[_W1G5Permanent(card=lea["Grizzly Bears"])],
+        hand=[pls["Multani's Harmony"]],
+    )
+    game = _W1G5Game(players=[me, _W1G5PlayerState(name="W1G5-B")])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    (bears,) = list(game.controlled_by(0))
+    bears.metadata["summoning_sickness_turn"] = -99
+
+    def granted():
+        return [
+            ability.source_line.lower() for ability in usable_activated_abilities(
+                _w1g5_compile(game.playable_card_of(bears))
+            )
+        ]
+
+    assert granted() == []
+    assert game.cast_from_hand(
+        0, "Multani's Harmony", target_player_index=0,
+        target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert granted() == ["{t}: add one mana of any color."]
+
+    result = game.activate_permanent_ability(
+        0, "Grizzly Bears",
+        permanent_index=game.battlefield_index_of(bears), mana_color="U",
+    )
+    assert result.supported and bears.tapped and not game.stack
+    assert {s: n for s, n in me.mana_pool.items() if n} == {"U": 1}
+
+    (harmony,) = [p for p in game.controlled_by(0) if p.card.name == "Multani's Harmony"]
+    game._remove_aura_effects(harmony)
+    game.remove_from_battlefield(harmony)
+    game._recompute_continuous_effects()
+    assert granted() == []
+
+
 @_w1g5_pytest.mark.slow
 def test_w1g5_emergence_blessing_and_compass_in_simulated_games(set_pool):
     """Whole games with this group's three spells pinned into both decks —

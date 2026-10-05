@@ -442,7 +442,14 @@ def _produce_one_color(
     # depend on who was asked.
     spend_only = instruction.payload.get("spend_only")
     seat = game.players.index(caster) if caster in game.players else None
-    colors = list(available) if available else ["W", "U", "B", "R", "G"]
+    # In WUBRG order (then colourless), whatever *available* is: three of this
+    # function's callers hand over a frozenset, and a set of one-letter strings
+    # iterates in an order that changes from process to process — so the same
+    # Fellwar Stone offered "U, B, R" on one run and "R, B, U" on the next.
+    colors = (
+        [c for c in ("W", "U", "B", "R", "G", "C") if c in available]
+        if available else ["W", "U", "B", "R", "G"]
+    )
     if named is None and seat is not None and amount > 0 and len(colors) > 1:
         armed = game.arm_pending_choice(
             "mana_color_choice", seat,

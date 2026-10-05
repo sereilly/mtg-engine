@@ -29,7 +29,7 @@ from engine.ai_valuation import entry_sacrifice_is_unavoidable
 from engine.card_loader import manifest_set_paths
 from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle
+from engine.oracle import compiled_units
 
 
 @pytest.fixture(scope="module")
@@ -58,10 +58,10 @@ def _mixed_run_lands(pool) -> list[str]:
     """Every shipped land whose tap-alone mana ability makes a fixed run of two
     or more different symbols."""
     found = []
-    for card in pool.values():
+    for card, program in compiled_units(pool.values()):
         if card.primary_type != "land":
             continue
-        for ability in compile_card_oracle(card).activated_abilities:
+        for ability in program.activated_abilities:
             if ability.instruction is None or not is_tap_alone_mana_ability(ability):
                 continue
             pips = (ability.instruction.payload or {}).get("pips")

@@ -457,6 +457,113 @@ def test_w1g5_meteor_crater_pays_for_a_real_spell(set_pool):
     assert _w1g5_floating(game) == {}
 
 
+# -- supported on arrival, driven ----------------------------------------------
+
+
+def _w1g5_forsaken_city_at_upkeep(set_pool, *, interactive):
+    """Forsaken City played, tapped for mana, and carried through the
+    opponent's turn into its controller's next upkeep. Both libraries are
+    Swamps so every draw step has a card."""
+    lea, pls = set_pool("LEA"), set_pool("PLS")
+    me = _W1G5PlayerState(
+        name="W1G5-A", hand=[lea["Grizzly Bears"], pls["Forsaken City"]],
+        library=[lea["Swamp"]] * 8,
+    )
+    you = _W1G5PlayerState(name="W1G5-B", library=[lea["Swamp"]] * 8)
+    game = _W1G5Game(players=[me, you])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    assert game.cast_from_hand(0, "Forsaken City").supported
+    city = _w1g5_named(game, 0, "Forsaken City")
+    assert game.tap_land_for_mana(0, "Forsaken City", "W", permanent_id=city.permanent_id)
+    assert _w1g5_floating(game) == {"W": 1}, "any color: white, as asked"
+    game.clear_mana_pools()
+    game.start_next_turn()
+    game.start_next_turn()
+    return game, city  # _w1g5_forsaken_city_at_upkeep
+
+
+def test_w1g5_forsaken_city_stays_tapped_unless_a_card_is_exiled(set_pool):
+    """"This land doesn't untap during your untap step. At the beginning of
+    your upkeep, you may exile a card from your hand. If you do, untap this
+    land." Supported on arrival and never run across a turn. The City is still
+    tapped after its controller's untap step; the upkeep offer is put to the
+    seat; exiling a card untaps it and declining leaves it tapped with the
+    hand intact."""
+    game, city = _w1g5_forsaken_city_at_upkeep(set_pool, interactive={0})
+    assert city.tapped, "it did not untap in the untap step"
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is not None
+    assert city.tapped, "not before a card is exiled"
+    held = [card.name for card in game.players[0].hand]
+    assert game.confirm_exile_from_hand_choice(0, held.index("Grizzly Bears"))
+    assert not city.tapped
+    assert "Grizzly Bears" not in [card.name for card in game.players[0].hand]
+    assert "Grizzly Bears" in [getattr(c, "name", c) for c in game.players[0].exile]
+
+    game, city = _w1g5_forsaken_city_at_upkeep(set_pool, interactive={0})
+    before = [card.name for card in game.players[0].hand]
+    assert game.confirm_optional_pay(0, accept=False)
+    assert city.tapped
+    assert [card.name for card in game.players[0].hand] == before
+
+
+def test_w1g5_terminal_moraine_fetches_a_basic_land_tapped(set_pool):
+    """"{2}, {T}, Sacrifice this land: Search your library for a basic land
+    card, put that card onto the battlefield tapped, then shuffle." Supported
+    on arrival and never run. Without the {2} it is refused and the Moraine
+    is not sacrificed; paid, the Moraine is in the graveyard before the
+    ability resolves, only a *basic* land is a legal find (not a dual, not a
+    creature), and it arrives tapped. Its first ability taps for {C}."""
+    def moraine(**extra):
+        game = _w1g5_table(
+            set_pool, mine=["Terminal Moraine", "Forest", "Mountain"],
+            costs=True, **extra,
+        )
+        lea = set_pool("LEA")
+        game.players[0].library = [
+            lea["Grizzly Bears"], lea["Underground Sea"], lea["Plains"], lea["Swamp"],
+        ]
+        return game, _w1g5_named(game, 0, "Terminal Moraine")
+
+    game, land = moraine()
+    assert game.tap_land_for_mana(0, "Terminal Moraine", "G", permanent_id=land.permanent_id)
+    assert _w1g5_floating(game) == {"C": 1}
+
+    game, land = moraine()
+    slot = game.battlefield_index_of(land)
+    refused = game.activate_permanent_ability(
+        0, "Terminal Moraine", permanent_index=slot, ability_index=1
+    )
+    assert not refused.supported and game.is_on_battlefield(land)
+
+    game, land = moraine(interactive={0})
+    for name in ("Forest", "Mountain"):
+        game.tap_land_for_mana(0, name, "G")
+    assert game.activate_permanent_ability(
+        0, "Terminal Moraine", permanent_index=game.battlefield_index_of(land),
+        ability_index=1,
+    ).supported
+    assert not game.is_on_battlefield(land), "sacrificed as the cost"
+    assert [card.name for card in game.players[0].graveyard] == ["Terminal Moraine"]
+    game.resolve_top_of_stack()
+    assert game.pending_choice_of("search_library", 0) is not None
+    library = [card.name for card in game.players[0].library]
+    assert not game.confirm_search_library(0, library.index("Grizzly Bears"))
+    assert not game.confirm_search_library(0, library.index("Underground Sea"))
+    assert game.confirm_search_library(0, library.index("Plains"))
+
+    plains = _w1g5_named(game, 0, "Plains")
+    assert plains.tapped
+    assert sorted(card.name for card in game.players[0].library) == [
+        "Grizzly Bears", "Swamp", "Underground Sea",
+    ]
+    assert not game.stack and not game.pending_choices
+
+
 @_w1g5_pytest.mark.slow
 def test_w1g5_the_lairs_and_the_crater_in_simulated_games(set_pool):
     """Whole games with a Lair and a Meteor Crater pinned into both decks:

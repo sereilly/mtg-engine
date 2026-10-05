@@ -169,3 +169,50 @@ def test_w1g5_a_typed_mass_keyword_grant_is_one_production(set_pool):
     assert _w1g5_shrouded(game) == {
         "0:Sol Ring": True, "0:Forest": False, "1:Sol Ring": False,
     }
+
+    # Two card types at once, which the lowering used to refuse outright
+    # (`tests/engine/test_grammar_lowering.py` pinned the refusal): only the
+    # permanent that is both gets the keyword.
+    both = _w1g5_mk_card(
+        name="Gearlift", mana_cost="{U}", type_line="Instant",
+        oracle_text="Artifact creatures you control gain flying until end of turn.",
+    )
+    game = _w1g5_blessing_table(
+        set_pool, mine=["Obsianus Golem", "Sol Ring", "Grizzly Bears"],
+        theirs=["Obsianus Golem"],
+    )
+    game.players[0].hand.append(both)
+    assert game.cast_from_hand(0, "Gearlift").supported
+    _w1g5_resolve_stack(game)
+    assert {
+        f"{seat}:{permanent.card.name}": game._has_keyword(permanent, "flying")
+        for seat, permanent in game.permanents_with_controller()
+    } == {
+        "0:Obsianus Golem": True, "0:Sol Ring": False, "0:Grizzly Bears": False,
+        "1:Obsianus Golem": False,
+    }
+
+
+def test_w1g5_the_blessing_in_response_saves_the_land_and_implode_draws_nothing(set_pool):
+    """The two cards on one stack. Implode names an opponent's Forest; the
+    Blessing resolves first and the Forest has shroud, so when Implode comes
+    to resolve its only target is illegal and it is removed from the stack
+    with neither sentence performed (CR 608.2b) — the Forest survives and the
+    one card drawn is the Blessing's."""
+    game = _w1g5_blessing_table(
+        set_pool, theirs=["Forest"], hand=["Implode"], library=["Swamp", "Plains"],
+    )
+    (forest,) = list(game.controlled_by(1))
+    assert game.queue_from_hand(
+        0, "Implode", target_player_index=1,
+        target_permanent_ids=[forest.permanent_id],
+    ).supported
+    assert game.queue_from_hand(0, "Skyshroud Blessing").supported
+    _w1g5_resolve_stack(game)
+
+    assert game.is_on_battlefield(forest)
+    assert len(game.players[0].hand) == 1, "one draw, not two"
+    assert sorted(card.name for card in game.players[0].graveyard) == [
+        "Implode", "Skyshroud Blessing",
+    ]
+

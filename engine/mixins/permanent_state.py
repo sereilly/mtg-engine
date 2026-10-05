@@ -3770,8 +3770,6 @@ class PermanentStateMixin:
             if not animation.keywords:
                 continue
             for target_perm in all_perms:
-                if target_perm.card.primary_type != "land":
-                    continue
                 if not land_animation_reaches(
                     self, source_perm, animation, target_perm
                 ):

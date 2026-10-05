@@ -211,3 +211,45 @@ def test_w1g5_a_derived_land_is_read_through_and_never_as_five_colours(set_pool)
     game, compass = _w1g5_compass(set_pool, mine=["Reflecting Pool", "Forest"])
     _w1g5_compass_tap(game, compass, "W")
     assert _w1g5_floating(game) == {"G": 1}
+
+
+def test_w1g5_mana_cylix_is_a_mana_ability_that_costs_a_mana(set_pool):
+    """"{1}, {T}: Add one mana of any color." Supported on arrival and never
+    run. A mana ability with a mana cost (CR 605.1a asks what it does, not
+    what it costs): with nothing floating it is refused and the Cylix stays
+    untapped; with one mana floating it turns a Mountain's red into the blue
+    that casts a Merfolk, without the stack."""
+    pls, lea = set_pool("PLS"), set_pool("LEA")
+    (ability,) = _w1g5_compile(pls["Mana Cylix"]).activated_abilities
+    assert _w1g5_is_mana_ability(ability)
+    assert ability.cost.mana["generic"] == 1 and ability.cost.requires_tap
+
+    me = _W1G5PlayerState(
+        name="W1G5-A",
+        battlefield=[
+            _W1G5Permanent(card=pls["Mana Cylix"]),
+            _W1G5Permanent(card=lea["Mountain"]),
+        ],
+        hand=[lea["Merfolk of the Pearl Trident"]],
+    )
+    game = _W1G5Game(players=[me, _W1G5PlayerState(name="W1G5-B")])
+    game.enforce_mana_costs = True
+    game.active_player_index = 0
+    (cylix, mountain) = list(game.controlled_by(0))
+
+    def filter_for(color):
+        return game.activate_permanent_ability(
+            0, "Mana Cylix",
+            permanent_index=game.battlefield_index_of(cylix), mana_color=color,
+        )
+
+    refused = filter_for("U")
+    assert not refused.supported and not cylix.tapped
+    assert game.tap_land_for_mana(0, "Mountain", "R", permanent_id=mountain.permanent_id)
+    assert filter_for("U").supported
+    assert cylix.tapped and not game.stack
+    assert _w1g5_floating(game) == {"U": 1}
+    assert game.cast_from_hand(0, "Merfolk of the Pearl Trident").supported
+    _w1g5_resolve_stack(game)
+    assert _w1g5_floating(game) == {}
+

@@ -144,6 +144,42 @@ def _stated_symbols(card) -> set[str]:
     return stated
 
 
+def _color_choice_amongs(card) -> tuple[dict, ...]:
+    """The ``among`` filters of every narrowed colour choice *card*'s mana
+    abilities make for their own controller — "Choose a color **of a permanent
+    you control**. Add one mana of that color." (Meteor Crater.)
+
+    The other shape whose colours the board defines, and not a "could produce"
+    clause: it reads permanents' *colours*, never another land's production,
+    so it takes no part in the fixpoint and is answered outright.
+    """
+    from .mana_payment import _every_nested_step, is_mana_ability
+    from .oracle import compile_card_oracle
+
+    found: list[dict] = []
+    for ability in compile_card_oracle(card).activated_abilities:
+        instruction = ability.instruction
+        if instruction is None or not ability.supported or not is_mana_ability(ability):
+            continue
+        for step in (instruction, *_every_nested_step(instruction)):
+            payload = step.payload or {}
+            if step.kind == "choose_color" and payload.get("among") and not payload.get("chooser"):
+                found.append(payload["among"])
+    return tuple(found)
+
+
+def _colors_chosen_among(game, seat: int, source, amongs) -> set[str]:
+    """Every colour the narrowed choices *amongs* would offer *seat* now."""
+    from .object_colors import colors_among_described
+
+    offered: set[str] = set()
+    for described in amongs:
+        offered.update(
+            colors_among_described(game, described, observer=seat, source=source)
+        )
+    return offered
+
+
 def derived_producer_board(card) -> str | None:
     """Which board *card*'s own mana production is derived from, or None.
 
@@ -208,6 +244,20 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
                 # rather than off ``produced_mana``, which for a derived land
                 # is Scryfall's list of everything the clause could ever name.
                 answer[perm.permanent_id] = _stated_symbols(perm.effective_card)
+                continue
+            amongs = (
+                () if lost_abilities_to_type_change(perm)
+                else _color_choice_amongs(perm.effective_card)
+            )
+            if amongs:
+                # Meteor Crater's shape: what it could produce is a colour of a
+                # permanent its controller has *now*, and with none it could
+                # produce nothing — where its printed summary says all five,
+                # which an opponent's Quirion Explorer or Fellwar Stone would
+                # then read as five colours on offer.
+                answer[perm.permanent_id] = _stated_symbols(
+                    perm.effective_card
+                ) | _colors_chosen_among(game, seat, perm, amongs)
             else:
                 answer[perm.permanent_id] = {
                     str(symbol).upper() for symbol in perm.effective_produced_mana
@@ -314,7 +364,6 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
     The seat is the permanent's controller, through the control seam (CR 109.5).
     """
     from .mana_payment import _every_nested_step
-    from .object_colors import colors_among_described
 
     seat = game.controller_index_of(permanent)
     if seat is None or instruction is None:
@@ -332,9 +381,7 @@ def ability_colors_on_offer(game, permanent, instruction) -> "tuple[str, ...] | 
             step.payload.get("chooser")
         ):
             found = frozenset(
-                colors_among_described(
-                    game, step.payload["among"], observer=seat, source=permanent
-                )
+                _colors_chosen_among(game, seat, permanent, (step.payload["among"],))
             )
         else:
             continue
