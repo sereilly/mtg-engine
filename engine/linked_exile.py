@@ -151,6 +151,33 @@ def linked_entries(source: "Permanent | None") -> tuple[dict[str, Any], ...]:
     return tuple(source.metadata.get(RECORD_KEY) or ())
 
 
+def take_linked_entry_at(
+    source: "Permanent | None", position: int
+) -> dict[str, Any] | None:
+    """Remove and return the entry at *position* in *source*'s record, leaving
+    every other entry where it was — or None when there is no such entry.
+
+    One card out of a pile that stays a pile: "Return **a card** you own exiled
+    with this artifact to your hand" (Gustha's Scepter) names the position its
+    controller picked, and "Choose a card **at random** that was exiled with
+    Skyship Weatherlight" names the one chance did. Both are positions into
+    :func:`linked_entries` rather than cards, for the reason the whole record
+    is entries: two copies of one card in a deck are the same
+    ``CardDefinition`` object, so a card cannot say which entry is meant.
+    """
+    if source is None:
+        return None
+    held = list(source.metadata.get(RECORD_KEY) or ())
+    if not 0 <= position < len(held):
+        return None
+    taken = held.pop(position)
+    if held:
+        source.metadata[RECORD_KEY] = held
+    else:
+        source.metadata.pop(RECORD_KEY, None)
+    return taken
+
+
 def take_linked_entries(
     source: "Permanent | None", *, ending: str | None = None
 ) -> list[dict[str, Any]]:

@@ -1002,17 +1002,60 @@ def _cap_damage_from_source_class(game, payload: dict) -> ReplacementOutcome | N
 #: either CR 616.1 order: addition commutes, and the clamp at zero is reached
 #: only from below.
 #:
-#: The recipient phrase is **not** payload and is spelled out twice with a
-#: backreference, because the two halves of the sentence have to name the same
-#: thing: a card reducing damage to a permanent and then dealing the reduced
-#: amount to a *player* is not this effect, and matching the two independently
-#: would read it as though it were.
+#: The recipient phrase is spelled out twice, because the two halves of the
+#: sentence have to name the same thing: a card reducing damage to a permanent
+#: and then dealing the reduced amount to a *player* is not this effect, and
+#: matching the two independently would read it as though it were. Which
+#: second half answers which first half is :data:`_DELTA_RECIPIENTS`.
 _SOURCE_DAMAGE_DELTA = re.compile(
     r"^if an? (?P<source_class>[a-z ]+?) would deal damage to a "
-    r"(?P<recipients>permanent or player|creature or player), it deals that "
+    r"(?P<recipients>permanent or player|creature or player|"
+    r"creature you control), it deals that "
     r"much damage (?P<direction>minus|plus) (?P<points>\d+) to that "
-    r"(?P=recipients) instead$"
+    r"(?P<echo>permanent or player|creature or player|creature) instead$"
 )
+
+#: Who a delta line covers, by the printed phrase behind "to a": the words the
+#: second half must echo it with, and the noun phrase the damaged object has to
+#: answer — as a filter payload ``subject_matches`` reads — or None where the
+#: sentence narrows nothing ("a permanent or player" is every recipient a
+#: damage event has).
+#:
+#: "…to **a creature you control**, … to **that creature** instead" (Lashknife
+#: Barrier) is the first narrowed printing, and the narrowing is the whole
+#: card: the seat is the Barrier's own controller (CR 109.5), so an opponent's
+#: creature is hit for the printed amount and a player always is. A phrase
+#: rather than a second pattern, for the reason the source class and the
+#: direction are payload — it is the same sentence with one clause changed,
+#: and a second interceptor would be a second answer to "how much does this
+#: event become".
+_DELTA_RECIPIENTS: dict[str, tuple[str, dict | None]] = {
+    "permanent or player": ("permanent or player", None),
+    "creature or player": ("creature or player", None),
+    "creature you control": (
+        "creature", {"type_filter": "creature", "controller": "you"},
+    ),
+}
+
+
+def _read_damage_delta(line: str) -> tuple[str, int, dict | None] | None:
+    """``(source class, signed points, protected phrase)`` for a delta line.
+
+    The one reader of the sentence; :func:`source_damage_delta` is its first
+    two answers, which is everything the unnarrowed printings have.
+    """
+    match = _SOURCE_DAMAGE_DELTA.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    if match is None:
+        return None
+    echo, protected = _DELTA_RECIPIENTS[match.group("recipients")]
+    if match.group("echo") != echo:
+        return None
+    points = int(match.group("points"))
+    return match.group("source_class"), (
+        -points if match.group("direction") == "minus" else points
+    ), protected
 
 
 def source_damage_delta(line: str) -> tuple[str, int] | None:
@@ -1032,15 +1075,44 @@ def source_damage_delta(line: str) -> tuple[str, int] | None:
     ("a spell", "a red spell"), not a list of card types to be split, so a
     class nobody reads is a typo in this file rather than a card the pool
     prints.
+
+    Which recipients the line covers is :func:`damage_delta_recipients`.
     """
-    match = _SOURCE_DAMAGE_DELTA.match(
-        " ".join((line or "").strip().lower().rstrip(".").split())
-    )
-    if match is None:
-        return None
-    points = int(match.group("points"))
-    return match.group("source_class"), (
-        -points if match.group("direction") == "minus" else points
+    read = _read_damage_delta(line)
+    return None if read is None else read[:2]
+
+
+def damage_delta_recipients(line: str) -> dict | None:
+    """The noun phrase a delta line's damaged object must answer, as a filter
+    payload — or None, both for a line that narrows nothing and for a line
+    that is not a delta at all (ask :func:`source_damage_delta` first).
+
+    "…to **a creature you control**" (Lashknife Barrier). Relative to the seat
+    controlling the permanent that prints it, which the caller supplies as the
+    observer.
+    """
+    read = _read_damage_delta(line)
+    return None if read is None else read[2]
+
+
+def _delta_covers(game, holder, recipient, protected: dict | None) -> bool:
+    """Whether *holder*'s delta line reaches a damage event on *recipient*.
+
+    Asked through ``subject_matches`` with the holder's controller as the
+    observer, so "a creature" is layer 4's answer and "you control" is layer
+    2's — a land animated this turn is covered, a creature stolen this turn is
+    covered by its new controller's Barrier and not by its old one. A player
+    is never an object a noun phrase describes, so a narrowed line never
+    covers one.
+    """
+    if protected is None:
+        return True
+    if not _is_permanent(recipient):
+        return False
+    from .subject_filters import subject_matches
+
+    return subject_matches(
+        game, recipient, protected, observer=game.controller_index_of(holder),
     )
 
 
@@ -1066,13 +1138,22 @@ def _spell_damage_delta(game, payload: dict) -> int:
     total = 0
     for permanent in game.all_permanents():
         for line in (permanent.effective_card.oracle_text or "").splitlines():
-            read = source_damage_delta(line)
+            read = _read_damage_delta(line)
             if read is None:
                 continue
-            source_class, points = read
+            source_class, points, protected = read
             if not _source_answers_class(
                 game, payload.get("source"), source_class,
                 payload.get("source_seat"),
+            ):
+                continue
+            # "…to **a creature you control**" (Lashknife Barrier): the one
+            # printing that narrows the recipient, so two Barriers under two
+            # controllers each shave their own side's creatures and nobody
+            # else's. Summed like every other line here — two under one
+            # controller are minus 2, in either CR 616.1 order.
+            if not _delta_covers(
+                game, permanent, payload.get("recipient"), protected
             ):
                 continue
             total += points
@@ -1108,13 +1189,21 @@ def _shift_spell_damage(game, payload: dict) -> ReplacementOutcome | None:
 
     One interceptor on both recipient kinds, because "a permanent or player" is
     one sentence and a second copy is two answers to it.
+
+    Lashknife Barrier: "If **a source** would deal damage to **a creature you
+    control**, it deals that much damage minus 1 to that creature instead." The
+    same sentence with both ends changed, and both are parameters of the one
+    reader (``_read_damage_delta``) rather than a second interceptor: any
+    source at all, combat damage included, and only the Barrier's controller's
+    creatures. Per recipient, because a damage event is per recipient — a
+    sweep dealing 2 to each creature is 1 to each of that side's.
     """
     delta = _spell_damage_delta(game, payload)
     shifted = max(0, int(payload["amount"]) + delta)
     recipient = payload["recipient"]
     game.log.append(
         f"{getattr(recipient, 'name', None) or recipient.card.name} takes "
-        f"{shifted} damage instead of {payload['amount']} (spell damage "
+        f"{shifted} damage instead of {payload['amount']} (damage "
         f"{'reduced by' if delta < 0 else 'increased by'} {abs(delta)})"
     )
     return ReplacementOutcome(new_amount=shifted)
@@ -1151,6 +1240,14 @@ def _source_answers_class(
         source_class = rest
     if source_class == "unblocked creatures":
         return _unblocked_attacker(source)
+    if source_class == "source":
+        # "If **a source** would deal damage to a creature you control…"
+        # (Lashknife Barrier). CR 609.7's widest class and no narrowing at
+        # all: a spell, an ability's permanent and a creature in combat are
+        # each a source, so nothing is asked of it — the reading the cap one
+        # function up already gives Divine Presence's identical two words.
+        # A colour word in front ("a red source") was peeled and tested above.
+        return True
     if source_class == "spell":
         return _source_is_a_spell(game, source)
     from .prevention import source_has_type

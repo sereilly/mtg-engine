@@ -174,6 +174,12 @@ def _lower_put_exiled_with_source(
                 "'all other cards' names an exile this effect did not perform",
                 node=node,
             )
+    if node.at_random and not node.chosen:
+        # A sweep moves the whole pile, so there is nothing for chance to
+        # pick; the word on one is a sentence no card prints.
+        raise LoweringError(
+            "'at random' picks one card out of a linked exile", node=node
+        )
     payload: dict[str, object] = {"zone": zone.name}
     if node.others_only:
         payload["others_only"] = True
@@ -197,6 +203,13 @@ def _lower_put_exiled_with_source(
         payload["under_control_of"] = "chooser"
     if node.chosen:
         payload["one_of"] = True
+        if node.at_random:
+            # "Choose a card **at random** that was exiled with Skyship
+            # Weatherlight." Nobody picks, so the handler arms no prompt —
+            # carried as a word on the one-card form rather than as a kind,
+            # because the pile, the destination and the drain of exactly one
+            # entry are all that form's.
+            payload["at_random"] = True
         # "…a card **you own**…" (Gustha's Scepter) narrows the pile to the
         # chooser's own cards; Purgatory prints no such clause and its pile
         # holds every card the enchantment exiled. A narrowing applied where the

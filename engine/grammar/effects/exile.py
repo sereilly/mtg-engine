@@ -466,6 +466,44 @@ def _parse_put_exiled_with_source(stream: TokenStream) -> ast.Statement | None:
     )
 
 
+def _parse_random_exiled_with_source(
+    stream: TokenStream,
+) -> "ast.PutExiledWithSource | None":
+    """``Choose a card at random that was exiled with <this permanent>. Put
+    that card into its owner's hand.`` (Skyship Weatherlight.)
+
+    Two printed sentences and one effect, read together for the reason every
+    "choose" in this grammar is: the first performs nothing on its own, and
+    "that card" in the second names what the first picked and nothing else.
+    The same CR 607.2a linked pile :func:`_parse_put_exiled_with_source` reads
+    — one card out of it, as Gustha's Scepter's is, with the pick made by
+    nobody.
+
+    Every word is required, the self-reference included: "exiled with" another
+    permanent is a pile this cannot find. Returns None with the cursor
+    untouched on anything else, so every other "choose" sentence keeps the
+    reading it has.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_phrase(
+            "choose", "a", "card", "at", "random", "that", "was", "exiled",
+            "with",
+        )
+        and _accept_self_reference(stream)
+        and stream.accept_punct(".")
+        and stream.accept_phrase("put", "that", "card", "into")
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        zone = _parse_zone(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    return ast.PutExiledWithSource(zone, chosen=True, at_random=True)
+
+
 def _parse_player_returns_exiled_with_source(
     stream: TokenStream, player: "ast.PlayerRef"
 ) -> "ast.PutExiledWithSource | None":

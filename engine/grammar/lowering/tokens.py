@@ -25,7 +25,8 @@ from ..errors import LoweringError
 from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, _back_reference_payload)
-from ._record_keys import _RECORDED_PERMANENTS
+from ._record_keys import (LOOP_BOUND_OBJECT, SWEPT_CONTROLLER_SEATS,
+                           _RECORDED_PERMANENTS)
 from ._amounts import count_spec, printed_count_spec
 from ._common import (
     _amount_payload, _describe_targets, _restrictions_beyond,
@@ -42,6 +43,7 @@ def _stamp_token_recipient(
     payload: dict[str, object],
     node: "ast.CreateToken | ast.CreateCopyToken",
     event: str | None,
+    produced: frozenset[str] = frozenset(),
 ) -> None:
     """Who creates the token, as payload — shared by both token makers.
 
@@ -96,6 +98,23 @@ def _stamp_token_recipient(
         # player" read. Under an event that froze no controller the words name
         # nobody, and the token would otherwise go to the ability's controller:
         # refused rather than defaulted.
+        if LOOP_BOUND_OBJECT in produced and SWEPT_CONTROLLER_SEATS in produced:
+            # "For each creature destroyed this way, **its controller** creates
+            # a 1/1 white Spirit creature token with flying." (March of Souls.)
+            # Inside an object loop the possessive names the object the
+            # *iteration* is on, and its seat comes off the per-object map the
+            # sweep froze before anything left (CR 608.2h) — the record and the
+            # reading "its controller draws a card" (Martyr's Cry) and "its
+            # controller gains life" (Seeds of Innocence) already make.
+            #
+            # Read before the frozen-event branch below for the reason the
+            # sacrifice lowering gives: a loop binds the pronoun more tightly
+            # than the firing event does. Gated on the marker as well as the
+            # record, because any sweep at all writes the record — without the
+            # marker "Destroy all creatures. Its controller creates a token."
+            # would compile to a per-iteration read with no iteration round it.
+            payload["recipient_iteration_seat"] = SWEPT_CONTROLLER_SEATS
+            return
         if event not in _EVENT_SUBJECT_CONTROLLERS:
             raise LoweringError(
                 f"no event named {event!r} freezes the seat 'its controller' "
@@ -163,7 +182,7 @@ def _lower_create_copy_token(
             bound: dict[str, object] = {
                 "count": _amount_payload(node.count), "copied": "event_subject",
             }
-            _stamp_token_recipient(bound, node, event)
+            _stamp_token_recipient(bound, node, event, produced)
             return (OracleInstruction("create_copy_token", "", bound),)
         if not recorded:
             raise LoweringError(
@@ -191,7 +210,7 @@ def _lower_create_copy_token(
             "count": _amount_payload(node.count),
             "permanents_from": recorded[0],
         }
-        _stamp_token_recipient(recorded_payload, node, event)
+        _stamp_token_recipient(recorded_payload, node, event, produced)
         return (OracleInstruction("create_copy_token", "", recorded_payload),)
     if node.subject.quantifier != "target":
         raise LoweringError("the copy token copies a chosen permanent", node=node)
@@ -205,7 +224,7 @@ def _lower_create_copy_token(
     if described:
         payload["filter"] = described
     _describe_targets(payload, node.subject)
-    _stamp_token_recipient(payload, node, event)
+    _stamp_token_recipient(payload, node, event, produced)
     return (OracleInstruction("create_copy_token", "", payload),)
 
 
@@ -375,7 +394,7 @@ def _lower_create_token(
                     f"nothing implements the token's ability {line!r}", node=node
                 )
         payload["oracle_text"] = chr(10).join(node.granted_lines)
-    _stamp_token_recipient(payload, node, event)
+    _stamp_token_recipient(payload, node, event, produced)
     count = _stamp_token_count(payload, node, produced)
     # "…that are tapped and attacking" (Basri Ket): entry state the handler
     # stamps as the tokens arrive.
