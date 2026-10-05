@@ -946,3 +946,99 @@ def test_a_narrowed_demonstrative_restates_nothing():
     assert restates_target(
         ast.TargetSpec("that", ast.ObjectFilter(card_types=("creature",))), bound
     )
+
+
+def _instead_pair_disagreement(line: str, card_name: str | None = None) -> str | None:
+    """None when *line* compiles to no two-armed "instead" pair, ``""`` when
+    its arms act on one object, else what differs between them."""
+    import re
+
+    from engine.oracle_types import OracleInstruction
+
+    text = re.sub(r"\([^)]*\)", "", line).strip()
+    lowered = text.lower()
+    # "Otherwise, … instead" is an if/otherwise whose "instead" belongs to a
+    # CR 614 replacement inside one arm (Soul Echo) — another production's.
+    if "instead" not in lowered or "otherwise" in lowered:
+        return None
+    compiled = compile_line(text, card_name=card_name)
+    if not compiled.usable:
+        return None
+
+    def walk(instructions):
+        for instruction in instructions or ():
+            if not isinstance(instruction, OracleInstruction):
+                continue
+            yield instruction
+            for value in instruction.payload.values():
+                yield from walk(
+                    (value,) if isinstance(value, OracleInstruction)
+                    else value if isinstance(value, (tuple, list)) else ()
+                )
+
+    def lead(arm):
+        # The action an arm performs, through one guard of its own (Prohibit).
+        if len(arm) != 1:
+            return None
+        step = arm[0]
+        if step.kind == "if_then" and not step.payload.get("else"):
+            inner = tuple(step.payload.get("then") or ())
+            return inner[0] if len(inner) == 1 else None
+        return step
+
+    found = None
+    for instruction in walk(compiled.instructions):
+        if instruction.kind != "if_then":
+            continue
+        then = tuple(instruction.payload.get("then") or ())
+        other = tuple(instruction.payload.get("else") or ())
+        if not then or not other:
+            continue
+        first, second = lead(then), lead(other)
+        if first is None or second is None:
+            found = found or ""
+            continue
+        if first.kind != second.kind:
+            return f"{first.kind} vs {second.kind}"
+        if first.payload.get("targets") != second.payload.get("targets"):
+            return "the arms describe different targets"
+        found = ""
+    return found
+
+
+def test_every_printed_instead_pair_acts_on_one_object():
+    """The census behind the fold, kept as a guard: every printed "A. If
+    <condition>, B instead." in the pool — both manifest roles — compiles to
+    two arms that lead with the same instruction kind and carry the identical
+    ``targets`` description (CR 601.2c: one announcement, whichever arm
+    resolves).
+
+    Validated backwards when it was written: the invented line below compiled
+    on the pre-fold tree to ``pump_self`` on its replacement arm — the bare
+    "it" read as the ability's source — and this same reader named it there.
+    The floor is what makes a clean result a statement about something: the
+    reader found fifteen printed pairs the day it was written.
+    """
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    assert _instead_pair_disagreement(
+        "Target creature gets +1/+1 until end of turn. If you control a "
+        "Swamp, it gets +2/+2 until end of turn instead."
+    ) == ""
+
+    examined, disagreeing, seen = 0, [], set()
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            if card.name in seen:
+                continue
+            seen.add(card.name)
+            for line in (card.oracle_text or "").split("\n"):
+                verdict = _instead_pair_disagreement(line, card.name)
+                if verdict is None:
+                    continue
+                examined += 1
+                if verdict:
+                    disagreeing.append((card.name, verdict))
+
+    assert examined >= 12, f"the reader found only {examined} printed pairs"
+    assert not disagreeing, disagreeing
