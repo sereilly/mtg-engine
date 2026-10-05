@@ -11,6 +11,7 @@ from .ai_valuation import (
     SPELL_TYPES,
     CastOffer,
     cast_offers,
+    entry_trigger_target_side,
     ability_denies_its_target,
     ability_target_side,
     cards_drawn_by_controller,
@@ -1251,6 +1252,20 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             # and a pump with no friendly one landed on an opponent's: an
             # activation that resolves and harms the seat that paid for it.
             side = _activation_target_side(permanent, ability.instruction)
+            if spec.get("source_of_choice"):
+                # "…a source of your choice…" (CR 609.7a) is not a target, so
+                # no side describes it — and a shield's own category reads
+                # "you", which named the activator's own largest creature as
+                # the thing to be shielded *from* (Bone Mask, Dark Sphere,
+                # Kithkin Armor, Pentagram of the Ages, Protective Sphere,
+                # Righteous Aura). The cast side's answer, for the same phrase.
+                named = _choose_damage_source(game, player_index, perms)
+                if not named:
+                    continue
+                perms = [
+                    t for t in perms if (t["seat"], t["index"]) == (named[0], named[1])
+                ]
+                side = None
             if side == "you" and ability_denies_its_target(ability.instruction):
                 # "Destroy target … you control" (Rats of Rath), "Return target
                 # land you control to its owner's hand" (Trade Routes): the
@@ -3392,7 +3407,11 @@ def _choose_single_object_target(
         # (Scapegoat): a denial the printed words aim at the caster's own
         # board, which this policy has no rescue to time it for.
         return ()
-    side = spell_target_side(card)
+    if spec.get("source_of_choice"):
+        return _choose_damage_source(game, caster_index, legal)
+    # A permanent's entry trigger, whose target this engine names as the
+    # permanent is cast: `spell_target_side` has nothing to read for it.
+    side = spell_target_side(card) or entry_trigger_target_side(card)
     others = [seat for seat in range(len(game.players)) if seat != caster_index]
     if side == "you":
         order = [caster_index]
@@ -3411,6 +3430,57 @@ def _choose_single_object_target(
             if isinstance(permanent_id, int):
                 return seat, entry["index"], [permanent_id]
     return ()
+
+
+def _choose_damage_source(game: Game, caster_index: int, legal: list[dict]):
+    """Name "a source of your choice" (CR 609.7a) for a spell that shields
+    against one: ``(seat, index, [permanent_id])``, or ``()`` when no source on
+    the table is one this seat would want to name.
+
+    A source is not a target, so no effect has a *side* for it
+    (``spell_target_side`` is None) and the chooser above took the first legal
+    permanent on the caster's own seat — its own first land. Legal, and a card
+    spent on nothing: three of seven simulated Samite Ministrations, and every
+    Reverse Damage, Eye for an Eye, Shadowbane, Reflect Damage and
+    Invulnerability an AI seat ever cast.
+
+    The choice is the one the engine makes for a seat that names nothing
+    (``handlers/prevention.default_damage_source``, written for the activated
+    half of the same phrase): the opposing source most likely to deal damage
+    this turn. Asked of that function rather than restated, and then held to
+    the announcement's own enumeration — where the printed phrase narrows what
+    may be chosen, the same rule is applied to what it admits. With no
+    opposing creature there is nothing worth shielding against and the card is
+    kept for a board that has one.
+    """
+    from .handlers.prevention import default_damage_source
+
+    by_id: dict[int, tuple[int, int]] = {}
+    for entry in legal:
+        permanent = game.permanent_at(entry["seat"], entry["index"])
+        permanent_id = game.permanent_id_of(permanent)
+        if isinstance(permanent_id, int):
+            by_id[permanent_id] = (entry["seat"], entry["index"])
+    chosen = default_damage_source(game, caster_index)
+    chosen_id = getattr(chosen, "permanent_id", None)
+    if chosen_id in by_id:
+        seat, index = by_id[chosen_id]
+        return seat, index, [chosen_id]
+    admitted = [
+        permanent
+        for permanent_id, (seat, _index) in by_id.items()
+        if seat != caster_index
+        and (permanent := game.permanent_by_id(permanent_id)) is not None
+        and permanent.is_creature
+    ]
+    if not admitted:
+        return ()
+    best = max(
+        admitted,
+        key=lambda perm: (bool(perm.attacking), perm.effective_power, -perm.permanent_id),
+    )
+    seat, index = by_id[best.permanent_id]
+    return seat, index, [best.permanent_id]
 
 
 def _caster_can_make_its_sacrifices(

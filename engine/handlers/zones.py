@@ -796,20 +796,43 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     # printed bound, carried to the prompt and obeyed by the default exactly as
     # the type is.
     no_basics = bool(instruction.payload.get("exclude_basic_land_names"))
+    # A non-interactive seat names the commonest card it may legally know of
+    # **in the place the name will be looked for**. That place is the
+    # sentence behind the choice, and three of the four cards printing one
+    # look among the chooser's own cards: Wood Sage and Desperate Research
+    # reveal the top of *your* library — a player built the deck, so what the
+    # library still holds is theirs to work out, and CR 401.2 hides only which
+    # card is where — and Cursed Scroll reveals a card from *your* hand. Named from the opponents' graveyards — the default for all
+    # four — a Scroll activated with one card in hand missed it eleven times
+    # running.
+    #
+    # Everything else (Foreshadow mills an opponent) keeps that default: the
+    # opponents' graveyards, which CR 400.2 makes public, are the evidence a
+    # player has of what an opponent's library holds, and naming out of that
+    # library itself would be the AI reading hidden information. Nothing to
+    # see names nothing, which is legal and simply misses.
+    from ..ai_valuation import chosen_name_own_zone
+
+    own_zone = (
+        chosen_name_own_zone(context.card, instruction)
+        if context.card is not None else None
+    )
+    if own_zone is not None:
+        default_name = _commonest_visible_name(
+            game, seat, (own_zone,), exclude_basics=no_basics, card_type=card_type,
+        )
+    else:
+        default_name = _commonest_visible_name(
+            game,
+            next(iter(game.opponents_of(seat)), seat),
+            ("graveyard",), exclude_basics=no_basics, card_type=card_type,
+        )
     game.arm_pending_choice(
         "choose_card_name", seat,
         card_name=context.card.name if context.card is not None else "",
         card_type=card_type,
         **({"exclude_basic_land_names": True} if no_basics else {}),
-        # A non-interactive seat names the commonest card it may legally look
-        # at — the opponents' graveyards, which CR 400.2 makes public. Naming
-        # from a library or a hand would be the AI reading hidden information.
-        # Nothing to see names nothing, which is legal and simply misses.
-        default_name=_commonest_visible_name(
-            game,
-            next(iter(game.opponents_of(seat)), seat),
-            ("graveyard",), exclude_basics=no_basics, card_type=card_type,
-        ),
+        default_name=default_name,
         record=context.results,
     )
     return True, "pending_choose_card_name"
