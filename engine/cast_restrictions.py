@@ -1024,18 +1024,52 @@ _CHOSEN_NAME_BAN = re.compile(
     r"names can't be played$"
 )
 
+#: Where a permanent records the **one** name its controller chose as it
+#: entered (Runed Halo, Booby Trap, Meddling Mage) — the key
+#: ``_initialize_permanent_state`` and the ``enter_choice`` resolver have always
+#: written; named here because the ban below is its newest reader.
+CHOSEN_CARD_NAME = "chosen_card_name"
+
+#: "Spells with the chosen name can't be cast." (Meddling Mage.) Null Chamber's
+#: sentence with one name instead of two and **no land half** — and the second
+#: difference is the one that must not be folded away: a land is played, never
+#: cast (CR 305.1), so this row stops no land drop, where Null Chamber's row
+#: says so in as many words and does.
+_CHOSEN_SINGLE_NAME_BAN = re.compile(
+    r"^spells with the chosen name can't be cast$"
+)
+
+#: Each printed chosen-name prohibition as ``(pattern, the metadata key its
+#: names were recorded under, whether it also stops a land being played)``.
+#: The reader below returns the last two, so the enforcement reads what the
+#: line printed rather than a flag somebody has to keep in step with it.
+_CHOSEN_NAME_BAN_ROWS: tuple[tuple["re.Pattern[str]", str, bool], ...] = (
+    (_CHOSEN_NAME_BAN, CHOSEN_CARD_NAMES, True),
+    (_CHOSEN_SINGLE_NAME_BAN, CHOSEN_CARD_NAME, False),
+)
+
 
 @lru_cache(maxsize=None)
-def chosen_name_ban_line(line: str) -> bool:
-    """Whether *line* is the chosen-name prohibition.
+def chosen_name_ban_row(line: str) -> tuple[str, bool] | None:
+    """``(record key, binds lands)`` for a chosen-name prohibition, or None."""
+    text = line.strip().lower().rstrip(".")
+    for pattern, record_key, binds_lands in _CHOSEN_NAME_BAN_ROWS:
+        if pattern.match(text) is not None:
+            return record_key, binds_lands
+    return None
 
-    One reader, two callers, exactly as :func:`global_cast_ban_line` has:
-    ``engine/grammar/registries.py`` asks it so the printed line is *claimed*,
-    and ``mixins/stack/casting.py`` asks it at CR 601.3 so the line is
-    *enforced*. A restriction claimed and not enforced is an enchantment that
-    reports supported and stops nothing.
+
+def chosen_name_ban_line(line: str) -> bool:
+    """Whether *line* is a chosen-name prohibition — either printed row.
+
+    One reader, every caller, exactly as :func:`global_cast_ban_line` has:
+    ``engine/grammar/registries.py`` and ``engine/oracle.py``'s creature gate
+    ask it so the printed line is *claimed*, and ``mixins/stack/casting.py``
+    asks :func:`chosen_name_ban` at CR 601.3 so the line is *enforced*. A
+    restriction claimed and not enforced is a permanent that reports supported
+    and stops nothing.
     """
-    return _CHOSEN_NAME_BAN.match(line.strip().lower().rstrip(".")) is not None
+    return chosen_name_ban_row(line) is not None
 
 
 def chosen_name_ban(game: "Game", card) -> str | None:
@@ -1050,22 +1084,29 @@ def chosen_name_ban(game: "Game", card) -> str | None:
     with different punctuation is the same name — the comparison every other
     name test in the engine makes.
     """
-    from .search_filters import name_key
+    from .search_filters import card_has_type, name_key
 
+    # **The name of what is being cast**, which for a split card is the half
+    # (CR 709.3a: "only the chosen half is evaluated to see if it can be
+    # cast") — the cast path hands this the face it is announcing, so a Mage
+    # naming "Wax" stops Wax and leaves Wane castable.
     wanted = name_key(getattr(card, "name", "") or "")
     if not wanted:
         return None
+    is_land = card_has_type(card, "land")
     for _seat, permanent in game.permanents_with_controller():
-        chosen = permanent.metadata.get(CHOSEN_CARD_NAMES) or ()
-        if not chosen:
-            continue
-        if not any(
-            chosen_name_ban_line(raw_line)
-            for raw_line in (permanent.effective_card.oracle_text or "").splitlines()
-        ):
-            continue
-        if any(name_key(str(name)) == wanted for name in chosen if name):
-            return permanent.card.name
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            row = chosen_name_ban_row(raw_line)
+            if row is None:
+                continue
+            record_key, binds_lands = row
+            if is_land and not binds_lands:
+                # "Spells … can't be cast" says nothing about a land drop.
+                continue
+            recorded = permanent.metadata.get(record_key) or ()
+            chosen = [recorded] if isinstance(recorded, str) else list(recorded)
+            if any(name_key(str(name)) == wanted for name in chosen if name):
+                return permanent.card.name
     return None
 
 

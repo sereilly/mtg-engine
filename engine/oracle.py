@@ -955,8 +955,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # narrowed spellings above and read the rest as a noun phrase, so a row
     # placed first would take the three narrower scopes' lines and answer them
     # through a filter instead of through the identity test each of them needs.
+    #
+    # "Whenever **another** permanent you control becomes the target of a spell
+    # or ability an opponent controls, you may return that permanent to its
+    # owner's hand." (Cloud Cover.) "Another" sits where the article does and
+    # is inside the delimited phrase, so the noun parser folds it into
+    # ``exclude_self`` exactly as it does for the entry rows' "another Rogue" —
+    # and ``events._self_becomes_target_filter`` hands ``subject_matches`` the
+    # watching permanent as its source, which is what the key is tested
+    # against. An alternative of the article rather than a row of its own:
+    # every axis after the noun is this row's.
     ("self_becomes_target",
-     r"whenever (?P<targeted_subject>an? [^,]+?) becomes "
+     r"whenever (?P<targeted_subject>(?:an?|another) [^,]+?) becomes "
      r"the target of (?P<targeted_by>a spell or ability|an aura spell|a spell"
      r"|an ability)"
      r"(?: (?P<targeting_controller>an opponent controls|you control))?"),
@@ -5464,9 +5474,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # whole static half is this sentence reported "text too complex" for the one
     # line the engine could enforce end to end. Asked of the reader that
     # enforces it, so the claim cannot outlive the ban.
-    from .cast_restrictions import own_cast_ban_line
+    from .cast_restrictions import chosen_name_ban_line, own_cast_ban_line
 
     if own_cast_ban_line(normalized) is not None:
+        return True
+    # "Spells with the chosen name can't be cast." (Meddling Mage.) The same
+    # CR 601.3 prohibition keyed on a name the permanent recorded as it entered,
+    # enforced off the board at every cast — no instruction, and a *creature*
+    # is refused for any line nothing reads, so the first creature to print it
+    # has to be admitted here by the reader that enforces it.
+    if chosen_name_ban_line(normalized):
         return True
     # A CR 601.2f cost change the casting path derives from every permanent's
     # own text — "Noncreature spells cost {1} more to cast" (Vryn Wingmare),

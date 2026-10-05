@@ -304,3 +304,54 @@ def test_w2g7_a_spell_that_may_name_no_target_keeps_its_highlight():
     """"Tap up to three target creatures without flying." (Tidal Surge.) Zero
     is a legal announcement, so an empty board is not a reason to grey it."""
     assert _playable(_board_session(["Island", "Island"], ["Tidal Surge"])) == [0]
+
+
+# ---------------------------------------------------------------------------
+# CR 601.3: a card a permanent has *named* is not castable (PLS W1G7)
+# ---------------------------------------------------------------------------
+#
+# "Spells with the chosen name can't be cast." (Meddling Mage; Null Chamber
+# prints the two-name sentence.) The cast path has refused a named card since
+# Mirage, and the highlight never asked: it glowed over a card whose click the
+# engine then declined. Asked through the predicate the cast path refuses with
+# (`cast_restrictions.chosen_name_ban`), so the two cannot answer differently.
+
+
+def _w1g7_named_by(session_id: str, card_name: str, named: str):
+    """Put *card_name* on seat 0's battlefield having chosen *named* as it
+    entered — the record its entry prompt writes."""
+    from engine.card_loader import load_cards, manifest_set_paths
+
+    pool: dict = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            pool.setdefault(card.name, card)
+    game = store.get(session_id).game
+    source = Permanent(card=pool[card_name])
+    source.metadata["chosen_card_name"] = named
+    source.metadata["chosen_card_names"] = [named, ""]
+    game.players[0].battlefield.append(source)
+    return source
+
+
+def test_a_card_a_meddling_mage_named_is_not_highlighted():
+    session_id = _board_session(["Plains"], ["Healing Salve", "Plains"])
+    assert _playable(session_id) == [0, 1]
+
+    mage = _w1g7_named_by(session_id, "Meddling Mage", "Healing Salve")
+
+    # The named spell loses the glow; the land beside it keeps its own.
+    assert _playable(session_id) == [1]
+
+    store.get(session_id).game.remove_from_battlefield(mage)
+    assert _playable(session_id) == [0, 1]
+
+
+def test_null_chambers_named_land_is_not_highlighted_either():
+    """The two-name row stops a *land* being played as well, which is the half
+    a spells-only reading of the predicate would have missed."""
+    session_id = _board_session(["Plains"], ["Healing Salve", "Plains"])
+
+    _w1g7_named_by(session_id, "Null Chamber", "Plains")
+
+    assert _playable(session_id) == [0]

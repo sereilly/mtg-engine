@@ -328,6 +328,16 @@ def _parse_that_object(stream: TokenStream) -> ast.TargetSpec | None:
     if noun is not None and noun in CARD_TYPES:
         stream.advance()
         return ast.TargetSpec("that", ast.ObjectFilter(card_types=(noun,)))
+    # "…you may return **that permanent** to its owner's hand." (Cloud Cover.)
+    # CR 110.1's word for the whole class: the trigger's own subject was "a
+    # permanent you control", and the restatement names what was bound without
+    # a card type because the event named none. An empty filter rather than a
+    # type invented for it — every lowering that takes a bound object checks
+    # the filter for restrictions *beyond* the restated noun, and there are
+    # none here to honour or to drop.
+    if noun == "permanent":
+        stream.advance()
+        return ast.TargetSpec("that", ast.ObjectFilter())
     # "destroy that **Wall**" (Battering Ram). A subtype names the bound object
     # just as a card type does — the trigger that fired required it, so the word
     # is describing what was bound rather than narrowing a fresh choice. Read

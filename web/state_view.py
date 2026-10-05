@@ -46,6 +46,7 @@ from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
 from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
+from engine.cast_restrictions import chosen_name_ban
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.faces import face_cards
@@ -297,6 +298,14 @@ def _card_castable_now(
 
     classification = classify_card(card)
     if not classification.supported:
+        return False
+
+    # "Spells with the chosen name can't be cast." (Meddling Mage, Null
+    # Chamber.) CR 601.3: a card a permanent has named is not castable however
+    # well the timing, the targets and the mana line up, so the glow goes — the
+    # click would be refused by this same predicate on the cast path. Asked of
+    # the half for a split card (the recursion above), which is CR 709.3a.
+    if chosen_name_ban(game, card) is not None:
         return False
 
     # CR 702.8b: flash casts any time an instant could be cast, so both timing

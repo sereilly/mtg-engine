@@ -43,7 +43,8 @@ from .activation_permissions import activation_permission_denial
 from .activation_restrictions import activation_denial, global_activation_ban
 from .auras import controller_cast_ban
 from .cast_costs import additional_costs, cast_announces_x
-from .cast_restrictions import global_cast_ban, last_cast_color_ban
+from .cast_restrictions import (chosen_name_ban, global_cast_ban,
+                                last_cast_color_ban)
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
@@ -2773,6 +2774,16 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         # and here for the reason every one above is: the cast path refuses,
         # nothing is spent, and a seat that keeps proposing its second white
         # spell of the turn does nothing with the rest of its mana.
+        return False
+
+    if chosen_name_ban(game, card) is not None:
+        # "Spells with the chosen name can't be cast." (Meddling Mage; Null
+        # Chamber's two-name sentence is the same reader.) The sixth ban on
+        # this list and here for the reason every one above is: the cast path
+        # refuses, nothing is spent, and a seat holding the named card would
+        # propose it every turn for as long as the Mage stood. Asked for every
+        # card and not only a spell, because Null Chamber's row stops a land
+        # being played too.
         return False
 
     if card.primary_type not in SPELL_TYPES:
