@@ -201,8 +201,57 @@ def _join_zones(zones: list[str]) -> str:
     return f"{', '.join(zones[:-1])}, and {zones[-1]}"
 
 
-def _tally(entries: Iterable[Mapping[str, Any]] | None) -> tuple[dict[str, int], int]:
-    """Sum an entry list into {casefolded name -> count} plus a grand total."""
+def catalog_index(payload: Iterable[Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    """A catalog payload keyed by every name a list may use for a card.
+
+    Its own name, casefolded — and, for a multi-face card, each spelling the
+    payload lists under ``aliases`` (``faces.name_aliases``: a half's name, one
+    slash, no spaces), so an imported "Assault" resolves to the one card
+    "Assault // Battery" (CR 709.2). A real card's name always wins over another
+    card's alias, which is why the names go in first.
+
+    The one construction of the map ``validate_deck`` is handed, and
+    ``web/static/legality.js``'s ``catalogIndex`` is its mirror — the browser
+    builds its lookup from the same payload by the same rule, so the two
+    validators cannot disagree about which card a typed name is.
+    """
+    entries = list(payload)
+    index: dict[str, Mapping[str, Any]] = {
+        str(entry["name"]).casefold(): entry for entry in entries
+    }
+    for entry in entries:
+        for alias in entry.get("aliases") or ():
+            index.setdefault(str(alias).casefold(), entry)
+    return index
+
+
+def card_key(name: str, catalog_by_name: Mapping[str, Mapping[str, Any]]) -> str:
+    """The key one **card** is counted under, whatever a list called it.
+
+    CR 100.2a limits a deck to four of "any card with a particular English card
+    name", and a split card is one card with two names (CR 709.2, 709.4a) that
+    a list may write five ways — "Assault // Battery", "Assault", "Battery",
+    one slash, no spaces. The catalog map indexes every one of those spellings
+    to the same entry (``faces.name_aliases``), so the entry's own name is the
+    one answer; keying the count on the *typed* name counted four "Assault"
+    and four "Assault // Battery" as two cards, eight copies and legal.
+
+    A name the catalog does not know keeps its own casefolded spelling: it is
+    reported separately as "not in catalog" and must not merge with anything.
+    """
+    key = name.casefold()
+    card = catalog_by_name.get(key)
+    if card is None:
+        return key
+    return str(card.get("name") or name).casefold()
+
+
+def _tally(
+    entries: Iterable[Mapping[str, Any]] | None,
+    catalog_by_name: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, int], int]:
+    """Sum an entry list into {card key -> count} plus a grand total — one key
+    per card (:func:`card_key`), not per spelling."""
     counts: dict[str, int] = {}
     total = 0
     for entry in entries or ():
@@ -210,7 +259,8 @@ def _tally(entries: Iterable[Mapping[str, Any]] | None) -> tuple[dict[str, int],
         count = int(entry.get("count", 0) or 0)
         if not name or count <= 0:
             continue
-        counts[name.casefold()] = counts.get(name.casefold(), 0) + count
+        key = card_key(name, catalog_by_name)
+        counts[key] = counts.get(key, 0) + count
         total += count
     return counts, total
 
@@ -239,7 +289,7 @@ def deck_ante_names(
     name. Cards absent from the catalog can't be checked and are skipped."""
     names: list[str] = []
     for zone in zones:
-        counts, _ = _tally(zone)
+        counts, _ = _tally(zone, catalog_by_name)
         for key in counts:
             card = catalog_by_name.get(key)
             if card is None or not is_ante_card(card):
@@ -313,9 +363,9 @@ def validate_deck(
     problems: list[str] = result["problems"]
     illegal: list[str] = result["illegal_names"]
     label = fmt["label"]
-    main_counts, main_total = _tally(entries)
-    side_counts, side_total = _tally(sideboard)
-    cmd_counts, cmd_total = _tally(commander)
+    main_counts, main_total = _tally(entries, catalog_by_name)
+    side_counts, side_total = _tally(sideboard, catalog_by_name)
+    cmd_counts, cmd_total = _tally(commander, catalog_by_name)
 
     # Main-deck order first, then sideboard/commander-only cards, so messages
     # read in the order the user built the deck.

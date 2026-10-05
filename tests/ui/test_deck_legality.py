@@ -321,3 +321,133 @@ def test_deck_list_ships_the_card_lists_it_is_judged_by():
             assert isinstance(deck.get(zone), list), (
                 f"deck {deck['name']!r} has no {zone} list in the /api/decks payload"
             )
+
+
+# ── A split card is one card, however a list spells it (CR 709.2, 100.2a) ────
+#
+# W2G4. The catalog indexes a split card under every spelling a decklist uses
+# for it (``faces.name_aliases``), and the copy count used to be keyed on the
+# *typed* name — so each spelling was its own four-of.
+
+_W2G4_SPLIT = {
+    "name": "Left // Right", "type_line": "Sorcery // Sorcery", "oracle_text": "",
+    "mana_cost": "{R} // {3}{G}", "legalities": {"legacy": "legal"},
+    "aliases": ["Left", "Right", "Left / Right", "Left/Right", "Left//Right"],
+}
+
+
+def _w2g4_copy_problems(result: dict) -> list[str]:
+    return [problem for problem in result["problems"] if "copies" in problem]
+
+
+def test_w2g4_a_split_card_is_counted_once_under_every_spelling():
+    from web.deck_legality import catalog_index
+
+    cat = catalog_index([_W2G4_SPLIT, _card("Left Hook", "legal", key="legacy")])
+
+    # Four of the card is four of the card, whichever name wrote it.
+    for name in ("Left // Right", "Left", "Right", "left/right"):
+        assert _w2g4_copy_problems(
+            validate_deck([{"name": name, "count": 4}], "legacy", cat)
+        ) == []
+
+    # The defect: two spellings, eight copies, and no problem reported.
+    res = validate_deck(
+        [{"name": "Left // Right", "count": 4}, {"name": "Left", "count": 4}],
+        "legacy", cat,
+    )
+    assert _w2g4_copy_problems(res) == [
+        "Left // Right: 8 copies exceed the 4-copy limit in Legacy."
+    ]
+    assert res["illegal_names"] == ["Left // Right"]
+
+    # Each half's name is the same card too, and the limit is across zones
+    # (CR 100.4a) — three as "Left" in the deck, two as "Right" in the sideboard.
+    res = validate_deck(
+        [{"name": "Left", "count": 3}], "legacy", cat,
+        sideboard=[{"name": "Right", "count": 2}],
+    )
+    assert _w2g4_copy_problems(res) == [
+        "Left // Right: 5 copies across deck and sideboard exceed the 4-copy limit in Legacy."
+    ]
+
+    # A real card whose name merely starts like a half is its own card.
+    res = validate_deck(
+        [{"name": "Left", "count": 4}, {"name": "Left Hook", "count": 4}], "legacy", cat,
+    )
+    assert _w2g4_copy_problems(res) == []
+
+
+def test_w2g4_an_alias_never_shadows_a_card_really_called_that():
+    """``catalog_index`` puts every real name in before any alias, so a card
+    actually named "Right" is not swallowed by the split card that has a half
+    called that — the same rule the browser's ``catalogIndex`` follows."""
+    from web.deck_legality import catalog_index
+
+    right = _card("Right", "legal", key="legacy")
+    cat = catalog_index([_W2G4_SPLIT, right])
+    assert cat["right"] is right and cat["left"] is _W2G4_SPLIT
+
+    res = validate_deck(
+        [{"name": "Left // Right", "count": 4}, {"name": "Right", "count": 4}],
+        "legacy", cat,
+    )
+    assert _w2g4_copy_problems(res) == []
+
+
+def test_w2g4_resolving_a_list_makes_one_row_per_card(monkeypatch):
+    """The editor holds a deck as one row per name and reads a card's copies off
+    that row, so two typed names resolving to one card must come back as one
+    row holding the sum — not two rows under the same resolved name."""
+    import web.catalog as catalog
+
+    split = dict(_W2G4_SPLIT, supported=True)
+    bolt = dict(_card("Test Bolt", "legal", key="legacy"), supported=True)
+    monkeypatch.setattr(
+        catalog, "CATALOG_BY_NAME", catalog.catalog_index([split, bolt])
+    )
+    resolved = catalog._resolve_deck_entries([
+        {"name": "Left", "count": 3},
+        {"name": "test bolt", "count": 2},
+        {"name": "Left // Right", "count": 1},
+        {"name": "Nonesuch", "count": 1},
+        {"name": "Right", "count": 2},
+        {"name": "Nonesuch", "count": 1},
+    ])
+    assert resolved == [
+        {"name": "Left // Right", "count": 6, "status": "ok"},
+        {"name": "Test Bolt", "count": 2, "status": "ok"},
+        {"name": "Nonesuch", "count": 1, "status": "unknown"},
+        {"name": "Nonesuch", "count": 1, "status": "unknown"},
+    ]
+
+
+def test_w2g4_the_catalog_payload_ships_the_aliases_the_server_indexes():
+    """Every multi-face card in the payload lists its other spellings, and the
+    server's own lookup is built from that list — so the browser, which builds
+    its lookup from the same payload, resolves the same names. Whole-pool, with
+    a floor: over a pool with no split card it would hold of nothing."""
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.faces import face_cards, name_aliases
+    from web.catalog import CATALOG_BY_NAME, CATALOG_PAYLOAD
+    from web.deck_legality import catalog_index
+
+    for entry in CATALOG_PAYLOAD:
+        assert ("aliases" in entry) == ("faces" in entry), entry["name"]
+        for alias in entry.get("aliases", ()):
+            assert CATALOG_BY_NAME[alias.casefold()]["name"] in (entry["name"], alias)
+    assert CATALOG_BY_NAME == catalog_index(CATALOG_PAYLOAD)
+
+    # The shipped pool may hold no split card (Invasion is `measured` as this
+    # is written), so the alias list itself is pinned on the cards that exist
+    # in either manifest role.
+    split = [
+        card for card in load_cards(manifest_set_paths(include_measured=True))
+        if face_cards(card)
+    ]
+    assert len(split) >= 5, "Invasion prints five split cards"
+    for card in split:
+        left, right = (face.name for face in face_cards(card))
+        assert name_aliases(card) == (
+            left, right, f"{left} / {right}", f"{left}/{right}", f"{left}//{right}",
+        )

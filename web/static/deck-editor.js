@@ -143,7 +143,12 @@
     if (!resp.ok) throw new Error("could not load card catalog");
     const payload = await resp.json();
     state.catalog = payload.cards || [];
-    state.catalogByName = new Map(state.catalog.map((c) => [c.name.toLowerCase(), c]));
+    // Every spelling a list may use for a card — a split card answers to each
+    // half's name too (CR 709.2) — so a deck written "Assault" finds, and is
+    // counted as, the one card Assault // Battery.
+    state.catalogByName = window.Legality && window.Legality.catalogIndex
+      ? window.Legality.catalogIndex(state.catalog)
+      : new Map(state.catalog.map((c) => [c.name.toLowerCase(), c]));
     if (window.Legality) window.Legality.setFormats(payload.formats);
     populateSetFilter();
     populateFormatSelect();
