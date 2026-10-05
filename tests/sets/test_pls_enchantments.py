@@ -273,7 +273,9 @@ def test_w1g7_cloud_cover_ignores_its_own_controllers_spells(_w1g7_cloud):
 
 
 def test_w1g7_cloud_cover_does_not_watch_itself(_w1g7_cloud):
-    """"**Another** permanent you control" — CR 109.2's "not this object"."""
+    """"**Another** permanent you control": every permanent but the one
+    printing the word. Dropped, an opponent's Disenchant aimed at Cloud Cover
+    would let its controller pick the enchantment back up."""
     table, cloud, _mine, _theirs = _w1g7_cloud(hands=((), (_w1g7_unmake(),)))
 
     table.cast_from_hand(
