@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from engine.faces import face_cards
 from engine.grammar.phrases import BASIC_LAND_WORDS
 from engine.grammar.vocabulary import (CREATURE_TYPES, LAND_TYPES,
                                        display_type_word)
@@ -1756,7 +1757,22 @@ def _word_of_command(ctx: PromptContext, choices: list) -> dict:
     target = ctx.game.players[choices[0].data["target_index"]]
     return {
         "target_name": target.name,
-        "choices": [{"hand_index": i, "name": c.name} for i, c in enumerate(target.hand)],
+        # A split card lists its halves: the caster chooses which one the
+        # target casts (CR 709.3, CR 723.5) and answers with that half's name.
+        "choices": [
+            {
+                "hand_index": i, "name": c.name,
+                **(
+                    {"faces": [
+                        {"name": face.name, "mana_cost": face.mana_cost,
+                         "oracle_text": face.oracle_text}
+                        for face in face_cards(c)
+                    ]}
+                    if face_cards(c) else {}
+                ),
+            }
+            for i, c in enumerate(target.hand)
+        ],
     }
 
 

@@ -6970,12 +6970,27 @@ function applyWordOfCommandPrompt(info) {
 
   title.textContent = "Word of Command";
   body.textContent = `Choose a card from ${info.target_name}'s hand for them to play.`;
+  // CR 709.3: a split card is cast as one half, and which half is the
+  // caster's choice here (CR 723.5) — so it gets one button per half, each
+  // answering with that half's name. A card with one face is one button.
   const buttons = info.choices
-    .map(
-      (c) =>
-        `<button type="button" class="prompt-choice-btn" data-woc-hand="${c.hand_index}">` +
-        `${escapeHtml(c.name)}</button>`
-    )
+    .map((c) => {
+      const faces = Array.isArray(c.faces) ? c.faces : [];
+      if (faces.length < 2) {
+        return (
+          `<button type="button" class="prompt-choice-btn" data-woc-hand="${c.hand_index}">` +
+          `${escapeHtml(c.name)}</button>`
+        );
+      }
+      return faces
+        .map(
+          (face) =>
+            `<button type="button" class="prompt-choice-btn" data-woc-hand="${c.hand_index}" ` +
+            `data-woc-face="${escapeHtml(face.name)}" title="${escapeHtml(face.oracle_text || "")}">` +
+            `${escapeHtml(c.name)} — cast ${escapeHtml(face.name)} ${escapeHtml(face.mana_cost || "")}</button>`
+        )
+        .join("");
+    })
     .join("");
   steps.innerHTML =
     `<div class="prompt-choice-column">${buttons}` +
@@ -6983,7 +6998,9 @@ function applyWordOfCommandPrompt(info) {
 
   steps.querySelectorAll("[data-woc-hand]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await sendAction({ seat, action: "word_of_command_confirm", hand_index: Number(btn.dataset.wocHand) });
+      const answer = { seat, action: "word_of_command_confirm", hand_index: Number(btn.dataset.wocHand) };
+      if (btn.dataset.wocFace) answer.card_name = btn.dataset.wocFace;
+      await sendAction(answer);
     });
   });
   const declineBtn = steps.querySelector("[data-woc-decline]");

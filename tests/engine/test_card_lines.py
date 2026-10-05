@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 import engine.oracle as oracle
 from engine.card_hooks import CARD_LINE_INSTRUCTIONS
 from engine.card_loader import load_cards, manifest_set_paths
@@ -101,8 +102,10 @@ def test_every_entry_supplies_an_instruction_the_card_compiles_with(catalog_by_n
     program, and has to go.
     """
     compiled = {
-        name: oracle.compile_card_oracle(card)
-        for name, card in catalog_by_name.items()
+        # By the name a line is read under — a half's own for a split card,
+        # which is what an entry for one of its lines would be keyed on.
+        card.name: oracle.compile_card_oracle(card)
+        for card in compilation_units(catalog_by_name.values())
     }
     inert = []
     for card_name, key, entry in _entries():

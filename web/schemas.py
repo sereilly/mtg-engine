@@ -361,6 +361,8 @@ class GameActionRequest(BaseModel):
     # names no half and is refused with the two names it could have meant. The
     # hand payload lists a split card's halves under `faces`, each carrying the
     # `name` to send here. This is why "which half" needs no field of its own.
+    # `word_of_command_confirm` reads it the same way: the half the forced
+    # split card is to be cast as, chosen by the caster (CR 723.5).
     card_name: str | None = None
     permanent_name: str | None = None
     permanent_index: int | None = Field(default=None, ge=0)

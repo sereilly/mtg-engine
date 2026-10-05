@@ -26,6 +26,7 @@ it exists to catch — or, worse, failed them for arriving in the right place.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine import Game
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.events import FUNCTIONS_FROM
@@ -49,7 +50,7 @@ def _graveyard_functioning_triggers():
     no such card yet, so a shipped-only fixture would make this guard vacuous on
     the very day it was written — which is the failure it exists to prevent.
     """
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         for trig in compile_card_oracle(card).triggered_abilities:
             if not trig.supported or trig.instruction is None:
                 continue

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.grammar import GRAMMAR_CATEGORIES, behavioural_payload, compile_line
 from engine.grammar.lower import INSTRUCTION_CATEGORIES
 from engine.oracle_types import OracleInstruction
@@ -2483,7 +2484,7 @@ def _executed_trigger_lines(catalog):
     """Every (card, line, node, instructions) the grammar executes as a trigger."""
     from engine.grammar import ast as grammar_ast
 
-    for card in catalog:
+    for card in compilation_units(catalog):
         for raw in (card.oracle_text or "").splitlines():
             line = raw.strip()
             if not line:
@@ -2632,7 +2633,7 @@ def test_every_land_tapped_for_mana_trigger_lands_on_a_kind_the_fire_site_runs(c
     from engine.oracle import compile_card_oracle
 
     undispatched = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.condition.kind != "land_tapped_for_mana" or trig.instruction is None:
                 continue
@@ -2654,7 +2655,7 @@ def test_every_becomes_tapped_trigger_has_a_filter_and_a_handler(catalog):
     from engine.oracle import compile_card_oracle
 
     problems = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.condition.kind != "permanent_becomes_tapped" or trig.instruction is None:
                 continue
@@ -3397,7 +3398,7 @@ def test_every_executed_end_step_trigger_lands_on_a_kind_the_step_enqueues(catal
     # enqueued. A guard that reads a different object from its dispatcher is
     # checking a card nobody plays.
     undispatched = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         for trig in compile_card_oracle(card).triggered_abilities:
             if not trig.supported or trig.instruction is None:
                 continue
@@ -4286,7 +4287,7 @@ def test_a_narrowed_trigger_reads_the_same_subject_on_both_sides():
     # Measured sets included, as the coverage instruments include them: this
     # asks whether the two readers agree about text the engine can see, and
     # every printing of this family today is in M21.
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         for line in (card.oracle_text or "").splitlines():
             condition, _ = _parse_trigger_condition(normalize_creature_line(line))
             if condition is None:
@@ -5164,7 +5165,7 @@ def test_no_supported_card_carries_their_choice_into_a_handler(catalog):
     from engine.oracle import compile_card_oracle
 
     carriers = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

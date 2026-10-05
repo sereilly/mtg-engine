@@ -33,6 +33,7 @@ import dataclasses
 
 import pytest
 
+from engine.faces import compilation_units, unit_label
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.handlers import EFFECT_HANDLERS
 from engine.models import CardDefinition
@@ -55,9 +56,15 @@ def _whole_pool():
     return list(seen.values())
 
 
-def _hollow_spells() -> list[tuple[str, list[str]]]:
+def _hollow_spells(cards=None) -> list[tuple[str, list[str]]]:
+    """Asked of each **spell** — ``faces.compilation_units``: a single-face
+    card, and each half of a split card (CR 709.3a: only the chosen half is
+    evaluated). The whole split card's own program is supported and holds no
+    instruction *by design* — it is never a spell — so asked whole, all five
+    of Invasion's were named here as resolving to nothing while a half that
+    really did would never have been looked at."""
     hollow: list[tuple[str, list[str]]] = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog() if cards is None else cards):
         type_line = card.type_line.lower()
         if "instant" not in type_line and "sorcery" not in type_line:
             continue
@@ -71,7 +78,7 @@ def _hollow_spells() -> list[tuple[str, list[str]]]:
             continue
         if any(instr.kind in EFFECT_HANDLERS for instr in program.instructions):
             continue
-        hollow.append((card.name, [f"{i.kind}:{i.value}" for i in program.instructions]))
+        hollow.append((unit_label(card), [f"{i.kind}:{i.value}" for i in program.instructions]))
     return hollow
 
 
@@ -107,7 +114,7 @@ def test_every_aura_in_the_pool_is_claimed_by_the_module_that_implements_it():
     from engine.oracle import expand_ability_lines, normalize_creature_line
 
     unclaimed = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         if "Aura" not in card.type_line:
             continue
         # **Through ``expand_ability_lines``**, the rule this repo states and
@@ -249,7 +256,11 @@ def test_the_flash_cycle_is_still_supported_by_what_it_actually_does():
     must not unsupport the cards that print it beside a real ability. Nine
     cards in the pool print the sentence and every one of them is held up by
     its own effect lines."""
-    by_name = {c.name: c for c in _w3g5_load(_w3g5_paths(include_measured=True))}
+    # `compilation_units`: the sentence is printed on, and holds up, a half.
+    by_name = {
+        c.name: c
+        for c in compilation_units(_w3g5_load(_w3g5_paths(include_measured=True)))
+    }
     # Asked of the **shipped** printers. A measured set's card may print the
     # sentence and be unsupported for a reason of its own -- that is what
     # `measured` means, and the census names it. Invasion's Breaking Wave
@@ -258,7 +269,7 @@ def test_the_flash_cycle_is_still_supported_by_what_it_actually_does():
     # having unsupported a card: a fact about today's manifest roles asserted as
     # an invariant, the class SET_PLAYBOOK.md records at Alliances and Ice Age.
     # The card joins the population the day its set is promoted.
-    shipped = {c.name for c in _w3g5_load(_w3g5_paths())}
+    shipped = {c.name for c in compilation_units(_w3g5_load(_w3g5_paths()))}
     printers = [
         card for card in by_name.values()
         if "as though it had flash" in (card.oracle_text or "")

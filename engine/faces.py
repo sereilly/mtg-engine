@@ -194,6 +194,41 @@ def castable_faces(card) -> tuple:
     return face_cards(card) or (card,)
 
 
+def compilation_units(cards) -> list:
+    """*cards* as the cards whose **text compiles**: each single-face card
+    itself, and each face of a multi-face card in its place (CR 709.3a).
+
+    The one iterator for a census whose question is about rules text — what a
+    line parses to, which instructions a program holds, what an ability is
+    labelled, which picker a target derives, whether a printed phrase is
+    enforced. A split card handed to such a census *whole* has an empty text
+    box and a program with no instructions, so the census examines it, finds
+    nothing, and reports the card clean: blind, not red. ``for card in
+    catalog`` is the loop that does that; ``for card in
+    compilation_units(catalog)`` is its replacement.
+
+    Not for a question about a **card** — a deck slot, a draw, a verification
+    row, a colour identity, the supported verdict a player is shown — which is
+    asked of the whole card (CR 709.4). ``tests/engine/test_face_blind_guards.py``
+    holds the tests and scripts to the distinction.
+
+    A list, in pool order with a card's faces in printed order, so a caller can
+    index or count it. A face's ``name`` is the half's own; :func:`unit_label`
+    spells it with its card for a message.
+    """
+    return [unit for card in cards for unit in castable_faces(card)]
+
+
+def unit_label(card) -> str:
+    """How a report names a compilation unit: a single-face card's name, and
+    ``"Assault // Battery [Assault]"`` for a face — the spelling the picker
+    sweep and the program differential already use, so one finding reads the
+    same in every instrument."""
+    parent = getattr(card, "face_of", None)
+    name = getattr(card, "name", "")
+    return f"{parent.name} [{name}]" if parent is not None else name
+
+
 def card_names(card) -> tuple[str, ...]:
     """Every name *card* has (CR 709.4a: a split card has two).
 
@@ -282,6 +317,7 @@ __all__ = [
     "castable_faces",
     "choose_a_face_refusal",
     "combined_oracle_text",
+    "compilation_units",
     "face_cards",
     "has_name",
     "holds_spell_named",
@@ -289,5 +325,6 @@ __all__ = [
     "is_multi_face",
     "name_aliases",
     "spell_named",
+    "unit_label",
     "whole_card",
 ]

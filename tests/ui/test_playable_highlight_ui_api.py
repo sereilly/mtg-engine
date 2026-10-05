@@ -191,6 +191,7 @@ def test_an_aura_is_not_highlighted_with_nothing_to_enchant():
 # identically by construction.
 
 from engine.card_loader import load_catalog as _load_catalog
+from engine.faces import compilation_units as _w2g4_units
 
 
 def _board_session(board: list[str], hand: list[str]) -> str:
@@ -263,12 +264,12 @@ def test_the_highlight_prices_every_cast_modifier_the_engine_knows():
 
     modifiers = {
         card.name
-        for card in _load_catalog()
+        for card in _w2g4_units(_load_catalog())
         for modifier in cost_modifiers_for(card.oracle_text or "")
         if modifier.applies_to == "cast"
     }
     modifiers |= {
-        card.name for card in _load_catalog()
+        card.name for card in _w2g4_units(_load_catalog())
         if self_cost_reduction(card.oracle_text or "")
     }
     assert "Gloom" in modifiers

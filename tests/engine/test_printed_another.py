@@ -23,6 +23,7 @@ import re
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import compile_line
 from engine.grammar.ast import ObjectFilter, TargetSpec
@@ -114,7 +115,9 @@ def _cards_printing_another_target() -> list[CardDefinition]:
     return sorted(
         (
             card
-            for card in load_cards(manifest_set_paths(include_measured=True))
+            for card in compilation_units(
+                load_cards(manifest_set_paths(include_measured=True))
+            )
             if re.search(r"\banother target\b", card.oracle_text or "", re.I)
         ),
         key=lambda card: card.name,

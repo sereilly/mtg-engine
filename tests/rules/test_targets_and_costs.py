@@ -9,6 +9,7 @@ it takes to pay a cost.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
@@ -1645,10 +1646,11 @@ from tests.helpers import resolve_stack
 
 
 def _w1g5_pool():
-    """Every card in both manifest roles, by name."""
+    """Every card whose text compiles in both manifest roles, by name — a
+    split card as its halves (``faces.compilation_units``)."""
     pool = {}
     for path in _w1g5_paths(include_measured=True):
-        for card in _w1g5_load(path):
+        for card in compilation_units(_w1g5_load(path)):
             pool.setdefault(card.name, card)
     return pool
 

@@ -39,6 +39,7 @@ BOARD_WIDE_CONTINUOUS_KINDS = (
     "buff_creatures_global_while_source_tapped",
 )
 
+from engine.faces import compilation_units
 from engine.lord_buffs import (
     CONDITIONS,
     LORD_BUFF_KIND,
@@ -443,7 +444,7 @@ def test_every_lord_shaped_line_in_the_pool_derives(catalog):
     answers land.
     """
     unclaimed: list[str] = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         lord_shaped = []
         for raw in (card.oracle_text or "").splitlines():
             normalized = normalize_creature_line(raw)

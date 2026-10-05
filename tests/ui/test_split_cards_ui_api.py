@@ -379,3 +379,106 @@ def test_the_chosen_half_stands_in_for_the_card_and_is_sent_by_its_own_name():
         assert step in chain, step
     assert "card_name: cardName" in chain
     assert "normalizeCardName(face)" in chain
+
+
+# ---------------------------------------------------------------------------
+# W2G4 — Word of Command forcing a split card (CR 709.3, CR 723.5)
+# ---------------------------------------------------------------------------
+#
+# The caster chooses the card the target plays, and for a split card that is
+# half an answer: which half is the caster's choice too. The prompt lists each
+# half, the answer rides `card_name` (the field a cast already names a half
+# on), and a split card answered whole is refused with the cast path's own
+# reason rather than recorded and then failing to play.
+
+
+def _w2g4_word_of_command(held):
+    sid, _session_obj, game = _session()
+    game.enforce_mana_costs = False
+    game.players[0].hand = [_SHIPPED["Word of Command"]]
+    game.players[1].hand = list(held)
+    assert game.cast_from_hand(0, "Word of Command", target_player_index=1).supported
+    return sid, game
+
+
+def _w2g4_confirm(sid, **fields):
+    return client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "word_of_command_confirm", **fields},
+    )
+
+
+def test_w2g4_the_word_of_command_prompt_lists_a_split_cards_halves():
+    sid, _game = _w2g4_word_of_command([_SHIPPED["Grizzly Bears"], QUICK_SLOW])
+
+    choices = _state(sid)["word_of_command"]["choices"]
+    assert choices[0] == {"hand_index": 0, "name": "Grizzly Bears"}
+    assert choices[1]["name"] == "Quick // Slow" and choices[1]["hand_index"] == 1
+    assert choices[1]["faces"] == [
+        {"name": "Quick", "mana_cost": "{R}",
+         "oracle_text": "Quick deals 1 damage to any target."},
+        {"name": "Slow", "mana_cost": "{G}", "oracle_text": "You gain 3 life."},
+    ]
+    # The target is not shown the caster's prompt (nor, through it, a hand).
+    assert _state(sid, seat=1)["word_of_command"] is None
+
+
+def test_w2g4_a_forced_split_card_is_answered_with_the_half():
+    sid, game = _w2g4_word_of_command([QUICK_SLOW])
+    them = game.players[1]
+
+    whole = _w2g4_confirm(sid, hand_index=0)
+    assert whole.status_code == 400
+    assert "Quick or Slow" in whole.json()["detail"] and "709.3" in whole.json()["detail"]
+    wrong = _w2g4_confirm(sid, hand_index=0, card_name="Quick // Slow")
+    assert wrong.status_code == 400
+    assert "chosen_hand_index" not in game.pending_word_of_command, "nothing was recorded"
+
+    assert _w2g4_confirm(sid, hand_index=0, card_name="Slow").status_code == 200
+    # Recorded; the spell waits on the stack for the caster to release priority.
+    assert any(item.card.name == "Word of Command" for item in game.stack)
+    assert them.hand == [QUICK_SLOW]
+    # Whoever holds priority passes until the stack is empty: the caster
+    # releases Word of Command, then the forced spell gets its own round.
+    for _ in range(8):
+        if not game.stack and game.pending_word_of_command is None:
+            break
+        holder = game.priority_player_index
+        passed = client.post(
+            f"/api/sessions/{sid}/action",
+            json={"seat": 0 if holder is None else holder, "action": "pass_priority"},
+        )
+        assert passed.status_code == 200, passed.text
+    assert not game.stack
+
+    assert them.life == 23, "Slow, the half that was named — not Quick, the first"
+    assert them.hand == [] and them.graveyard[-1] is QUICK_SLOW
+
+
+def test_w2g4_the_client_offers_one_button_per_half_and_sends_its_name():
+    body = app_js_function_body("applyWordOfCommandPrompt")
+    assert "c.faces" in body and "data-woc-face" in body
+    assert "answer.card_name = btn.dataset.wocFace" in body
+    # A card with one face is still one button carrying only its hand index.
+    assert 'data-woc-hand="${c.hand_index}">' in body
+
+
+def test_w2g4_a_cost_tax_is_shown_on_the_half_it_taxes_not_folded_into_the_card():
+    """The hand payload shows each card's cost with Gloom's tax folded in. A
+    split card's ``mana_cost`` is two costs side by side and the card is never
+    a spell (CR 709.3), so the fold belongs on the halves: Stand ({W}) is taxed
+    and Deliver ({2}{U}) is not. Folded into the whole string it read
+    ``{W}{5}{U}`` — the white half's tax added to the blue half's generic."""
+    stand_deliver = _INV["Stand // Deliver"]
+    sid, _session_obj, game = _session()
+    game.players[0].hand.append(stand_deliver)
+    game._put_permanent_onto_battlefield(1, Permanent(card=_SHIPPED["Gloom"]), None)
+
+    card = _state(sid)["players"][0]["hand"][0]
+    assert card["mana_cost"] == card["printed_mana_cost"] == "{W} // {2}{U}"
+    assert card["cost_increased"] is False
+    stand, deliver = card["faces"]
+    assert (stand["mana_cost"], stand["printed_mana_cost"], stand["cost_increased"]) == (
+        "{3}{W}", "{W}", True,
+    )
+    assert (deliver["mana_cost"], deliver["cost_increased"]) == ("{2}{U}", False)

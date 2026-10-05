@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
@@ -53,7 +54,7 @@ def test_no_self_damager_trigger_reads_the_damagers_controller():
     wrong: list[str] = []
     seen: set[str] = set()
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        for card in compilation_units(load_cards(path)):
             if card.name in seen:
                 continue
             seen.add(card.name)

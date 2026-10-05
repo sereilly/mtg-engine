@@ -291,19 +291,49 @@
     return effectiveMaxCopies(card, fmt, cardStatus(card, key));
   }
 
-  // Sum an entry list into a Map of lowercased name -> count, plus a total.
-  function tally(entries) {
+  // The key one *card* is counted under, whatever a list called it. CR 100.2a
+  // limits a deck to four of a card, and a split card is one card with two
+  // names (CR 709.2, 709.4a) that a list may spell five ways; `lookupCard`
+  // resolves every spelling to the one catalog entry, so the entry's own name
+  // is the answer. A name the catalog does not know keeps its own spelling.
+  // Mirrors `card_key` in web/deck_legality.py.
+  function cardKey(name, lookupCard) {
+    const card = typeof lookupCard === "function" ? lookupCard(name) : null;
+    return String((card && card.name) || name).toLowerCase();
+  }
+
+  // Sum an entry list into a Map of card key -> count, plus a total — one key
+  // per card (`cardKey`), not per spelling.
+  function tally(entries, lookupCard) {
     const counts = new Map();
     let total = 0;
     for (const entry of entries || []) {
       const name = String((entry && entry.name) || "").trim();
       const count = Number((entry && entry.count) || 0);
       if (!name || count <= 0) continue;
-      const key = name.toLowerCase();
+      const key = cardKey(name, lookupCard);
       counts.set(key, (counts.get(key) || 0) + count);
       total += count;
     }
     return { counts, total };
+  }
+
+  // Index a catalog payload by every name a list may use for a card: its own,
+  // and — for a split card — each spelling the server lists under `aliases`
+  // (a half's name, one slash, no spaces). A real card's name always wins over
+  // another card's alias, so a pass over the names comes first. Mirrors
+  // CATALOG_BY_NAME in web/catalog.py; the deck editor's lookup is built here
+  // so the browser and the server resolve a typed name to the same card.
+  function catalogIndex(catalog) {
+    const index = new Map();
+    for (const card of catalog || []) index.set(String(card.name).toLowerCase(), card);
+    for (const card of catalog || []) {
+      for (const alias of (card && card.aliases) || []) {
+        const key = String(alias).toLowerCase();
+        if (!index.has(key)) index.set(key, card);
+      }
+    }
+    return index;
   }
 
   // Validate a whole deck. `entries`/`sideboard`/`commander` are [{name, count}];
@@ -322,9 +352,9 @@
       anteNames: [],
     };
 
-    const main = tally(entries);
-    const side = tally(sideboard);
-    const cmd = tally(commander);
+    const main = tally(entries, lookupCard);
+    const side = tally(sideboard, lookupCard);
+    const cmd = tally(commander, lookupCard);
     // Main-deck order first, then sideboard/commander-only cards.
     const names = [
       ...main.counts.keys(),
@@ -425,6 +455,8 @@
     commanderTypeProblem,
     deckCardProblem,
     validateDeck,
+    cardKey,
+    catalogIndex,
     DEFAULT_FORMAT,
   };
 })();

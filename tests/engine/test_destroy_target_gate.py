@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.game import Game
 from engine.handlers._common import permanent_matches_filter
@@ -113,7 +114,7 @@ def destroy_payloads() -> list[tuple[str, dict]]:
                     if nested:
                         walk(name, nested)
 
-    for card in seen_cards.values():
+    for card in compilation_units(seen_cards.values()):
         try:
             program = compile_card_oracle(card)
         except Exception:  # pragma: no cover - a card that will not compile is

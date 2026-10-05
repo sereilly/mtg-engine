@@ -1000,6 +1000,9 @@ class SpellCastingMixin:
                     grant = permission_for(
                         self, caster_index, candidate, from_zone,
                         as_land=candidate.primary_type == "land",
+                        # Judged as the spell it is being cast as — the
+                        # named half of a split card (CR 709.3a).
+                        spell=spell_named(candidate, card_name),
                     )
                     if grant is not None and grant.zone_seat == seat:
                         source_zone, hand_index, permission = pile, i, grant
@@ -1962,7 +1965,7 @@ class SpellCastingMixin:
             # pure loss, paid on top of a spell that was already free.
             and chosen_alternative is None
         ):
-            waiver = permission_for(self, caster_index, held, "hand")
+            waiver = permission_for(self, caster_index, held, "hand", spell=card)
             if waiver is not None and from_zone == "hand":
                 free_grant = waiver
                 if permission is None:

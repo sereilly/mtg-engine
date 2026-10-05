@@ -34,6 +34,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .faces import castable_faces
 from .search_filters import card_has_type
 
 if TYPE_CHECKING:
@@ -148,7 +149,19 @@ def _zone_cards(game, permission: CastPermission) -> list:
     return getattr(player, permission.zone)
 
 
-def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool) -> bool:
+def _covers(
+    game, permission: CastPermission, card, zone: str, *, as_land: bool, spell=None,
+) -> bool:
+    """Whether *permission* lets *card* be cast or played out of *zone*.
+
+    Two kinds of scope, asked of two objects. **Which object** — the cards a
+    grant named, the top of a pile — is asked of *card*, the card as its zone
+    holds it. **What kind of spell** — ``card_types`` — is asked of *spell*,
+    what the card is being cast as: the half, for a split card (CR 709.3a:
+    "only the chosen half is evaluated to see if it can be cast"), and the
+    card itself otherwise.
+    """
+    spell = card if spell is None else spell
     if permission.zone != zone:
         return False
     if as_land and permission.mode != "play":
@@ -162,7 +175,7 @@ def _covers(game, permission: CastPermission, card, zone: str, *, as_land: bool)
     # permanent type would have been silently narrowed. One reader for the
     # whole engine (``engine/search_filters.card_has_type``).
     if permission.card_types and not any(
-        card_has_type(card, name) for name in permission.card_types
+        card_has_type(spell, name) for name in permission.card_types
     ):
         return False
     if permission.position == "top":
@@ -362,16 +375,27 @@ def board_graveyard_play(game, player_index: int) -> str | None:
 
 
 def permission_for(
-    game, player_index: int, card, zone: str, *, as_land: bool = False
+    game, player_index: int, card, zone: str, *, as_land: bool = False, spell=None,
 ) -> CastPermission | None:
     """The first live grant letting *player_index* cast/play *card* from
     *zone*, or None. ``zone == "hand"`` answers only cost-waiver grants — the
     ordinary permission to cast from hand is a rule, not an effect, and the
-    caller must not gate it on this seam."""
+    caller must not gate it on this seam.
+
+    *card* is the card as its zone holds it — what a grant's identity list,
+    a pile's top and "your graveyard" are about. *spell* is what it is being
+    cast as, and is what a permission scoped by a **characteristic** judges:
+    a card type, a mana value, the text that opens a zone to the card that
+    prints it. For a split card that is the half (CR 709.3a/b) — the card in
+    the zone is every type and the combined mana value of both (CR 709.4),
+    and judged by it Burn // Grow is a five-mana instant-and-sorcery to a
+    waiver its one-mana instant half is entitled to. Omitted, the card is
+    its own spell, which is every card with one face."""
+    spell = card if spell is None else spell
     for permission in game.cast_permissions:
         if permission.player_index != player_index:
             continue
-        if _covers(game, permission, card, zone, as_land=as_land):
+        if _covers(game, permission, card, zone, as_land=as_land, spell=spell):
             return permission
     # "You may cast Goblin spells from the top of your library." (Conspicuous
     # Snoop.) A static permission of a *permanent*, read off its text for as
@@ -394,7 +418,7 @@ def permission_for(
     # enchantment leaves. The hand is the zone it opens — the ordinary
     # permission to cast from hand is a rule, and what this adds is the waiver.
     if zone == "hand" and not as_land:
-        source = board_free_cast(game, card)
+        source = board_free_cast(game, spell)
         if source is not None:
             return CastPermission(
                 player_index=player_index, zone="hand", mode="cast",
@@ -421,7 +445,7 @@ def permission_for(
     if (
         zone != "hand"
         and not as_land
-        and self_permission_zone(card) == zone
+        and self_permission_zone(spell) == zone
         and any(entry is card for entry in getattr(game.players[player_index], zone))
     ):
         return CastPermission(
@@ -537,8 +561,19 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
                 pile = pile[:1] if owner_seat == player_index else []
             for index, card in enumerate(pile):
                 as_land = card.primary_type == "land"
-                permission = permission_for(
-                    game, player_index, card, zone, as_land=as_land
+                # Asked once per spell the card can be cast as
+                # (`castable_faces`: the card itself, or each half of a
+                # split card) and offered when any is covered. The entry is
+                # the card's — the client asks which half, and the cast is
+                # re-judged against the half that was named.
+                permission = next(
+                    (
+                        found for spell in castable_faces(card)
+                        if (found := permission_for(
+                            game, player_index, card, zone, as_land=as_land, spell=spell,
+                        )) is not None
+                    ),
+                    None,
                 )
                 if permission is None:
                     continue

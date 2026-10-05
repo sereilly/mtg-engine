@@ -17,6 +17,7 @@ before the fix it named all nine abilities as asked-at-push and non-modal.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.modal_triggers import MODAL_INSTRUCTION_KIND, modal_trigger_modes
 from engine.oracle import compile_card_oracle
@@ -25,7 +26,7 @@ from engine.oracle import compile_card_oracle
 def _w2g5_top_level_choices():
     examined = 0
     rows = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

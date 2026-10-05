@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.mixins.stack.casting import (
     _ENCHANT_TARGET_MATCHERS,
     permanent_matches_enchant_noun,
@@ -75,7 +76,7 @@ def test_every_shipped_auras_enchant_noun_has_a_matcher(catalog):
         return [part.strip() for part in noun.split(" or ")]
 
     missing = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         noun = aura_enchant_noun(card)
         if noun is None or not compile_card_oracle(card).supported:
             continue

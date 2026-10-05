@@ -11,7 +11,7 @@ from engine.card_loader import load_cards
 from engine.classifier import classify_card
 from engine.faces import combined_oracle_text, face_cards, name_aliases
 
-from .deck_legality import normalize_format, validate_deck
+from .deck_legality import catalog_index, normalize_format, validate_deck
 from .deck_store import deck_commander, deck_sideboard
 
 from .runtime import CARD_PATHS, CARD_SEARCH_ORDER, verification_store
@@ -110,6 +110,12 @@ def _build_catalog_payload() -> list[dict]:
                             }
                             for face in face_cards(card)
                         ],
+                        # Every other spelling a list may use for this card
+                        # (``faces.name_aliases``). The browser indexes its
+                        # own lookup from this, so a personal deck's "Assault"
+                        # resolves — and is counted (CR 100.2a) — as the one
+                        # card it is, by the same list the server uses below.
+                        "aliases": list(name_aliases(card)),
                     }
                     if face_cards(card) else {}
                 ),
@@ -135,20 +141,25 @@ def _build_catalog_payload() -> list[dict]:
 
 CATALOG_PAYLOAD = _build_catalog_payload()
 
-CATALOG_BY_NAME = {entry["name"].casefold(): entry for entry in CATALOG_PAYLOAD}
-# …and every other spelling a decklist uses for a split card (a half's name, one
-# slash), so an imported "Assault" resolves to — and is rewritten as — the one
-# card "Assault // Battery" (CR 709.2). Never over a card really called that.
-for _card in CARD_SEARCH_ORDER:
-    for _alias in name_aliases(_card):
-        CATALOG_BY_NAME.setdefault(
-            _alias.casefold(), CATALOG_BY_NAME[_card.name.casefold()]
-        )
+# Every spelling a decklist uses for a card — a split card's halves and its
+# one-slash forms beside its printed name — so an imported "Assault" resolves
+# to, and is rewritten as, the one card "Assault // Battery" (CR 709.2). Never
+# over a card really called that (``deck_legality.catalog_index``).
+CATALOG_BY_NAME = catalog_index(CATALOG_PAYLOAD)
 
 
 def _resolve_deck_entries(entries: list[dict]) -> list[dict]:
-    """Resolve deck entries against the catalog, attaching a status to each."""
+    """Resolve deck entries against the catalog, attaching a status to each.
+
+    One entry per **card**: two typed names that resolve to the same catalog
+    card — "Assault" and "Assault // Battery" (CR 709.2: one card), or one name
+    in two capitalisations — are summed into the entry the first of them made.
+    The editor holds a deck as one row per name and counts a card's copies off
+    that row, so two rows under one resolved name showed four copies of a card
+    the deck held eight of.
+    """
     resolved: list[dict] = []
+    by_card: dict[str, dict] = {}
     for entry in entries:
         name = str(entry.get("name", "")).strip()
         count = int(entry.get("count", 0))
@@ -157,9 +168,16 @@ def _resolve_deck_entries(entries: list[dict]) -> list[dict]:
         match = CATALOG_BY_NAME.get(name.casefold())
         if match is None:
             resolved.append({"name": name, "count": count, "status": "unknown"})
-        else:
-            status = "ok" if match["supported"] else "unsupported"
-            resolved.append({"name": match["name"], "count": count, "status": status})
+            continue
+        row = by_card.get(match["name"])
+        if row is not None:
+            row["count"] += count
+            continue
+        status = "ok" if match["supported"] else "unsupported"
+        row = by_card[match["name"]] = {
+            "name": match["name"], "count": count, "status": status,
+        }
+        resolved.append(row)
     return resolved
 
 

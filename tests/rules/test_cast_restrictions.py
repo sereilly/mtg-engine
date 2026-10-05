@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game
 from engine.card_loader import load_catalog
 from engine.cast_restrictions import check_cast_timing
@@ -330,7 +331,7 @@ def test_601_3_every_printed_cast_window_in_the_pool_is_claimed_by_the_table():
 
     unclaimed = [
         (card.name, line.strip())
-        for card in seen.values()
+        for card in compilation_units(seen.values())
         for line in (card.oracle_text or "").splitlines()
         if line.strip().lower().startswith("cast this spell only")
         and not cast_timing_claims_line(line)

@@ -40,7 +40,7 @@ from engine import Game
 from engine.card_loader import load_catalog
 from engine.legality import targeting_instruction
 from engine.models import Permanent, PlayerState
-from engine.oracle import compile_card_oracle
+from engine.oracle import compiled_units
 from engine.targeting import derive_activation_spec
 
 _SPELL_VICTIMS = (
@@ -78,8 +78,9 @@ def _catalog():
 
 def _stack_abilities(catalog):
     """Every supported activated ability whose activation spec is ``stack``."""
-    for card in catalog:
-        program = compile_card_oracle(card)
+    # ``compiled_units``: the abilities of a multi-face card are on its faces
+    # (CR 709.3a) and its whole-card program holds none.
+    for card, program in compiled_units(catalog):
         if not program.supported:
             continue
         for index, ability in enumerate(program.activated_abilities):

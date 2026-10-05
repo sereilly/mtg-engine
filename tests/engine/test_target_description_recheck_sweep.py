@@ -24,6 +24,7 @@ rig that stopped casting anything from passing over zero cards.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units, whole_card
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.layer_bridge import SET_CARD_TYPES
@@ -36,7 +37,9 @@ from tests.helpers import resolve_stack
 _GATE = "every target is illegal (608.2b)"
 
 _POOL: dict = {}
-for _card in load_cards(manifest_set_paths()):
+# `compilation_units`: a split card is its halves, each a spell with its own
+# target phrase. Read whole it has none and is never swept.
+for _card in compilation_units(load_cards(manifest_set_paths())):
     _POOL.setdefault(_card.name, _card)
 
 
@@ -64,7 +67,9 @@ def _board(spell):
 
     fillers = [_POOL[n] for n in ("Forest", "Grizzly Bears", "Mountain")]
     game = Game(players=[
-        PlayerState(name="P0", hand=[spell, *fillers],
+        # The hand holds the card; the cast names the spell (a half of a
+        # split card by its own name, CR 709.3).
+        PlayerState(name="P0", hand=[whole_card(spell), *fillers],
                     battlefield=[perm("Grizzly Bears"), perm("Scathe Zombies"), perm("Forest")],
                     library=[_POOL["Island"]] * 4),
         PlayerState(name="P1", hand=list(fillers),
@@ -133,12 +138,12 @@ def _sweep(spells, change, *, floor):
         }:
             continue  # the change did not take this spell's target out of its description
         examined += 1
-        before = _fingerprint(game, card.name)
+        before = _fingerprint(game, whole_card(card).name)
         mark = len(game.log)
         resolve_stack(game)
         if not any(_GATE in line for line in game.log[mark:]):
             failures.append(f"{card.name}: not countered by the rule — {game.log[mark:][-3:]}")
-        elif _fingerprint(game, card.name) != before:
+        elif _fingerprint(game, whole_card(card).name) != before:
             failures.append(f"{card.name}: countered, but the game changed")
     assert not failures, "\n".join(failures)
     assert examined >= floor, f"only {examined} spells examined; the rig stopped casting"

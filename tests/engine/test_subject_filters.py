@@ -17,6 +17,7 @@ from __future__ import annotations
 import dataclasses
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.keywords import grant_keyword
@@ -620,7 +621,7 @@ def test_every_sacrifice_filter_in_the_pool_is_one_the_prompt_can_test():
     reaching one of them would be a restriction quietly not applied.
     """
     escaped: list[str] = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

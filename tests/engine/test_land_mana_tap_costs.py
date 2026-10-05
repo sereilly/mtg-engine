@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.mana_payment import is_mana_ability
@@ -33,7 +34,7 @@ from engine.oracle import compile_card_oracle
 
 
 def _pool():
-    return load_cards(manifest_set_paths(include_measured=True))
+    return compilation_units(load_cards(manifest_set_paths(include_measured=True)))
 
 
 def _priced_mana_lands(cards):

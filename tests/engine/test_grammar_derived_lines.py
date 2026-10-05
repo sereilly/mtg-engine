@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import oracle
 from engine.card_loader import load_catalog, load_cards, manifest_set_paths
 from engine.grammar import ast as grammar_ast, compile_line
@@ -42,7 +43,7 @@ def pool_lines():
     the wider pool is the one it should ask about.
     """
     lines = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         text = oracle.expand_modal_activated_lines(card.oracle_text or "")
         for raw in text.splitlines():
             line = raw.strip()
@@ -262,7 +263,7 @@ def test_combat_restrictions_match_the_derivation_table_exactly():
     # having — but it is no longer what decides the assertion.
     refused = 0
     compared = 0
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         for raw_line in card.oracle_text.split("\n"):
             line = raw_line.strip()
             if not line:

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units, whole_card
 from engine import Game
 from engine.card_loader import load_catalog
 from engine.models import PlayerState
@@ -48,7 +49,7 @@ _VICTIMS = (
 
 def _stack_targeting_spells(catalog):
     """Every non-modal instant or sorcery whose cast spec points at the stack."""
-    for card in catalog:
+    for card in compilation_units(catalog):
         if card.primary_type not in ("instant", "sorcery"):
             continue
         program = compile_card_oracle(card)
@@ -66,7 +67,9 @@ def _announce(card, spec, victim, by_name):
     game = Game(players=[PlayerState(name="P0"), PlayerState(name="P1")])
     game.enforce_mana_costs = False
     game.players[0].hand.append(by_name[victim])
-    game.players[1].hand.append(card)
+    # The hand holds the card; the cast below names the spell — a half of a
+    # split card by its own name (CR 709.3).
+    game.players[1].hand.append(whole_card(card))
     queued = game.queue_from_hand(0, victim, target_player_index=1)
     if not queued.supported or len(game.stack) != 1:
         return None

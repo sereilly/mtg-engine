@@ -25,7 +25,7 @@ import random
 from dataclasses import replace
 
 from ...auras import attach_aura
-from ...faces import has_name
+from ...faces import castable_faces, has_name, is_multi_face, spell_named
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
@@ -6669,10 +6669,18 @@ class PendingChoicesMixin:
     # -- Word of Command -----------------------------------------------------
 
     def confirm_word_of_command(
-        self, caster_index: int, hand_index: int | None, defer_resolution: bool = False
+        self, caster_index: int, hand_index: int | None, defer_resolution: bool = False,
+        spell_name: str | None = None,
     ) -> bool:
         """Record the caster's card choice for a pending Word of Command.
         ``hand_index`` < 0 (or None) declines.
+
+        *spell_name* is which **half** of a split card the target is to cast
+        (CR 709.3: the player casting chooses, and CR 723.5 gives every choice
+        the controlled player would make to the one controlling them). It is
+        required for a multi-face card — a split card named whole names no
+        spell, and there is no pick the engine could make that is not it
+        choosing for the caster — and ignored for a card with one face.
 
         With ``defer_resolution`` (the interactive priority path) the choice is
         only recorded: the spell stays on the stack and finishes resolving —
@@ -6686,10 +6694,12 @@ class PendingChoicesMixin:
         return self.resolve_pending_choice(
             "word_of_command", caster_index,
             hand_index=hand_index, defer_resolution=defer_resolution,
+            spell_name=spell_name,
         )
 
     def _resolve_word_of_command(
-        self, choice: PendingChoice, hand_index: int | None, defer_resolution: bool
+        self, choice: PendingChoice, hand_index: int | None, defer_resolution: bool,
+        spell_name: str | None = None,
     ) -> bool:
         pending = choice.data
         caster_index = choice.player_index
@@ -6697,6 +6707,15 @@ class PendingChoicesMixin:
         target = self.players[pending["target_index"]]
         if chosen >= 0 and chosen >= len(target.hand):
             return False
+        if chosen >= 0 and is_multi_face(target.hand[chosen]):
+            # CR 709.3: which half is part of the choice, and it is the
+            # caster's (CR 723.5). An answer naming no half is not an answer;
+            # the prompt stays up.
+            if spell_named(target.hand[chosen], spell_name or "") is None:
+                return False
+            pending["chosen_spell_name"] = spell_name
+        else:
+            pending.pop("chosen_spell_name", None)
         if defer_resolution and pending.get("_stack_item") in self.stack:
             pending["chosen_hand_index"] = chosen
             if chosen >= 0:
@@ -6720,8 +6739,13 @@ class PendingChoicesMixin:
     def _default_word_of_command(self, choice: PendingChoice) -> None:
         """Force the first card in the target's hand (deterministic)."""
         target = self.players[choice.data["target_index"]]
+        # …and its first half, for a split card: the same deterministic
+        # default one level down (`castable_faces` is the card itself when
+        # it has one face).
+        spell_name = castable_faces(target.hand[0])[0].name if target.hand else None
         if not self._resolve_word_of_command(
-            choice, 0 if target.hand else -1, defer_resolution=False
+            choice, 0 if target.hand else -1, defer_resolution=False,
+            spell_name=spell_name,
         ):
             self.discard_pending_choice(choice)
 
@@ -6763,7 +6787,13 @@ class PendingChoicesMixin:
                 return True
         if not (0 <= hand_index < len(target.hand)):
             return False
-        card_name = target.hand[hand_index].name
+        held = target.hand[hand_index]
+        # The spell the card is cast as: the half the caster named for a
+        # split card (CR 709.3), the card itself otherwise. A caller that
+        # finishes without a recorded half (the headless paths) gets the
+        # first one, as the default answer does.
+        spell = spell_named(held, pending.get("chosen_spell_name") or held.name)
+        card_name = (spell or castable_faces(held)[0]).name
         result = self.queue_from_hand(target_index, card_name, target_player_index=target_index)
         if result.supported and auto_resolve_forced and self.stack:
             self.resolve_stack()
@@ -10273,7 +10303,7 @@ register_choice(
 register_choice(
     "word_of_command",
     resolve=lambda game, choice, r: game._resolve_word_of_command(
-        choice, r["hand_index"], r["defer_resolution"]
+        choice, r["hand_index"], r["defer_resolution"], r.get("spell_name"),
     ),
     default=lambda game, choice: game._default_word_of_command(choice),
     action="word_of_command_confirm",

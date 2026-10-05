@@ -21,6 +21,7 @@ refused rather than answered by a sum the card may not mean.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import compile_line
@@ -154,7 +155,7 @@ def test_no_shipped_card_prints_a_counted_each_opponent_board_condition():
 
     examined = 0
     each_opponent = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         for payload in walk(compile_card_oracle(card), set()):
             examined += 1
             if payload.get("who") == "each_opponent":

@@ -8,6 +8,7 @@ source order. These pin the properties the registry replaced that with.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.oracle import compile_card_oracle
 from engine.phases.upkeep_effects import UPKEEP_EFFECTS, upkeep_effect
@@ -24,7 +25,7 @@ def _pool_trigger_pairs() -> dict[tuple[str, str], list[str]]:
     ``load_catalog`` — what a player can deck — deliberately stays narrower.
     """
     pairs: dict[tuple[str, str], list[str]] = {}
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         for trig in compile_card_oracle(card).triggered_abilities:
             if trig.instruction is None:
                 continue

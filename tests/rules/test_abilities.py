@@ -18,6 +18,7 @@ changes.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
 from engine.mana_payment import is_mana_ability
@@ -1654,7 +1655,9 @@ from engine.named_counters import add_counters as _w3g5_add_counters
 
 
 def _w3g5_pool():
-    return load_cards(_w3g5_manifest_set_paths(include_measured=True))
+    return compilation_units(
+        load_cards(_w3g5_manifest_set_paths(include_measured=True))
+    )
 
 
 #: Cost fields the harness below can satisfy on a bare board: the tap, and

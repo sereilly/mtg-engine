@@ -1020,6 +1020,7 @@ def test_every_printed_instead_pair_acts_on_one_object():
     reader found fifteen printed pairs the day it was written.
     """
     from engine.card_loader import load_cards, manifest_set_paths
+    from engine.faces import compilation_units
 
     assert _instead_pair_disagreement(
         "Target creature gets +1/+1 until end of turn. If you control a "
@@ -1028,7 +1029,9 @@ def test_every_printed_instead_pair_acts_on_one_object():
 
     examined, disagreeing, seen = 0, [], set()
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        # ``compilation_units``: a split card's lines are on its halves (CR
+        # 709.3a), and read whole it has no text for this to examine.
+        for card in compilation_units(load_cards(path)):
             if card.name in seen:
                 continue
             seen.add(card.name)
