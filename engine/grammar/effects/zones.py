@@ -15,6 +15,15 @@ forking one**: three of the six productions here lower in that module
 until now — one of the asymmetries CLAUDE.md lists, closed rather than
 duplicated under a new word.
 
+That paragraph was true at Mirage and is not now. The shuffles left
+``lowering/zones.py`` for ``lowering/shuffles.py`` at Urza's Destiny, so of the
+ten nodes built here exactly one — ``ExileGraveyardPosition`` — still lowers in
+the module this one is named for; the other two exiles lower in
+``linked_exile`` and the two puts in ``hand`` and ``library``. The five shuffle
+nodes are ``ast/shuffles.py`` since Planeshift's Phase 0, under the lowering
+side's word, because over there a shuffle is not a zone change; only this
+module's first line still files it as a move.
+
 The cut is where the call graph already fell apart: every name here is reached
 from ``imperatives``, ``statements`` or ``subject_verb`` and from nothing left in
 ``library``, and nothing here calls anything there. Neither module imports the

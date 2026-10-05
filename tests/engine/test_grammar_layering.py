@@ -1786,18 +1786,27 @@ AST_FAMILIES = [
         # fired on the readers (`effects/board.py` at 1,007), not on the
         # inventory.
         "destruction",
-        # `zones` is the fourth of that shape. The nodes its six productions
-        # build — `ShuffleLibrary`, `ShuffleGraveyardIntoLibrary`,
-        # `ShuffleHandIntoLibrary`, `ExileTopOfLibrary`, `ExileEntireLibrary`,
-        # `PutIteratedCardOnLibrary` — are cards in a pile, and they live in
-        # `ast/cards.py`, `ast/library.py` and (the two exiles, since Tempest's
-        # third wave) `ast/exile.py` beside every other card node. The guard
-        # fired on the readers (`effects/library.py` at 1,030), not on the
-        # inventory, and splitting the nodes out to match would put a node in
-        # one family with both of its readers in another — exactly what `types`
-        # records.
+        # `zones` is the fourth of that shape. The ten nodes its productions
+        # build are cards in a pile, and each lives with its *subject* rather
+        # than with this reader: the five shuffles in `ast/shuffles.py` (in
+        # `ast/board.py` until Planeshift's Phase 0, whatever this note used to
+        # say — see under the list), `ExileTopOfLibrary`, `ExileEntireLibrary`
+        # and `ExileGraveyardPosition` in `ast/exile.py` since Tempest's third
+        # wave, `PutIteratedCardOnLibrary` in `ast/cards.py` and
+        # `PutLibraryTopIntoHand` in `ast/library.py`. The guard fired on the
+        # readers (`effects/library.py` at 1,030), not on the inventory, and an
+        # `ast/zones.py` gathered to match would put nine of the ten in one
+        # family with their lowering in another (only the last exile lowers in
+        # `lowering/zones.py`) — exactly what `types` records.
         "zones",
     )
+] + [
+    # `shuffles` is the one AST family `EFFECT_FAMILIES` cannot supply, because
+    # the parse side has no module of the name — so it is appended, the way
+    # `LOWERING_FAMILIES` appends its lowering-only families, and the name is
+    # `lowering/shuffles.py`'s. The note under the list says why it is not
+    # `zones`.
+    "shuffles",
 ]
 # `library` left this list at Alliances' third wave, when the size guard below
 # fired on `ast/cards.py` itself. The note above records why it was excluded —
@@ -1828,13 +1837,40 @@ AST_FAMILIES = [
 # does this permanent answer to", where the rest of `board` answers what happens
 # *to* it. The other exclusions above still hold.
 #
-# One correction the same reading turned up: the `zones` note below says
+# One correction the same reading turned up: the `zones` note above said
 # `ShuffleLibrary`, `ShuffleGraveyardIntoLibrary` and `ShuffleHandIntoLibrary`
-# "live in `ast/cards.py`, `ast/library.py` and `ast/exile.py`". All three live
-# in `ast/board.py` and always have. The exclusion it argues for is still right
+# "live in `ast/cards.py`, `ast/library.py` and `ast/exile.py`". All three lived
+# in `ast/board.py` and always had. The exclusion it argues for is still right
 # — the guard that made `zones` a family fired on `effects/library.py`, not on
 # the inventory — but the module names in it were never checked, because a
 # comment naming a module is not something any test reads.
+#
+# `shuffles` joined the list at Planeshift's Phase 0: the inventory firing
+# again, and the first time what came out was not one of the exclusions above.
+# `ast/board.py` sat at 965 with a wave about to open on it, and the five
+# `Shuffle…` nodes — the three that correction names, plus
+# `ShuffleSourceIntoLibrary` and `ShuffleTargetIntoLibrary` — were the 156 lines
+# of it that module's docstring had never claimed. "What happens *to* a
+# permanent" covers one of the five; the other four move cards out of a
+# graveyard or a hand, or nothing at all, and of the eleven CR 701 citations in
+# the file eight were theirs, seven of them to 701.24 (Shuffle). They were also
+# where the module had been growing: 49 of the 123 lines it gained after
+# `control_changes` left it at 842.
+#
+# The name is the lowering side's, and it is the mirror at its most exact —
+# `lowering/shuffles.py` lowers those five nodes and no other, and nothing else
+# lowers one of them. It is **not** `zones`, though `effects/zones.py` builds
+# all five: `shuffles` left `lowering/zones.py` at Urza's Destiny because a
+# shuffle answers "what order is this library in now" and not "which zone does
+# this object end up in", so an `ast/zones.py` holding nothing but shuffles
+# would have meant the opposite of the module it was named for. The `zones`
+# exclusion therefore still holds, with its module names now the ones the code
+# has, and the parse side stays the one package without the word:
+# `effects/zones.py` is 553 lines and crossed nothing.
+#
+# `ast/cards.py` was the other home on offer — its first line has claimed
+# "shuffle" since the package was cut — and was ruled out by arithmetic: 794
+# lines, so the five would have left it 50 under this file's own guard.
 
 
 def _imports(path: Path) -> list[tuple[int, str, bool]]:

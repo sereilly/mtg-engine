@@ -7,6 +7,10 @@ means.
 Mana used to be here. It is `ast/mana.py` now, mirroring `lowering/mana.py`,
 which split off for the same reason: what a permanent *produces* turned out to
 be a family of its own rather than a corner of this one.
+
+Shuffling is in the first line and was never here, beyond the three-line
+`Shuffle` nothing builds: the five nodes the productions do build sat in
+`ast/board.py` and are `ast/shuffles.py` since Planeshift's Phase 0.
 """
 
 from __future__ import annotations

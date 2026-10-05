@@ -32,7 +32,14 @@ from engine.grammar import ast
 
 REPO = Path(__file__).resolve().parent.parent.parent
 AST_DIR = REPO / "engine" / "grammar" / "ast"
-FAMILIES = ["damage", "characteristics", "board", "cards", "stack", "combat", "game"]
+# `shuffles` is here because its five nodes were in `board` until Planeshift's
+# Phase 0, and a split must not shrink what this guard reads. Five earlier ones
+# did exactly that — `tapping` and `control_changes` out of `board`; `mana`,
+# `library` and `exile` out of `cards` — and are still unlisted, as is
+# `separations`. `library` has two leaves the second test below would name
+# (`BinRevealedCard`, `GraveyardTopToLibrary`), so listing it is a decision
+# about those two rather than a one-word edit.
+FAMILIES = ["damage", "characteristics", "board", "shuffles", "cards", "stack", "combat", "game"]
 
 # Leaf nodes that are deliberately not statements. Each needs a reason, because
 # the whole failure this guards is a name going missing without one.
