@@ -708,3 +708,81 @@ def test_w1g7_keldon_twilight_offers_only_the_creatures_it_names(set_pool):
         "W1G7 Old"
     ]
     assert others[0].card.name == "W1G7 Old"
+
+
+# Phyrexian Tyranny and the seat nobody asks. "Pay tolls, always" answered this
+# card by tapping two lands in every draw step for the rest of the game, so a
+# toll whose whole penalty is a little life is priced against the lands on the
+# seat's own turn (`ai_policy.optional_pay_may_tap_lands`).
+
+
+def _w1g7_tyranny_draw_step(set_pool, *, life, hand):
+    """Seat 1 (three Forests, *hand*, *life*) takes its draw step under seat
+    0's Tyranny with mana costs enforced, and answers the toll by default."""
+    lea = set_pool("LEA")
+    tyranny = _W1G7Permanent(card=set_pool("PLS")["Phyrexian Tyranny"])
+    lands = _w1g7_lands(set_pool, 3, "Forest")
+    table = _w1g7_board(
+        [tyranny], lands, hands=((), tuple(lea[name] for name in hand)),
+    )
+    table.enforce_mana_costs = True
+    table.players[1].life = life
+    # The draw itself is a land, so what the seat could cast afterwards is
+    # exactly the *hand* the test handed it.
+    table.players[1].library = [lea["Forest"]] * 6
+    table.turn = 2
+
+    table.begin_turn_bookkeeping(1)
+    table.resolve_untap_step(1)
+    table.resolve_upkeep(1)
+    table.resolve_draw_step(1)
+    table.auto_resolve_pending_choices()
+    return table, lands
+
+
+def test_w1g7_a_healthy_seat_keeps_its_lands_for_the_spell_in_its_hand(set_pool):
+    table, lands = _w1g7_tyranny_draw_step(
+        set_pool, life=20, hand=("Grizzly Bears",)
+    )
+
+    assert table.players[1].life == 18
+    assert not any(land.tapped for land in lands)
+
+
+def test_w1g7_a_seat_with_nothing_to_cast_pays_the_toll(set_pool):
+    """The mana would sit idle, so the life is the dearer price even at 20."""
+    table, lands = _w1g7_tyranny_draw_step(set_pool, life=20, hand=())
+
+    assert table.players[1].life == 20
+    assert sum(land.tapped for land in lands) == 2
+
+
+def test_w1g7_a_seat_low_on_life_pays_even_holding_a_spell(set_pool):
+    """Declining would leave it under `LIFE_TOLL_FLOOR`."""
+    from engine.ai_policy import LIFE_TOLL_FLOOR
+
+    table, lands = _w1g7_tyranny_draw_step(
+        set_pool, life=LIFE_TOLL_FLOOR + 1, hand=("Grizzly Bears",)
+    )
+
+    assert table.players[1].life == LIFE_TOLL_FLOOR + 1
+    assert sum(land.tapped for land in lands) == 2
+
+
+def test_w1g7_a_toll_off_its_own_turn_is_still_paid(set_pool):
+    """On another seat's turn the lands are idle until the untap step, so the
+    standing answer stands: pay."""
+    lea = set_pool("LEA")
+    tyranny = _W1G7Permanent(card=set_pool("PLS")["Phyrexian Tyranny"])
+    lands = _w1g7_lands(set_pool, 3, "Forest")
+    table = _w1g7_board([tyranny], lands, hands=((), (lea["Grizzly Bears"],)))
+    table.enforce_mana_costs = True
+    table.active_player_index = 0
+
+    table._draw_with_replacements(table.players[1], 1)
+    table.check_state_based_actions()
+    _w1g7_resolve_stack(table)
+    table.auto_resolve_pending_choices()
+
+    assert table.players[1].life == 20
+    assert sum(land.tapped for land in lands) == 2

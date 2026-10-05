@@ -4059,6 +4059,34 @@ def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     return (player_index == controller) != unpaid_is_a_loss
 
 
+#: The life total below which a seat nobody asked starts spending its lands on
+#: a life-only toll during its own turn (:func:`optional_pay_may_tap_lands`).
+#: A weight, like every number in this module: half the starting total, so a
+#: healthy seat keeps developing and one that has been bled to it stops
+#: bleeding. The toll is paid when declining would leave the seat *under* it.
+LIFE_TOLL_FLOOR = 10
+
+
+def _life_only_toll(entry: dict) -> int | None:
+    """The life a seat loses by declining *entry*, when losing that life is
+    **all** declining does; otherwise None.
+
+    Read off the armed offer's own decline branch, so it is a fact about the
+    compiled program and never about a card: exactly one ``target_loses_life``
+    carrying a printed number. Anything else — a sacrifice, damage, a counter,
+    two steps, an amount only the resolution knows — is a toll this cannot
+    price, and None keeps the standing policy for it (pay).
+    """
+    decline = tuple(entry.get("_on_decline") or ())
+    if len(decline) != 1:
+        return None
+    step = decline[0]
+    if getattr(step, "kind", None) != "target_loses_life":
+        return None
+    amount = step.payload.get("amount")
+    return amount if isinstance(amount, int) and amount > 0 else None
+
+
 def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked may tap its untapped lands to pay a
     mana-priced "you may pay" / "unless you pay" (`_default_optional_pay`).
@@ -4088,9 +4116,30 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
       somebody else chose to cast, and what accepting does is left to defaults
       this policy cannot value — the copy keeps its original target, which is
       the payer's own creature. Those keep the floating-mana rule.
+    * **A toll whose whole penalty is a little life is the one toll priced
+      against the lands** (:func:`_life_only_toll`). "Whenever a player draws a
+      card, that player loses 2 life unless they pay {2}" (Phyrexian Tyranny)
+      asks every turn, in the draw step, before the seat has cast anything —
+      and "always pay" answered it by tapping two lands a turn for the rest of
+      the game: forty tolls paid out of forty in a six-game run, the seat
+      under it casting with whatever was left. So on the seat's **own** turn
+      such a toll is paid like a gift — with mana nothing in hand could use —
+      until its life is low enough (:data:`LIFE_TOLL_FLOOR`) that the life is
+      the dearer of the two. On another seat's turn the lands are idle and the
+      standing answer stands: pay.
     """
     if entry.get("_on_decline") or int(entry.get("damage", 0) or 0) > 0:
-        return True
+        loss = _life_only_toll(entry)
+        if loss is None or game.active_player_index != player_index:
+            return True
+        payer = game.players[player_index]
+        if payer.life - loss < LIFE_TOLL_FLOOR:
+            return True
+        return not any(
+            card.primary_type != "land"
+            and _cast_candidate(game, player_index, card, hand_index) is not None
+            for hand_index, card in hand_spells(payer)
+        )
     context = entry.get("_context")
     if getattr(context, "caster", None) is not game.players[player_index]:
         return False
