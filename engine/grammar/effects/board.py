@@ -29,7 +29,8 @@ from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount
 from ..errors import GrammarError
 from ..names import accept_original_expansion
-from ..nouns import accept_one_of_each, parse_object_filter
+from ..distinct import accept_one_of_each
+from ..nouns import parse_object_filter
 from ..records import _parse_for_each_history
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream

@@ -73,9 +73,10 @@ COLOR_WORDS: dict[str, str] = {
 #: each release.
 #:
 #: Defined here and re-exported by ``phrases`` under the name every caller
-#: already imports. It moved down a layer the day the noun reader needed it —
-#: "a land **of each basic land type**" (Global Ruin, Coalition Victory) is
-#: read in ``nouns``, which ``phrases`` imports and so cannot be imported by.
+#: already imports. It moved down the day a reader below ``phrases`` needed
+#: it — "a land **of each basic land type**" (Global Ruin, Coalition Victory)
+#: is read in ``distinct``, which ``phrases`` imports and so cannot be
+#: imported by.
 BASIC_LAND_WORDS: tuple[str, ...] = (
     "plains", "island", "swamp", "mountain", "forest",
 )

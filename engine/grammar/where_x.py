@@ -28,7 +28,8 @@ from .records import (accept_added_base, accept_damage_dealt_this_turn,
 
 from .errors import GrammarError
 from .lexer import NUMBER, PUNCT
-from .nouns import parse_counted_objects, parse_object_filter
+from .distinct import parse_counted_objects
+from .nouns import parse_object_filter
 from .readers import accept_source_reference
 from .stream import TokenStream
 from .vocabulary import NUMBER_WORDS

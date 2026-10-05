@@ -424,7 +424,7 @@ def _parse_counted_amount(
             return counters
         # Late import for the reason `parse_equal_to` gives: nouns depends on
         # this module for comparisons, so the cycle is broken at call time.
-        from .nouns import parse_counted_objects
+        from .distinct import parse_counted_objects
         from .where_x import accept_this_way_count
 
         filt = parse_counted_objects(stream)
@@ -597,7 +597,7 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
             return counters
         # Late import: nouns depends on this module for comparisons, so the
         # cycle is broken at call time rather than import time.
-        from .nouns import parse_counted_objects
+        from .distinct import parse_counted_objects
         from .where_x import accept_this_way_count
 
         filt = parse_counted_objects(stream)

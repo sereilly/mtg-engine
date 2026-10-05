@@ -45,7 +45,8 @@ from .amounts import (accept_counter_kind, accept_counters_on_event_subject,
 from .durations import _parse_duration
 from .errors import GrammarError
 from .lexer import GToken, tokenize
-from .nouns import parse_counted_objects, parse_object_filter
+from .distinct import parse_counted_objects
+from .nouns import parse_object_filter
 # Re-exported under the name this module's callers already use — the
 # arrangement `readers` documents for the fragments it holds.
 from .readers import _identifies_one_object  # noqa: F401
@@ -77,7 +78,7 @@ from .keywords import _parse_keywords, parse_keyword_list
 #: two of them need it — the combat restriction ("can't attack unless defending
 #: player controls a Forest") and the choose-a-type grant (Giant Slug) — and a
 #: fragment two families share is what this module is for. The tuple itself
-#: lives in ``vocabulary`` since the noun reader below this module needed it.
+#: lives in ``vocabulary`` since ``distinct``, below this module, needed it.
 
 
 def is_pt_counter(kind: str) -> bool:

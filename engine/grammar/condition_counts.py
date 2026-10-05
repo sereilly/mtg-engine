@@ -51,7 +51,8 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
-from .nouns import accept_one_of_each, parse_object_filter
+from .distinct import accept_one_of_each
+from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of

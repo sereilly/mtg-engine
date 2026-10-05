@@ -258,6 +258,22 @@ PARSE_LAYERS = [
     # attacking creature" nests a whole phrase.
     "postmodifiers",
     "nouns",
+    # What a **count** may be taken over instead of objects — "for each basic
+    # land type **among** lands you control" (domain, CR 207.2c) and "a land
+    # **of each** basic land type". New at Invasion's wave 1 rather than split
+    # out of anything: the two readers were written into `nouns` and took it
+    # from 848 lines to 960 in one round, so they were moved before the wave's
+    # colour groups — who all extend the noun parser — found the guard there.
+    #
+    # Above `nouns`, whose object parser reads the phrase on either side of the
+    # words, and never imported back: a count position opts in by calling
+    # `parse_counted_objects`, where a target or a sweep calls the plain reader
+    # and so cannot read "destroy target basic land type among …". Below
+    # `phrases` and `where_x`, the two count readers that import it. No mirror
+    # name to reuse — the lowering side is one branch of `_amounts.count_spec`
+    # — so it carries the name of the AST field it produces,
+    # `ObjectFilter.distinct`.
+    "distinct",
     # Which **seat** a printed phrase names — CR 102's player, not CR 109's
     # object. Split out of `references` at Urza's Saga's wave-2 integration,
     # when that module reached the guard with **one** line to spare and a third

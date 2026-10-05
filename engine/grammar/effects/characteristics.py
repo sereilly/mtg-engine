@@ -23,7 +23,8 @@ from ..records import (_parse_for_each_this_way,
 
 from ..errors import GrammarError
 from ..lexer import PT, PUNCT, QUOTE, SELF, tokenize
-from ..nouns import parse_counted_objects, parse_object_filter
+from ..distinct import parse_counted_objects
+from ..nouns import parse_object_filter
 from ..references import parse_recipient, parse_target_spec
 from ..stream import TokenStream
 

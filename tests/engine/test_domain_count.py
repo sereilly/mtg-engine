@@ -3,7 +3,7 @@
 CR 207.2c's ability word, printed in ten Invasion sentences and in every
 sentence position a count can occupy. It is **one aggregate on the count spec**
 (``distinct_basic_land_types``), read by one parser entry
-(``nouns.parse_counted_objects``), carried on ``ObjectFilter.distinct`` and
+(``distinct.parse_counted_objects``), carried on ``ObjectFilter.distinct`` and
 lifted by ``lowering/_amounts.count_spec`` — so any sentence that spends a
 count through that function reads domain for free.
 

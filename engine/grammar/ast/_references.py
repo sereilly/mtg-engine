@@ -793,7 +793,7 @@ class ObjectFilter:
     #: emitted by ``to_payload`` and listed in
     #: ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS``, so every lowering but
     #: the count refuses the phrase by name: read as a plain filter it would
-    #: count the lands. Produced only by ``nouns.parse_counted_objects`` — the
+    #: count the lands. Produced only by ``distinct.parse_counted_objects`` — the
     #: reader a count position calls — and never by the noun parser a target or
     #: a sweep calls. The value is the count spec's aggregate name.
     distinct: str | None = None
