@@ -56,6 +56,7 @@ from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
+from engine.spell_prohibitions import casting_forbidden_this_turn
 from engine.targeting import usable_activated_abilities
 from engine.untap_restrictions import permanent_in_limited_scope
 
@@ -297,6 +298,15 @@ def _card_castable_now(
 
     classification = classify_card(card)
     if not classification.supported:
+        return False
+
+    # "Target player can't cast spells this turn." (Orim's Chant) / "Until end
+    # of turn, target player can't cast instant or sorcery spells." (Abeyance.)
+    # CR 601.3: a prohibited spell cannot begin to be cast, so it is not
+    # castable *now* — asked of the record the cast path itself refuses by, so
+    # a card that glows is one the click will not be refused for. The untyped
+    # sentence stops no land drop (CR 305.1), which that reader already knows.
+    if casting_forbidden_this_turn(game, player_index, card) is not None:
         return False
 
     # CR 702.8b: flash casts any time an instant could be cast, so both timing

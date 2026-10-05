@@ -1271,6 +1271,23 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
         specs.append(_permanent_set_cost_spec(
             described, "return_cost", int(cost.return_to_hand_count)
         ))
+    described = getattr(cost, "return_filter", None)
+    if described is not None and not getattr(cost, "return_count_x", False):
+        # The **cast** side's spelling of the same cost
+        # (``AdditionalCost.return_filter``): "Kicker—Return a creature you
+        # control to its owner's hand." (Arctic Merfolk.) Which creature goes
+        # home is the caster's (CR 601.2b), and the charger has read
+        # ``cost_permanent_ids`` for it since Infernal Harvest — but nothing
+        # described the choice, so a human who kicked the Merfolk returned
+        # whichever creature the default met first.
+        #
+        # A printed count only. "Return **X** Swamps" (Infernal Harvest) stays
+        # pinned in ``test_cost_pickers._PICKERLESS_CAST_COSTS`` with its own
+        # reason: the cast client asks X after the cost stage, so a set of X
+        # has nowhere to learn its size from.
+        specs.append(_permanent_set_cost_spec(
+            described, "return_cost", int(getattr(cost, "return_count", 1) or 1)
+        ))
     described = getattr(cost, "tap_filter", None)
     if described is not None and getattr(cost, "tap_count", 0):
         # "**Tap an untapped creature you control**: …" (Opposition, Earthcraft,

@@ -3000,6 +3000,21 @@ class LegalityMixin:
             # countering it would be inventing a target the card never printed
             # — or its target may be a player, above.
             return None
+        if spec_is_a_cost(spec):
+            # …and the second spelling of "does not target at all": a spell
+            # whose whole derived spec is a **payment** picker ("As an
+            # additional cost to cast this spell, sacrifice a creature. Draw
+            # two cards.", Village Rites). ``derive_cast_spec`` answers with
+            # the cost when there is no target beside it, so the test above
+            # did not see "no target" — and an id stamped on the item was then
+            # judged as one. The AI names the permanent it means to pay with on
+            # the target channel, that permanent is in the graveyard by the
+            # time the spell is on the stack, and every such spell paid its
+            # cost and was then "countered by the rules" for a target it never
+            # printed: 15 of 15 in the pool, Diabolic Intent in a simulated
+            # game. A payment is not a target (CR 601.2b vs 601.2c), which is
+            # what a cost flag at the top of a spec says.
+            return None
         if any(
             role.get("kind") in _UNFIZZLABLE_TARGET_KINDS
             for role in spec_roles(spec)

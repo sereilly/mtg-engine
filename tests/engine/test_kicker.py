@@ -101,6 +101,15 @@ def test_every_kicker_line_is_rewritten_into_an_offer_the_reader_keys_by(kicker_
             for cost in additional_costs(card)
             for offer in cost.optional_mana
         ]
+        # …or a price that is not mana ("Kicker—Sacrifice a land.", nine
+        # Planeshift cards): the same announcement namespace, keyed by the
+        # cost's own ``optional_key`` — which is what the cast path accepts the
+        # announcement under and what ``kicked`` reads back.
+        offered += [
+            cost.optional_key
+            for cost in additional_costs(card)
+            if cost.optional_key is not None
+        ]
         assert key in offered, (card.name, key, offered)
         # …and the compiler's text holds the sentence, not the keyword line.
         expanded = expand_ability_lines(card.oracle_text, card_name=card.name)
