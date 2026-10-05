@@ -689,7 +689,12 @@ def _serialize_card(
     # them in the cost the UI shows and auto-taps for, so the pay-mana prompt
     # matches what the player actually pays. ``printed_mana_cost`` keeps the
     # unmodified printed value for reference.
-    tax = _gloom_white_tax(card, game)
+    # Never on a multi-face card as a whole: it is not a spell (CR 709.3), its
+    # `mana_cost` is two costs spelled side by side, and folding a tax into
+    # that string added it to whichever half printed a generic symbol —
+    # Stand // Deliver read `{W}{5}{U}` under Gloom, the white half's tax on
+    # the blue half's cost. Each face below is taxed as the spell it is.
+    tax = 0 if face_cards(card) else _gloom_white_tax(card, game)
     effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
     serialized = _card_preview(card)
     serialized.update({

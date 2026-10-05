@@ -212,6 +212,7 @@ def _action_cast(session, req, seat_type):
             and permission_for(
                 session.game, req.seat, top, "library",
                 as_land=top.primary_type == "land",
+                spell=spell_named(top, req.card_name),
             ) is not None
             else None
         )
@@ -234,7 +235,8 @@ def _action_cast(session, req, seat_type):
         ]
         # ``spell_named`` at each of the four lookups in this handler: a split
         # card is cast by the name of one of its halves (CR 709.3), the
-        # permission is asked of the card as the zone holds it, and what the
+        # permission is asked of the card as the zone holds it *and* of the
+        # half it is being cast as (`permission_for`'s `spell`), and what the
         # timing gates below judge is the half (CR 709.3a).
         card = next(
             (
@@ -246,6 +248,7 @@ def _action_cast(session, req, seat_type):
                     grant := permission_for(
                         session.game, req.seat, entry, req.from_zone,
                         as_land=entry.primary_type == "land",
+                        spell=spell_named(entry, req.card_name),
                     )
                 ) is not None
                 and grant.zone_seat == seat

@@ -540,3 +540,138 @@ def test_w2g4_a_seat_that_is_not_asked_forces_the_first_half():
     assert game.pending_word_of_command is None
     assert p1.life == 18 and BURN_GROW in p1.graveyard
     assert not any("choose which half" in line for line in game.log)
+
+
+# ---------------------------------------------------------------------------
+# W2G4 — a permission scoped by a spell's characteristics judges the half
+# ---------------------------------------------------------------------------
+#
+# CR 709.3a: "Only the chosen half is evaluated to see if it can be cast", and
+# CR 709.3b: the spell has only that half's characteristics. A cast permission
+# has two kinds of scope. *Which object* it covers — the card a grant named,
+# the top card of a pile — is asked of the card as its zone holds it, whole.
+# *What kind of spell* it covers — "instant spells with mana value 2 or less",
+# "instant and sorcery spells" — is asked of the spell, and for a split card
+# that is the half. Both were asked of the whole card, so Burn // Grow was a
+# five-mana instant-and-sorcery to every such permission: too expensive for a
+# waiver its one-mana half is entitled to, and a sorcery to a permission that
+# names sorceries while the half being cast is an instant.
+#
+# No card in the pool prints a split card beside one of these today — which is
+# why the fixtures are invented, and why nothing had failed.
+
+
+def _w2g4_waiver(card_type: str, mana_value: int) -> CardDefinition:
+    """Aluren's sentence with its two parameters turned
+    (``cast_permissions.board_free_cast_line`` reads both as payload)."""
+    return CardDefinition(
+        name=f"Free {card_type.title()} Charter",
+        mana_cost="{2}{G}{G}",
+        cmc=4.0,
+        type_line="Enchantment",
+        oracle_text=(
+            f"Any player may cast {card_type} spells with mana value {mana_value} "
+            "or less without paying their mana costs and as though they had flash."
+        ),
+        colors=("G",),
+        color_identity=("G",),
+        keywords=(),
+        produced_mana=(),
+        raw={},
+    )
+
+
+def _w2g4_charter_game(charter):
+    game, p0, p1 = _duel(enforce=True)
+    game._put_permanent_onto_battlefield(1, Permanent(card=charter), None)
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    p0.hand.append(BURN_GROW)
+    return game, p0, p1
+
+
+@pytest.mark.cr("709.3a", "709.3b")
+def test_w2g4_a_mana_value_waiver_reads_the_halfs_mana_value():
+    """Burn is an instant with mana value 1. The card it is half of has mana
+    value 5 everywhere but the stack (CR 709.4b) — and the stack is where a
+    spell is."""
+    game, p0, p1 = _w2g4_charter_game(_w2g4_waiver("instant", 2))
+    assert p0.mana_pool.get("R", 0) == 0 and not list(game.controlled_by(0))
+
+    cast = game.queue_from_hand(0, "Burn", target_player_index=1)
+    assert cast.supported, cast.details
+    resolve_stack(game)
+    assert p1.life == 18 and BURN_GROW in p0.graveyard
+
+
+@pytest.mark.cr("709.3a", "709.3b")
+def test_w2g4_a_waiver_for_another_type_does_not_reach_the_half():
+    """The mirror, and the one that was wrong in the caster's favour: a waiver
+    for *sorcery* spells of mana value 5 or less covered the whole card (a
+    sorcery, mana value 5) and so made Burn — an instant — free."""
+    game, p0, p1 = _w2g4_charter_game(_w2g4_waiver("sorcery", 5))
+
+    burn = game.queue_from_hand(0, "Burn", target_player_index=1)
+    assert not burn.supported, "Burn is not a sorcery spell; nothing waives its cost"
+    assert p1.life == 20 and p0.hand == [BURN_GROW] and not game.stack
+
+    # Grow *is* a sorcery of mana value 4, and the same waiver is its.
+    grow = game.queue_from_hand(0, "Grow")
+    assert grow.supported, grow.details
+    resolve_stack(game)
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Elephant Token"]
+
+
+@pytest.mark.cr("709.3a", "709.3b")
+def test_w2g4_a_typed_zone_permission_covers_the_half_of_that_type_only():
+    """"You may cast instant spells from your graveyard": the card in the
+    graveyard is an instant *and* a sorcery (CR 709.4c), the spell cast out of
+    it is one or the other, and the permission is about the spell."""
+    from engine.cast_permissions import grant_permission, playable_from_zones
+
+    game, p0, p1 = _duel()
+    game.active_player_index = 0
+    game._set_phase_and_step("precombat_main", "precombat_main")
+    p0.graveyard.append(BURN_GROW)
+    grant_permission(
+        game, player_index=0, zone="graveyard", mode="cast",
+        card_types=("instant",), duration="end_of_turn", source_name="Test Grant",
+    )
+
+    # Offered — one half is castable — and offered once, as the card.
+    offered = [entry for entry in playable_from_zones(game, 0) if entry["zone"] == "graveyard"]
+    assert [entry["name"] for entry in offered] == ["Burn // Grow"]
+
+    grow = game.queue_from_hand(0, "Grow", from_zone="graveyard")
+    assert not grow.supported and BURN_GROW in p0.graveyard and not game.stack
+
+    burn = game.queue_from_hand(0, "Burn", from_zone="graveyard", target_player_index=1)
+    assert burn.supported, burn.details
+    assert game.stack[-1].card.name == "Burn" and BURN_GROW not in p0.graveyard
+    resolve_stack(game)
+    assert p1.life == 18 and _no_half_is_loose(game)
+
+
+# ---------------------------------------------------------------------------
+# W2G4 — what a mixed split card is, outside the stack (CR 709.4c)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cr("709.4c")
+def test_w2g4_a_mixed_split_card_has_both_types_and_one_primary_type():
+    """``primary_type`` picks one type by the order of a list and answers
+    "instant" for an Instant // Sorcery card. That is a *display* bucket — the
+    deck builder's and the report's — and every reader that asks what a card
+    in a zone **is** goes through ``card_has_type``, which answers for both.
+    Pinned here because the two are easy to confuse, and the day a reader asks
+    ``primary_type == "sorcery"`` of a card in a graveyard it will miss this
+    one. (``tests/engine/test_face_blind_guards.py`` holds the same line for
+    compiled text.)"""
+    assert BURN_GROW.primary_type == "instant"
+    assert card_has_type(BURN_GROW, "instant") and card_has_type(BURN_GROW, "sorcery")
+    burn, grow = face_cards(BURN_GROW)
+    assert (burn.primary_type, grow.primary_type) == ("instant", "sorcery")
+    assert not card_has_type(burn, "sorcery") and not card_has_type(grow, "instant")
+    # Where the one-type answer would do damage is the timing gate, and that
+    # reads the half: ``tests/ui/test_split_cards_ui_api.py`` casts Quick and
+    # is refused Slow on the opponent's turn.
