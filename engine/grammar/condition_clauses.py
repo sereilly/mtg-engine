@@ -53,7 +53,18 @@ def _parse_self_in_graveyard_above(
     if not stream.accept_phrase("this", "card", "is", "in", "your", "graveyard"):
         return None
     if not stream.accept_word("with"):
-        raise stream.error("expected 'with' after the graveyard clause")
+        # "…if **this card is in your graveyard**, you may pay {1}{B}{B}."
+        # (Pyre Zombie.) The clause with no position asked: CR 113.6b's
+        # statement of where the ability functions and nothing more. The same
+        # node with a floor of zero cards above it — every position the card
+        # holds qualifies — rather than a second node, because the graveyard
+        # scan, the re-check on resolution and the ``functions_from`` stamp are
+        # all this node's already and a sibling would have to repeat each.
+        # "card" is no card type, so nothing is counted; the floor of zero is
+        # what answers.
+        return ast.SelfInGraveyardWithCardsAbove(
+            card_type="card", count=0, at_least=True, directly=False,
+        )
     at_least = False
     if stream.accept_word("a", "an"):
         count = 1

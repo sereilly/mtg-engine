@@ -54,7 +54,16 @@ from ._common import (
 
 
 
-def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
+#: Trigger conditions that are a step of the turn and name no object: under
+#: one, a bare "it" in the effect has only the ability's own source to mean.
+#: Closed and short on purpose -- a condition added here is a claim that its
+#: fire site freezes no card and no permanent.
+_OBJECTLESS_STEP_EVENTS = frozenset({"upkeep_self", "upkeep_each"})
+
+
+def _returns_its_own_source(
+    node: "ast.ReturnToZone", subject, event: str | None = None,
+) -> bool:
     """Whether "return **it**" names the ability's *own* card rather than the
     firing event's object.
 
@@ -93,10 +102,16 @@ def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
 
     Narrow on purpose in the other direction too. Storm Cauldron's bound "return
     it" goes to a hand and Puppet Master's names a card, so neither is
-    reachable; and "...to **your** hand" is deliberately absent, because that
-    spelling lowers to ``return_self_from_graveyard``, which searches one seat's
-    graveyard alone -- a different reading, which no card in the pool prints
-    under a self-event.
+    reachable.
+
+    * "At the beginning of your upkeep, if this card is in your graveyard, you
+      may pay {1}{B}{B}. If you do, return it to **your** hand." (Pyre Zombie.)
+      The third reading, which ``return_self_from_graveyard`` performs and
+      which was absent while no card printed it. Admitted only under an event
+      that names **no object at all** -- a step of the turn -- because under
+      one that does, the same four words are Enduring Renewal's and name the
+      event's card. The pronoun has nothing else to be: Death Spark prints the
+      sentence with "this card" spelled out, and the two are one payload.
     """
     if subject.quantifier != "it" or not subject.filter.is_source:
         return False
@@ -108,11 +123,11 @@ def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
         and node.under_control_of is not None
     ):
         return True
-    return (
-        node.to.name == "hand"
-        and node.to.owner is not None
-        and node.to.owner.kind == "owner"
-    )
+    if node.to.name != "hand" or node.to.owner is None:
+        return False
+    if node.to.owner.kind == "owner":
+        return True
+    return node.to.owner.kind == "you" and event in _OBJECTLESS_STEP_EVENTS
 
 
 
@@ -307,7 +322,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier == "that"
         and not subject.filter.is_card
-        and not _returns_its_own_source(node, subject)
+        and not _returns_its_own_source(node, subject, event)
         and not _is_attached_host_pronoun(subject)
         and node.from_zone is None
         and node.to.name == "hand"
@@ -359,7 +374,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
-        and not _returns_its_own_source(node, subject)
+        and not _returns_its_own_source(node, subject, event)
         # An *attached* trigger's "it" names the Aura's host, not a card this
         # event recorded, so it falls past to the two readings that find it.
         and not _is_attached_host_pronoun(subject)
