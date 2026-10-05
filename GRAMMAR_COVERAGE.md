@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 73.3% | 71.7% | 50.1% | 215 |
+| INV *(measured)* | 335 | 547 | 75.3% | 73.9% | 51.0% | 220 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 569 | 283 | expected a subject |  |
+| 563 | 277 | expected a subject |  |
 | 150 | 77 | unrecognized effect verb |  |
-| 147 | 82 | unconsumed text |  |
+| 142 | 77 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -6295,6 +6295,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Prosperity**
   - `Each player draws X cards.`
   - `Each player draws X cards.`
+- **Protective Sphere**
+  - `{1}, Pay 1 life: Prevent all damage that would be dealt to you this turn by a source of your choice that shares a color with the mana spent on this activation cost. (Colorless mana prevents no damage.)`
 - **Provoke**
   - `Untap target creature you don't control. That creature blocks this turn if able.`
   - `Draw a card.`
@@ -6813,6 +6815,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Reviving Dose**
   - `You gain 3 life.`
   - `Draw a card.`
+- **Rewards of Diversity**
+  - `Whenever an opponent casts a multicolored spell, you gain 4 life.`
 - **Rewind**
   - `Counter target spell. Untap up to four lands.`
   - `Counter target spell. Untap up to four lands.`
@@ -7114,6 +7118,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Samite Ministration**
+  - `Prevent all damage that would be dealt to you this turn by a source of your choice. Whenever damage from a black or red source is prevented this way this turn, you gain that much life.`
 - **Samite Sanctuary**
   - `{2}: Prevent the next 1 damage that would be dealt to target creature this turn. Any player may activate this ability.`
 - **Sanctimony**
@@ -8076,6 +8082,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Spreading Algae**
   - `When enchanted land becomes tapped, destroy it.`
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
+- **Spreading Plague**
+  - `Whenever a creature enters, destroy all other creatures that share a color with it. They can't be regenerated.`
 - **Squall**
   - `Squall deals 2 damage to each creature with flying.`
 - **Squallmonger**
@@ -9101,6 +9109,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Urborg Panther**
   - `{B}, Sacrifice this creature: Destroy target creature blocking it.`
   - `Sacrifice a creature named Feral Shadow, a creature named Breathstealer, and this creature: Search your library for a card named Spirit of the Night, put that card onto the battlefield, then shuffle.`
+- **Urborg Phantom**
+  - `{U}: Prevent all combat damage that would be dealt to and dealt by this creature this turn.`
 - **Urborg Shambler**
   - `Other black creatures get -1/-1.`
 - **Urborg Skeleton**
