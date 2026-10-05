@@ -90,6 +90,13 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     target = context.target
     card = context.card
     source_permanent = context.source_permanent
+    # The permanent the *sentence is printed on*, kept apart from
+    # ``source_permanent`` — which from here down means the **dealer** and can
+    # be moved off it by a printed subject (``biter`` below). The two were one
+    # variable while every moved dealer aimed its damage somewhere else; "That
+    # artifact deals damage … **to this creature**" (Goblin Tinkerer) is the
+    # first sentence whose recipient is the object the dealer was moved off.
+    own_permanent = context.source_permanent
     x_value = context.x_value
 
     # ``biter: "attached"`` — "**Enchanted creature** deals 1 damage to target
@@ -116,13 +123,33 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # nothing else once ``source_permanent`` is known non-None, which the
         # early return above guarantees.
         card = host.card
+    elif (dealer_record := instruction.payload.get("biter")) is not None:
+        # ``biter: "destroyed_target"`` — "Destroy target artifact. **That
+        # artifact** deals damage equal to its mana value to this creature."
+        # (Goblin Tinkerer.) The dealer is the object an earlier step of this
+        # same resolution named, read from the record that step froze before
+        # it acted (CR 608.2h) — the ``Permanent`` itself, so the damage has
+        # the artifact's colours, types, keywords and controller whether the
+        # artifact is in a graveyard by now or regenerated and still here
+        # (CR 120.7: the source is the object that dealt it).
+        #
+        # No record means the step named nothing — its target was gone
+        # (CR 608.2b) — and then nothing deals the damage, for the reason an
+        # Aura with no host deals none: falling back to the ability's own
+        # source is the wrong dealer coming back by another door.
+        dealer = (context.results or {}).get(dealer_record)
+        if dealer is None or not hasattr(dealer, "effective_card"):
+            game.log.append(f"{card.name}: nothing to deal the damage")
+            return True, "resolved"
+        source_permanent = dealer
+        card = dealer.effective_card
 
     # Rocket Launcher: "Destroy this artifact at the beginning of the next end
     # step." A consequence of having activated, so it is marked here rather
     # than sequenced — the end step's existing delayed-destruction sweep does
     # the rest (phases/end_step.py:_delayed_eot_removal).
-    if instruction.payload.get("destroys_source_at_end_step") and source_permanent is not None:
-        source_permanent.metadata["destroy_at_next_end_step"] = True
+    if instruction.payload.get("destroys_source_at_end_step") and own_permanent is not None:
+        own_permanent.metadata["destroy_at_next_end_step"] = True
 
     # "…it deals **that much** damage" (Brash Taunter): the number is the firing
     # event's, frozen into the trigger's context by the fire site. An absent
@@ -328,12 +355,16 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # A source that has already left the battlefield takes nothing (CR
         # 608.2b's spirit: the object the effect names is gone), and says so
         # rather than falling through to a face.
-        if source_permanent is None or not game.is_on_battlefield(source_permanent):
+        #
+        # The recipient is the permanent the sentence is printed on; the
+        # *dealer* is ``source_permanent``, which is the same object unless a
+        # printed subject moved it (Goblin Tinkerer's destroyed artifact).
+        if own_permanent is None or not game.is_on_battlefield(own_permanent):
             game.log.append(f"{card.name}: its source is gone, no damage to itself")
             return True, "resolved"
         game._mark_damage_on_permanent(
-            source_permanent, damage, source=source_permanent, asks=True,
-            then=_damage_reporter(game, card, source_permanent),
+            own_permanent, damage, source=source_permanent or own_permanent,
+            asks=True, then=_damage_reporter(game, card, own_permanent),
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "bound_permanent":
