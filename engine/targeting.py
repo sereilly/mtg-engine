@@ -1566,6 +1566,14 @@ def _counter_spec(payload: dict) -> dict:
         # then counters nothing, which is the {U} paid for no effect the
         # narrowing beside it exists to prevent.
         spec["stack_targets_source"] = True
+    controller = payload.get("controller")
+    if controller:
+        # "…spell or ability **an opponent controls**" (Teferi's Response),
+        # "…artifact spell **you control**" (Goblin Artisans). Whose object it
+        # is, handed over in the word the handler tests — so the offer and the
+        # counter name one set, and a spell cast at one's own land is never
+        # offered to a card that could not counter it.
+        spec["stack_controller"] = controller
     if payload.get("also_ability"):
         # "Counter target spell **or ability** that targets a creature."
         # (Diplomatic Escort.) CR 113.7a: an ability on the stack is not a
@@ -3041,6 +3049,18 @@ def _from_instruction(instruction) -> dict | None:
     # ``targets`` description settles on that, and none in the pool carries
     # both.
     if instruction.payload.get("permanents_from"):
+        return None
+    # **…and so does one acting on the firing event's own object.** "Whenever a
+    # permanent becomes tapped, put a wind counter on **it**" (Freyalise's
+    # Winds), "…a creature or land becomes tapped, put an hourglass counter on
+    # it" (Temporal Distortion). ``on_event_subject`` is the lowering's record
+    # that the pronoun names what the event was about, found by the id the fire
+    # site froze (CR 603.10) — the paragraph above with the record held by the
+    # trigger instead of by the resolution, and with the same consequence:
+    # read as a target, the trigger asked for a creature nobody was choosing,
+    # and on a board with **no creature** CR 603.3c removed it from the stack,
+    # so tapping a land under either enchantment put no counter on it.
+    if instruction.payload.get("on_event_subject"):
         return None
     by_kind = _KIND_TO_SPEC.get(instruction.kind)
     return dict(by_kind) if by_kind is not None else None

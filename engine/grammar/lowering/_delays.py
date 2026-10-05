@@ -11,9 +11,15 @@ a time.
 
 A floor, not a family: eight lowering families read
 :data:`_BOUND_OBJECT_DELAYED_EVENTS` and it reads nothing back.
+
+:func:`end_step_action_on_made_permanent` is the one builder here, and it is
+here for the tables' reason: it answers "which object is this delayed entry
+about" for the case where the creating effect *made* that object a step ago.
 """
 
 from __future__ import annotations
+
+from ...oracle_types import OracleInstruction
 
 
 #: Delayed-trigger events (CR 603.7) whose entry names a **particular object**
@@ -92,3 +98,48 @@ _DELAYED_AGENT_EVENTS: frozenset[str] = frozenset({
 
 #: The payload key the delayed machinery stamps that object's id under.
 BOUND_PERMANENT_ID = "bound_permanent_id"
+
+
+#: What "<verb> it at the beginning of the next end step" does to a permanent
+#: an earlier step of the same effect **made**, as the kind that acts on a
+#: delayed entry's bound object (CR 603.7c).
+_MADE_PERMANENT_END_STEP_ACTIONS = {
+    "destroy": "destroy_bound_permanent",
+    "sacrifice": "sacrifice_bound_permanent",
+    "bounce": "return_bound_permanent_to_hand",
+}
+
+
+def end_step_action_on_made_permanent(action: str, record: str) -> OracleInstruction:
+    """The delayed ability "<action> **it** at the beginning of the next end
+    step" creates when "it" is a permanent this effect made.
+
+    "Create a 3/1 black and red Graveborn creature token with haste. Sacrifice
+    it at the beginning of the next end step." (Balduvian Dead; Hornet Cannon
+    and Tidal Wave print the sentence too.) "You may put a creature card from
+    your hand onto the battlefield. … Its controller sacrifices it at the
+    beginning of the next end step." (Cauldron Dance.)
+
+    The pronoun names what the step in front made — a token, a reanimated card,
+    a card put from a hand — which nothing targeted and which did not exist
+    when the ability was announced. ``arm_self_action_at_next_end_step`` reads
+    it as "the ability's target, else its source", and behind a maker both are
+    wrong: Balduvian Dead marked **itself** for the sacrifice and kept the
+    token, Tidal Wave (a spell, so no source) armed nothing at all, and
+    Cauldron Dance resolved its *graveyard slot* as a battlefield slot.
+
+    So the id is frozen out of the maker's *record* as the entry is created
+    (CR 603.7c), the shape Sneak Attack and Shallow Grave already compile to:
+    an empty record arms nothing, and a permanent that leaves and returns is a
+    new object the entry no longer names (CR 400.7).
+    """
+    return OracleInstruction("create_delayed_trigger", "", {
+        "event": "next_end_step",
+        "once": True,
+        "duration": "until_it_triggers",
+        "binds_recorded": record,
+        "binds_target": False,
+        "instruction": OracleInstruction(
+            _MADE_PERMANENT_END_STEP_ACTIONS[action], "", {}
+        ),
+    })

@@ -1597,6 +1597,16 @@ class SpellCastingMixin:
         if named_refusal is not None:
             self.log.append(named_refusal)
             return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
+        # …and the same rule for a target **on the stack** that prints a
+        # description no arm above reads ("…an opponent controls that targets a
+        # land you control", Teferi's Response). Its own call because the named
+        # object is a stack item rather than a battlefield slot.
+        stack_refusal = self.described_stack_target_refusal(
+            caster_index, card, target_stack_item, from_zone=from_zone,
+        )
+        if stack_refusal is not None:
+            self.log.append(stack_refusal)
+            return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
 
         # …and the same rule for a named **spell on the stack**, which the gate
         # above does not read (its slots are battlefield slots). See

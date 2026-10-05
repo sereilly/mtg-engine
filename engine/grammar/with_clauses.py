@@ -258,6 +258,20 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
                 d.with_named_counter = kind.text
                 return True
         stream.reset(counter_probe)
+        # "…each land **with an activated ability that isn't a mana ability**"
+        # (Tsabo's Web). Read whole, in the singular the distributive "each"
+        # prints and the plural a bare noun phrase would: every word is the
+        # narrowing — "activated" is CR 602's class and the relative clause is
+        # CR 605.1a's exclusion — so a reading that stopped at "ability" would
+        # name every land that taps for mana, which is every land.
+        if stream.accept_phrase(
+            "an", "activated", "ability", "that", "isn't", "a", "mana", "ability",
+        ) or stream.accept_phrase(
+            "activated", "abilities", "that", "aren't", "mana", "abilities",
+        ):
+            d.with_nonmana_activated_ability = True
+            return True
+        stream.reset(counter_probe)
         # "with mana value X" (Spell Blast). Two words, so it is tried
         # before the keyword list — "mana" alone is not a keyword, but
         # leaving the phrase unmatched would strand "value X" and fail the

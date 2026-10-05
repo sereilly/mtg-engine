@@ -3777,6 +3777,17 @@ def exile_target_permanent(game: Game, instruction: OracleInstruction, context: 
     if owner_index is None:
         owner_index = controller_index if controller_index is not None else 0
     game.players[owner_index].exile.append(perm.card)
+    # "Exile target creature you control. Return **that card** to the
+    # battlefield … at the beginning of the next end step." (Liberate.) Which
+    # card this step exiled, under the key every "that card" behind an exile
+    # reads — a delayed ability's creation freezes the scratchpad
+    # (CR 603.7d), so the return finds this card by identity and not whatever
+    # else has reached the zone since. A **token** is not recorded: CR 111.8
+    # ends its existence when it leaves the battlefield, so there is no card
+    # for the words to name and returning one would mint a card from nothing.
+    context.results["exiled_cards"] = (
+        [] if perm.metadata.get("is_token") else [perm.card]
+    )
     # Recorded as exiled **with** the ability's source when that source is a
     # permanent (CR 610.3), exactly as ``exile_top_of_library`` does it and for
     # the same reason: nothing ends the link on its own — the entry carries no
@@ -8664,6 +8675,7 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
     caster = context.caster
     destination = str(instruction.payload.get("zone", "hand"))
     moved: list = []
+    returned_to = ""
     # The caster's own pile first, then everybody else's. Identity alone is not
     # enough to pick the pile: a deck repeats one immutable ``CardDefinition``
     # per copy and the catalog is shared between seats, so *the same object* can
@@ -8680,6 +8692,27 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             # come back to life still saying "face down" (CR 400.7, 406.7).
             if not game.take_card_from_exile(owner, card):
                 continue
+            if destination == "battlefield":
+                # "Return that card to the battlefield under **its owner's**
+                # control." (Liberate.) CR 400.3 put the card in its owner's
+                # exile, so the seat holding it is the owner; "under your
+                # control" is the ability's controller instead, and the
+                # permanent then remembers whose it is, exactly as
+                # ``reanimate_bound_card`` records it. A new object either way
+                # (CR 400.7): no counters, no Auras, summoning-sick.
+                owner_seat = game.players.index(owner)
+                seat = (
+                    owner_seat
+                    if instruction.payload.get("control") == "owner"
+                    else game.players.index(caster)
+                )
+                permanent = Permanent(card=card)
+                if owner_seat != seat:
+                    permanent.metadata["owner_player_index"] = owner_seat
+                game._put_permanent_onto_battlefield(seat, permanent, None)
+                moved.append(card)
+                returned_to = game.players[seat].name
+                break
             if destination == "graveyard":
                 # CR 400.3: its **owner's** graveyard, and the owner is the
                 # player whose exile held it — the card reached that pile out of
@@ -8697,7 +8730,12 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             ):
                 moved.append(card)
             break
-    if moved:
+    if moved and destination == "battlefield":
+        game.log.append(
+            f"{', '.join(card.name for card in moved)} returned to the "
+            f"battlefield under {returned_to}'s control ({context.card.name})"
+        )
+    elif moved:
         names = ", ".join(card.name for card in moved)
         game.log.append(
             f"{caster.name} put {names} into their hand from exile"

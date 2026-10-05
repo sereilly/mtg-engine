@@ -205,6 +205,15 @@ class SameNamedObject:
 
     zone: str
     nontoken: bool = False
+    #: "…if **another** permanent with the same name is on the battlefield"
+    #: (Winnow). The article is what moves the comparison: "a" compares against
+    #: what the firing event named, "another" against the object *this effect
+    #: targets* — and "another" is identity, so the target is never the second
+    #: object it is compared with. A field rather than a node
+    #: because the question is still "does an object of this name exist over
+    #: there"; only where the name comes from differs, and the lowering refuses
+    #: each spelling wherever its referent is not in view.
+    other: bool = False
 
 
 @dataclass(frozen=True)

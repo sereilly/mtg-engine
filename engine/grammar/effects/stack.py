@@ -329,6 +329,44 @@ def _parse_countered_destination(
     return zone, position, narrowing
 
 
+def _parse_destroy_countered_ability_source(
+    stream: TokenStream,
+) -> "ast.DestroyCounteredAbilitySource | None":
+    """``if a permanent's ability is countered this way, destroy that
+    permanent`` (Teferi's Response), or None with the cursor where it was.
+
+    Read whole, for ``BoundPermanentActivationBan``'s reason: nothing in it is
+    payload. "A permanent's ability" is not a noun phrase a matcher could test
+    — it is the question the counter's own record answers — and "that
+    permanent" is that record read back, so a production that took either half
+    alone would hand the other to a reader that names a different object.
+
+    "It can't be regenerated." is read as a trailing sentence when printed and
+    recorded, never skipped: an unread rider would be a destroy a regeneration
+    shield answers where the card says it cannot.
+    """
+    mark = stream.mark()
+    if not (
+        stream.accept_phrase(
+            "if", "a", "permanent", "'s", "ability", "is", "countered", "this",
+            "way",
+        )
+        and stream.accept_punct(",")
+        and stream.accept_phrase("destroy", "that", "permanent")
+    ):
+        stream.reset(mark)
+        return None
+    bypass = False
+    rider = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "it", "can't", "be", "regenerated"
+    ):
+        bypass = True
+    else:
+        stream.reset(rider)
+    return ast.DestroyCounteredAbilitySource(bypass_regeneration=bypass)
+
+
 def _parse_countered_narrowing(stream: TokenStream) -> "ast.ObjectFilter | None":
     """``if <noun phrase> is countered this way`` — the class the redirect
     applies to, or None when the words are not that clause (Desertion).

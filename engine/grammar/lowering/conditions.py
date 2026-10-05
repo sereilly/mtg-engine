@@ -325,6 +325,33 @@ def _lower_condition(
         # the condition answer False on every board and turn Bazaar's counter
         # into an ability that never fires: a card compiling supported and doing
         # nothing, which is the failure this whole file's gates exist for.
+        if condition.other:
+            # "Destroy target nonland permanent **if another permanent with the
+            # same name is on the battlefield**." (Winnow.) "Another" than the
+            # object this effect targets, so the name is that target's and the
+            # referent is the one `pronoun_target_referent` reads off the branch
+            # this guards. Under a trigger, or beside a branch that targets no
+            # permanent, there is nothing for "another" to be other than — and
+            # a graveyard holds no permanents (CR 110.1) — so each refuses
+            # rather than comparing against a name nobody chose.
+            if event is not None or referent != "permanent":
+                raise LoweringError(
+                    "'another permanent with the same name' needs a targeted "
+                    "permanent to be other than",
+                    node=condition,
+                )
+            if condition.zone != "battlefield":
+                raise LoweringError(
+                    "'another … with the same name' is asked of the "
+                    "battlefield only",
+                    node=condition,
+                )
+            return {
+                "kind": "same_named_object",
+                "zone": condition.zone,
+                "nontoken": bool(condition.nontoken),
+                "same_name_as": "target",
+            }
         if event not in _SAME_NAME_EVENTS:
             raise LoweringError(
                 f"no event named {event!r} freezes the name 'the same name' "

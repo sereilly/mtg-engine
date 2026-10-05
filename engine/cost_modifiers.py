@@ -1207,6 +1207,20 @@ def spell_cost_tax(
     stack_total, stack_names = _stack_tax(
         game, caster_index, card, targeted_stack
     )
+    # "You may cast this spell as though it had flash **if you pay {2} more to
+    # cast it**." (Rout and Invasion's four others.) An additional cost the
+    # card prints on itself rather than one a permanent imposes, and here for
+    # this function's own stated reason: a caster asking "what does this cost?"
+    # must get one answer, and this price is part of it exactly when the spell
+    # is being cast outside sorcery timing. ``cast_timing`` decides when.
+    from .cast_timing import flash_surcharge_owed
+
+    flash_price = flash_surcharge_owed(game, caster_index, card)
+    if flash_price:
+        return (
+            total + stack_total + flash_price,
+            names + stack_names + [f"{card.name}'s own flash price"],
+        )
     return total + stack_total, names + stack_names
 
 

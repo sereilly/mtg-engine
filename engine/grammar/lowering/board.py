@@ -39,8 +39,9 @@ from ._common import (_describe_targets, _filter_payload,
                       _is_enchanted, _is_source, _is_target,
                       _restrictions_beyond, player_deed_payload,
                       refuse_untestable)
-from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload)
-from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS)
+from ._events import (ATTACHED_SUBJECT_EVENTS, CHOSEN_PLAYER, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, OTHER_CHOSEN_PERMANENT, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, CHOSEN_PERMANENT, _RECORDED_PERMANENTS, _back_reference_payload, CREATED_TOKEN, _PERMANENTS_MADE_BY_THIS_EFFECT)
+from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS,
+                      end_step_action_on_made_permanent)
 
 
 #: Where a chosen attachment host is recorded for the step behind it to read.
@@ -674,10 +675,22 @@ def _lower_sacrifice_expansion_permanents(
 
 
 def _lower_delayed_self_action(
-    node: ast.DelayedSelfAction,
+    node: ast.DelayedSelfAction, produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
     """Rocket Launcher / Rakalite. The action is payload, the delay is the kind
     — because what a reader downstream must not get wrong is *when*."""
+    made = produced & (_PERMANENTS_MADE_BY_THIS_EFFECT | {CREATED_TOKEN})
+    if node.subject == "bound" and made:
+        # "Create a 3/1 … token with haste. **Sacrifice it** at the beginning
+        # of the next end step." (Balduvian Dead; Hornet Cannon, Tidal Wave.)
+        # The pronoun names what the step in front *made* — never the target or
+        # the source the handler below falls back to. See the builder.
+        if len(made) != 1:
+            raise LoweringError(
+                "several earlier steps made permanents; which one \"it\" "
+                "names is ambiguous", node=node,
+            )
+        return (end_step_action_on_made_permanent(node.action, next(iter(made))),)
     return (
         OracleInstruction(
             # Keyed `self_action`, not `action`: a payload key called

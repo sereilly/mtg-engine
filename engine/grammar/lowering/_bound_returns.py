@@ -42,6 +42,7 @@ from ...oracle_types import CHOSEN_TARGET_GRAVEYARD_SLOTS
 from ._deaths import BOUND_CARD_EVENTS
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import _EVENT_SUBJECT_OBJECTS
+from ._record_keys import _PERMANENTS_MADE_BY_THIS_EFFECT
 from ._described_returns import lower_described_return
 from ._events import CHOSEN_PERMANENT as _ATTACH_HOST_KEY
 from ._common import (
@@ -53,7 +54,16 @@ from ._common import (
 
 
 
-def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
+#: Trigger conditions that are a step of the turn and name no object: under
+#: one, a bare "it" in the effect has only the ability's own source to mean.
+#: Closed and short on purpose -- a condition added here is a claim that its
+#: fire site freezes no card and no permanent.
+_OBJECTLESS_STEP_EVENTS = frozenset({"upkeep_self", "upkeep_each"})
+
+
+def _returns_its_own_source(
+    node: "ast.ReturnToZone", subject, event: str | None = None,
+) -> bool:
     """Whether "return **it**" names the ability's *own* card rather than the
     firing event's object.
 
@@ -92,10 +102,16 @@ def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
 
     Narrow on purpose in the other direction too. Storm Cauldron's bound "return
     it" goes to a hand and Puppet Master's names a card, so neither is
-    reachable; and "...to **your** hand" is deliberately absent, because that
-    spelling lowers to ``return_self_from_graveyard``, which searches one seat's
-    graveyard alone -- a different reading, which no card in the pool prints
-    under a self-event.
+    reachable.
+
+    * "At the beginning of your upkeep, if this card is in your graveyard, you
+      may pay {1}{B}{B}. If you do, return it to **your** hand." (Pyre Zombie.)
+      The third reading, which ``return_self_from_graveyard`` performs and
+      which was absent while no card printed it. Admitted only under an event
+      that names **no object at all** -- a step of the turn -- because under
+      one that does, the same four words are Enduring Renewal's and name the
+      event's card. The pronoun has nothing else to be: Death Spark prints the
+      sentence with "this card" spelled out, and the two are one payload.
     """
     if subject.quantifier != "it" or not subject.filter.is_source:
         return False
@@ -107,11 +123,11 @@ def _returns_its_own_source(node: "ast.ReturnToZone", subject) -> bool:
         and node.under_control_of is not None
     ):
         return True
-    return (
-        node.to.name == "hand"
-        and node.to.owner is not None
-        and node.to.owner.kind == "owner"
-    )
+    if node.to.name != "hand" or node.to.owner is None:
+        return False
+    if node.to.owner.kind == "owner":
+        return True
+    return node.to.owner.kind == "you" and event in _OBJECTLESS_STEP_EVENTS
 
 
 
@@ -174,6 +190,115 @@ def lower_untargeted_return(
                 {"tapped": True} if node.entering_tapped else {},
             ),
         )
+    # "Return target creature card from your graveyard to the battlefield. …
+    # **Return it to your hand** at the beginning of the next end step."
+    # (Cauldron Dance.) Shallow Grave's "Exile it at the beginning of the next
+    # end step" with the other verb: the pronoun reads as the source everywhere
+    # else, and here the source is a spell — so what it names is the permanent
+    # an earlier step of this same resolution **made**, which the delayed entry
+    # freezes by id as it is created (CR 603.7c; ``lowering/delayed`` reads
+    # this kind and binds the record).
+    #
+    # ``produced`` is the whole gate, as it is for the exile: behind a step
+    # that made no permanent the words keep whatever reading they had. And the
+    # narrower set on purpose — a step that merely *acted on* a permanent
+    # leaves "it" naming the ability's target, which is the branch further
+    # down.
+    #
+    # "**Your** hand" and "its owner's hand" are both admitted and mean one
+    # zone: CR 400.3 sends an object bound for any hand but its owner's to its
+    # owner's, and the handler moves the card through the seam that does. Any
+    # other possessive is a seat nothing here resolves.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and event in _BOUND_OBJECT_DELAYED_EVENTS
+        and (produced & _PERMANENTS_MADE_BY_THIS_EFFECT)
+        and node.from_zone is None
+        and node.to.name == "hand"
+        and (
+            (subject.quantifier == "it" and subject.filter.is_source)
+            or (subject.quantifier == "that" and not subject.filter.is_card)
+        )
+    ):
+        if node.to.owner is None or node.to.owner.kind not in ("owner", "you"):
+            raise LoweringError(
+                "a permanent this effect made returns to its owner's hand",
+                node=node,
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "under_control_of", "repetitions", "actor", "attached_to",
+                "losing_subtypes", "losing_abilities", "gaining_abilities",
+                "also_stack",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread:
+            raise LoweringError(
+                "the bound-permanent bounce honours no further rider", node=node
+            )
+        if _restrictions_beyond(
+            subject.filter, frozenset({"is_source", "card_types"})
+        ):
+            raise LoweringError(
+                "the bound-permanent bounce honours no further narrowing",
+                node=node,
+            )
+        return (OracleInstruction("return_bound_permanent_to_hand", "", {}),)
+    # "Exile target creature you control. **Return that card to the
+    # battlefield under its owner's control** at the beginning of the next end
+    # step." (Liberate.) The card an earlier step of this same effect exiled —
+    # CR 400.7 made it a new object, which is why the sentence says "card" —
+    # read out of the scratchpad the delay froze as it was created (CR 603.7d).
+    # ``put_exiled_cards_into_zone`` is the one handler of "that card" behind
+    # an exile; the battlefield is its third destination.
+    #
+    # ``produced`` is the gate, as it is for every back-reference here: with no
+    # exile in front of it "that card" keeps the event reading below. In front
+    # of that branch because that one refuses the words outright.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and subject.filter.is_card
+        and "exiled_cards" in produced
+        and node.from_zone is None
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+    ):
+        control = getattr(node.under_control_of, "kind", None)
+        if control not in ("owner", "you"):
+            # CR 110.2's default is the ability's controller, and a sentence
+            # that does not say which seat is one this engine will not guess
+            # for — a flickered creature somebody had stolen comes back to a
+            # different player under each reading.
+            raise LoweringError(
+                "an exiled card returns under your or its owner's control, "
+                "and the sentence must say which", node=node,
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "repetitions", "actor", "attached_to", "losing_subtypes",
+                "losing_abilities", "gaining_abilities", "also_stack",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread:
+            raise LoweringError(
+                "the exiled card's return honours no further rider", node=node
+            )
+        if _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"})):
+            raise LoweringError(
+                "the exiled card's return honours no further narrowing",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "put_exiled_cards_into_zone", "",
+                {"zone": "battlefield", "control": control},
+            ),
+        )
     # "Whenever a creature becomes the target of a spell or ability, **return
     # that creature to its owner's hand**." (Cowardice.)
     #
@@ -197,7 +322,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier == "that"
         and not subject.filter.is_card
-        and not _returns_its_own_source(node, subject)
+        and not _returns_its_own_source(node, subject, event)
         and not _is_attached_host_pronoun(subject)
         and node.from_zone is None
         and node.to.name == "hand"
@@ -249,7 +374,7 @@ def lower_untargeted_return(
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("that", "it")
         and (subject.filter.is_card or subject.quantifier == "it")
-        and not _returns_its_own_source(node, subject)
+        and not _returns_its_own_source(node, subject, event)
         # An *attached* trigger's "it" names the Aura's host, not a card this
         # event recorded, so it falls past to the two readings that find it.
         and not _is_attached_host_pronoun(subject)

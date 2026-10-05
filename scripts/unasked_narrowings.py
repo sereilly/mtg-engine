@@ -80,6 +80,9 @@ ENGINE_DIR = REPO_ROOT / "engine"
 CONTROLLER_ARGUMENT = {
     "defending_player": "defending",
     "that_player": "that_player",
+    # "…its controller controls" (Tectonic Instability): a seat only the
+    # handler holding the trigger context can name, like the row above.
+    "event_subject_controller": "that_player",
     "target_opponent": "targeted_player",
     "target_player": "targeted_player",
     # "the active player" is the one seat word that needs nothing: whose turn

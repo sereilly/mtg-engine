@@ -155,6 +155,17 @@ def _parse_postmodifiers(
         if stream.accept_phrase("they", "control"):
             d.controller = "that_player"
             continue
+        # "Whenever a land enters, tap all lands **its controller controls**."
+        # (Tectonic Instability.) The seat that controls the object the firing
+        # event was about — not "that player", which names a seat the event
+        # *was* about, and the two are frozen under different keys. Its own
+        # word, so a reader that has not been taught it refuses rather than
+        # resolving it against the wrong record; ``subject_matches`` answers no
+        # for it until a handler holding the trigger's context has rewritten
+        # it.
+        if stream.accept_phrase("its", "controller", "controls"):
+            d.controller = "event_subject_controller"
+            continue
         # "target creature **whose controller controls an Island**"
         # (Seasinger). Not a seat this object's controller *is*, but a fact
         # about what that seat has elsewhere — so it is its own field rather

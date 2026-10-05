@@ -340,6 +340,18 @@ def _tap_or_untap_all_matching(
     # is here. Rewritten into the relative key the matcher does answer, against
     # that seat, exactly as ``untap_up_to_matching`` rewrites Mudslide's "they
     # control".
+    if described.get("controller") == "event_subject_controller":
+        # "Whenever a land enters, tap all lands **its controller controls**."
+        # (Tectonic Instability.) The seat the fire site froze beside the
+        # entering land (CR 603.10) — its controller as it entered, which is
+        # the seat the sentence names even if the land has changed hands or
+        # left by the time this resolves. Rewritten into the relative key the
+        # matcher answers, exactly as "that player" is below.
+        frozen = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(frozen, int) or not 0 <= frozen < len(game.players):
+            return False, "no controller was frozen for the event's object"
+        observer = frozen
+        described["controller"] = "you"
     if described.get("controller") == "that_player":
         frozen = None
         # "**Target player** untaps all basic lands they control." (Early

@@ -164,7 +164,12 @@ def _parse_same_named_object(stream: TokenStream) -> "ast.SameNamedObject | None
     somewhere else.
     """
     mark = stream.mark()
-    if not stream.accept_word("a", "an"):
+    # "**another** permanent with the same name" (Winnow) compares against the
+    # object the effect targets rather than against what an event named — the
+    # article is the whole difference, so it is recorded and the lowering
+    # decides which referent each spelling may read.
+    other = bool(stream.accept_word("another"))
+    if not other and not stream.accept_word("a", "an"):
         return None
     nontoken = bool(stream.accept_word("nontoken"))
     if not stream.accept_word("card", "permanent"):
@@ -175,7 +180,7 @@ def _parse_same_named_object(stream: TokenStream) -> "ast.SameNamedObject | None
         return None
     for words, zone in _SAME_NAME_ZONES:
         if stream.accept_phrase(*words):
-            return ast.SameNamedObject(zone, nontoken=nontoken)
+            return ast.SameNamedObject(zone, nontoken=nontoken, other=other)
     stream.reset(mark)
     return None
 

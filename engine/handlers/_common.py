@@ -2225,6 +2225,16 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
 
         if counters_on(perm, str(named_counter)) <= 0:
             return False
+    # "each land **with an activated ability that isn't a mana ability**"
+    # (Tsabo's Web). What the permanent can do *now*: ``effective_card`` is the
+    # card as it reads after a copy, a text change and any granted ability, so
+    # a Forest handed Maze of Ith's ability stops untapping and a Strip Mine
+    # that has lost its abilities starts.
+    if payload.get("with_nonmana_activated_ability"):
+        from ..mana_payment import has_nonmana_activated_ability
+
+        if not has_nonmana_activated_ability(perm.effective_card):
+            return False
     # "an **untapped** creature" (Enthralling Hold). The twin of ``tapped_only``
     # and a separate key for the reason stated on ``to_payload``.
     if payload.get("untapped_only") and perm.tapped:

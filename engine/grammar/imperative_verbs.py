@@ -116,6 +116,7 @@ from .effects import (
     _parse_scry,
     _parse_search_library,
     _parse_switch_pt,
+    _parse_simultaneous_untap_and_tap,
     _parse_tap_untap,
 )
 
@@ -165,6 +166,16 @@ def parse_imperative_verb(
         return _parse_destroy(stream)
     if stream.at_word("tap", "untap"):
         return _parse_tap_untap(stream)
+    # "**Simultaneously** untap all tapped creatures and tap all untapped
+    # creatures." (Breaking Wave.) Sands of Time's inversion with its subject
+    # implied, so the same production reads it — the adverb is what makes the
+    # two sweeps one effect, and without this the line had no reading at all
+    # rather than the sequential one that would tap the whole board. Declines
+    # without consuming.
+    if stream.at_word("simultaneously"):
+        both = _parse_simultaneous_untap_and_tap(stream, ast.PlayerRef("you"))
+        if both is not None:
+            return both
     if stream.at_word("attach"):
         return _parse_attach(stream)
     if stream.at_word("exchange"):

@@ -314,6 +314,13 @@ class ObjectFilter:
     # answer, which is the exact failure ``named_counters.py``'s own docstring
     # records: a card put counters where nothing read them.
     with_named_counter: str | None = None
+    # "each land **with an activated ability that isn't a mana ability**"
+    # (Tsabo's Web). A question about what the object can *do* rather than
+    # what it is: CR 605.1a decides which of its activated abilities are mana
+    # abilities, and the narrowing is that at least one is not. Its own field
+    # because nothing else here describes it — a keyword list names keywords,
+    # and "an activated ability" is CR 602's whole class.
+    with_nonmana_activated_ability: bool = False
     # "nontoken" (Lich's sacrifice). CR 111.1: a token is not a card, so this is
     # neither an excluded card type nor an excluded subtype.
     nontoken: bool = False

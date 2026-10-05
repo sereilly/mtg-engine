@@ -93,6 +93,32 @@ class CounterAbility:
 
 
 @dataclass(frozen=True)
+class DestroyCounteredAbilitySource:
+    """"If a permanent's ability is countered this way, destroy that permanent."
+    (Teferi's Response.)
+
+    The printed "if" is not a condition over the board and the printed "that
+    permanent" is not a target: the spell chose a **spell or ability**
+    (CR 115.1), and the permanent is the source of whatever ability the counter
+    in front of this sentence removed — which, once that ability is off the
+    stack, nothing but the counter's own record can name (CR 113.7a: an ability
+    has no card). So both halves are one back-reference, exactly as
+    ``BoundPermanentActivationBan`` reads Interdict's "that permanent", and the
+    lowering refuses without the producer.
+
+    "A permanent's ability" is the whole of the condition and it is carried by
+    the record itself: a countered *spell* writes none, and neither does an
+    ability whose source is not on the battlefield (a card's ability
+    functioning from a graveyard), so "nothing recorded" is "the condition is
+    false" with no second test to drift from the first.
+
+    ``bypass_regeneration`` is the rider a printing could add ("…It can't be
+    regenerated."); Teferi's Response prints none.
+    """
+    bypass_regeneration: bool = False
+
+
+@dataclass(frozen=True)
 class CounterSpell:
     subject: TargetSpec
     # "unless its controller pays {X}" (Power Sink) — CR 118.3c: the spell is

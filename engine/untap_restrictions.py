@@ -318,6 +318,23 @@ UNTAP_RESTRICTION_PATTERNS: tuple[tuple[re.Pattern, Callable[[re.Match], UntapRe
         _subject_block,
     ),
     (
+        # "**Each** permanent with an hourglass counter on it **doesn't** untap
+        # during **its controller's** untap step." (Temporal Distortion.)
+        # "Each land with an activated ability that isn't a mana ability
+        # doesn't untap…" (Tsabo's Web.) The row above in its distributive
+        # spelling — a quantifier over the same set is not a different
+        # restriction, which is the skip row's reasoning at the top of this
+        # table — so it builds through the same reader and the noun phrase is
+        # the same payload. Its own row rather than an alternation because all
+        # three number words change together: a pattern admitting "each …
+        # don't untap" would claim a sentence nobody prints.
+        re.compile(
+            r"^each (?P<subject>.+?) doesn't untap "
+            r"during its controller's untap step$"
+        ),
+        _subject_block,
+    ),
+    (
         # "As long as this artifact is untapped, each player chooses artifact,
         # creature, or land during their untap step. That player can untap only
         # permanents of the chosen type this step." (Storage Matrix.) One row

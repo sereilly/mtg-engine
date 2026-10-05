@@ -79,6 +79,13 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # is what a compiler admits a narrowed line on, so without the word the
     # whole ability refused and the card was unsupported.
     "with_named_counter",
+    # "each land **with an activated ability that isn't a mana ability**"
+    # (Tsabo's Web). Answered off the object alone — what a permanent can do
+    # is its effective card's compiled program (layer 1's copy and layer 3's
+    # text change folded in, a granted ability appended) and CR 605.1a's
+    # question is ``mana_payment.is_mana_ability``'s — so it sits in the
+    # delegated half with the counter keys beside it.
+    "with_nonmana_activated_ability",
     # "…each artifact **with mana value less than or equal to the number of
     # rust counters on it**" (Corrosion). Two characteristics of the *same*
     # object compared against each other, both read off the permanent being
@@ -1052,6 +1059,16 @@ def subject_matches(
         elif controller in ("target_opponent", "target_player"):
             if targeted_player is None or not game.controls(targeted_player, obj):
                 return False
+        # "…all lands **its controller controls**" (Tectonic Instability). The
+        # controller of the object the firing event was about, which no read of
+        # the board can make and no caller argument carries: the handler holding
+        # the trigger's context rewrites the word into "you" against the frozen
+        # seat before asking. Reaching here with it unrewritten means nobody
+        # did, so the answer is no — without this branch the word fell into
+        # the relative comparison at the bottom and read as "an opponent
+        # controls".
+        elif controller == "event_subject_controller":
+            return False
         # "Non-Wall creatures **the active player** controls" (Maddening Imp,
         # Siren's Call). CR 102.1's seat, and the one seat word on this list
         # that needs nothing from the caller: whose turn it is, is a fact about

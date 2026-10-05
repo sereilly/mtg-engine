@@ -563,6 +563,29 @@ def _counter_targets_refusal(game, instruction, context, target) -> bool:
     )
 
 
+def _counter_controller_refusal(game, instruction, context, target) -> str | None:
+    """Why *target* is not an object this counter may name by its controller,
+    or None.
+
+    "counter target artifact spell **you control**" (Goblin Artisans) and
+    "counter target spell or ability **an opponent controls**" (Teferi's
+    Response): one question with the answer turned over, asked of the seat that
+    put the object on the stack. CR 112.2 makes that a spell's controller and
+    CR 113.8 an ability's, so ``caster_index`` answers for both kinds and this
+    is read on **both** sides of the card/no-card divide below — it was asked
+    of spells alone, which was the whole pool until a union printed it.
+    """
+    wanted = instruction.payload.get("controller")
+    if wanted is None:
+        return None
+    mine = target.caster_index == game.players.index(context.caster)
+    if wanted == "you" and not mine:
+        return "you control"
+    if wanted == "opponent" and mine:
+        return "an opponent controls"
+    return None
+
+
 @effect_handler("counter_top_stack_spell")
 def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     card = context.card
@@ -625,11 +648,29 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     "a matching permanent, cannot counter"
                 )
                 return True, "resolved"
+            whose = _counter_controller_refusal(game, instruction, context, target)
+            if whose is not None:
+                game.log.append(
+                    f"{card.name}: {target.card.name}'s ability is not one "
+                    f"{whose}, cannot counter"
+                )
+                return True, "resolved"
             # The same seam the spell path ends with, and the whole of the
             # effect here: CR 701.6a removes the object from the stack, and
             # there is no card to bin, no "exile it instead" rider to honour
             # and no destination to redirect.
             game.counter_stack_object(target)
+            # "If **a permanent's ability** is countered this way, destroy that
+            # permanent." (Teferi's Response.) The record Interdict's counter
+            # writes, written here for the same reason: this is the only step
+            # that knows which permanent the ability came from, and once the
+            # object is off the stack nothing else can be asked (CR 113.7a).
+            # A source that has already left the battlefield is not "a
+            # permanent" any more (CR 110.1), so it is not recorded — the
+            # destroy behind this would otherwise chase an id nothing holds.
+            source = target.source_permanent
+            if source is not None and game.is_on_battlefield(source):
+                context.results[COUNTERED_ABILITY_SOURCE] = source
             game.log.append(f"{card.name} countered {target.card.name}'s ability")
             return True, "resolved"
         # What this step **chose**, recorded the moment it is known and not
@@ -746,15 +787,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{str(only_if).replace('it would ', '')}, cannot counter"
                 )
                 return True, "resolved"
-        # "counter target artifact spell **you control**" (Goblin Artisans).
+        # "counter target artifact spell **you control**" (Goblin Artisans),
+        # "…spell or ability **an opponent controls**" (Teferi's Response).
         # Whose spell it is, asked of the seat that put it on the stack.
-        if instruction.payload.get("controller") == "you":
-            if target.caster_index != game.players.index(context.caster):
-                game.log.append(
-                    f"{card.name}: {target.card.name} is not a spell you control, "
-                    "cannot counter"
-                )
-                return True, "resolved"
+        whose = _counter_controller_refusal(game, instruction, context, target)
+        if whose is not None:
+            game.log.append(
+                f"{card.name}: {target.card.name} is not a spell {whose}, "
+                "cannot counter"
+            )
+            return True, "resolved"
         # "…that isn't the target of an ability from another creature named ~"
         # (Goblin Artisans): a guard against two copies aiming at the same
         # spell. Asked of the stack, because the abilities pointing at that

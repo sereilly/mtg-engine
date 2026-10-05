@@ -1419,8 +1419,16 @@ def last_cast_color_ban(game: "Game", caster_index: int, card) -> str | None:
 #: ``turn_management`` empties it at the turn boundary — which is the half that
 #: matters, because a record outliving its turn is a restriction that stops
 #: applying, and a cap lifted is a spell castable when the card forbids it.
+#:
+#: **Who is capped is payload too.** "**You** can't cast more than one spell
+#: each turn." (Yawgmoth's Agenda) is the same count over one seat — CR 109.5's
+#: "you", the permanent's controller — where "each player" binds the table.
+#: Read as one row so the two cannot drift, and recorded rather than matched
+#: and dropped: an Agenda read as Arcane Laboratory caps its controller's
+#: opponents as well, which is a drawback turned into a lock.
 _SPELL_CAP_PER_TURN = re.compile(
-    r"^each player can't cast more than (?P<count>[a-z]+) spells? each turn$"
+    r"^(?P<who>each player|you) can't cast more than (?P<count>[a-z]+) "
+    r"spells? each turn$"
 )
 
 #: Printed number words a cap can be written with. Its own table for the reason
@@ -1457,12 +1465,26 @@ def spell_cap_line(line: str) -> int | None:
     return _CAP_NUMBER_WORDS.get(match.group("count"))
 
 
+@lru_cache(maxsize=None)
+def spell_cap_binds_controller_only(line: str) -> bool:
+    """Whether *line*'s cap is printed on "**you**" rather than "each player".
+
+    Beside :func:`spell_cap_line` rather than folded into its answer, so the
+    three callers that ask only "is this a cap, and of how many" keep the int
+    they read — and the one that enforces it asks this as well.
+    """
+    match = _SPELL_CAP_PER_TURN.match(line.strip().lower().rstrip("."))
+    return match is not None and match.group("who") == "you"
+
+
 def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
     """The name of a permanent whose per-turn cap *caster_index* has reached.
 
     Every battlefield and no seat comparison, for :func:`global_play_timing`'s
     reason: the sentence says "each player", so it binds its own controller as
-    thoroughly as anybody (CR 601.3a).
+    thoroughly as anybody (CR 601.3a). The one comparison is the printed
+    "**you**" (Yawgmoth's Agenda), which binds the permanent's controller and
+    nobody else.
 
     The count read is the seat's **own** record, not a shared one: CR 601.3a
     restricts the player who is casting, and one table-wide tally would let an
@@ -1478,11 +1500,14 @@ def spell_cap_ban(game: "Game", caster_index: int) -> str | None:
     if not (0 <= caster_index < len(game.players)):
         return None
     cast_so_far = len(game.players[caster_index].spells_cast_this_turn)
-    for _seat, permanent in game.permanents_with_controller():
+    for seat, permanent in game.permanents_with_controller():
         for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
             cap = spell_cap_line(raw_line)
-            if cap is not None and cast_so_far >= cap:
-                return permanent.card.name
+            if cap is None or cast_so_far < cap:
+                continue
+            if spell_cap_binds_controller_only(raw_line) and seat != caster_index:
+                continue
+            return permanent.card.name
     return None
 
 
