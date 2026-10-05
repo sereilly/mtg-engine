@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 87.8% | 87.8% | 62.2% | 277 |
+| INV *(measured)* | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,7 +57,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 521 | 238 | expected a subject |  |
+| 520 | 237 | expected a subject |  |
 | 148 | 75 | unrecognized effect verb |  |
 | 128 | 63 | unconsumed text |  |
 | 50 | 32 | granted ability in quotes | phase 3 (quoted abilities) |
@@ -6377,6 +6377,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Psychic Allergy**
   - `At the beginning of each opponent's upkeep, this enchantment deals X damage to that player, where X is the number of nontoken permanents of the chosen color they control.`
   - `At the beginning of your upkeep, destroy this enchantment unless you sacrifice two Islands.`
+- **Psychic Battle**
+  - `Whenever a player chooses one or more targets, each player reveals the top card of their library. The player who reveals the card with the greatest mana value may change the target or targets. If two or more cards are tied for greatest, the target or targets remain unchanged. Changing targets this way doesn't trigger abilities of permanents named Psychic Battle.`
 - **Psychic Purge**
   - `Psychic Purge deals 1 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, that player loses 5 life.`
