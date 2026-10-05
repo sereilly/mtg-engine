@@ -132,10 +132,11 @@ def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePerman
     creature they control"): with no subject the chooser is the effect's own
     controller, and it is the same node and the same prompt.
 
-    CR 115.1b is the whole difference from :func:`_parse_choose_target` below:
-    an untargeted "choose" is made on resolution, so nothing is announced for
-    it, hexproof and protection do not stop it, and no picker is raised as the
-    ability goes on the stack.
+    CR 115.10a is the whole difference from :func:`_parse_choose_target` below:
+    nothing is a target unless the text says "target", so this pick is one of
+    CR 608.2d's choices made while the effect is applied — nothing is announced
+    for it, hexproof and protection do not stop it, and no picker is raised as
+    the ability goes on the stack.
 
     **Only a sentence when a later one reads what it chose**, for this module's
     standing reason — a choice nothing spends is an instruction that performs

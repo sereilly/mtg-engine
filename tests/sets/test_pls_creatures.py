@@ -609,7 +609,7 @@ def test_w1g6_guard_dogs_prevents_the_combat_damage_of_a_creature_sharing_the_ch
     """"{2}{W}, {T}: Choose a permanent you control. Prevent all combat damage
     target creature would deal this turn if it shares a color with that
     permanent." The creature is a target, announced as the ability is
-    activated; the permanent is *chosen as it resolves* (CR 115.1b, 608.2d),
+    activated; the permanent is *chosen as it resolves* (CR 115.10a, 608.2d),
     which is when its controller is asked. The red Goblin is chosen against the
     red Giant: three unblocked combat damage is prevented."""
     dogs = _w1g6_card(set_pool, "Guard Dogs")

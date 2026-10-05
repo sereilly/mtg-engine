@@ -366,8 +366,8 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     if chosen is not None:
         return chosen
     # "Choose **a** permanent you control." (Guard Dogs.) The untargeted twin
-    # (CR 115.1b: chosen on resolution), behind the targeted one and declining
-    # on the same terms — unless a later sentence reads what it chose.
+    # (CR 115.10a, 608.2d: chosen on resolution), behind the targeted one and
+    # declining on the same terms — unless a later sentence reads what it chose.
     picked = _parse_choose_untargeted_permanent(stream)
     if picked is not None:
         return picked
