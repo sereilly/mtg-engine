@@ -410,10 +410,12 @@ class PermanentStateMixin:
         bodies = choosable_bodies(text)
         if bodies:
             # Options first: _apply_chosen_body clears the keywords of the
-            # *other* bodies before granting the chosen one's, and the card's
-            # text mentions every body's keyword — so the compiler reads
-            # "with flying" off Primal Clay and grants it. Applying a body
-            # before the options are recorded leaves that stray grant in place.
+            # *other* bodies before granting the chosen one's, which is what
+            # lets the prompt's answer replace the default body applied here.
+            # (It used to be load-bearing a second way: layer 6's seed read
+            # "with flying" and "with defender" off this sentence, so every
+            # Primal Clay had both until that clear ran. The seed reads keyword
+            # lines only now -- ``layer_bridge._printed_abilities_cached``.)
             permanent.metadata["body_options"] = list(bodies)
             self._apply_chosen_body(permanent, bodies[0])
             if len(bodies) > 1:

@@ -57,7 +57,6 @@ from .continuous import (
     switch_pt,
 )
 from .keywords import ability_effects, derived_grants, derived_removals
-from .enter_effects import KICKED_ENTRY
 from .landwalk import landwalk_requirement
 from .land_types import land_type_changes, lost_abilities_to_type_change
 from .lord_buffs import QUALIFIER_FIELDS
@@ -287,7 +286,7 @@ _QUALIFIED_WALK = r"(\w+) %s\b"
 
 
 def _text_keywords_in(value: str) -> set[str]:
-    """The keywords printed in one keyword or static line.
+    """The keywords printed in one keyword line.
 
     A substring scan, and the one place its hazard is answered rather than
     assumed. ``_TEXT_KEYWORDS``' own comment says a bare word is safe "for the
@@ -341,22 +340,32 @@ def _printed_abilities_cached(
     )
     abilities = {kw.lower() for kw in keywords}
     for instruction in compile_card_oracle(card).instructions:
-        if instruction.kind not in ("keyword_line", "static_line"):
+        # **A keyword line, and nothing else.** "Does this line give *this
+        # permanent* this keyword?" is a question about the line's subject, and
+        # the compiler's line classifier has already answered it: a line that
+        # states the object's own keyword abilities is a ``keyword_line``
+        # (CR 702), one that gives them to it on a condition is a
+        # ``conditional_static`` and one that gives them to a class of
+        # permanents is a ``lord_buff`` -- the last two contributed in layer 6
+        # by their own readers, with the condition and the class enforced.
+        #
+        # A ``static_line`` is what is left: a sentence some text-keyed table
+        # claimed and no instruction carries. This scan used to read those too,
+        # and a word search has no subject, so it seeded whatever keyword the
+        # sentence *mentioned*: Gliding Licid flew because it says "enchanted
+        # creature has flying", Guardian Beast was indestructible because the
+        # artifacts beside it are, Rootwater Shaman had flash because Auras may
+        # be cast "as though they had flash", and Gosta Dirk had the islandwalk
+        # his own text switches off. Faerie Squadron ("…and with flying", for a
+        # *kicked* one) was the first found and was skipped by pattern; a skip
+        # per sentence is a deny-list of a table that names no legitimate
+        # entry. Over both manifest roles the pool carries 199 static lines, 18
+        # of them mention a keyword, and not one of the 18 gives it to the
+        # permanent printing it
+        # (``tests/engine/test_printed_keyword_seed.py``).
+        if instruction.kind != "keyword_line":
             continue
         value = instruction.value or ""
-        # A lord line ("Other Merfolk … have islandwalk") grants the ability to
-        # other creatures, not to the lord itself.
-        if value.startswith("other "):
-            continue
-        # "If this creature was kicked, it enters with two +1/+1 counters on it
-        # **and with flying**." (Faerie Squadron.) The keyword is what a
-        # *kicked* one has, granted at entry through layer 6
-        # (``permanent_state._initialize_permanent_state``) -- not a printed
-        # ability, so the word scan below must not seed it: every unkicked
-        # Faerie Squadron flew, a strictly better creature than the {U} 1/1 the
-        # card prints.
-        if KICKED_ENTRY.match(value):
-            continue
         abilities.update(_text_keywords_in(value))
         # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves
         # of the Hunt token Master of the Hunt makes carries one. It cannot ride
