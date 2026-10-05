@@ -3395,6 +3395,10 @@ class PendingChoicesMixin:
             # The number *defines* a characteristic (CR 604.3), so the P/T that
             # reads it is stale until the layers are recomputed.
             self._refresh_dynamic_creatures()
+        else:
+            # A spell's number (Void): nothing but the scratchpad keeps it, so
+            # the log is the only place the table can read what was named.
+            self.log.append(f"{choice.data.get('card_name')}: chose {value}")
         self.discard_pending_choice(choice)
         return True
 

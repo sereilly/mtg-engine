@@ -3866,6 +3866,20 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["subtype_filter"] = str(chosen_type)
+    # "…discards all nonland cards with mana value **equal to the number**."
+    # (Void.) The third record, a number this time, resolved into the ordinary
+    # ``mana_value`` comparison. Zero is a legal number, so the test is for the
+    # record rather than for its truth.
+    number_key = instruction.payload.get("mana_value_from")
+    if number_key is not None:
+        chosen_number = context.results.get(str(number_key))
+        if not isinstance(chosen_number, int) or isinstance(chosen_number, bool):
+            game.log.append(
+                f"{context.card.name}: no number was chosen, so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["mana_value"] = {"op": "eq", "value": chosen_number}
     doomed = [
         index for index, held in enumerate(victim.hand)
         if _card_matches_filter(held, filters, game=game, owner=victim)

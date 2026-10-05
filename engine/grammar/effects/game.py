@@ -193,6 +193,13 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
             # answer is one above the printed number — the floor the prompt
             # offers and the resolver enforces.
             bounds = (floor.value + 1, None)
+    elif stream.accept_phrase("choose", "a", "number") and (
+        stream.exhausted or stream.at_punct(".", ",")
+    ):
+        # "Choose a number." (Void.) No bound printed at all, which CR 107.1
+        # reads as any whole number from zero up: the floor is the rule's and
+        # the missing ceiling is the card's own answer.
+        bounds = (0, None)
     if bounds is None:
         stream.reset(mark)
         return None

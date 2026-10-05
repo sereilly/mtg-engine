@@ -130,6 +130,8 @@ class _FilterDraft:
     mana_value_at_most_counters: str | None = None
     #: See ``ast.ObjectFilter.mana_value_equals_source_counters``.
     mana_value_equals_source_counters: str | None = None
+    #: See ``ast.ObjectFilter.mana_value_equals_chosen_number``.
+    mana_value_equals_chosen_number: bool = False
     #: See ``ast.ObjectFilter.power_at_most_source_counters``.
     power_at_most_source_counters: str | None = None
     #: See ``ast.ObjectFilter.power_greater_than_cards_in_hand``.
@@ -316,6 +318,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         mana_value=d.mana_value,
         mana_value_at_most_counters=d.mana_value_at_most_counters,
         mana_value_equals_source_counters=d.mana_value_equals_source_counters,
+        mana_value_equals_chosen_number=d.mana_value_equals_chosen_number,
         power_at_most_source_counters=d.power_at_most_source_counters,
         power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
         zone=d.zone,

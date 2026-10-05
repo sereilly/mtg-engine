@@ -403,6 +403,21 @@ def _lower_destroy(
                 )
             filt = dataclasses.replace(filt, of_bound_type=False)
             bound_type["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+        # "Choose a number. Destroy all artifacts and creatures with mana value
+        # **equal to that number**." (Void.) The same split one characteristic
+        # over: the number is the resolution's, so it travels as the record's
+        # name and the handler turns it into the ordinary ``mana_value``
+        # comparison. Only behind the step that chose one.
+        if filt.mana_value_equals_chosen_number:
+            from ...oracle_types import CHOSEN_NUMBER_THIS_WAY
+
+            if CHOSEN_NUMBER_THIS_WAY not in produced:
+                raise LoweringError(
+                    "'equal to that number' names a number no step of this "
+                    "effect chose", node=node,
+                )
+            filt = dataclasses.replace(filt, mana_value_equals_chosen_number=False)
+            bound_type["mana_value_from"] = CHOSEN_NUMBER_THIS_WAY
         described = _filter_payload(filt)
         narrowing = {
             key: value for key, value in described.items()

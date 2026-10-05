@@ -44,6 +44,7 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
+                             CHOSEN_NUMBER_THIS_WAY,
                              X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
@@ -369,6 +370,19 @@ def _lower_discard(
                     described_filter, of_bound_type=False
                 )
                 carried["subtype_filter_from"] = CHOSEN_CREATURE_TYPE_THIS_WAY
+            # "…discards all nonland cards with mana value **equal to the
+            # number**." (Void.) The third record this sweep reads, split off
+            # the same way and for the same reason.
+            if described_filter.mana_value_equals_chosen_number:
+                if CHOSEN_NUMBER_THIS_WAY not in produced:
+                    raise LoweringError(
+                        "'equal to the number' names a number no step of this "
+                        "effect chose", node=node,
+                    )
+                described_filter = dataclasses.replace(
+                    described_filter, mana_value_equals_chosen_number=False
+                )
+                carried["mana_value_from"] = CHOSEN_NUMBER_THIS_WAY
             described = chargeable_card_filter(described_filter)
             if described is None:
                 raise LoweringError(
