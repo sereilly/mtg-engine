@@ -24,6 +24,8 @@ The pool-wide half is ``tests/engine/test_damage_dealers.py``.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 from engine import Game, PlayerState
@@ -146,10 +148,7 @@ def test_w2g5_the_dealers_lifelink_gains_its_controller_life(catalog_by_name):
         name="Probe Automaton", mana_cost="{3}", type_line="Artifact Creature - Construct",
         oracle_text="Lifelink", power=2, toughness=2,
     )
-    automaton = type(automaton)(**{
-        **{f: getattr(automaton, f) for f in automaton.__dataclass_fields__},
-        "cmc": 3.0, "keywords": ("Lifelink",),
-    })
+    automaton = dataclasses.replace(automaton, cmc=3.0, keywords=("Lifelink",))
     game, tinkerer, target = _w2g5_tinkerer_board(catalog_by_name, automaton)
     assert game._has_keyword(target, "lifelink")
     before = [player.life for player in game.players]
