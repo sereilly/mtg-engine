@@ -240,6 +240,102 @@ def _accept_noted_mana(stream: TokenStream) -> str | None:
     return "type"
 
 
+def _accept_alternative_separator(stream: TokenStream) -> bool:
+    """The separator between two alternatives of a printed mana choice: ``or``,
+    and — in a list of three or more — ``,`` and ``, or``.
+
+    "{T}: Add {U}, {B}, or {R}." (the five Lairs.) The reader this replaces
+    looked for the one word "or", which is every dual land ever printed and
+    stops at two: a Lair's line refused on its first comma, so a land in the
+    pool had a mana ability that compiled to nothing.
+
+    Consumed only when a mana symbol follows, so "Add {B}, then add an
+    additional {B} …" (the Mana Batteries) keeps its comma for the sentence
+    after it. **And a bare comma only when the list it opens closes on an
+    "or"**: a serial list is a choice because of its conjunction, which is
+    printed once, before the last item — "{U}, {B}, or {R}" is one of three,
+    and a list with no "or" anywhere is not a sentence this may read as one
+    (it would be read as *every* symbol by the next reader, or as a choice by
+    this one, and the card would say which). The look-ahead is what stops the
+    first comma of such a list being taken on trust.
+    """
+    mark = stream.mark()
+    comma = stream.accept_punct(",")
+    said_or = stream.accept_word("or")
+    if not (comma or said_or) or not stream.at_kind(MANA):
+        stream.reset(mark)
+        return False
+    if said_or:
+        return True
+    resume = stream.mark()
+    closes = False
+    while stream.at_kind(MANA):
+        while stream.at_kind(MANA):
+            stream.advance()
+        more = stream.accept_punct(",")
+        if stream.accept_word("or"):
+            closes = stream.at_kind(MANA)
+            break
+        if not more:
+            break
+    stream.reset(resume if closes else mark)
+    return closes
+
+
+#: Which board a "could produce" phrase reads, by the seat word its noun phrase
+#: carries: ``ObjectFilter.controller -> board``. The two values are the ones
+#: ``engine/mana_could_produce.py`` answers; a phrase about any other seat (a
+#: chosen player's lands, every land on the table) names a board nothing reads
+#: and refuses rather than being handed whichever of these two is nearest.
+_COULD_PRODUCE_BOARDS: dict[str, str] = {
+    "you": "controlled_lands",
+    "opponent": "opponent_lands",
+}
+
+
+def _accept_could_produce_lands(stream: TokenStream) -> "ast.ObjectFilter | None":
+    """``that a <land phrase> could produce`` — the lands CR 106.7 asks about,
+    as the noun reader's own filter, or None with the cursor untouched.
+
+    One reader for every spelling: "a land an opponent controls" (Fellwar
+    Stone), "a land you control" (Reflecting Pool), "a **basic** land you
+    control" (Star Compass). They were two literal sentences, one per card, so
+    a third card differing by an adjective refused its whole line — and the
+    adjective is the card.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("that", "a"):
+        return None
+    try:
+        lands = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("could", "produce"):
+        stream.reset(mark)
+        return None
+    return lands
+
+
+def _could_produce_board(stream: TokenStream, lands: "ast.ObjectFilter") -> str:
+    """The board *lands* names, or a refusal.
+
+    The phrase must be about **lands** — CR 106.7's question is asked of a
+    permanent's mana abilities, and the reader behind this
+    (``mana_could_produce``) walks lands and nothing else, so "a creature you
+    control could produce" would be answered about the wrong permanents — and
+    about a seat that reader can name.
+    """
+    if tuple(lands.card_types) != ("land",):
+        raise stream.error("a 'could produce' phrase names lands")
+    board = _COULD_PRODUCE_BOARDS.get(lands.controller or "")
+    if board is None:
+        raise stream.error(
+            "a 'could produce' phrase names your lands or an opponent's"
+        )
+    return board
+
+
 def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     """``Add {G}`` / ``Add {C}{C}{C}`` / ``Add one mana of any color``."""
     start = stream.mark()
@@ -294,12 +390,7 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
         # "{B} or {R}" — a dual land's choice, not two mana. The word is
         # *recorded* on the node, because a parse that merely consumed it would
         # read "Add {B} or {R}" and "Add {B}{R}" as the same clause.
-        if stream.at_word("or"):
-            mark = stream.mark()
-            stream.advance()
-            if not stream.at_kind(MANA):
-                stream.reset(mark)
-                break
+        if _accept_alternative_separator(stream):
             choice = True
             runs.append({})
     if choice and any(len(run) != 1 or sum(run.values()) != 1 for run in runs):
@@ -507,9 +598,7 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             reference = "cost_untapped_land"
         elif stream.accept_phrase("the", "sacrificed", "land", "could", "produce"):
             reference = "cost_sacrificed_land"
-        elif stream.accept_phrase(
-            "that", "a", "land", "you", "control", "could", "produce"
-        ):
+        elif (lands := _accept_could_produce_lands(stream)) is not None:
             # "…of any type **that a land you control** could produce."
             # (Reflecting Pool.) A described *board* rather than a
             # back-reference to what this ability's cost paid, which is why it
@@ -519,7 +608,8 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
             # colour phrase one branch below, one CR 106.1b type wider.
             return ast.AddMana(
                 (), any_color=count, source_text=_clause(),
-                any_type_from_lands="controlled_lands",
+                any_type_from_lands=_could_produce_board(stream, lands),
+                could_produce_lands=lands,
             )
         else:
             raise stream.error(
@@ -541,13 +631,18 @@ def _parse_add_mana(stream: TokenStream) -> ast.Statement:
     # so it rides the same node, and a line printing words this cannot read
     # leaves them unconsumed and refuses (the full-consumption invariant) rather
     # than adding any colour at all.
-    any_color_from = None
-    if stream.accept_phrase(
-        "that", "a", "land", "an", "opponent", "controls", "could", "produce"
-    ):
-        any_color_from = "opponent_lands"
+    #
+    # "…that a **basic** land **you control** could produce." (Star Compass.)
+    # The same clause about the other board and a narrower set of its lands,
+    # which is why the phrase is read as a noun phrase rather than matched as a
+    # sentence: whose lands and which lands are both words the card prints.
+    lands = _accept_could_produce_lands(stream)
     return ast.AddMana(
-        (), any_color=count, source_text=_clause(), any_color_from=any_color_from
+        (), any_color=count, source_text=_clause(),
+        any_color_from=(
+            None if lands is None else _could_produce_board(stream, lands)
+        ),
+        could_produce_lands=lands,
     )
 
 

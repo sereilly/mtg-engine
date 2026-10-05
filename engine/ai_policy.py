@@ -11,6 +11,7 @@ from .ai_valuation import (
     SPELL_TYPES,
     CastOffer,
     cast_offers,
+    entry_sacrifice_is_unavoidable,
     entry_trigger_target_side,
     ability_denies_its_target,
     ability_target_side,
@@ -344,6 +345,15 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
 
     Which land, when there is a choice: the one that adds a colour the hand's
     spells ask for and the seat's lands do not yet make (`_land_drop_value`).
+
+    **Never a land its own entry would sacrifice.** "When this land enters,
+    sacrifice it unless you return a non-Lair land you control to its owner's
+    hand" (the Lairs; the Karoo cycle) played onto a board with no such land
+    is the card and the land drop both thrown away, and `_land_drop_value`
+    ranked exactly that play first on turn one — a three-colour land adds more
+    wanted colours than any basic. Such a land is not a candidate until the
+    price can be met (`ai_valuation.entry_sacrifice_is_unavoidable`), so the
+    seat plays the basic beside it, or holds.
     """
     if not game._may_play_another_land(player_index):
         return None
@@ -351,6 +361,8 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
     best_value: tuple[int, int] | None = None
     for hand_index, card in enumerate(game.players[player_index].hand):
         if card.primary_type != "land":
+            continue
+        if entry_sacrifice_is_unavoidable(game, player_index, card):
             continue
         candidate = _cast_candidate(game, player_index, card, hand_index)
         if candidate is None:
@@ -4371,6 +4383,18 @@ def _plan_land_taps(
         if game.land_mana_tap_refusal(permanent) is None
         and not _land_mana_is_unplannable(game, permanent)
     ]
+    # **What a tap of a mixed land really makes.** "{T}: Add {C}{U}." (Coral
+    # Atoll and the rest of the Karoo cycle, Soldevi Excavations, Balduvian
+    # Trading Post) is two mana of two *different* symbols, and `take` below
+    # credited `amount` of whichever one symbol the pip loop asked for — so an
+    # Atoll read as {U}{U}, a {U}{U} spell was planned on it alone, the tap
+    # made {C}{U} and the cast was refused. Seven lands in the pool, measured;
+    # every other land's run is one symbol and is credited as it always was.
+    mixed_runs = {
+        index: run
+        for index, permanent in enumerate(game.controlled_by(player))
+        if (run := _land_mixed_run(game, permanent)) is not None
+    }
 
     if _can_pay_cost(pool, required, player):
         return (), ()
@@ -4383,6 +4407,11 @@ def _plan_land_taps(
         land_index, _symbols, amount = remaining.pop(position)
         chosen.append(land_index)
         colors.append(symbol)
+        run = mixed_runs.get(land_index)
+        if run is not None:
+            for made, count in run.items():
+                pool[made] = pool.get(made, 0) + count
+            return
         pool[symbol] = pool.get(symbol, 0) + amount
 
     for symbol in _MANA_SYMBOLS:
@@ -4488,6 +4517,30 @@ def _can_pay_cost(
     return available_generic >= generic
 
 
+def _land_mixed_run(game: Game, permanent: Permanent) -> "dict[str, int] | None":
+    """The fixed run one tap of *permanent* makes when it is **two or more
+    different symbols** ("{C}{U}", Coral Atoll), as ``{symbol: count}`` — or
+    None for every other land, whose tap is a number of one symbol and is
+    counted by `_land_mana_amount`.
+
+    Read off the free ability the tap seam will run and only where nothing
+    else decides the output: a seat-wide swap replaces the type (and perhaps
+    the amount), and a multiplier or a restriction makes the run something
+    this cannot state.
+    """
+    from . import land_mana_swaps
+
+    if land_mana_swaps.swapped_production(game, permanent) is not None:
+        return None
+    free, _priced = game._land_mana_abilities(permanent)
+    payload = (getattr(free, "payload", None) or {}) if free is not None else {}
+    pips = payload.get("pips")
+    if not pips or len(payload) != 1:
+        return None
+    run = {str(symbol): int(count) for symbol, count in pips}
+    return run if len(run) >= 2 else None
+
+
 def _land_mana_amount(game: Game, permanent: Permanent) -> int:
     """How many mana one tap of *permanent* makes, as the planner counts it.
 
@@ -4541,12 +4594,22 @@ def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
     payload = free.payload or {}
     if payload.get("spend_only"):
         return True
-    return any(
+    if any(
         (step.payload or {}).get(key)
         for step in (free, *((payload.get("steps") or ())))
         for key in _BOARD_DEPENDENT_MANA_KEYS
         if hasattr(step, "payload")
-    )
+    ):
+        return True
+    # A land whose *colours* the board decides and whose amount it does not
+    # ("Choose a color of a permanent you control. Add one mana of that
+    # color.", Meteor Crater) is plannable for exactly what that board offers
+    # now — `Game._land_payment_colors` answers with it — and unplannable only
+    # where it offers nothing: `_land_symbols` would fall back to "C" for a
+    # land with no symbol, the tap would make no mana, and the cast would be
+    # refused for the same spell every turn.
+    narrowed = game.narrowed_land_mana_colors(land)
+    return narrowed is not None and not narrowed
 
 
 def _tap_alone_land_symbols(game: Game, land: Permanent) -> set[str]:
@@ -4576,6 +4639,14 @@ def _land_symbols(game: Game, permanent: Permanent) -> tuple[str, ...]:
 
     symbols = tuple(game._land_payment_colors(permanent))
     free, _priced = game._land_mana_abilities(permanent)
+    if symbols and game.narrowed_land_mana_colors(permanent) is not None:
+        # A land whose colours the board defines (Reflecting Pool, Meteor
+        # Crater): `_land_payment_colors` has already answered with exactly
+        # what that board offers. The reordering below would widen it back to
+        # every colour the compiled ability *could* name — "any color" reads
+        # as all five there — which is the summary's mistake made a second
+        # time.
+        return symbols
     if symbols and free is not None and not land_mana_swaps.payment_colors(game, permanent):
         # **Only what the tap can make.** ``_land_payment_colors`` is the
         # printed summary for an unswapped land, and the summary lists every

@@ -311,12 +311,25 @@ def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
     Exactly three words and nothing after them. "Choose a color **and**…" and
     "choose a color of your choice" are sentences this has not read, and a
     reader that stopped at "color" would leave the rest to be dropped.
+
+    **Or three words and a noun phrase**: "Choose a color **of a permanent you
+    control**." (Meteor Crater.) The phrase narrows which colours may be named
+    to the ones those permanents have, so it is read whole — by the noun
+    reader, into ``among`` — or the sentence is not this one.
     """
     mark = stream.mark()
-    if stream.accept_phrase("choose", "a", "color") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        return ast.ChooseColor()
+    if stream.accept_phrase("choose", "a", "color"):
+        if stream.exhausted or stream.at_punct(".", ","):
+            return ast.ChooseColor()
+        if stream.accept_phrase("of", "a"):
+            try:
+                among = parse_object_filter(stream)
+            except GrammarError:
+                among = None
+            if among is not None and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                return ast.ChooseColor(among=among)
     stream.reset(mark)
     return None
 

@@ -268,6 +268,13 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
     """
     own = tuple(perm.effective_produced_mana)
     if perm.has_type("land"):
+        # A land whose colours the board defines (Reflecting Pool, Meteor
+        # Crater) is offered as exactly what it makes here, even when that is
+        # one colour or none: its printed summary is all five, and a picker
+        # built from it asks for colours the engine will not produce.
+        narrowed = game.narrowed_land_mana_colors(perm)
+        if narrowed is not None:
+            return narrowed
         payable = tuple(game._land_payment_colors(perm))
         if len(payable) > 1 and set(payable) != set(own):
             return payable

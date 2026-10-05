@@ -520,14 +520,40 @@ def test_the_team_keyword_grant_carries_how_wide_it_reaches():
 
 
 def test_the_team_keyword_grant_refuses_a_narrowing_it_cannot_honour():
-    """The handler loops over the controller's board and tests nothing else, so
-    a printed restriction it cannot apply has to refuse rather than be dropped
-    into a wider grant."""
+    """A printed restriction the handler cannot apply has to refuse rather than
+    be dropped into a wider grant.
+
+    "Artifact creatures you control gain flying" stood here as the refused
+    example until PLS W1G5, on the ground that "the handler loops over the
+    controller's board and tests nothing else". That stopped being true with
+    Stampede: the handler tests a ``filter`` through the one subject matcher,
+    and a second card type is a key that matcher answers. So the line lowers
+    now **with the narrowing carried** — asserted here, and run on a board in
+    ``tests/sets/test_pls_instants.py`` — and the refusal is pinned on a seat
+    the handler cannot name.
+    """
     result = compile_line(
-        "Artifact creatures you control gain flying until end of turn."
+        "Creatures target player controls gain flying until end of turn."
     )
     assert result.parsed
     assert not result.lowered
+
+    assert _instructions(
+        "Artifact creatures you control gain flying until end of turn."
+    ) == [
+        (
+            "grant_team_keyword_until_eot",
+            {
+                "keywords": ("flying",),
+                "every_permanent": True,
+                "filter": {
+                    "type_filter_all": ["artifact", "creature"], "controller": "you",
+                },
+                "every_seat": False,
+                "duration": "end_of_turn",
+            },
+        )
+    ]
 
 
 def test_a_bare_back_reference_under_a_quantityless_trigger_is_refused():

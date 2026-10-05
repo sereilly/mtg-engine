@@ -1966,7 +1966,10 @@ def _color_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
-        "colors": ["W", "U", "B", "R", "G"],
+        # The sentence's own narrowing where it printed one ("a color of a
+        # permanent you control", Meteor Crater) — the list the resolver holds
+        # the answer to — and CR 105.1's five otherwise.
+        "colors": list(data.get("colors") or ["W", "U", "B", "R", "G"]),
         "default_color": data.get("default_color"),
     }
 

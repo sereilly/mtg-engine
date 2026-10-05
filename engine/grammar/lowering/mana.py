@@ -11,8 +11,9 @@ never uses the stack.
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, COUNTERS_REMOVED,
                             MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                             OracleInstruction)
-from ...subject_filters import (card_only_filter, object_only_filter,
-                                untestable_filter_keys)
+from ...mana_could_produce import LANDS_FILTER_KEY
+from ...subject_filters import (OBJECT_ONLY_FILTER_KEYS, card_only_filter,
+                                object_only_filter, untestable_filter_keys)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -460,6 +461,7 @@ def _lower_add_mana(
         # an empty one, where CR 106.7 says it produces no mana at all. Which
         # board is payload for the reason every printed word in this family is.
         payload["any_type_from_lands"] = node.any_type_from_lands
+        payload.update(_could_produce_narrowing(node))
         return (OracleInstruction("add_mana_from_text", "", payload),)
     if node.any_color_from is not None:
         # "…that a land an opponent controls could produce" (Fellwar Stone).
@@ -467,7 +469,44 @@ def _lower_add_mana(
         # picker read one answer. Emitted only when printed, so every payload
         # written before it is byte-identical.
         payload["any_color_from"] = node.any_color_from
+        payload.update(_could_produce_narrowing(node))
     return (OracleInstruction("add_mana_from_text", "", payload),)
+
+
+def _could_produce_narrowing(node: ast.AddMana) -> dict[str, object]:
+    """*Which* of the board's lands a "could produce" phrase names, as the one
+    payload key that carries it — or nothing, when the phrase names them all.
+
+    "…that a **basic** land you control could produce." (Star Compass.) Whose
+    lands is the board, already on the payload under the key its printed word
+    ("color" / "type") chose; "land" is what the reader behind it walks. So
+    both are taken out of the filter and what is left is the narrowing — for
+    the three cards that shipped before this, nothing at all, which is what
+    keeps their payloads byte-identical.
+
+    Held to what a permanent alone can answer, because the reader hands each
+    land to ``subject_matches`` with the seat already spent on the board: a
+    narrowing that needs anything else would be a word the card prints and
+    nothing tests, and the ability would read every land.
+    """
+    lands = node.could_produce_lands
+    if lands is None:
+        return {}
+    described = {
+        key: value
+        for key, value in _filter_payload(lands).items()
+        if key not in ("controller", "type_filter")
+    }
+    if not described:
+        return {}
+    untestable = untestable_filter_keys(described, allowed=OBJECT_ONLY_FILTER_KEYS)
+    if untestable:
+        raise LoweringError(
+            "a 'could produce' phrase cannot test "
+            + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return {LANDS_FILTER_KEY: described}
 
 
 def _lower_note_mana_spent(

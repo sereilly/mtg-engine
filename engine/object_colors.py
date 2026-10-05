@@ -221,6 +221,36 @@ def colors_among(game, permanents) -> frozenset[str]:
     return frozenset(found) & frozenset(ALL_COLORS)
 
 
+def colors_among_described(
+    game, described: "dict | None", *, observer: int | None, source=None
+) -> tuple[str, ...]:
+    """The colours among the permanents a filter payload *described* names, in
+    WUBRG order — "a color **of a permanent you control**" (Meteor Crater).
+
+    :func:`colors_among` over the set ``subject_matches`` admits, so the noun
+    phrase means here what it means in a sweep or a count and the colours are
+    the layers' (a Lace-recoloured permanent offers what it now is, a
+    colourless one offers nothing). *observer* is the seat "you control" is
+    relative to and *source* the permanent whose ability this is.
+
+    A tuple in the one fixed order, because every caller either offers the
+    list to a player or takes its first entry as a deterministic default.
+    """
+    from .subject_filters import subject_matches
+
+    found = colors_among(
+        game,
+        (
+            permanent
+            for permanent in game.all_permanents()
+            if subject_matches(
+                game, permanent, described, observer=observer, source=source
+            )
+        ),
+    )
+    return tuple(color for color in ALL_COLORS if color in found)
+
+
 def of_each_color(game, permanents) -> bool:
     """Whether *permanents* include one **of each color** (CR 105.1's five).
 
@@ -237,5 +267,6 @@ def of_each_color(game, permanents) -> bool:
 
 __all__ = [
     "ALL_COLORS", "card_colors", "color_override_for_seat", "colors_among",
+    "colors_among_described",
     "is_multicolored", "object_colors", "of_each_color", "share_a_color",
 ]

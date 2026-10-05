@@ -3160,7 +3160,7 @@ class PendingChoicesMixin:
 
     def arm_color_choice(
         self, player_index: int, *, card_name: str, permanent, result_key: str,
-        context, default: str,
+        context, default: str, colors=None,
     ):
         """Queue "choose a color" for the seat the resolving ability names.
 
@@ -3180,6 +3180,11 @@ class PendingChoicesMixin:
         writers would be a permanent with two chosen colours; one writer with
         two records is one answer in the two places its two kinds of reader
         look.
+
+        *colors* is the list the sentence narrows the choice to ("a color **of
+        a permanent you control**", Meteor Crater), or None for CR 105.1's
+        five. Carried on the prompt so the picker offers exactly what the
+        resolver will accept, and the resolver refuses anything else.
         """
         return self.arm_pending_choice(
             "color_choice", player_index,
@@ -3187,6 +3192,7 @@ class PendingChoicesMixin:
             permanent=permanent,
             result_key=result_key,
             default_color=default,
+            colors=list(colors) if colors else None,
             _context=context,
         )
 
@@ -3214,6 +3220,13 @@ class PendingChoicesMixin:
             except ValueError:
                 return False
             if not symbol:
+                return False
+            offered = choice.data.get("colors")
+            if offered and symbol not in offered:
+                # A colour the sentence does not offer (Meteor Crater's "of a
+                # permanent you control") is refused for the reason a
+                # non-colour is: the prompt stays owed rather than quietly
+                # taking the default.
                 return False
             permanent = choice.data.get("permanent")
             if permanent is not None and self.is_on_battlefield(permanent):
@@ -4510,6 +4523,23 @@ class PendingChoicesMixin:
             produces=self._land_payment_colors,
         )
 
+    def narrowed_land_mana_colors(self, land) -> "tuple[str, ...] | None":
+        """What *land*'s tap makes **here**, where the rest of the battlefield
+        decides it, or None for a land that says what it makes.
+
+        The ability the tap seam will run (``_land_mana_abilities``' free one),
+        asked of ``mana_could_produce.ability_colors_on_offer`` — the handler's
+        own reading of the two board-narrowed shapes. Empty is "this land makes
+        nothing on this board", which the payment planner, the AI's tap plan
+        and the client's colour picker must all be able to hear.
+        """
+        from ...mana_could_produce import ability_colors_on_offer
+
+        free, _priced = self._land_mana_abilities(land)
+        if free is None:
+            return None
+        return ability_colors_on_offer(self, land, free)
+
     def _land_payment_colors(self, land) -> tuple[str, ...]:
         """What tapping *land* would actually put in its controller's pool.
 
@@ -4528,6 +4558,15 @@ class PendingChoicesMixin:
         swapped = land_mana_swaps.payment_colors(self, land)
         if swapped:
             return swapped
+        # A land whose colours the *board* defines (Reflecting Pool, Meteor
+        # Crater) answers with what that board offers now. Its printed summary
+        # is every colour it could ever make, which this hook used to hand the
+        # planner: a cost with a {B} in it read as payable off a Reflecting
+        # Pool beside a Forest, the Pool was tapped, made {G}, and the payment
+        # came up short.
+        narrowed = self.narrowed_land_mana_colors(land)
+        if narrowed is not None:
+            return narrowed
         own = tuple(land.effective_produced_mana or ())
         # "Lands you control have "{T}: Add two mana of any one color.""
         # (Overlaid Terrain.) A *granted* mana ability, which the printed

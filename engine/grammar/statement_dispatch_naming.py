@@ -34,8 +34,10 @@ from . import ast
 from .errors import LoweringError
 from .lowering._deaths import BOUND_CARD_EVENTS
 from .lowering._events import CHOSEN_PLAYER, chooser_payload as _chooser_payload
+from ..subject_filters import untestable_filter_keys
 from .lowering import (
     _amount_payload,
+    _filter_payload,
     _lower_put_exiled_card_into_zone,
     _lower_put_exiled_this_way,
     _lower_reveal_top_sorting_by_chosen_name,
@@ -253,7 +255,11 @@ def lower_naming_statement(
         # ability's own source — see the node. What can vary is *who* names it.
         return (
             OracleInstruction(
-                "choose_color", "", _chooser_payload(statement, event, "colour")
+                "choose_color", "",
+                {
+                    **_chooser_payload(statement, event, "colour"),
+                    **_color_choice_among(statement),
+                },
             ),
         )
 
@@ -406,3 +412,25 @@ def _lower_reveal_chosen_hand_cards(
         OracleInstruction("put_chosen_hand_cards_onto_battlefield", "", entry),
     )
     return (OracleInstruction("sequence", "", {"steps": steps}),)
+
+
+def _color_choice_among(statement: "ast.ChooseColor") -> dict[str, object]:
+    """"Choose a color **of a permanent you control**." (Meteor Crater.) The
+    permanents whose colours may be named, as the ``among`` filter the handler
+    asks ``subject_matches`` about — or nothing, for the unnarrowed sentence,
+    which keeps every payload written before this byte-identical.
+
+    Refused when the phrase says something that matcher cannot test: a
+    narrowing carried and not tested is a choice among every permanent's
+    colours, which for this card is a five-colour land.
+    """
+    if statement.among is None:
+        return {}
+    described = _filter_payload(statement.among)
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "a colour choice cannot test " + ", ".join(sorted(untestable)),
+            node=statement,
+        )
+    return {"among": described}

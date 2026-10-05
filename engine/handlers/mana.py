@@ -442,7 +442,14 @@ def _produce_one_color(
     # depend on who was asked.
     spend_only = instruction.payload.get("spend_only")
     seat = game.players.index(caster) if caster in game.players else None
-    colors = list(available) if available else ["W", "U", "B", "R", "G"]
+    # In WUBRG order (then colourless), whatever *available* is: three of this
+    # function's callers hand over a frozenset, and a set of one-letter strings
+    # iterates in an order that changes from process to process — so the same
+    # Fellwar Stone offered "U, B, R" on one run and "R, B, U" on the next.
+    colors = (
+        [c for c in ("W", "U", "B", "R", "G", "C") if c in available]
+        if available else ["W", "U", "B", "R", "G"]
+    )
     if named is None and seat is not None and amount > 0 and len(colors) > 1:
         armed = game.arm_pending_choice(
             "mana_color_choice", seat,
@@ -872,15 +879,22 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # keeps the Pool from reading *itself*: Scryfall records its
         # ``produced_mana`` as all five colours, so a plain union would let a
         # lone Reflecting Pool tap for anything.
+        #
+        # **Whose lands and which of them are both payload.** The board is the
+        # key's value and the narrowing rides beside it (``LANDS_FILTER_KEY``),
+        # so "a basic land you control" (Star Compass) and "a land an opponent
+        # controls" are this one read with different data — through
+        # ``_could_produce_offer``, which the colour phrase one branch down
+        # asks too.
         from_own_lands = instruction.payload.get("any_type_from_lands")
         if from_own_lands is not None:
-            from ..mana_could_produce import types_a_land_you_control_could_produce
-
-            seat = game.players.index(caster)
-            available = types_a_land_you_control_could_produce(game, seat)
+            available = _could_produce_offer(
+                game, context, instruction, str(from_own_lands), colors_only=False
+            )
             if not available:
                 game.log.append(
-                    f"{card.name}: no land you control could produce any mana"
+                    f"{card.name}: no {_BOARD_WORDS.get(str(from_own_lands), 'land')}"
+                    " could produce any mana"
                 )
                 return True, "resolved"
             if symbol not in available:
@@ -894,12 +908,15 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                 available=available,
             )
         narrowed_to = instruction.payload.get("any_color_from")
-        offered: "tuple[str, ...] | None" = None
+        offered: "frozenset[str] | None" = None
         if narrowed_to is not None:
-            offered = _colors_opponents_lands_produce(game, caster)
+            offered = _could_produce_offer(
+                game, context, instruction, str(narrowed_to), colors_only=True
+            )
             if not offered:
                 game.log.append(
-                    f"{card.name}: no land an opponent controls produces colored mana"
+                    f"{card.name}: no {_BOARD_WORDS.get(str(narrowed_to), 'land')}"
+                    " produces colored mana"
                 )
                 return True, "resolved"
             if symbol not in offered:
@@ -1074,23 +1091,39 @@ def grant_spend_mana_as_though(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
-def _colors_opponents_lands_produce(game, caster) -> frozenset[str]:
-    """The colours "a land an opponent controls could produce" names (Fellwar
-    Stone).
+#: How the log names each board a "could produce" phrase can read
+#: (``mana_could_produce.BOARDS``), for the line that says it offered nothing.
+_BOARD_WORDS: dict[str, str] = {
+    "controlled_lands": "land you control",
+    "opponent_lands": "land an opponent controls",
+}
 
-    Asked of ``engine/mana_could_produce.py``, which is CR 106.7's own reading
-    and the reader Reflecting Pool's phrase uses. This was a scan of
-    ``commander.produced_mana_colors`` over the opponents' lands, which is the
-    right answer for every land that says what it makes and the wrong one for a
-    land that derives it: Scryfall records Reflecting Pool's ``produced_mana``
-    as all five colours, so an opponent's lone Pool made this Stone tap for
-    anything. CR 106.7 answers "no type of mana can be defined this way", and
-    its own example is a board of nothing but these cards.
+
+def _could_produce_offer(
+    game, context, instruction, board: str, *, colors_only: bool
+) -> frozenset[str]:
+    """What a "…that a land … could produce" clause offers the resolving seat
+    (Fellwar Stone, Reflecting Pool, Star Compass).
+
+    Asked of ``engine/mana_could_produce.py``, which is CR 106.7's own reading.
+    This was a scan of ``commander.produced_mana_colors`` over the opponents'
+    lands, which is the right answer for every land that says what it makes and
+    the wrong one for a land that derives it: Scryfall records Reflecting Pool's
+    ``produced_mana`` as all five colours, so an opponent's lone Pool made this
+    Stone tap for anything. CR 106.7 answers "no type of mana can be defined
+    this way", and its own example is a board of nothing but these cards.
+
+    One function for both printed words and both boards, which is what the two
+    branches calling it used to be two of: the board is the payload key's value
+    and the narrowing ("a **basic** land") is the key beside it.
     """
-    from ..mana_could_produce import colors_a_land_an_opponent_controls_could_produce
+    from ..mana_could_produce import LANDS_FILTER_KEY, mana_lands_could_produce
 
-    return colors_a_land_an_opponent_controls_could_produce(
-        game, game.players.index(caster)
+    return mana_lands_could_produce(
+        game, game.players.index(context.caster), board,
+        colors_only=colors_only,
+        narrowing=instruction.payload.get(LANDS_FILTER_KEY),
+        source=context.source_permanent,
     )
 
 
