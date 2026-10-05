@@ -1672,6 +1672,44 @@ def kicked_with(card: CardDefinition, choices: dict | None, key: str) -> bool:
     return key in kickers_paid(card, choices)
 
 
+#: "…if it was kicked **with its {1}{G} kicker**" -- the printed cost a linked
+#: ability names (CR 702.33f), wherever on the card it sits.
+_NAMED_KICKER_QUESTION = re.compile(
+    r"kicked with its (?P<cost>(?:\{[^{}]+\})+) kicker", re.IGNORECASE
+)
+
+
+def unlinked_kicker_question(oracle_text: str) -> str | None:
+    """The first cost a "kicked with its [A] kicker" sentence of *oracle_text*
+    names that the card's own kicker line does not offer, as printed -- or
+    None, which is every card but a malformed one.
+
+    CR 702.33f: such an ability "is linked to the appropriate kicker ability",
+    where A and B are "the first and second kicker costs listed on the card".
+    So the cost in the question has to be one of :func:`kicker_costs` -- the
+    keys a payment is recorded under -- and a sentence naming any other is a
+    condition no cast can ever make true. The sentence itself parses and
+    lowers happily (its key is simply never written), so the card would report
+    supported with a trigger that never fires; asked by the support gate in
+    ``engine/oracle.py`` of the **printed** text, beside the uncharged-cost
+    gate and for its reason, it is refused instead.
+
+    Compared as canonical keys, through the two functions the offer was
+    spelled with, so "{U}{1}" asked of a "Kicker {1}{U}" is the same cost. A
+    run no payment can spend ({X}, a hybrid) has no key and is unlinked.
+    """
+    if "kicked with its" not in (oracle_text or "").lower():
+        return None
+    from .mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    offered = kicker_costs(oracle_text)
+    for match in _NAMED_KICKER_QUESTION.finditer(oracle_text):
+        symbols = mana_cost_from_symbols(match.group("cost"))
+        if not symbols or mana_cost_label(symbols) not in offered:
+            return match.group("cost")
+    return None
+
+
 @compilation_cache
 @lru_cache(maxsize=None)
 def _additional_costs_of_text(
@@ -1889,5 +1927,6 @@ __all__ = [
     "cast_announces_x",
     "cast_cost_claims_line",
     "costs_charged_from",
+    "unlinked_kicker_question",
     "unread_cost_sentence",
 ]
