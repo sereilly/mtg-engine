@@ -454,6 +454,30 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return any(int(times or 0) > 0 for times in paid.values())
         return int(paid.get(str(wanted), 0) or 0) > 0
 
+    if kind == "was_kicked":
+        # "If **this spell was kicked**" / "if **it was kicked**" / "if this
+        # creature **wasn't kicked**" (CR 702.33d). One question with two places
+        # the answer is kept, picked by what is asking:
+        #
+        # * a **permanent**'s ability (an entry trigger, Skizzik's end-step
+        #   trigger) reads the stamp ``resolution._resolve_card`` left on the
+        #   permanent that spell became -- the stack item is long gone, and a
+        #   permanent nothing cast has no stamp, which is the rule's answer;
+        # * a **spell** resolving reads its own stack record.
+        #
+        # Both come from ``cast_costs.kicked``, the reader keyed by the offer
+        # the kicker rewrite produced.
+        from ..cast_costs import KICKED, kicked
+
+        source = context.source_permanent
+        if source is not None:
+            answer = bool(source.metadata.get(KICKED))
+        else:
+            answer = context.card is not None and kicked(
+                context.card, context.choices
+            )
+        return answer != bool(payload.get("negated"))
+
     if kind == "all_of":
         # Every part, and an empty list is False rather than the vacuous True
         # `all([])` would give: a conjunction that lowered to nothing is a

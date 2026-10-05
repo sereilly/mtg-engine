@@ -164,6 +164,8 @@ def _ai_step(session: Session) -> bool:
                 # CR 601.2d, forwarded for the same reason: the division is part
                 # of the announcement, and a cast that drops it is refused.
                 divided_targets=cast_action.divided_targets,
+                # CR 601.2b's optional costs (a kicker), forwarded likewise.
+                optional_cost_payments=cast_action.optional_cost_payments,
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
@@ -192,6 +194,8 @@ def _ai_step(session: Session) -> bool:
                 # CR 601.2d, forwarded for the same reason: the division is part
                 # of the announcement, and a cast that drops it is refused.
                 divided_targets=cast_action.divided_targets,
+                # CR 601.2b's optional costs (a kicker), forwarded likewise.
+                optional_cost_payments=cast_action.optional_cost_payments,
             )
             _auto_resolve_ai_pending(session)
 

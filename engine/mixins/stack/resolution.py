@@ -12,7 +12,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
-from ...cast_costs import buyback_paid
+from ...cast_costs import KICKED, buyback_paid, kicked
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...enter_effects import copy_on_enter_type
@@ -1300,6 +1300,22 @@ class StackResolutionMixin:
             # because a later card may ask either question and they are not the
             # same one: a reanimation stamps the first and not the second.
             permanent.metadata["cast_from_zone"] = cast_from_zone
+            # "If this creature **was kicked**, it enters with …" / "When this
+            # creature enters, **if it was kicked**, …" / "…if this creature
+            # **wasn't kicked**, sacrifice it" (Skizzik, turns later). CR
+            # 702.33d settled the answer at the announcement and the stack item
+            # carried it; it is copied onto the permanent here because the
+            # permanent is what all three sentences are asked of and the stack
+            # item is gone by the time the last of them is.
+            #
+            # Stamped **before** the permanent enters, for the creature type's
+            # reason below: an entry replacement (CR 614.1c) reads it as the
+            # permanent arrives. And only here, the one entry that is a cast
+            # (CR 701.5a) -- a reanimated, blinked or token-copied permanent
+            # never passes this line, which is the rule rather than an
+            # omission: it was not cast, so it was not kicked.
+            if kicked(card, choices):
+                permanent.metadata[KICKED] = True
             # "…the controller of **the permanent it becomes** sacrifices it at
             # the beginning of the next cleanup step" (Mirage's flash Auras).
             # The answer was frozen as the spell was announced, because that is

@@ -580,6 +580,13 @@ def _spell_cast_filter(
     card = _cast_card(event)
     if card is None:
         return False
+    # "Whenever a player **kicks** a spell" (Saproling Infestation). The cast
+    # event narrowed by CR 702.33d's fact about the cast, which the
+    # announcement carries (``_apply_spell_cast_any_triggers``) because it is
+    # settled there and nowhere on the card. Asked first: a spell that was not
+    # kicked answers no whatever else the trigger prints.
+    if "cast_kicked" in trig.condition.payload and not event.payload.get("kicked"):
+        return False
     # The type narrowing goes through the shared helper below, which the
     # ordinal-counting path already used. This branch used to read a
     # `card_type` key **no pattern in the compiler ever emitted** — a

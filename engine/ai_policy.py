@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 import re
 
@@ -35,7 +36,7 @@ from .ai_valuation import (
 from .activation_permissions import activation_permission_denial
 from .activation_restrictions import activation_denial, global_activation_ban
 from .auras import controller_cast_ban
-from .cast_costs import cast_announces_x
+from .cast_costs import additional_costs, cast_announces_x, kicker_cost
 from .cast_restrictions import global_cast_ban, last_cast_color_ban
 from .legality import targeting_ban_refusal
 from .cast_restrictions import check_cast_timing
@@ -107,6 +108,12 @@ class CastAction:
     # mapped to rather than what the plan had counted on. Empty means no
     # colour was planned, and an executor keeps the seam's default.
     land_tap_colors: tuple[str, ...] = ()
+    # CR 601.2b's optional additional costs this cast takes, as the map the
+    # cast path reads (``optional_cost_payments``: canonical symbols -> times).
+    # None for every candidate that takes none. The field did not exist, so no
+    # AI seat ever paid a buyback or a kicker: a kicked-only half of a card was
+    # text the simulator could not reach. See `_cast_candidate`.
+    optional_cost_payments: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -376,6 +383,27 @@ def _land_drop_value(
     return (len(makes - made), len(makes))
 
 
+#: CR 601.2b's optional-cost answer the candidate *being built* would announce,
+#: for the target choosers underneath `_cast_candidate`. CR 702.33g makes a
+#: kicked-only part's targets depend on it, so every chooser has to read the
+#: same spec the announcement will be checked against -- and they take a card,
+#: not an announcement. A context variable rather than a parameter on five
+#: functions: it is one fact about one candidate, set and reset around the
+#: single call that builds it, and None (every card that prints no kicker)
+#: reads exactly the spec those choosers read before.
+_OFFERS_ANNOUNCED: ContextVar["dict[str, int] | None"] = ContextVar(
+    "ai_offers_announced", default=None
+)
+
+
+def _cast_spec(card: CardDefinition, program):
+    """`derive_cast_spec` for the candidate being built (see
+    `_OFFERS_ANNOUNCED`)."""
+    return derive_cast_spec(
+        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+    )
+
+
 def _cast_candidate(
     game: Game,
     player_index: int,
@@ -388,11 +416,94 @@ def _cast_candidate(
     """The `CastAction` casting *card* from *from_zone* would be, or None when
     the cast is illegal, unaffordable or has nothing legal to point at.
 
+    **Kicker (CR 702.33) is decided here, and the policy is stated: kick
+    whenever the lands can pay for it.** A card that prints a kicker is tried
+    kicked first and unkicked second, each as a whole candidate, because the
+    two are different announcements -- a different price, and by CR 702.33g a
+    different set of targets (an unkicked Benalish Emissary names no land). So
+    a kicked attempt that cannot be afforded, or whose kicked half has nothing
+    legal to point at, falls back to the plain creature rather than leaving the
+    card in hand all game.
+    """
+    kicker = kicker_cost(card.oracle_text or "")
+    if kicker is None or card.primary_type == "land":
+        return _cast_candidate_announcing(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic, offers=None,
+        )
+    for offers in ({kicker: 1}, {}):
+        token = _OFFERS_ANNOUNCED.set(offers)
+        try:
+            candidate = _cast_candidate_announcing(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic, offers=offers,
+            )
+        finally:
+            _OFFERS_ANNOUNCED.reset(token)
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def _paid_for_half_names_nothing(
+    game: Game, player_index: int, card: CardDefinition, offers: "dict[str, int]"
+) -> bool:
+    """Whether taking *offers* adds a target the board cannot supply.
+
+    CR 702.33g gives a kicked-only part its targets only when the spell is
+    kicked, so the two announcements have different specs -- and when the
+    kicked one asks for something and the engine's own enumeration (the list a
+    human's picker is built from) is empty, the kicker's whole effect is one
+    that cannot happen.
+    """
+    program = compile_card_oracle(card)
+    taken = derive_cast_spec(card, program, optional_cost_payments=offers)
+    declined = derive_cast_spec(card, program, optional_cost_payments={})
+    if taken is None or taken == declined:
+        return False
+    if taken.get("kind") in ("none", "modal") or spec_roles(taken):
+        return False
+    return not game._enumerate_targets(player_index, card, taken, for_cast=True)
+
+
+def _offer_taken(card: CardDefinition, offers: "dict[str, int] | None"):
+    """The one optional mana offer *offers* takes on *card*, or None.
+
+    One, because one is all this policy announces: the kicker. Read back off
+    ``additional_costs`` -- the table the cast path charges from -- so the mana
+    planned here is the mana the cast will ask for.
+    """
+    for symbols, times in (offers or {}).items():
+        if int(times or 0) <= 0:
+            continue
+        for cost in additional_costs(card):
+            for offer in cost.optional_mana:
+                if offer.symbols == symbols:
+                    return offer
+    return None
+
+
+def _cast_candidate_announcing(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+    offers: "dict[str, int] | None" = None,
+) -> CastAction | None:
+    """`_cast_candidate` for one fixed answer to CR 601.2b's optional costs.
+
     One body for the hand and the command zone (CR 903.8), because everything
     it checks is about the *card* and the board rather than about the zone:
     the zone contributes only where the executor finds the card (`from_zone`,
     `hand_index`) and what the cast additionally costs (*extra_generic*, the
     commander tax).
+
+    *offers* is the optional additional costs this candidate takes (None for a
+    card that prints none): its mana is planned with the spell's, and an offer
+    printing an {X} ("Kicker {X}") announces the largest X the lands can pay.
     """
     player = game.players[player_index]
     if (
@@ -510,10 +621,46 @@ def _cast_candidate(
     tap_colors: tuple[str, ...] = ()
 
     alternative_cost = False
+    taken_offer = _offer_taken(card, offers)
+    if taken_offer is not None and _paid_for_half_names_nothing(
+        game, player_index, card, offers
+    ):
+        # The half the offer buys has a target and the board has none for it
+        # (a kicked Tolarian Emissary with no enchantment anywhere). Paying is
+        # legal and buys nothing, so this candidate is declined and the caller
+        # falls back to the plain cast.
+        return None
+    if taken_offer is not None and not game.enforce_mana_costs and taken_offer.x_count:
+        # A free X has no ceiling to size it by, and "the most the lands can
+        # pay" is the only rule this policy has for one. Declined.
+        return None
     if game.enforce_mana_costs and card.primary_type != "land":
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
+        if taken_offer is not None:
+            # The offer's mana on top of the spell's, planned as one payment
+            # because it is paid as one (`casting.queue_from_hand` folds an
+            # optional cost into the same mana). For an offer printing an {X}
+            # the X is sized here, largest first, exactly as
+            # `_max_affordable_x` sizes a mana cost's -- and an X of zero is
+            # not proposed, for the reason `x_value == 0` is refused above: it
+            # is a price paid for nothing.
+            sized = None
+            for offer_x in (range(15, 0, -1) if taken_offer.x_count else (None,)):
+                total = dict(required)
+                for symbol, amount in taken_offer.cost_at(offer_x).items():
+                    total[symbol] = total.get(symbol, 0) + amount
+                if _plan_land_taps(game, player, total) is not None:
+                    sized = (offer_x, total)
+                    break
+            if sized is None:
+                return None
+            if taken_offer.x_count:
+                x_value = sized[0]
+            required = sized[1]
         plan = _plan_land_taps(game, player, required)
         if plan is None:
+            if taken_offer is not None:
+                return None
             # CR 118.9: the mana cost is not the only price. A spell whose
             # printed alternative cost this board *can* pay is castable right
             # now, and a seat that only ever asked the mana question sat on
@@ -548,6 +695,7 @@ def _cast_candidate(
         alternative_cost=alternative_cost,
         divided_targets=divided_targets,
         land_tap_colors=tap_colors,
+        optional_cost_payments=dict(offers) if taken_offer is not None else None,
     )
 
 
@@ -2475,7 +2623,7 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # `derive_cast_spec` returns — is exactly the question to ask. Blue
     # Elemental Blast's mode 0 counters a red spell, so an AI holding one with
     # an empty stack offered it every turn and was refused every turn.
-    spec = derive_cast_spec(card, program)
+    spec = _cast_spec(card, program)
     if spec is None or spec.get("kind") in ("none", "modal") or spec_roles(spec):
         # No spec, no target; roles are `_choose_role_targets`' question and it
         # already declines an unfillable chain.
@@ -2786,7 +2934,7 @@ def _choose_role_targets(
     chain wants a valuation in ``engine/ai_valuation.py``, derived from its
     compiled program, not a branch here.
     """
-    if not spec_roles(derive_cast_spec(card, compile_card_oracle(card))):
+    if not spec_roles(_cast_spec(card, compile_card_oracle(card))):
         return None
     options = game.cast_target_spec(caster_index, card).get("valid_targets") or []
     picks: list[dict] = []
@@ -2841,7 +2989,7 @@ def _choose_several_targets(
     ever wants fewer needs a valuation, not a special case here.
     """
     program = compile_card_oracle(card)
-    spec = derive_cast_spec(card, program)
+    spec = _cast_spec(card, program)
     maximum = (spec or {}).get("max_targets")
     # "Return **up to X** target cards from your graveyard to your hand, where X
     # is the number of black permanents target opponent controls **as you cast
@@ -2989,7 +3137,7 @@ def _choose_single_object_target(
     aimed at a face by the seat it already carries.
     """
     program = compile_card_oracle(card)
-    spec = derive_cast_spec(card, program)
+    spec = _cast_spec(card, program)
     if (
         not isinstance(spec, dict)
         or spec.get("kind") in _NOT_OBJECT_SPECS

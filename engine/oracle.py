@@ -1175,6 +1175,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",
      r"whenever a player casts a spell of the chosen (?P<cast_chosen_color>)color"),
     ("spell_cast",                  r"whenever a player casts a spell"),
+    # "Whenever a player **kicks** a spell" (Saproling Infestation). CR 702.33d:
+    # a spell is kicked when "its controller declared the intention to pay" its
+    # kicker cost, which is part of casting it (CR 601.2b) -- so this is the
+    # cast event narrowed by a fact about the cast, not a second event. The
+    # marker group is what the dispatcher reads (`events._spell_cast_filter`,
+    # against the ``kicked`` flag every cast announces); a row without it would
+    # be the bare trigger above under another spelling, firing on every spell.
+    ("spell_cast",                  r"whenever a player kicks a spell(?P<cast_kicked>)"),
     # "…from anywhere other than their hand" (Ghostly Pilferer). A narrowing on
     # the *zone the spell was cast from*, which the stack item already records
     # — the field the cast-permission seam added. Longest first: the bare row
@@ -5115,6 +5123,13 @@ _GRAMMAR_STATIC_CREATURE_KINDS = frozenset(
         # `engine/zone_copies.py`'s own payload, so the gate and the dispatch
         # are the same table by construction.
         ZONE_TOP_COPY_KIND,
+        # "This creature can attack as though it didn't have defender." with no
+        # duration -- the ability a kicked Prison Barricade is granted in
+        # quotes. A CR 609.4 permission that is a static property of the
+        # creature, read off the compiled program by
+        # `declare_attackers_step._ignores_defender`; like every kind above,
+        # the instruction is the record the consumer reads.
+        "attacks_as_though_no_defender",
     }
 )
 
@@ -5278,6 +5293,14 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
     # keyword, an unrecognized granted ability or an unmodelled condition is now
     # reported unsupported rather than admitted and dropped.
     if lord_buff_for(normalized) is not None:
+        return True
+    # "Other Bird creatures get +1/+1 for each feather counter on **Kangee**."
+    # (Kangee, Aerie Keeper.) The table's counter tail is anchored on "this
+    # <noun>", and a legendary card writes the same reference as its own name;
+    # collapsed through the reader every other table in this function is asked
+    # through, and only where the uncollapsed line found nothing, so no
+    # sentence the table read before is read differently now.
+    if lord_buff_for(_restriction_line(line, card_name)) is not None:
         return True
     # "Creatures with islandwalk can be blocked as though they didn't have
     # islandwalk." (Gosta Dirk, Lord Magnus, Ur-Drago print it on a creature;
@@ -5720,7 +5743,10 @@ def _parse_creature_program(
                 )
             elif (bonus := static_bonus_for(_restriction_line(line, card_name))) is not None:
                 instructions.append(OracleInstruction(bonus.kind, "", bonus.payload))
-            elif (lord := lord_buff_for(normalized)) is not None:
+            elif (
+                lord := lord_buff_for(normalized)
+                or lord_buff_for(_restriction_line(line, card_name))
+            ) is not None:
                 # The lord line the gate just admitted, carried as data. The
                 # consumer used to re-parse `static_line`'s text with two
                 # regexes of its own, which is how the gate and the dispatch came
@@ -6276,7 +6302,7 @@ def expand_ability_lines(
     unchanged, which is what every reader asking about a line rather than a card
     wants.
     """
-    from .cast_costs import expand_buyback_lines
+    from .cast_costs import expand_buyback_lines, expand_kicker_lines
     from .echo import expand_echo_lines
     from .fading import expand_fading_lines
     from .self_reference import expand_short_self_references
@@ -6292,6 +6318,14 @@ def expand_ability_lines(
     # CR 702.32a's, for echo's reason: a whole line in, whole lines out, read by
     # none of the rewrites below.
     oracle_text = expand_fading_lines(oracle_text)
+    # CR 702.33a's: "Kicker [cost]" *means* "You may pay an additional [cost] as
+    # you cast this spell", which is the CR 601.2b offer buyback's first half
+    # already becomes (``engine/cast_costs.py``). Its own statement for echo's
+    # reason -- a whole keyword line in, one cost sentence out, read by none of
+    # the rewrites below. What makes kicker more than a cost is that the card's
+    # *other* sentences ask whether it was paid; that is ``cast_costs.kicked``,
+    # not a rewrite.
+    oracle_text = expand_kicker_lines(oracle_text)
 
     # Its own statement rather than another layer of the nested call below. The
     # composition is what every keyword-as-a-rewrite adds itself to, so it is

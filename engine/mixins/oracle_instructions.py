@@ -5,6 +5,7 @@ import dataclasses
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..event_durations import end_event_durations
+from ..cast_costs import kicked
 from ..events import emit
 from ..game_types import OracleExecutionContext, OracleStateMachine
 from ..handlers import EFFECT_HANDLERS
@@ -286,9 +287,16 @@ class OracleInstructionsMixin:
         # Without it the two spellings of one announcement disagreed — an
         # opponent-scoped cast trigger could say "that player" and an
         # unnarrowed one could not.
+        # ``kicked`` rides the same announcement (CR 702.33d: a spell is kicked
+        # once "its controller declared the intention to pay" its kicker cost,
+        # which is CR 601.2b and so already true as the spell goes on the
+        # stack). "Whenever a player kicks a spell" (Saproling Infestation) is
+        # this event narrowed by it, not a second event: every cast announces
+        # the flag and only a trigger printed with the verb reads it.
         emit(
             self, "spell_cast", subject=card, caster_index=caster_index,
             cast_card=card, event_subject_player=caster_index,
+            kicked=bool(item is not None and kicked(card, item.choices)),
         )
         # …and the other thing a cast can do to the board: end a continuous
         # effect that was printed to last **until** one (CR 611.2a) — "until a

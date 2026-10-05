@@ -18,6 +18,15 @@ from __future__ import annotations
 #: "…can attack this turn as though it didn't have defender." (Wall of Wonder.)
 ATTACK_AS_THOUGH_NO_DEFENDER = "attack_as_though_no_defender_until_eot"
 
+#: "This creature can attack as though it didn't have defender." with **no**
+#: duration (the ability Prison Barricade has when it was kicked). The static
+#: twin of the flag above: an instruction kind on the creature's own compiled
+#: program, never a stamp, because a static ability applies for exactly as long
+#: as the permanent says the sentence (CR 604.1) and nothing has to sweep it.
+#: One name here for the lowering that produces it and the declare-attackers
+#: read that honours it.
+ATTACKS_AS_THOUGH_NO_DEFENDER = "attacks_as_though_no_defender"
+
 #: "Target creature can't block this turn." (Panic.) A *restriction* rather than
 #: a permission, and here anyway: it is the same kind of channel — one mark on
 #: one permanent, written by a handler, read by a combat step, swept with the

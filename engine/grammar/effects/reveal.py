@@ -458,6 +458,24 @@ def _accept_reveal_until_rest(
     again ("and *put* all other cards revealed this way into your graveyard").
     """
     mark = stream.mark()
+    # "…and **shuffle all other cards revealed this way into your library**."
+    # (Thicket Elemental.) The fate Transmogrify prints as "then shuffles the
+    # rest into their library", on this production's own sentence -- so it
+    # reaches the handler branch that card already uses, and the pile is put
+    # back and shuffled once (CR 701.24) rather than binned. A verb of its own
+    # rather than a row of ``_REVEAL_UNTIL_REST``, because that table maps a
+    # *zone word* and the zone here is the library the cards came from: only
+    # the verb says they are shuffled in rather than put back in order. Every
+    # word required, the possessive agreeing with the sentence's subject as it
+    # does at every other position.
+    if stream.accept_word("shuffle"):
+        if stream.accept_phrase(
+            "all", "other", "cards", "revealed", "this", "way", "into",
+            possessive, "library",
+        ):
+            return "shuffle_into_library"
+        stream.reset(mark)
+        return None
     # Avenging Druid's repeated verb. Read before the pile so the two elided
     # spellings below are one branch.
     stream.accept_word("put")

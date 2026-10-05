@@ -51,7 +51,7 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       ReturnedToHandThisTurn, RevealedCardIs,
                       ManaAddedWithThisAbility,
                       SacrificedThisWay, SourceAbilityActivations,
-                      StartedTheTurnState, TappedThisWay)
+                      StartedTheTurnState, TappedThisWay, WasKicked)
 
 @dataclass(frozen=True)
 class Controls:
@@ -693,6 +693,7 @@ Condition = Union[
     ZoneHasCards,
     # Asked of a record of what already happened (``ast/records.py``).
     AdditionalCostWasPaid,
+    WasKicked,
     AttackedOrBlockedThisCombat,
     ChosenThisWay,
     CoinFlipResult,

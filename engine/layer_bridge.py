@@ -57,6 +57,7 @@ from .continuous import (
     switch_pt,
 )
 from .keywords import ability_effects, derived_grants, derived_removals
+from .enter_effects import KICKED_ENTRY
 from .landwalk import landwalk_requirement
 from .land_types import land_type_changes, lost_abilities_to_type_change
 from .lord_buffs import QUALIFIER_FIELDS
@@ -346,6 +347,15 @@ def _printed_abilities_cached(
         # A lord line ("Other Merfolk … have islandwalk") grants the ability to
         # other creatures, not to the lord itself.
         if value.startswith("other "):
+            continue
+        # "If this creature was kicked, it enters with two +1/+1 counters on it
+        # **and with flying**." (Faerie Squadron.) The keyword is what a
+        # *kicked* one has, granted at entry through layer 6
+        # (``permanent_state._initialize_permanent_state``) -- not a printed
+        # ability, so the word scan below must not seed it: every unkicked
+        # Faerie Squadron flew, a strictly better creature than the {U} 1/1 the
+        # card prints.
+        if KICKED_ENTRY.match(value):
             continue
         abilities.update(_text_keywords_in(value))
         # A printed "bands with other [quality]" line (CR 702.22b) — the Wolves

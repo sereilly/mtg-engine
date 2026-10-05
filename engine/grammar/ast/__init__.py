@@ -149,6 +149,7 @@ from .conditions import (
 )
 from .records import (
     AdditionalCostWasPaid,
+    WasKicked,
     AttackedOrBlockedThisCombat,
     ChosenThisWay,
     CoinFlipResult,
@@ -597,6 +598,7 @@ __all__ = [
     "CountersPlacedThisWay",
     "EachAdditionalCostPaid",
     "AdditionalCostWasPaid",
+    "WasKicked",
     "EachShortOfThisWay",
     "DestroyedThisWay",
     "DestroyedTargetWas",

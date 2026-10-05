@@ -56,14 +56,45 @@ class OptionalManaCost:
 
     symbols: str
     repeatable: bool = False
+    #: "Kicker **{X}**" (Verdeloth the Ancient) / "Kicker **{X}{2}**" (Kangee,
+    #: Aerie Keeper). How many {X} symbols the offer prints. CR 107.3a names
+    #: "an additional cost with an {X} in it" as one of the four places an X is
+    #: announced, and this is the mana-shaped one: the caster who takes the
+    #: offer names a number and pays that much generic mana per symbol on top of
+    #: :attr:`cost`.
+    #:
+    #: A count rather than a flag for the reason a mana cost's own X is counted
+    #: (CR 107.3: "{X}{X}" is twice X), and its own field rather than a symbol
+    #: inside :attr:`cost` because ``mana_cost_from_symbols`` -- the one reader
+    #: that turns printed symbols into a payment -- refuses an X outright, and
+    #: has to: a cost read with its X silently worth nothing is a spell cast for
+    #: less than it prints.
+    x_count: int = 0
 
     @property
     def cost(self) -> dict[str, int]:
-        """What one payment of this offer costs, as the symbol dict every
-        payment in this engine speaks."""
+        """What one payment of this offer costs **before any X**, as the symbol
+        dict every payment in this engine speaks. Empty for a bare ``{X}``."""
         from .mana_payment import mana_cost_from_symbols
 
-        return mana_cost_from_symbols(self.symbols) or {}
+        printed = self.symbols.replace("{X}", "") if self.x_count else self.symbols
+        return mana_cost_from_symbols(printed) or {}
+
+    def cost_at(self, x_value: int | None) -> dict[str, int]:
+        """What one payment costs with the announced X folded in (CR 107.3a).
+
+        The one place an offer's X becomes mana, read by the charge
+        (``casting.queue_from_hand``) and the picker's ceiling
+        (``legality.cast_cost_offers``) alike. An unannounced X is 0, which is
+        CR 107.3's reading of a number nobody named and the only one that
+        cannot charge a player for mana they did not agree to.
+        """
+        charged = dict(self.cost)
+        if self.x_count:
+            extra = self.x_count * max(0, int(x_value or 0))
+            if extra:
+                charged["generic"] = charged.get("generic", 0) + extra
+        return charged
 
 
 @dataclass(frozen=True)
@@ -959,6 +990,10 @@ def _read_cost_clauses(costs: str) -> dict | None:
     return fields
 
 
+#: One printed {X}, either case (the cost sentences are read lowercased).
+_X_SYMBOL = re.compile(r"\{x\}", re.IGNORECASE)
+
+
 def _optional_mana_offers(
     printed: str, *, repeatable: bool
 ) -> tuple[OptionalManaCost, ...] | None:
@@ -990,13 +1025,29 @@ def _optional_mana_offers(
             # conjunction this does not read, most likely. Refused rather than
             # charged as the part that matched.
             return None
-        symbols = mana_cost_from_symbols(run)
-        if not symbols:
+        # "you may pay **{X}{2}**" -- CR 702.33a's rewrite of Kangee's kicker.
+        # The X symbols are counted off the run and the rest goes through the
+        # one reader below, which refuses an X on purpose (see
+        # ``OptionalManaCost.x_count``). Either case: both preambles are
+        # matched against a lowercased line.
+        x_count = len(_X_SYMBOL.findall(run))
+        rest = _X_SYMBOL.sub("", run)
+        if x_count and repeatable:
+            # "{X} any number of times" would need an X per payment and the
+            # announcement carries one. No card prints it; refused rather than
+            # charged as one X shared between payments.
             return None
-        label = mana_cost_label(symbols)
+        symbols = mana_cost_from_symbols(rest) if rest else None
+        if not symbols and not (x_count and not rest):
+            return None
+        # The canonical key: X first, as Magic prints a mana cost, then
+        # ``mana_cost_label``'s spelling of whatever is not X.
+        label = "{X}" * x_count + (mana_cost_label(symbols) if symbols else "")
         if any(offer.symbols == label for offer in offers):
             return None
-        offers.append(OptionalManaCost(label, repeatable=repeatable))
+        offers.append(
+            OptionalManaCost(label, repeatable=repeatable, x_count=x_count)
+        )
     return tuple(offers) or None
 
 
@@ -1322,6 +1373,155 @@ def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Kicker (CR 702.33)
+# ---------------------------------------------------------------------------
+#
+# **Buyback's shape exactly, and built on buyback's machinery rather than beside
+# it.** CR 702.33a: "'Kicker [cost]' means 'You may pay an additional [cost] as
+# you cast this spell.'" That is CR 601.2b's optional additional cost, the
+# sentence this table already reads in full -- so the keyword line is rewritten
+# into it before any line is classified (:func:`expand_kicker_lines`, composed
+# into ``oracle.expand_ability_lines``) and nothing downstream knows the word:
+# ``_read_cost_clauses`` reads the offer, ``legality.cast_cost_offers`` prices it
+# against the pool and the untapped lands, the browser's cast-offer prompt asks
+# for it, ``casting._optional_cost_announcement`` checks it and the stack item
+# records it under ``additional_costs_paid``.
+#
+# What kicker has that buyback does not is that **other sentences of the card
+# ask about it** -- "if this spell was kicked", "if it was kicked", "if this
+# creature wasn't kicked" -- and CR 702.33d says when the answer is settled: "a
+# spell has been kicked if its controller declared the intention to pay any or
+# all of its kicker costs". So :func:`kicked` is the one reader, asked
+#
+# * by the condition evaluator, of a resolving spell's own stack record;
+# * by ``resolution._resolve_card`` as a permanent spell becomes a permanent,
+#   which stamps :data:`KICKED` on it -- because the permanent is what an entry
+#   replacement, an entry trigger and Skizzik's end-step trigger turns later
+#   read, and the stack item is gone by then (CR 400.7 gives a permanent that
+#   leaves and returns a fresh object with no stamp, which is the rule: it was
+#   not cast, so it was not kicked);
+# * by the cast announcement, for "whenever a player kicks a spell".
+#
+# and it reads the same key the rewrite produced, so the offer that is charged
+# is exactly the offer that makes the spell kicked.
+
+#: The permanent-metadata key a kicked permanent spell leaves on the permanent
+#: it becomes. Present and true, or absent.
+KICKED = "kicked"
+
+#: "Kicker {2}", "Kicker {1}{G}", "Kicker {X}{2}". One run of mana symbols.
+#:
+#: Deliberately *not* "Kicker {1}{G} and/or {2}{U}" (Planeshift's two-kicker
+#: cards): the reader below would take it -- "and/or" is two independent offers
+#: to ``_optional_mana_offers`` -- but those cards ask *which* kicker was paid
+#: ("if it was kicked with its {1}{G} kicker"), a condition nothing here answers,
+#: and admitting the cost without the question is a wording claimed and never
+#: exercised. It stays a line :func:`unread_cost_sentence` reports.
+_KICKER_LINE = re.compile(
+    r"^kicker\s+(?P<cost>(?:\{[^{}]+\})+)$", re.IGNORECASE
+)
+
+#: Any line that *is* a kicker keyword line, readable or not -- the wider shape
+#: the support gate asks, for ``_BUYBACK_SHAPE``'s reason: a kicker whose cost
+#: this file cannot read must be reported as a cost nothing charges, never fall
+#: through to a gate that has not heard of the keyword and cast the spell
+#: unkickable. What follows the word has to open a cost (a mana symbol, or the
+#: em dash a non-mana cost is printed behind), which is what keeps "Kicker costs
+#: cost {1} less" -- a static ability *about* kicker -- out of it.
+_KICKER_SHAPE = re.compile(r"^(?:multi)?kicker\s*(?:[—–-]|\{)", re.IGNORECASE)
+
+
+def _kicker_line_offer(line: str) -> tuple[str, str] | None:
+    """``(announcement key, rules sentence)`` for one kicker line, or None.
+
+    The key is the canonical spelling ``_optional_mana_offers`` gives the
+    rewritten sentence -- read **back off the sentence** rather than spelled a
+    second time here, for ``_buyback_line_offer``'s reason: the key is what the
+    announcement is recorded under and what :func:`kicked` reads it back by,
+    and two spellings of one cost is a spell that paid its kicker and resolved
+    unkicked.
+    """
+    stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
+    stripped = stripped.strip().rstrip(".")
+    match = _KICKER_LINE.match(stripped)
+    if match is None:
+        return None
+    read = _printed_additional_cost(
+        BUYBACK_RULES_TEXT.format(cost=match.group("cost"))
+    )
+    if read is None or len(read.optional_mana) != 1:
+        return None
+    key = read.optional_mana[0].symbols
+    return key, BUYBACK_RULES_TEXT.format(cost=key)
+
+
+def is_kicker_line(line: str) -> bool:
+    """Whether *line* is a printed kicker keyword line, readable or not."""
+    stripped = _BUYBACK_REMINDER.sub("", line or "").strip()
+    return _KICKER_SHAPE.match(stripped) is not None
+
+
+def expand_kicker_line(line: str) -> str | None:
+    """The CR 702.33a rules text for one printed kicker line, or None."""
+    offer = _kicker_line_offer(line)
+    return None if offer is None else offer[1]
+
+
+def expand_kicker_lines(oracle_text: str) -> str:
+    """*oracle_text* with every kicker keyword line rewritten to its rules text.
+
+    Text without one is returned unchanged, so applying this to every card costs
+    a substring test. Applied by the compiler before any line is classified,
+    beside ``expand_buyback_lines`` and for its reason: what the compiler reads
+    and what every other reader of a card's lines reads must be one text.
+    """
+    if not oracle_text or "icker" not in oracle_text:
+        return oracle_text
+    return "\n".join(
+        expand_kicker_line(line) or line for line in oracle_text.split("\n")
+    )
+
+
+@lru_cache(maxsize=None)
+def kicker_cost(oracle_text: str) -> str | None:
+    """The canonical key *oracle_text*'s kicker keyword offers, or None.
+
+    Read off the **printed** text, which is what a resolving spell's
+    ``CardDefinition`` still carries -- the rewrite happens inside the compiler
+    and nothing writes it back onto the card. Cached because it is asked of
+    every spell that is cast and every one that resolves.
+    """
+    if "icker" not in (oracle_text or ""):
+        return None
+    for line in oracle_text.split("\n"):
+        offer = _kicker_line_offer(line)
+        if offer is not None:
+            return offer[0]
+    return None
+
+
+def kicked(card: CardDefinition, choices: dict | None) -> bool:
+    """Whether this cast of *card* was kicked (CR 702.33d).
+
+    *choices* is the spell's own stack record. CR 702.33d settles the answer at
+    the announcement ("declared the intention to pay"), and ``choices`` is where
+    the announcement survives: the pool that paid is empty by resolution
+    (CR 500.5).
+
+    False for a card printing no kicker and for an object nothing cast, which
+    has no ``choices`` to read.
+    """
+    cost = kicker_cost(getattr(card, "oracle_text", "") or "")
+    if cost is None:
+        return False
+    paid = (choices or {}).get("additional_costs_paid") or {}
+    try:
+        return int(paid.get(cost, 0) or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 @compilation_cache
 @lru_cache(maxsize=None)
 def _additional_costs_of_text(
@@ -1386,7 +1586,10 @@ def costs_charged_from(
     )
 
 
-def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
+def cast_announces_x(
+    card: CardDefinition, *, from_zone: str = "hand",
+    taken: dict[str, int] | None = None,
+) -> bool:
     """Whether casting *card* from *from_zone* makes its controller announce a
     value for X (CR 107.3a).
 
@@ -1416,10 +1619,39 @@ def cast_announces_x(card: CardDefinition, *, from_zone: str = "hand") -> bool:
     """
     if "{X}" in (card.mana_cost or "").upper():
         return True
-    return any(
+    charged = costs_charged_from(card, from_zone)
+    if any(
         cost.pay_life_x or cost.return_count_x or cost.exile_graveyard_count_x
         or cost.discard_count_x
+        for cost in charged
+    ):
+        return True
+    # "Kicker {X}" (Verdeloth the Ancient). An X that lives in an *offer*, so
+    # whether it is announced at all turns on CR 601.2b's other answer: a caster
+    # who declined the kicker names no number, and a box asking for one would be
+    # asking about a cost nobody is paying. *taken* is that answer so far --
+    # ``optional_cost_payments``, the map the offer prompt re-asks the spec
+    # with -- and with none of it given the answer is no.
+    return any(
+        offer.x_count and int((taken or {}).get(offer.symbols, 0) or 0) > 0
+        for cost in charged
+        for offer in cost.optional_mana
+    )
+
+
+def optional_x_offers(
+    card: CardDefinition, *, from_zone: str = "hand"
+) -> tuple[OptionalManaCost, ...]:
+    """Every CR 601.2b offer of *card* that prints an {X} ("Kicker {X}").
+
+    Empty for every card but two in the pool, which is what lets the cast path
+    ask it of every spell and change nothing for the rest.
+    """
+    return tuple(
+        offer
         for cost in costs_charged_from(card, from_zone)
+        for offer in cost.optional_mana
+        if offer.x_count
     )
 
 
@@ -1459,6 +1691,13 @@ def unread_cost_sentence(line: str) -> str | None:
         # reader as "printed cost nothing charges: …".
         stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
         return stripped.strip().lower().rstrip(".")
+    # A kicker line the rewrite could not read (CR 702.33a), for the buyback
+    # line's reason one block up: what survives to here is a printing
+    # :func:`expand_kicker_line` refused, and a card cast with its kicker never
+    # offered is a card that can never be what half its text describes.
+    if is_kicker_line(line) and expand_kicker_line(line) is None:
+        stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
+        return stripped.strip().lower().rstrip(".")
     return None
 
 
@@ -1481,6 +1720,13 @@ __all__ = [
     "expand_buyback_line",
     "expand_buyback_lines",
     "is_buyback_line",
+    "KICKED",
+    "expand_kicker_line",
+    "expand_kicker_lines",
+    "is_kicker_line",
+    "kicked",
+    "kicker_cost",
+    "optional_x_offers",
     "read_return_clause",
     "read_sacrifice_all_clause",
     "read_sacrifice_clause",

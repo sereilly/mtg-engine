@@ -189,12 +189,32 @@ def test_the_read_back_key_is_canonical_not_as_printed():
 @pytest.mark.cr("601.2b")
 def test_a_cost_clause_naming_an_unspendable_symbol_refuses_the_whole_line():
     """``_read_cost_clauses`` refuses a sentence whole rather than charging the
-    part it read — the direction a cost must never drift in. An {X} in an
-    optional additional cost has no payment behind it, so the line stays
+    part it read — the direction a cost must never drift in. A hybrid symbol in
+    an optional additional cost has no payment behind it, so the line stays
     unclaimed and the card stays unsupported instead of castable at a
-    discount."""
+    discount.
+
+    This asserted the same of an **{X}** until Invasion, and the reason it no
+    longer does is the rule working rather than relaxing: "Kicker {X}"
+    (Verdeloth the Ancient) is CR 107.3a's "additional cost with an {X} in it",
+    and it now has a payment — ``OptionalManaCost.x_count``, charged at the
+    announced X by ``cost_at``. So an X is *read*, as a count beside the mana
+    the offer costs without it, and never as a symbol worth nothing; and an X
+    offered "any number of times", which one announcement cannot size, still
+    refuses whole."""
     assert additional_cost_for_line(
+        "As an additional cost to cast this spell, you may pay {G/W}{G}."
+    ) is None
+    read = additional_cost_for_line(
         "As an additional cost to cast this spell, you may pay {X}{G}."
+    )
+    [offer] = read.optional_mana
+    assert (offer.symbols, offer.x_count) == ("{X}{G}", 1)
+    assert offer.cost == {"G": 1}
+    assert offer.cost_at(3) == {"G": 1, "generic": 3}
+    assert additional_cost_for_line(
+        "As an additional cost to cast this spell, "
+        "you may pay {X}{G} any number of times."
     ) is None
 
 

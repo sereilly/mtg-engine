@@ -44,7 +44,7 @@ from __future__ import annotations
 import re
 
 from .activation_zones import BATTLEFIELD, ability_functions_from
-from .cast_costs import additional_costs, costs_charged_from
+from .cast_costs import additional_costs, costs_charged_from, kicker_cost
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -2539,10 +2539,72 @@ def _cast_cost_picker(
     return None
 
 
-def _cast_target_spec(card, program) -> dict | None:
+def _as_kicked(instructions, was_kicked: bool) -> tuple:
+    """*instructions* as a cast that was (or was not) kicked will run them.
+
+    CR 702.33g: "If part of a spell's ability has its effect only if that spell
+    was kicked, and that part of the ability includes any targets, the spell's
+    controller chooses those targets only if that spell was kicked." So the
+    picker must read the program the *announcement* describes, not the card:
+    Probe's "target player discards two cards" names nobody on an unkicked
+    cast, and an Emissary's "destroy target land" is a trigger that will not
+    trigger (CR 603.4).
+
+    Two gates, both the grammar's own: an ``if_then`` whose condition is
+    ``was_kicked`` collapses to the arm that will run (which is also what makes
+    a "... instead" pair name one target rather than two), and an instruction
+    carrying it as an ``intervening_if`` stays only when the gate will hold.
+    Everything else is walked through the wrappers ``_WRAPPER_STEP_KEYS``
+    already names, so a gate inside a ``sequence`` is found where it is.
+    """
+    kept: list = []
+    for instruction in instructions:
+        payload = instruction.payload or {}
+        gate = payload.get("intervening_if")
+        if isinstance(gate, dict) and gate.get("kind") == "was_kicked":
+            if was_kicked == bool(gate.get("negated")):
+                continue
+        condition = payload.get("condition")
+        if (
+            instruction.kind == "if_then"
+            and isinstance(condition, dict)
+            and condition.get("kind") == "was_kicked"
+        ):
+            arm = "then" if was_kicked != bool(condition.get("negated")) else "else"
+            kept.extend(_as_kicked(tuple(payload.get(arm) or ()), was_kicked))
+            continue
+        rewritten = None
+        for key in _WRAPPER_STEP_KEYS.get(instruction.kind, ()):
+            steps = tuple(payload.get(key) or ())
+            if not steps:
+                continue
+            viewed = _as_kicked(steps, was_kicked)
+            if viewed != steps:
+                rewritten = {**(rewritten or payload), key: viewed}
+        if rewritten is not None:
+            instruction = type(instruction)(
+                instruction.kind, instruction.value, rewritten
+            )
+        kept.append(instruction)
+    return tuple(kept)
+
+
+def _cast_target_spec(
+    card, program, *, was_kicked: bool | None = None
+) -> dict | None:
     """What *card* announces as a **target** when it is cast (CR 601.2c), or
     None when it targets nothing. The cost half of the announcement is
-    :func:`_cast_cost_picker`; :func:`derive_cast_spec` is the two together."""
+    :func:`_cast_cost_picker`; :func:`derive_cast_spec` is the two together.
+
+    *was_kicked* is CR 702.33g's answer when the caller has one: True or False
+    reads the program through :func:`_as_kicked`, and None -- a caller asking
+    about the card rather than about an announcement -- reads every arm, which
+    is what this did before the pool printed a kicker."""
+    def viewed(instructions):
+        if was_kicked is None:
+            return instructions
+        return _as_kicked(tuple(instructions), was_kicked)
+
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:
         # Animate Dead. `_apply_aura_effect` reads the chosen index out of
@@ -2569,20 +2631,20 @@ def _cast_target_spec(card, program) -> dict | None:
     # gate is removed, so it is measured rather than assumed.
     type_line = card.type_line.lower()
     if "instant" in type_line or "sorcery" in type_line:
-        return _from_instructions(program.instructions)
+        return _from_instructions(viewed(program.instructions))
 
     # A permanent's enters-the-battlefield trigger is the one exception: this
     # engine picks its target as the permanent is cast (Oubliette), where
     # CR 603.3d would choose it when the trigger goes on the stack. That is a
     # standing approximation, not a targeting question — but while it holds, the
     # prompt has to be raised at cast time or the trigger has no target at all.
-    return _from_instructions([
+    return _from_instructions(viewed([
         ability.instruction
         for ability in program.triggered_abilities
         if ability.supported
         and ability.instruction is not None
         and ability.condition.kind == "enters_battlefield"
-    ])
+    ]))
 
 
 def derive_cast_spec(
@@ -2605,7 +2667,18 @@ def derive_cast_spec(
     cost_spec = _cast_cost_picker(
         card, from_zone, announced=optional_cost_payments
     )
-    target_spec = _cast_target_spec(card, program)
+    # CR 702.33g: a kicked-only part's targets are chosen only if the spell was
+    # kicked. Answerable exactly when the caller says what CR 601.2b's
+    # announcement is so far -- *optional_cost_payments*, the same map that
+    # decides the cost picker one line up -- and only for a card that prints a
+    # kicker at all. A caller that passes none is asking about the card, and
+    # gets every arm.
+    was_kicked: bool | None = None
+    if optional_cost_payments is not None:
+        kicker = kicker_cost(card.oracle_text or "")
+        if kicker is not None:
+            was_kicked = int(optional_cost_payments.get(kicker, 0) or 0) > 0
+    target_spec = _cast_target_spec(card, program, was_kicked=was_kicked)
     if cost_spec is None:
         return target_spec
     if target_spec is None:

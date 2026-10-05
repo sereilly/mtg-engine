@@ -409,6 +409,34 @@ class EachAdditionalCostPaid:
     """
     symbols: str
 @dataclass(frozen=True)
+class WasKicked:
+    """"If **this spell was kicked**, …" (Dismantling Blow) / "…, if **it was
+    kicked**, …" (the five Emissaries) / "…if **this creature wasn't kicked**,
+    sacrifice it." (Skizzik.)
+
+    CR 702.33d: "a spell has been kicked if its controller declared the
+    intention to pay any or all of its kicker costs" -- a fact about the *cast*,
+    so no read of the board answers it. A record, beside
+    :class:`AdditionalCostWasPaid` and for its reason: the announcement was made
+    at CR 601.2b and survives only where the casting path wrote it.
+
+    Its own node rather than that one's, although kicker *is* an optional
+    additional cost, because the two sentences name different things: "this
+    spell's additional cost" is whichever offer the card prints, and "kicked" is
+    one named offer among possibly several (a card may print a kicker beside an
+    unrelated optional cost). The evaluator asks ``cast_costs.kicked``, the
+    reader the kicker rewrite itself keys the offer by.
+
+    *subject* is the reference as printed -- ``None`` for "this spell", a source
+    spec otherwise -- kept so that ``rebinding`` can see a bare "it" for the
+    pronoun it is. Lowering refuses one that names anything but the ability's
+    own source, since that is the only object the answer is recorded on.
+    """
+    subject: "TargetSpec | None" = None
+    negated: bool = False
+
+
+@dataclass(frozen=True)
 class AdditionalCostWasPaid:
     """"**If this spell's additional cost was paid**, …" (Undergrowth.)
 

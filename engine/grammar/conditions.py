@@ -253,6 +253,27 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         return ast.AdditionalCostWasPaid()
     stream.reset(mark)
 
+    # "**this spell was kicked**" (Dismantling Blow) / "**it was kicked**" (the
+    # Emissaries) / "**this creature wasn't kicked**" (Skizzik). CR 702.33d's
+    # fact about the cast, read here -- above every reader that opens on a
+    # source reference -- because the verb settles it and it consumes nothing
+    # when the verb is not there.
+    #
+    # Every spelling of the reference, through the one reader the state
+    # clauses below use, so "this spell", "this creature", the card's own name
+    # and the bare pronoun are one production. The reference is kept on the
+    # node as printed for ``rebinding``'s reason: a bare "it" is a pronoun.
+    kicked_mark = stream.mark()
+    kicked_subject = accept_source_reference_spec(stream)
+    if kicked_subject is not None:
+        if stream.accept_phrase("was", "kicked"):
+            return ast.WasKicked(kicked_subject)
+        if stream.accept_phrase("wasn't", "kicked") or stream.accept_phrase(
+            "was", "not", "kicked"
+        ):
+            return ast.WasKicked(kicked_subject, negated=True)
+    stream.reset(kicked_mark)
+
     # "**you haven't added mana with this ability this turn**" (Carpet of
     # Flowers). Read before the flip branch below, which opens on the same
     # "you" and resets cleanly either way, and read as a *record* rather than

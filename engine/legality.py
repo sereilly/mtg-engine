@@ -40,7 +40,8 @@ from .handlers._common import (evaluate_count, excluded_graveyard_slot,
                                permanent_matches_filter, state_holds)
 from .models import CardDefinition, Permanent, PlayerState
 from .alternative_costs import alternative_costs
-from .cast_costs import buyback_cost, cast_announces_x, costs_charged_from
+from .cast_costs import (buyback_cost, cast_announces_x, costs_charged_from,
+                         kicker_cost)
 from .cast_restrictions import timing_fixed_seat
 from .faces import is_multi_face
 from .combat_restrictions import restriction_condition_holds
@@ -860,7 +861,14 @@ class LegalityMixin:
             # CR 601.2b's answer so far, for the one cost kind that is an offer
             # rather than a price: a declined buyback asks the caster to name
             # nothing, and a taken one needs the picker its price implies.
-            optional_cost_payments=optional_cost_payments,
+            #
+            # **An answer not yet given is "nothing taken"**, not "unknown":
+            # this is the spec a player is shown, and CR 702.33g gives a
+            # kicked-only part's targets to a spell that was kicked and to no
+            # other. So a card looked at before any offer is answered is read
+            # as the unkicked cast it so far is -- Benalish Emissary asks for no
+            # land -- and the offer prompt re-asks with the kicker taken.
+            optional_cost_payments=optional_cost_payments or {},
         ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         # CR 107.3c: a spell that defines its own X takes the announcement away
@@ -920,7 +928,9 @@ class LegalityMixin:
             spec["default_creature_type"] = self._default_cast_creature_type(
                 caster_index, card
             )
-        if cast_announces_x(card, from_zone=from_zone):
+        if cast_announces_x(
+            card, from_zone=from_zone, taken=optional_cost_payments
+        ):
             spec["announces_x"] = True
             # And the ceiling that goes with it, which the mana pool cannot
             # supply because this X is not paid in mana: a life total (CR 119.4)
@@ -932,6 +942,7 @@ class LegalityMixin:
                 spell_hand_index=(
                     spell_hand_index if from_zone == "hand" else None
                 ),
+                taken=optional_cost_payments,
             )
             if bound is not None:
                 spec["max_x"] = (
@@ -1128,6 +1139,10 @@ class LegalityMixin:
         # resolution use, so a card whose keyword this engine cannot read is
         # never labelled as having one.
         buyback = buyback_cost(card.oracle_text or "")
+        # …and which is its **kicker** (CR 702.33a), for the same reason: the
+        # player deciding whether to pay {1}{G} on Benalish Emissary needs to
+        # know that price is what destroys the land.
+        kicker = kicker_cost(card.oracle_text or "")
         charged = costs_charged_from(card, from_zone)
         # CR 601.2b's optional **non-mana** price (Constant Mists'
         # "Buyback—Sacrifice a land"). Emitted before the mana walk below and
@@ -1179,7 +1194,10 @@ class LegalityMixin:
         # "sacrifice a creature" says nothing about which price buys the card
         # back.
         for offer in every_offer:
-            one = offer.cost
+            # An offer printing an {X} ("Kicker {X}{2}") is priced at X = 0
+            # here: whether it can be taken *at all*. How large an X it can then
+            # carry is ``max_x`` on the spec, asked once it is taken.
+            one = offer.cost_at(0)
             # What the rest of the announcement has already claimed, so the
             # ceilings cannot each promise the same mana.
             floor = dict(printed)
@@ -1215,6 +1233,7 @@ class LegalityMixin:
                 # byte-identical payload.
                 "label": (
                     "buyback" if buyback and offer.symbols == buyback
+                    else "kicker" if kicker and offer.symbols == kicker
                     else offer.symbols
                 ),
                 "repeatable": offer.repeatable,
@@ -1226,6 +1245,7 @@ class LegalityMixin:
     def _additional_cost_x_ceiling(
         self, caster_index: int, card: CardDefinition, *, from_zone: str,
         spell_hand_index: int | None = None,
+        taken: dict[str, int] | None = None,
     ) -> int | None:
         """The largest X the printed additional costs of *card* leave payable,
         or None when no printed cost names one.
@@ -1281,7 +1301,43 @@ class LegalityMixin:
                 bounds.append(len(self._discard_cost_payers(
                     caster_index, cost, spell_hand_index=spell_hand_index,
                 )))
+            # "Kicker **{X}**" (Verdeloth the Ancient). The fifth resource, and
+            # the one that *is* mana -- but not the mana cost's, so the
+            # browser's own pool arithmetic (which prices an {X} it can see in
+            # the mana cost) has nothing to price. Asked of ``plan_payment``,
+            # the matching the payment itself runs, against the printed cost
+            # plus the offer at each X: the largest the pool and the untapped
+            # lands can pay together. Only for an offer the announcement so far
+            # has *taken* -- a declined kicker announces no X at all.
+            for offer in cost.optional_mana:
+                if not offer.x_count:
+                    continue
+                if int((taken or {}).get(offer.symbols, 0) or 0) <= 0:
+                    continue
+                bounds.append(self._optional_x_ceiling(caster_index, card, offer))
         return min(bounds) if bounds else None
+
+    def _optional_x_ceiling(
+        self, caster_index: int, card: CardDefinition, offer
+    ) -> int:
+        """The largest X *offer* is payable at, on top of *card*'s mana cost.
+
+        Read against the printed cost for ``cast_cost_offers``' reason: a
+        CR 601.2f increase in force makes the number optimistic, and an
+        optimistic announcement is refused by the payment with nothing spent.
+        """
+        caster = self.players[caster_index]
+        pool = dict(caster.mana_pool)
+        lands = untapped_mana_lands(self.controlled_by(caster_index))
+        printed = mana_cost_from_symbols(card.mana_cost or "") or {}
+        reachable = sum(pool.values()) + len(lands)
+        for x_value in range(reachable, -1, -1):
+            required = dict(printed)
+            for symbol, amount in offer.cost_at(x_value).items():
+                required[symbol] = required.get(symbol, 0) + amount
+            if plan_payment(pool, lands, required) is not None:
+                return x_value
+        return 0
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
     def named_role_objects(self, target_permanent_ids, target_role_refs) -> list:
