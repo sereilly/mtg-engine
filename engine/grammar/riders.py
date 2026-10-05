@@ -647,9 +647,13 @@ def _attach_riders(statement: ast.Statement, riders: ast.DamageRiders) -> ast.St
                 statement.riders.cant_be_prevented or riders.cant_be_prevented
             ),
         )
-        return ast.DealDamage(
-            statement.source, statement.amount, statement.recipients, merged, statement.chooser
-        )
+        # ``replace``, not a fresh node from five named fields: that spelling
+        # rebuilt the statement without ``per_each`` (Baki's Curse's "for each
+        # Aura attached to that creature"), so a rider sentence behind a
+        # multiplied damage clause deleted the multiplier and the line
+        # compiled dealing the flat amount. No card prints the two together,
+        # which is the only reason nothing had moved.
+        return replace(statement, riders=merged)
     if isinstance(statement, ast.Sequence) and statement.steps:
         steps = list(statement.steps)
         steps[-1] = _attach_riders(steps[-1], riders)
