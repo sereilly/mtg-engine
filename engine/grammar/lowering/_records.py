@@ -369,6 +369,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # refuse for want of a producer, which is the loud failure.
     "exile_target_permanent": (
         LAST_TARGET_CONTROLLER, _EVENT_SUBJECT_TOUGHNESS_RECORD,
+        # …and the card itself (Liberate: "Return **that card** to the
+        # battlefield …"). The key every other exile declares, written by the
+        # single-target path of the handler.
+        "exiled_cards",
         # …and what it was called (Eradicate) — see
         # ``oracle_types.LAST_TARGET_NAME``. Safe to declare where the *power*
         # above is not: nothing else in the grammar reads a name record, so

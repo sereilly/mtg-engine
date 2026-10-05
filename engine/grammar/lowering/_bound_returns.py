@@ -231,6 +231,59 @@ def lower_untargeted_return(
                 node=node,
             )
         return (OracleInstruction("return_bound_permanent_to_hand", "", {}),)
+    # "Exile target creature you control. **Return that card to the
+    # battlefield under its owner's control** at the beginning of the next end
+    # step." (Liberate.) The card an earlier step of this same effect exiled —
+    # CR 400.7 made it a new object, which is why the sentence says "card" —
+    # read out of the scratchpad the delay froze as it was created (CR 603.7d).
+    # ``put_exiled_cards_into_zone`` is the one handler of "that card" behind
+    # an exile; the battlefield is its third destination.
+    #
+    # ``produced`` is the gate, as it is for every back-reference here: with no
+    # exile in front of it "that card" keeps the event reading below. In front
+    # of that branch because that one refuses the words outright.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "that"
+        and subject.filter.is_card
+        and "exiled_cards" in produced
+        and node.from_zone is None
+        and node.to.name == "battlefield"
+        and node.to.owner is None
+    ):
+        control = getattr(node.under_control_of, "kind", None)
+        if control not in ("owner", "you"):
+            # CR 110.2's default is the ability's controller, and a sentence
+            # that does not say which seat is one this engine will not guess
+            # for — a flickered creature somebody had stolen comes back to a
+            # different player under each reading.
+            raise LoweringError(
+                "an exiled card returns under your or its owner's control, "
+                "and the sentence must say which", node=node,
+            )
+        unread = [
+            name for name in (
+                "entering_tapped", "entering_counters", "exile_on_leave",
+                "repetitions", "actor", "attached_to", "losing_subtypes",
+                "losing_abilities", "gaining_abilities", "also_stack",
+            )
+            if getattr(node, name, None)
+        ]
+        if unread:
+            raise LoweringError(
+                "the exiled card's return honours no further rider", node=node
+            )
+        if _restrictions_beyond(subject.filter, frozenset({"is_card", "zone"})):
+            raise LoweringError(
+                "the exiled card's return honours no further narrowing",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "put_exiled_cards_into_zone", "",
+                {"zone": "battlefield", "control": control},
+            ),
+        )
     # "Whenever a creature becomes the target of a spell or ability, **return
     # that creature to its owner's hand**." (Cowardice.)
     #

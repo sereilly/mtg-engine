@@ -410,3 +410,77 @@ def test_backlash_cannot_target_a_tapped_creature(set_pool):
     ).supported
     assert game.players[1].life == 20
     assert game.players[0].hand == [backlash]
+
+
+def _w1g8_liberate_table(set_pool):
+    """Seat 0 on its own turn with Liberate in hand and a Grizzly Bears;
+    seat 1 has a Hill Giant."""
+    game = _w1g8_instant_duel(set_pool)
+    game.interactive_seats = set()
+    game.start_turn(0)
+    bears = _w1g8_instant_put(game, set_pool, 0, "Grizzly Bears")
+    giant = _w1g8_instant_put(game, set_pool, 1, "Hill Giant")
+    game.players[0].hand = [set_pool("INV")["Liberate"]]
+    return game, bears, giant
+
+
+def test_liberate_exiles_a_creature_and_returns_it_at_the_next_end_step(set_pool):
+    """"Exile target creature you control. Return that card to the battlefield
+    under its owner's control at the beginning of the next end step." Gone
+    until the end step, then back as a new object (CR 400.7)."""
+    game, bears, _giant = _w1g8_liberate_table(set_pool)
+
+    assert game.cast_from_hand(
+        0, "Liberate", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert _w1g8_instant_names(game, 0) == []
+    assert [card.name for card in game.players[0].exile] == ["Grizzly Bears"]
+
+    game.resolve_end_step(0)
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_instant_names(game, 0) == ["Grizzly Bears"]
+    assert game.players[0].exile == []
+    returned = next(iter(game.controlled_by(game.players[0])))
+    assert returned.permanent_id != bears.permanent_id
+
+
+def test_liberate_returns_a_stolen_creature_to_its_owner(set_pool):
+    """"…under its **owner's** control": a creature seat 0 controls and seat 1
+    owns is exiled to seat 1's exile (CR 400.3) and comes back on seat 1's
+    side."""
+    from engine.control import change_control
+
+    game, bears, giant = _w1g8_liberate_table(set_pool)
+    change_control(giant, 0, source=bears)
+    game._sync_control()
+    assert game.controller_index_of(giant) == 0
+
+    assert game.cast_from_hand(
+        0, "Liberate", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w1g8_resolve_stack(game)
+    assert [card.name for card in game.players[1].exile] == ["Hill Giant"]
+
+    game.resolve_end_step(0)
+    _w1g8_resolve_stack(game)
+
+    assert _w1g8_instant_names(game, 1) == ["Hill Giant"]
+    assert _w1g8_instant_names(game, 0) == ["Grizzly Bears"]
+
+
+def test_liberate_cannot_target_a_creature_its_caster_does_not_control(set_pool):
+    """"target creature **you control**": the opponent's Hill Giant is not
+    offered and cannot be named."""
+    liberate = set_pool("INV")["Liberate"]
+    assert _w1g8_cast_spec(liberate, _w1g8_compile(liberate)) == {
+        "kind": "creature", "own_only": True,
+    }
+    game, _bears, giant = _w1g8_liberate_table(set_pool)
+
+    assert not game.cast_from_hand(
+        0, "Liberate", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert game.is_on_battlefield(giant)
+    assert game.players[0].hand == [liberate]
