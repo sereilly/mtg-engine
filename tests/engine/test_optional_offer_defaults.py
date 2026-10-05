@@ -505,6 +505,15 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "put_cards_from_hand_onto_battlefield",
         "remove_any_number_of_counters_from_self", "reveal_hand",
         "reveal_hand_while_source_present", "target_gains_life",
+        # Elfhame Sanctuary (INV), read at its promotion: "…you may search your
+        # library for a basic land card, reveal that card, put it into your
+        # hand, then shuffle. If you do, you skip your draw step this turn."
+        # A search is an action a player can always take - of a library with
+        # no such card, or with no cards at all (CR 701.23b: failing to find
+        # is a legal outcome of searching a hidden zone) - so the offer is
+        # never empty, and a seat that searched and found nothing *did*
+        # search: the rider is right to fire and the draw step is skipped.
+        "search_library",
         # Targeted, so an empty case is already refused at announcement
         # (CR 601.2c) or at resolution (CR 608.2b).
         "bounce_target_creature", "deal_damage", "destroy_target_permanent",

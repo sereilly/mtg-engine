@@ -488,6 +488,13 @@ ACTIVATED_LABELS: dict[str, str] = {
     "redirect_source_damage_to_target_until_eot": "activated_prevention",
     "grant_whole_prevention_shield": "activated_prevention",
     "grant_chosen_source_blanket_shield": "activated_prevention",
+    # --- Invasion, at its promotion ---------------------------------------
+    # Urborg Phantom: "{U}: Prevent all combat damage that would be dealt to
+    # and dealt by this creature this turn." The kind was triggered-only in
+    # the shipped pool (the row in TRIGGERED_LABELS below); this is the first
+    # card to *activate* it, and it takes the bucket every other activated
+    # shield in this block has.
+    "prevent_damage_to_target_until_eot": "activated_prevention",
     "grant_exile_prevention_shield": "activated_prevention",
     # --- Fallen Empires' activated abilities, added at its promotion --------
     # Same rule as M21's block above: the bucket the *ability* belongs to, not
