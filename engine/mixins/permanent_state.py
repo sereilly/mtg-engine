@@ -2270,6 +2270,15 @@ class PermanentStateMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        if static.applies_to == "creature_type":
+            # "All **Goblins** are black and are Zombies …" (Dralnu's Crusade.)
+            # Through the layer-4 accessor, so a creature another effect has
+            # made a Goblin is one and a Goblin that has lost the type is not.
+            # Not self-referential the way the artifact row above is: the type
+            # this static adds is never the type its own scope names.
+            return bool(static.subtypes) and all(
+                permanent.has_type(subtype) for subtype in static.subtypes
+            )
         if static.applies_to == "nonland_permanent":
             # "All **nonland** permanents are the chosen color." (Shifting Sky.)
             # The branch above with no seat to compare: every battlefield's

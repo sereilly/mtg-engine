@@ -176,3 +176,87 @@ def test_w1g6_shifting_sky_follows_its_record_and_a_headless_seat_is_never_asked
     late = _W1G6Permanent(card=_w1g6_card(set_pool, "Savannah Lions"))
     game._put_permanent_onto_battlefield(1, late, None)
     assert _w1g6_colors(game, late) == ["U"]
+
+
+def _w1g6_shape(game, perm):
+    """(colours, is a Goblin, is a Zombie, power, toughness) through the
+    layers."""
+    return (
+        _w1g6_colors(game, perm), perm.has_type("goblin"), perm.has_type("zombie"),
+        perm.effective_power, perm.effective_toughness,
+    )  # _w1g6_shape
+
+
+def test_w1g6_dralnus_crusade_makes_every_goblin_a_black_zombie_as_well(set_pool):
+    """"All Goblins get +1/+1. / All Goblins are black and are Zombies in
+    addition to their other creature types." Both players' Goblins are black —
+    instead of red (CR 105.3, layer 5) — and Goblin **Zombies** (CR 205.1b,
+    layer 4: the type is added, so they are still Goblins), and 2/2. The Bears
+    and the Giant are neither, and when the Crusade leaves every Goblin is a
+    red 1/1 Goblin again."""
+    assert _w1g6_compile(_w1g6_card(set_pool, "Dralnu's Crusade")).supported
+    game, mine, theirs = _w1g6_table(
+        set_pool, ["Mons's Goblin Raiders", "Grizzly Bears"],
+        ["Goblin Balloon Brigade", "Hill Giant"], hand=["Dralnu's Crusade"],
+    )
+    raiders, bears = mine
+    brigade, giant = theirs
+    assert _w1g6_shape(game, raiders) == (["R"], True, False, 1, 1)
+
+    assert game.queue_from_hand(0, "Dralnu's Crusade").supported
+    _w1g6_resolve_stack(game)
+    crusade = next(p for p in game.controlled_by(0) if p.card.name == "Dralnu's Crusade")
+
+    assert _w1g6_shape(game, raiders) == (["B"], True, True, 2, 2)
+    assert _w1g6_shape(game, brigade) == (["B"], True, True, 2, 2)
+    assert _w1g6_shape(game, bears) == (["G"], False, False, 2, 2)
+    assert _w1g6_shape(game, giant) == (["R"], False, False, 3, 3)
+    assert _w1g6_colors(game, crusade) == ["B", "R"], "the enchantment is no Goblin"
+
+    game.remove_from_battlefield(crusade)
+    game._recompute_continuous_effects()
+    assert _w1g6_shape(game, raiders) == (["R"], True, False, 1, 1)
+    assert _w1g6_shape(game, brigade) == (["R"], True, False, 1, 1)
+
+
+def test_w1g6_dralnus_crusade_goblins_are_zombies_to_lord_of_the_undead_and_black_to_terror(set_pool):
+    """What the two layers buy. "Other Zombie creatures get +1/+1" (Lord of the
+    Undead) counts a Crusade Goblin: 1/1, +1/+1 from the Crusade, +1/+1 from
+    the Lord. And the Goblin is a black creature, so a Terror ("nonblack") may
+    not name it — the same Terror could a moment before the Crusade resolved."""
+    game, mine, theirs = _w1g6_table(
+        set_pool, ["Lord of the Undead"], ["Mons's Goblin Raiders"],
+        hand=["Terror", "Dralnu's Crusade"],
+    )
+    lord, raiders = mine[0], theirs[0]
+    assert (raiders.effective_power, raiders.effective_toughness) == (1, 1)
+    assert game.queue_from_hand(0, "Terror", target_permanent_ids=[raiders.permanent_id]).supported
+    game.stack.clear()
+    game.players[0].hand.append(_w1g6_card(set_pool, "Terror"))
+
+    assert game.queue_from_hand(0, "Dralnu's Crusade").supported
+    _w1g6_resolve_stack(game)
+
+    assert (raiders.effective_power, raiders.effective_toughness) == (3, 3)
+    assert (lord.effective_power, lord.effective_toughness) == (2, 2), "other Zombies"
+    refused = game.queue_from_hand(0, "Terror", target_permanent_ids=[raiders.permanent_id])
+    assert not refused.supported, refused.details
+
+
+def test_w1g6_dralnus_crusade_reads_goblin_through_the_layers(set_pool):
+    """The scope is "Goblins" as the board currently is, not as cards are
+    printed: Bears made Goblins by a Conspiracy naming Goblin are black Goblin
+    Zombies under the Crusade, and stop being when the Conspiracy leaves."""
+    game, mine, _theirs = _w1g6_table(set_pool, ["Grizzly Bears", "Dralnu's Crusade"], [])
+    bears = mine[0]
+    assert _w1g6_shape(game, bears) == (["G"], False, False, 2, 2)
+
+    conspiracy = _W1G6Permanent(card=set_pool("MMQ")["Conspiracy"])
+    game._put_permanent_onto_battlefield(0, conspiracy, None)
+    conspiracy.metadata["chosen_creature_type"] = "goblin"
+    game._recompute_continuous_effects()
+    assert _w1g6_shape(game, bears) == (["B"], True, True, 3, 3)
+
+    game.remove_from_battlefield(conspiracy)
+    game._recompute_continuous_effects()
+    assert _w1g6_shape(game, bears) == (["G"], False, False, 2, 2)
