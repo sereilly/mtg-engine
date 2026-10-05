@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 import engine.oracle as oracle
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.effect_labels import (
@@ -58,7 +59,9 @@ def measured_grammar_abilities():
 def _abilities_of(cards):
     activated: list[tuple[str, str, str]] = []
     triggered: list[tuple[str, str, str, str]] = []
-    for card in cards:
+    # `compilation_units`: an ability is on the card whose text prints it,
+    # which for a split card is a half. The whole card's program has none.
+    for card in compilation_units(cards):
         program = oracle.compile_card_oracle(card)
         for ability in program.activated_abilities:
             if ability.instruction is None:
@@ -196,7 +199,7 @@ def test_a_wrapper_kind_never_borrows_a_leaf_effects_bucket(grammar_abilities):
     activated, _triggered = grammar_abilities
     wrappers: set[str] = set()
     leaves: set[str] = set()
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         program = oracle.compile_card_oracle(card)
         for ability in program.activated_abilities:
             if ability.instruction is None or ability.instruction.kind not in ACTIVATED_LABELS:

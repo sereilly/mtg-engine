@@ -33,6 +33,7 @@ someone checked.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.auras import aura_continuous_claim
 from engine.card_loader import load_catalog
 from engine.cast_restrictions import cast_timing_claims_line
@@ -204,7 +205,7 @@ def _derived(normalized: str) -> bool:
 
 def _unbacked_static_lines() -> list[tuple[str, str]]:
     unbacked: list[tuple[str, str]] = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         program = compile_card_oracle(card)
         if not program.supported:
             continue
@@ -236,7 +237,7 @@ def test_the_acknowledgement_list_has_no_dead_entries():
     prefix inherits an acknowledgement nobody re-checked."""
     lines = [
         normalize_creature_line(raw_line)
-        for card in load_catalog()
+        for card in compilation_units(load_catalog())
         for raw_line in card.oracle_text.split("\n")
         if normalize_creature_line(raw_line)
     ]

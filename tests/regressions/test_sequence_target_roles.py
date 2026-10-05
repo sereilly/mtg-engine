@@ -36,6 +36,7 @@ of thing, and that half must stay visible rather than quietly grow.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
@@ -242,7 +243,7 @@ def test_no_announcement_mixes_a_seat_and_an_object_without_roles():
     """
     from engine.targeting import SEAT_ROLE_KINDS
 
-    cards = load_cards(manifest_set_paths(include_measured=True))
+    cards = compilation_units(load_cards(manifest_set_paths(include_measured=True)))
     examined = 0
     unroled: list[str] = []
     for card in cards:

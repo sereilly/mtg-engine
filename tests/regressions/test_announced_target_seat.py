@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.legality import _activation_spec
@@ -176,7 +177,7 @@ def _announcements_on_the_activators_own_side():
     here: the announcement gate passed every one of these announcements and the
     *resolver* discarded them, which is why nothing in the suite went red.
     """
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         try:
             program = compile_card_oracle(card)
         except Exception:  # pragma: no cover - a compile failure is another test's

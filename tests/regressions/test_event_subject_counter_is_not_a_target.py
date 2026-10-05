@@ -16,6 +16,7 @@ The card reported supported with every sentence claimed, and its existing tests
 all had a creature on the table.
 """
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.named_counters import counters_on
@@ -45,7 +46,7 @@ def test_an_event_subject_instruction_derives_no_target_spec(set_pool):
     picker for it."""
     examined = 0
     for code in ("ICE", "INV"):
-        for card in set_pool(code).values():
+        for card in compilation_units(set_pool(code).values()):
             for ability in compile_card_oracle(card).triggered_abilities:
                 instruction = ability.instruction
                 if instruction is None or not instruction.payload.get("on_event_subject"):

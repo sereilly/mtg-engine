@@ -23,6 +23,7 @@ on how many abilities it examined, so a derivation that stopped reporting
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
@@ -37,7 +38,7 @@ _FLOOR = 7
 
 
 def _announced_x_target_abilities():
-    pool = load_cards(manifest_set_paths(include_measured=True))
+    pool = compilation_units(load_cards(manifest_set_paths(include_measured=True)))
     for card in pool:
         program = compile_card_oracle(card)
         if not program.supported:

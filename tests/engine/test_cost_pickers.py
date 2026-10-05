@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import manifest_set_paths, load_cards
 from engine.cast_costs import additional_costs
 from engine.oracle import compile_card_oracle
@@ -33,7 +34,9 @@ from engine.targeting import derive_activation_spec, derive_cast_spec
 # deck yet is missing all the same, and this is exactly where it was found.
 _POOL = {}
 for _path in manifest_set_paths(include_measured=True):
-    for _card in load_cards(_path):
+    # `compilation_units`: a split card is its halves, the cards whose text
+    # prints a cost and whose programs hold an ability.
+    for _card in compilation_units(load_cards(_path)):
         _POOL.setdefault(_card.name, _card)
 
 # The flag each choosable cost sets on the spec it derives. The *names* matter:

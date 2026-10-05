@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import ast, parse_line
 from engine.grammar.lowering._common import chargeable_tap_filter
@@ -26,7 +27,9 @@ from engine.oracle import (chargeable_exile_payload, chargeable_sacrifice_payloa
 
 @pytest.fixture(scope="module")
 def pool():
-    return load_cards(manifest_set_paths(include_measured=True))
+    # Each card whose text compiles — a split card as its halves, whose
+    # programs are where its abilities are (`faces.compilation_units`).
+    return compilation_units(load_cards(manifest_set_paths(include_measured=True)))
 
 
 def _compare_sacrifice(

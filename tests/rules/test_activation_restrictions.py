@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game
 from engine.activation_restrictions import (
     ACTIVATION_RESTRICTIONS,
@@ -198,7 +199,7 @@ def test_every_printed_activation_clause_in_the_pool_is_readable():
     """
     unreadable = {
         clause: card.name
-        for card in _CATALOG.values()
+        for card in compilation_units(_CATALOG.values())
         for clause in unreadable_activation_clauses(card.oracle_text or "", card.name)
     }
 

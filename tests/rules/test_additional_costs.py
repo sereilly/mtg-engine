@@ -24,6 +24,7 @@ import re
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import load_catalog, manifest_set_path
 from engine.models import Permanent
@@ -491,7 +492,7 @@ def test_601_2b_no_shipped_card_carries_a_cost_sentence_nothing_charges():
     shipped, measured = [], []
     for path in _w2g1_paths(include_measured=True):
         is_shipped = path in _w2g1_paths()
-        for card in load_cards(path):
+        for card in compilation_units(load_cards(path)):
             for line in (card.oracle_text or "").split("\n"):
                 if _w2g1_unread_add(line) or _w2g1_unread_alt(line):
                     (shipped if is_shipped else measured).append(
@@ -617,7 +618,7 @@ from engine.cast_costs import costs_charged_from as _w4g2_all_costs
 _W4G2_POOL = {
     card.name: card
     for path in _w4g2_paths(include_measured=True)
-    for card in load_cards(path)
+    for card in compilation_units(load_cards(path))
 }
 
 
@@ -842,7 +843,7 @@ def test_202_4_an_additional_cost_is_not_part_of_the_mana_cost():
     from engine.oracle import compile_card_oracle
 
     checked = 0
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         text = (card.oracle_text or "").lower()
         if "as an additional cost" not in text:
             continue

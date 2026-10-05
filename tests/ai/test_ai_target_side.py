@@ -18,6 +18,7 @@ cast.
 """
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine.ai_policy import (
     _choose_target_for_spell,
     choose_activation_action,
@@ -161,7 +162,7 @@ def test_every_single_target_denial_in_the_pool_is_aimed_at_the_opponent(catalog
                     yield from walk(nested)
 
     examined, self_aimed = [], []
-    for card in catalog:
+    for card in compilation_units(catalog):
         if card.primary_type not in ("instant", "sorcery"):
             continue
         program = compile_card_oracle(card)
@@ -550,7 +551,7 @@ def test_no_wrapped_own_ability_in_the_pool_is_aimed_at_the_wrong_seat(catalog, 
     walk named 47 shipped abilities aimed at the wrong seat (Bullwhip,
     Serrated Biskelion, Power Matrix, Wishmonger, every Licid, …).
     """
-    cards = {card.name: card for card in catalog}
+    cards = {card.name: card for card in compilation_units(catalog)}
     cards.update(set_pool("PCY"))
     lea = set_pool("LEA")
     small, big = lea["Grizzly Bears"], lea["Craw Wurm"]
@@ -612,7 +613,7 @@ def test_an_aura_that_charges_its_hosts_controller_is_cast_on_an_opponent(catalo
     **own** permanent and took the damage itself each upkeep. Pool-wide, with
     a host of every kind on both boards; validated backwards: 21 of the 22
     examined went on the caster's own permanent before this change."""
-    cards = {card.name: card for card in catalog}
+    cards = {card.name: card for card in compilation_units(catalog)}
     cards.update(set_pool("PCY"))
     hosts = [cards[name] for name in ("Grizzly Bears", "Mountain", "Ornithopter", "Castle")]
     examined, cast, wrong = [], 0, []

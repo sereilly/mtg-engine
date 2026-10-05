@@ -22,6 +22,7 @@ tree before that fix it names Pendrell Flux as well as the card below.
 
 from __future__ import annotations
 
+from engine.faces import compilation_units
 from engine.auras import aura_granted_ability_lines
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.granted_abilities import granted_ability_supported
@@ -56,8 +57,9 @@ def _census() -> tuple[int, set[str]]:
     unread: set[str] = set()
     seen: set[str] = set()
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
-            key = card.oracle_id or card.name
+        for card in compilation_units(load_cards(path)):
+            # A half shares its card's oracle_id, so the name is the key.
+            key = card.name
             if key in seen:
                 continue
             seen.add(key)

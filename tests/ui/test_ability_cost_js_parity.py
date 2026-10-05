@@ -40,6 +40,7 @@ from pathlib import Path
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.activation_zones import HAND, ability_functions_from
 from engine.card_loader import load_catalog
 from engine.oracle import compile_card_oracle
@@ -142,7 +143,9 @@ def _engine_symbols(cost) -> list[str]:
 
 @pytest.fixture(scope="module")
 def js_readings(tmp_path_factory):
-    cards = load_catalog()
+    # Each card whose text compiles — the client reads a split card's menu
+    # off the half, never off the whole card's empty text box.
+    cards = compilation_units(load_catalog())
     folder = tmp_path_factory.mktemp("ability-cost-parity")
     payload = folder / "cards.json"
     payload.write_text(

@@ -22,6 +22,7 @@ import dataclasses
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_catalog
 from engine.oracle import compile_card_oracle
 from engine.replacements import REPLACEMENT_LINES, replacement_claims_line
@@ -136,7 +137,7 @@ def test_no_permanent_is_supported_by_a_whitelist_substring_alone():
     from engine.oracle import compile_card_oracle
 
     hollow = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         type_line = card.type_line.lower()
         # "equipment" beside "aura", and for the same reason: an Equipment's
         # "Equipped creature gets +1/+1" is read off its own text by

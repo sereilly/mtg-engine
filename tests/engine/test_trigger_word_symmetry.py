@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.grammar import parse_line
 from engine.grammar.errors import GrammarError
 from engine.grammar.trigger_tables import _WHENEVER_EVENTS
@@ -135,7 +136,7 @@ def test_both_front_ends_name_one_condition_over_both_manifest_roles():
     from engine.oracle import expand_ability_lines, trigger_condition_of_line
 
     disagreements = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         for raw in expand_ability_lines(card.oracle_text or "").splitlines():
             line = raw.strip()
             if not line:

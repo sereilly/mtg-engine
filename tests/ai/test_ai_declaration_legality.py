@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.ai_policy import choose_attackers
 from engine.card_loader import load_cards, manifest_set_paths
@@ -65,7 +66,7 @@ def _w2g4_restriction_cards():
         for card in load_cards(path):
             seen.setdefault(card.oracle_id or card.name, card)
     found = []
-    for card in seen.values():
+    for card in compilation_units(seen.values()):
         kinds = {
             instruction.kind
             for instruction in compile_card_oracle(card).instructions
@@ -256,7 +257,7 @@ def _w1g1_restriction_cards():
         for card in load_cards(path):
             seen.setdefault(card.oracle_id or card.name, card)
     found = []
-    for card in seen.values():
+    for card in compilation_units(seen.values()):
         kinds = {
             instruction.kind
             for instruction in compile_card_oracle(card).instructions

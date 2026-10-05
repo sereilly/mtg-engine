@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.self_reference import expand_short_self_references, short_self_name
 
@@ -18,7 +19,7 @@ from engine.self_reference import expand_short_self_references, short_self_name
 @pytest.fixture(scope="module")
 def _r28_pool():
     seen = {}
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         seen.setdefault(card.name, card)
     return list(seen.values())
 

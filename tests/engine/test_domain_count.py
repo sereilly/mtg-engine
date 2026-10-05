@@ -23,6 +23,7 @@ import dataclasses
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.grammar import ast, board_count_spec_for, compile_line
@@ -243,7 +244,7 @@ def test_the_count_refuses_what_it_cannot_answer():
 
 def _cards_printing_domain():
     seen: dict[str, object] = {}
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         text = (card.oracle_text or "").lower()
         if "basic land type among" in text or "basic land types among" in text:
             seen.setdefault(card.name, card)

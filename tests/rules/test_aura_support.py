@@ -17,6 +17,7 @@ from real cards passes against the version that checked nothing.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.auras import aura_effect_claim, unclaimed_aura_lines
 from engine.card_loader import load_catalog
 from engine.models import CardDefinition
@@ -81,7 +82,7 @@ def test_303_4_every_aura_in_the_pool_has_all_its_effect_lines_claimed():
     """The ratchet. Ingesting a set with an Aura whose effect is not
     implemented fails here, naming the line."""
     unclaimed: list[tuple[str, str]] = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         if "aura" not in card.type_line.lower():
             continue
         # **From `expand_ability_lines`, not from the printed text.** That

@@ -37,6 +37,7 @@ from functools import lru_cache
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.modal_triggers import INLINE_TRIGGER_CONDITIONS
@@ -62,7 +63,7 @@ def _entry_trigger_cards() -> tuple:
     that prints an inline entry trigger, deduped by name over both roles."""
     seen: dict[str, object] = {}
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        for card in compilation_units(load_cards(path)):
             seen.setdefault(card.name, card)
     rows = []
     for card in seen.values():

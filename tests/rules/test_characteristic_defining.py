@@ -12,6 +12,7 @@ Gaea's Liege would pass against the version that hardcoded exactly those four.
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.characteristic_defining import dynamic_pt_for
 from engine.models import CardDefinition, Permanent
@@ -492,7 +493,7 @@ def test_208_2_every_star_printed_creature_in_the_pool_is_one_of_the_two_forms()
     from engine.enter_effects import choosable_bodies
 
     defining, entering = [], []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         if "*" not in f"{card.power or ''}{card.toughness or ''}":
             continue
         kinds = {

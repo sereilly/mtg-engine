@@ -30,6 +30,7 @@ import re
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import PlayerState
 from engine.card_loader import load_cards, load_catalog, manifest_set_paths
 from engine.legality import _fallback_activation_spec
@@ -40,9 +41,21 @@ from tests.helpers import CARDS_BY_NAME as _C
 from tests.helpers import _game, _nosick
 
 
+def _supported_units(pool):
+    """*pool* as the supported cards whose text compiles: a split card is its
+    halves here, each with a program of its own (``faces.compilation_units``).
+    Read whole it has no ability to derive a prompt for, and passes every
+    guard below. A function of the pool so that claim can be tested on an
+    invented card (``test_face_blind_guards.py``)."""
+    return [
+        c for c in compilation_units(pool)
+        if compile_card_oracle(c).supported
+    ]
+
+
 @pytest.fixture(scope="module")
 def supported_cards():
-    return [c for c in load_catalog() if compile_card_oracle(c).supported]
+    return _supported_units(load_catalog())
 
 
 @pytest.fixture(scope="module")

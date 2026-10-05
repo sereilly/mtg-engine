@@ -25,6 +25,7 @@ authors being careful, which is not a mechanism.
 
 import pytest
 
+from engine.faces import compilation_units
 import engine.oracle as oracle
 from engine.card_loader import load_catalog
 from engine.oracle_types import clear_compilation_caches
@@ -91,7 +92,9 @@ def with_and_without_grammar():
     file entirely: a stale cache does not fail where it is written, which is why
     the reversibility is asserted below rather than trusted.
     """
-    cards = load_catalog()
+    # Each card whose text compiles (`faces.compilation_units`): a split card's
+    # instructions are its halves', and its own program has none to compare.
+    cards = compilation_units(load_catalog())
     live = {c.name: _kinds(oracle.compile_card_oracle(c)) for c in cards}
     original = oracle._grammar_instruction
     oracle._grammar_instruction = lambda *args, **kwargs: None
@@ -368,7 +371,7 @@ def test_grammar_compilation_is_deterministic(seed):
     """Compiling twice yields identical programs. Parsing must stay a pure
     function of the text — the AI-behavior regression tests depend on a given
     seed reproducing a run exactly."""
-    cards = load_catalog()
+    cards = compilation_units(load_catalog())
     first = [oracle.compile_card_oracle(card) for card in cards]
     second = [oracle.compile_card_oracle(card) for card in cards]
     assert first == second

@@ -34,6 +34,7 @@ import pathlib
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.oracle import compile_card_oracle
 from tests.source_index import source_tree
@@ -131,7 +132,7 @@ def _live_conditions() -> list[tuple[str, str]]:
     no instruction here and is fired by the hook's own site.
     """
     found = []
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

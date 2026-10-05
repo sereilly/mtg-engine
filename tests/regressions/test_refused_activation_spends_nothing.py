@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.models import Permanent
@@ -260,7 +261,7 @@ def _w2g3_sweep_run(card, ability_index, ability, scenario):
 def test_no_shipped_activation_refused_at_its_cost_has_paid_part_of_it():
     reached = {"sick": 0, "tapped": 0, "broke": 0}
     spent: list[str] = []
-    for card in load_catalog():
+    for card in compilation_units(load_catalog()):
         usable = usable_activated_abilities(compile_card_oracle(card))
         for index, ability in enumerate(usable):
             if ability.instruction is None or not ability.supported:

@@ -16,6 +16,7 @@ and the client's castable badge all read a spell's extra cost from.
 
 import re
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.cast_timing import (casts_at_instant_speed, flash_permission_sentence,
@@ -28,7 +29,7 @@ _PRICED = re.compile(r"as though it had flash if you pay \{(\d+)\} more", re.I)
 def _priced_cards():
     seen = {}
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards(path):
+        for card in compilation_units(load_cards(path)):
             match = _PRICED.search(card.oracle_text or "")
             if match is not None:
                 seen.setdefault(card.name, (card, int(match.group(1))))

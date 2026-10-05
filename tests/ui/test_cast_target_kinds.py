@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.legality import targeting_instruction
 from engine.oracle import compile_card_oracle
@@ -40,7 +41,9 @@ APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").rea
 # first prints one is exactly when this should fail.
 _POOL = {}
 for _path in manifest_set_paths(include_measured=True):
-    for _card in load_cards(_path):
+    # `compilation_units`: a split card is cast as a half, and the half is
+    # what derives a cast spec; the whole card derives none.
+    for _card in compilation_units(load_cards(_path)):
         _POOL.setdefault(_card.name, _card)
 
 #: Kinds that name no choice, so no prompt collects them.

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.cast_costs import (KICKED, additional_costs, expand_kicker_line,
                                is_kicker_line, kicked, kicker_cost,
@@ -53,7 +54,9 @@ _CAST_FLOOR = 20
 
 def _both_roles() -> dict:
     cards: dict = {}
-    for card in load_cards(manifest_set_paths(include_measured=True)):
+    # Each card whose text compiles: a kicker line on a split card's half is
+    # that half's (`faces.compilation_units`), and the whole card prints none.
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
         cards.setdefault(card.name, card)
     return cards
 

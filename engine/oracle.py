@@ -7685,6 +7685,14 @@ def compiled_faces(card: CardDefinition) -> tuple[tuple[CardDefinition, OraclePr
     return face_programs(card) or ((card, compile_card_oracle(card)),)
 
 
+def compiled_units(cards) -> list[tuple[CardDefinition, OracleProgram]]:
+    """A pool as the (card, program) pairs a census over **compiled text**
+    reads: :func:`compiled_faces` of every card, flattened. The pool-level form
+    of ``faces.compilation_units`` for the common loop that compiles each card
+    it visits — ``for card, program in compiled_units(catalog)``."""
+    return [pair for card in cards for pair in compiled_faces(card)]
+
+
 def compile_card_oracle(card: CardDefinition) -> OracleProgram:
     if is_multi_face(card):
         # CR 709.3a: "Only the chosen half is evaluated to see if it can be

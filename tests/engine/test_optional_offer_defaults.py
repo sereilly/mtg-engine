@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.ai_valuation import SELF_PAYMENT_KINDS, offered_action_is_a_payment
 from engine.handlers.registry import EFFECT_HANDLERS
@@ -84,7 +85,7 @@ def _free_offers(catalog):
     what is floating and taps nothing — and this is the half nobody chose.
     """
     seen = set()
-    for card in sorted(catalog, key=lambda c: c.name):
+    for card in sorted(compilation_units(catalog), key=lambda c: c.name):
         program = compile_card_oracle(card)
         if not program.supported:
             continue
@@ -290,7 +291,7 @@ def test_the_leading_step_is_what_the_sentence_offers(kind, expected):
 def _modal_choices(catalog):
     """Every ``choose_one`` the pool compiles, with its modes' instructions."""
     seen = set()
-    for card in sorted(catalog, key=lambda c: c.name):
+    for card in sorted(compilation_units(catalog), key=lambda c: c.name):
         program = compile_card_oracle(card)
         if not program.supported:
             continue
@@ -546,7 +547,7 @@ def test_every_offer_with_a_rider_names_a_reviewed_action_kind(catalog):
         "sacrifice_self",
     }
     found: set[str] = set()
-    for card in catalog:
+    for card in compilation_units(catalog):
         for instruction in _program_instructions(compile_card_oracle(card)):
             payload = instruction.payload or {}
             if instruction.kind != "may" or not payload.get("then"):

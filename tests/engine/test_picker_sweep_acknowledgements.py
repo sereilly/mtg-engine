@@ -39,7 +39,7 @@ from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
 
 from .test_activation_targeting import _UNANNOUNCEABLE_TARGETS, _abilities
-from .test_targeting import _NO_PICKER, acknowledgeable_cards
+from .test_targeting import _NO_PICKER, _supported_units, acknowledgeable_cards
 
 _REPO = Path(__file__).resolve().parents[2]
 
@@ -48,7 +48,7 @@ _REPO = Path(__file__).resolve().parents[2]
 def supported_cards():
     """The shipped pool, compiled — the same fixture the two ratchet files
     beside this one use, spelled the same way."""
-    return [card for card in load_catalog() if compile_card_oracle(card).supported]
+    return _supported_units(load_catalog())
 
 
 def _picker_sweep():

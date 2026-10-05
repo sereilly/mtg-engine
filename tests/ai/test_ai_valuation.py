@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.ai_policy import choose_activation_action, choose_cast_action
 from engine.ai_valuation import (
@@ -349,7 +350,7 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
     from engine.divided_damage import divided_description
 
     described = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         program = compile_card_oracle(card)
         shape = divided_shape(program)
         assert (shape is not None) is (
@@ -512,7 +513,7 @@ def test_every_several_target_removal_card_in_the_pool_aims_at_an_opponent(catal
 
     removal = {"destroy_target_permanent", "exile_target_permanent"}
     checked = []
-    for card in catalog:
+    for card in compilation_units(catalog):
         program = compile_card_oracle(card)
         if not program.supported:
             continue

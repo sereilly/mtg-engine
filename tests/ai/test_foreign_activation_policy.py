@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import pytest
 
+from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.activation_permissions import card_widens_activation
 from engine.ai_policy import (
@@ -272,7 +273,7 @@ def test_no_own_ability_that_harms_its_source_is_ever_proposed(catalog, set_pool
     them — Quicksilver Wall, Ribbon Snake, Volrath's Dungeon, Blinking Spirit
     — and the floor keeps a later narrowing from passing by examining
     nothing."""
-    cards = {card.name: card for card in catalog}
+    cards = {card.name: card for card in compilation_units(catalog)}
     cards.update(set_pool("PCY"))
     mountain = cards["Mountain"]
     examined, proposed = [], []

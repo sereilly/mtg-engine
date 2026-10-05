@@ -24,6 +24,7 @@ import re
 
 import pytest
 
+from engine.faces import compilation_units
 from engine.card_loader import load_catalog
 from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
@@ -35,21 +36,28 @@ from engine.targeting import (
 )
 
 
+def _supported_units(pool):
+    """*pool* as its supported spells — a function of the pool so the claim
+    in ``supported_cards`` below can be tested on an invented split card
+    (``test_face_blind_guards.py``)."""
+    return [
+        spell
+        for spell in compilation_units(pool)
+        if compile_card_oracle(spell).supported
+    ]
+
+
 @pytest.fixture(scope="module")
 def supported_cards():
     """Every supported **spell** in the shipped pool: a card, or — for a split
-    card — each of its halves (``faces.castable_faces``, CR 709.3a).
+    card — each of its halves (``faces.compilation_units``, CR 709.3a).
 
     Every ratchet in this file asks a question of one cast: what the printed
     line names, what the program targets, what picker is derived. A split card
     has two answers and none of its own, so handed in whole it passes each of
     them with "nothing printed, nothing derived" and is never looked at.
     """
-    return [
-        spell
-        for card in load_catalog() if compile_card_oracle(card).supported
-        for spell in castable_faces(card)
-    ]
+    return _supported_units(load_catalog())
 
 
 def acknowledgeable_cards():
@@ -75,11 +83,7 @@ def acknowledgeable_cards():
     """
     from engine.card_loader import load_cards, manifest_set_paths
 
-    return [
-        card
-        for card in load_cards(manifest_set_paths(include_measured=True))
-        if compile_card_oracle(card).supported
-    ]
+    return _supported_units(load_cards(manifest_set_paths(include_measured=True)))
 
 
 def test_reconstruction_picks_an_artifact_card_out_of_a_graveyard(supported_cards):

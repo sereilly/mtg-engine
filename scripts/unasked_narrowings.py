@@ -61,6 +61,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.card_loader import load_cards, manifest_set_paths  # noqa: E402
+from engine.faces import compilation_units, unit_label  # noqa: E402
 from engine.oracle import compile_card_oracle  # noqa: E402
 
 HANDLERS_DIR = REPO_ROOT / "engine" / "handlers"
@@ -165,8 +166,11 @@ def census() -> dict[str, dict[str, set[str]]]:
     which is when this question is cheapest to answer."""
     pool = {}
     for path in manifest_set_paths(include_measured=True):
-        for card in load_cards([path]):
-            pool.setdefault(card.name, card)
+        # `compilation_units`: a split card's instructions are on its halves'
+        # programs (CR 709.3a) and its own program holds none, so read whole
+        # a narrowing printed on a half was never counted.
+        for card in compilation_units(load_cards([path])):
+            pool.setdefault(unit_label(card), card)
 
     rows: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
     for name, card in sorted(pool.items()):
