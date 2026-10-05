@@ -100,6 +100,7 @@ from .effects import (
     _parse_distribute_counters,
     _parse_put_counter,
     _parse_put_exiled_with_source,
+    _parse_random_exiled_with_source,
     parse_put_milled_card_onto_battlefield,
     _parse_put_hand_cards_on_library,
     _parse_put_source_into_zone,
@@ -661,6 +662,13 @@ def parse_imperative_verb(
         hand_pick = _parse_choose_cards_in_hand(stream)
         if hand_pick is not None:
             return hand_pick
+        # "Choose a card at random that was exiled with <this permanent>. Put
+        # that card into its owner's hand." (Skyship Weatherlight.) One card
+        # out of a linked pile, picked by nobody. Non-consuming on refusal, so
+        # the naming productions below keep their say.
+        random_linked = _parse_random_exiled_with_source(stream)
+        if random_linked is not None:
+            return random_linked
         # Demonic Consultation's naming paragraph. Tried before the two below
         # it because all three open with the same four words and this one is
         # the only one whose fifth token is a full stop followed by "exile" —

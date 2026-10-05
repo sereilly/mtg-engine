@@ -715,6 +715,7 @@ def make_chosen_source_shield(
 def make_chosen_source_blanket(
     source, seat: int | None, source_name: str | None = None, *,
     colors: tuple[str, ...] = (), rider_colors: tuple[str, ...] = (),
+    any_recipient: bool = False,
 ) -> Shield:
     """The turn-long shield against one chosen source (Samite Ministration,
     Protective Sphere).
@@ -736,13 +737,20 @@ def make_chosen_source_blanket(
 
     *source* is required. See ``PREVENT_ALL_FROM_CHOSEN_SOURCE`` for why this
     shield has no sourceless form.
+
+    *any_recipient* is Penance's flag on this shield: "Prevent all damage a
+    source of your choice would deal this turn" (Rith's Charm) prints no
+    recipient, so the shield stops that source's damage to whoever it was
+    headed for — a player or a permanent, the caster's or anybody's. It still
+    lives on the seat that armed it, which is where the cleanup sweep finds it,
+    and ``prevention._table_shields`` is what makes every recipient reach it.
     """
     if source is None:
         raise ValueError("a chosen-source blanket is armed against a source")
     return Shield(
         kind=PREVENT_ALL_FROM_CHOSEN_SOURCE, amount=None, uses=None,
         source=source, colors=tuple(colors), rider_colors=tuple(rider_colors),
-        filter_seat=seat, source_name=source_name,
+        filter_seat=seat, source_name=source_name, any_recipient=any_recipient,
     )
 
 

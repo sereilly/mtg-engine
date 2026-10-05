@@ -8,7 +8,8 @@ from ..auras import PUT_ONTO_BATTLEFIELD_BY
 from ..faces import has_name
 from ..exiled_records import (record_exiled_card, records_for_cards,
                               source_object)
-from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
+from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card, linked_entries,
+                            take_linked_entries, take_linked_entry_at)
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
@@ -7182,6 +7183,30 @@ def put_exiled_with_source(game: Game, instruction: OracleInstruction, context: 
         # the pile did. The record is *not* drained here: the cards left behind
         # are still exiled with the permanent.
         seat = game.players.index(context.caster)
+        if instruction.payload.get("at_random"):
+            # "Choose a card **at random** that was exiled with Skyship
+            # Weatherlight. Put that card into its owner's hand." The same one
+            # card with nobody choosing it, so there is no prompt to arm: the
+            # pick is made here, out of the list a chooser would have been
+            # offered (``live_linked_exile_positions``), and through the
+            # module RNG the AI simulator seeds so a seed still replays a run.
+            live = game.live_linked_exile_positions(
+                source,
+                owner_index=(
+                    seat if instruction.payload.get("owned_by_chooser") else None
+                ),
+            )
+            name = context.card.name if context.card is not None else "that permanent"
+            if not live:
+                game.log.append(f"nothing is exiled with {name}")
+                return True, "resolved"
+            entry = take_linked_entry_at(source, random.choice(live))
+            game.leave_linked_exile(entry, zone)
+            game.log.append(
+                f"{entry['card'].name}, chosen at random from the cards exiled "
+                f"with {name}, goes to its owner's {zone}"
+            )
+            return True, "resolved"
         game.arm_pending_choice(
             "linked_exile_return", seat,
             card_name=context.card.name if context.card is not None else "",

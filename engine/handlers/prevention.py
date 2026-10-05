@@ -717,14 +717,20 @@ def grant_chosen_source_blanket_shield(
     if chosen is None or seat is None:
         game.log.append(f"{granted_by}: no source of damage to choose")
         return True, "resolved"
+    # "Prevent all damage a source of your choice would deal this turn."
+    # (Rith's Charm.) No recipient printed, so the same shield reaches every
+    # recipient that source would damage — the flag, not a second shield.
+    any_recipient = bool(instruction.payload.get("any_recipient"))
     add_shield(caster, make_chosen_source_blanket(
         chosen, seat, granted_by, colors=colors,
         rider_colors=tuple(instruction.payload.get("rider_colors") or ()),
+        any_recipient=any_recipient,
     ))
     source_card = getattr(chosen, "card", chosen)
     game.log.append(
         f"{caster.name} will prevent all damage "
-        f"{getattr(source_card, 'name', 'a source')} would deal them this turn"
+        f"{getattr(source_card, 'name', 'a source')} would deal "
+        f"{'' if any_recipient else 'them '}this turn"
         + (
             f" while it shares a color with the mana spent ({'/'.join(colors)})"
             if colors else ""

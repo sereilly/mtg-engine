@@ -1968,9 +1968,18 @@ class PendingChoicesMixin:
 
     @staticmethod
     def _exile_search_matches(card, data: dict) -> bool:
+        from ...search_filters import card_has_type
+
         card_types = tuple(data.get("card_types") or ())
         colors = tuple(data.get("colors") or ())
-        if card_types and card.primary_type not in card_types:
+        # Through ``card_has_type``, never ``primary_type``: CR 205.2a gives a
+        # card every type printed on it, and "artifact **and/or** creature
+        # cards" (Skyship Weatherlight) is a union over them. ``primary_type``
+        # collapses a type line to the first word of a fixed list, so a card
+        # whose line reads "Land Creature" answered "land" and was neither.
+        if card_types and not any(
+            card_has_type(card, wanted) for wanted in card_types
+        ):
             return False
         if colors and not any(color in card.colors for color in colors):
             return False
@@ -2029,13 +2038,25 @@ class PendingChoicesMixin:
         # ``ends_on`` is empty and that is the card: Mangara's Tome never gives
         # them back, so nothing ends the link and the pile outlives the
         # artifact in exile, exactly as Knowledge Vault's does.
+        #
+        # **Linked whenever a permanent did the exiling**, face down or not
+        # (CR 607.2a): "…search your library for any number of artifact and/or
+        # creature cards, exile them" is Skyship Weatherlight's first ability,
+        # and its second names "a card … that was exiled with Skyship
+        # Weatherlight". Linking only the face-down pile left that second
+        # ability reading a record nothing wrote — the channel mismatch every
+        # other exile-with-a-source handler already avoids by linking
+        # unconditionally. Inert for a card that never asks (Chandra, Heart of
+        # Fire's -9 reads its finds off the resolution, not off the record),
+        # and a spell has no permanent to link to.
         source = getattr(ctx, "source_permanent", None) if ctx is not None else None
-        if choice.data.get("face_down_pile") and source is not None:
+        if source is not None:
+            face_down = bool(choice.data.get("face_down_pile"))
             for card in exiled:
                 link_exiled_card(
-                    source, card, choice.player_index, face_down=True
+                    source, card, choice.player_index, face_down=face_down
                 )
-            if choice.data.get("shuffle_pile"):
+            if face_down and choice.data.get("shuffle_pile"):
                 # Through the module RNG the AI simulator seeds, like every
                 # other shuffle here, so a seed still replays a run exactly.
                 shuffle_linked_pile(source, random.shuffle)
@@ -5707,22 +5728,39 @@ class PendingChoicesMixin:
         the list the seat is offered and the list its answer is checked against
         have to be one list.
         """
+        return self.live_linked_exile_positions(
+            choice.data.get("_source_permanent"),
+            owner_index=(
+                choice.player_index
+                if choice.data.get("owned_by_chooser") else None
+            ),
+        )
+
+    def live_linked_exile_positions(
+        self, source, *, owner_index: int | None = None
+    ) -> list[int]:
+        """The positions in *source*'s linked-exile record that still name a
+        card in exile — narrowed to one owner's when *owner_index* is given.
+
+        The one answer to "which cards can a one-card return out of this pile
+        move", asked by the pick above (Gustha's Scepter) and by the random
+        pick that has no prompt to ask it through (Skyship Weatherlight). Two
+        scans would be two lists, and the card chance picked has to be one the
+        chooser could have been offered.
+        """
         from ...linked_exile import linked_entries
 
-        source = choice.data.get("_source_permanent")
-        chooser = choice.player_index
-        owned_only = bool(choice.data.get("owned_by_chooser"))
         live: list[int] = []
         for index, entry in enumerate(linked_entries(source)):
-            owner_index = int(entry.get("owner_index", -1))
-            if owned_only and owner_index != chooser:
+            entry_owner = int(entry.get("owner_index", -1))
+            if owner_index is not None and entry_owner != owner_index:
                 continue
-            if not (0 <= owner_index < len(self.players)):
+            if not (0 <= entry_owner < len(self.players)):
                 continue
             # A card that has already left exile by some other route is not a
             # card this can return (CR 608.2b: as much as possible, and no card
             # created from nowhere).
-            if entry["card"] not in self.players[owner_index].exile:
+            if entry["card"] not in self.players[entry_owner].exile:
                 continue
             live.append(index)
         return live
@@ -5743,7 +5781,7 @@ class PendingChoicesMixin:
         the cards left behind are still exiled with the permanent, and its
         lose-control trigger still names them.
         """
-        from ...linked_exile import RECORD_KEY, linked_entries
+        from ...linked_exile import take_linked_entry_at
 
         source = choice.data.get("_source_permanent")
         if source is None:
@@ -5751,12 +5789,7 @@ class PendingChoicesMixin:
             return True
         if entry_index not in self.live_linked_exile_return_choices(choice):
             return False
-        held = list(linked_entries(source))
-        entry = held.pop(int(entry_index))
-        if held:
-            source.metadata[RECORD_KEY] = held
-        else:
-            source.metadata.pop(RECORD_KEY, None)
+        entry = take_linked_entry_at(source, int(entry_index))
         zone = str(choice.data.get("zone", "hand"))
         self.leave_linked_exile(
             entry, zone,

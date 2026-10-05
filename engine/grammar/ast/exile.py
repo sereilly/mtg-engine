@@ -336,6 +336,13 @@ class PutExiledWithSource:
     #: sweep and the two are different seats — inferring would hand Cold
     #: Storage's creatures to whoever owned them.
     under_your_control: bool = False
+    #: "**Choose a card at random** that was exiled with Skyship Weatherlight.
+    #: Put that card into its owner's hand." ``chosen``'s one card with the
+    #: picker taken away: nobody decides which, so there is no prompt and no
+    #: "you own" to narrow by. A field beside ``chosen`` rather than a third
+    #: quantity, because it is a fact about *how* the one card is picked and
+    #: means nothing on a sweep — the lowering refuses it there.
+    at_random: bool = False
 
 
 @dataclass(frozen=True)

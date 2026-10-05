@@ -294,8 +294,23 @@ def _accept_active_voice_shield(
     this cannot finish keeps the refusal it has.
     """
     mark = stream.mark()
-    dealt_by = parse_recipient(stream) or parse_bound_subject(stream)
-    if dealt_by is None or not stream.accept_phrase("would", "deal"):
+    # "Prevent all damage **a source of your choice** would deal this turn."
+    # (Rith's Charm.) CR 609.7a's chosen source in the subject position, where
+    # the passive spelling prints it behind a "by" (Samite Ministration) — read
+    # ahead of the noun-phrase reader for ``_accept_chosen_source``'s reason:
+    # that reader takes "a source" for a described object and strands "of your
+    # choice". The same node the passive branch builds (``from_filter``, empty
+    # for "no property named"), so the two voices cannot drift into two
+    # shields.
+    chosen_source = bool(
+        stream.accept_phrase("a", "source", "of", "your", "choice")
+    )
+    dealt_by = None if chosen_source else (
+        parse_recipient(stream) or parse_bound_subject(stream)
+    )
+    if not (chosen_source or dealt_by is not None) or not stream.accept_phrase(
+        "would", "deal"
+    ):
         stream.reset(mark)
         return None
     recipient: ast.Recipient | None = None
@@ -305,6 +320,11 @@ def _accept_active_voice_shield(
             stream.reset(mark)
             return None
     duration = _parse_duration(stream)
+    if chosen_source:
+        return ast.PreventDamage(
+            ast.AllOf(), to=recipient, duration=duration,
+            combat_only=combat_only, from_filter=ast.ObjectFilter(),
+        )
     return ast.PreventDamage(
         ast.AllOf(), to=recipient, duration=duration, combat_only=combat_only,
         dealt_by=dealt_by,

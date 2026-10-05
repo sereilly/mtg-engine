@@ -191,7 +191,12 @@ def _lower_chosen_source_blanket(
     more than it says:
 
     * the recipient is **you** — the shield hangs off the ability's controller,
-      and one printed for a chosen target would be armed on the wrong object;
+      and one printed for a chosen target would be armed on the wrong object —
+      **or is not printed at all**: "Prevent all damage a source of your choice
+      would deal this turn" (Rith's Charm) names only the source, so it stops
+      that source's damage to whoever it was headed for. That is Penance's
+      ``any_recipient`` reach on the same seat-held shield, and it is carried
+      as that flag rather than as a second kind;
     * no colour or type narrows the choice (``from_filter`` is the empty
       phrase). A narrowed one — "a red source of your choice" — is a property
       the shield would have to recheck and this payload carries none;
@@ -207,9 +212,11 @@ def _lower_chosen_source_blanket(
             "the chosen-source blanket names no property of its source",
             node=node,
         )
-    if not _is_you(node.to) or node.to_others:
+    any_recipient = node.to is None
+    if (not any_recipient and not _is_you(node.to)) or node.to_others:
         raise LoweringError(
-            "the chosen-source blanket protects its controller", node=node
+            "the chosen-source blanket protects its controller, or names no "
+            "recipient at all", node=node
         )
     if (
         node.combat_only
@@ -232,6 +239,18 @@ def _lower_chosen_source_blanket(
             "the chosen-source blanket lasts exactly this turn", node=node
         )
     payload: dict[str, object] = {}
+    if any_recipient:
+        # Emitted only when the sentence prints no recipient, so Samite
+        # Ministration's and Protective Sphere's payloads stay byte-identical.
+        payload["any_recipient"] = True
+        if node.prevented_rider is not None:
+            # "…you gain that much life" pays the seat the shield protects,
+            # and this one protects nobody in particular. No card prints the
+            # pair; refusing names it rather than guessing who is paid.
+            raise LoweringError(
+                "a recipient-free chosen-source blanket carries no rider",
+                node=node,
+            )
     if node.source_shares_spent_mana_color:
         # "…that shares a color with the mana spent on this activation cost"
         # (Protective Sphere). The colours are read at resolution from the
