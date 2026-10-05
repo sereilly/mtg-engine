@@ -64,7 +64,8 @@ from engine.alternative_costs import (  # noqa: E402
 from engine.cast_costs import cast_cost_claims_line  # noqa: E402
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
-from engine.cast_permissions import board_free_cast_line  # noqa: E402
+from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
+                                     board_graveyard_play_line)
 from engine.cast_restrictions import (CAST_RESTRICTIONS,  # noqa: E402
                                       cast_absence_line, cast_condition_line,
                                       combat_play_ban_line,
@@ -448,6 +449,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # One channel, asking the one reader all three enforcement sites ask.
     ("cast_permissions.py (board-wide free cast)",
      lambda s: board_free_cast_line(s) is not None),
+    # "You may play lands and cast spells from your graveyard." (Yawgmoth's
+    # Agenda.) The static spelling of Yawgmoth's Will's grant: derived off the
+    # board by `cast_permissions.permission_for` at every cast and land play.
+    # Its own channel, asking the reader that answers it.
+    ("cast_permissions.py (controller's graveyard opened)",
+     board_graveyard_play_line),
     # A CR 614 replacement effect, in full. `engine/replacements.py`'s
     # REPLACEMENT_LINES *is* the set of constants its interceptors probe for, so
     # asking it is asking the code that carries the line out. Three of these

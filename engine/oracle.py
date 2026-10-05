@@ -6627,6 +6627,18 @@ def _derived_static_claims(
         for line in (oracle_text or "").splitlines()
     ):
         claims.append(BOARD_FREE_CAST_CLAIM)
+    # "You may play lands and cast spells from your graveyard." (Yawgmoth's
+    # Agenda.) The static spelling of Yawgmoth's Will's grant, read off the
+    # board by ``cast_permissions.permission_for`` — no instruction, so its own
+    # claim, asked through the reader that enforces it.
+    from .cast_permissions import (BOARD_GRAVEYARD_PLAY_CLAIM,
+                                   board_graveyard_play_line)
+
+    if any(
+        board_graveyard_play_line(line)
+        for line in (oracle_text or "").splitlines()
+    ):
+        claims.append(BOARD_GRAVEYARD_PLAY_CLAIM)
     # "Rather than pay the mana cost for a spell, its controller may discard a
     # card that shares a color with that spell." (Dream Halls.) CR 118.9's
     # alternative cost granted from a board rather than printed on the spell,

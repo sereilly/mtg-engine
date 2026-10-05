@@ -311,6 +311,56 @@ def board_free_cast(game, card) -> str | None:
     return None
 
 
+#: "You may play lands and cast spells from your graveyard." (Yawgmoth's
+#: Agenda.) Yawgmoth's Will's sentence with no window on it: the Will is a
+#: sorcery and *grants* the permission until end of turn, where the Agenda is
+#: an enchantment and has it for as long as it is on the battlefield — a static
+#: ability of a permanent (CR 604.1), so it is derived from the board on demand
+#: for Aluren's reason above. A stored grant would have to be taken away when
+#: the enchantment leaves, and one nobody took away is a graveyard that stays
+#: open for the rest of the game.
+#:
+#: Read whole. Both verbs are the permission (CR 305.1 plays a land, CR 601.2
+#: casts a spell) and "your graveyard" is its only zone; a narrower printing —
+#: a card type, "the top of" — is a different sentence and must not match.
+_BOARD_GRAVEYARD_PLAY = re.compile(
+    r"^you may play lands and cast spells from your graveyard$"
+)
+
+#: The claim name the support gate and ``engine/grammar/registries.py`` use for
+#: the row above. Its own, for :data:`BOARD_FREE_CAST_CLAIM`'s reason.
+BOARD_GRAVEYARD_PLAY_CLAIM = "board_graveyard_play"
+
+
+def board_graveyard_play_line(line: str) -> bool:
+    """Whether *line* is the static graveyard permission above.
+
+    One reader, four callers — the parse claim, the support gate, the coverage
+    channel and :func:`board_graveyard_play`, which is the enforcement. A claim
+    with no enforcement behind it is an Agenda that reports supported while
+    being a pure drawback: a one-spell cap and an exile, with nothing bought.
+    """
+    return _BOARD_GRAVEYARD_PLAY.match(line.strip().lower().rstrip(".")) is not None
+
+
+def board_graveyard_play(game, player_index: int) -> str | None:
+    """The name of a permanent *player_index* controls that opens their own
+    graveyard to them, or None.
+
+    The controller's battlefield only: "**you** may", CR 109.5's controller.
+    Through the control seam and ``effective_card``, so an Agenda that changes
+    hands opens its new controller's graveyard and closes the old one's, and a
+    copy of it grants what it copies (CR 707.2).
+    """
+    if not 0 <= player_index < len(game.players):
+        return None
+    for permanent in game.controlled_by(game.players[player_index]):
+        for raw_line in (permanent.effective_card.oracle_text or "").splitlines():
+            if board_graveyard_play_line(raw_line):
+                return permanent.card.name
+    return None
+
+
 def permission_for(
     game, player_index: int, card, zone: str, *, as_land: bool = False
 ) -> CastPermission | None:
@@ -349,6 +399,20 @@ def permission_for(
             return CastPermission(
                 player_index=player_index, zone="hand", mode="cast",
                 cards=[card], free=True, duration=None, source_name=source,
+            )
+    # "You may play lands and cast spells from your graveyard." (Yawgmoth's
+    # Agenda.) The board permission one zone over, derived for the same
+    # reason. "Play", so a land is covered (CR 305.1 still charges the land
+    # drop); the seat's **own** pile and by identity, which is what "your
+    # graveyard" says and what a stored grant's ``cards`` list would carry.
+    if zone == "graveyard" and any(
+        entry is card for entry in game.players[player_index].graveyard
+    ):
+        source = board_graveyard_play(game, player_index)
+        if source is not None:
+            return CastPermission(
+                player_index=player_index, zone="graveyard", mode="play",
+                cards=[card], duration=None, source_name=source,
             )
     # The card's own static permission, asked last: a granted one may waive a
     # cost or open a wider zone, and answering with this first would hide it.

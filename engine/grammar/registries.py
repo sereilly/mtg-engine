@@ -49,7 +49,10 @@ from ..cast_restrictions import (CAST_RESTRICTIONS, COMBAT_PLAY_BAN_CLAIM,
                                  global_cast_ban_line,
                                  global_play_timing_line,
                                  GLOBAL_PLAY_TIMING_CLAIM)
-from ..cast_permissions import BOARD_FREE_CAST_CLAIM, board_free_cast_line
+from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
+                                BOARD_GRAVEYARD_PLAY_CLAIM,
+                                board_free_cast_line,
+                                board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
 from ..counter_conditions import UNCOUNTERABLE_CLAIM, uncounterable_line
 from ..cost_x_definitions import (cast_x_ceiling_line, cast_x_definition_line,
@@ -230,6 +233,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # any of them.
     if board_free_cast_line(normalized) is not None:
         return BOARD_FREE_CAST_CLAIM
+
+    # engine/cast_permissions.py — the same module's other board permission:
+    # "You may play lands and cast spells from your graveyard." (Yawgmoth's
+    # Agenda.) Yawgmoth's Will's sentence with no window, so it is a static
+    # ability read off the board at every cast and every land play rather than
+    # a grant an instruction makes. Claimed through the reader
+    # ``permission_for`` enforces it with.
+    if board_graveyard_play_line(normalized):
+        return BOARD_GRAVEYARD_PLAY_CLAIM
 
     # engine/activation_restrictions.py — the *board* half of CR 602.5:
     # "Activated abilities of creatures can't be activated." (Cursed Totem.)
