@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
 from ..counter_conditions import spell_cant_be_countered
-from ..divided_damage import DIVIDED_TARGETS, divided_entry
+from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               StackAnnouncement, is_live, record_exiled_card,
                               record_in_context)
@@ -1547,6 +1547,21 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         item.target_player_index = seat
         item.target_permanent_id = game.permanent_id_of(permanent)
         item.target_permanent_index = game.battlefield_index_of(permanent)
+        divided = (item.choices or {}).get(DIVIDED_TARGETS)
+        if divided:
+            # The list that decides, rewritten here as it is in the player
+            # branch below — and for a reason that branch's note already
+            # gives: "writing the seat and leaving that list behind would log
+            # a redirect the damage step then ignored". It was left behind on
+            # this side: a Fireball re-aimed from a face onto a creature logged
+            # the new target and dealt its damage to the old one. CR 115.7f
+            # keeps the division, so the one share travels with the target.
+            share = divided_entry(divided[0])[2] if len(divided) == 1 else None
+            item.choices[DIVIDED_TARGETS] = [
+                stamped_entry(
+                    seat, item.target_permanent_index, share, item.target_permanent_id
+                )
+            ]
         game.log.append(
             f"{card_name}: {item.card.name} now targets {permanent.card.name}"
         )

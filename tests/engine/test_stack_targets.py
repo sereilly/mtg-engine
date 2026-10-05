@@ -346,8 +346,8 @@ _UNCHANGEABLE_REASONS = frozenset({
 #: ordinary ingest must not move them, and a census that stopped changing
 #: anything must not pass.
 #:
-#: Measured at Invasion: of 858 targeted casts, 745 were changed and resolved,
-#: 103 had no other legal target on the mirrored board, and 10 were refused —
+#: Measured at Invasion: of 858 targeted casts, 746 were changed and resolved,
+#: 103 had no other legal target on the mirrored board, and 9 were refused —
 #: every one for printing "target" twice (Deadshot, Drafna's Restoration, …).
 #: Of 531 targeted activations: 479, 49 and 3.
 _CAST_CHANGED_FLOOR = 600

@@ -487,6 +487,28 @@ def test_the_division_stays_with_the_slot_it_was_announced_for():
     assert bear.damage_marked == 0 and wall.damage_marked == 0
 
 
+@pytest.mark.cr("115.7a", "115.7f")
+def test_a_divided_spell_re_aimed_onto_a_creature_deals_its_damage_there():
+    """The other retarget in the pool — "change the target of target spell with
+    a single target" — moving a divided spell that named one face onto a
+    creature. The spell records its targets in a list of its own, and the
+    re-aim has to rewrite that list, or the log names the new target and the
+    damage goes to the old one."""
+    game, placed = _table(
+        hands=[["Test Arc"], ["Test Deflect"]], boards=[["Test Ogre"], []],
+        interactive=(1,), arbiters=(),
+    )
+    ogre = placed[(0, "Test Ogre")][0]
+    assert game.queue_from_hand(0, "Test Arc", divided_targets=[(1, None, 3)]).supported
+    assert game.queue_from_hand(1, "Test Deflect", target_stack_index=0).supported
+    game._settle()
+    _answer_permanent(game, ogre)
+    resolve_stack(game)
+
+    assert ogre.damage_marked == 3
+    assert [player.life for player in game.players] == [20, 20]
+
+
 @pytest.mark.cr("115.5")
 def test_a_spell_cannot_be_re_aimed_at_itself():
     """"A spell or ability on the stack is an illegal target for itself."

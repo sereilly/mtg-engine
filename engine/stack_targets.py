@@ -573,6 +573,7 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     """
     from .legality import _cast_lines
     from .oracle import compile_card_oracle
+    from .targeting import line_names_a_cast_target
 
     def count(text: str | None) -> int:
         return _target_instances(text) if text else 0
@@ -588,7 +589,14 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     card = item.card
     type_line = (card.type_line or "").lower()
     if "instant" in type_line or "sorcery" in type_line:
-        return sum(count(line) for line in _cast_lines(card))
+        # Only the lines that name a *cast* target: an instant's own triggered
+        # line ("When a spell or ability an opponent controls causes you to
+        # discard this card, … deals 4 damage to any target", Guerrilla
+        # Tactics) is another object's choice, made if it ever triggers.
+        return sum(
+            count(line) for line in _cast_lines(card)
+            if line_names_a_cast_target(_REMINDER_TEXT.sub("", line))
+        )
     if "aura" in type_line:
         return None
     program = compile_card_oracle(card)
