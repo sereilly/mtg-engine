@@ -27,7 +27,7 @@ from ._common import (
     _restrictions_beyond, is_mana_value_x, SEVERAL_DESTROY_NARROWINGS,
     split_creature_type_choice, testable_filter_payload
 )
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_STAMPED_TARGET_OBJECTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_NAMES, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, names_attached_permanent, CHOSEN_PERMANENT)
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, LAST_TARGET_NAME, _EVENT_STAMPED_TARGET_OBJECTS, _EVENT_SUBJECT_OBJECTS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_NAMES, EVENT_SUBJECT_PLAYER, ROLE_NAMES_BLOCK_PARTNER, binds_block_pair, names_attached_permanent, CHOSEN_PERMANENT)
 from ._delays import (_DELAYED_AGENT_EVENTS, _BOUND_OBJECT_DELAYED_EVENTS)
 from ._superlatives import superlative_pick
 
@@ -685,6 +685,39 @@ def _lower_destroy(
                 bound_payload["bypass_regeneration"] = True
             return (
                 OracleInstruction("destroy_bound_permanent", "", bound_payload),
+            )
+        # "Whenever this creature becomes blocked by a green creature, destroy
+        # **that creature**. It can't be regenerated." (Phyrexian Reaper,
+        # Phyrexian Slayer.) The other half of the pair the trigger bound — the
+        # referent the *delayed* destroy has read since Thicket Basilisk and the
+        # tuck, the tap, the pumps and the keyword grants each read one family
+        # over — destroyed now instead of at end of combat. So it is No
+        # Quarter's handler, which resolves the pair through
+        # ``block_pair_permanents`` and never through a pick: the trigger
+        # offered no choice (CR 603.3d).
+        #
+        # ``binds_block_pair`` rather than the kind, for that helper's reason:
+        # CR 509.3c makes a *bare* "becomes blocked" fire once with several
+        # blockers and no way to say which one "that creature" is, and this
+        # must refuse there rather than destroy whichever came first.
+        #
+        # The noun restates the creature the condition already narrowed; a
+        # narrowing of its own would be a second test the handler does not
+        # make, so it refuses rather than being consumed and dropped.
+        if binds_block_pair(event, event_subject):
+            if filt.card_types != ("creature",) or _restrictions_beyond(
+                filt, frozenset({"card_types"})
+            ):
+                raise LoweringError(
+                    "the block-pair destroy names the creature the trigger "
+                    "bound and carries no narrowing of its own",
+                    node=node,
+                )
+            pair_payload: dict[str, object] = {}
+            if node.no_regen:
+                pair_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_block_pair_partner", "", pair_payload),
             )
         if event not in _EVENT_STAMPED_TARGET_OBJECTS:
             raise LoweringError(

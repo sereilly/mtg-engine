@@ -514,6 +514,19 @@ def conditional_static_holds(
             perm.has_type("planeswalker") and perm.has_type(subtype)
             for perm in game.controlled_by(seat)
         )
+    if kind == "color_is_most_common":
+        # "…as long as **white is the most common color among all permanents**
+        # or is tied for most common" (the Invasion Djinns). The census is
+        # ``engine/color_census.py``'s — one count, also asked by the two
+        # spells that test their target against it and by Call to Arms over a
+        # narrower set — and it reads colours through the layers, so a Lace on
+        # anything moves the answer at the next recompute with nothing to undo.
+        from .color_census import color_is_most_common
+
+        return color_is_most_common(
+            game, str(condition.get("color") or ""),
+            tied=bool(condition.get("tied", True)),
+        )
     if kind == "all_share_a_color":
         # "Nonartifact creatures get +2/+2 **as long as they all share a
         # color**." (Common Cause.) CR 105.2 makes an object's colours a set, so
@@ -660,7 +673,7 @@ def conditional_static_holds(
             if pivot_seat is None:
                 return False
             seats = [pivot_seat]
-        elif who == "opponent":
+        elif who in ("opponent", "each_opponent"):
             seats = [
                 index
                 for index, player in enumerate(game.players)
@@ -673,6 +686,12 @@ def conditional_static_holds(
             return False
         return _controls_count_holds(
             game, seats, described, int(wanted), op,
+            # "**No** opponent controls …" (Kavu Runner) is one statement about
+            # every opponent, where "**an** opponent controls …" is about any
+            # one of them: the first is a single tally over all their boards,
+            # the second an `any` over the seats. With one opponent they are
+            # the same number, which is why only a third seat can tell.
+            pooled=(who == "each_opponent"),
             observer=(
                 seat if who == "you"
                 else pivot_seat if who == "controller"
@@ -688,7 +707,8 @@ def conditional_static_holds(
 
 
 def _controls_count_holds(
-    game, seats, described: dict, wanted: int, op: str, *, observer, source
+    game, seats, described: dict, wanted: int, op: str, *, observer, source,
+    pooled: bool = False,
 ) -> bool:
     """Whether **any one** of *seats* controls a matching count satisfying *op*.
 
@@ -711,17 +731,22 @@ def _controls_count_holds(
         # An unreadable comparison must not fall through to "0 matches", which
         # for a "no such permanent" clause is the condition always holding.
         return False
-    for index in seats:
-        found = sum(
+    tallies = [
+        sum(
             1
             for perm in game.controlled_by(index)
             if subject_matches(
                 game, perm, described, observer=observer, source=source
             )
         )
-        if compare(found, wanted):
-            return True
-    return False
+        for index in seats
+    ]
+    if pooled:
+        # *pooled* is the ``each_opponent`` seat: one total across every seat
+        # in the list, compared once. The lowering admits it only with a
+        # printed zero, where the total and each seat's own count agree.
+        return compare(sum(tallies), wanted)
+    return any(compare(found, wanted) for found in tallies)
 
 
 def singular_land_type(word: str) -> str:

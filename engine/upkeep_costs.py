@@ -239,6 +239,43 @@ def cost_from_payload(payload: dict) -> UpkeepCost:
     )
 
 
+#: ``cost_from`` on an upkeep toll whose price is **the permanent's own mana
+#: cost** — "sacrifice this permanent unless you pay its mana cost" (Pendrell
+#: Flux's and Essence Leak's granted ability). The sentence is granted to
+#: whatever an Aura is on, so the cost is read off that permanent when it is
+#: asked for rather than printed anywhere.
+SOURCE_MANA_COST = "its_mana_cost"
+
+
+def resolved_toll_instruction(permanent, instruction):
+    """*instruction* with a derived upkeep cost filled in, or **None when the
+    cost cannot be paid at all**.
+
+    The one reader of :data:`SOURCE_MANA_COST`, asked by both pay-or-sacrifice
+    handlers and by the prompt that quotes them, so a player is never quoted
+    one price and charged another. Every other instruction is returned as it
+    came.
+
+    None is CR 118.6: an object with no mana cost — a land, a token that is not
+    a copy (CR 202.1b) — has an *unpayable* cost, and so does an ability whose
+    cost is based on it. The caller sacrifices without offering anything, which
+    is what the rule leaves: the payment may not even be attempted.
+    """
+    payload = instruction.payload or {}
+    if payload.get("cost_from") != SOURCE_MANA_COST:
+        return instruction
+    from dataclasses import replace
+
+    from .mana_payment import permanent_mana_cost
+
+    cost = permanent_mana_cost(permanent)
+    if cost is None:
+        return None
+    resolved = {key: value for key, value in payload.items() if key != "cost_from"}
+    resolved["mana"] = cost
+    return replace(instruction, payload=resolved)
+
+
 def cost_prompt_fields(cost: UpkeepCost) -> dict:
     """The keys a pay-or-consequence prompt carries a cost on: the payload the
     affordability pass reads back, and the two renderings the prompt shows.

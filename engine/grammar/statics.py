@@ -282,6 +282,13 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     # on at the call site.
     if payload.get("kind") == "all_share_a_color":
         return payload
+    # "…as long as **white is the most common color among all permanents** or
+    # is tied for most common" (the Invasion Djinns). A census of the whole
+    # battlefield: no seat word and no noun phrase for the `controls` gates
+    # below to hold to anything, and `conditional_static_holds` answers it
+    # through `engine/color_census.py`.
+    if payload.get("kind") == "color_is_most_common":
+        return payload
     # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
     # CR 613 puts no limit on how many clauses a static's criteria have, so each
     # conjunct is checked by *this same gate* rather than by a second, laxer
@@ -310,7 +317,23 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     # real distinction and not a synonym for "you" — an Aura's controller and
     # its host's controller part company the moment either is stolen, and this
     # clause follows the host.
-    if who not in ("you", "opponent", "target_opponent", "controller"):
+    #
+    # "…as long as **no opponent** controls a white or blue creature" (Kavu
+    # Runner, Skittish Kavu) is the fifth, ``each_opponent``: every opponent's
+    # board at once. Admitted only with the printed zero — the condition
+    # lowering has already refused that seat with any other count, because a
+    # pooled tally and an every-opponent test part company above zero — and
+    # checked again here, since this gate is also handed payloads that did not
+    # come through it.
+    if who == "each_opponent" and (
+        payload.get("op"), payload.get("count")
+    ) != ("eq", 0):
+        raise LoweringError(
+            "conditional_static_holds answers 'no opponent controls' and no "
+            "other count over every opponent",
+            node=node,
+        )
+    if who not in ("you", "opponent", "target_opponent", "controller", "each_opponent"):
         raise LoweringError(
             f"conditional_static_holds answers 'controls' for you or an "
             f"opponent, not {who!r}",
@@ -509,8 +532,15 @@ def _lower_self_conditional_static(
     # written. It is the *same* sentence Tidal Influence prints about a set of
     # creatures instead of about itself, and both lower to one condition
     # payload answered by one evaluator.
-    counted = condition.get("kind") == "source_counter_count"
-    if not attached and not counted and condition.get("who") != "opponent":
+    #
+    # The colour census (the Invasion Djinns) is a third: about the whole
+    # battlefield rather than about your board or the creature, a condition
+    # that table has no row for and could not write one for without a second
+    # reader of the clause the two census *spells* go through the grammar for.
+    counted = condition.get("kind") in ("source_counter_count", "color_is_most_common")
+    if not attached and not counted and condition.get("who") not in (
+        "opponent", "each_opponent",
+    ):
         raise LoweringError(
             "a conditional static bonus about your own board is derived by "
             "engine/static_bonuses.py",

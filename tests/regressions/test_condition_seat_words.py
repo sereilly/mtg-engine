@@ -126,8 +126,15 @@ def test_a_counted_each_opponent_condition_is_refused_not_pooled():
 
 def test_no_shipped_card_prints_a_counted_each_opponent_board_condition():
     """The pin, with a floor on what it read: every ``controls`` condition in
-    the pool (both manifest roles), and the only ``each_opponent`` one is
-    Kezzerdrix's zero."""
+    the pool (both manifest roles), and every ``each_opponent`` one is a zero.
+
+    Kezzerdrix's was the only one until Invasion, whose two Kavus print the
+    same count with the negation on the *seat* — "as long as **no opponent**
+    controls a white or blue creature" — and on a static rather than an
+    intervening-if. The invariant is the zero, which is what both evaluators'
+    pooled tallies are right for; the names are pinned beside it so a third
+    arrival is read rather than waved through.
+    """
 
     def walk(value, seen):
         if id(value) in seen:
@@ -154,4 +161,9 @@ def test_no_shipped_card_prints_a_counted_each_opponent_board_condition():
                 each_opponent.append((card.name, payload.get("op"), payload.get("count")))
 
     assert examined >= 50, examined
-    assert each_opponent == [("Kezzerdrix", "eq", 0)]
+    assert all((op, count) == ("eq", 0) for _name, op, count in each_opponent), (
+        each_opponent
+    )
+    assert sorted(name for name, _op, _count in each_opponent) == [
+        "Kavu Runner", "Kezzerdrix", "Skittish Kavu",
+    ]

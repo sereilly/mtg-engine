@@ -39,7 +39,7 @@ from ..enter_effects import (
     choosable_bodies,
 )
 from ..auras import (CHOSEN_PROTECTION_COLOR, aura_protection_colors,
-                     auras_attached_to)
+                     auras_attached_to, conditional_ability_lines_for)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
@@ -2739,16 +2739,19 @@ class PermanentStateMixin:
         color = source_perm.metadata.get("chosen_color")
         if not isinstance(seat, int) or not (0 <= seat < len(self.players)) or not color:
             return False
-        counts: dict[str, int] = {}
-        for perm in self.controlled_by(seat):
-            if perm.metadata.get("is_token"):
-                continue
-            for other in self._effective_colors(perm):
-                counts[other] = counts.get(other, 0) + 1
-        mine = counts.get(color, 0)
-        if mine <= 0:
-            return False
-        return all(count < mine for other, count in counts.items() if other != color)
+        # The census itself is ``engine/color_census.py``'s — the one count the
+        # Invasion Djinns, Barrin's Unmaking and Tsabo's Assassin also ask, over
+        # "all permanents" where this card names a narrower set. What is this
+        # card's own is the set and the strictness (``tied=False``).
+        from ..color_census import color_is_most_common
+
+        return color_is_most_common(
+            self, color, tied=False,
+            permanents=[
+                perm for perm in self.controlled_by(seat)
+                if not perm.metadata.get("is_token")
+            ],
+        )
 
     @staticmethod
     def _protection_quality_of(word: str) -> tuple[str, str] | None:
@@ -3647,6 +3650,31 @@ class PermanentStateMixin:
                         continue
                 for keyword in cs_keywords:
                     add_derived_grant(recipient, keyword)
+
+        # Step 4: an ability an **Aura** grants its host in quotes *while the
+        # host answers a criterion* — 'As long as enchanted permanent is red or
+        # green, it has "At the beginning of your upkeep, sacrifice this
+        # permanent unless you pay its mana cost."' (Essence Leak.)
+        #
+        # On the derived-ability channel the quoted lord grant in step 2 uses,
+        # and in this pass for step 3's reason: the pass owns that channel's
+        # clear and rebuild, so the line is re-derived from the board every
+        # time and a host that stops being red simply is not handed it again
+        # (CR 611.3a). The unconditional Aura quote is folded in by
+        # ``Permanent.effective_card`` itself; this one cannot be, because the
+        # criterion is a layer-5 question and needs the game.
+        for _host_seat, host in self.permanents_with_controller():
+            for aura in auras_attached_to(host):
+                # CR 109.5: the Aura's controller, not the host's — the two
+                # part company whenever one is cast on an opponent's permanent,
+                # which is what this card is for.
+                aura_seat = self.controller_index_of(aura)
+                if aura_seat is None:
+                    continue
+                for line in conditional_ability_lines_for(
+                    self, aura, aura_seat, host
+                ):
+                    add_derived_ability_line(host, line)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a

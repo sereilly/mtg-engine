@@ -76,6 +76,10 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # unchanged.
     "cant_attack_unless_greater_power_attacks": "combat_restrictions",
     "cant_block_unless_greater_power_blocks": "combat_restrictions",
+    # "…unless a black or green creature also attacks." (Scarred Puma.) The
+    # same declaration-wide restriction again, asking for a companion that
+    # answers a printed noun phrase rather than one that outpowers it.
+    "cant_attack_unless_subject_attacks": "combat_restrictions",
     # "That creature can't attack during its controller's next turn." (Wall of
     # Dust's block trigger) — a one-shot stamp on the blocked creature, read
     # back by `can_attack` for exactly one of that controller's turns.

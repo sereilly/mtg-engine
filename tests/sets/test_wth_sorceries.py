@@ -913,3 +913,53 @@ def test_w3g2_the_x_sized_graveyard_return_carries_x_not_a_literal(set_pool):
     ret = sequence.payload["steps"][0]
     assert ret.kind == "return_creature_from_graveyard_to_hand"
     assert ret.payload["targets"]["count"] == "x"
+
+
+# --- INV W1G4: Tariff and a creature with no mana cost ---
+from engine import Game as _InvW1G4TariffGame
+from engine import PlayerState as _InvW1G4TariffSeat
+from engine.models import Permanent as _InvW1G4TariffPermanent
+from tests.helpers import resolve_stack as _inv_w1g4_tariff_resolve
+
+
+def _inv_w1g4_tariff_board(set_pool, mine, theirs):
+    """Seat 0 holding Tariff, one creature per seat, costs enforced, no mana."""
+    inv_w1g4_tariff = _InvW1G4TariffGame(players=[
+        _InvW1G4TariffSeat(name="Tariff-A", hand=[set_pool("WTH")["Tariff"]]),
+        _InvW1G4TariffSeat(name="Tariff-B"),
+    ])
+    inv_w1g4_tariff.enforce_mana_costs = False
+    inv_w1g4_tariff.active_player_index = 0
+    placed = []
+    for seat, card in ((0, mine), (1, theirs)):
+        inv_w1g4_creature = _InvW1G4TariffPermanent(card=card)
+        inv_w1g4_tariff._put_permanent_onto_battlefield(seat, inv_w1g4_creature, None)
+        placed.append(inv_w1g4_creature)
+    assert inv_w1g4_tariff.cast_from_hand(0, "Tariff").supported
+    inv_w1g4_tariff.enforce_mana_costs = True
+    _inv_w1g4_tariff_resolve(inv_w1g4_tariff)
+    return inv_w1g4_tariff, placed
+
+
+def test_inv_w1g4_tariff_cannot_be_paid_for_a_creature_with_no_mana_cost(set_pool):
+    """CR 202.1b gives a token no mana cost and CR 118.6 makes a cost based on
+    it **unpayable** — so "unless they pay that creature's mana cost" leaves a
+    token no way out, where a creature printed at {0} is kept for nothing.
+
+    The derived cost came back as an empty dict for both, which every reader
+    took for "no cost": the token was kept for free, the opposite of the rule.
+    The two are told apart by ``mana_payment.permanent_mana_cost`` now — None
+    for no mana cost, an empty requirement for {0}.
+    """
+    from engine.tokens import make_token_card
+
+    token = make_token_card(
+        "Saproling", 1, 1, "Token Creature — Saproling", colors=("G",)
+    )
+    thopter = set_pool("ATQ")["Ornithopter"]
+    assert token.mana_cost == "" and thopter.mana_cost == "{0}"
+
+    game, (mine, theirs) = _inv_w1g4_tariff_board(set_pool, token, thopter)
+    assert not game.is_on_battlefield(mine), "no mana cost: nothing may be paid"
+    assert game.is_on_battlefield(theirs), "{0} is a cost, and anyone can pay it"
+    assert "Tariff: Saproling was sacrificed" in game.log

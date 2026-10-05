@@ -35,7 +35,8 @@ from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
 from ..mana_payment import plan_payment, untapped_mana_lands
-from ..upkeep_costs import UpkeepCost, cost_from_payload, cost_prompt_fields
+from ..upkeep_costs import (UpkeepCost, cost_from_payload, cost_prompt_fields,
+                            resolved_toll_instruction)
 from ..effect_labels import triggered_label
 from ..handlers import EFFECT_HANDLERS
 from .upkeep_effects import (UPKEEP_EFFECTS, UpkeepContext, UpkeepEffectsMixin,
@@ -539,7 +540,15 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # arithmetic — this used to be a branch naming one card's
             # instruction kind, which is a second copy of it and the way a
             # player gets quoted one number and charged another.
-            cost = upcoming_cost(permanent, trig.instruction)
+            #
+            # "…unless you pay **its mana cost**" is resolved first, through the
+            # reader the handlers charge from. An unpayable one (CR 118.6: the
+            # permanent has no mana cost) offers nothing — there is no payment
+            # to quote, and the handler sacrifices without asking.
+            tolled = resolved_toll_instruction(permanent, trig.instruction)
+            if tolled is None:
+                continue
+            cost = upcoming_cost(permanent, tolled)
             choices.append({
                 "card_name": permanent.card.name,
                 # Which permanent this price is being quoted for (CR 400.7's

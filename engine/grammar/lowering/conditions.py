@@ -214,6 +214,43 @@ def _lower_condition(
             "negated": condition.negated,
             "target": referent,
         }
+    if isinstance(condition, ast.ColorIsMostCommon):
+        # "…as long as **white is the most common color among all permanents**
+        # or is tied for most common" (the Invasion Djinns). A census of the
+        # whole battlefield against a printed colour: no seat, no pronoun and no
+        # filter, so nothing here depends on the trigger or the effect beside
+        # it. ``tied`` is the printed tail, carried because the two spellings
+        # are opposite answers on a level board.
+        return {
+            "kind": "color_is_most_common",
+            "color": condition.color,
+            "tied": condition.tied,
+        }
+    if isinstance(condition, ast.SharesMostCommonColor):
+        # "Destroy target creature **if it shares a color with the most common
+        # color among all permanents** or a color tied for most common."
+        # (Tsabo's Assassin, Barrin's Unmaking.) The pronoun is the target of
+        # the effect this guards — :class:`ItIsColor`'s referent, refused for
+        # that clause's two reasons: under a trigger "it" most often names the
+        # event's subject, and with no single target beside it there is no
+        # object to ask.
+        #
+        # A **permanent** only. The census is of permanents and the two cards
+        # target one; a spell on the stack has colours too, but its referent is
+        # resolved from the other half of the context and no card prints the
+        # question about one, so it refuses rather than being answered about
+        # whatever permanent the resolver could reach.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        if referent != "permanent":
+            raise LoweringError(
+                "the colour census is asked of a targeted permanent, and this "
+                "effect names none",
+                node=condition,
+            )
+        return {"kind": "target_shares_most_common_color", "target": referent}
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an

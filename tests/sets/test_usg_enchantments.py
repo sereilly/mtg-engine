@@ -1180,3 +1180,88 @@ def test_w1g5_every_usg_hollow_card_now_carries_an_instruction(set_pool):
         parts = list(program.activated_abilities) + list(program.triggered_abilities)
         hollow = [part.source_line for part in parts if part.instruction is None]
         assert not hollow, "%s still has an instruction-less part: %s" % (name, hollow)
+
+
+# --- INV W1G4: Pendrell Flux, the quote that compiled to nothing ---
+from engine import Game as _InvW1G4Game
+from engine import PlayerState as _InvW1G4Seat
+from engine.models import Permanent as _InvW1G4Permanent
+from tests.helpers import resolve_stack as _inv_w1g4_resolve
+
+
+def _inv_w1g4_fluxed(set_pool, host_name, *, lands=0, land="Forest"):
+    """A game where seat 0 has cast Pendrell Flux on seat 1's *host_name*.
+
+    Returns ``(game, host, lands)`` with mana costs enforced from here on.
+    """
+    usg, lea = set_pool("USG"), set_pool("LEA")
+    inv_w1g4_game = _InvW1G4Game(players=[
+        _InvW1G4Seat(name="Flux-caster", hand=[usg["Pendrell Flux"]]),
+        _InvW1G4Seat(name="Flux-host"),
+    ])
+    inv_w1g4_game.enforce_mana_costs = False
+    inv_w1g4_game.active_player_index = 0
+    host = _InvW1G4Permanent(card=lea[host_name])
+    inv_w1g4_game._put_permanent_onto_battlefield(1, host, None)
+    tapped_out = []
+    for _ in range(lands):
+        inv_w1g4_land = _InvW1G4Permanent(card=lea[land])
+        inv_w1g4_game._put_permanent_onto_battlefield(1, inv_w1g4_land, None)
+        tapped_out.append(inv_w1g4_land)
+    assert inv_w1g4_game.cast_from_hand(
+        0, "Pendrell Flux", target_player_index=1,
+        target_permanent_index=inv_w1g4_game.battlefield_index_of(host),
+    ).supported
+    _inv_w1g4_resolve(inv_w1g4_game)
+    inv_w1g4_game.check_state_based_actions()
+    inv_w1g4_game.enforce_mana_costs = True
+    return inv_w1g4_game, host, tapped_out
+
+
+def test_inv_w1g4_pendrell_flux_makes_its_host_pay_its_own_mana_cost(set_pool):
+    """'Enchanted creature has "At the beginning of your upkeep, sacrifice this
+    creature unless you pay its mana cost."'
+
+    The quote refused in the parser — "expected 'reduced by' after a derived
+    mana cost" — so the host was handed a line its own compile reported
+    unsupported, and the Aura did nothing for as long as it had shipped. The
+    host's controller now pays the host's {1}{G} on *their* upkeep, and only
+    theirs.
+    """
+    from engine.oracle import compile_card_oracle
+
+    game, bear, forests = _inv_w1g4_fluxed(set_pool, "Grizzly Bears", lands=3)
+    granted = compile_card_oracle(bear.effective_card)
+    assert granted.supported, granted.reason
+    assert [trig.instruction.kind for trig in granted.triggered_abilities] == [
+        "upkeep_pay_or_sacrifice_self"
+    ]
+
+    game.resolve_upkeep(0)
+    _inv_w1g4_resolve(game)
+    assert game.is_on_battlefield(bear) and not any(f.tapped for f in forests)
+
+    game.resolve_upkeep(1)
+    _inv_w1g4_resolve(game)
+    assert game.is_on_battlefield(bear)
+    assert sum(forest.tapped for forest in forests) == 2, "{1}{G}, not nothing"
+
+
+def test_inv_w1g4_pendrell_flux_takes_a_host_whose_cost_goes_unpaid(set_pool):
+    """With the wrong colour of land the {G} cannot be paid (CR 118.3: no
+    partial payment), and a host that is declined for is sacrificed — the Aura
+    following it to the graveyard as a state-based action.
+    """
+    for lands, answers in ((0, None), (3, "decline"), (3, "wrong colour")):
+        land = "Island" if answers == "wrong colour" else "Forest"
+        game, bear, held = _inv_w1g4_fluxed(
+            set_pool, "Grizzly Bears", lands=lands, land=land
+        )
+        choices = {bear.permanent_id: False} if answers == "decline" else None
+        game.resolve_upkeep(1, human_choices=choices)
+        _inv_w1g4_resolve(game)
+        game.check_state_based_actions()
+
+        assert not game.is_on_battlefield(bear), answers
+        assert not any(land_perm.tapped for land_perm in held), answers
+        assert [c.name for c in game.players[0].graveyard] == ["Pendrell Flux"]

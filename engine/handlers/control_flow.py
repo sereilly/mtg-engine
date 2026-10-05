@@ -1330,6 +1330,46 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         matched = wanted in colors
         return (not matched) if payload.get("negated") else matched
 
+    if kind == "target_shares_most_common_color":
+        # "Destroy target creature **if it shares a color with the most common
+        # color among all permanents** or a color tied for most common."
+        # (Tsabo's Assassin, Barrin's Unmaking.) CR 608.2c again: the census is
+        # taken while the instruction is followed, so a permanent that entered
+        # or was recoloured in response is counted, and the target itself is one
+        # of "all permanents" — a lone coloured target is always most common.
+        #
+        # The picker offers every permanent the noun phrase admits: the clause
+        # is a condition on the *effect*, not a targeting restriction, so a
+        # target that fails it is a legal target the spell simply does nothing
+        # to (CR 608.2b reads the printed target phrase, which says no colour).
+        #
+        # The same resolver the colour clause above uses, for its reason: the
+        # branch and the effect beside it must mean one permanent. A target
+        # that is gone shares a colour with nothing.
+        from ..color_census import shares_most_common_color
+        from ._common import resolve_target_permanent
+
+        target = resolve_target_permanent(
+            game, context,
+            predicate=lambda perm: True,
+            fallback_players=(),
+            fallback_on_invalid_choice=False,
+        )
+        return shares_most_common_color(game, target)
+
+    if kind == "color_is_most_common":
+        # "…white is the most common color among all permanents or is tied for
+        # most common." The Djinns print it on a static, where
+        # ``static_bonuses.conditional_static_holds`` answers it; this is the
+        # same payload reaching an intervening-if or a sentence-level "if", and
+        # the same census answers it so the two cannot disagree about a tie.
+        from ..color_census import color_is_most_common
+
+        return color_is_most_common(
+            game, str(payload.get("color") or ""),
+            tied=bool(payload.get("tied", True)),
+        )
+
     if kind == "target_is_type":
         # "Untap target Griffin. **If it's a creature**, it gets +1/+1 until
         # end of turn." (Griffin Canyon.) The type twin of the colour clause
@@ -3112,6 +3152,35 @@ def _offered_seats(
     return [game.players.index(context.caster if actor == "you" else context.target)]
 
 
+def _derived_cost_is_unpayable(printed, context: OracleExecutionContext, game) -> bool:
+    """Whether an offer's cost is read off a permanent that **has no mana
+    cost** — CR 118.6's unpayable cost.
+
+    "…unless they pay that creature's mana cost" (Tariff) asked of a token or
+    an animated land: CR 202.1b gives such an object no mana cost, and a cost
+    based on it may not be paid at all. :func:`_derived_cost` answers that
+    object with an empty dict, which every reader downstream takes for "no
+    cost" — so the offer was made for free and the creature kept, the opposite
+    of the rule.
+
+    Asked through ``mana_payment.permanent_mana_cost``, the reader the upkeep
+    toll of the same printed words ("unless you pay its mana cost", Pendrell
+    Flux) uses, so ``{0}`` — a mana cost, and a payable one — is not caught by
+    it. Nothing recorded is not this question: that is an offer with no
+    permanent behind it, which keeps the answer :func:`_derived_cost` gives.
+    """
+    key = dict(printed or {}).get("cost_from")
+    if key is None or game is None:
+        return False
+    recorded = context.results.get(key)
+    permanent = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
+    if permanent is None:
+        return False
+    from ..mana_payment import permanent_mana_cost
+
+    return permanent_mana_cost(permanent) is None
+
+
 def _offer_to_seat(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
     player_index: int, rebind: bool = False,
@@ -3209,6 +3278,15 @@ def _offer_to_seat(
     # only the ones this resolution already has — and this trigger fired on a
     # card being drawn, which named nothing at all.
     on_reflexive = _steps(instruction, "reflexive")
+
+    # CR 118.6: a cost based on the mana cost of an object that has none is
+    # unpayable, so the offer is not made and the penalty applies — the same
+    # outcome as the unaffordable offer below, reached before an empty cost can
+    # be read as a free one.
+    if _derived_cost_is_unpayable(instruction.payload.get("cost"), context, game):
+        if on_decline:
+            _run(game, on_decline, context)
+        return
 
     # An offer the player cannot afford is never made; its decline branch (a
     # "…unless you pay" penalty) still applies. The alternative payment is part

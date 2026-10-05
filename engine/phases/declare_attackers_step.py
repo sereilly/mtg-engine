@@ -14,6 +14,7 @@ from ..auras import attached_combat_restrictions, aura_restriction_active
 from ..combat_permissions import (ATTACK_AS_THOUGH_NO_DEFENDER,
                                   CANT_ATTACK_UNTIL_EOT)
 from ..combat_restrictions import (declaration_company_required,
+                                   declaration_companion_required,
                                    declaration_greater_power_required,
                                    declaration_tap_costs,
                                    defender_attack_cap,
@@ -1517,6 +1518,25 @@ class DeclareAttackersStepMixin:
                     f"{attacker.card.name} needs an attacking creature with "
                     "greater power beside it"
                 )
+        # "…unless **a black or green creature** also attacks." (Scarred Puma.)
+        # The same CR 508.1c question with a described companion. "Also" is
+        # "other than this one" — `is`, for the reason given above — and the
+        # description is tested through `subject_matches`, so the companion's
+        # colour is the layers' answer at the moment of the declaration.
+        for attacker in declared_attackers:
+            for described in declaration_companion_required(attacker):
+                seat = self.controller_index_of(attacker)
+                if not any(
+                    other is not attacker
+                    and subject_matches(
+                        self, other, described, observer=seat, source=attacker
+                    )
+                    for other in declared_attackers
+                ):
+                    return attacker, (
+                        f"{attacker.card.name} can't attack unless a creature "
+                        "its text names also attacks"
+                    )
         # "…unless you tap an untapped creature you control not declared as an
         # attacking creature this combat." (Hollow Warrior.) A cost every one of
         # them pays out of the same board, so the plan is asked of the whole

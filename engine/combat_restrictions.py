@@ -130,6 +130,8 @@ class CombatRestriction:
 #                                   phases/declare_attackers_step.declaration_refusal
 #   cant_block_unless_greater_power_blocks
 #                                   phases/declare_blockers_step.declare_blockers
+#   cant_attack_unless_subject_attacks
+#                                   phases/declare_attackers_step.attack_declaration_refusal
 _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
     (
         # "No more than two creatures can attack **you** each combat."
@@ -2068,6 +2070,32 @@ def declaration_greater_power_required(permanent, kind: str) -> bool:
     return any(
         instruction.kind == wanted
         for instruction in compile_card_oracle(permanent.effective_card).instructions
+    )
+
+
+def declaration_companion_required(permanent) -> tuple[dict, ...]:
+    """The noun phrase(s) another declared attacker must answer for *permanent*
+    to attack — empty when it prints no such restriction.
+
+    "This creature can't attack unless a black or green creature also
+    attacks." (Scarred Puma.) :func:`declaration_greater_power_required`'s
+    sibling: the same CR 508.1c floor on the declaration the creature joins,
+    with a described companion where that one compares power. The filter is
+    payload and is tested by ``subject_matches`` at the gate, so the companion's
+    colour is read through the layers at the moment of the declaration — a
+    creature a Lace has turned green escorts the Puma, and a green one turned
+    white no longer does.
+
+    A tuple because a creature may be granted the sentence twice and each
+    printing is its own restriction to satisfy. Read off ``effective_card``
+    like every other combat restriction here.
+    """
+    from .oracle import compile_card_oracle
+
+    return tuple(
+        dict(instruction.payload.get("companion") or {})
+        for instruction in compile_card_oracle(permanent.effective_card).instructions
+        if instruction.kind == "cant_attack_unless_subject_attacks"
     )
 
 

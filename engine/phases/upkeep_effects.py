@@ -31,6 +31,7 @@ this seam.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable
 
+from ..upkeep_costs import resolved_toll_instruction
 
 if TYPE_CHECKING:
     from ..models import Permanent, PlayerState
@@ -260,7 +261,17 @@ class UpkeepEffectsMixin:
         human_choices = ctx.human_choices
         permanent = ctx.permanent
         trig = ctx.trig
-        mana: dict[str, int] = trig.instruction.payload.get("mana", {})
+        # "…unless you pay **its mana cost**" resolves here, through the reader
+        # the prompt quoted from; None is CR 118.6's unpayable cost.
+        tolled = resolved_toll_instruction(permanent, trig.instruction)
+        if tolled is None:
+            self.sacrifice_permanent(permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {permanent.card.name} on upkeep "
+                "(it has no mana cost to pay)"
+            )
+            return
+        mana: dict[str, int] = tolled.payload.get("mana", {})
         # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair the wind-counter
         # handler beside this one already uses — never a hand-rolled pool read.
         # Both of these used to test the *coloured* pips alone:
@@ -779,7 +790,20 @@ class UpkeepEffectsMixin:
         human_choices = ctx.human_choices
         permanent = ctx.permanent
         trig = ctx.trig
-        mana = trig.instruction.payload.get("mana", {})
+        # "Sacrifice this permanent unless you pay **its mana cost**" (Pendrell
+        # Flux's and Essence Leak's granted ability): the price is read off the
+        # permanent now, through the one reader the prompt quoted from. None is
+        # CR 118.6 — a land or a token has no mana cost, so the cost is
+        # unpayable and the permanent goes without anything being offered.
+        tolled = resolved_toll_instruction(permanent, trig.instruction)
+        if tolled is None:
+            self.sacrifice_permanent(permanent)
+            self.log.append(
+                f"{controller.name} sacrificed {permanent.card.name} on upkeep "
+                "(it has no mana cost to pay)"
+            )
+            return
+        mana = tolled.payload.get("mana", {})
         # `can_pay_upkeep_mana` / `_spend_upkeep_mana`, the pair the wind-counter
         # handler beside this one already uses — never a hand-rolled pool read.
         # Both of these used to test the *coloured* pips alone:
