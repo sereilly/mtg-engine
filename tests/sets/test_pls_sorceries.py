@@ -177,3 +177,61 @@ def test_w1g3_noxious_vapors_asks_nothing_of_a_hand_with_no_colour_in_it(set_poo
     assert _w1g3_zone(mine.hand) == ["Forest"]
     assert _w1g3_zone(mine.graveyard) == ["Black Lotus", "Noxious Vapors", "Sol Ring"]
     assert not theirs.hand and not theirs.graveyard
+
+
+def _w1g3_guilt_table(set_pool, hand_a, hand_b, library_a, library_b, *, interactive=()):
+    """Urza's Guilt in seat 0's hand beside *hand_a*; libraries top first."""
+    game, card = _w1g3_vapors_table(set_pool, hand_a, hand_b, interactive=interactive)
+    mine, theirs = game.players
+    mine.hand[0] = card("Urza's Guilt")
+    mine.library[:] = [card(name) for name in library_a]
+    theirs.library[:] = [card(name) for name in library_b]
+    return game, mine, theirs  # _w1g3_guilt_table
+
+
+def test_w1g3_urzas_guilt_draws_then_discards_then_drains_every_player(set_pool):
+    """"Each player draws two cards, then discards three cards, then loses 4
+    life." With nobody asked: A holds two, draws two and discards three; B
+    holds nothing, draws two and discards both — "three" is as many as there
+    are (CR 608.2). Both lose 4."""
+    game, mine, theirs = _w1g3_guilt_table(
+        set_pool, ["Counterspell", "Lightning Bolt"], [],
+        ["Island", "Swamp", "Plains"], ["Mountain", "Forest", "Island"],
+    )
+
+    result = game.cast_from_hand(0, "Urza's Guilt")
+    _w1g3_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    _w1g3_resolve_stack(game)
+
+    assert result.supported, result.details
+    assert len(mine.hand) == 1 and len(mine.graveyard) == 4, "three discards and the spell"
+    assert not theirs.hand and _w1g3_zone(theirs.graveyard) == ["Forest", "Mountain"]
+    assert _w1g3_zone(mine.library) == ["Plains"] and _w1g3_zone(theirs.library) == ["Island"]
+    assert (mine.life, theirs.life) == (16, 16)
+
+
+def test_w1g3_urzas_guilt_takes_no_life_until_the_discards_are_chosen(set_pool):
+    """The order is the sentence's: the draw has happened when the discards are
+    owed — each player chooses out of a hand that holds the two new cards —
+    and the life loss waits for the last of them."""
+    game, mine, theirs = _w1g3_guilt_table(
+        set_pool, ["Counterspell", "Lightning Bolt"], [],
+        ["Island", "Swamp", "Plains"], ["Mountain", "Forest", "Island"],
+        interactive=(0, 1),
+    )
+    game.queue_from_hand(0, "Urza's Guilt")
+    game.resolve_top_of_stack()
+
+    owed = {c.player_index: c.data["count"] for c in game.pending_choices if c.kind == "discard"}
+    assert owed == {0: 3, 1: 2}
+    assert _w1g3_zone(mine.hand) == ["Counterspell", "Island", "Lightning Bolt", "Swamp"]
+    assert (mine.life, theirs.life) == (20, 20)
+
+    assert game.confirm_discard(0, [0, 1, 2])
+    assert (mine.life, theirs.life) == (20, 20), "B has not discarded yet"
+    assert game.confirm_discard(1, [0, 1])
+    _w1g3_resolve_stack(game)
+
+    assert _w1g3_zone(mine.hand) == ["Swamp"]
+    assert (mine.life, theirs.life) == (16, 16)

@@ -237,3 +237,92 @@ def test_w1g3_sawtooth_loon_bottoms_what_it_can_from_a_short_hand(set_pool):
 
     assert [card.name for card in player.library] == ["Counterspell"]
     assert [card.name for card in player.hand] == ["Sawtooth Loon"]
+
+
+def _w1g3_lord_table(set_pool, mine_graveyard, *, interactive=(0, 1)):
+    """Lord of the Undead for seat 0 with *mine_graveyard* behind it."""
+    game, card, mine, _theirs = _w1g3_creature_table(set_pool, ["Lord of the Undead"], [])
+    game.interactive_seats = set(interactive)
+    game.players[0].graveyard.extend(card(name) for name in mine_graveyard)
+    return game, game.players[0], mine[0]  # _w1g3_lord_table
+
+
+def test_w1g3_lord_of_the_undead_pumps_every_other_zombie(set_pool):
+    """"Other Zombie creatures get +1/+1." Every Zombie on every battlefield —
+    an opponent's too — but not the Lord itself, and not a Bear."""
+    game, _card, mine, theirs = _w1g3_creature_table(
+        set_pool, ["Lord of the Undead", "Scathe Zombies", "Grizzly Bears"],
+        ["Scathe Zombies"],
+    )
+    lord, zombie, bear = mine
+
+    assert (lord.effective_power, lord.effective_toughness) == (2, 2)
+    assert (zombie.effective_power, zombie.effective_toughness) == (3, 3)
+    assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+    assert (theirs[0].effective_power, theirs[0].effective_toughness) == (3, 3)
+
+
+def test_w1g3_lord_of_the_undead_returns_a_zombie_card_and_only_a_zombie(set_pool):
+    """"{1}{B}, {T}: Return target **Zombie** card from your graveyard to your
+    hand." A Bear is not a legal target and the activation is refused with the
+    Lord untapped; the Maggot Carrier is, and comes back."""
+    game, player, lord = _w1g3_lord_table(set_pool, ["Grizzly Bears", "Maggot Carrier"])
+
+    refused = game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=0)
+    assert not refused.supported and not lord.tapped and not game.stack
+
+    result = game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=1)
+    _w1g3_resolve_stack(game)
+
+    assert result.supported and lord.tapped, result.details
+    assert [card.name for card in player.hand] == ["Maggot Carrier"]
+    assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g3_lord_of_the_undead_never_falls_back_to_a_card_that_is_not_a_zombie(set_pool):
+    """What driving it found. With no slot announced the handler's fallback took
+    the first *creature* card in the pile — the Grizzly Bears lying ahead of the
+    Zombie — because the generic scan reads no subtype. It takes the Zombie now;
+    and with no Zombie in the pile the ability cannot be activated at all
+    (CR 602.2b), rather than returning a Bear."""
+    game, player, _lord = _w1g3_lord_table(set_pool, ["Grizzly Bears", "Maggot Carrier"])
+
+    assert game.queue_permanent_ability(0, "Lord of the Undead").supported
+    _w1g3_resolve_stack(game)
+
+    assert [card.name for card in player.hand] == ["Maggot Carrier"]
+    assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
+
+    game, player, lord = _w1g3_lord_table(set_pool, ["Grizzly Bears"])
+    refused = game.queue_permanent_ability(0, "Lord of the Undead")
+    assert not refused.supported and not lord.tapped
+    assert not player.hand
+
+
+def test_w1g3_lord_of_the_undead_returns_no_bystander_when_its_zombie_has_gone(set_pool):
+    """The Zombie leaves the graveyard in response. The ability's only target is
+    gone, and what is left in the pile is not a Zombie — so nothing comes back.
+    It used to return the Grizzly Bears."""
+    game, player, _lord = _w1g3_lord_table(set_pool, ["Grizzly Bears", "Maggot Carrier"])
+    game.queue_permanent_ability(0, "Lord of the Undead", target_permanent_index=1)
+
+    player.graveyard.pop(1)
+    _w1g3_resolve_stack(game)
+
+    assert not player.hand
+    assert [card.name for card in player.graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g3_maggot_carrier_costs_every_player_a_life(set_pool):
+    """"When this creature enters, each player loses 1 life." Cast for real at a
+    three-seat table: its controller too, and both opponents."""
+    game, _card, _mine, _theirs = _w1g3_creature_table(
+        set_pool, [], [], hands=(["Maggot Carrier"],), seats=3,
+    )
+
+    result = game.cast_from_hand(0, "Maggot Carrier")
+    _w1g3_resolve_stack(game)
+
+    assert result.supported, result.details
+    assert [player.life for player in game.players] == [19, 19, 19]
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Maggot Carrier"]

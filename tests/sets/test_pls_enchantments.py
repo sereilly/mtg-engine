@@ -475,3 +475,37 @@ def test_w1g3_planeswalkers_mischief_is_activated_only_as_a_sorcery(set_pool):
     assert not refused.supported and "sorcery" in refused.details, refused.details
     assert [card.name for card in players[1].hand] == ["Lightning Bolt"]
     assert not players[1].exile and not game.cast_permissions
+
+
+def _w1g3_suspicious_upkeeps(set_pool, mine, theirs):
+    """Dark Suspicions for seat 0, with *mine* / *theirs* cards in each hand,
+    run through seat 0's upkeep and then seat 1's. Returns both pairs of life
+    totals, ``(after A's upkeep, after B's upkeep)``."""
+    game, players, card = _w1g3_cycle_board(set_pool, "Dark Suspicions", [])
+    players[0].hand.extend([card("Forest")] * mine)
+    players[1].hand.extend([card("Forest")] * theirs)
+    game.resolve_upkeep(0)
+    _w1g3_resolve_stack(game)
+    after_own = (players[0].life, players[1].life)
+    game.active_player_index = 1
+    game.resolve_upkeep(1)
+    _w1g3_resolve_stack(game)
+    return after_own, (players[0].life, players[1].life)  # _w1g3_suspicious_upkeeps
+
+
+def test_w1g3_dark_suspicions_charges_the_opponent_the_difference_in_hands(set_pool):
+    """"At the beginning of each **opponent's** upkeep, that player loses X
+    life, where X is the number of cards in that player's hand minus the number
+    of cards in your hand." Five against two is 3 — on the opponent's upkeep,
+    to the opponent, and nothing on its controller's own."""
+    after_own, after_theirs = _w1g3_suspicious_upkeeps(set_pool, 2, 5)
+
+    assert after_own == (20, 20)
+    assert after_theirs == (20, 17)
+
+
+def test_w1g3_dark_suspicions_takes_nothing_from_the_smaller_hand(set_pool):
+    """The subtraction stops at 0 (CR 107.1b): an opponent holding fewer cards
+    than you loses nothing and gains nothing, and equal hands are 0."""
+    assert _w1g3_suspicious_upkeeps(set_pool, 5, 2) == ((20, 20), (20, 20))
+    assert _w1g3_suspicious_upkeeps(set_pool, 3, 3) == ((20, 20), (20, 20))

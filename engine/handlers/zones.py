@@ -1873,6 +1873,15 @@ def _return_graveyard_card_to_owners_hand(
     return True, "resolved"
 
 
+#: The payload keys that narrow *which* creature card a graveyard return may
+#: take — everything ``handlers/_common.graveyard_card_matches`` reads beyond
+#: the card type. A return carrying one of them must never reach the generic
+#: "first creature card" scan, which reads none of them.
+_GRAVEYARD_NARROWING_KEYS = (
+    "graveyard_subtypes", "graveyard_colors", "supertypes", "graveyard_mana_value",
+)
+
+
 @effect_handler("return_creature_from_graveyard_to_hand")
 def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     if instruction.payload.get("any_graveyard"):
@@ -2000,7 +2009,24 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
     # the source itself, so the slot walk above is used instead. Without one the
     # call is left exactly as it was, so every card written before this keeps
     # its behaviour byte for byte.
-    if excluded is not None:
+    #
+    # **…and the last place a printed narrowing has to be.** "Return target
+    # **Zombie** card from your graveyard to your hand" (Lord of the Undead) is
+    # ``card_type: "creature"`` plus ``graveyard_subtypes``, so it reaches this
+    # point — and the generic scan below asks only "is it a creature card?".
+    # With no slot announced (a bare activation, an AI seat, an entry trigger
+    # nothing chose a target for) or with the announced card gone, the Lord
+    # returned whichever creature card lay first in the pile: a Grizzly Bears.
+    # Three shipped cards did the same — Mtenda Griffin a non-Griffin, Strongarm
+    # Thug a non-Mercenary, Crypt Angel a green creature for "blue or red" — on
+    # the ordinary cast, because nothing announces an entry trigger's target.
+    #
+    # The keys are the ones ``graveyard_card_matches`` reads beyond the type
+    # itself, so the scan and the picker ask one predicate.
+    narrowed = any(
+        instruction.payload.get(key) for key in _GRAVEYARD_NARROWING_KEYS
+    )
+    if excluded is not None or narrowed:
         chosen_index = next(
             (i for i in range(len(caster.graveyard)) if _eligible_slot(i)), None
         )
