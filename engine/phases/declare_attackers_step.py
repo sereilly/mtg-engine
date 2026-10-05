@@ -1346,7 +1346,7 @@ class DeclareAttackersStepMixin:
         if attacker.metadata.get("must_attack_until_eot"):
             return True
         # "**During that player's next turn**, the chosen creatures attack if
-        # able" (Oracle en-Vec). The same CR 508.1a requirement the mark above
+        # able" (Oracle en-Vec). The same CR 508.1d requirement the mark above
         # carries, over a turn that had not started when the ability resolved —
         # so it is the seat-turn stamp rather than the cleanup-swept flag, which
         # would have been gone a whole turn before the requirement applied.

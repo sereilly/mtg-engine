@@ -843,7 +843,7 @@ def force_bound_to_attack_until_eot(game: Game, instruction: OracleInstruction, 
     """"This artifact deals 1 damage to target creature. **That creature**
     attacks this turn if able." (Bullwhip.)
 
-    The same CR 508.1a requirement as the targeted kind above, on the object an
+    The same CR 508.1d requirement as the targeted kind above, on the object an
     earlier step of this resolution already acted on rather than on a second
     choice. ``bound_permanent`` is the reader every "that creature" goes
     through, so a requirement inside a loop names the iteration's object and one

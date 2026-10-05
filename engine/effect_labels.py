@@ -383,7 +383,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # Al-abara's Carpet, beside `grant_prevention_shield`.
     "grant_source_class_prevention_shield": "activated_prevent",
     # North Star produces no mana; its whole effect is permission to spend what
-    # you have as though it were another type (CR 601.2g). `activated_mana` is
+    # you have as though it were another type (CR 609.4b). `activated_mana` is
     # for an ability whose point is that mana appears, so this takes Idol of
     # Endurance's `activated_permission` instead.
     "grant_spend_mana_as_though": "activated_permission",
@@ -520,7 +520,7 @@ ACTIVATED_LABELS: dict[str, str] = {
     # type changes above: CR 205 is what a permanent *is*, which is the bucket
     # rather than the P/T it arrives with.
     "animate_matching_until_eot": "activated_characteristic",
-    # Vodalian War Machine. A permission to attack (CR 508.1a) rather than a
+    # Vodalian War Machine. A permission to attack (CR 508.1c) rather than a
     # characteristic change: the Wall keeps defender and the restriction is
     # lifted for the turn.
     "attack_as_though_no_defender_until_eot": "activated_combat",

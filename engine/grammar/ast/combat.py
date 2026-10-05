@@ -376,7 +376,7 @@ class AttacksThisTurnIfAble:
     #: is the one Oracle en-Vec prints in front of the sentence instead
     #: ("During that player's next turn, the chosen creatures attack if able").
     #:
-    #: A field rather than two nodes, because CR 508.1a's requirement is the
+    #: A field rather than two nodes, because CR 508.1d's requirement is the
     #: same requirement either way and only its window differs — the same reason
     #: every other printed window in this grammar is payload. None means the
     #: sentence printed no window *here*, which is legal only until a leading

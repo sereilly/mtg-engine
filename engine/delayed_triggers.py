@@ -61,7 +61,7 @@ DELAYED_EVENTS: dict[str, str] = {
     # "Whenever a creature blocks **this turn**, …" (Battle Cry). The blocking
     # half of the row above, and a separate event for the reason the two
     # declaration steps are two steps: a block is announced by the defending
-    # player at CR 509.1g and an attack by the active player at CR 508.1f, and
+    # player at CR 509.1g and an attack by the active player at CR 508.1k, and
     # an entry armed for one must not be woken by the other.
     #
     # Announced **per blocking creature**, so the fire site names that creature

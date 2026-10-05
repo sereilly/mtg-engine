@@ -181,7 +181,7 @@ def _lower_attacks_this_turn_if_able(
     node: ast.AttacksThisTurnIfAble,
     produced: frozenset[str] = frozenset(),
 ) -> tuple[OracleInstruction, ...]:
-    """CR 508.1a's requirement for one turn, on the source or on a chosen
+    """CR 508.1d's requirement for one turn, on the source or on a chosen
     creature.
 
     "…this creature deals 3 damage to you **and attacks this turn if able**"
@@ -214,7 +214,7 @@ def _lower_attacks_this_turn_if_able(
         )
     if node.window == THAT_PLAYERS_NEXT_TURN:
         # "**During that player's next turn**, the chosen creatures attack if
-        # able." (Oracle en-Vec.) The same CR 508.1a requirement over a turn
+        # able." (Oracle en-Vec.) The same CR 508.1d requirement over a turn
         # that has not started, on the set an earlier step chose — so the same
         # instruction with the window and the record as payload, which is where
         # every other printed parameter in this grammar goes.

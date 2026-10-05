@@ -367,7 +367,7 @@ def board_flash_timing(game: "Game", seat: int, card) -> bool:
 
 
 def a_sorcery_could_be_cast(game: "Game", seat: int) -> bool:
-    """CR 601.3d's timing: *seat*'s own main phase, with an empty stack.
+    """CR 307.1's timing: *seat*'s own main phase, with an empty stack.
 
     One rule, two readers. ``activation_restrictions`` asks it of "Activate only
     as a sorcery" and the cast path asks it of "any time a sorcery couldn't have

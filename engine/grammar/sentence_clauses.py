@@ -485,7 +485,7 @@ def _distribute_duration(
         if statement.duration not in (None, "end_of_turn"):
             raise stream.error("this sentence prints two different durations")
         return dataclasses.replace(statement, duration="end_of_turn")
-    # CR 508.1a's requirement keeps its window as a **name** rather than a
+    # CR 508.1d's requirement keeps its window as a **name** rather than a
     # ``Duration`` — "this turn" and "that player's next turn" are the two the
     # engine has a mark for, and neither is a node — so it takes the prefix by
     # translation, exactly as the three nodes below do and for their reason: the

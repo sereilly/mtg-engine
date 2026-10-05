@@ -206,8 +206,8 @@ _PATTERNS: tuple[tuple[re.Pattern[str], "str | tuple[str, ...]"], ...] = (
         # The counted noun is payload (`.+` read by `_printed_noun` below and
         # refused when it is a phrase `subject_matches` cannot test), so a card
         # printing "more creatures than" is this rule over a different set. The
-        # two *seats* are not payload: CR 508.1a makes "you" the attacking
-        # player and CR 506.2 makes the other one the defending player, so the
+        # two *seats* are not payload: CR 506.2 makes "you" the attacking
+        # player and the other one the defending player, so the
         # printed words are what the enforcement step already knows — they stay
         # in the pattern because a regex has to name what it matches, and a
         # sentence naming the other seat would be a different card that has to

@@ -295,7 +295,7 @@ def spendable_restricted_mana(player, purpose: "PaymentPurpose | None") -> dict[
     """Every restricted bucket *purpose* may be paid from, merged by symbol.
 
     Merged rather than tried one at a time because a payment is one operation:
-    two buckets that both admit it are, to CR 601.2g, simply mana in the pool.
+    two buckets that both admit it are, to CR 601.2h, simply mana in the pool.
     Which of them a spent unit came out of is settled afterwards by
     :func:`debit_restricted_mana`, in the same order this merge walked.
 

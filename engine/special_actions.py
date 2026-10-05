@@ -114,7 +114,7 @@ def special_action_refusal(
     is a button that does nothing.
 
     The timing is CR 116.2e's "any time they have priority", which is CR 117.1's
-    priority and not CR 601.3d's sorcery window. A seat with no priority at all
+    priority and not CR 307.1's sorcery window. A seat with no priority at all
     (`priority_player_index is None`) is refused: that is a turn-based action
     running or the game not started, and neither is a moment a player may act.
     """

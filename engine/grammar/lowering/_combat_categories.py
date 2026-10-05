@@ -150,18 +150,18 @@ COMBAT_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # `remove_from_combat` is here: the family whose steps dispatch it.
     "reassign_blockers_between_attackers": "combat_restrictions",
     "mark_non_wall_target_to_attack": "combat_restrictions",
-    # Kookus: CR 508.1a's requirement for one turn, which is not the printed
+    # Kookus: CR 508.1d's requirement for one turn, which is not the printed
     # static `combat_restrictions.py` reads for "attacks **each combat** if
     # able". Same category, so GRAMMAR_CATEGORIES is unchanged.
     "force_self_to_attack_until_eot": "combat_restrictions",
     # "Target creature attacks this turn if able." (Boiling Blood.) The
-    # same CR 508.1a requirement on a creature the caster chose rather
+    # same CR 508.1d requirement on a creature the caster chose rather
     # than on the effect's own source.
     "force_target_to_attack_until_eot": "combat_restrictions",
     "force_bound_to_attack_until_eot": "combat_restrictions",
     "force_bound_to_block_until_eot": "combat_restrictions",
     # "**Non-Wall creatures the active player controls** attack this turn if
-    # able." (Maddening Imp.) The same CR 508.1a requirement over every creature
+    # able." (Maddening Imp.) The same CR 508.1d requirement over every creature
     # a printed noun phrase describes — the mirror of the block twin two rows
     # down, which is why they carry the same category and the same name shape.
     "force_subject_to_attack_until_eot": "combat_restrictions",
