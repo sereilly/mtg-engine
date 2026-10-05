@@ -1593,6 +1593,108 @@ def foreign_activation_use(ability) -> str | None:
     return "aimed"
 
 
+# --- CR 601.2b: the optional additional costs a cast may take ---------------
+#
+# What an offer *buys*, as the four things an optional cost in this pool can
+# buy. Derived from the compiled program and from the two readers a
+# resolution itself asks (`cast_costs.buyback_paid`, `cast_costs.kicked`) —
+# never from the keyword's printed name, so a card worded as the rules text of
+# either is read the same way.
+
+#: The spell's own card comes back to its owner's hand as it resolves
+#: (CR 702.27a). The payment buys *the next cast*, not this one.
+OFFER_RETURNS_SPELL = "returns_spell"
+#: The spell is kicked (CR 702.33d): some part of the program asks `was_kicked`.
+OFFER_KICKS = "kicked"
+#: Each payment adds to what the spell does — the program reads this offer's
+#: *count* ("for each additional {1}{R} you paid", "an additional 3 life for
+#: each additional {1}{G} you paid").
+OFFER_ADDS = "more_effect"
+#: The spell does something *different* when paid, and which is better depends
+#: on the board (Undergrowth's paid Fog spares red creatures — the caster's and
+#: everybody else's).
+OFFER_ALTERS = "other_effect"
+
+
+@dataclass(frozen=True)
+class CastOffer:
+    """One optional additional cost a cast of a card may take (CR 601.2b).
+
+    ``key`` is what the announcement is keyed by (``optional_cost_payments``),
+    read off the same table the cast path charges from. Exactly one of ``mana``
+    (a run of symbols folded into the spell's mana payment) and ``price`` (a
+    sacrifice, a discard, life — "Buyback—Sacrifice a land") is set.
+    """
+
+    key: str
+    buys: str
+    repeatable: bool = False
+    mana: object | None = None
+    price: object | None = None
+    #: The zone this offer belongs to a cast from, or None for every zone
+    #: (`AdditionalCost.from_zone`).
+    from_zone: str | None = None
+
+
+def _payload_names(value, key: str) -> bool:
+    """Whether *key* appears anywhere under *value* — as a dict key (``per_cost:
+    {key: 1}``) or as a value (``repeat_from_cost: key``)."""
+    if isinstance(value, str):
+        return value == key
+    if isinstance(value, dict):
+        return any(
+            name == key or _payload_names(inner, key) for name, inner in value.items()
+        )
+    if isinstance(value, (list, tuple)):
+        return any(_payload_names(inner, key) for inner in value)
+    payload = getattr(value, "payload", None)
+    return isinstance(payload, dict) and _payload_names(payload, key)
+
+
+def _what_an_offer_buys(card: CardDefinition, key: str) -> str:
+    from .cast_costs import buyback_paid, kicked
+
+    record = {"additional_costs_paid": {key: 1}}
+    if buyback_paid(card, record):
+        return OFFER_RETURNS_SPELL
+    if kicked(card, record):
+        return OFFER_KICKS
+    program = compile_card_oracle(card)
+    if _payload_names(tuple(program.instructions), key):
+        return OFFER_ADDS
+    return OFFER_ALTERS
+
+
+def cast_offers(card: CardDefinition) -> tuple[CastOffer, ...]:
+    """Every optional additional cost casting *card* offers, with what it buys.
+
+    Empty for all but a few dozen cards. Read from ``cast_costs.
+    additional_costs`` — the table ``queue_from_hand`` announces, gates and
+    charges from — so an offer the policy takes is one the cast path knows by
+    the same key.
+    """
+    from .cast_costs import additional_costs
+
+    offers: list[CastOffer] = []
+    for cost in additional_costs(card):
+        for offer in cost.optional_mana:
+            offers.append(CastOffer(
+                key=offer.symbols,
+                buys=_what_an_offer_buys(card, offer.symbols),
+                repeatable=offer.repeatable,
+                mana=offer,
+                from_zone=cost.from_zone,
+            ))
+        if cost.optional_key is not None:
+            offers.append(CastOffer(
+                key=cost.optional_key,
+                buys=_what_an_offer_buys(card, cost.optional_key),
+                price=cost,
+                from_zone=cost.from_zone,
+            ))
+    return tuple(offers)
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
