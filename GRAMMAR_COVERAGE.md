@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 71.3% | 69.3% | 47.7% | 203 |
+| INV *(measured)* | 335 | 547 | 73.3% | 71.7% | 50.1% | 215 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,13 +57,13 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 570 | 284 | expected a subject |  |
-| 156 | 91 | unconsumed text |  |
+| 569 | 283 | expected a subject |  |
 | 150 | 77 | unrecognized effect verb |  |
+| 147 | 82 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
-| 21 | 19 | expected 'unless defending player controls' |  |
+| 20 | 18 | expected 'unless defending player controls' |  |
 | 18 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 8 | 4 | expected 'card' |  |
 | 7 | 1 | no lowering for RawEffect |  |
@@ -674,6 +674,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Barrin's Codex**
   - `At the beginning of your upkeep, you may put a page counter on this artifact.`
   - `{4}, {T}, Sacrifice this artifact: Draw X cards, where X is the number of page counters on this artifact.`
+- **Barrin's Unmaking**
+  - `Return target permanent to its owner's hand if that permanent shares a color with the most common color among all permanents or a color tied for most common.`
 - **Barrin, Master Wizard**
   - `{2}, Sacrifice a permanent: Return target creature to its owner's hand.`
 - **Barrin, Tolarian Archmage**
@@ -3481,6 +3483,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control a Dwarf, sacrifice this creature.`
 - **Goham Djinn**
   - `{1}{B}: Regenerate this creature.`
+  - `This creature gets -2/-2 as long as black is the most common color among all permanents or is tied for most common.`
 - **Golgothian Sylex**
   - `{1}, {T}: Each nontoken permanent with a name originally printed in the Antiquities expansion is sacrificed by its controller.`
 - **Goremand**
@@ -3607,6 +3610,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Hakim, Loreweaver**
   - `{U}{U}: Return target Aura card from your graveyard to the battlefield attached to Hakim. Activate only during your upkeep and only if Hakim isn't enchanted.`
   - `{U}{U}, {T}: Destroy all Auras attached to Hakim.`
+- **Halam Djinn**
+  - `This creature gets -2/-2 as long as red is the most common color among all permanents or is tied for most common.`
 - **Halfdane**
   - `At the beginning of your upkeep, change Halfdane's base power and toughness to the power and toughness of target creature other than Halfdane until the end of your next upkeep.`
 - **Hall of Gemstone**
@@ -4404,6 +4409,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kavu Monarch**
   - `Kavu creatures have trample.`
   - `Whenever another Kavu enters, put a +1/+1 counter on this creature.`
+- **Kavu Runner**
+  - `This creature has haste as long as no opponent controls a white or blue creature.`
 - **Kaysa**
   - `Green creatures you control get +1/+1.`
 - **Keen Glidemaster**
@@ -4781,6 +4788,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Lightning Bolt deals 3 damage to any target.`
 - **Lightning Cloud**
   - `Whenever a player casts a red spell, you may pay {R}. If you do, this enchantment deals 1 damage to any target.`
+- **Lightning Dart**
+  - `Lightning Dart deals 1 damage to target creature. If that creature is white or blue, Lightning Dart deals 4 damage to it instead.`
 - **Lightning Dragon**
   - `{R}: This creature gets +1/+0 until end of turn.`
 - **Liliana's Devotee**
@@ -6063,8 +6072,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Remove a fade counter from this creature: This creature gets +1/+1 until end of turn.`
 - **Phyrexian Purge**
   - `Destroy any number of target creatures.`
+- **Phyrexian Reaper**
+  - `Whenever this creature becomes blocked by a green creature, destroy that creature. It can't be regenerated.`
 - **Phyrexian Reclamation**
   - `{1}{B}, Pay 2 life: Return target creature card from your graveyard to your hand.`
+- **Phyrexian Slayer**
+  - `Whenever this creature becomes blocked by a white creature, destroy that creature. It can't be regenerated.`
 - **Phyrexian Splicer**
   - `{2}, {T}, Choose flying, first strike, trample, or shadow: Until end of turn, target creature with the chosen ability loses it and another target creature gains it.`
 - **Phyrexian Tower**
@@ -6997,6 +7010,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Rugged Highlands**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {R} or {G}.`
+- **Ruham Djinn**
+  - `This creature gets -2/-2 as long as white is the most common color among all permanents or is tied for most common.`
 - **Ruination**
   - `Destroy all nonbasic lands.`
 - **Ruins of Trokair**
@@ -7202,6 +7217,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Creatures you control get +1/+0 until end of turn.`
 - **Scarecrow**
   - `{6}, {T}: Prevent all damage that would be dealt to you this turn by creatures with flying.`
+- **Scarred Puma**
+  - `This creature can't attack unless a black or green creature also attacks.`
 - **Scars of the Veteran**
   - `Prevent the next 7 damage that would be dealt to any target this turn. If it's a creature, put a +0/+1 counter on it for each 1 damage prevented this way at the beginning of the next end step.`
 - **Scarwood Bandits**
@@ -7662,6 +7679,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast a creature spell, sacrifice this creature.`
 - **Skittering Skirge**
   - `When you cast a creature spell, sacrifice this creature.`
+- **Skittish Kavu**
+  - `This creature gets +1/+1 as long as no opponent controls a white or blue creature.`
 - **Skulking Fugitive**
   - `When this creature becomes the target of a spell or ability, sacrifice it.`
 - **Skulking Ghost**
@@ -8246,6 +8265,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Suffocation**
   - `Suffocation deals 4 damage to the controller of the last red instant or sorcery spell that dealt damage to you this turn.`
   - `Draw a card at the beginning of the next turn's upkeep.`
+- **Sulam Djinn**
+  - `This creature gets -2/-2 as long as green is the most common color among all permanents or is tied for most common.`
 - **Suleiman's Legacy**
   - `When this enchantment enters, destroy all Djinns and Efreets. They can't be regenerated.`
   - `Whenever a Djinn or Efreet enters, destroy it. It can't be regenerated.`
@@ -8941,6 +8962,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: Target creature blocks this creature this turn if able.`
 - **Tsabo Tavoc**
   - `{B}{B}, {T}: Destroy target legendary creature. It can't be regenerated.`
+- **Tsabo's Assassin**
+  - `{T}: Destroy target creature if it shares a color with the most common color among all permanents or a color tied for most common. A creature destroyed this way can't be regenerated.`
 - **Tsabo's Web**
   - `When this artifact enters, draw a card.`
 - **Tsunami**
@@ -9763,6 +9786,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Yawgmoth's Will**
   - `Until end of turn, you may play lands and cast spells from your graveyard.`
   - `If a card would be put into your graveyard from anywhere this turn, exile that card instead.`
+- **Zanam Djinn**
+  - `This creature gets -2/-2 as long as blue is the most common color among all permanents or is tied for most common.`
 - **Zap**
   - `Zap deals 1 damage to any target.`
   - `Draw a card.`
