@@ -72,6 +72,92 @@ _CLEANUP_SACRIFICE_RIDER = re.compile(
 )
 
 
+#: "You may cast this spell as though it had flash **if you pay {2} more to
+#: cast it**." (Invasion's five: Breaking Wave, Ghitu Fire, Rout, Saproling
+#: Symbiosis, Twilight's Call.) The permission above with a price on it, and
+#: the price is the whole card: CR 601.3c lets the player *begin* to cast as
+#: though the spell had flash because the additional cost will be paid, and a
+#: reading that kept the permission and dropped the cost is a sorcery that is
+#: simply an instant.
+#:
+#: Which is what these five were. :data:`_FLASH_PERMISSION` is searched for,
+#: not matched whole, so it answered yes for this sentence and
+#: :func:`casts_at_instant_speed` opened the instant window with nothing
+#: charged — Rout was an instant-speed Wrath of God for its sorcery price, on
+#: four cards reporting supported with every sentence claimed.
+#:
+#: The cost is payload (a card printing "{1}{U} more" is this sentence), read
+#: whole, and only a **generic** cost is admitted: that is what the cast path's
+#: generic tax can charge, and a coloured surcharge folded into it would be
+#: payable with any land — cheaper than printed, the one direction a cost may
+#: never move.
+_FLASH_SURCHARGE = re.compile(
+    r"^you may cast this spell as though it had flash if you pay "
+    r"\{(?P<generic>\d+)\} more to cast it$"
+)
+
+#: Reminder text trailing a line ("(You may cast it any time you could cast an
+#: instant.)"). The support gate hands this file printed lines as they are, so
+#: the parenthetical is taken off here rather than made part of the pattern —
+#: a printing without it is the same sentence.
+_TRAILING_REMINDER = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def flash_surcharge_line(line: str) -> int | None:
+    """The generic mana *line* charges for casting its spell as though it had
+    flash, or None when the line is not that sentence."""
+    normalized = _TRAILING_REMINDER.sub("", _normalize(line)).rstrip(".")
+    match = _FLASH_SURCHARGE.match(normalized)
+    return int(match.group("generic")) if match is not None else None
+
+
+def flash_surcharge(oracle_text: str) -> int | None:
+    """What *oracle_text*'s own flash permission costs, or None if it prints
+    none (or prints the free one)."""
+    for raw_line in (oracle_text or "").splitlines():
+        surcharge = flash_surcharge_line(raw_line)
+        if surcharge is not None:
+            return surcharge
+    return None
+
+
+def flash_surcharge_owed(game: "Game", seat: int, card) -> int:
+    """The extra generic mana *seat* owes to cast *card* **right now**.
+
+    CR 601.3c's additional cost, and it is owed exactly when the permission is
+    being used: the spell is being cast at a time a sorcery could not be
+    (CR 307.5a's test, :func:`a_sorcery_could_be_cast`), and nothing else is
+    letting it be. So it is zero in the caster's own main phase with an empty
+    stack — paying it there buys nothing and no player would — and zero when
+    another effect already grants the timing (a flash grant covering the
+    card's type, a board permission), because then the spell is not being cast
+    "as though it had flash" by *this* sentence at all.
+
+    Derived from the timing rather than asked as a choice: the two answers a
+    prompt could collect are "pay, and cast now" and "do not, and do not cast",
+    and the second is simply not casting. One reader for the cast path, the
+    AI's affordability and the client's castable badge
+    (``cost_modifiers.spell_cost_tax``), so the three cannot disagree about
+    what the card costs at this moment.
+    """
+    surcharge = flash_surcharge(getattr(card, "oracle_text", "") or "")
+    if not surcharge:
+        return 0
+    if a_sorcery_could_be_cast(game, seat):
+        return 0
+    if card.primary_type == "instant" or card.has_flash:
+        return 0
+    from .cast_permissions import board_free_cast
+
+    if (
+        board_free_cast(game, card) is not None
+        or granted_flash_timing(game, seat, card)
+        or board_flash_timing(game, seat, card)
+    ):
+        return 0
+    return surcharge
+
+
 @dataclass
 class FlashGrant:
     """"You may cast creature spells this turn as though they had flash."
@@ -375,7 +461,32 @@ def cast_permission_line(line: str) -> bool:
     normalized = _normalize(line).rstrip(".")
     if not grants_flash(normalized):
         return False
+    # "…if you pay {2} more to cast it." (Invasion's five.) The other rider
+    # this file enforces, claimed on the same all-or-nothing rule: the price is
+    # charged by ``cost_modifiers.spell_cost_tax`` through
+    # :func:`flash_surcharge_owed`, so the permission is never credited without
+    # it.
+    if flash_surcharge_line(line) is not None:
+        return True
     return sacrifices_at_cleanup_if_cast_at_instant_speed(normalized)
+
+
+def flash_permission_sentence(sentence: str) -> bool:
+    """Whether one printed *sentence* is a flash permission this file
+    implements **in full** — the coverage census's reader.
+
+    The bare permission (Mirage's cycle prints its rider as a second sentence,
+    which the census claims separately) or the priced one. Matched whole on
+    purpose: the census used to ask :func:`grants_flash`, which *searches*, so
+    "…as though it had flash if you pay {2} more to cast it" was claimed on its
+    first nine words and the price was a dropped rider in the one instrument
+    built to find them.
+    """
+    normalized = _TRAILING_REMINDER.sub("", _normalize(sentence)).rstrip(".")
+    return (
+        _FLASH_PERMISSION.fullmatch(normalized) is not None
+        or _FLASH_SURCHARGE.match(normalized) is not None
+    )
 
 
 __all__ = [
@@ -386,6 +497,10 @@ __all__ = [
     "grant_flash_timing",
     "granted_flash_timing",
     "cast_permission_line",
+    "flash_permission_sentence",
+    "flash_surcharge",
+    "flash_surcharge_line",
+    "flash_surcharge_owed",
     "casts_at_instant_speed",
     "board_flash_timing",
     "grants_flash",

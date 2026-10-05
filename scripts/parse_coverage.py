@@ -99,7 +99,7 @@ def defender_assigns_claims(sentence: str) -> bool:
 from engine.resolution_overrides import resolution_override_sentence  # noqa: E402
 from engine.special_actions import (permanent_special_action_sentence,  # noqa: E402
                                     special_action_line)
-from engine.cast_timing import (grants_flash,  # noqa: E402
+from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
                                 sacrifices_at_cleanup_if_cast_at_instant_speed,
                                 static_flash_permission)
 from engine.replacements import replacement_claims_line  # noqa: E402
@@ -294,7 +294,13 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # sentence by sentence and the card prints two: a permission and a rider,
     # each implemented by its own half of `engine/cast_timing.py`. Asked of the
     # readers that answer them, for the reason every claim above is.
-    ("cast_timing.py (granted flash)", grants_flash),
+    #
+    # ``flash_permission_sentence`` rather than ``grants_flash``: that one
+    # *searches*, and claimed "…as though it had flash if you pay {2} more to
+    # cast it" (Rout and Invasion's four others) on its first nine words — a
+    # dropped rider in the census itself, while the cards cast at instant speed
+    # for their sorcery price.
+    ("cast_timing.py (granted flash)", flash_permission_sentence),
     ("cast_timing.py (cleanup sacrifice rider)",
      sacrifices_at_cleanup_if_cast_at_instant_speed),
     # And the *static* half of the same file — "You may cast Aura spells with

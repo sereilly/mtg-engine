@@ -393,13 +393,18 @@ def _parse_simultaneous_untap_and_tap(
     keeps the reading it has — including the plain "that player untaps …" the
     verb table below already reaches.
     """
+    # "**Simultaneously untap all** tapped creatures **and tap all** untapped
+    # creatures." (Breaking Wave.) The same sentence in the imperative — the
+    # spell's controller is the implied subject — and with the other
+    # quantifier: "each" and "all" name one set here, every object the noun
+    # phrase describes, so they are one reading and not two.
     mark = stream.mark()
     if not stream.accept_word("simultaneously"):
         return None
     if not stream.accept_word("untaps", "untap"):
         stream.reset(mark)
         return None
-    if not stream.accept_word("each"):
+    if not stream.accept_word("each", "all"):
         stream.reset(mark)
         return None
     untap = _accept_object_filter(stream)
@@ -412,7 +417,7 @@ def _parse_simultaneous_untap_and_tap(
     if not stream.accept_word("taps", "tap"):
         stream.reset(mark)
         return None
-    if not stream.accept_word("each"):
+    if not stream.accept_word("each", "all"):
         stream.reset(mark)
         return None
     tapped = _accept_object_filter(stream)
