@@ -28,7 +28,7 @@ from .errors import GrammarError
 from .stream import TokenStream
 from .effects import (_parse_attacks_this_turn_if_able, _parse_becomes,
                       _parse_damage, _parse_doesnt_untap_next_step,
-                      _parse_loses)
+                      _parse_gains, _parse_gets, _parse_loses)
 
 
 def _with_damage_conjunct(
@@ -269,3 +269,100 @@ def _with_gained_type_conjunct(
         stream.reset(mark)
         return statement
     return ast.Conjunction((statement, joined))
+
+
+#: The verbs a listed predicate may open on, and the production each one is.
+#: Every row is a *characteristic* sentence — P/T, abilities, colour and type —
+#: because those are the things one printed list says about one permanent, and
+#: because each already carries (or shares) a duration the list can distribute.
+_LISTED_PREDICATES = {
+    "gets": _parse_gets, "get": _parse_gets,
+    "gains": _parse_gains, "gain": _parse_gains,
+    "becomes": _parse_becomes, "become": _parse_becomes,
+    "loses": _parse_loses, "lose": _parse_loses,
+}
+
+
+def _with_predicate_list(
+    stream: TokenStream,
+    statement: ast.Statement,
+    source: "ast.TargetSpec | None",
+) -> ast.Statement:
+    """``<subject> A, B, and C`` — one noun phrase printed once and a *list* of
+    things said about it.
+
+    "Until end of turn, target creature becomes black**, gets +1/-1, and gains**
+    "{B}: Regenerate this creature."" (Defiling Tears.) The comma-and-"and"
+    spelling of what every joiner above reads between two members: the subject
+    is announced once (CR 601.2c — one target), and each member is a whole
+    predicate of it. Here rather than in any one family for this module's own
+    reason, three times over: the members are a colour change, a pump and a
+    grant, and ``effects/types.py`` may not import ``effects/characteristics.py``.
+
+    The list has to **close**. A comma is also how a sentence continues into
+    something that is not about this subject at all ("…gets +1/+1 until end of
+    turn, and you gain 1 life"), so a member is only read behind a comma when
+    the word after it is one of the listed verbs, and the whole reading is
+    rewound unless the last member read was the one behind ", and". A list
+    half-taken would be a conjunction of the first two members with the third
+    left as unconsumed text blamed on the wrong clause.
+
+    A trailing duration is the whole list's, exactly as it is the whole
+    conjunction's one function up (CR 611.2a): "…gets +1/+1, gains flying, and
+    becomes blue **until end of turn**" ends together, so every member that
+    printed no window of its own wears the one behind the last. The fronted
+    spelling this card prints is distributed over the conjunction by the
+    sentence layer.
+    """
+    if source is None:
+        return statement
+    mark = stream.mark()
+    members: list[ast.Statement] = [statement]
+    closed = False
+    while not closed and stream.accept_punct(","):
+        closed = bool(stream.accept_word("and"))
+        parser = _LISTED_PREDICATES.get(stream.peek_word() or "")
+        if parser is None:
+            closed = False
+            break
+        try:
+            member = parser(stream, source)
+        except GrammarError:
+            closed = False
+            break
+        if not _is_listed_predicate(member):
+            # A life loss, a control change, a loss of the game: the verb was
+            # one of the list's and the sentence was not about this permanent.
+            closed = False
+            break
+        members.append(member)
+    if not closed or len(members) < 3:
+        stream.reset(mark)
+        return statement
+    flat: list[ast.Statement] = []
+    for member in members:
+        flat.extend(
+            member.effects if isinstance(member, ast.Conjunction) else (member,)
+        )
+    last = flat[-1]
+    return ast.Conjunction(tuple(
+        _share_trailing_duration(member, last) for member in flat[:-1]
+    ) + (last,))
+
+
+def _is_listed_predicate(member: ast.Statement) -> bool:
+    """Whether *member* is something a predicate list may hold: a statement
+    about the listed permanent's own characteristics, or a join of such."""
+    if isinstance(member, ast.Conjunction):
+        return all(_is_listed_predicate(effect) for effect in member.effects)
+    return isinstance(member, _LISTED_NODES)
+
+
+#: What a listed predicate may *be*. The verbs in ``_LISTED_PREDICATES`` open
+#: other sentences too ("gains 3 life", "gains control of …", "loses the
+#: game"), and those are statements about a player that a permanent's noun
+#: phrase cannot be the subject of.
+_LISTED_NODES = (
+    ast.Pump, ast.GainKeyword, ast.GainAbilityText, ast.LoseKeyword,
+    ast.BecomeColor, ast.GainType,
+)

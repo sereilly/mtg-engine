@@ -36,7 +36,8 @@ from . import ast
 from .lexer import SELF, WORD
 from .conjuncts import (_with_attack_conjunct, _with_damage_conjunct,
                         _with_gained_type_conjunct,
-                        _with_keyword_loss_conjunct, _with_untap_conjunct)
+                        _with_keyword_loss_conjunct, _with_predicate_list,
+                        _with_untap_conjunct)
 from .imperatives import parse_imperative
 from .nouns import parse_object_filter
 from .player_verbs import parse_player_subject_verb
@@ -264,13 +265,13 @@ def parse_subject_verb(
             # reason the "deals" branch above gives: a sentence prints one of
             # them, and nesting would make the order they are tried a fact
             # about which card was written first.
-            return _with_gained_type_conjunct(
+            return _with_predicate_list(stream, _with_gained_type_conjunct(
                 stream,
                 _with_untap_conjunct(stream, _with_damage_conjunct(
                     stream, _parse_gets(stream, source_spec), source_target
                 ), source_target),
                 source_target,
-            )
+            ), source_target)
         if token.text in ("gains", "gain"):
             # "**You** gain control of that land until end of turn."
             # (Wellspring.) CR 608.2c gives an effect with no printed subject
@@ -285,8 +286,10 @@ def parse_subject_verb(
                 control = _parse_gain_control(stream)
                 if control is not None:
                     return control
-            return _with_untap_conjunct(stream, _with_damage_conjunct(
-                stream, _parse_gains(stream, source_spec), source_target
+            return _with_predicate_list(stream, _with_untap_conjunct(
+                stream, _with_damage_conjunct(
+                    stream, _parse_gains(stream, source_spec), source_target
+                ), source_target,
             ), source_target)
         if token.text in ("loses", "lose"):
             # "…**that player loses all unspent mana**" (Drain Power, Mana
@@ -392,11 +395,14 @@ def parse_subject_verb(
             # carry, on the verb that prints it here — one noun phrase, two
             # things said about it, and left unread it is unconsumed text that
             # refuses the whole line.
-            return _with_keyword_loss_conjunct(
+            # "…becomes black**, gets +1/-1, and gains** "{B}: Regenerate this
+            # creature."" (Defiling Tears.) The listed spelling of the same
+            # join, read outside it: a sentence prints one or the other.
+            return _with_predicate_list(stream, _with_keyword_loss_conjunct(
                 stream,
                 _parse_becomes(stream, source_spec),
-                source_spec if isinstance(source_spec, ast.TargetSpec) else None,
-            )
+                source_target,
+            ), source_target)
         # "This creature**'s power becomes** the toughness of target creature
         # …" (Sworn Defender). CR 613.4b's rewrite in the possessive voice,
         # where the verb belongs to a *characteristic* of the subject rather

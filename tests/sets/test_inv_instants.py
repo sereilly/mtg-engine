@@ -1743,3 +1743,128 @@ def test_liberate_cannot_target_a_creature_its_caster_does_not_control(set_pool)
     ).supported
     assert game.is_on_battlefield(giant)
     assert game.players[0].hand == [liberate]
+
+
+# --- W2G2: bound objects ---
+from engine import Game as _W2G2Game, PlayerState as _W2G2PlayerState
+from engine.models import Permanent as _W2G2Permanent
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.targeting import derive_cast_spec as _w2g2_cast_spec
+from tests.helpers import resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_instant_duel(set_pool, *, active: int = 0):
+    """Two seats with costs off and ten Islands each to draw from."""
+    island = set_pool("LEA")["Island"]
+    w2g2_game = _W2G2Game(players=[
+        _W2G2PlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(2)
+    ])
+    w2g2_game.enforce_mana_costs = False
+    w2g2_game.active_player_index = active
+    return w2g2_game
+
+
+def _w2g2_instant_put(game, set_pool, seat: int, name: str, code: str = "LEA"):
+    """*name* on *seat*'s battlefield, past its summoning sickness."""
+    w2g2_permanent = _W2G2Permanent(card=set_pool(code)[name])
+    game._put_permanent_onto_battlefield(seat, w2g2_permanent, None)
+    w2g2_permanent.metadata["summoning_sickness_turn"] = -99
+    return w2g2_permanent
+
+
+# --- Defiling Tears --------------------------------------------------------
+#
+# "Until end of turn, target creature becomes black, gets +1/-1, and gains
+# "{B}: Regenerate this creature.""
+#
+# One target and a list of three things said about it. Each member lowers to
+# its own step, and all three have to land on the one creature that was named.
+
+
+def test_defiling_tears_does_all_three_things_to_the_one_target(set_pool):
+    game = _w2g2_instant_duel(set_pool)
+    giant = _w2g2_instant_put(game, set_pool, 0, "Hill Giant")
+    bystander = _w2g2_instant_put(game, set_pool, 0, "Grizzly Bears")
+    game.players[0].hand.append(set_pool("INV")["Defiling Tears"])
+
+    assert game.cast_from_hand(
+        0, "Defiling Tears", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w2g2_resolve_stack(game)
+
+    assert giant.effective_colors == {"B"}
+    assert (giant.effective_power, giant.effective_toughness) == (4, 2)
+    assert giant.effective_card.oracle_text == "{B}: Regenerate this creature"
+    # The creature beside it is not the target and is none of the three.
+    assert bystander.effective_colors == {"G"}
+    assert (bystander.effective_power, bystander.effective_toughness) == (2, 2)
+    assert bystander.effective_card.oracle_text == ""
+
+
+def test_defiling_tears_grant_is_a_real_ability_and_the_colour_a_real_colour(set_pool):
+    """The quoted ability can be activated and shields the creature; "becomes
+    black" is what Terror's "nonblack" reads (CR 105.3)."""
+    game = _w2g2_instant_duel(set_pool)
+    giant = _w2g2_instant_put(game, set_pool, 0, "Hill Giant")
+    game.players[0].hand.append(set_pool("INV")["Defiling Tears"])
+    game.cast_from_hand(
+        0, "Defiling Tears", target_permanent_ids=[giant.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+
+    assert game.activate_permanent_ability(
+        0, "Hill Giant", ability_index=0,
+    ).supported
+    _w2g2_resolve_stack(game)
+    assert "Hill Giant gains regeneration shield" in game.log
+
+    game.players[1].hand.append(set_pool("LEA")["Terror"])
+    refused = game.cast_from_hand(
+        1, "Terror", target_permanent_ids=[giant.permanent_id],
+    )
+    assert not refused.supported
+    assert game.is_on_battlefield(giant)
+
+
+def test_defiling_tears_ends_at_cleanup_all_three_together(set_pool):
+    """The fronted "Until end of turn" governs every member of the list
+    (CR 611.2a), so the colour, the P/T and the ability leave together."""
+    game = _w2g2_instant_duel(set_pool)
+    giant = _w2g2_instant_put(game, set_pool, 0, "Hill Giant")
+    game.players[0].hand.append(set_pool("INV")["Defiling Tears"])
+    game.cast_from_hand(
+        0, "Defiling Tears", target_permanent_ids=[giant.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+
+    game.resolve_cleanup_step(0)
+
+    assert giant.effective_colors == {"R"}
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+    assert giant.effective_card.oracle_text == ""
+    assert not game.activate_permanent_ability(
+        0, "Hill Giant", ability_index=0,
+    ).supported
+
+
+def test_defiling_tears_minus_one_toughness_kills_a_one_toughness_creature(set_pool):
+    """-1 toughness is not damage: Savannah Lions (2/1) is put into the
+    graveyard by state-based actions (CR 704.5f), and nothing regenerates it."""
+    game = _w2g2_instant_duel(set_pool)
+    lions = _w2g2_instant_put(game, set_pool, 1, "Savannah Lions")
+    game.players[0].hand.append(set_pool("INV")["Defiling Tears"])
+
+    game.cast_from_hand(
+        0, "Defiling Tears", target_permanent_ids=[lions.permanent_id],
+    )
+    _w2g2_resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert not game.is_on_battlefield(lions)
+    assert [card.name for card in game.players[1].graveyard] == ["Savannah Lions"]
+
+
+def test_defiling_tears_offers_one_creature_target(set_pool):
+    tears = set_pool("INV")["Defiling Tears"]
+    assert _w2g2_cast_spec(tears, _w2g2_compile(tears)) == {"kind": "creature"}
