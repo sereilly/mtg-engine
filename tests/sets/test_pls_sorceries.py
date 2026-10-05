@@ -214,3 +214,44 @@ def test_w1g8_its_controller_needs_the_loop_to_name_anybody():
     )
     assert bare.parse_error or bare.lowering_error
     assert not bare.instructions
+
+
+# W1G8, supported on arrival and driven: Hull Breach.
+
+
+def test_w1g8_hull_breach_destroys_by_mode(set_pool):
+    """Three modes: an artifact, an enchantment, or one of each — and the
+    third mode's two targets may sit on two different battlefields."""
+    lea = _w1g8s_lea()
+    breach = set_pool("PLS")["Hull Breach"]
+    game, _, theirs = _w1g8s_duel(
+        [], [lea["Sol Ring"], lea["Crusade"], lea["Hill Giant"]],
+        hand0=[breach] * 2,
+    )
+    ring, crusade, giant = theirs
+
+    assert game.cast_from_hand(
+        0, "Hull Breach", mode_index=0, target_permanent_ids=[ring.permanent_id]
+    ).supported
+    _w1g8s_resolve_stack(game)
+    assert not game.is_on_battlefield(ring)
+    assert game.is_on_battlefield(crusade) and game.is_on_battlefield(giant)
+
+    assert game.cast_from_hand(
+        0, "Hull Breach", mode_index=1,
+        target_permanent_ids=[crusade.permanent_id],
+    ).supported
+    _w1g8s_resolve_stack(game)
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Hill Giant"]
+
+    game, mine, theirs = _w1g8s_duel(
+        [lea["Sol Ring"]], [lea["Crusade"], lea["Hill Giant"]], hand0=[breach],
+    )
+    cast = game.cast_from_hand(
+        0, "Hull Breach", mode_index=2,
+        target_permanent_ids=[mine[0].permanent_id, theirs[0].permanent_id],
+    )
+    assert cast.supported, cast.details
+    _w1g8s_resolve_stack(game)
+    assert list(game.controlled_by(0)) == []
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Hill Giant"]

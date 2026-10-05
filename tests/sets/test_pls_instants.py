@@ -311,3 +311,258 @@ def test_w1g8_a_recipient_free_chosen_source_blanket_reads_its_whole_sentence():
         card_name="Probe",
     )
     assert no_duration.lowering_error and not no_duration.instructions
+
+
+# W1G8, supported on arrival and driven: Malicious Advice, the three other
+# Charms (each mode through its own picker), Terminate, Gerrard's Command and
+# Daring Leap. Every one compiled with all four instruments quiet and none had
+# been run.
+
+
+def test_w1g8_malicious_advice_taps_x_targets_and_costs_x_life(set_pool):
+    """"Tap X target artifacts, creatures, and/or lands. You lose X life." The
+    picker asks for X distinct targets out of those three types; an
+    enchantment is not one of them."""
+    lea = _w1g8i_lea()
+    advice = set_pool("PLS")["Malicious Advice"]
+    assert _w1g8i_targeting.derive_cast_spec(advice, _w1g8i_compile(advice)) == {
+        "kind": "permanent", "x_targets": True, "distinct_targets": True,
+        "filter": {"type_filter": ["artifact", "creature", "land"]},
+    }
+    game, _, theirs = _w1g8i_duel(
+        [], [lea["Hill Giant"], lea["Sol Ring"], lea["Island"], lea["Crusade"]],
+        hand0=[advice] * 3,
+    )
+    giant, ring, island, crusade = theirs
+
+    cast = game.cast_from_hand(
+        0, "Malicious Advice", x_value=2,
+        target_permanent_ids=[giant.permanent_id, island.permanent_id],
+    )
+    assert cast.supported, cast.details
+    _w1g8i_resolve_stack(game)
+    assert [perm.tapped for perm in theirs] == [True, False, True, False]
+    assert game.players[0].life == 18
+
+    refused = game.cast_from_hand(
+        0, "Malicious Advice", x_value=1,
+        target_permanent_ids=[crusade.permanent_id],
+    )
+    assert not refused.supported
+    assert not crusade.tapped and game.players[0].life == 18
+
+    assert game.cast_from_hand(0, "Malicious Advice", x_value=0).supported
+    _w1g8i_resolve_stack(game)
+    assert game.players[0].life == 18 and not ring.tapped
+
+
+def test_w1g8_crosiss_charm_modes(set_pool):
+    """Bounce any permanent to its owner's hand; destroy a **nonblack**
+    creature through a regeneration shield; destroy an artifact."""
+    lea = _w1g8i_lea()
+    charm = set_pool("PLS")["Crosis's Charm"]
+    assert [_w1g8i_mode_spec(charm, index) for index in range(3)] == [
+        {"kind": "permanent"},
+        {"kind": "creature", "filter": {"exclude_colors": ["B"]}},
+        {"kind": "artifact"},
+    ]
+    regenerator = _w1g8i_body(
+        "Regenerator", 2, 2, "{G}: Regenerate this creature.", colors=("G",),
+    )
+    game, _, theirs = _w1g8i_duel(
+        [], [regenerator, lea["Scathe Zombies"], lea["Sol Ring"], lea["Island"]],
+        hand0=[charm] * 4,
+    )
+    troll, zombies, ring, island = theirs
+
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=0, target_permanent_ids=[island.permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert [card.name for card in game.players[1].hand] == ["Island"]
+
+    # a black creature is not a nonblack one: nothing is destroyed, and the
+    # nonblack creature beside it is not taken in its place
+    game.cast_from_hand(
+        0, charm.name, mode_index=1, target_permanent_ids=[zombies.permanent_id]
+    )
+    _w1g8i_resolve_stack(game)
+    assert game.is_on_battlefield(zombies) and game.is_on_battlefield(troll)
+
+    shielded = game.activate_permanent_ability(1, "Regenerator", ability_index=0)
+    assert shielded.supported, shielded.details
+    _w1g8i_resolve_stack(game)
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=1, target_permanent_ids=[troll.permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert not game.is_on_battlefield(troll), "it can't be regenerated"
+
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=2, target_permanent_ids=[ring.permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Scathe Zombies"]
+
+
+def test_w1g8_darigaazs_charm_modes(set_pool):
+    """Raise a creature card from *your* graveyard (not a land card, not the
+    opponent's graveyard); 3 damage to any target; +3/+3 until end of turn."""
+    lea = _w1g8i_lea()
+    charm = set_pool("PLS")["Darigaaz's Charm"]
+    assert [_w1g8i_mode_spec(charm, index) for index in range(3)] == [
+        {"kind": "graveyard_creature", "own_graveyard_only": True},
+        {"kind": "any"},
+        {"kind": "creature"},
+    ]
+    game, mine, theirs = _w1g8i_duel(
+        [lea["Grizzly Bears"]], [lea["Hill Giant"]], hand0=[charm] * 5,
+        graveyard0=[lea["Island"], lea["Hill Giant"]],
+    )
+
+    assert not game.cast_from_hand(
+        0, charm.name, mode_index=0, target_permanent_index=0
+    ).supported, "slot 0 is a land card"
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=0, target_permanent_index=1
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert "Hill Giant" in [card.name for card in game.players[0].hand]
+    assert "Hill Giant" not in [card.name for card in game.players[0].graveyard]
+
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=1, target_player_index=1
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert game.players[1].life == 17
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=1,
+        target_permanent_ids=[theirs[0].permanent_id],
+    ).supported
+    _w1g8i_resolve_stack(game)
+    game._settle()
+    assert not game.is_on_battlefield(theirs[0])
+
+    assert game.cast_from_hand(
+        0, charm.name, mode_index=2, target_permanent_ids=[mine[0].permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert (mine[0].effective_power, mine[0].effective_toughness) == (5, 5)
+    game.resolve_cleanup_step(0)
+    assert (mine[0].effective_power, mine[0].effective_toughness) == (2, 2)
+
+
+def test_w1g8_dromars_charm_modes(set_pool):
+    """Gain 5; counter a spell (and not castable in that mode onto an empty
+    stack); -2/-2 until end of turn, which kills a 2/2 and wears off a 3/3."""
+    lea = _w1g8i_lea()
+    charm = set_pool("PLS")["Dromar's Charm"]
+    assert [_w1g8i_mode_spec(charm, index) for index in range(3)] == [
+        None, {"kind": "stack"}, {"kind": "creature"},
+    ]
+    game, _, theirs = _w1g8i_duel(
+        [], [lea["Grizzly Bears"], lea["Hill Giant"]], hand0=[charm] * 5,
+        hand1=[lea["Lightning Bolt"]],
+    )
+    bears, giant = theirs
+
+    assert game.cast_from_hand(0, charm.name, mode_index=0).supported
+    _w1g8i_resolve_stack(game)
+    assert game.players[0].life == 25
+
+    assert not game.cast_from_hand(0, charm.name, mode_index=1).supported
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(
+        0, charm.name, mode_index=1, target_stack_index=0
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert game.players[0].life == 25, "the Bolt was countered"
+    assert "Lightning Bolt" in [card.name for card in game.players[1].graveyard]
+
+    for target in (bears, giant):
+        assert game.cast_from_hand(
+            0, charm.name, mode_index=2, target_permanent_ids=[target.permanent_id]
+        ).supported
+        _w1g8i_resolve_stack(game)
+    game._settle()
+    assert not game.is_on_battlefield(bears)
+    assert (giant.effective_power, giant.effective_toughness) == (1, 1)
+    game.resolve_cleanup_step(0)
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+
+
+def test_w1g8_terminate_destroys_any_creature_through_regeneration(set_pool):
+    """"Destroy target creature. It can't be regenerated." Any colour, either
+    battlefield — named by id, so the caster's own creature is the one that
+    dies — and never an artifact."""
+    lea = _w1g8i_lea()
+    terminate = set_pool("PLS")["Terminate"]
+    regenerator = _w1g8i_body(
+        "Regenerator", 2, 2, "{G}: Regenerate this creature.", colors=("G",),
+    )
+    game, mine, theirs = _w1g8i_duel(
+        [lea["Grizzly Bears"]], [regenerator, lea["Scathe Zombies"], lea["Sol Ring"]],
+        hand0=[terminate] * 3,
+    )
+    assert game.activate_permanent_ability(1, "Regenerator", ability_index=0).supported
+    _w1g8i_resolve_stack(game)
+
+    assert game.cast_from_hand(
+        0, "Terminate", target_permanent_ids=[theirs[0].permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert not game.is_on_battlefield(theirs[0])
+
+    assert game.cast_from_hand(
+        0, "Terminate", target_permanent_ids=[mine[0].permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+    assert not game.is_on_battlefield(mine[0])
+    assert game.is_on_battlefield(theirs[1]), "the opponent's creature was not named"
+
+    assert not game.cast_from_hand(
+        0, "Terminate", target_permanent_ids=[theirs[2].permanent_id]
+    ).supported
+
+
+def test_w1g8_gerrards_command_untaps_and_pumps_one_creature(set_pool):
+    lea = _w1g8i_lea()
+    command = set_pool("PLS")["Gerrard's Command"]
+    game, mine, _ = _w1g8i_duel(
+        [lea["Grizzly Bears"], lea["Hill Giant"]], [], hand0=[command],
+    )
+    bears, giant = mine
+    bears.tapped = giant.tapped = True
+
+    assert game.cast_from_hand(
+        0, "Gerrard's Command", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+
+    assert not giant.tapped and bears.tapped
+    assert (giant.effective_power, giant.effective_toughness) == (6, 6)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+    game.resolve_cleanup_step(0)
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+
+
+def test_w1g8_daring_leap_grants_both_keywords_until_end_of_turn(set_pool):
+    lea = _w1g8i_lea()
+    leap = set_pool("PLS")["Daring Leap"]
+    game, mine, _ = _w1g8i_duel(
+        [lea["Grizzly Bears"], lea["Hill Giant"]], [], hand0=[leap],
+    )
+    bears, giant = mine
+
+    assert game.cast_from_hand(
+        0, "Daring Leap", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    _w1g8i_resolve_stack(game)
+
+    assert (giant.effective_power, giant.effective_toughness) == (4, 4)
+    assert giant.has_keyword("flying") and giant.has_keyword("first strike")
+    assert not bears.has_keyword("flying")
+    game.resolve_cleanup_step(0)
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+    assert not giant.has_keyword("flying")
+    assert not giant.has_keyword("first strike")

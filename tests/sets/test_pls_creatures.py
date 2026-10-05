@@ -256,3 +256,187 @@ def test_w1g8_an_unsourced_instance_redirect_reads_its_whole_sentence():
         refused = _w1g8c_compile_line(text, card_name="Probe")
         assert refused.parse_error or refused.lowering_error, text
         assert not refused.instructions, text
+
+
+# W1G8, supported on arrival and driven: Tahngarth, Nemata, Ertai and
+# Flametongue Kavu compiled with every instrument quiet and had never been
+# run. Each gets the game that would have shown it wrong.
+
+
+def test_w1g8_tahngarth_is_bitten_back_by_the_creature_itself(set_pool):
+    """"…deals damage equal to its power to target creature. **That creature**
+    deals damage equal to its power to Tahngarth." The second damage's source
+    is the creature (CR 120.7), so a lifelink target gains its controller the
+    life; and a creature the first half killed still bites back, because
+    state-based actions wait for the ability to finish resolving."""
+    lea = _w1g8c_lea()
+    tahngarth_card = set_pool("PLS")["Tahngarth, Talruum Hero"]
+    lifelinker = _w1g8c_body("Lifelinker", 3, 5, "Lifelink", ("Lifelink",))
+    game, mine, theirs = _w1g8c_duel(
+        [tahngarth_card], [lifelinker, lea["Grizzly Bears"]],
+    )
+    tahngarth = mine[0]
+
+    used = game.activate_permanent_ability(
+        0, tahngarth_card.name, ability_index=0,
+        target_permanent_ids=[theirs[0].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g8c_resolve_stack(game)
+    assert theirs[0].damage_marked == 4
+    assert tahngarth.damage_marked == 3
+    assert game.players[1].life == 23, "the Lifelinker dealt that damage"
+    assert theirs[1].damage_marked == 0, "the creature named, not its neighbour"
+
+    game, mine, theirs = _w1g8c_duel([tahngarth_card], [lea["Grizzly Bears"]])
+    used = game.activate_permanent_ability(
+        0, tahngarth_card.name, ability_index=0,
+        target_permanent_ids=[theirs[0].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g8c_resolve_stack(game)
+    game._settle()
+    assert not game.is_on_battlefield(theirs[0])
+    assert mine[0].damage_marked == 2
+    assert mine[0].tapped, "{T} is part of the cost"
+
+
+def test_w1g8_tahngarth_has_vigilance_and_may_target_itself(set_pool):
+    """Vigilance: attacking does not tap it. And "target creature" includes
+    Tahngarth — it deals itself its power twice over, once as the dealer and
+    once as "that creature"."""
+    tahngarth_card = set_pool("PLS")["Tahngarth, Talruum Hero"]
+    game, mine, _ = _w1g8c_duel([tahngarth_card], [])
+    _w1g8c_fight(game, 0, defender=1)
+    assert not mine[0].tapped
+    assert game.players[1].life == 16
+
+    game, mine, _ = _w1g8c_duel([tahngarth_card], [])
+    used = game.activate_permanent_ability(
+        0, tahngarth_card.name, ability_index=0,
+        target_permanent_ids=[mine[0].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g8c_resolve_stack(game)
+    assert mine[0].damage_marked == 8
+
+
+def test_w1g8_nemata_pumps_every_players_saprolings(set_pool):
+    """"Sacrifice a Saproling: Saproling creatures get +1/+1 until end of
+    turn." Every player's, not only the controller's; nothing that is not a
+    Saproling; until cleanup; and the cost is a Saproling or the ability
+    cannot be activated."""
+    lea = _w1g8c_lea()
+    nemata_card = set_pool("PLS")["Nemata, Grove Guardian"]
+    game, mine, _ = _w1g8c_duel([nemata_card, lea["Grizzly Bears"]], [])
+
+    refused = game.activate_permanent_ability(
+        0, nemata_card.name, ability_index=1,
+        cost_permanent_ids=[mine[1].permanent_id],
+    )
+    assert not refused.supported, "a Bear is not a Saproling"
+    assert game.is_on_battlefield(mine[1])
+
+    for _ in range(3):
+        made = game.activate_permanent_ability(0, nemata_card.name, ability_index=0)
+        assert made.supported, made.details
+        _w1g8c_resolve_stack(game)
+    saprolings = [
+        perm for perm in game.controlled_by(0) if perm.has_type("saproling")
+    ]
+    assert len(saprolings) == 3
+    assert saprolings[0].effective_colors == {"G"}
+    theirs = _w1g8c_Permanent(card=saprolings[0].card)
+    game.players[1].battlefield.append(theirs)
+    game._settle()
+
+    pumped = game.activate_permanent_ability(0, nemata_card.name, ability_index=1)
+    assert pumped.supported, pumped.details
+    _w1g8c_resolve_stack(game)
+    survivors = [
+        perm for perm in game.controlled_by(0) if perm.has_type("saproling")
+    ]
+    assert len(survivors) == 2, "one was the cost"
+    for perm in [*survivors, theirs]:
+        assert (perm.effective_power, perm.effective_toughness) == (2, 2)
+    assert (mine[0].effective_power, mine[0].effective_toughness) == (4, 5)
+    assert (mine[1].effective_power, mine[1].effective_toughness) == (2, 2)
+
+    game.resolve_cleanup_step(0)
+    assert (theirs.effective_power, theirs.effective_toughness) == (1, 1)
+
+
+def test_w1g8_ertai_may_sacrifice_itself_to_counter(set_pool):
+    """"{U}, {T}, Sacrifice a creature or enchantment: Counter target spell."
+    Ertai is a creature, so it may pay with itself — the ability is already on
+    the stack and still counters. An enchantment pays too; with no spell to
+    target the ability is refused with nothing tapped and nothing sacrificed."""
+    lea = _w1g8c_lea()
+    ertai_card = set_pool("PLS")["Ertai, the Corrupted"]
+    game, mine, _ = _w1g8c_duel(
+        [ertai_card], [], hand1=[lea["Hill Giant"]], active=1,
+    )
+    assert game.queue_from_hand(1, "Hill Giant").supported
+    used = game.activate_permanent_ability(
+        0, ertai_card.name, ability_index=0, target_stack_index=0,
+        cost_permanent_ids=[mine[0].permanent_id],
+    )
+    assert used.supported, used.details
+    assert not game.is_on_battlefield(mine[0]), "sacrificed as the cost"
+    _w1g8c_resolve_stack(game)
+    assert list(game.controlled_by(1)) == []
+    assert [card.name for card in game.players[1].graveyard] == ["Hill Giant"]
+
+    game, mine, _ = _w1g8c_duel(
+        [ertai_card, lea["Crusade"]], [], hand1=[lea["Lightning Bolt"]], active=1,
+    )
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    used = game.activate_permanent_ability(
+        0, ertai_card.name, ability_index=0, target_stack_index=0,
+        cost_permanent_ids=[mine[1].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g8c_resolve_stack(game)
+    assert game.players[0].life == 20
+    assert game.is_on_battlefield(mine[0]) and mine[0].tapped
+    assert not game.is_on_battlefield(mine[1])
+
+    game, mine, _ = _w1g8c_duel([ertai_card, lea["Grizzly Bears"]], [])
+    refused = game.activate_permanent_ability(0, ertai_card.name, ability_index=0)
+    assert not refused.supported
+    assert not mine[0].tapped and game.is_on_battlefield(mine[1])
+
+
+def test_w1g8_flametongue_kavu_must_shoot_something(set_pool):
+    """The trigger is mandatory (no "may", no "up to"): with a creature across
+    the table it kills it, and alone on the battlefield it must target itself
+    and dies — an interactive seat is offered that one target and nothing
+    else."""
+    lea = _w1g8c_lea()
+    kavu = set_pool("PLS")["Flametongue Kavu"]
+    game, _, theirs = _w1g8c_duel(
+        [], [lea["Hill Giant"], lea["Grizzly Bears"]], hand0=[kavu],
+    )
+    cast = game.cast_from_hand(
+        0, kavu.name, target_permanent_ids=[theirs[0].permanent_id]
+    )
+    assert cast.supported, cast.details
+    _w1g8c_resolve_stack(game)
+    game._settle()
+    assert [perm.card.name for perm in game.controlled_by(1)] == ["Grizzly Bears"]
+    assert [perm.card.name for perm in game.controlled_by(0)] == ["Flametongue Kavu"]
+
+    game, _, _ = _w1g8c_duel([], [], hand0=[kavu])
+    assert game.cast_from_hand(0, kavu.name).supported
+    _w1g8c_resolve_stack(game)
+    game._settle()
+    assert list(game.controlled_by(0)) == []
+    assert [card.name for card in game.players[0].graveyard] == ["Flametongue Kavu"]
+
+    game, _, _ = _w1g8c_duel([], [], hand0=[kavu], interactive=(0,))
+    assert game.cast_from_hand(0, kavu.name).supported
+    game.resolve_top_of_stack()
+    (prompt,) = game.pending_choices_of("trigger_target", 0)
+    assert [target["name"] for target in prompt.data["targets"]] == [
+        "Flametongue Kavu",
+    ]

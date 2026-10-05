@@ -267,3 +267,44 @@ def test_w1g8_lashknife_barrier_is_per_recipient_and_per_controller(set_pool):
     _w1g8e_change_control(mine[1], 1, source="test")
     game._sync_control()
     assert _w1g8e_dealt(game, mine[1], 3) == 3
+
+
+# W1G8, supported on arrival and driven: Deadapult.
+
+
+def test_w1g8_deadapult_needs_a_zombie_of_its_controllers(set_pool):
+    """"{R}, Sacrifice a Zombie: This enchantment deals 2 damage to any
+    target." The cost is a *Zombie* and the payer's own: with none, or with
+    only the opponent's, the ability is refused and nothing is sacrificed —
+    and a creature that is not a Zombie is never taken in its place."""
+    lea = _w1g8e_lea()
+    deadapult = set_pool("PLS")["Deadapult"]
+    game, mine, theirs = _w1g8e_duel(
+        [deadapult, lea["Grizzly Bears"]], [lea["Scathe Zombies"]],
+    )
+
+    for cost in ([mine[1].permanent_id], [theirs[0].permanent_id], None):
+        refused = game.activate_permanent_ability(
+            0, "Deadapult", ability_index=0, target_player_index=1,
+            cost_permanent_ids=cost,
+        )
+        assert not refused.supported, cost
+    assert game.is_on_battlefield(mine[1]) and game.is_on_battlefield(theirs[0])
+    assert game.players[1].life == 20
+
+    game, mine, theirs = _w1g8e_duel(
+        [deadapult, lea["Grizzly Bears"], lea["Scathe Zombies"]],
+        [lea["Hill Giant"]],
+    )
+    used = game.activate_permanent_ability(
+        0, "Deadapult", ability_index=0,
+        target_permanent_ids=[theirs[0].permanent_id],
+        cost_permanent_ids=[mine[2].permanent_id],
+    )
+    assert used.supported, used.details
+    _w1g8e_resolve_stack(game)
+    assert theirs[0].damage_marked == 2
+    assert [perm.card.name for perm in game.controlled_by(0)] == [
+        "Deadapult", "Grizzly Bears",
+    ]
+    assert [card.name for card in game.players[0].graveyard] == ["Scathe Zombies"]
