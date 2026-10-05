@@ -289,3 +289,78 @@ def test_w1g6_phelddagrifs_trample_ability_now_offers_its_opponent(set_pool):
         0, "Phelddagrif", ability_index=0, target_player_index=0,
     ).supported
     assert [perm.card.name for perm in game.controlled_by(0)] == ["Phelddagrif"]
+
+
+def _w1g6_greevil_table(set_pool, interactive):
+    """Root Greevil facing three colours of enchantment, one of them — the
+    opponent's red Orcish Oriflamme — turned black through layer 5."""
+    game, mine, theirs = _w1g6_table(
+        set_pool, ["Root Greevil", "Castle", "Bad Moon"],
+        ["Crusade", "Bad Moon", "Orcish Oriflamme", "Grizzly Bears", "Howling Mine"],
+        mana=True, interactive=interactive,
+    )
+    oriflamme = theirs[2]
+    oriflamme.metadata["color_override_until_eot"] = "B"
+    game._recompute_continuous_effects()
+    assert _w1g6_colors(game, oriflamme) == ["B"]
+    return game, mine, theirs  # _w1g6_greevil_table
+
+
+def test_w1g6_root_greevil_destroys_every_enchantment_of_the_colour_chosen_at_resolution(set_pool):
+    """"{2}{G}, {T}, Sacrifice this creature: Destroy all enchantments of the
+    color of your choice." The Greevil is sacrificed and {2}{G} spent as the
+    ability is activated; the colour is asked as it **resolves** (CR 608.2d) —
+    the white sent with the activation is not read. Black is answered: both
+    players' Bad Moons go, and so does the Oriflamme a colour change made
+    black. White Castle and Crusade, the green creature and the colourless
+    artifact stay."""
+    game, mine, _theirs = _w1g6_greevil_table(set_pool, (0,))
+    greevil = mine[0]
+    _ability, spec = _w1g6_ability(greevil.card)
+    assert spec is None, "a sweep chooses no target"
+
+    assert not game.queue_permanent_ability(0, "Root Greevil", ability_index=0).supported
+    game.players[0].mana_pool["G"] = 3
+    assert game.queue_permanent_ability(
+        0, "Root Greevil", ability_index=0, mana_color="W",
+    ).supported
+    assert not game.is_on_battlefield(greevil)
+    assert [card.name for card in game.players[0].graveyard] == ["Root Greevil"]
+    assert game.players[0].mana_pool["G"] == 0
+
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("color_choice", 0)]
+    assert _w1g6_names(game, 1) == [
+        "Bad Moon", "Crusade", "Grizzly Bears", "Howling Mine", "Orcish Oriflamme",
+    ], "nothing is destroyed before the colour is named"
+    assert game.confirm_color_choice(0, "B")
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_names(game, 0) == ["Castle"]
+    assert _w1g6_names(game, 1) == ["Crusade", "Grizzly Bears", "Howling Mine"]
+    assert sorted(card.name for card in game.players[1].graveyard) == [
+        "Bad Moon", "Orcish Oriflamme",
+    ]
+
+
+def test_w1g6_root_greevil_sweeps_for_a_seat_nobody_asks(set_pool):
+    """A headless seat takes the prompt's default — the colour its opponents
+    hold most of — and the sweep still runs once, over one colour: every
+    enchantment that goes is the same colour, and at least one enchantment of
+    another colour is still there."""
+    game, _mine, _theirs = _w1g6_greevil_table(set_pool, ())
+    game.players[0].mana_pool["G"] = 3
+    before = {
+        perm.permanent_id: (perm.card.name, tuple(_w1g6_colors(game, perm)))
+        for perm in game.all_permanents() if perm.has_type("enchantment")
+    }
+
+    assert game.queue_permanent_ability(0, "Root Greevil", ability_index=0).supported
+    _w1g6_resolve_stack(game)
+
+    survivors = {perm.permanent_id for perm in game.all_permanents()}
+    gone = {colour for pid, (_name, colour) in before.items() if pid not in survivors}
+    kept = {colour for pid, (_name, colour) in before.items() if pid in survivors}
+    assert len(gone) == 1 and gone.isdisjoint(kept), (gone, kept)
+    assert kept, "enchantments of the other colour were left alone"
+    assert game.pending_choices == []

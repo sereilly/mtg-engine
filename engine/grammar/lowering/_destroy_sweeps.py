@@ -60,7 +60,8 @@ from ...subject_filters import object_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
-    _filter_payload, _restrictions_beyond, split_creature_type_choice
+    _filter_payload, _restrictions_beyond, split_color_choice,
+    split_creature_type_choice,
 )
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 from ._events import (EVENT_SUBJECT_NAMES, LAST_TARGET_NAME,
@@ -462,6 +463,16 @@ def lower_destroy_sweep(
         # gate below, because with the phrase still in the payload that
         # gate is exactly what refuses the card.
         prelude, described, chosen_type = split_creature_type_choice(described)
+        # "Destroy all enchantments **of the color of your choice**." (Root
+        # Greevil.) The same lift one characteristic over, through the helper
+        # the bounce sweep already uses for it (Wash Out): the ``choose_color``
+        # step goes in front — asked as the ability resolves, CR 608.2d — and
+        # the sweep reads the colour back out of the scratchpad. "…of that
+        # color" behind a sentence that already chose is the same read with no
+        # step of its own.
+        color_prelude, described, chosen_color = split_color_choice(described)
+        prelude = (*prelude, *color_prelude)
+        chosen_type = {**chosen_type, **chosen_color}
         if untestable_filter_keys(described):
             raise LoweringError("no sweep handler for this narrowing", node=node)
         # "**Target player** reveals their hand … Then destroy all creatures

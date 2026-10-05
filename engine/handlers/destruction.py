@@ -230,6 +230,9 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             # arrangement for a *number* an earlier step chose, resolved below
             # into the ordinary ``mana_value`` comparison.
             "mana_value_from",
+            # "…**of the color of your choice**" (Root Greevil). The third
+            # record, a colour, resolved below into ``color_filter``.
+            "color_filter_from",
         )
     }
     # CR 608.2d's choice, spent. The word is read out of the scratchpad rather
@@ -251,6 +254,21 @@ def destroy_all_matching(game: Game, instruction: OracleInstruction, context: Or
             )
             return True, "resolved"
         filters["subtype_filter"] = str(chosen)
+    # "Destroy all enchantments **of the color of your choice**." (Root
+    # Greevil.) CR 608.2d's choice again, a colour this time, read out of the
+    # scratchpad the ``choose_color`` step in front wrote and turned into the
+    # ordinary ``color_filter`` — which ``subject_matches`` answers through
+    # CR 613's layer 5, so an enchantment a Lace turned green is a green
+    # enchantment here. The key and the direction are Persecute's discard's:
+    # **no colour means no sweep**, because the phrase read as no narrowing is
+    # every enchantment on the table.
+    color_key = instruction.payload.get("color_filter_from")
+    if color_key is not None:
+        chosen_color = context.results.get(str(color_key))
+        if not chosen_color:
+            game.log.append(f"{context.card.name}: no colour was chosen")
+            return True, "resolved"
+        filters["color_filter"] = str(chosen_color)
     # "Choose a number. Destroy all artifacts and creatures with mana value
     # **equal to that number**." (Void.) CR 608.2d's choice one characteristic
     # over, and the same direction on an absent record: no number means no
