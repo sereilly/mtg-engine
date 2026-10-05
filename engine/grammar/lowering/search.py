@@ -6,12 +6,13 @@ it on the parse side since Mirage, so this re-forms the mirror rather than
 forking a third vocabulary for one printed idiom.
 
 The seam is the one the parse side had already drawn. ``library`` is about a
-pile of cards a flow *shows* somebody — a revealed hand, the top cards looked
-at, a graveyard exiled wholesale — where a search is about a pile nobody may
-see at all: CR 701.23a lets the searcher look through every card in the zone,
-CR 701.23b lets them fail to find, and what the flow has to carry is therefore
-which cards the phrase admits and where each find lands. Different question,
-different closed sets, and the two halves share no reader.
+pile of cards a flow *shows* somebody — a hand looked at, the top cards of a
+library — and ``reveal``, which has since taken the revealed hand this sentence
+used to name, about one it shows everybody; where a search is about a pile
+nobody may see at all: CR 701.23a lets the searcher look through every card in
+the zone, CR 701.23b lets them fail to find, and what the flow has to carry is
+therefore which cards the phrase admits and where each find lands. Different
+question, different closed sets, and the two halves share no reader.
 
 The filter fields a search can honour are closed sets for the reason
 ``library``'s docstring gives its own: a field the picker cannot test would

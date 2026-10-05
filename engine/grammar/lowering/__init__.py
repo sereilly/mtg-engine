@@ -19,7 +19,10 @@ template has one home on each side — prowess parses in
     board            destruction, bouncing, tapping, control, exile
     cards            draw, mill, scry
     hand             discard, and the other moves that start in a hand
-    library          search, reveal, look-at, exile linkage — the hidden zones
+    library          CR 701.20e's look — at a hand, at a library's top — and
+                     the procedures over that top
+    reveal           CR 701.20a, a library's top or a hand shown to everybody
+    search           CR 701.23, a look through a whole zone for a card
     mana             "Add {G}", the tapped-land mana trigger, and a standing
                      change to what a land produces
     stack            countering
@@ -311,12 +314,6 @@ from .library import (
     _lower_look_top_exile_random,
     _lower_look_top_pick,
     _lower_exile_graveyard,
-    _lower_discard_revealed_matching_unless_pay_life,
-    _lower_discard_revealed_unless_pay_life,
-    _lower_play_with_hand_revealed,
-    _lower_reveal_hand,
-    _lower_reveal_random_from_hand,
-    _lower_reveal_hand_and_choose,
     _lower_look_at_hand,
     _lower_put_library_top_into_hand,
     _lower_graveyard_top_to_library,
@@ -328,8 +325,15 @@ from .library import (
 )
 # CR 701.20a's public half of the look, split off `library` when Tempest's
 # second wave took that module past the size guard — see that module's
-# docstring for the line.
+# docstring for the line. The six hand reveals followed at the Phase 0 between
+# Invasion's waves; the line did not move, they had been on the wrong side of it.
 from .reveal import (
+    _lower_discard_revealed_matching_unless_pay_life,
+    _lower_discard_revealed_unless_pay_life,
+    _lower_play_with_hand_revealed,
+    _lower_reveal_hand,
+    _lower_reveal_random_from_hand,
+    _lower_reveal_hand_and_choose,
     _lower_bin_revealed_card,
     _lower_reveal_cards_from_hand,
     _lower_graveyard_top_opponent_chooses,

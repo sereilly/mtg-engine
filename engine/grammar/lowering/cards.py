@@ -1,10 +1,11 @@
 """Lowering cards off the top of a library: draw, mill, scry.
 
 The other flows this module used to hold have families of their own: mana
-production in `mana.py`, the hidden-zone search/reveal/exile-linkage flows in
-`library.py`, and everything that names cards already in a hand — the discard
-family with its two fused draw/discard shapes, and a hand put back onto a
-library — in `hand.py`.
+production in `mana.py`, the hidden-zone flows in `library.py` (the look) and
+the three modules that have left it since (`search.py`, `reveal.py`,
+`linked_exile.py`), and everything that names cards already in a hand — the
+discard family with its two fused draw/discard shapes, and a hand put back onto
+a library — in `hand.py`.
 """
 
 from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,

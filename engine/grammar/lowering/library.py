@@ -1,31 +1,60 @@
-"""Lowering the hidden-zone flows: search, reveal and look-at.
+"""Lowering a **look** (CR 701.20e), the private half of a reveal, and the
+library's top.
 
-Every shape here pivots on a pile of cards in a hidden zone offered through a
-picker — a library search, a revealed hand, the top cards looked at, a
-graveyard exiled wholesale. The search filter fields the flow can actually
-honour are closed sets, because a filter it cannot honour must refuse rather
-than be dropped.
+Every shape here pivots on a pile of cards one player is shown, or nobody is: a
+hand looked at; the top cards of a library looked at and then picked from, put
+back in an order, cycled or split into piles; a card moved onto the top or off
+it with nobody choosing.
+A narrowing the flow cannot test must refuse rather than be dropped, and the
+reason is sharper here than anywhere: the pile is hidden, so a pick offered
+from a wider set than the card prints is one nobody at the table sees happen.
 
-**"and exile linkage" used to be the fourth conjunct of that first line**, and
-it is `lowering/exile.py`'s now: the module crossed the thousand-line guard, and
-the trailing conjunct was what had stopped being a lodger. Every shape that
-moved pivots on the linked-exile record (`engine/linked_exile.py`) and on what
-may later be cast out of it, which is that module's stated subject rather than
-this one's, and the cut needed no import in either direction because the call
-graph had already fallen apart there.
+**The first line of this docstring read "search, reveal and look-at" until
+Invasion — two families after both had left.** ``search`` went to
+``lowering/search.py`` at Visions' first wave and the reveals of a library's
+top to ``lowering/reveal.py`` at Tempest's second; "and exile linkage" was a
+fourth conjunct before either, and is ``lowering/linked_exile.py``'s now by way
+of ``lowering/exile.py``. What the Tempest cut left behind was every reveal of
+a **hand** — the bare reveal, the card at random, the two "discards it unless
+they pay life" offers, Duress's reveal-and-choose and Stromgald Spy's standing
+reveal — a third of this file, filed under a library, reading two records
+(``revealed_card``, ``REVEALED_HAND_CARDS``) that ``reveal`` already read and
+wrote. They followed at the Phase 0 between Invasion's two waves, with this
+module thirty lines under the guard on two growth centres: the revealed hand,
+and ``_lower_look_top_pick``. The first is ``reveal``'s. The second is the half
+of this module that grows with the pool, so when the guard comes near again,
+cut *inside* that function's family rather than along another zone.
+
+The line is the CR's, drawn inside one rule: a reveal (CR 701.20a) shows a card
+to every player, and a look shows it "only to the specified player". It is
+drawn per **node**, so each side carries one flagged form of the other and says
+so. ``_lower_look_top_pick`` takes "**Reveal** a number of cards …" (Eye of
+Yawgmoth) as a ``revealed`` key on the look-and-pick procedure the sentence
+otherwise is, and ``reveal``'s ``_lower_reveal_hand_and_choose`` takes Mind
+Warp's "Look at target player's hand and choose …" as ``looked_at``. Neither
+module calls the other.
+
+**Three lodgers, named so the next cut can find them.** None looks at anything
+and none touches a library. ``_lower_exile_graveyard`` empties a zone wholesale,
+and its node and its production are ``exile``'s.
+``_lower_graveyard_pick_onto_battlefield`` emits ``search_library`` and was
+filed here when that kind's lowering was — it has been ``search``'s since
+Visions — and ``_lower_put_graveyard_position_onto_battlefield`` arrived beside
+it, for the reason its own docstring records rather than dresses up. They stay
+because a lodger's home has to have room for it, and each of those homes
+(``exile``, ``search``, ``zones``) sits nearer the guard than this module now
+does.
 """
 
-from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
-                             OracleInstruction, X_FROM_COUNT)
+from ...oracle_types import (PER_OBJECT_SEAT_RECORDS, OracleInstruction,
+                             X_FROM_COUNT)
 from ...subject_filters import card_only_filter
 from .. import ast
 from ..errors import LoweringError
-from ...oracle_types import CHOSEN_COLOR_THIS_WAY
 from ._cost_records import cost_record_spec
 from ._common import (
     chargeable_card_filter,
     graveyard_position_payload,
-    dropped_narrowings,
     _amount_payload,
     _describe_targets,
     _is_target,
@@ -33,310 +62,9 @@ from ._common import (
     _targets_only,
 )
 from ._events import (
-    _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
-    _EVENT_SUBJECT_PLAYERS,
-    EVENT_SUBJECT_PLAYER,
     _back_reference_payload,
 )
-
-
-
-
-
-
-# The ``ObjectFilter`` fields the revealed-hand picker can test. The exclusion
-# is the only narrowing any printing of this template uses, and
-# `search_filters.search_matches` is what tests it — so a field outside this set
-# refuses the line rather than leaving the caster choosing from the whole hand
-# while the card claims a restriction. Same rule the search lowering follows,
-# and the same predicate underneath it.
-#: What the revealed-hand picker can narrow by. ``excluded_basic_lands`` is
-#: the third, and it arrived with Lobotomy's "a card **other than a basic land
-#: card**" — one printed phrase, read by ``search_filters.search_matches``,
-#: which is the one predicate the engine, the AI and the web picker all answer
-#: with. A field admitted here without that reader behind it would be a picker
-#: offering the whole hand while the card named less of it.
-#: ``card_types`` is the fourth, and it is the *positive* form of the first —
-#: "You choose **a creature card** from it" (Ostracize) asks the same question
-#: as "a **noncreature, nonland** card" with the answer the other way up, and
-#: ``search_matches`` answers it under ``card_type``. Admitted only because that
-#: reader was already there: a positive type narrowing the picker could not test
-#: would be Ostracize discarding a land.
-#: ``excluded_supertypes`` is the fifth, and it arrived with Encroach's "a
-#: **nonbasic** land card". A supertype exclusion rather than the basic-land
-#: pair beside it: the noun phrase has already said "land", so what the "non"
-#: excludes is CR 205.4a's word alone — and ``search_matches`` reads it off the
-#: printed type line's supertype half, which is what a card outside the
-#: battlefield has instead of characteristics (CR 613.1).
-_REVEALED_HAND_FIELDS = frozenset(
-    {"excluded_types", "is_card", "excluded_basic_lands", "card_types",
-     "excluded_supertypes"}
-)
-
-
-def _lower_reveal_hand(
-    node: ast.RevealHand, event: str | None = None
-) -> tuple[OracleInstruction, ...]:
-    """"Target player **reveals their hand**" (CR 701.20), on its own.
-
-    The first half of Amnesia and Rag Man, lowered as its own step so the
-    discard behind it is the ordinary discard instruction rather than a second
-    fused kind. "Each player reveals their hand" is still refused: it would be a
-    loop nothing here performs.
-
-    **"You reveal your hand" is not a no-op**, and refusing it was this
-    function's one wrong reading — the reason given was that the revealer
-    "already sees" the zone, which is true of the revealer and of nobody else at
-    the table. CR 701.20a shows the cards to *every* player, and on Manabond
-    that is the whole price of the offer: the hand becomes public and is then
-    discarded. It carries no ``targets`` key, so the handler reads the seat off
-    ``who`` rather than off whatever the resolution context happened to be
-    holding — the distinction Detonate's sequence made necessary one family
-    over.
-
-    The rest of the payload is who reveals, because a reveal narrows nothing and
-    chooses nothing — what the sentence after it does with the revealed hand is
-    that sentence's business, and on Inquisition that is an ordinary counted
-    damage.
-    """
-    if node.player.kind == "you":
-        return (OracleInstruction("reveal_hand", "", {"who": "you"}),)
-    # "Whenever Crosis deals combat damage to a player, … **that player**
-    # reveals their hand …" (Crosis, the Purger; Darigaaz, the Igniter.) The
-    # seat the damage froze (CR 603.10), under the word ``discard_hand`` already
-    # spells it with — and admitted only under an event whose fire site really
-    # recorded a damaged player, the gate that sentence is held to: under any
-    # other trigger the words name nobody, and the handler's fallback is the
-    # ability's own controller.
-    if node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS:
-        return (OracleInstruction("reveal_hand", "", {"who": "damaged_player"}),)
-    if node.player.kind not in ("target_player", "target_opponent"):
-        raise LoweringError(
-            f"no handler reveals {node.player.kind!r}'s hand", node=node
-        )
-    return (OracleInstruction("reveal_hand", "", _targets_only(node.player)),)
-
-
-def _lower_reveal_random_from_hand(
-    node: "ast.RevealRandomFromHand",
-) -> tuple[OracleInstruction, ...]:
-    """"Target player **reveals a card at random from their hand**." (Wand of
-    Ith.) One card nobody chose, and the record it leaves is the one every "if
-    it's a …" already reads, so the sentences behind it need no new referent.
-
-    **"You" is admitted here and refused by ``_lower_reveal_hand``**, and the
-    difference is what "at random" does. Revealing your own *hand* shows you
-    nothing you did not already know, which is why that one refuses; revealing
-    one card of it **at random** picks a card nobody chose and shows it to every
-    player, which is the whole of Cursed Scroll — the sentence behind it asks
-    which card the randomness landed on, and the answer is information the
-    revealer did not have either.
-    """
-    if node.player.kind not in ("you", "target_player", "target_opponent"):
-        raise LoweringError(
-            f"no handler reveals a card from {node.player.kind!r}'s hand",
-            node=node,
-        )
-    if node.player.kind == "you":
-        # ``revealer`` rather than a ``targets`` payload, and **stated** rather
-        # than left to the handler's fallback. That fallback reads
-        # ``context.target``, which is the *ability's* target — and on Cursed
-        # Scroll the ability targets somebody else for its damage, so an
-        # unstated revealer opened the opponent's hand while the card says
-        # "your hand". A target payload would have been worse: the picker would
-        # then offer a player this sentence never names.
-        return (
-            OracleInstruction(
-                "reveal_random_card_from_hand", "", {"revealer": "you"}
-            ),
-        )
-    return (
-        OracleInstruction(
-            "reveal_random_card_from_hand", "", _targets_only(node.player)
-        ),
-    )
-
-
-def _lower_discard_revealed_unless_pay_life(
-    node: "ast.DiscardRevealedUnlessPayLife", produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"That player **discards it unless they pay 1 life**." (Wand of Ith.)
-
-    ``produced`` is the whole gate, and the same one ``RevealedCardIs`` takes:
-    "it" names the card a reveal earlier in this effect recorded, and with no
-    reveal in front of it there is nothing to discard — an offer bought off
-    against nothing would charge a player life for keeping a card that was
-    never named.
-    """
-    if "revealed_card" not in produced:
-        raise LoweringError(
-            "'it' with nothing in this effect that revealed a card", node=node
-        )
-    if node.player.kind not in ("target_player", "that_player", "target_opponent"):
-        raise LoweringError(
-            f"no handler makes {node.player.kind!r} discard the revealed card",
-            node=node,
-        )
-    payload: dict[str, object] = {}
-    if node.mana_value_of_revealed:
-        payload["life"] = "revealed_mana_value"
-    else:
-        amount = _amount_payload(node.amount)
-        if not isinstance(amount, int) or amount < 0:
-            raise LoweringError("a life payment is a printed number", node=node)
-        payload["life"] = amount
-    return (
-        OracleInstruction("discard_revealed_unless_pay_life", "", payload),
-    )
-
-
-def _lower_discard_revealed_matching_unless_pay_life(
-    node: "ast.DiscardRevealedMatchingUnlessPayLife", produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"For each blue instant card revealed this way, **that player discards
-    that card unless they pay 4 life**." (Sirocco.)
-
-    ``produced`` is the gate, and it names the *hand* reveal rather than the
-    single-card one: "this way" is the set the sentence in front showed, and
-    with no reveal behind it the loop would walk an empty record and the spell
-    would silently do nothing.
-
-    The narrowing is carried or the line refuses. Every key has to be one
-    ``card_matches_filter`` answers — the objects are cards in a hand, so
-    nothing about the battlefield is in the question, and a dropped adjective
-    here is a spell discarding cards its own text did not name.
-    """
-    if REVEALED_HAND_CARDS not in produced:
-        raise LoweringError(
-            "'revealed this way' with nothing in this effect that revealed a "
-            "hand", node=node,
-        )
-    if node.player.kind not in ("target_player", "that_player", "target_opponent"):
-        raise LoweringError(
-            f"no handler makes {node.player.kind!r} discard the revealed cards",
-            node=node,
-        )
-    # ``to_payload`` directly, not ``_filter_payload``: that reader refuses
-    # every card-scoped filter by construction, because the handlers it feeds
-    # search the battlefield. These objects are cards in a hand, so the gate is
-    # ``card_only_filter`` instead — and ``dropped_narrowings`` beside it,
-    # because a phrase that left no key at all would widen the discard to every
-    # card the reveal showed.
-    payload = node.filter.to_payload()
-    described = card_only_filter(payload)
-    lost = dropped_narrowings(node.filter, payload)
-    if described is None or lost:
-        raise LoweringError(
-            "the revealed-card discard cannot test that phrase", node=node
-        )
-    amount = _amount_payload(node.amount)
-    if not isinstance(amount, int) or amount < 0:
-        raise LoweringError("a life payment is a printed number", node=node)
-    return (
-        OracleInstruction(
-            "discard_revealed_matching_unless_pay_life", "",
-            {"filter": described, "life": amount},
-        ),
-    )
-
-
-def _lower_reveal_hand_and_choose(
-    node: ast.RevealHandAndChoose, event: str | None = None,
-    produced: frozenset[str] = frozenset(),
-) -> tuple[OracleInstruction, ...]:
-    """"Target opponent reveals their hand. You choose a noncreature, nonland
-    card from it. That player discards that card." (Duress.)
-
-    One instruction for the whole template: the reveal is what makes the choice
-    legal, and the discard is what the choice was for, so splitting them would
-    put a chosen card between two instructions with nothing carrying it.
-    """
-    # "Choose a color. … you choose a card **of that color** from it." (Addle.)
-    # CR 608.2d's colour, admitted only behind a step that chose one and
-    # carried as the scratchpad key Persecute's discard reads.
-    of_that_color = (
-        node.filter.color_chosen_this_way and CHOSEN_COLOR_THIS_WAY in produced
-    )
-    leftover = _restrictions_beyond(
-        node.filter,
-        _REVEALED_HAND_FIELDS | ({"color_chosen_this_way"} if of_that_color else set()),
-    )
-    if leftover:
-        raise LoweringError(
-            "the revealed-hand picker cannot narrow by: " + ", ".join(leftover),
-            node=node,
-        )
-    if node.filter.type_match != "any":  # pragma: no cover - no card prints it
-        # A printed type *union* is an OR everywhere in this engine, and
-        # ``search_matches`` reads ``card_type`` that way. An "all" match would
-        # be a narrower question than the predicate behind the picker asks, so
-        # it refuses rather than being widened to the union.
-        raise LoweringError(
-            "the revealed-hand picker reads a type union, not an intersection",
-            node=node,
-        )
-    payload: dict[str, object] = {"fate": node.fate}
-    if of_that_color:
-        payload["color_filter_from"] = CHOSEN_COLOR_THIS_WAY
-    if node.filter.card_types:
-        # "You choose **a creature card** from it." (Ostracize.) The positive
-        # twin of ``exclude_types`` below, emitted only when the card prints it
-        # so Duress's payload stays byte-identical — and emitted at all for that
-        # key's reason: what the picker offers and what an answer is checked
-        # against are one predicate, so a type only the handler knew about is a
-        # client offering the whole hand.
-        payload["card_types"] = list(node.filter.card_types)
-    if node.filter.excluded_types:
-        payload["exclude_types"] = list(node.filter.excluded_types)
-    if node.filter.excluded_supertypes:
-        # "…a **nonbasic** land card from it." (Encroach.) Emitted only when the
-        # card prints it, so every earlier printing's payload stays
-        # byte-identical — and emitted at all for the reason the two keys around
-        # it are: a phrase the production consumes and the payload drops is a
-        # picker offering a Plains while the card says otherwise.
-        payload["exclude_supertypes"] = list(node.filter.excluded_supertypes)
-    if node.filter.excluded_basic_lands:
-        # Emitted only when the card prints it, so Duress's payload stays
-        # byte-identical — and emitted at all, because a phrase the production
-        # consumes and the payload drops is a picker offering a Mountain while
-        # the card says otherwise.
-        payload["exclude_basic_lands"] = True
-    # Both keys are emitted only when the card carries them, so Duress's payload
-    # stays byte-identical and no behaviour signature moves.
-    amount = _amount_payload(node.count)
-    if amount != 1:
-        payload["count"] = amount
-    if node.up_to:
-        # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
-        # ceiling, carried so the prompt lets the chooser stop early. Emitted
-        # only when the card prints the words, for the reason the two keys above
-        # are: every earlier printing names exactly as many as it says, and its
-        # payload stays byte-identical.
-        payload["up_to"] = True
-    if not node.revealed:
-        payload["looked_at"] = True
-    if node.player.kind == "that_player":
-        # "Look at **that player's** hand …" (Leshrac's Sigil). Nothing was
-        # targeted, so there is no choice to read the seat off: it is the one
-        # the firing event froze (CR 603.10), on the key its fire site stamps.
-        # Refused under any other event rather than left to `context.target`,
-        # which for a trigger that chose nothing is whatever the resolution
-        # happened to be carrying — an opponent's hand emptied by accident.
-        if event not in _EVENT_SUBJECT_PLAYERS:
-            raise LoweringError(
-                f"no event named {event!r} freezes the seat 'that player' names",
-                node=node,
-            )
-        payload["victim"] = EVENT_SUBJECT_PLAYER
-        return (OracleInstruction("reveal_hand_and_choose", "", payload),)
-    _describe_targets(payload, node.player)
-    if "targets" not in payload:
-        raise LoweringError(
-            f"the revealed-hand picker cannot name the {node.player.kind}",
-            node=node,
-        )
-    return (OracleInstruction("reveal_hand_and_choose", "", payload),)
 
 
 def _lower_exile_graveyard(node: ast.ExileGraveyard) -> tuple[OracleInstruction, ...]:
@@ -479,16 +207,6 @@ def _lower_put_library_top_into_hand(
     else:
         payload = {"amount": _amount_payload(node.count)}
     return (OracleInstruction("put_library_top_into_hand", "", payload),)
-
-
-
-
-
-
-
-
-
-
 
 
 def _lower_graveyard_top_to_library(
@@ -793,7 +511,7 @@ def _lower_graveyard_pick_onto_battlefield(
     in ``lowering/zones``, because what it emits decides the family: no
     ``target`` is printed, so the card is not chosen until the effect resolves
     (CR 115.1b), and a pick made during resolution out of a named zone is a
-    *search prompt* — the same instruction ``_lower_search_library`` above
+    *search prompt* — the same instruction ``search._lower_search_library``
     emits, narrowed to a graveyard. Sending it to the reanimation handler
     instead would have made it a cast-time target, which is a different card:
     the graveyard it comes out of is named by a referent nobody can evaluate
@@ -924,47 +642,4 @@ def _lower_put_graveyard_position_onto_battlefield(
     payload["graveyard_owner"] = payload.pop("owner")
     return (
         OracleInstruction("reanimate_graveyard_position", "", payload),
-    )
-
-
-def _lower_play_with_hand_revealed(
-    node: "ast.PlayWithHandRevealed", event: str | None = None,
-) -> tuple[OracleInstruction, ...]:
-    """Stromgald Spy: "…have **defending player play with their hand revealed
-    for as long as this creature remains on the battlefield**."
-
-    Two refusals, both by name.
-
-    The **duration** must be the linked one. That is the whole of what makes the
-    effect implementable without a sweep: the record goes on the source and
-    ``engine/revealed_hands.py`` scans the battlefield for it, so a permanent
-    that leaves stops contributing (CR 611.2b) and a returning one is a new
-    object with no record (CR 400.7). Any other duration would need something
-    to end it, and nothing does.
-
-    The **seat** must be one an event froze. "Defending player" is CR 506.2's,
-    stamped by the combat fire sites, and outside those events nothing recorded
-    it — an effect that silently revealed nobody's hand rather than one somebody
-    declined.
-    """
-    if node.duration.kind != "while_source_on_battlefield":
-        raise LoweringError(
-            "a hand is revealed for as long as the source is on the "
-            f"battlefield, not {node.duration.kind or 'indefinitely'}",
-            node=node,
-        )
-    if node.player.kind != "defending_player":
-        raise LoweringError(
-            f"no seat record names {node.player.kind!r} for a revealed hand",
-            node=node,
-        )
-    if event not in _DEFENDING_PLAYER_EVENTS:
-        raise LoweringError(
-            '"defending player" names a seat this event did not record',
-            node=node,
-        )
-    return (
-        OracleInstruction("reveal_hand_while_source_present", "", {
-            "player": node.player.kind,
-        }),
     )
