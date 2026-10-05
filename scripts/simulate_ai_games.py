@@ -75,6 +75,12 @@ def main() -> int:
         f"{report.cleanup_discards} card(s) discarded to hand size"
     )
 
+    # CR 500.7: extra turns actually taken. Only a pool printing one can move
+    # it — and until INV's wave 2 nothing could, because the loop alternated
+    # the seats itself and walked past the queue.
+    if report.extra_turns_taken:
+        print(f"Extra turns taken: {report.extra_turns_taken}")
+
     # CR 602.1b: abilities activated on a permanent another seat controls
     # ("Any player may activate this ability"). Only a pool printing one can
     # move it, so it is shown when it did.

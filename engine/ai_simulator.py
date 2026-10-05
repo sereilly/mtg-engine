@@ -120,6 +120,14 @@ class SimulationReport:
     #: step of any simulated turn ended around an unanswered question (CR 608.2,
     #: CR 500.2); ``simulate_ai_games.py`` exits 1 on anything else.
     steps_left_owing: Counter[str] = field(default_factory=Counter)
+    #: Turns that were **extra** turns (CR 500.7) — Time Walk's, Time Warp's,
+    #: Final Fortune's. Zero in every run before INV's wave 2, and not because
+    #: no seat cast one: the loop alternated the two seats itself, so an extra
+    #: turn was queued by the spell and never taken, and "you skip your next
+    #: turn" (Meditate, Chronatog) skipped nothing. The seventh omission of
+    #: the class, found by counting the queue at the end of four games with
+    #: Time Walk pinned: five resolved, five still queued.
+    extra_turns_taken: int = 0
     #: How many step changes that count was taken over. A zero above means
     #: something only beside a number here: an instrument that looked at
     #: nothing reports nothing owed.
@@ -1158,114 +1166,125 @@ def run_ai_simulation(
         log_cursor = 0
         report.log_lines.append(f"=== Game {game_index} ===")
 
-        # game.turn starts at 1 but is never incremented by the manual step calls
-        # below. Reset to 0 so the pre-loop increment lands on 1 for the very
-        # first half-turn and advances correctly for every subsequent half-turn,
-        # allowing summoning-sickness to clear after a creature's first full turn.
+        # `game.turn` starts at 1 and `start_next_turn` increments it before
+        # each turn, so it is reset to 0 for the first increment to land on 1.
         game.turn = 0
+        # Seat 0 takes the first turn, as it always has here. The engine works
+        # out whose turn is next from whose turn it was (CR 500.7 keeps the
+        # rotation's place across extra turns), so the seat "before" the first
+        # one is the last.
+        game.active_player_index = len(game.players) - 1
 
-        for turn in range(1, max_turns + 1):
-            for active in (0, 1):
-                game.turn += 1
-                active_player = game.players[active]
-                opponent = game.players[1 - active]
+        # *max_turns* is rounds, as it always was: two turns each. An extra
+        # turn is one of them, so a game with Time Walk in it still ends.
+        for half_turn in range(2 * max_turns):
+            turn = half_turn // 2 + 1
+            # **Whose turn comes next is `Game.start_next_turn`'s answer.**
+            # This read ``for active in (0, 1)``, the last piece of the turn
+            # structure the loop still decided for itself, and so no simulated
+            # game had ever taken an extra turn or skipped one: Time Walk put
+            # its turn on `extra_turn_queue` and the loop walked past it. Nine
+            # shipped cards add or skip a turn.
+            #
+            # It is also the beginning phase and the entry into the main
+            # phase — `Game.start_turn`, the engine's own walk, called rather
+            # than copied. See the notes below.
+            active = game.start_next_turn()
+            report.extra_turns_taken += bool(game.current_turn_is_extra)
+            active_player = game.players[active]
+            opponent = game.players[1 - active]
 
-                # The beginning phase and the entry into the main phase are
-                # `Game.start_turn` — the engine's own walk, called rather than
-                # copied. This loop open-coded it, and each piece left out was
-                # invisible in the same way: the run completes, the interaction
-                # count is non-zero and the issue list is empty.
-                #
-                # * `begin_turn_bookkeeping` was missing first, which froze
-                #   every per-seat-turn record in every AI game:
-                #   `seat_turn_counts` is written in exactly one place, so
-                #   Wiitigo's "since your last upkeep" read False forever,
-                #   Giant Turtle, Goblin Rock Sled and Tangle Kelp never saw
-                #   "attacked during your last turn", and Wall of Dust and
-                #   Oracle en-Vec never saw "during its controller's next
-                #   turn". Found by W1G2 while building echo.
-                # * Then the main-phase *entry* (CR 505): the loop went
-                #   draw -> cast, so no `main_phase_first` /
-                #   `main_phase_each_yours` trigger had ever fired in an AI
-                #   game — Sanctum of Fruitful Harvest, Eladamri's Vineyard,
-                #   Carpet of Flowers.
-                # * And the sixth of the class is not a missing call at all:
-                #   upkeep then draw, with the *answer* to what the upkeep
-                #   asked taken after both. See
-                #   `SimulationReport.steps_left_owing`; the fix is the
-                #   `prompt_driver` this game was built with, so each of these
-                #   steps answers its own prompts inside its own priority
-                #   window, in the engine's order rather than this loop's.
-                #
-                # What follows the beginning phase is the turn plan's answer
-                # (`enter_next_turn_phase`, inside `start_turn`), not a phase
-                # named here.
-                game.start_turn(active)
-                # The drain is the half `_close_or_defer_step` does for every
-                # other step and `_enter_main_phase` does not, because a main
-                # phase is not closed before the active player acts in it: the
-                # entry opens a priority window, and the triggers it announced
-                # have to resolve before the cast below sees the board.
-                game._resolve_priority_window()
-                _resolve_pending_choices(game)
+            # This loop open-coded all of that, and each piece left out was
+            # invisible in the same way: the run completes, the interaction
+            # count is non-zero and the issue list is empty.
+            #
+            # * `begin_turn_bookkeeping` was missing first, which froze
+            #   every per-seat-turn record in every AI game:
+            #   `seat_turn_counts` is written in exactly one place, so
+            #   Wiitigo's "since your last upkeep" read False forever,
+            #   Giant Turtle, Goblin Rock Sled and Tangle Kelp never saw
+            #   "attacked during your last turn", and Wall of Dust and
+            #   Oracle en-Vec never saw "during its controller's next
+            #   turn". Found by W1G2 while building echo.
+            # * Then the main-phase *entry* (CR 505): the loop went
+            #   draw -> cast, so no `main_phase_first` /
+            #   `main_phase_each_yours` trigger had ever fired in an AI
+            #   game — Sanctum of Fruitful Harvest, Eladamri's Vineyard,
+            #   Carpet of Flowers.
+            # * And the sixth of the class is not a missing call at all:
+            #   upkeep then draw, with the *answer* to what the upkeep
+            #   asked taken after both. See
+            #   `SimulationReport.steps_left_owing`; the fix is the
+            #   `prompt_driver` this game was built with, so each of these
+            #   steps answers its own prompts inside its own priority
+            #   window, in the engine's order rather than this loop's.
+            #
+            # What follows the beginning phase is the turn plan's answer
+            # (`enter_next_turn_phase`, inside `start_turn`), not a phase
+            # named here.
+            #
+            # The drain is the half `_close_or_defer_step` does for every
+            # other step and `_enter_main_phase` does not, because a main
+            # phase is not closed before the active player acts in it: the
+            # entry opens a priority window, and the triggers it announced
+            # have to resolve before the cast below sees the board.
+            game._resolve_priority_window()
+            _resolve_pending_choices(game)
 
-                # The main phase's passes, in the order a player takes them:
-                # the land drop, then casts paid for out of the lands, then
-                # the activations, each planned against what is still
-                # untapped. See `_play_land_drops` and `_play_casts`.
-                _play_land_drops(game, active, report, game_index, turn)
-                _play_casts(game, active, report, game_index, turn)
-                _play_activations(game, active, report, game_index, turn)
+            # The main phase's passes, in the order a player takes them:
+            # the land drop, then casts paid for out of the lands, then
+            # the activations, each planned against what is still
+            # untapped. See `_play_land_drops` and `_play_casts`.
+            _play_land_drops(game, active, report, game_index, turn)
+            _play_casts(game, active, report, game_index, turn)
+            _play_activations(game, active, report, game_index, turn)
 
-                # CR 506-511, the half of a turn this loop did not have. It went
-                # main phase -> cast -> activate -> next seat, so no simulated
-                # game had ever declared an attacker, declared a block or run a
-                # combat damage step — which is why `refused_attacks` below could
-                # not have been measured before, and why "run the sim" was never
-                # an end-to-end check for combat work however green it came back.
-                #
-                # The same shape as the two omissions above it and found the same
-                # way: the run completes, the interaction count is non-zero and
-                # the issue list is empty, so nothing fails. What is absent is
-                # every creature that ever attacked, and the only proof is to
-                # count the log lines that are not there.
-                #
-                # Driven through `engine/ai_combat.py`, which the web layer's AI
-                # attack declaration also goes through — a refused declaration is
-                # silent, and a second copy of that fallback chain would be a
-                # second place for the silence to live.
-                if not game.is_game_over():
-                    _play_combat_phase(game, active, report, game_index, turn)
+            # CR 506-511, the half of a turn this loop did not have. It went
+            # main phase -> cast -> activate -> next seat, so no simulated
+            # game had ever declared an attacker, declared a block or run a
+            # combat damage step — which is why `refused_attacks` below could
+            # not have been measured before, and why "run the sim" was never
+            # an end-to-end check for combat work however green it came back.
+            #
+            # The same shape as the two omissions above it and found the same
+            # way: the run completes, the interaction count is non-zero and
+            # the issue list is empty, so nothing fails. What is absent is
+            # every creature that ever attacked, and the only proof is to
+            # count the log lines that are not there.
+            #
+            # Driven through `engine/ai_combat.py`, which the web layer's AI
+            # attack declaration also goes through — a refused declaration is
+            # silent, and a second copy of that fallback chain would be a
+            # second place for the silence to live.
+            if not game.is_game_over():
+                _play_combat_phase(game, active, report, game_index, turn)
 
-                # CR 512-514, the half of a turn this loop still did not have
-                # after combat arrived: the postcombat main phase, anything
-                # CR 500.8 added, and the ending phase. See `_play_rest_of_turn`.
-                if not game.is_game_over():
-                    _play_rest_of_turn(game, active, report, game_index, turn)
+            # CR 512-514, the half of a turn this loop still did not have
+            # after combat arrived: the postcombat main phase, anything
+            # CR 500.8 added, and the ending phase. See `_play_rest_of_turn`.
+            if not game.is_game_over():
+                _play_rest_of_turn(game, active, report, game_index, turn)
 
-                new_logs = game.log[log_cursor:]
-                report.log_lines.extend(f"  {line}" for line in new_logs)
-                log_cursor = len(game.log)
+            new_logs = game.log[log_cursor:]
+            report.log_lines.extend(f"  {line}" for line in new_logs)
+            log_cursor = len(game.log)
 
-                current = _zone_counter(game)
-                if current != initial_cards:
-                    lost = initial_cards - current
-                    gained = current - initial_cards
-                    report.issues.append(
-                        InteractionIssue(
-                            game_index, turn,
-                            "Zone conservation failed: "
-                            f"missing {dict(lost) or '{}'}, extra {dict(gained) or '{}'}",
-                        )
+            current = _zone_counter(game)
+            if current != initial_cards:
+                lost = initial_cards - current
+                gained = current - initial_cards
+                report.issues.append(
+                    InteractionIssue(
+                        game_index, turn,
+                        "Zone conservation failed: "
+                        f"missing {dict(lost) or '{}'}, extra {dict(gained) or '{}'}",
                     )
-                    # Re-baseline, or one leak reports itself on every later
-                    # turn of the game and buries whatever comes next.
-                    initial_cards = current
+                )
+                # Re-baseline, or one leak reports itself on every later
+                # turn of the game and buries whatever comes next.
+                initial_cards = current
 
-                if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
-                    break
-
-            if game.players[0].life <= 0 or game.players[1].life <= 0 or game.players[0].lost or game.players[1].lost:
+            if active_player.life <= 0 or opponent.life <= 0 or active_player.lost or opponent.lost:
                 break
 
         owing = Counter(game._steps_left_owing)

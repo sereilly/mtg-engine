@@ -256,3 +256,73 @@ def test_w2g6_a_drain_does_not_answer_a_choice_twice(_w2g6_cards):
     game.auto_resolve_pending_choices(kinds=("optional_pay",))
 
     assert answers == [id(first), id(second)]
+
+
+# --- whose turn comes next is the engine's answer -----------------------------
+
+
+def _w2g6_turn_takers(report) -> list[tuple[str, str]]:
+    """``(game, seat)`` for every turn of the run, in order — read off the untap
+    step's own log line, which every turn writes exactly once."""
+    import re
+
+    takers = []
+    for line in report.log_lines:
+        found = re.match(r"\s+AI-([AB])-(\d+) untapped \d+ permanent", line)
+        if found:
+            takers.append((found.group(2), found.group(1)))
+    return takers
+
+
+def test_w2g6_a_simulated_seat_takes_the_extra_turn_it_cast():
+    """CR 500.7. The seventh omission of the class, found by counting rather
+    than by a failure: the loop read ``for active in (0, 1)``, so Time Walk
+    queued its turn and the loop walked past it. Four games with it pinned —
+    five resolved, five still on `extra_turn_queue` at the end, none taken.
+    Whose turn is next is `Game.start_next_turn`'s answer now."""
+    report = run_ai_simulation(
+        _w2g6_path("LEA"), games=4, seed=5, max_turns=14, required_cards=["Time Walk"],
+    )
+    resolved = sum("cast Time Walk -> resolved" in line for line in report.log_lines)
+    takers = _w2g6_turn_takers(report)
+    twice_running = sum(1 for first, second in zip(takers, takers[1:]) if first == second)
+
+    assert resolved >= 3, f"Time Walk resolved only {resolved} time(s); pick a seed that casts it"
+    # One per Time Walk, less any still queued when its game ended.
+    assert resolved - 4 <= report.extra_turns_taken <= resolved
+    assert report.extra_turns_taken >= 1
+    assert twice_running == report.extra_turns_taken
+    assert not report.issues, [issue.message for issue in report.issues]
+
+
+def test_w2g6_a_simulated_seat_skips_the_turn_a_card_takes_from_it():
+    """CR 500.11's other direction, through the same call: Meditate's "You
+    skip your next turn" is a record `_compute_next_active_player` spends, and
+    a loop that named the seats itself never asked. A skipped turn is the
+    *other* seat taking two in a row, with no extra turn to explain it."""
+    report = run_ai_simulation(
+        _w2g6_path("TMP"), games=4, seed=5, max_turns=14, required_cards=["Meditate"],
+    )
+    resolved = sum("cast Meditate -> resolved" in line for line in report.log_lines)
+    takers = _w2g6_turn_takers(report)
+    twice_running = sum(1 for first, second in zip(takers, takers[1:]) if first == second)
+
+    assert resolved >= 2, f"Meditate resolved only {resolved} time(s)"
+    assert report.extra_turns_taken == 0
+    assert 1 <= twice_running <= resolved
+
+
+def test_w2g6_an_ordinary_game_still_alternates_its_two_seats():
+    """…and nothing else moved: with no card that adds or skips a turn, the
+    engine's rotation is the alternation the loop used to spell out, seat A
+    first. (The five default seeded runs — LEA, DRK, TMP, M21, INV — are
+    byte-identical across the change.)"""
+    report = run_ai_simulation(_w2g6_path("DRK"), games=2, seed=1337, max_turns=8)
+    takers = _w2g6_turn_takers(report)
+
+    assert len(takers) >= 20
+    for game in {game for game, _seat in takers}:
+        seats = [seat for taker_game, seat in takers if taker_game == game]
+        assert seats[0] == "A"
+        assert all(first != second for first, second in zip(seats, seats[1:])), seats
+    assert report.extra_turns_taken == 0
