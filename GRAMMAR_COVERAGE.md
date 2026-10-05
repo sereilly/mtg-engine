@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 84.5% | 83.4% | 58.5% | 261 |
+| INV *(measured)* | 335 | 547 | 85.9% | 85.7% | 60.1% | 266 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 529 | 246 | expected a subject |  |
-| 149 | 76 | unrecognized effect verb |  |
-| 133 | 68 | unconsumed text |  |
+| 526 | 243 | expected a subject |  |
+| 148 | 75 | unrecognized effect verb |  |
+| 131 | 66 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -602,6 +602,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Backfire**
   - `Whenever enchanted creature deals damage to you, this Aura deals that much damage to that creature's controller.`
   - `Whenever enchanted creature deals damage to you, this Aura deals that much damage to that creature's controller.`
+- **Backlash**
+  - `Tap target untapped creature. That creature deals damage equal to its power to its controller.`
 - **Bad Deal**
   - `You draw two cards and each opponent discards two cards. Each player loses 2 life.`
 - **Bad Moon**
@@ -1025,6 +1027,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, all creatures gain "{T}: This creature deals damage equal to its power to target creature."`
 - **Breach**
   - `Target creature gets +2/+0 and gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
+- **Breaking Wave**
+  - `Simultaneously untap all tapped creatures and tap all untapped creatures.`
 - **Breath of Darigaaz**
   - `Breath of Darigaaz deals 1 damage to each creature without flying and each player. If this spell was kicked, it deals 4 damage to each creature without flying and each player instead.`
 - **Breathstealer**
@@ -1239,6 +1243,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Cathodion**
   - `When this creature dies, add {C}{C}{C}.`
 - **Cauldron Dance**
+  - `Return target creature card from your graveyard to the battlefield. That creature gains haste. Return it to your hand at the beginning of the next end step.`
   - `You may put a creature card from your hand onto the battlefield. That creature gains haste. Its controller sacrifices it at the beginning of the next end step.`
 - **Caustic Wasps**
   - `Whenever this creature deals combat damage to a player, you may destroy target artifact that player controls.`
@@ -4761,6 +4766,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, that player may put a +1/+1 counter on target creature of their choice.`
 - **Liability**
   - `Whenever a nontoken permanent is put into a player's graveyard from the battlefield, that player loses 1 life.`
+- **Liberate**
+  - `Exile target creature you control. Return that card to the battlefield under its owner's control at the beginning of the next end step.`
 - **Library Larcenist**
   - `Whenever this creature attacks, draw a card.`
 - **Library of Alexandria**
@@ -6386,6 +6393,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: You may tap or untap target creature.`
 - **Puppet's Verdict**
   - `Flip a coin. If you win the flip, destroy all creatures with power 2 or less. If you lose the flip, destroy all creatures with power 3 or greater.`
+- **Pure Reflection**
+  - `Whenever a player casts a creature spell, destroy all Reflections. Then that player creates an X/X white Reflection creature token, where X is the mana value of that spell.`
 - **Purelace**
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
   - `Target spell or permanent becomes white. (Mana symbols on that permanent remain unchanged.)`
@@ -6417,6 +6426,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pyramids**
   - `• Destroy target Aura attached to a land.`
 - **Pyre Zombie**
+  - `At the beginning of your upkeep, if this card is in your graveyard, you may pay {1}{B}{B}. If you do, return it to your hand.`
   - `{1}{R}{R}, Sacrifice this creature: It deals 2 damage to any target.`
 - **Pyric Salamander**
   - `{R}: This creature gets +1/+0 until end of turn. Sacrifice this creature at the beginning of the next end step.`
@@ -8492,6 +8502,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}, {T}: Target creature gets +1/+1 for as long as this artifact remains tapped.`
 - **Tectonic Break**
   - `Each player sacrifices X lands of their choice.`
+- **Tectonic Instability**
+  - `Whenever a land enters, tap all lands its controller controls.`
 - **Teferi's Care**
   - `{W}, Sacrifice an enchantment: Destroy target enchantment.`
   - `{3}{U}{U}: Counter target enchantment spell.`
@@ -8510,6 +8522,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Teferi's Realm**
   - `At the beginning of each player's upkeep, that player chooses artifact, creature, land, or non-Aura enchantment. All nontoken permanents of that type phase out. (While they're phased out, they're treated as though they don't exist. Each one phases in before its controller untaps during their next untap step.)`
 - **Teferi's Response**
+  - `Counter target spell or ability an opponent controls that targets a land you control. If a permanent's ability is countered this way, destroy that permanent.`
   - `Draw two cards.`
 - **Teferi's Tutelage**
   - `When this enchantment enters, draw a card, then discard a card.`
@@ -9750,6 +9763,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Winged Sliver**
   - `All Sliver creatures have flying.`
 - **Winnow**
+  - `Destroy target nonland permanent if another permanent with the same name is on the battlefield.`
   - `Draw a card.`
 - **Winter Blast**
   - `Tap X target creatures. Winter Blast deals 2 damage to each of those creatures with flying.`
