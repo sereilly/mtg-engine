@@ -31,8 +31,6 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
-from .oracle_types import compilation_cache
-
 # The nouns an Aura's effect clause can address, from its "Enchant <noun>" line.
 _NOUN = r"(?:creature|artifact|enchantment|land|wall|permanent)"
 
@@ -2051,13 +2049,42 @@ def _host_criterion_filter(noun: str, criterion: str) -> dict | None:
     return narrowed
 
 
-@compilation_cache
 @lru_cache(maxsize=None)
+def _conditional_ability_grant_shapes(oracle_text: str) -> tuple[tuple[tuple, str], ...]:
+    """Every ``(criterion, quoted ability)`` *oracle_text* prints in the
+    conditional-grant shape, whether or not the engine can read the quote.
+
+    The half of :func:`aura_conditional_ability_grants` that is a pure function
+    of the text, and the only half cached here: whether the quote **compiles**
+    is ``granted_ability_supported``'s answer, held in a cache
+    ``clear_compilation_caches`` knows about. Caching that answer a second time
+    under this function would be a compiled answer in a cache nothing clears —
+    the two-poisoned-keys failure ``oracle_types.compilation_cache`` exists for.
+
+    The recompute asks this of every Aura on every pass, so the quick refusal
+    is first and is what nearly every card takes.
+    """
+    text = oracle_text or ""
+    if '"' not in text or "as long as" not in text.lower():
+        return ()
+    shapes: list[tuple[tuple, str]] = []
+    for raw_line in text.splitlines():
+        match = _CONDITIONAL_QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
+        if match is None:
+            continue
+        described = _host_criterion_filter(
+            match.group("noun"), match.group("criterion").strip()
+        )
+        if described is not None:
+            shapes.append((_freeze_filter(described), match.group("ability")))
+    return tuple(shapes)
+
+
 def aura_conditional_ability_grants(oracle_text: str) -> tuple[tuple[tuple, str], ...]:
     """``(criterion, ability line)`` pairs an Aura grants its host **while the
     host answers the criterion**.
 
-    The criterion is a filter payload frozen as sorted items (the result is
+    The criterion is a filter payload frozen as sorted items (the shapes are
     cached, and a shared dict would be one caller's mutation away from changing
     the card); :func:`conditional_ability_lines_for` thaws it.
 
@@ -2072,24 +2099,16 @@ def aura_conditional_ability_grants(oracle_text: str) -> tuple[tuple[tuple, str]
     (``granted_abilities.granted_ability_supported``) — so the support gate,
     which asks this function, cannot admit a line whose ability does nothing.
     """
-    text = oracle_text or ""
-    if '"' not in text or "as long as" not in text.lower():
+    shapes = _conditional_ability_grant_shapes(oracle_text or "")
+    if not shapes:
         return ()
     from .granted_abilities import granted_ability_supported
 
-    grants: list[tuple[tuple, str]] = []
-    for raw_line in text.splitlines():
-        match = _CONDITIONAL_QUOTED_ABILITY_GRANT.match(_line_text(raw_line))
-        if match is None:
-            continue
-        described = _host_criterion_filter(
-            match.group("noun"), match.group("criterion").strip()
-        )
-        ability = match.group("ability")
-        if described is None or not granted_ability_supported(ability):
-            continue
-        grants.append((_freeze_filter(described), ability))
-    return tuple(grants)
+    return tuple(
+        (criterion, ability)
+        for criterion, ability in shapes
+        if granted_ability_supported(ability)
+    )
 
 
 def _freeze_filter(described: dict) -> tuple:

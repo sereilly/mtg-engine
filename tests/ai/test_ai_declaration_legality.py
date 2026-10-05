@@ -48,6 +48,7 @@ _W2G4_DECLARATION_KINDS = (
     "max_attackers_on_you_each_combat",          # Crawlspace
     "cant_attack_unless_others_attack",          # Orcish Conscripts, Mogg Flunkies
     "cant_attack_unless_greater_power_attacks",  # Okk
+    "cant_attack_unless_subject_attacks",        # Scarred Puma
     "can_only_attack_alone",                     # Errantry's grant, and any printing
 )
 
