@@ -33,6 +33,7 @@ from .auras import (
     aura_card_type_grants,
     aura_type_grants,
     auras_attached_to,
+    chosen_landwalk_grants,
 )
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
@@ -630,6 +631,11 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             for keyword, state in aura_conditional_keyword_grants(text)
             if aura_conditional_grant_holds(perm, state)
         ]
+        # "Enchanted creature has landwalk **of the chosen type**." (Traveler's
+        # Cloak.) The one grant whose word is not in the text: it is the land
+        # type this Aura recorded as it entered, re-read here so a late answer
+        # to the entry prompt is the one the creature walks with.
+        granted.extend(chosen_landwalk_grants(aura))
         stamp = int(aura.metadata.get("aura_timestamp", 0))
         # "Enchanted creature **loses** flying." (Mammoth Harness.) The same
         # layer and the same attach timestamp, contributed in the opposite
