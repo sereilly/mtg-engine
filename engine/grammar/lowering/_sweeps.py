@@ -41,6 +41,12 @@ idiom. Public rather than module-private now that it crosses a module line;
 "exile all tokens …" sentences to land. The same question a third time, asked
 of CR 406's keyword action: "exile all Sand Warriors" picks nothing and names
 nobody, and the exile family keeps every reading that does.
+
+**The destroy sweep is the fourth asking and it is not here**, for a reason
+that is a number rather than a subject: at Invasion's Phase 0 this module was
+573 lines and "destroy all …" some 420, so it left ``lowering/destruction.py``
+for ``_destroy_sweeps`` next door instead. One question, two files; a cut of
+this module along its verbs would put them back in step.
 """
 
 from __future__ import annotations

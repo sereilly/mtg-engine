@@ -1881,7 +1881,13 @@ def test_layers_only_import_downward(layers):
         # `FAMILY_SHARED` has called it a floor since Tempest; it was missing
         # here only because `_common` was its one importer, and `_common` is
         # skipped. A floor reading a floor, nothing reads back.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
+        #
+        # `_destroy_sweeps` joins at Invasion's Phase 0 between waves 1 and 2:
+        # the "destroy all …" half of `destruction`, which that family now
+        # imports as one call. Listed here as well as in `FAMILY_SHARED`
+        # because the two answer different questions — that set says it is not
+        # a family, this tuple says a family may import it.
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2411,6 +2417,17 @@ FAMILY_SHARED = {
     # `damage.py`; the two had drifted, and the inline one was dropping the head
     # noun from the payload it built.
     "_sweeps",
+    # `_destroy_sweeps` is `_sweeps`' question asked of CR 701.8 — "destroy
+    # all …" names a set and picks nothing — pre-split out of
+    # `lowering/destruction.py` at Invasion's Phase 0 between waves 1 and 2,
+    # with that module at 987 lines on three wave-1 groups' additions, two of
+    # them branches of the sweep. By subject it belongs *in* `_sweeps`, beside
+    # `lower_exile_sweep`; it is a second file because `_sweeps` was 573 lines
+    # and the destroy sweep some 420, and a floor four families grow into is
+    # the last module to leave sitting on the guard. A floor for `_sweeps`'
+    # reason: `destruction` is its only reader — the sweep as one call, and
+    # the seat gate "of their choice" asks too — and it reads nothing back.
+    "_destroy_sweeps",
     # `_superlatives` arrived at Urza's Saga with the noun phrase two families
     # print: "the creature with the least **toughness**" is a damage recipient
     # (Purging Scythe) and "the creature with the least **power**" a destroy

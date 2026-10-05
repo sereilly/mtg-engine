@@ -249,8 +249,6 @@ from .tolls import (
     _lower_destroy_each_unless_paid,
 )
 from .destruction import (
-    _DESTROY_ALL_KINDS,
-    _BASIC_LAND_TYPES,
     _lower_destroy,
 )
 from .control_changes import (
@@ -520,8 +518,6 @@ __all__ = [
     "_lower_become_aura",
     "_lower_gain_type",
     "_lower_change_text",
-    "_DESTROY_ALL_KINDS",
-    "_BASIC_LAND_TYPES",
     "_BLOCK_PAIR_EVENTS",
     "binds_block_pair",
     "_lower_destroy",
