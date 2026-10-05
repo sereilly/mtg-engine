@@ -44,7 +44,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | NEM | 143 | 219 | 80.4% | 80.4% | 64.4% | 123 |
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | M21 | 285 | 503 | 87.5% | 87.3% | 61.0% | 237 |
-| INV *(measured)* | 335 | 547 | 77.5% | 76.1% | 53.2% | 232 |
+| INV *(measured)* | 335 | 547 | 82.6% | 81.4% | 56.5% | 250 |
 | **All (shipped)** | **6450** | **9451** | **90.6%** | **89.9%** | **61.1%** | **4919** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -57,9 +57,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 563 | 277 | expected a subject |  |
+| 534 | 251 | expected a subject |  |
 | 150 | 77 | unrecognized effect verb |  |
-| 132 | 67 | unconsumed text |  |
+| 133 | 68 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 23 | 7 | expected what this creature can't block, or a duration |  |
@@ -198,6 +198,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Aggressive Urge**
   - `Target creature gets +1/+1 until end of turn.`
   - `Draw a card.`
+- **Agonizing Demise**
+  - `Destroy target nonblack creature. It can't be regenerated. If this spell was kicked, Agonizing Demise deals damage equal to that creature's power to the creature's controller.`
 - **Agonizing Memories**
   - `Look at target player's hand and choose two cards from it. Put them on top of that player's library in any order.`
   - `Look at target player's hand and choose two cards from it. Put them on top of that player's library in any order.`
@@ -742,6 +744,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}, {T}: You may put a creature card of the chosen type from your hand onto the battlefield.`
 - **Bellowing Fiend**
   - `Whenever this creature deals damage to a creature, this creature deals 3 damage to that creature's controller and 3 damage to you.`
+- **Benalish Emissary**
+  - `When this creature enters, if it was kicked, destroy target land.`
 - **Benalish Heralds**
   - `{3}{U}, {T}: Draw a card.`
 - **Benalish Missionary**
@@ -1019,6 +1023,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, all creatures gain "{T}: This creature deals damage equal to its power to target creature."`
 - **Breach**
   - `Target creature gets +2/+0 and gains fear until end of turn. (It can't be blocked except by artifact creatures and/or black creatures.)`
+- **Breath of Darigaaz**
+  - `Breath of Darigaaz deals 1 damage to each creature without flying and each player. If this spell was kicked, it deals 4 damage to each creature without flying and each player instead.`
 - **Breathstealer**
   - `{B}: This creature gets +1/-1 until end of turn.`
 - **Breeding Pit**
@@ -1138,6 +1144,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{G}: This creature gains flying and loses trample until end of turn.`
 - **Canopy Stalker**
   - `When this creature dies, you gain 1 life for each creature that died this turn.`
+- **Canopy Surge**
+  - `Canopy Surge deals 1 damage to each creature with flying and each player. If this spell was kicked, it deals 4 damage to each creature with flying and each player instead.`
 - **Canyon Drake**
   - `{1}, Discard a card at random: This creature gets +2/+0 until end of turn.`
 - **Capashen Knight**
@@ -2148,6 +2156,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Dismal Backwater**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {U} or {B}.`
+- **Dismantling Blow**
+  - `Destroy target artifact or enchantment. If this spell was kicked, draw two cards.`
 - **Dismiss**
   - `Counter target spell.`
   - `Draw a card.`
@@ -2682,6 +2692,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this creature: It deals 2 damage to target attacking or blocking creature.`
 - **Experimental Overload**
   - `Create an X/X blue and red Weird creature token, where X is the number of instant and sorcery cards in your graveyard. Then you may return an instant or sorcery card from your graveyard to your hand. Exile Experimental Overload.`
+- **Explosive Growth**
+  - `Target creature gets +2/+2 until end of turn. If this spell was kicked, that creature gets +5/+5 until end of turn instead.`
 - **Expunge**
   - `Destroy target nonartifact, nonblack creature. It can't be regenerated.`
 - **Extinction**
@@ -3961,6 +3973,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player discards two cards at random.`
 - **Hyperion Blacksmith**
   - `{T}: You may tap or untap target artifact an opponent controls.`
+- **Hypnotic Cloud**
+  - `Target player discards a card. If this spell was kicked, that player discards three cards instead.`
 - **Hypnotic Specter**
   - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
   - `Whenever this creature deals damage to an opponent, that player discards a card at random.`
@@ -4377,6 +4391,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Kaervek's Torch deals X damage to any target.`
 - **Kaervek, the Spiteful**
   - `Other creatures get -1/-1.`
+- **Kangee, Aerie Keeper**
+  - `When Kangee enters, if it was kicked, put X feather counters on it.`
 - **Karakas**
   - `{T}: Add {W}.`
   - `{T}: Return target legendary creature to its owner's hand.`
@@ -5840,6 +5856,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Prevent the next 4 damage that would be dealt to any target this turn.`
 - **Orim's Prayer**
   - `Whenever one or more creatures attack you, you gain 1 life for each attacking creature.`
+- **Orim's Touch**
+  - `Prevent the next 2 damage that would be dealt to any target this turn. If this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead.`
 - **Orim, Samite Healer**
   - `{T}: Prevent the next 3 damage that would be dealt to any target this turn.`
 - **Ornery Dilophosaur**
@@ -6295,6 +6313,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Private Research**
   - `At the beginning of your upkeep, you may put a page counter on this Aura.`
   - `When enchanted creature dies, draw a card for each page counter on this Aura.`
+- **Probe**
+  - `Draw three cards, then discard two cards. If this spell was kicked, target player discards two cards.`
 - **Prodigal Sorcerer**
   - `{T}: This creature deals 1 damage to any target.`
   - `{T}: This creature deals 1 damage to any target.`
@@ -7204,6 +7224,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this enchantment leaves the battlefield, destroy all tokens created with this enchantment. They can't be regenerated.`
 - **Saproling Cluster**
   - `{1}, Discard a card: Create a 1/1 green Saproling creature token. Any player may activate this ability.`
+- **Saproling Infestation**
+  - `Whenever a player kicks a spell, you create a 1/1 green Saproling creature token.`
 - **Saproling Symbiosis**
   - `Create a 1/1 green Saproling creature token for each creature you control.`
 - **Sarcomancy**
@@ -7583,6 +7605,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
   - `{R}: This creature gets +1/+0 until end of turn.`
+- **Shivan Emissary**
+  - `When this creature enters, if it was kicked, destroy target nonblack creature. It can't be regenerated.`
 - **Shivan Gorge**
   - `{T}: Add {C}.`
   - `{2}{R}, {T}: Shivan Gorge deals 1 damage to each opponent.`
@@ -7701,6 +7725,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you cast a creature spell, sacrifice this creature.`
 - **Skittish Kavu**
   - `This creature gets +1/+1 as long as no opponent controls a white or blue creature.`
+- **Skizzik**
+  - `At the beginning of the end step, if this creature wasn't kicked, sacrifice it.`
 - **Skulking Fugitive**
   - `When this creature becomes the target of a spell or ability, sacrifice it.`
 - **Skulking Ghost**
@@ -8617,6 +8643,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a non-Wall creature, destroy that creature at end of combat.`
+- **Thicket Elemental**
+  - `When this creature enters, if it was kicked, you may reveal cards from the top of your library until you reveal a creature card. If you do, put that card onto the battlefield and shuffle all other cards revealed this way into your library.`
 - **Thieves' Auction**
   - `Exile all nontoken permanents. Starting with you, each player chooses one of the exiled cards and puts it onto the battlefield tapped under their control. Repeat this process until all cards exiled this way have been chosen.`
 - **Thieves' Guild Enforcer**
@@ -8811,6 +8839,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature loses banding and all "bands with other" abilities until end of turn. Activate only during any upkeep step.`
 - **Tolarian Academy**
   - `{T}: Add {U} for each artifact you control.`
+- **Tolarian Emissary**
+  - `When this creature enters, if it was kicked, destroy target enchantment.`
 - **Tolarian Entrancer**
   - `Whenever this creature becomes blocked by a creature, gain control of that creature at end of combat.`
 - **Tolarian Kraken**
@@ -9120,6 +9150,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Urborg**
   - `{T}: Add {B}.`
   - `{T}: Target creature loses first strike or swampwalk until end of turn.`
+- **Urborg Emissary**
+  - `When this creature enters, if it was kicked, return target permanent to its owner's hand.`
 - **Urborg Justice**
   - `Target opponent sacrifices a creature of their choice for each creature put into your graveyard from the battlefield this turn.`
 - **Urborg Mindsucker**
@@ -9243,8 +9275,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each upkeep, create a 1/1 green Saproling creature token.`
 - **Verdant Touch**
   - `Target land becomes a 2/2 creature that's still a land. (This effect lasts indefinitely.)`
+- **Verdeloth the Ancient**
+  - `Saproling creatures and other Treefolk creatures get +1/+1.`
 - **Verdigris**
   - `Destroy target artifact.`
+- **Verduran Emissary**
+  - `When this creature enters, if it was kicked, destroy target artifact. It can't be regenerated.`
 - **Verduran Enchantress**
   - `Whenever you cast an enchantment spell, you may draw a card.`
   - `Whenever you cast an enchantment spell, you may draw a card.`
