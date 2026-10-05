@@ -100,6 +100,29 @@ def _accept_spell_type_union(stream: TokenStream) -> "tuple[str, ...] | None":
     return tuple(found)
 
 
+def _cast_it_while_exiled(stream: TokenStream) -> bool:
+    """The bare pronoun, consumed only when the rest of the sentence is
+    "[without paying its mana cost] for as long as it remains exiled".
+
+    A lookahead, not a reading: the caller reads the waiver and the duration
+    through the readers every other spelling uses, and this only decides
+    whether "it" may stand where "that card" does. Without the trailing clause
+    "you may cast it" names whatever the sentence in front was about — a
+    creature card in a graveyard, the top of a library — and those are other
+    productions' sentences.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("it"):
+        return False
+    after_pronoun = stream.mark()
+    stream.accept_phrase("without", "paying", "its", "mana", "cost")
+    pinned = bool(
+        stream.accept_phrase("for", "as", "long", "as", "it", "remains", "exiled")
+    )
+    stream.reset(after_pronoun if pinned else mark)
+    return pinned
+
+
 def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     """A sentence granting permission to cast or play from a zone the rules
     alone would not allow (CR 601.3) — see :class:`ast.CastPermission` for the
@@ -232,6 +255,12 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
         # where this verb has exactly one referent — the card the sentence
         # before it exiled.
         or (mode == "look" and stream.accept_word("it"))
+        # …and under "cast" where the sentence itself says which card "it" is:
+        # "You may cast **it** without paying its mana cost **for as long as it
+        # remains exiled**." (Planeswalker's Mischief.) The trailing clause is
+        # what pins the pronoun to an exiled card, so it is required here
+        # rather than merely read — see ``_cast_it_while_exiled``.
+        or (mode == "cast" and _cast_it_while_exiled(stream))
     ):
         # "…**without paying its mana cost**." (Temporal Aperture.) CR 118.9's
         # waiver over a named card, which is the same ``free`` flag the blanket

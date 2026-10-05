@@ -347,3 +347,131 @@ def test_w1g3_planeswalkers_scorn_is_activated_only_as_a_sorcery(set_pool):
 
     assert not refused.supported and "sorcery" in refused.details, refused.details
     assert (bear.effective_power, bear.effective_toughness) == (2, 2)
+
+
+def _w1g3_activate_mischief(set_pool, held, **board):
+    """Planeswalker's Mischief, activated at seat 1 and resolved. Returns the
+    game and both players."""
+    game, players, _card = _w1g3_cycle_board(
+        set_pool, "Planeswalker's Mischief", held, **board
+    )
+    result = game.queue_permanent_ability(
+        0, "Planeswalker's Mischief", target_player_index=1
+    )
+    assert result.supported, result.details
+    _w1g3_resolve_stack(game)
+    return game, players[0], players[1]  # _w1g3_activate_mischief
+
+
+def test_w1g3_planeswalkers_mischief_exiles_a_revealed_instant_and_lends_it(set_pool):
+    """"If it's an instant or sorcery card, exile it. You may cast it without
+    paying its mana cost for as long as it remains exiled." The card goes to
+    its *owner's* exile (CR 400.3) and the permission to the enchantment's
+    controller — never to the card's owner — and "it" is the revealed card:
+    the enchantment itself stays where it is."""
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Lightning Bolt"])
+
+    assert not theirs.hand and not mine.exile
+    assert [card.name for card in theirs.exile] == ["Lightning Bolt"]
+    assert [perm.card.name for perm in mine.battlefield] == ["Planeswalker's Mischief"]
+    (grant,) = game.cast_permissions
+    assert (grant.player_index, grant.zone_seat) == (0, 1)
+    assert (grant.mode, grant.free, grant.duration) == ("cast", True, "while_exiled")
+    refused = game.queue_from_hand(1, "Lightning Bolt", from_zone="exile")
+    assert not refused.supported, "the owner was given nothing"
+
+
+def test_w1g3_planeswalkers_mischief_casts_the_card_for_free_into_its_owners_graveyard(set_pool):
+    """CR 118.9: cast with costs enforced and not one land in play. The Bolt
+    resolves, lands in its **owner's** graveyard, the one-card grant is spent,
+    and the end step then has nothing to return."""
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Lightning Bolt"])
+    game.enforce_mana_costs = True
+
+    cast = game.queue_from_hand(0, "Lightning Bolt", from_zone="exile", target_player_index=1)
+    _w1g3_resolve_stack(game)
+
+    assert cast.supported, cast.details
+    assert theirs.life == 17
+    assert [card.name for card in theirs.graveyard] == ["Lightning Bolt"]
+    assert not theirs.exile and not mine.graveyard and not game.cast_permissions
+
+    game.resolve_end_step(0)
+    _w1g3_resolve_stack(game)
+    assert not theirs.hand, "if you haven't cast it"
+    assert [card.name for card in theirs.graveyard] == ["Lightning Bolt"]
+
+
+def test_w1g3_planeswalkers_mischief_returns_an_uncast_card_at_the_end_step(set_pool):
+    """"At the beginning of the next end step, if you haven't cast it, return
+    it to its owner's hand." Back in the opponent's hand — and the permission
+    ends with the card's stay in exile (CR 611.2b), so nothing is left that a
+    later exile of the same card could wake up."""
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Lightning Bolt"])
+    assert [trigger.event for trigger in game.delayed_triggers] == ["next_end_step"]
+
+    game.resolve_end_step(0)
+    _w1g3_resolve_stack(game)
+
+    assert [card.name for card in theirs.hand] == ["Lightning Bolt"]
+    assert not theirs.exile and not mine.hand
+    assert not game.cast_permissions and not game.delayed_triggers
+    assert any(
+        line == "Lightning Bolt returned to its owner's hand from exile"
+        for line in game.log
+    ), game.log[-4:]
+
+
+def test_w1g3_planeswalkers_mischief_leaves_a_creature_card_in_the_hand(set_pool):
+    """"**If it's an instant or sorcery card**": a creature card is revealed
+    and nothing else happens — nothing exiled, nothing permitted, and the end
+    step returns nothing. An empty hand reveals nothing at all."""
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Grizzly Bears"])
+
+    assert [card.name for card in theirs.hand] == ["Grizzly Bears"]
+    assert not theirs.exile and not game.cast_permissions
+    assert any("B reveals Grizzly Bears at random" in line for line in game.log)
+    game.resolve_end_step(0)
+    _w1g3_resolve_stack(game)
+    assert [card.name for card in theirs.hand] == ["Grizzly Bears"]
+
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, [])
+    assert not theirs.exile and not game.cast_permissions
+    assert [perm.card.name for perm in mine.battlefield] == ["Planeswalker's Mischief"]
+
+
+def test_w1g3_planeswalkers_mischief_lends_a_sorcery_and_fixes_x_at_zero(set_pool):
+    """A sorcery is exiled like an instant and cast in the same main phase. And
+    CR 107.3b: a spell cast without paying its mana cost has X = 0, whatever
+    the caster announces — a Fireball lent this way deals nothing."""
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Wrath of God"])
+    cast = game.queue_from_hand(0, "Wrath of God", from_zone="exile")
+    _w1g3_resolve_stack(game)
+    assert cast.supported, cast.details
+    assert [card.name for card in theirs.graveyard] == ["Wrath of God"]
+
+    game, mine, theirs = _w1g3_activate_mischief(set_pool, ["Fireball"])
+    game.enforce_mana_costs = True
+    cast = game.queue_from_hand(
+        0, "Fireball", from_zone="exile", target_player_index=1, x_value=5
+    )
+    assert cast.supported, cast.details
+    assert [item.x_value for item in game.stack] == [0]
+    _w1g3_resolve_stack(game)
+    assert theirs.life == 20
+
+
+def test_w1g3_planeswalkers_mischief_is_activated_only_as_a_sorcery(set_pool):
+    """The clause the cycle's blue member prints: refused on the opponent's
+    turn with the hand untouched."""
+    game, players, _card = _w1g3_cycle_board(
+        set_pool, "Planeswalker's Mischief", ["Lightning Bolt"], active=1
+    )
+
+    refused = game.queue_permanent_ability(
+        0, "Planeswalker's Mischief", target_player_index=1
+    )
+
+    assert not refused.supported and "sorcery" in refused.details, refused.details
+    assert [card.name for card in players[1].hand] == ["Lightning Bolt"]
+    assert not players[1].exile and not game.cast_permissions

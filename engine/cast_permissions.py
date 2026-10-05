@@ -468,6 +468,56 @@ def consume(game, permission: CastPermission, card) -> None:
         game.cast_permissions.remove(permission)
 
 
+def end_while_exiled_grants(game, zone_seat: int, card) -> None:
+    """A card has just left *zone_seat*'s exile: end what "for as long as it
+    remains exiled" granted over it (CR 611.2b).
+
+    ``"while_exiled"`` is swept by no turn step, on the argument that
+    :func:`_covers` re-checks the card is still in the zone — and that argument
+    is about the card being *absent*, which is half the duration. The other
+    half is CR 400.7: a card that leaves exile and later comes back is a new
+    object with no relation to the one the grant named. A grant left behind is
+    that relation, and it is found again by identity — every copy of a card in
+    a deck is one ``CardDefinition``, so it need not even be the same physical
+    card. Psychic Theft returned the card to its owner's hand at the end step
+    and went on letting its caster cast **any copy of it that was ever exiled
+    again**, by anything, for the rest of the game.
+
+    So liveness is settled where the card leaves (``Game.take_card_from_exile``,
+    the one departure seam): a grant may name a card no more times than that
+    pile still holds it. Counted rather than cleared, because two grants can
+    name two copies of one card and only one copy has gone — and counted
+    *after* the removal, so the departure that is a cast under the grant
+    itself, which :func:`consume` then retires, cannot be charged twice.
+    """
+    named = [
+        permission for permission in game.cast_permissions
+        if permission.duration == "while_exiled" and permission.zone == "exile"
+        and permission.zone_seat == zone_seat and permission.cards
+        and any(entry is card for entry in permission.cards)
+    ]
+    if not named:
+        return
+    excess = sum(
+        sum(1 for entry in permission.cards if entry is card)
+        for permission in named
+    ) - sum(1 for held in game.players[zone_seat].exile if held is card)
+    for permission in named:
+        while excess > 0:
+            slot = next(
+                (i for i, entry in enumerate(permission.cards) if entry is card),
+                None,
+            )
+            if slot is None:
+                break
+            del permission.cards[slot]
+            excess -= 1
+        if not permission.cards:
+            game.cast_permissions[:] = [
+                held for held in game.cast_permissions if held is not permission
+            ]
+
+
 def expire_end_of_turn(game) -> None:
     """CR 514.2: "until end of turn" and "this turn" grants end at cleanup."""
     game.cast_permissions[:] = [

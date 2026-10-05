@@ -704,6 +704,10 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # ``revealed_card`` stays first: ``primary_produced`` reads the head as the
     # record an "if you do" tests.
     "reveal_random_card_from_hand": ("revealed_card", "its_mana_value"),
+    # "…If it's an instant or sorcery card, **exile it**. You may cast **it**
+    # … for as long as it remains exiled." (Planeswalker's Mischief.) The card
+    # the reveal turned up, under the key every exile a permission reads writes.
+    "exile_revealed_card": "exiled_cards",
     # "Exile it. **If you do**, create a 5/5 black Demon creature token with
     # flying." (Archfiend's Vessel.) The self-exile records that it happened, so
     # the branch after it is the ordinary if-you-do rather than a fused kind.

@@ -306,6 +306,28 @@ def lower_pronoun_exile(
                 node=node,
             )
         return (OracleInstruction("exile_created_token", "", {}),)
+    # "Target opponent reveals a card at random from their hand. If it's an
+    # instant or sorcery card, **exile it**." (Planeswalker's Mischief.) The
+    # two branches above with a reveal as the step in front: the pronoun's
+    # antecedent is the card that step turned up, which is still in the zone it
+    # was shown from (CR 701.20a moves nothing), so the handler takes it out of
+    # that zone rather than reading a source or a target.
+    #
+    # Read as the source instead this lowered to ``exile_self`` — an
+    # enchantment exiling itself whenever its opponent revealed an instant.
+    # ``produced`` is the whole gate, as it is above.
+    if (
+        _is_source(subject)
+        and isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and "revealed_card" in produced
+    ):
+        if node.duration.kind is not None or node.counters:
+            raise LoweringError(
+                "an exile of a revealed card carries no duration or counters",
+                node=node,
+            )
+        return (OracleInstruction("exile_revealed_card", "", {}),)
     if _is_source(subject):
         if node.duration.kind is not None:
             raise LoweringError(

@@ -7754,6 +7754,10 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
             grant_permission(
                 game, player_index=grantee_index, zone=zone,
                 mode=payload.get("mode", "cast"), cards=held,
+                # "…**without paying its mana cost** for as long as it remains
+                # exiled." (Planeswalker's Mischief.) CR 118.9's waiver, on the
+                # flag the two grants below already carry.
+                free=bool(payload.get("free")),
                 duration=duration, source_name=source_name,
                 source_permanent_id=game.permanent_id_of(context.source_permanent),
                 zone_player_index=zone_seat,
@@ -8846,14 +8850,29 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
         )
     elif moved:
         names = ", ".join(card.name for card in moved)
+        # "…return it to its **owner's** hand" (Psychic Theft, Planeswalker's
+        # Mischief) lands in the hand of the seat whose exile held it, which is
+        # not the caster's — and the line said the caster had put it into
+        # *their* hand, in a public log, about a card that went the other way.
+        to_owner = bool(instruction.payload.get("to_owner"))
         game.log.append(
-            f"{caster.name} put {names} into their hand from exile"
+            (
+                f"{names} returned to its owner's hand from exile"
+                if to_owner
+                else f"{caster.name} put {names} into their hand from exile"
+            )
             if destination == "hand"
             else f"{names} was put into its owner's graveyard from exile"
         )
     elif instruction.payload.get("only_if_unplayed"):
+        # Two different nothings, and the log says which: a card that was
+        # played has left exile, and a conditional exile that never happened
+        # ("**If it's an instant or sorcery card**, exile it" — Planeswalker's
+        # Mischief, about a creature card) left no card to ask about.
         game.log.append(
-            f"{context.card.name}: the exiled card was played, so nothing is binned"
+            f"{context.card.name}: the exiled card was played, so nothing is "
+            "moved"
+            if cards else f"{context.card.name}: no card was exiled"
         )
     else:
         game.log.append(f"{context.card.name}: nothing was left in exile to take")
@@ -9845,6 +9864,64 @@ def exile_random_card_from_hand(game: Game, instruction: OracleInstruction, cont
     game.log.append(
         f"{victim.name} exiled {card.name} at random from their hand"
     )
+    return True, "resolved"
+
+
+@effect_handler("exile_revealed_card")
+def exile_revealed_card(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…If it's an instant or sorcery card, **exile it**." (Planeswalker's
+    Mischief.)
+
+    "It" is the card the reveal in front of this step recorded, taken out of
+    the hand it was shown from **by slot** — ``discard_revealed_card``'s rule
+    and for its reason: a hand is the one zone where two copies of a card are
+    one object, so the index resolved at reveal time is the only thing that
+    names which of them was shown. A hand that has changed underneath exiles
+    nothing rather than guessing.
+
+    Into its **owner's** exile (CR 400.3), which is the revealing player's and
+    not the ability's controller's, and recorded under the one ``exiled_cards``
+    key every other exile writes — so "you may cast it … for as long as it
+    remains exiled" and "if you haven't cast it, return it" read the referent
+    this engine already has. The record is written even when nothing moves:
+    ``lowering/_records`` declares it for the kind, and an absent key is a
+    back-reference with no producer rather than an exile of nothing.
+
+    Whose hand is ``reveal_random_card_from_hand``'s own answer, read the same
+    way, so the two steps cannot name different players.
+
+    **A card turned up from a library is the same pronoun**, and the record is
+    the same key (``reveal_top_of_library`` writes ``revealed_card`` too), so
+    this kind answers for both zones rather than exiling nothing behind one of
+    them: with no hand slot recorded the card is where ``bin_revealed_card``
+    looks for it, still on its owner's library.
+    """
+    context.results["exiled_cards"] = []
+    card = context.results.get("revealed_card")
+    if card is None:
+        return True, "resolved"
+    index = context.results.get(REVEALED_HAND_INDEX)
+    if not isinstance(index, int):
+        for owner in game.players:
+            for slot, held in enumerate(owner.library):
+                if held is card:
+                    owner.library.pop(slot)
+                    owner.exile.append(card)
+                    context.results["exiled_cards"] = [card]
+                    game.log.append(
+                        f"{owner.name} exiles {card.name} from their library"
+                    )
+                    return True, "resolved"
+        game.log.append(f"{context.card.name}: {card.name} has already moved")
+        return True, "resolved"
+    victim = context.target if context.target is not None else context.caster
+    if not (0 <= index < len(victim.hand)) or victim.hand[index] is not card:
+        game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
+        return True, "resolved"
+    victim.hand.pop(index)
+    victim.exile.append(card)
+    context.results["exiled_cards"] = [card]
+    game.log.append(f"{victim.name} exiles {card.name} from their hand")
     return True, "resolved"
 
 
