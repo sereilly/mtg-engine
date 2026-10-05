@@ -64,7 +64,7 @@ from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
 from .targeting import (bounce_subject_filter, derive_activation_spec,
-                        derive_cast_spec, spec_roles,
+                        derive_cast_spec, role_is_seat, spec_roles,
                         usable_activated_abilities)
 
 _MANA_SYMBOLS = ("W", "U", "B", "R", "G", "C")
@@ -1211,7 +1211,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         target_role_refs: list[dict] | None = None
         if spec_roles(spec):
             target_role_refs = _choose_activation_role_targets(
-                game, player_index, permanent_index
+                game, player_index, permanent_index,
+                # A side only for a chain that announces a **seat** — the three
+                # abilities this walk could not answer at all until it grew an
+                # arm for one (see the function). Every other roles ability
+                # keeps the first-option walk it has always had: giving those a
+                # side too is the right policy and a different change, one that
+                # moves what the AI does with every card already activating.
+                side=(
+                    _activation_target_side(permanent, ability.instruction)
+                    if any(role_is_seat(role) for role in spec_roles(spec))
+                    else None
+                ),
             )
             if target_role_refs is None:
                 # No legal chain. Skipped rather than proposed: CR 602.2b fills
@@ -1371,7 +1382,8 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
 
 
 def _choose_activation_role_targets(
-    game: Game, player_index: int, permanent_index: int
+    game: Game, player_index: int, permanent_index: int,
+    side: str | None = None,
 ) -> "list[dict] | None":
     """One object per **role** for an activated ability, or None when no legal
     chain exists.
@@ -1386,14 +1398,43 @@ def _choose_activation_role_targets(
 
     The answer is in the wire's own shape (``target_role_refs``) because a role
     here may be a card in a graveyard, which has no permanent id to send.
+
+    **A role may also be a seat**, and this walk had no arm for one: "Target
+    **opponent** reveals a card at random from their hand. **Target creature**
+    gets +X/+X …" (Planeswalker's Favor, Scorn), "Prevent the next 2 damage …
+    to target creature. **Target opponent** may draw a card." (Soldevi
+    Heretic). A pick of kind ``"player"`` is neither a permanent nor a card, so
+    it fell to the permanent branch, found nothing at that seat's slot ``None``
+    and answered "no legal chain" — three abilities, the only three in the pool
+    that announce a seat in a roles chain, that no AI seat ever activated.
+
+    *side* is which board the ability's object role is aimed at
+    (``_activation_target_side``), and with a seat role in the chain it is no
+    longer optional: the first option at the permanent level is the first
+    board in seat order, so without it Scorn's -X/-X would land on the
+    activator's own creature whenever the activator sits first. A level with
+    no pick on the wanted side is "no legal chain", the single-target block's
+    rule above and for its reason.
     """
     options = game.activation_target_spec(
         player_index, permanent_index, ability_index=0,
     ).get("valid_targets") or []
     refs: list[dict] = []
     while options:
+        if side in ("you", "opponent") and any(
+            option.get("kind") == "permanent" for option in options
+        ):
+            options = [
+                option for option in options
+                if option.get("kind") != "permanent"
+                or (option.get("seat") == player_index) == (side == "you")
+            ]
+            if not options:
+                return None
         pick = options[0]
-        if pick.get("kind") == "graveyard":
+        if pick.get("kind") == "player":
+            refs.append({"seat": pick.get("seat")})
+        elif pick.get("kind") == "graveyard":
             refs.append({
                 "graveyard_seat": pick.get("seat"),
                 "graveyard_index": pick.get("index"),
