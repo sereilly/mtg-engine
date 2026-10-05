@@ -1720,6 +1720,12 @@ _SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
     # site collects before the rebuild (CR 603.10a) — so "nontoken creature"
     # is answered by the same layered accessors as every other subject here.
     "matching_permanent_leaves_battlefield": "leaver",
+    # "Whenever a permanent is returned to a player's hand" (Warped Devotion).
+    # Asked while the subject is still on a battlefield for the row above's
+    # reason — ``Game.put_card_into_hand`` announces before the caller removes
+    # it (CR 603.10a) — so a narrower phrase ("a creature …") is answered by
+    # the layered accessors like every other subject here.
+    "permanent_returned_to_hand": "returned",
 }
 
 

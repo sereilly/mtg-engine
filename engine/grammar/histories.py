@@ -96,6 +96,25 @@ def accept_history_relation(stream: TokenStream, d) -> bool:
     if stream.accept_phrase("that", "attacked", "this", "turn"):
         d.attacked_this_turn = True
         return True
+    # "…sacrifices a creature of their choice **that they controlled since the
+    # beginning of the turn**." (Keldon Twilight.) CR 302.6's condition asked
+    # as a relative clause — the record Total War's exemption already sets from
+    # the other side ("except for creatures the player hasn't controlled
+    # continuously since the beginning of the turn"), stored as the positive
+    # for that clause's reason. One reading of "controlled since the turn
+    # began": the summoning-sickness clock, which a control change resets.
+    #
+    # "They" is the seat the sentence already named as the one sacrificing, so
+    # the possessive adds no second controller to test — CR 701.21a lets a
+    # player sacrifice only what they control, and the prompt offers exactly
+    # that board. Every word is required: "since the beginning of **your last
+    # upkeep**" is a different window this record cannot answer.
+    if stream.accept_phrase(
+        "that", "they", "controlled", "since", "the", "beginning", "of",
+        "the", "turn",
+    ):
+        d.controlled_since_turn_start = True
+        return True
     # "…deals 2 damage to each creature **dealt damage this turn**." (Inflame.)
     # Fatal Blow's "that was dealt damage this turn" with the relative pronoun
     # and the auxiliary left out — a reduced relative clause, one printed fact

@@ -808,6 +808,36 @@ def _lower_discard(
     else:
         kind = "discard_target_cards"
         payload["amount"] = amount
+        # "Whenever a permanent is returned to a player's hand, **that player**
+        # discards a card." (Warped Devotion.) Under a trigger, "that player"
+        # is the seat the firing event froze (CR 603.10) — and this branch read
+        # it as the *chosen-target* reading for years, with no event gate at
+        # all (`lowering/board.py` says so in as many words). Under a trigger
+        # nobody targeted, ``context.target`` is whatever a targetless
+        # resolution defaults to, which is the ability's controller's opponent:
+        # so Oppression made the *other* player discard whenever its controller
+        # cast a spell, and Anvil of Bogardan drew its controller two cards on
+        # their draw step and took the discard out of the opponent's hand.
+        # Both compiled supported and both discarded exactly one card, which is
+        # why nothing saw it.
+        #
+        # The three tables are read in the order the sacrifice lowering reads
+        # them, for its reason — they name disjoint events, so the order is
+        # documentation — and an event in none of them refuses: a seat nobody
+        # froze is not a hand to take a card from.
+        if node.player.kind == "that_player" and event is not None:
+            if event in _DAMAGED_PLAYER_EVENTS:
+                payload["who"] = "damaged_player"
+            elif event in _EVENT_SUBJECT_PLAYERS:
+                payload["who"] = EVENT_SUBJECT_PLAYER
+            elif event in _EVENT_SUBJECT_CONTROLLERS:
+                payload["who"] = EVENT_SUBJECT_CONTROLLER
+            else:
+                raise LoweringError(
+                    "no event named {!r} freezes the seat 'that player' names"
+                    .format(event),
+                    node=node,
+                )
     _describe_targets(payload, node.player)
     return (OracleInstruction(kind, "", payload),)
 

@@ -1390,6 +1390,30 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # *source's* departure and is dispatched off the source's own card.
     ("matching_permanent_leaves_battlefield",
      r"whenever (?P<leaver_subject>(?:a|an|another) [^,]+?) leaves the battlefield"),
+    # "Whenever **a permanent is returned to a player's hand**, that player
+    # discards a card." (Warped Devotion.) A zone change with *both* ends named:
+    # the battlefield (a "permanent" is nothing else, CR 110.1) and a hand. So
+    # it is not the row above, which is every departure, and it is not a card
+    # reaching a hand from anywhere — a draw and a Raise Dead put a card in a
+    # hand and return no permanent.
+    #
+    # Announced from ``Game.put_card_into_hand``, the one seam that is handed
+    # both halves: the hand it is going to and, as ``from_battlefield``, the
+    # permanent it is the card of. CR 603.10a makes it look back in time ("an
+    # object that all players can see is put into a hand"), which is why the
+    # announcement is made there, before the permanent is taken off the
+    # battlefield — an enchantment returned by the same effect still sees
+    # itself go.
+    #
+    # The noun phrase is delimited and read by the noun parser, exactly as the
+    # row above delimits its own, so "a creature is returned to a player's
+    # hand" is the same row with a narrower filter. "A player's" is the only
+    # hand spelling read: whose hand is the *event's* (CR 400.3 — always the
+    # owner's), and a card narrowing it ("to your hand") is a different trigger
+    # this row refuses rather than widens.
+    ("permanent_returned_to_hand",
+     r"whenever (?P<returned_subject>(?:a|an|another) [^,]+?) is returned to "
+     r"a player's hand"),
     ("one_or_more_attack",          r"whenever one or more creatures you control attack"),
     # "Whenever one or more Cats you control deal combat damage to a player"
     # (Feline Sovereign). A **batched** trigger: however many creatures dealt

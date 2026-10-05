@@ -3854,11 +3854,17 @@ def test_damage_trigger_discard_still_has_to_be_at_random():
 
     Without it the victim chooses which card goes, which is
     ``discard_target_cards`` -- so the random reading must not claim the
-    sentence merely because the trigger matches."""
+    sentence merely because the trigger matches.
+
+    The seat rides the payload (PLS W1G7): "that player" under a trigger is the
+    player the event froze, and the chosen handler used to be left to read
+    ``context.target`` for it -- the ability controller's opponent, whoever was
+    damaged. ``tests/regressions/test_frozen_seat_discard.py`` holds the three
+    shipped cards that was wrong for in a duel."""
     assert _instructions(
         "Whenever this creature deals damage to an opponent, that player discards a card.",
         "Test",
-    ) == [("discard_target_cards", {"amount": 1})]
+    ) == [("discard_target_cards", {"amount": 1, "who": "damaged_player"})]
 
 
 def test_removing_a_counter_matches_the_rule_it_replaces():

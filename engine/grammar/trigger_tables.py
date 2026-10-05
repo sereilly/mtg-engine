@@ -439,6 +439,12 @@ _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # attached to, so the subject leads and the phrase is the narrowing — the
     # entry rows' shape, read in `engine/oracle.py`'s table under the same kind.
     (("leaves", "the", "battlefield"), "matching_permanent_leaves_battlefield"),
+    # "Whenever **a permanent** is returned to a player's hand, …" (Warped
+    # Devotion.) The departure above with its destination named: one zone
+    # change, both ends printed. Subject-led for the row above's reason, and
+    # read under the same kind `engine/oracle.py`'s table gives it.
+    (("is", "returned", "to", "a", "player", "'s", "hand"),
+     "permanent_returned_to_hand"),
     # "Whenever **a creature** is dealt damage, destroy it." (Death Pits of
     # Rath.) The same event Fungusaur's "whenever **this** creature is dealt
     # damage" names and Binding Agony's "whenever **enchanted** creature is

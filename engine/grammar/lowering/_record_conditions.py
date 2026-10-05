@@ -583,6 +583,14 @@ def lower_record_condition(
         return {"kind": "additional_cost_paid"}
     if isinstance(condition, ast.ReturnedToHandThisTurn):
         return {"kind": "returned_to_hand_this_turn"}
+    if isinstance(condition, ast.CreaturesAttackedThisTurn):
+        # The sign rides the payload, as it does for the seat records below:
+        # "no creatures attacked" and "a creature attacked" are one question
+        # with two signs, and a kind per sign is two kinds for one record.
+        return {
+            "kind": "creatures_attacked_this_turn",
+            "negated": bool(condition.negated),
+        }
     if isinstance(condition, ast.HadPlus1Counter):
         return {"kind": "had_plus1_counter"}
     if isinstance(condition, ast.HadNamedCounter):

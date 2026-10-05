@@ -319,3 +319,392 @@ def test_w1g7_cloud_cover_watches_an_opponents_ability_and_any_permanent(
     _w1g7_resolve_stack(table)
 
     assert [card.name for card in table.players[0].hand] == ["Forest"]
+
+
+# Warped Devotion — "Whenever a permanent is returned to a player's hand, that
+# player discards a card." A zone change with both ends named, announced from
+# `Game.put_card_into_hand` — the one seam handed the hand it is going to and,
+# as `from_battlefield`, the permanent it is the card of.
+
+
+def _w1g7_devotion_table(set_pool, *, mine=(), theirs=(), hands=((), ())):
+    devotion = _W1G7Permanent(card=set_pool("PLS")["Warped Devotion"])
+    table = _w1g7_board([devotion, *mine], list(theirs), hands=hands)
+    return table, devotion
+
+
+def _w1g7_settle(table):
+    """Drain the stack and take every default the drained objects armed."""
+    for _ in range(8):
+        _w1g7_resolve_stack(table)
+        if not table.pending_choices:
+            return
+        table.auto_resolve_pending_choices()
+    raise AssertionError("the table did not settle")
+
+
+def _w1g7_names(cards):
+    return sorted(getattr(card, "name", None) or card.card.name for card in cards)
+
+
+def test_w1g7_warped_devotion_compiles_onto_the_zone_change(set_pool):
+    program = _w1g7_compile(set_pool("PLS")["Warped Devotion"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "permanent_returned_to_hand"
+    assert trigger.condition.payload == {"returned_filter": {}}
+    assert trigger.instruction.kind == "discard_target_cards"
+    # "That player" is the seat the move froze, not a seat anybody targeted.
+    assert trigger.instruction.payload == {
+        "amount": 1, "who": "event_subject_player",
+    }
+
+
+def test_w1g7_warped_devotion_makes_the_bounced_permanents_owner_discard(set_pool):
+    """Seat 1 bounces seat 0's creature: the hand it reaches is seat 0's, so
+    seat 0 discards — not the player who cast the bounce, and not "the
+    opponent of the enchantment's controller", which is the seat a targetless
+    resolution defaults to and the one this card used to take the card from."""
+    lea = set_pool("LEA")
+    mine = _W1G7Permanent(card=_w1g7_card("W1G7 Mine", "Creature - Test", pt=(2, 2)))
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, mine=[mine],
+        hands=((lea["Forest"],), (lea["Unsummon"], lea["Swamp"])),
+    )
+
+    assert table.cast_from_hand(
+        1, "Unsummon", target_permanent_ids=[mine.permanent_id]
+    ).supported
+    _w1g7_settle(table)
+
+    assert len(table.players[0].hand) == 1, "one card arrived and one went"
+    assert len(table.players[0].graveyard) == 1
+    assert _w1g7_names(table.players[1].hand) == ["Swamp"]
+    assert _w1g7_names(table.players[1].graveyard) == ["Unsummon"]
+
+
+def test_w1g7_warped_devotion_follows_the_owner_whoever_did_the_bouncing(set_pool):
+    lea = set_pool("LEA")
+    theirs = _W1G7Permanent(
+        card=_w1g7_card("W1G7 Theirs", "Creature - Test", pt=(2, 2))
+    )
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, theirs=[theirs],
+        hands=((lea["Unsummon"], lea["Forest"]), (lea["Swamp"],)),
+    )
+
+    table.cast_from_hand(0, "Unsummon", target_permanent_ids=[theirs.permanent_id])
+    _w1g7_settle(table)
+
+    assert _w1g7_names(table.players[0].hand) == ["Forest"]
+    assert len(table.players[1].hand) == 1 and len(table.players[1].graveyard) == 1
+
+
+def test_w1g7_warped_devotion_ignores_a_card_that_was_never_a_permanent(set_pool):
+    """A draw and a return from a graveyard both put a card into a hand and
+    return no *permanent* — the narrowing "a permanent is returned" is."""
+    lea = set_pool("LEA")
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, hands=((lea["Raise Dead"], lea["Forest"]), (lea["Swamp"],)),
+    )
+    table.players[0].graveyard.append(lea["Grizzly Bears"])
+
+    assert table.cast_from_hand(0, "Raise Dead", target_permanent_index=0).supported
+    _w1g7_settle(table)
+    table._draw_with_replacements(table.players[1], 1)
+    table.check_state_based_actions()
+    _w1g7_settle(table)
+
+    assert _w1g7_names(table.players[0].hand) == ["Forest", "Grizzly Bears"]
+    assert _w1g7_names(table.players[0].graveyard) == ["Raise Dead"]
+    assert table.players[1].graveyard == []
+
+
+def test_w1g7_warped_devotion_fires_for_a_token_that_is_bounced(set_pool):
+    """CR 111.7: "if a token changes zones, applicable triggered abilities will
+    trigger before the token ceases to exist." The token is returned to its
+    owner's hand — and then is no card anywhere — so its owner discards."""
+    from engine.tokens import make_token_card
+
+    lea = set_pool("LEA")
+    token = _W1G7Permanent(card=make_token_card(
+        "Saproling", 1, 1, "Token Creature - Saproling", colors=("G",),
+    ))
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, theirs=[token], hands=((lea["Unsummon"],), (lea["Swamp"],)),
+    )
+    table._initialize_permanent_state(token, 1, 0)
+
+    table.cast_from_hand(0, "Unsummon", target_permanent_ids=[token.permanent_id])
+    _w1g7_settle(table)
+
+    assert table.players[1].hand == [], "the token is not a card in a hand"
+    assert _w1g7_names(table.players[1].graveyard) == ["Swamp"]
+    assert not table.is_on_battlefield(token)
+
+
+def test_w1g7_warped_devotion_sees_itself_returned(set_pool):
+    """CR 603.10a: an ability that triggers when an object all players can see
+    is put into a hand looks back in time, so the enchantment bounced by the
+    effect is still there to see itself go."""
+    lea = set_pool("LEA")
+    table, devotion = _w1g7_devotion_table(
+        set_pool, hands=((lea["Forest"],), (set_pool("LEG")["Boomerang"],)),
+    )
+
+    table.cast_from_hand(1, "Boomerang", target_permanent_ids=[devotion.permanent_id])
+    _w1g7_settle(table)
+
+    assert _w1g7_names(table.players[0].graveyard) == ["Forest"]
+    assert _w1g7_names(table.players[0].hand) == ["Warped Devotion"]
+
+
+def test_w1g7_warped_devotion_triggers_once_per_permanent_in_a_sweep(set_pool):
+    """One trigger per permanent returned (CR 603.2c: an event containing
+    several occurrences triggers once for each)."""
+    lea, forest = set_pool("LEA"), set_pool("LEA")["Forest"]
+    evacuation = next(
+        set_pool(code)["Evacuation"]
+        for code in ("STH", "5ED", "6ED", "TMP", "INV")
+        if "Evacuation" in set_pool(code)
+    )
+    mine = [
+        _W1G7Permanent(card=_w1g7_card(f"W1G7 Mine {n}", "Creature - Test", pt=(1, 1)))
+        for n in (1, 2)
+    ]
+    theirs = [
+        _W1G7Permanent(card=_w1g7_card("W1G7 Theirs", "Creature - Test", pt=(1, 1)))
+    ]
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, mine=mine, theirs=theirs,
+        hands=((evacuation, forest, forest, forest), (lea["Swamp"], lea["Swamp"])),
+    )
+
+    assert table.cast_from_hand(0, "Evacuation").supported
+    _w1g7_settle(table)
+
+    # Seat 0: three Forests and two returned creatures in, two discards out.
+    assert len(table.players[0].hand) == 3
+    assert len(table.players[0].graveyard) == 3  # Evacuation + two discards
+    # Seat 1: two Swamps and one returned creature in, one discard out.
+    assert len(table.players[1].hand) == 2
+    assert len(table.players[1].graveyard) == 1
+
+
+def test_w1g7_warped_devotion_costs_a_gating_creature_a_card(set_pool):
+    """Gating ("When this creature enters, return a red or green creature you
+    control to its owner's hand") under Warped Devotion: the return is a
+    permanent returned to a hand, so the gater's controller discards."""
+    lea, pls = set_pool("LEA"), set_pool("PLS")
+    gater = pls["Horned Kavu"]
+    assert _w1g7_compile(gater).supported
+    host = _W1G7Permanent(card=_w1g7_card(
+        "W1G7 Red Host", "Creature - Test", pt=(2, 2), colors=("R",), cost="{R}",
+    ))
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, mine=[host], hands=((gater, lea["Forest"]), ()),
+    )
+
+    assert table.cast_from_hand(0, "Horned Kavu").supported
+    _w1g7_settle(table)
+
+    hand = _w1g7_names(table.players[0].hand)
+    # Gating returned one of the two red-or-green creatures (the Kavu may
+    # return itself); either way exactly one card came back and one was
+    # discarded, so the hand is still one card and the graveyard holds one.
+    assert len(hand) == 1, hand
+    assert len(table.players[0].graveyard) == 1
+    assert any("must choose 1 card(s) to discard" in line for line in table.log)
+
+
+def test_w1g7_warped_devotion_with_sunken_hope_is_a_discard_every_upkeep(set_pool):
+    """Sunken Hope ("each player's upkeep, that player returns a creature they
+    control to its owner's hand") beside Warped Devotion: the active player
+    bounces a creature and then discards."""
+    lea = set_pool("LEA")
+    hope = _W1G7Permanent(card=set_pool("PLS")["Sunken Hope"])
+    theirs = _W1G7Permanent(
+        card=_w1g7_card("W1G7 Theirs", "Creature - Test", pt=(2, 2))
+    )
+    table, _devotion = _w1g7_devotion_table(
+        set_pool, mine=[hope], theirs=[theirs],
+        hands=((lea["Forest"],), (lea["Swamp"],)),
+    )
+    table.turn = 2
+
+    table.begin_turn_bookkeeping(1)
+    table.resolve_untap_step(1)
+    table.resolve_upkeep(1)
+    _w1g7_settle(table)
+
+    assert not table.is_on_battlefield(theirs)
+    assert len(table.players[1].hand) == 1 and len(table.players[1].graveyard) == 1
+    assert _w1g7_names(table.players[0].hand) == ["Forest"]
+
+
+def test_w1g7_a_narrower_returned_subject_is_enforced():
+    """The noun phrase is data: "a **creature** is returned to a player's hand"
+    is the same row with a filter, and the filter is tested — an enchantment
+    bounced past it discards nothing."""
+    watcher = _W1G7Permanent(card=_w1g7_card(
+        "W1G7 Watcher", "Enchantment",
+        "Whenever a creature is returned to a player's hand, that player "
+        "discards a card.",
+    ))
+    rock = _W1G7Permanent(card=_w1g7_card("W1G7 Rock", "Artifact", cost="{2}"))
+    bear = _W1G7Permanent(card=_w1g7_card("W1G7 Bear", "Creature - Test", pt=(2, 2)))
+    filler = _w1g7_card("W1G7 Card", "Sorcery", "Draw a card.")
+    table = _w1g7_board([watcher], [rock, bear], hands=((), (filler, filler)))
+    program = _w1g7_compile(watcher.card)
+    assert program.supported, program.reason
+
+    table.put_card_into_hand(table.players[1], rock.card, from_battlefield=rock)
+    table.remove_from_battlefield(rock)
+    _w1g7_settle(table)
+    assert table.players[1].graveyard == []
+
+    table.put_card_into_hand(table.players[1], bear.card, from_battlefield=bear)
+    table.remove_from_battlefield(bear)
+    _w1g7_settle(table)
+    assert len(table.players[1].graveyard) == 1
+
+
+# Keldon Twilight — "At the beginning of each player's end step, if no
+# creatures attacked this turn, that player sacrifices a creature of their
+# choice that they controlled since the beginning of the turn." Three pieces
+# that each already had a neighbour: the per-player end step (Monsoon), a
+# turn-wide attack record read as CR 603.4's intervening-if, and CR 302.6's
+# clock as a narrowing on the forced-sacrifice prompt.
+
+
+def _w1g7_twilight_table(set_pool, *, mine=("W1G7 Mine",), theirs=("W1G7 Theirs",),
+                         interactive=()):
+    twilight = _W1G7Permanent(card=set_pool("PLS")["Keldon Twilight"])
+    ours = [
+        _W1G7Permanent(card=_w1g7_card(name, "Creature - Test", pt=(2, 2)))
+        for name in mine
+    ]
+    others = [
+        _W1G7Permanent(card=_w1g7_card(name, "Creature - Test", pt=(2, 2)))
+        for name in theirs
+    ]
+    table = _w1g7_board([twilight, *ours], others, interactive=interactive)
+    table.turn = 4
+    return table, ours, others
+
+
+def _w1g7_to_end_step(table, seat, *, begin=True):
+    """Run *seat*'s turn to the beginning of its end step, attacking with
+    nobody; the end-step triggers are on the stack when this returns."""
+    if begin:
+        table.start_turn(seat)
+    table._close_current_priority_step()
+    for _ in range(12):
+        if table.current_turn_phase == "ending":
+            return
+        table.enter_next_turn_phase()
+    raise AssertionError("the turn never reached its ending phase")
+
+
+def test_w1g7_keldon_twilight_compiles_with_its_gate_and_its_narrowing(set_pool):
+    program = _w1g7_compile(set_pool("PLS")["Keldon Twilight"])
+    assert program.supported, program.reason
+
+    (trigger,) = program.triggered_abilities
+    assert trigger.condition.kind == "end_step"
+    assert trigger.instruction.kind == "sacrifice_matching_permanent"
+    assert trigger.instruction.payload == {
+        "filter": {"type_filter": "creature", "controlled_since_turn_start": True},
+        "who": "event_subject_player",
+        "intervening_if": {"kind": "creatures_attacked_this_turn", "negated": True},
+    }
+
+
+def test_w1g7_keldon_twilight_takes_a_creature_from_the_player_whose_end_step_it_is(
+    set_pool,
+):
+    table, ours, others = _w1g7_twilight_table(set_pool)
+
+    _w1g7_to_end_step(table, 1)
+    assert [item.card.name for item in table.stack] == ["Keldon Twilight"]
+    _w1g7_settle(table)
+
+    # "That player" is the active one — the opponent here, not the
+    # enchantment's controller.
+    assert not table.is_on_battlefield(others[0])
+    assert table.is_on_battlefield(ours[0])
+
+
+def test_w1g7_keldon_twilight_binds_its_own_controller_on_their_turn(set_pool):
+    table, ours, others = _w1g7_twilight_table(set_pool)
+
+    _w1g7_to_end_step(table, 0)
+    _w1g7_settle(table)
+
+    assert not table.is_on_battlefield(ours[0])
+    assert table.is_on_battlefield(others[0])
+
+
+def test_w1g7_keldon_twilight_does_not_trigger_on_a_turn_a_creature_attacked(set_pool):
+    """CR 603.4: an intervening-if that is false means the ability does not
+    trigger at all — nothing goes on the stack. The record is the seat's, so an
+    attacker that has since left the battlefield still attacked."""
+    table, _ours, others = _w1g7_twilight_table(set_pool)
+    table.start_turn(1)
+    table._close_current_priority_step()
+    table.advance_combat_phase()
+    table.advance_combat_phase()
+    assert table.declare_attackers(1, [0])[0]
+    table.remove_from_battlefield(others[0])  # the attacker is gone …
+    assert table.players[1].attacked_this_turn  # … and still attacked
+
+    for _ in range(12):
+        if table.current_turn_phase == "ending":
+            break
+        table.enter_next_turn_phase()
+
+    assert table.current_turn_phase == "ending"
+    assert table.stack == []
+
+
+def test_w1g7_keldon_twilight_spares_a_creature_that_arrived_this_turn(set_pool):
+    """"…that they controlled since the beginning of the turn". A creature cast
+    this turn is not one, so a player holding only that one sacrifices
+    nothing — and with an older creature beside it, only the older is offered."""
+    fresh = _w1g7_card("W1G7 Fresh", "Creature - Test", pt=(2, 2))
+    table, _ours, _others = _w1g7_twilight_table(set_pool, theirs=())
+    table.players[1].hand.append(fresh)
+    table.start_turn(1)
+    assert table.cast_from_hand(1, "W1G7 Fresh").supported
+    _w1g7_settle(table)
+
+    _w1g7_to_end_step(table, 1, begin=False)
+    _w1g7_settle(table)
+
+    assert _w1g7_names(table.controlled_by(1)) == ["W1G7 Fresh"]
+    assert table.players[1].graveyard == []
+
+
+def test_w1g7_keldon_twilight_offers_only_the_creatures_it_names(set_pool):
+    fresh = _w1g7_card("W1G7 Fresh", "Creature - Test", pt=(2, 2))
+    table, _ours, others = _w1g7_twilight_table(
+        set_pool, theirs=("W1G7 Old",), interactive={1},
+    )
+    table.players[1].hand.append(fresh)
+    table.start_turn(1)
+    table.cast_from_hand(1, "W1G7 Fresh")
+    table.resolve_stack(pause_for_choices=True)
+
+    _w1g7_to_end_step(table, 1, begin=False)
+    table.resolve_top_of_stack(pause_for_choices=True)
+
+    (owed,) = table.pending_choices
+    assert (owed.kind, owed.player_index) == ("sacrifice", 1)
+    offered = table._sacrifice_candidate_indices(
+        table.players[1], owed.data["filter"]
+    )
+    assert [table.players[1].battlefield[i].card.name for i in offered] == [
+        "W1G7 Old"
+    ]
+    assert others[0].card.name == "W1G7 Old"
