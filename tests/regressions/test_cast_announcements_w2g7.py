@@ -232,7 +232,8 @@ def test_w2g7_no_spell_in_the_pool_is_cast_bare_at_an_empty_board_unless_its_tex
         f"{len(over_refused)} spells that may name no target were refused for "
         f"having none to name: {sorted(over_refused)}"
     )
-    # 433 examined and 385 refused when this was written (182 of them newly).
+    # 433 examined and 378 refused when this was written; without the gate 196
+    # are, so 182 casts at nothing were legal before it.
     assert examined > 380, f"the sweep only examined {examined} spells"
     assert refused > 330, f"only {refused} bare casts were refused"
     # INV W2G3 owns CR 601.2c for a spell that targets a spell: when its gate
