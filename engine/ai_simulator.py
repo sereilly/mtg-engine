@@ -10,8 +10,9 @@ from .ai_combat import run_ai_combat_phase
 from .ai_policy import (choose_activation_action, choose_cast_action,
                         choose_foreign_activation_action,
                         choose_hand_activation_action, choose_land_drop,
-                        tap_planned_lands)
+                        spell_being_cast, tap_planned_lands)
 from .card_loader import load_cards
+from .faces import whole_card
 from .game import Game
 from .search_filters import card_has_type
 from .oracle import compile_card_oracle
@@ -386,7 +387,14 @@ def _zone_counter(game: Game) -> Counter[str]:
         # discriminator `StackItem` actually carries; there is no `is_ability`,
         # and asking for one with a default quietly counted every ability.
         if item.ability_instruction is None and item.card is not None:
-            counter[item.card.name] += 1
+            # By the *whole* card's name (CR 709.2: it is one card): a split
+            # card's spell is its half, under the half's name, and counting
+            # that would read a suspended Assault as an Assault // Battery
+            # vanishing and an "Assault" appearing. Every other zone holds the
+            # whole card, so a half found *there* — a card that left the stack
+            # without becoming whole again (CR 709.4) — is counted under the
+            # half's name and is reported as exactly that leak.
+            counter[whole_card(item.card).name] += 1
     # And a permanent another permanent is *holding*. Oubliette's scoped
     # exile-and-return keeps the creature it removed as a live ``Permanent`` on
     # its own metadata rather than in any zone list, so the creature is in the
@@ -688,7 +696,10 @@ def _play_one_cast(
         if cast_action.from_zone == "command"
         else active_player.hand
     )
-    card_to_cast = cast_zone[cast_action.hand_index]
+    # The spell, not the zone's card: a split card is cast as the half the
+    # policy scored (CR 709.3), and every line below — the cast, the log, the
+    # support check, the effect audit — is about that half.
+    card_to_cast = spell_being_cast(cast_zone, cast_action)
 
     # The payment: the planned lands tapped into the pool, each for the colour
     # the plan counted on (`ai_policy.tap_planned_lands`, the web AI seat's

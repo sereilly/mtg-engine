@@ -53,6 +53,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine import card_hooks, load_cards  # noqa: E402
+from engine.faces import face_cards, whole_card  # noqa: E402
 from set_argument import add_set_argument, resolve_set  # noqa: E402
 from engine.card_loader import manifest_set_paths  # noqa: E402
 from engine.grammar import compile_line as compile_grammar_line  # noqa: E402
@@ -1237,7 +1238,29 @@ def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCovera
         coverage.supported = False
         return coverage
 
-    acknowledged_map = ACKNOWLEDGED.get(card.name, {})
+    # A multi-face card's text is on its faces (CR 709.4c) and its own text box
+    # is empty — so reading the card as handed in finds no sentence, claims
+    # nothing, leaves nothing unclaimed and reports "fully claimed" over zero
+    # sentences. That is the default outcome for a split card and exactly the
+    # failure this instrument exists to prevent, so each face is analysed as the
+    # card it is on the stack (`engine/faces.py`) and the findings are reported
+    # under the one card a player holds. `load_pool` hands whole cards only, so
+    # the recursion is one level deep by construction.
+    faces = face_cards(card)
+    if faces:
+        for face in faces:
+            part = analyze_card(face, hooked, run_probe=run_probe)
+            coverage.supported = coverage.supported and part.supported
+            coverage.claims.extend(part.claims)
+            coverage.unclaimed.extend(part.unclaimed)
+            coverage.acknowledged.extend(part.acknowledged)
+            coverage.probe_findings.extend(part.probe_findings)
+        return coverage
+
+    # A deliberate shortcut is recorded against the card a reader would look
+    # up, which for a half is the whole card — so a stale entry is still found
+    # by the `(name, sentence)` comparison `collect_findings` makes.
+    acknowledged_map = ACKNOWLEDGED.get(whole_card(card).name, {})
     # Every printed line the compiled program kept an ability for, normalized the
     # same way the sentences below are, so the two can be compared at all.
     compiled_lines = {

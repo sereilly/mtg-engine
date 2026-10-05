@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from engine.card_loader import load_cards  # noqa: E402
-from engine.oracle import compile_card_oracle  # noqa: E402
+from engine.oracle import compile_card_oracle, compiled_faces  # noqa: E402
 from engine.targeting import (  # noqa: E402
     card_names_a_chooser,
     cast_picker_expected,
@@ -124,44 +124,52 @@ def sweep(cards):
         "activation_no_picker": [],
         "acknowledged": [],
     }
-    for card in cards:
-        program = compile_card_oracle(card)
-        if not program.supported:
+    for whole in cards:
+        if not compile_card_oracle(whole).supported:
             continue
-        spec = derive_cast_spec(card, program)
-        derives = spec is not None and spec.get("kind") != "none"
-        if cast_picker_expected(card, program) and not derives:
-            if card.name in ACKNOWLEDGED:
-                findings["acknowledged"].append((card.name, ACKNOWLEDGED[card.name]))
-            else:
-                findings["no_picker"].append(
-                    (card.name, (card.oracle_text or "").splitlines()[0])
-                )
-        if derives and not card_names_a_chooser(card, program):
-            findings["phantom_picker"].append((card.name, str(spec)))
-        for index, ability in enumerate(program.activated_abilities):
-            line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
-            if "of an opponent's choice" in line or (
-                # The same fact in the other printed word order, with the
-                # chooser as the sentence's subject: "**An opponent chooses**
-                # target creature they control" (Echo Chamber). Two spellings
-                # of one exclusion rather than two exclusions — a reader that
-                # knew only Preacher's would report the second card as a
-                # missing picker, which is the opposite of what it is.
-                "an opponent chooses target" in line
-            ):
-                # The opponent picks, not the activator (Preacher, Echo
-                # Chamber) — the activation ratchet derives the same exclusion
-                # from the program (tests/engine/test_activation_targeting.py).
-                continue
-            if "target" in line and derive_activation_spec(ability) is None:
-                acknowledged = ACKNOWLEDGED_ABILITIES.get((card.name, index))
-                if acknowledged is not None:
-                    findings["acknowledged"].append((card.name, acknowledged))
+        # One pass per **spell** (``compiled_faces``). A split card is two, each
+        # with its own printed line and its own picker (CR 709.3a: only the
+        # chosen half is evaluated), and the whole card has neither a line nor
+        # a spec — so asked as handed in it answers "no choice printed, no
+        # picker derived" and passes every question below without one being
+        # asked. A single-face card is its own one-entry list.
+        for card, program in compiled_faces(whole):
+            # A half is reported as the card a player holds, with the half named.
+            label = card.name if card is whole else f"{whole.name} [{card.name}]"
+            spec = derive_cast_spec(card, program)
+            derives = spec is not None and spec.get("kind") != "none"
+            if cast_picker_expected(card, program) and not derives:
+                if whole.name in ACKNOWLEDGED:
+                    findings["acknowledged"].append((label, ACKNOWLEDGED[whole.name]))
                 else:
-                    findings["activation_no_picker"].append(
-                        (card.name, ability.source_line)
+                    findings["no_picker"].append(
+                        (label, (card.oracle_text or "").splitlines()[0])
                     )
+            if derives and not card_names_a_chooser(card, program):
+                findings["phantom_picker"].append((label, str(spec)))
+            for index, ability in enumerate(program.activated_abilities):
+                line = _QUOTED.sub("", _REMINDER.sub("", ability.source_line or "")).lower()
+                if "of an opponent's choice" in line or (
+                    # The same fact in the other printed word order, with the
+                    # chooser as the sentence's subject: "**An opponent chooses**
+                    # target creature they control" (Echo Chamber). Two spellings
+                    # of one exclusion rather than two exclusions — a reader that
+                    # knew only Preacher's would report the second card as a
+                    # missing picker, which is the opposite of what it is.
+                    "an opponent chooses target" in line
+                ):
+                    # The opponent picks, not the activator (Preacher, Echo
+                    # Chamber) — the activation ratchet derives the same exclusion
+                    # from the program (tests/engine/test_activation_targeting.py).
+                    continue
+                if "target" in line and derive_activation_spec(ability) is None:
+                    acknowledged = ACKNOWLEDGED_ABILITIES.get((whole.name, index))
+                    if acknowledged is not None:
+                        findings["acknowledged"].append((label, acknowledged))
+                    else:
+                        findings["activation_no_picker"].append(
+                            (label, ability.source_line)
+                        )
     return findings
 
 

@@ -36,6 +36,7 @@ import re
 from collections import defaultdict
 from typing import Any, Iterable
 
+from .faces import face_cards
 from .oracle import compile_card_oracle
 
 _COLOUR_WORD = re.compile(r"\b(white|blue|black|red|green)\b")
@@ -94,8 +95,19 @@ def behaviour_signature(card) -> str:
     """
     program = compile_card_oracle(card)
     type_line = card.type_line.lower()
+    # A multi-face card (CR 709) has no instructions of its own — its program
+    # is its faces' — so everything below but the types would be empty for it,
+    # and two split cards with different spells on them would differ only by
+    # the masked text. That is the dropped-payload failure this module's
+    # docstring describes. Each face's full signature is part of the card's;
+    # the key is absent for a single-face card, so no existing class moves and
+    # a split card can never be the peer of a card with one face.
+    faces = [
+        json.loads(behaviour_signature(face)) for face in face_cards(card)
+    ]
     return json.dumps(
         {
+            **({"faces": faces} if faces else {}),
             "types": [t for t in _DISPATCH_TYPES if t in type_line],
             "keywords": sorted(k.lower() for k in (card.keywords or ())),
             # Colour is masked, but how *many* mana are produced is not:

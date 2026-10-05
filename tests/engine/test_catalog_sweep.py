@@ -26,6 +26,7 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState, classify_card, load_cards
+from engine.faces import face_cards, is_multi_face
 from engine.models import CardDefinition, Permanent
 from tests.helpers import (
     _mk_card,
@@ -62,6 +63,15 @@ def pytest_generate_tests(metafunc):
     # complete set — was never swept at all. Driving it from the manifest means
     # a new set is covered the moment it is ingested.
     names = [c.name for c in _sweep_pool() if c.name not in SWEEP_EXCLUSIONS]
+    # …and every **half** of a split card, by its own name (CR 709.3): the
+    # sweep casts by name, and a split card named whole is refused before any
+    # of its text runs — so swept only as "Assault // Battery" the card would
+    # pass this file with neither spell on it ever having resolved.
+    names += [
+        face.name
+        for c in _sweep_pool() if c.name not in SWEEP_EXCLUSIONS
+        for face in face_cards(c)
+    ]
     metafunc.parametrize("card_name", names)
 
 
@@ -84,7 +94,13 @@ def sweep_by_name():
     ``catalog_by_name`` is shipped-only on purpose and is read by guards that
     are making a claim about what ships; this sweep is not one of them.
     """
-    return {card.name: card for card in _sweep_pool()}
+    by_name = {card.name: card for card in _sweep_pool()}
+    # A half's name finds the card it is half of — that is what sits in the
+    # hand; the cast below names the half.
+    for card in _sweep_pool():
+        for face in face_cards(card):
+            by_name.setdefault(face.name, card)
+    return by_name
 
 
 def test_the_sweep_covers_every_measured_set(sweep_by_name):
@@ -213,3 +229,8 @@ def test_every_catalog_card_resolves_without_exception(all_cards, sweep_by_name,
     # The call must not raise; result being unsupported is acceptable
     # (some cards may have unmet preconditions in this generic setup)
     assert result is not None
+    if is_multi_face(card):
+        # The one refusal that is *not* acceptable here: a half that was swept
+        # under a name the cast path did not take for a half.
+        named_whole = card_name == card.name
+        assert ("709.3" in (result.details or "")) == named_whole, result.details

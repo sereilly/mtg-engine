@@ -33,6 +33,7 @@ from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.mana_payment import is_mana_ability
 from engine.models import Permanent
+from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
 
 #: Every printed spelling of a colour chosen while the effect is applied. "A
@@ -59,7 +60,10 @@ _COLOUR_PROMPTS = ("color_choice", "color_set_choice")
 def _w3g2_catalog():
     cards = {}
     for card in load_cards(manifest_set_paths(include_measured=True)):
-        cards.setdefault(card.name, card)
+        # One entry per **spell**: a split card's printed lines are on its
+        # halves (CR 709.4c), and read whole it has none to hold to this guard.
+        for spell in castable_faces(card):
+            cards.setdefault(spell.name, spell)
     return cards
 
 

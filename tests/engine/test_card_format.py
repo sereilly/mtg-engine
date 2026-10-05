@@ -26,7 +26,7 @@ from engine.card_loader import (
     load_catalog,
     manifest_set_paths,
 )
-from engine.models import CardDefinition
+from engine.models import CardDefinition, CardFace
 from engine.oracle import SUPPORTED_LAYOUTS, compile_card_oracle
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
@@ -146,19 +146,98 @@ def _card(**kwargs) -> CardDefinition:
 
 
 def test_current_pool_is_all_single_faced():
+    """Named for what it asserted before split cards (CR 709) were admitted;
+    what it holds now is that every layout the shipped pool carries is one the
+    compiler reads — the single-face ones, plus the layouts whose faces
+    ``engine/faces.py`` derives as cards of their own."""
     assert {card.layout for card in load_catalog()} <= SUPPORTED_LAYOUTS
 
 
-@pytest.mark.parametrize("layout", ["split", "flip", "transform", "modal_dfc", "adventure", "meld"])
+@pytest.mark.parametrize("layout", ["flip", "transform", "modal_dfc", "adventure", "meld"])
 def test_multi_face_layouts_are_explicitly_unsupported(layout):
-    """A split card carries empty top-level mana_cost/oracle_text with the real
-    text in card_faces. Compiling it as-is would classify it a supported
+    """A multi-face card carries empty top-level mana_cost/oracle_text with the
+    real text in card_faces. Compiling it as-is would classify it a supported
     vanilla — a wrong answer with no error. It must refuse instead, naming the
-    layout so support_report points at the actual gap."""
-    card = _card(name=f"Test {layout}", mana_cost="", oracle_text="", layout=layout)
+    layout so support_report points at the actual gap.
+
+    ``split`` left this list when CR 709 was implemented; the faces are given
+    here so the refusal is about the *layout* and not about a card with no
+    faces to read (the test below)."""
+    faces = (
+        CardFace("Front", "{1}", "Instant", "Draw a card."),
+        CardFace("Back", "{1}", "Instant", "Draw a card."),
+    )
+    card = _card(
+        name=f"Test {layout}", mana_cost="", oracle_text="", layout=layout, faces=faces,
+    )
     program = compile_card_oracle(card)
     assert not program.supported
     assert layout in program.reason
+
+
+def test_a_split_card_with_no_faces_is_still_refused():
+    """The original guard, for the one way a split card can still arrive blank:
+    a card file whose ``card_faces`` was dropped (``ingest_set.py`` keeps it,
+    and this is what notices if it stops). With no halves there is nothing to
+    compile, and reading the empty top-level text as a supported vanilla is the
+    silently wrong answer the layout gate exists for."""
+    card = _card(name="Test split", mana_cost="", oracle_text="", layout="split")
+    program = compile_card_oracle(card)
+    assert not program.supported
+    assert "split" in program.reason
+
+
+def _split(**halves_text) -> CardDefinition:
+    (left, left_text), (right, right_text) = halves_text.items()
+    return _card(
+        name=f"{left} // {right}", mana_cost="{R} // {3}{G}", cmc=5.0,
+        type_line="Sorcery // Sorcery", oracle_text="", colors=("G", "R"),
+        layout="split",
+        faces=(
+            CardFace(left, "{R}", "Sorcery", left_text),
+            CardFace(right, "{3}{G}", "Sorcery", right_text),
+        ),
+    )
+
+
+def test_a_split_card_compiles_one_program_per_half():
+    """CR 709.3a: only the chosen half is evaluated, so the *whole* card has no
+    instructions of its own — its verdict is its halves' — and each half
+    compiles as the normal-layout card ``engine/faces.py`` derives, under its
+    own name (so "Left deals 2 damage" is a self-reference to the half)."""
+    from engine.oracle import MULTI_FACE_EFFECT_KIND, compiled_faces, face_programs
+
+    card = _split(
+        Left="Left deals 2 damage to any target.",
+        Right="Create a 3/3 green Elephant creature token.",
+    )
+    whole = compile_card_oracle(card)
+    assert whole.supported and whole.effect_kind == MULTI_FACE_EFFECT_KIND
+    assert whole.instructions == ()
+    programs = face_programs(card)
+    assert [face.name for face, _ in programs] == ["Left", "Right"]
+    assert [program.instructions[0].kind for _, program in programs] == [
+        "deal_damage", "create_token",
+    ]
+    assert compiled_faces(card) == programs
+    # ...and a single-face card is its own one-entry list, so an instrument
+    # loops over `compiled_faces` without asking which kind it holds.
+    bolt = _card(name="Test Bolt", oracle_text="Test Bolt deals 3 damage to any target.")
+    assert [face for face, _ in compiled_faces(bolt)] == [bolt]
+
+
+def test_a_split_card_is_supported_only_when_every_half_is():
+    """A card is supported when *any* of its lines is, which is the census
+    weakness a two-spell card would inherit as "one half works". It does not:
+    a split card with one unreadable half is unsupported, and the reason names
+    the half."""
+    card = _split(
+        Left="Left deals 2 damage to any target.",
+        Right="Frobnicate the gribble until morning.",
+    )
+    program = compile_card_oracle(card)
+    assert not program.supported
+    assert program.reason.startswith("Right: ")
 
 
 def test_normal_layout_still_compiles():

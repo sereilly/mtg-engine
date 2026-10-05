@@ -14,6 +14,7 @@ from fastapi import HTTPException
 
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.behaviour_signature import peers_by_card
+from engine.faces import face_cards, name_aliases
 from engine.oracle import simple_card_keywords
 
 from .deck_store import DeckStore
@@ -43,6 +44,32 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 CARD_CATALOG = load_cards(CARD_PATHS)
 
 CARD_BY_NAME = {card.name.casefold(): card for card in CARD_CATALOG}
+# A split card answers to more spellings than the one it is printed with
+# (CR 709.4a gives it two names, and a decklist may write either, or both with
+# one slash). Each finds the *card* — never shadowing a card that really is
+# called that, which is what ``setdefault`` is for.
+for _card in CARD_CATALOG:
+    for _alias in name_aliases(_card):
+        CARD_BY_NAME.setdefault(_alias.casefold(), _card)
+
+# The halves of the pool's split cards, by their own names: the **spell** a
+# name names, where ``CARD_BY_NAME`` answers the card. A cast names a half
+# (CR 709.3), so a route handed a spell name — the cast-spec endpoint, the
+# Debug Menu's free cast — asks :func:`spell_by_name`.
+SPELL_BY_NAME = {
+    face.name.casefold(): face
+    for card in CARD_CATALOG
+    for face in face_cards(card)
+}
+
+
+def spell_by_name(name: str):
+    """The spell *name* names: a split card's half by the half's name, and
+    otherwise the catalog card (which for a split card's whole spelling is the
+    card itself — not a spell, and the cast path says so). None if unknown."""
+    key = str(name).strip().casefold()
+    return SPELL_BY_NAME.get(key) or CARD_BY_NAME.get(key)
+
 
 CARD_SEARCH_ORDER = sorted(CARD_CATALOG, key=lambda card: card.name)
 

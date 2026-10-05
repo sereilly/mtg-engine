@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from engine.card_loader import load_cards
 from engine.classifier import classify_card
+from engine.faces import combined_oracle_text, face_cards, name_aliases
 
 from .deck_legality import normalize_format, validate_deck
 from .deck_store import deck_commander, deck_sideboard
@@ -89,7 +90,29 @@ def _build_catalog_payload() -> list[dict]:
                 "mana_cost": card.mana_cost,
                 "cmc": card.cmc,
                 "type_line": card.type_line,
-                "oracle_text": card.oracle_text,
+                # A split card's text is on its halves (CR 709.4c): the
+                # catalog shows every face's, so the deck editor's text search
+                # and its preview see what the card does rather than a blank.
+                "oracle_text": combined_oracle_text(card),
+                # Present only for a multi-face card — the halves as a browser
+                # shows them: each one's own name, cost, type and text.
+                **(
+                    {
+                        "layout": card.layout,
+                        "faces": [
+                            {
+                                "name": face.name,
+                                "mana_cost": face.mana_cost,
+                                "cmc": face.cmc,
+                                "type_line": face.type_line,
+                                "oracle_text": face.oracle_text,
+                                "colors": list(face.colors),
+                            }
+                            for face in face_cards(card)
+                        ],
+                    }
+                    if face_cards(card) else {}
+                ),
                 "set": raw.get("set"),
                 "set_name": raw.get("set_name"),
                 "sets": memberships.get(card.name, []),
@@ -113,6 +136,14 @@ def _build_catalog_payload() -> list[dict]:
 CATALOG_PAYLOAD = _build_catalog_payload()
 
 CATALOG_BY_NAME = {entry["name"].casefold(): entry for entry in CATALOG_PAYLOAD}
+# …and every other spelling a decklist uses for a split card (a half's name, one
+# slash), so an imported "Assault" resolves to — and is rewritten as — the one
+# card "Assault // Battery" (CR 709.2). Never over a card really called that.
+for _card in CARD_SEARCH_ORDER:
+    for _alias in name_aliases(_card):
+        CATALOG_BY_NAME.setdefault(
+            _alias.casefold(), CATALOG_BY_NAME[_card.name.casefold()]
+        )
 
 
 def _resolve_deck_entries(entries: list[dict]) -> list[dict]:

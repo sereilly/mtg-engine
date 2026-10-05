@@ -48,13 +48,13 @@ from .schemas import (
 
 from .runtime import (
     AUTO_PASSES,
-    CARD_BY_NAME,
     CARD_CATALOG,
     CATALOG_CARD_NAMES,
     STATIC_DIR,
     _require_session,
     _save_snapshot,
     deck_store,
+    spell_by_name,
     store,
     verification_store,
 )
@@ -556,7 +556,10 @@ def get_card_target_spec(
     session = _require_session(session_id)
     if seat >= len(session.game.players):
         raise HTTPException(status_code=400, detail="seat out of range for this session")
-    card = CARD_BY_NAME.get(card_name.strip().casefold())
+    # ``spell_by_name``: a split card's half is asked for by the half's name
+    # (CR 709.3), and the spec that comes back is that half's — the whole card
+    # has none of its own, only the choice between its halves.
+    card = spell_by_name(card_name)
     if card is None:
         raise HTTPException(status_code=404, detail="card not found")
     return build_card_target_spec(

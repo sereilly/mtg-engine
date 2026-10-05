@@ -18,6 +18,7 @@ from fastapi import HTTPException
 from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
+from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
 from engine.mana_payment import taps_for_payment
 from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
@@ -185,8 +186,8 @@ def _action_cast(session, req, seat_type):
         # the reason instead of a queue refusal.
         card = next(
             (
-                entry for entry in caster.command_zone
-                if entry.name == req.card_name
+                spell_named(entry, req.card_name) for entry in caster.command_zone
+                if spell_named(entry, req.card_name) is not None
                 and session.game.may_cast_from_command_zone(req.seat, entry)
             ),
             None,
@@ -205,9 +206,9 @@ def _action_cast(session, req, seat_type):
         own = session.game.players[req.seat].library
         top = own[0] if own else None
         card = (
-            top
+            spell_named(top, req.card_name)
             if top is not None
-            and top.name == req.card_name
+            and spell_named(top, req.card_name) is not None
             and permission_for(
                 session.game, req.seat, top, "library",
                 as_land=top.primary_type == "land",
@@ -231,12 +232,16 @@ def _action_cast(session, req, seat_type):
         seats = [req.seat] + [
             seat for seat in range(len(session.game.players)) if seat != req.seat
         ]
+        # ``spell_named`` at each of the four lookups in this handler: a split
+        # card is cast by the name of one of its halves (CR 709.3), the
+        # permission is asked of the card as the zone holds it, and what the
+        # timing gates below judge is the half (CR 709.3a).
         card = next(
             (
-                entry
+                spell_named(entry, req.card_name)
                 for seat in seats
                 for entry in getattr(session.game.players[seat], req.from_zone)
-                if entry.name == req.card_name
+                if spell_named(entry, req.card_name) is not None
                 and (
                     grant := permission_for(
                         session.game, req.seat, entry, req.from_zone,
@@ -255,7 +260,19 @@ def _action_cast(session, req, seat_type):
     else:
         card = _find_card_in_hand(caster, req.card_name)
         if card is None:
-            raise HTTPException(status_code=400, detail="card not in hand")
+            # CR 709.3: a split card named whole names no half. Said in the
+            # rule's words rather than as "card not in hand", which is false —
+            # the card is right there, and a client author reading that would
+            # go looking for a hand-sync bug.
+            refusal = next(
+                (
+                    choose_a_face_refusal(entry) for entry in caster.hand
+                    if entry.name == req.card_name
+                    and choose_a_face_refusal(entry) is not None
+                ),
+                None,
+            )
+            raise HTTPException(status_code=400, detail=refusal or "card not in hand")
 
     # CR 702.8b: a card with flash casts any time an instant could be cast, so
     # the two sorcery-speed gates below ask instant-or-flash, not the type line
@@ -691,7 +708,12 @@ def do_action(session_id: str, req: GameActionRequest):
     ):
         active_hand = session.game.players[session.current_turn].hand
         selected = set(session.cleanup_selected_indices)
-        matching_indices = [idx for idx, card in enumerate(active_hand) if card.name == req.card_name]
+        matching_indices = [
+            idx for idx, card in enumerate(active_hand)
+            # Either spelling of a split card: this is a discard being named,
+            # not a half being cast (CR 709.2 — it is one card).
+            if holds_spell_named(card, req.card_name)
+        ]
         preferred_index = next((idx for idx in matching_indices if idx not in selected), None)
         if preferred_index is None and matching_indices:
             preferred_index = matching_indices[0]

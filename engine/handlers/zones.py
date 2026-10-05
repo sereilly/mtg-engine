@@ -5,6 +5,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..auras import PUT_ONTO_BATTLEFIELD_BY
+from ..faces import has_name
 from ..exiled_records import (record_exiled_card, records_for_cards,
                               source_object)
 from ..linked_exile import LEAVES, UNTAPPED, link_exiled_card, linked_entries, take_linked_entries
@@ -977,7 +978,7 @@ def reveal_top_sorting_by_chosen_name(game: Game, instruction: OracleInstruction
     )
     _place_sorted_reveal(
         game, caster, revealed, instruction.payload,
-        lambda card: bool(named) and card.name == named,
+        lambda card: bool(named) and has_name(card, named),
     )
     return True, "resolved"
 
@@ -3127,8 +3128,11 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
         cards = getattr(target, zone, None)
         if cards is None:
             continue
-        kept = [card for card in cards if card.name != named]
-        found = [card for card in cards if card.name == named]
+        # ``has_name`` (CR 709.4a): "an object has the chosen name if one of
+        # its names is the chosen name", and a split card in a hand, a library
+        # or a graveyard has two.
+        kept = [card for card in cards if not has_name(card, named)]
+        found = [card for card in cards if has_name(card, named)]
         if found:
             cards[:] = kept
             target.exile.extend(found)

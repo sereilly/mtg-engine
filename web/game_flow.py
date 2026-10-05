@@ -21,6 +21,7 @@ from engine.ai_policy import (
     choose_hand_activation_action,
     choose_cast_action,
     choose_combat_instant_cast_action,
+    spell_being_cast,
     tap_planned_lands,
 )
 
@@ -139,7 +140,9 @@ def _ai_step(session: Session) -> bool:
             if cast_action.from_zone == "command"
             else game.players[seat].hand
         )
-        card_to_cast = cast_zone[cast_action.hand_index]
+        # The spell the policy chose, which for a split card is one half of
+        # the zone's card (CR 709.3) — see `ai_policy.spell_being_cast`.
+        card_to_cast = spell_being_cast(cast_zone, cast_action)
         # The payment, through the executor the AI simulator shares
         # (`engine.ai_policy.tap_planned_lands`): each planned land tapped for
         # the colour the plan counted on, by the mana ability that makes it.
@@ -250,7 +253,7 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
 
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
-        card_to_cast = game.players[seat].hand[instant_action.hand_index]
+        card_to_cast = spell_being_cast(game.players[seat].hand, instant_action)
         tap_planned_lands(game, seat, instant_action)
         result = game.queue_from_hand(
             seat,
@@ -503,7 +506,9 @@ def _advance_phase(session: Session) -> None:
                         if _seat_type(session, defender_index) == "ai" else None
                     )
                     if instant_action is not None:
-                        card_to_cast = game.players[defender_index].hand[instant_action.hand_index]
+                        card_to_cast = spell_being_cast(
+                            game.players[defender_index].hand, instant_action
+                        )
                         tap_planned_lands(game, defender_index, instant_action)
                         game.cast_from_hand(
                             defender_index,

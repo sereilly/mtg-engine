@@ -25,6 +25,7 @@ import random
 from dataclasses import replace
 
 from ...auras import attach_aura
+from ...faces import has_name
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
@@ -3591,7 +3592,7 @@ class PendingChoicesMixin:
             self.log.append("nothing was named, so nothing was exiled")
             return True
         if any(
-            "basic" in (card.type_line or "").lower() and card.name == named
+            "basic" in (card.type_line or "").lower() and has_name(card, named)
             for zone in data["zones"] for card in getattr(target, zone, [])
         ):
             return False
@@ -3599,8 +3600,11 @@ class PendingChoicesMixin:
         taken_from: dict[str, int] = {}
         for zone in data["zones"]:
             cards = getattr(target, zone, [])
-            kept = [card for card in cards if card.name != named]
-            taken = [card for card in cards if card.name == named]
+            # ``has_name`` at every chosen-name test in this module
+            # (CR 709.4a): a split card off the stack has both its halves'
+            # names, so naming either finds it.
+            kept = [card for card in cards if not has_name(card, named)]
+            taken = [card for card in cards if has_name(card, named)]
             if taken:
                 taken_from[zone] = len(taken)
                 cards[:] = kept
@@ -3666,7 +3670,7 @@ class PendingChoicesMixin:
             return True
         named = (card_name or "").strip()
         revealed = player.library.pop(0)
-        hit = bool(named) and revealed.name == named
+        hit = bool(named) and has_name(revealed, named)
         zone_name = data["match_zone"] if hit else data["miss_zone"]
         # The hand is reached through the CR 614 seam every other "put this card
         # into a hand" in this engine goes through — a commander on its way to a
@@ -3924,7 +3928,7 @@ class PendingChoicesMixin:
         while player.library:
             card = player.library.pop(0)
             revealed.append(card)
-            if named and card.name == named:
+            if named and has_name(card, named):
                 found = card
                 break
         # "…and exile all other cards revealed this way" — everything the
@@ -3990,9 +3994,9 @@ class PendingChoicesMixin:
         # by value, and this engine's CardDefinition is shared between copies.
         revealed_indices = sorted(random.sample(range(len(zone)), count)) if count else []
         revealed = [zone[i] for i in revealed_indices]
-        discarded = [card for card in revealed if named and card.name == named]
+        discarded = [card for card in revealed if named and has_name(card, named)]
         for index in reversed(revealed_indices):
-            if named and zone[index].name == named:
+            if named and has_name(zone[index], named):
                 self.put_card_into_graveyard(target, zone.pop(index))
         self.discard_pending_choice(choice)
         self.log.append(

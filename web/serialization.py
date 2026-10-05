@@ -16,6 +16,7 @@ import re
 from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
+from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import cast_target_kind, targeting_instruction
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
@@ -209,15 +210,41 @@ def _card_preview(card) -> dict:
     """The base card-preview dict shared by every card serialization: identity,
     rules text, and art. Callers extend it with context-specific fields."""
     image_uri, large_image_uri, art_crop = _card_image_uris(card)
-    return {
+    preview = {
         "name": card.name,
         "type": card.type_line,
-        "oracle_text": card.oracle_text,
+        # Every face's text for a split card (CR 709.4c), whose own text box is
+        # empty: a preview that showed the top-level field would draw a card
+        # with two spells on it as a blank one. A single-face card's own text.
+        "oracle_text": combined_oracle_text(card),
         "image_uri": image_uri,
         "large_image_uri": large_image_uri,
         "art_crop": art_crop,
         "colors": list(card.colors),
     }
+    faces = face_cards(card)
+    if faces:
+        # CR 709.1: the halves, each as the card it is on the stack. Present
+        # only on a multi-face card, so its absence is "this card has one face"
+        # for every client reading it. The cast-ready shape (target spec,
+        # modes, taxed cost) is `_serialize_card`'s, which overwrites this for
+        # the viewer's own cards; here it is what a preview needs to *show*.
+        preview["layout"] = card.layout
+        preview["faces"] = [
+            {
+                "name": face.name,
+                "type": face.type_line,
+                "oracle_text": face.oracle_text,
+                "mana_cost": face.mana_cost,
+                "colors": list(face.colors),
+            }
+            for face in faces
+        ]
+    if is_face(card):
+        # A half on the stack (CR 709.3b): its own name and characteristics,
+        # and the card it is half of, so a client can say which card this is.
+        preview["face_of"] = whole_card(card).name
+    return preview
 
 
 def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
@@ -693,6 +720,20 @@ def _serialize_card(
         serialized["target_spec"] = game.cast_target_spec(
             caster_index, card, from_zone=from_zone, spell_hand_index=hand_index,
         )
+    faces = face_cards(card)
+    if faces:
+        # CR 709.3: the player chooses a half *before* anything else about the
+        # cast is decided, and CR 709.3a evaluates only that half. So each face
+        # is serialized as the card it would be on the stack — the full shape a
+        # single-face hand card has, target spec and all — and the client's
+        # cast flow carries on with the chosen face in the card's place. Its
+        # `name` is what the cast action sends as `card_name`.
+        serialized["faces"] = [
+            _serialize_card(
+                face, game, caster_index, from_zone=from_zone, hand_index=hand_index,
+            )
+            for face in faces
+        ]
     return serialized
 
 
@@ -1036,12 +1077,21 @@ def _serialize_player(
     game: Game,
     playable_hand_indices: list[int] | None = None,
     playable_command_indices: list[int] | None = None,
+    castable_hand_faces: dict[int, list[str]] | None = None,
 ) -> dict:
     if viewer_seat == seat:
         hand = [
             _serialize_card(card, game, seat, hand_index=index)
             for index, card in enumerate(player.hand)
         ]
+        # Which half of a split card in hand could be cast right now. The
+        # card's own entry in `playable_hand_indices` says "at least one"; the
+        # two halves have different costs, colours and targets (CR 709.3a), so
+        # the prompt that offers them has to know which. Stamped on the face
+        # entries rather than sent as a second list keyed by position.
+        for index, names in (castable_hand_faces or {}).items():
+            for face in hand[index].get("faces", ()):
+                face["castable_now"] = face["name"] in names
     elif _hand_revealed_to_viewer(game, viewer_seat, seat):
         # An active reveal (Glasses of Urza's look, Word of Command's forced-play
         # choice) lets the viewer see this player's actual cards, so the opponent

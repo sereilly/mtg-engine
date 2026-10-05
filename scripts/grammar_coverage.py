@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from engine.card_loader import load_cards, manifest_measured_codes, manifest_set_paths
 from set_argument import POOL_SCOPE, add_set_argument, resolve_set
 from engine.grammar import GRAMMAR_CATEGORIES, compile_line
+from engine.faces import castable_faces
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_PATH = REPO_ROOT / "GRAMMAR_COVERAGE.md"
@@ -134,11 +135,21 @@ def analyze() -> tuple[dict[str, Stats], Stats, collections.Counter, list[tuple[
             if shipped:
                 overall.cards += 1
             card_executed = False
-            for raw in (card.oracle_text or "").splitlines():
+            # Every line of every **face** (`faces.castable_faces`: the card
+            # itself, or each half of a split card). A split card's text is on
+            # its halves and its own text box is empty, so read as handed in it
+            # contributes a card to the denominator and no line at all — the
+            # parser would be credited or blamed for nothing it printed. Each
+            # half is read under its own name, which is its self-reference.
+            for face, raw in (
+                (face, raw)
+                for face in castable_faces(card)
+                for raw in (face.oracle_text or "").splitlines()
+            ):
                 line = raw.strip()
                 if not line:
                     continue
-                result = compile_line(line, card_name=card.name)
+                result = compile_line(line, card_name=face.name)
                 if result.blank:
                     # Reminder-text-only line: no rules text to account for, so
                     # counting it either way would distort the percentages.

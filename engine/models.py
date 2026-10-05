@@ -81,6 +81,14 @@ class CardDefinition:
     # such as City in a Bottle need. Reading the loaded-first set code instead
     # breaks as soon as a reprint set is added.
     printings: tuple[str, ...] = ()
+    # The whole card this is one face of (CR 709): set only on the per-face
+    # cards ``engine/faces.face_cards`` derives — a split card's halves — and
+    # None on every card that is a card in its own right. It is what lets a
+    # half that leaves the stack become its whole card again (CR 709.4,
+    # ``faces.whole_card``). Out of the comparison and the repr: two halves are
+    # equal when their characteristics are, and a parent in the repr would
+    # print the whole card inside each of its halves.
+    face_of: "CardDefinition | None" = field(default=None, compare=False, repr=False)
 
     @property
     def is_legendary(self) -> bool:

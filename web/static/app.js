@@ -3759,7 +3759,16 @@ function isPendingCastTargetValidForCard(card, { targetSeat = null, zoneKind = "
 function findCardInCurrentHand(cardName) {
   const me = getCurrentPlayerState();
   if (!me || !Array.isArray(me.hand)) return null;
-  return me.hand.find((card) => normalizeCardName(card) === cardName) || null;
+  const whole = me.hand.find((card) => normalizeCardName(card) === cardName);
+  if (whole) return whole;
+  // A cast in progress is named by its spell, and a split card's spell is one
+  // of its halves (CR 709.3) — so a half's name finds that half, which is the
+  // object carrying the cost and the target spec the cast is being built from.
+  for (const card of me.hand) {
+    const face = cardFaces(card).find((entry) => normalizeCardName(entry) === cardName);
+    if (face) return face;
+  }
+  return null;
 }
 
 function beginPendingHandCast(card, handIndex = null) {
@@ -10050,16 +10059,25 @@ function renderActivationPrompt() {
     customRow.classList.add("hidden");
     const several = pendingModalChoice.atLeast === true;
     const picked = pendingModalChoice.picked || [];
-    title.textContent = several
+    // A split card's halves (CR 709.3) ride the same prompt as a modal
+    // spell's modes; only the words differ.
+    const faceChoice = pendingModalChoice.faceChoice === true;
+    title.textContent = faceChoice
+      ? `Cast which half — ${pendingModalChoice.cardName}`
+      : several
       ? `Choose one or more — ${pendingModalChoice.cardName}`
       : `Choose one — ${pendingModalChoice.cardName}`;
-    body.textContent = several
+    body.textContent = faceChoice
+      ? "A split card is cast as one of its halves. Select which."
+      : several
       ? "Select every mode to cast, then confirm. Each one picks its own target."
       : "Select which mode to cast.";
     const modeButtons = pendingModalChoice.modes
       .map((mode, index) => {
         const disabled = mode.supported === false ? " disabled" : "";
-        const suffix = mode.supported === false ? " (unsupported)" : "";
+        const suffix = mode.supported === false
+          ? (faceChoice ? " (can't be cast now)" : " (unsupported)")
+          : "";
         const on = several && picked.includes(index) ? " prompt-choice-btn-on" : "";
         const tick = several && picked.includes(index) ? "✓ " : "";
         return `<button type="button" class="prompt-choice-btn${on}" data-mode-choice="${index}"${disabled}>${tick}${escapeHtml(mode.label)}${suffix}</button>`;
@@ -12451,6 +12469,82 @@ function continueDeclarationCost(declaration, picked) {
     .catch((e) => updateActionHint(e.message, true));
 }
 
+// CR 709: the halves of a split card. The server lists them under `faces`, each
+// serialized as the card it would be on the stack — its own name, cost, type,
+// text and (for the viewer's own hand) target spec — so once a half is chosen
+// the rest of the cast flow carries on with the half in the card's place. A
+// card with one face has no `faces` at all.
+function cardFaces(card) {
+  if (!card || typeof card === "string") return [];
+  return Array.isArray(card.faces) ? card.faces : [];
+}
+
+function cardHasFaces(card) {
+  return cardFaces(card).length >= 2;
+}
+
+// CR 709.3: "A player chooses which half of a split card they are casting
+// before putting it onto the stack." Asked first, before modes, costs and
+// targets, because CR 709.3a has only the chosen half evaluated for any of
+// them. Reuses the mode-choice prompt — it is the same gesture, one of N
+// buttons — with `faceChoice` saying what the buttons are. Returns true when
+// the prompt was opened.
+function startFaceChoicePrompt(card, castAction = "cast") {
+  const faces = cardFaces(card);
+  if (faces.length < 2) return false;
+  const cardName = normalizeCardName(card);
+  pendingModalChoice = {
+    card,
+    cardName,
+    castAction,
+    faceChoice: true,
+    atLeast: false,
+    picked: [],
+    modes: faces.map((face) => ({
+      label: [face.name, face.mana_cost || face.printed_mana_cost || "", "—", face.oracle_text || ""]
+        .filter(Boolean)
+        .join(" "),
+      // `castable_now` is stamped on the viewer's own hand cards; absent (a
+      // zone cast, a preview) it is not known and the half stays offered —
+      // the engine refuses a half that cannot be cast, with the reason.
+      supported: face.castable_now !== false,
+    })),
+  };
+  renderActivationPrompt();
+  return true;
+}
+
+// Carry a cast on with the chosen half standing in for the card: the same
+// chain every cast entry runs (modes, optional prices, additional costs,
+// targets, then a bare cast). The half's `name` is what the action sends as
+// `card_name` — the engine casts a split card by the name of the half.
+async function castChosenFace(face, castAction = "cast") {
+  if (cardIsModal(face) && startModalChoicePrompt(face, castAction)) return;
+  if (startCastOfferPrompt(face, castAction)) return;
+  if (startCastCostPrompt(face, castAction)) return;
+  if (startCastTargetCascade(face, castAction)) return;
+  const cardName = normalizeCardName(face);
+  const actionBody = {
+    seat,
+    action: castAction,
+    card_name: cardName,
+    target_seat: getDefaultTargetSeat(cardName),
+  };
+  try {
+    await sendAction(actionBody);
+    updateActionHint(`Cast ${cardName}.`);
+    clearPendingHandCast();
+  } catch (e) {
+    if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+      pendingAutoTap = { card: face, cardName, actionBody };
+      renderActivationPrompt();
+      return;
+    }
+    clearPendingHandCast();
+    updateActionHint(e.message, true);
+  }
+}
+
 // Show the generic mode-choice prompt for a modal spell. Returns true when the
 // prompt was opened, false when the card isn't actually modal.
 function startModalChoicePrompt(card, castAction = "cast") {
@@ -12532,6 +12626,20 @@ function chooseModalMode(index) {
   const choice = pendingModalChoice;
   const mode = choice.modes[index];
   if (!mode) return;
+  if (choice.faceChoice) {
+    // CR 709.3: the half is chosen; everything after is about the half.
+    const face = cardFaces(choice.card)[index];
+    if (!face) return;
+    if (mode.supported === false) {
+      updateActionHint(`${face.name} can't be cast right now — pick the other half.`, true);
+      return;
+    }
+    pendingModalChoice = null;
+    renderActivationPrompt();
+    updateActionHint(`Casting ${face.name}.`);
+    castChosenFace(face, choice.castAction);
+    return;
+  }
   if (mode.supported === false) {
     updateActionHint("That mode isn't supported yet — pick another.", true);
     return;
@@ -14775,7 +14883,17 @@ async function fetchCardByName(cardName) {
   const payload = await resp.json();
   const cards = Array.isArray(payload.cards) ? payload.cards : [];
   const lowered = term.toLowerCase();
-  return cards.find((card) => String(card.name || "").toLowerCase() === lowered) || null;
+  const exact = cards.find((card) => String(card.name || "").toLowerCase() === lowered);
+  if (exact) return exact;
+  // The name of one half of a split card names that half (CR 709.3): the
+  // free cast then asks the server for the half's own target spec and sends
+  // the half's name, exactly as a hand cast does. The whole card's name is
+  // found above and is refused by the server with the two halves it names.
+  for (const card of cards) {
+    const face = cardFaces(card).find((entry) => String(entry.name || "").toLowerCase() === lowered);
+    if (face) return { ...face, image_uri: card.image_uri, large_image_uri: card.large_image_uri };
+  }
+  return null;
 }
 
 // Catalog-search cards (the debug "cast for free" flow) carry no target spec —
@@ -15689,6 +15807,13 @@ function createCardElement(card, options = {}) {
         beginPendingHandCast(card, handIndex);
         cardEl.classList.add("casting-card");
 
+        // A split card is cast as one of its halves (CR 709.3), chosen before
+        // anything else about the cast — the mode, the costs and the targets
+        // are all the half's (CR 709.3a).
+        if (startFaceChoicePrompt(card)) {
+          return;
+        }
+
         // Modal "Choose one —" spells prompt for the mode first; the chosen mode
         // then drives which targeting flow (if any) runs.
         if (cardIsModal(card) && startModalChoicePrompt(card)) {
@@ -16126,6 +16251,7 @@ async function beginZoneCast(card, zone) {
   beginPendingHandCast(card);
   pendingCastFromZone = zone;
   try {
+    if (startFaceChoicePrompt(card)) return;  // CR 709.3, as in the hand cast
     if (cardIsModal(card) && startModalChoicePrompt(card)) return;
     if (startCastOfferPrompt(card)) return;
     if (startCastCostPrompt(card)) return;
@@ -18720,6 +18846,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
     if (payload.kind === "hand") {
       const card = findCardInCurrentHand(payload.name);
       beginPendingHandCast(card || payload.name, Number.isInteger(payload.handIndex) ? payload.handIndex : null);
+      if (card && startFaceChoicePrompt(card)) { return; }  // CR 709.3
       if (card && cardIsModal(card) && startModalChoicePrompt(card)) { return; }
       if (card && startCastOfferPrompt(card)) { return; }
       if (card && startCastCostPrompt(card)) { return; }

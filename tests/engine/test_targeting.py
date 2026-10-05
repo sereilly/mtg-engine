@@ -25,6 +25,7 @@ import re
 import pytest
 
 from engine.card_loader import load_catalog
+from engine.faces import castable_faces
 from engine.oracle import compile_card_oracle
 from engine.targeting import (
     card_names_a_chooser,
@@ -36,7 +37,19 @@ from engine.targeting import (
 
 @pytest.fixture(scope="module")
 def supported_cards():
-    return [c for c in load_catalog() if compile_card_oracle(c).supported]
+    """Every supported **spell** in the shipped pool: a card, or — for a split
+    card — each of its halves (``faces.castable_faces``, CR 709.3a).
+
+    Every ratchet in this file asks a question of one cast: what the printed
+    line names, what the program targets, what picker is derived. A split card
+    has two answers and none of its own, so handed in whole it passes each of
+    them with "nothing printed, nothing derived" and is never looked at.
+    """
+    return [
+        spell
+        for card in load_catalog() if compile_card_oracle(card).supported
+        for spell in castable_faces(card)
+    ]
 
 
 def acknowledgeable_cards():

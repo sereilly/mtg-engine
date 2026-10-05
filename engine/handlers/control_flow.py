@@ -26,6 +26,7 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ..damage_deaths import DAMAGED_BY_SOURCE_DIED
+from ..faces import has_name
 from ..exiled_records import is_live, record_in_context, source_object
 from ..named_counters import counters_on
 from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
@@ -495,7 +496,9 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         if payload.get("zone") == "graveyard":
             return any(
-                card.name == name
+                # CR 201.2a over CR 709.4a: a split card in a graveyard has
+                # both halves' names, so it shares a name with either half.
+                has_name(card, name)
                 for player in game.players
                 for card in player.graveyard
             )
