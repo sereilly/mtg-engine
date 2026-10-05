@@ -141,7 +141,12 @@ def test_every_graveyard_functioning_trigger_reaches_its_zone():
         # land for an optional gift only when nothing else would spend it
         # (`ai_policy.optional_pay_may_tap_lands`), which is a policy question
         # and not the one this guard asks.
-        for basic in ("Plains", "Island", "Swamp", "Mountain", "Forest"):
+        #
+        # **Two of each**, since Pyre Zombie (INV): its price is {1}{B}{B}, and
+        # one of each basic covers any generic cost and no cost that names a
+        # colour twice — the offer was declined out of hand and the guard read
+        # a working card as one that never fired.
+        for basic in ("Plains", "Island", "Swamp", "Mountain", "Forest") * 2:
             p1.battlefield.append(Permanent(card=pool[basic]))
         game._sync_control()
         game.interactive_seats = {0}

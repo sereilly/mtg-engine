@@ -60,10 +60,10 @@ def _parse_self_in_graveyard_above(
         # holds qualifies — rather than a second node, because the graveyard
         # scan, the re-check on resolution and the ``functions_from`` stamp are
         # all this node's already and a sibling would have to repeat each.
-        # "card" is no card type, so nothing is counted; the floor of zero is
-        # what answers.
+        # The type is the one every printing of the longer clause names and is
+        # never consulted: a floor of zero is met by any pile.
         return ast.SelfInGraveyardWithCardsAbove(
-            card_type="card", count=0, at_least=True, directly=False,
+            card_type="creature", count=0, at_least=True, directly=False,
         )
     at_least = False
     if stream.accept_word("a", "an"):
