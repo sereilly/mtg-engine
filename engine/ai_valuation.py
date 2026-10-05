@@ -1058,6 +1058,64 @@ def castable_commanders(game, player_index: int):
     )
 
 
+def entry_sacrifice_is_unavoidable(game, seat: int, card: CardDefinition) -> bool:
+    """Whether *card*, entering under *seat* now, would be sacrificed by its own
+    entry trigger because the price to keep it cannot be met.
+
+    "When this land enters, sacrifice it unless you return a non-Lair land you
+    control to its owner's hand." (the five Lairs; Visions' Karoo cycle prints
+    the same sentence about an untapped basic.) Played with no such land on the
+    battlefield the card goes straight to the graveyard and the turn's land
+    drop goes with it — a legal play no player makes, and one the land-drop
+    chooser made on turn one whenever such a land added a colour the hand
+    wanted.
+
+    Read off the compiled program, so it is a claim about the *shape* and not
+    a list of ten names: an enters-the-battlefield trigger that is an offer
+    whose declined branch sacrifices the source and whose accepted branch
+    opens by having the controller choose at least N of their own permanents.
+    The candidates are counted through ``subject_matches`` with the seat as
+    observer — the handler's own reading of the phrase — so "non-Lair", "an
+    untapped Plains" and whatever the next cycle prints are payload.
+
+    False for every other shape, including a price this cannot count: an
+    answer of "unavoidable" keeps a card in hand, so it is given only where
+    the count is certain.
+    """
+    from .subject_filters import subject_matches
+
+    for trigger in compile_card_oracle(card).triggered_abilities:
+        instruction = trigger.instruction
+        if (
+            trigger.condition.kind != "enters_battlefield"
+            or instruction is None
+            or instruction.kind != "may"
+            or instruction.payload.get("actor") != "you"
+        ):
+            continue
+        declined = instruction.payload.get("otherwise") or ()
+        if [step.kind for step in declined] != ["sacrifice_self"]:
+            continue
+        action = instruction.payload.get("action") or ()
+        if not action or action[0].kind != "choose_permanents":
+            continue
+        asked = action[0].payload or {}
+        if asked.get("chooser") != "you" or asked.get("controlled_by") != "chooser":
+            continue
+        needed = int(asked.get("at_least", 0) or 0)
+        if needed <= 0:
+            continue
+        described = asked.get("filter") or {}
+        available = sum(
+            1
+            for permanent in game.controlled_by(seat)
+            if subject_matches(game, permanent, described, observer=seat)
+        )
+        if available < needed:
+            return True
+    return False
+
+
 def is_mana_ability(instruction: OracleInstruction) -> bool:
     """Whether *instruction* adds mana to its controller's pool."""
     return instruction.kind in MANA_ABILITY_KINDS

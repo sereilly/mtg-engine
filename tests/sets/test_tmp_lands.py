@@ -208,3 +208,76 @@ def test_fellwar_stone_still_copies_an_ordinary_land(catalog_by_name):
     game._settle()
 
     assert {sym: n for sym, n in p1.mana_pool.items() if n} == {"G": 1}, game.log
+
+
+# --- PLS W1G5: what a board-narrowed land makes here ---
+from engine import Game as _PlsW1G5Game, PlayerState as _PlsW1G5PlayerState
+from engine.land_types import change_land_type as _pls_w1g5_change_land_type
+from engine.mana_could_produce import lands_could_produce as _pls_w1g5_lands_could_produce
+from engine.mana_payment import plan_payment as _pls_w1g5_plan_payment
+from engine.mana_payment import untapped_mana_lands as _pls_w1g5_payment_lands
+from engine.models import Permanent as _PlsW1G5Permanent
+
+
+def _pls_w1g5_pool_board(set_pool, *beside):
+    """A Reflecting Pool under seat 0 beside the Alpha lands named."""
+    lea = set_pool("LEA")
+    me = _PlsW1G5PlayerState(
+        name="A",
+        battlefield=[_PlsW1G5Permanent(card=set_pool("TMP")["Reflecting Pool"])]
+        + [_PlsW1G5Permanent(card=lea[name]) for name in beside],
+    )
+    game = _PlsW1G5Game(players=[me, _PlsW1G5PlayerState(name="B")])
+    game.active_player_index = 0
+    (pool,) = [p for p in game.controlled_by(0) if p.card.name == "Reflecting Pool"]
+    return game, pool  # _pls_w1g5_pool_board
+
+
+def test_pls_w1g5_reflecting_pool_is_planned_for_what_its_board_offers(set_pool):
+    """Found driving Planeshift's Meteor Crater, which has the same shape: a
+    land whose colours the *board* defines, summarised by Scryfall as all five.
+
+    The payment planner's hook (`Game._land_payment_colors`) answered with that
+    summary, so a cost with a {B} in it read as payable off a Reflecting Pool
+    beside a Forest — every "you may pay {1}{B}" inside a resolution, every
+    upkeep toll. The Pool was tapped, made {G} (the handler has always known
+    CR 106.7), and the payment came up short. One answer now, for the planner
+    and for the colours the client offers: what the Pool makes *here*.
+    """
+    from web.serialization import _offered_mana
+
+    game, pool = _pls_w1g5_pool_board(set_pool, "Forest")
+    lands = _pls_w1g5_payment_lands(game.controlled_by(0))
+    assert len(lands) == 2
+
+    assert game._land_payment_colors(pool) == ("G",)
+    assert _offered_mana(game, pool) == ("G",)
+    assert _pls_w1g5_plan_payment(
+        {}, lands, {"B": 1}, produces=game._land_payment_colors
+    ) is None
+    two_green = _pls_w1g5_plan_payment(
+        {}, lands, {"G": 2}, produces=game._land_payment_colors
+    )
+    assert two_green is not None and len(two_green.tapped) == 2
+
+    lonely, pool = _pls_w1g5_pool_board(set_pool)
+    assert lonely._land_payment_colors(pool) == ()
+    assert _offered_mana(lonely, pool) == ()
+    assert _pls_w1g5_plan_payment(
+        {}, _pls_w1g5_payment_lands(lonely.controlled_by(0)), {"generic": 1},
+        produces=lonely._land_payment_colors,
+    ) is None, "a Pool that reads only itself makes no mana (CR 106.7)"
+
+
+def test_pls_w1g5_a_pool_whose_type_was_set_is_no_longer_derived(set_pool):
+    """CR 305.7: a land whose subtype an effect *sets* loses the abilities its
+    rules text gave it and gains the basic one. A Reflecting Pool turned into
+    a Mountain could produce {R} and reads nobody — it used to be read off its
+    printed text and went on deriving from a board it no longer looks at."""
+    game, pool = _pls_w1g5_pool_board(set_pool)
+    assert _pls_w1g5_lands_could_produce(game)[pool.permanent_id] == frozenset()
+
+    _pls_w1g5_change_land_type(pool, "mountain", source="pls-w1g5-test")
+    assert _pls_w1g5_lands_could_produce(game)[pool.permanent_id] == frozenset({"R"})
+    assert game.narrowed_land_mana_colors(pool) is None
+    assert game._land_payment_colors(pool) == ("R",)
