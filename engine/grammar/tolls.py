@@ -61,23 +61,61 @@ def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPla
     if not paying_buys and not stream.accept_word("unless"):
         return None
     payer = parse_player_ref(stream)
-    if payer is None or not stream.accept_word("pays", "pay"):
+    if payer is None:
+        stream.reset(mark)
+        return None
+    # "Unless any player pays **5 life**, …" — the life-priced chain, in the
+    # fronted position the trailing reader below takes for Aether Rift.
+    life = _accept_chained_life_price(stream, payer)
+    if life is None and not stream.accept_word("pays", "pay"):
         stream.reset(mark)
         return None
     if paying_buys and payer.kind not in _ENUMERATED_PAYERS:
         stream.reset(mark)
         return None
-    try:
-        cost = _parse_mana_payment(stream, allow_variable=True)
-    except GrammarError:
-        stream.reset(mark)
-        return None
+    cost: "ast.ManaCost | None" = ast.ManaCost()
+    if life is None:
+        try:
+            cost = _parse_mana_payment(stream, allow_variable=True)
+        except GrammarError:
+            stream.reset(mark)
+            return None
     if cost is None or not stream.accept_punct(","):
         stream.reset(mark)
         return None
     if paying_buys:
-        return ast.UnlessPlayerPays(payer, cost, None, paid=parse_body(stream))
-    return ast.UnlessPlayerPays(payer, cost, parse_body(stream))
+        return ast.UnlessPlayerPays(
+            payer, cost, None, paid=parse_body(stream), life=life or 0
+        )
+    return ast.UnlessPlayerPays(payer, cost, parse_body(stream), life=life or 0)
+
+
+def _accept_chained_life_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> int | None:
+    """``pays <N> life`` behind a payer that names a **set** of seats, as the
+    number — or None with the cursor untouched.
+
+    "…unless **any player pays 5 life**." (Aether Rift.) One toll the whole
+    table is offered and the first payment ends, which is the chain
+    :class:`ast.UnlessPlayerPays` already is; only the currency differs. The
+    three words go through ``_parse_pay_life``, the reader every other life
+    price in this file uses, so an offer to one seat and an offer to the table
+    cannot come to read the phrase two ways.
+
+    A fixed number only: the chain re-arms itself once per seat, and an amount
+    that had to be re-evaluated for each would be a different card.
+    """
+    # "An opponent" too, under either of the reference reader's spellings: the
+    # lowering asks every opponent in turn for it (``_OPPONENT_PAYERS``).
+    if payer.kind not in _ENUMERATED_PAYERS and payer.kind != "opponent":
+        return None
+    mark = stream.mark()
+    price = _parse_pay_life(stream, payer)
+    if price is None or not isinstance(price.amount, ast.Fixed):
+        stream.reset(mark)
+        return None
+    return price.amount.value
 
 
 #: Payer references naming a *set* of seats one payment satisfies. "Any player
@@ -498,6 +536,14 @@ def _accept_trailing_toll(
         stream.reset(mark)
         return None
     price_at = stream.pos
+    # "…unless **any player pays 5 life**." (Aether Rift.) Read in front of the
+    # price actions, which decline every enumerated payer: a life price over a
+    # set of seats is the chain below with CR 119.4's currency.
+    chained_life = _accept_chained_life_price(stream, payer)
+    if chained_life is not None:
+        return _under_a_leading_condition(
+            body, ast.UnlessPlayerPays(payer, ast.ManaCost(), body, life=chained_life)
+        )
     action = _accept_price_action(stream, payer)
     if action is not None:
         # Not offered to an enumerated payer: `ast.May` is one offer to one

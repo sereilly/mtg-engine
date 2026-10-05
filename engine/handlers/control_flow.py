@@ -34,7 +34,7 @@ from ..oracle_types import (CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
                             SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
-                            MILLED_THIS_WAY,
+                            MILLED_THIS_WAY, DISCARDED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
 from ..turn_state import started_the_turn
@@ -1509,6 +1509,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         if isinstance(paid, Permanent):
             return permanent_matches_filter(paid, described)
         return _card_matches_filter(paid, described)
+
+    if kind == "discarded_this_way":
+        # "If you discard a creature card this way" (Aether Rift). The record
+        # the discard in front of it wrote, not the graveyard: the pile also
+        # holds cards this effect never touched. The printed type *line*, as
+        # the two readers beside this one ask it — CR 608.2h's last-known
+        # information about a card that was in a hand a moment ago.
+        cards = context.results.get(DISCARDED_THIS_WAY) or []
+        wanted = tuple(payload.get("card_types") or ())
+        match = all if payload.get("type_match") == "all" else any
+        return any(
+            match(name in card.type_line.lower() for name in wanted)
+            for card in cards
+        )
 
     if kind == "discarded_card_was":
         # "If the discarded card was a land card" (Land's Edge). The card is in
@@ -3570,10 +3584,17 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
             game._execute_oracle_instruction(step, context)
         return True, "resolved"
     seat = seats[asked]
+    # "…unless any player pays **5 life**." (Aether Rift.) CR 119.4: the prompt
+    # carries the price as ``life_cost``, which is the field the payer's
+    # "can you?" test and the charge both read — a seat below the amount is
+    # asked and cannot say yes, and its answer is the decline that moves the
+    # chain on.
+    life_price = int(payload.get("life") or 0)
     game.arm_pending_choice(
         "optional_pay", seat,
         card_name=context.card.name if context.card is not None else "",
         cost=cost,
+        life_cost=life_price,
         life=0,
         _source_permanent=context.source_permanent,
         # Paying ends the chain: no later seat is asked, and only what the
@@ -3590,7 +3611,10 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
         ),
         _on_reflexive=(),
         _context=context,
-        prompt=f"Pay {mana_cost_label(cost)}?" if cost else "Pay?",
+        prompt=(
+            f"Pay {mana_cost_label(cost)}?" if cost
+            else f"Pay {life_price} life?" if life_price else "Pay?"
+        ),
     )
     return True, "resolved"
 

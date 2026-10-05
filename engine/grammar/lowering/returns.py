@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import DISCARDED_INTO_GRAVEYARD, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
 from ._events import OTHER_CHOSEN_PERMANENT, _back_reference_payload
@@ -267,6 +267,51 @@ def _lower_return_to_zone(
             OracleInstruction(
                 "return_recorded_permanents_to_hand", "",
                 {"permanents_from": OTHER_CHOSEN_PERMANENT},
+            ),
+        )
+    # "Discard a card at random. If you discard a creature card this way,
+    # return **it from your graveyard** to the battlefield …" (Aether Rift.)
+    # The pronoun names the card the discard in front of it put into the
+    # graveyard, which only that step's record can say: nothing was targeted,
+    # and the pile holds cards this effect never touched. The reader is the
+    # one Helm of Obedience's "put one of them onto the battlefield" already
+    # uses, pointed at the discard's record instead of the mill's.
+    #
+    # Refused without the producer, and that is this branch's whole gate: a
+    # pronoun from a graveyard with no step in front that put a card there
+    # names nothing, and falling through would read "it" as the source.
+    if (
+        isinstance(subject, ast.TargetSpec)
+        and subject.quantifier == "it"
+        and not subject.targeted
+        and node.from_zone is not None
+        and node.from_zone.name == "graveyard"
+    ):
+        if DISCARDED_INTO_GRAVEYARD not in produced:
+            raise LoweringError(
+                '"it … from your graveyard" names a card no earlier step of '
+                "this effect put there",
+                node=node,
+            )
+        if not (
+            node.to.name == "battlefield"
+            and not node.entering_tapped
+            and not node.entering_counters
+            and node.under_control_of in (None, ast.PlayerRef("you"))
+            and node.attached_to is None
+            and not node.losing_subtypes
+            and node.repetitions is None
+            and node.actor is None
+        ):
+            raise LoweringError(
+                "a card discarded this way returns to the battlefield, with "
+                "no rider", node=node,
+            )
+        return (
+            OracleInstruction(
+                "put_milled_card_onto_battlefield", "",
+                {"cards_from": DISCARDED_INTO_GRAVEYARD,
+                 "under_your_control": True, "the_one_card": True},
             ),
         )
     # "Return **another** target artifact card from your graveyard to your

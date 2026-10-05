@@ -69,6 +69,7 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              LAST_TARGET_OWNER, LIFE_LOST_THIS_WAY,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
+                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                              PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
@@ -270,6 +271,15 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
     "discard_controller_cards": "discarded_count",
+    # "Discard a card **at random**. If you discard a creature card this way,
+    # return it from your graveyard to the battlefield …" (Aether Rift.) The
+    # sample takes its cards inline, so this step knows *which* went as well as
+    # how many: see ``oracle_types.DISCARDED_THIS_WAY``. The count stays the
+    # primary, so "if you do" behind a random discard asks what it asks behind
+    # every other one.
+    "discard_x_target_cards": (
+        "discarded_count", DISCARDED_THIS_WAY, DISCARDED_INTO_GRAVEYARD,
+    ),
     # The per-seat form records the same thing, so a sentence reading "the
     # number of cards they discarded this way" has a producer to name — and
     # records it **twice**, flat and keyed by seat, which is what the prompt

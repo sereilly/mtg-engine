@@ -292,12 +292,17 @@ class DiscardedThisWay:
     was made can neither put a card back nor discard one, and the sentence
     behind it must not fire for that player.
 
-    Carries no field. Which discard it means is always the one the sentence in
-    front of it printed, and the lowering refuses the words without a step of
-    this effect that records a discard — the standing rule for every
+    Carries no producer field. Which discard it means is always the one the
+    sentence in front of it printed, and the lowering refuses the words without
+    a step of this effect that records a discard — the standing rule for every
     back-reference here, because an unwritten record reads as zero and the
     branch would silently never run.
+
+    ``filter`` is "If you discard a **creature** card this way" (Aether Rift):
+    the same question narrowed to *what* went, which the count cannot answer.
+    None is the bare "a card" every printing before it asks about.
     """
+    filter: "ObjectFilter | None" = None
 @dataclass(frozen=True)
 class ChosenThisWay:
     """"for each of **those cards**" (Sylvan Library) / "for each of **those

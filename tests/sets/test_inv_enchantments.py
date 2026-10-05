@@ -2094,3 +2094,183 @@ def test_pure_reflection_ignores_a_noncreature_spell(set_pool):
 
     assert _w1g8_reflections(game, 0) == [] and _w1g8_reflections(game, 1) == []
     assert game.players[0].life == 17
+
+
+# --- W2G2: bound objects ---
+from engine import Game as _W2G2EGame, PlayerState as _W2G2EPlayerState
+from engine.models import Permanent as _W2G2EPermanent
+from engine.oracle import compile_card_oracle as _w2g2e_compile
+from tests.helpers import resolve_stack as _w2g2e_resolve_stack
+
+
+# --- Aether Rift -----------------------------------------------------------
+#
+# "At the beginning of your upkeep, discard a card at random. If you discard a
+# creature card this way, return it from your graveyard to the battlefield
+# unless any player pays 5 life."
+#
+# "It" is the card the random discard took — a record, because by the second
+# sentence it is one card among many in a graveyard. The toll is Prophecy's
+# chain ("unless any player pays {2}") charged in life (CR 119.4).
+
+
+def _w2g2_rift_table(set_pool, hand, *, interactive=(), seats: int = 2, life=None):
+    """Seat 0 on its own turn with Aether Rift on the battlefield and *hand*."""
+    island = set_pool("LEA")["Island"]
+    game = _W2G2EGame(players=[
+        _W2G2EPlayerState(name=f"P{seat}", life=20, library=[island] * 10)
+        for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.active_player_index = 0
+    rift = _W2G2EPermanent(card=set_pool("INV")["Aether Rift"])
+    game._put_permanent_onto_battlefield(0, rift, None)
+    game.players[0].hand = [set_pool("LEA")[name] for name in hand]
+    for seat, total in (life or {}).items():
+        game.players[seat].life = total
+    w2g2_rift = game
+    return w2g2_rift
+
+
+def _w2g2_rift_board(game) -> list[str]:
+    w2g2_board = sorted(
+        permanent.effective_card.name
+        for permanent in game.controlled_by(game.players[0])
+    )
+    return w2g2_board
+
+
+def _w2g2_rift_settle(game) -> None:
+    """Drain the stack and let every non-interactive seat answer its link of
+    the chain."""
+    _w2g2e_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    game._settle()
+
+
+def test_aether_rift_returns_the_discarded_creature_when_nobody_pays(set_pool):
+    """Every seat is asked, active player first (CR 101.4); with both
+    declining, the creature card the discard took comes back."""
+    game = _w2g2_rift_table(set_pool, ["Craw Wurm"], interactive=(0, 1))
+
+    game.resolve_upkeep(0)
+    assert [card.name for card in game.players[0].graveyard] == ["Craw Wurm"]
+    asked = []
+    while game.pending_choices:
+        choice = game.pending_choices[0]
+        assert choice.kind == "optional_pay"
+        assert choice.data["life_cost"] == 5 and not choice.data["cost"]
+        asked.append(choice.player_index)
+        assert game.confirm_optional_pay(choice.player_index, accept=False)
+    game._settle()
+
+    assert asked == [0, 1]
+    assert _w2g2_rift_board(game) == ["Aether Rift", "Craw Wurm"]
+    assert game.players[0].graveyard == []
+    assert [player.life for player in game.players] == [20, 20]
+
+
+def test_aether_rift_one_payment_of_five_life_keeps_it_in_the_graveyard(set_pool):
+    """The first payment ends the chain: the opponent pays 5 life, nobody
+    after them is asked, and the creature card stays where the discard put it."""
+    game = _w2g2_rift_table(
+        set_pool, ["Craw Wurm"], interactive=(0, 1, 2), seats=3,
+    )
+    game.resolve_upkeep(0)
+
+    assert game.confirm_optional_pay(0, accept=False)
+    assert game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert game.pending_choices == []
+    assert _w2g2_rift_board(game) == ["Aether Rift"]
+    assert [card.name for card in game.players[0].graveyard] == ["Craw Wurm"]
+    assert [player.life for player in game.players] == [20, 15, 20]
+
+
+def test_aether_rift_a_player_below_five_life_cannot_pay(set_pool):
+    """CR 119.4: a player may pay 5 life only with at least 5. An opponent at
+    4 who says yes has not paid — it is a decline, and the creature returns."""
+    game = _w2g2_rift_table(
+        set_pool, ["Craw Wurm"], interactive=(0, 1), life={1: 4},
+    )
+    game.resolve_upkeep(0)
+
+    assert game.confirm_optional_pay(0, accept=False)
+    assert game.confirm_optional_pay(1, accept=True)
+    game._settle()
+
+    assert game.players[1].life == 4
+    assert _w2g2_rift_board(game) == ["Aether Rift", "Craw Wurm"]
+
+
+def test_aether_rift_discarding_a_noncreature_card_offers_nothing(set_pool):
+    """"If you discard a **creature** card this way": a land goes to the
+    graveyard and that is the whole of the upkeep."""
+    game = _w2g2_rift_table(set_pool, ["Forest"], interactive=(0, 1))
+
+    game.resolve_upkeep(0)
+    _w2g2_rift_settle(game)
+
+    assert game.pending_choices == []
+    assert [card.name for card in game.players[0].graveyard] == ["Forest"]
+    assert _w2g2_rift_board(game) == ["Aether Rift"]
+
+
+def test_aether_rift_with_an_empty_hand_does_nothing(set_pool):
+    game = _w2g2_rift_table(set_pool, [], interactive=(0, 1))
+
+    game.resolve_upkeep(0)
+    _w2g2_rift_settle(game)
+
+    assert game.pending_choices == []
+    assert _w2g2_rift_board(game) == ["Aether Rift"]
+
+
+def test_aether_rift_headless_the_opponent_pays_to_stop_it(set_pool):
+    """Non-interactive seats answer the chain by the standing policy: the
+    controller never pays to stop its own creature, the opponent does."""
+    game = _w2g2_rift_table(set_pool, ["Craw Wurm"])
+
+    game.resolve_upkeep(0)
+    _w2g2_rift_settle(game)
+
+    assert [player.life for player in game.players] == [20, 15]
+    assert _w2g2_rift_board(game) == ["Aether Rift"]
+
+
+def test_aether_rift_returns_only_the_card_it_discarded(set_pool):
+    """Library of Leng puts the discarded card on its owner's library instead
+    (CR 701.9c: unrevealed in a hidden zone, it was not "a creature card"), so
+    nothing is offered — and the *older* Craw Wurm already in the graveyard,
+    the same ``CardDefinition`` object, is not returned in its place."""
+    game = _w2g2_rift_table(set_pool, ["Craw Wurm"])
+    leng = _W2G2EPermanent(card=set_pool("LEA")["Library of Leng"])
+    game._put_permanent_onto_battlefield(0, leng, None)
+    game.players[0].graveyard.append(set_pool("LEA")["Craw Wurm"])
+
+    game.resolve_upkeep(0)
+    _w2g2_rift_settle(game)
+
+    assert game.players[0].library[0].name == "Craw Wurm"
+    assert [card.name for card in game.players[0].graveyard] == ["Craw Wurm"]
+    assert _w2g2_rift_board(game) == ["Aether Rift", "Library of Leng"]
+    assert [player.life for player in game.players] == [20, 20]
+
+
+def test_aether_rift_compiles_to_a_discard_a_test_and_a_life_toll(set_pool):
+    """The shape, once: the toll sits *inside* the condition (a land discarded
+    asks nobody for life) and carries the return on its unpaid branch."""
+    program = _w2g2e_compile(set_pool("INV")["Aether Rift"])
+    (trigger,) = program.triggered_abilities
+    discard, test = trigger.instruction.payload["steps"]
+    assert discard.kind == "discard_x_target_cards"
+    assert test.payload["condition"]["kind"] == "discarded_this_way"
+    (toll,) = test.payload["then"]
+    assert (toll.kind, toll.payload["payer"], toll.payload["life"]) == (
+        "unless_player_pays", "any_player", 5,
+    )
+    assert [step.kind for step in toll.payload["unpaid"]] == [
+        "put_milled_card_onto_battlefield"
+    ]

@@ -183,6 +183,10 @@ def _lower_unless_player_pays(
       behind it is a payment charged for no reason.
     """
     payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if payer is None and node.life:
+        # The parser builds a life price only over a set of seats; one seat's
+        # is the ``May`` whose *action* is the payment.
+        raise LoweringError("a life-priced chain needs a set of payers", node=node)
     if payer is None:
         # "…**unless you pay {R}**, …" (Goblin Flotilla); "**Unless target
         # player pays {3}**, that player loses 5 life …" (Rhystic Syphon). An
@@ -223,6 +227,12 @@ def _lower_unless_player_pays(
         # disagree about what a printed X costs.
         "cost": variable_mana_payload(node.cost, what="a toll", node=node),
     }
+    if node.life:
+        # "…unless any player pays **5 life**." (Aether Rift.) Beside the
+        # (empty) mana cost rather than inside it: the prompt and the payer's
+        # CR 119.4 test both read ``life_cost``, a different field from
+        # ``cost`` for the reason the offer keeps them apart.
+        payload["life"] = node.life
     if unpaid:
         # ``unpaid``, never ``otherwise`` and never ``steps``: the first is the
         # offer's *declined* branch, which every reader that walks a program
