@@ -34,6 +34,7 @@ from ...exiled_records import (EXILE_RECORD_KEY,
                                EXILED_SPELL_CONTROLLER_KEY)
 
 from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,  # noqa: F401
+                             EVENT_CHOSEN_TARGETS,
                              LAST_TARGET_NAME,
                              EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS)
 from .. import ast
@@ -638,3 +639,17 @@ EXILED_SPELL_RECORD = EXILE_RECORD_KEY
 
 
 EXILED_SPELL_CONTROLLER = EXILED_SPELL_CONTROLLER_KEY
+
+
+#: What a firing event leaves in the resolution for a back-reference to read,
+#: keyed by trigger-condition kind like every table in this module — and seeded
+#: into ``produced`` by ``lower.lower_ability``, so a sentence that reads one is
+#: refused under every event that did not write it.
+#:
+#: One row. "Whenever a player chooses one or more targets, … change **the
+#: target or targets**" (Psychic Battle): the phrase names the targets of the
+#: object the event was about, which `Game.announce_targets_chosen` freezes by
+#: identity. Under a cast trigger or an upkeep the same five words name nothing.
+EVENT_PRODUCES: dict[str, frozenset[str]] = {
+    "player_chooses_targets": frozenset({EVENT_CHOSEN_TARGETS}),
+}

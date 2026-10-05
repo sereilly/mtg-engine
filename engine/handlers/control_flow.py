@@ -390,6 +390,53 @@ def most_controlling_seat(game: Game, filters: dict) -> "int | None":
     )
 
 
+def _revealed_mana_value_leader(
+    game: Game, context: OracleExecutionContext
+) -> "int | None":
+    """The seat whose revealed card has strictly the greatest mana value, or
+    None. ("The player who reveals the card with the greatest mana value",
+    Psychic Battle.)
+
+    Read off the per-seat record "each player reveals the top card of their
+    library" wrote earlier in this same resolution (CR 608.2h), never off the
+    libraries again: CR 701.20a moved nothing, but the record is what says
+    which cards *this* sentence is comparing, and a second look would compare
+    whatever is on top by then.
+
+    **Only a seat that revealed a card is in the comparison.** "The player who
+    reveals the card with the greatest mana value" describes a player by a card
+    they revealed, so a player whose library was empty revealed nothing and
+    cannot be that player — however many others tie. One revealed card among
+    three seats is the greatest of the cards revealed and names its revealer;
+    no revealed card at all names nobody.
+
+    **A tie names nobody** — the card prints it ("If two or more cards are
+    tied for greatest, the target or targets remain unchanged"), and it is the
+    same strictness :func:`_strict_leader` gives every other superlative here.
+    Written out rather than routed through that function because its field is
+    every living seat, and this comparison's field is the revealers.
+
+    Mana value is the card's own (CR 202.3): a land's is 0 (CR 202.3a), an
+    ``{X}`` in a library is 0 (CR 107.3g), and a split card's is both halves
+    together (CR 709.4b) — which is what the whole card's ``cmc`` already
+    holds, the record being of the card in the library and never of a face.
+    """
+    revealed = context.results.get(REVEALED_TOP_CARDS_BY_SEAT) or {}
+    values = {
+        seat: int(getattr(card, "cmc", 0) or 0)
+        for seat, card in revealed.items()
+        if isinstance(seat, int)
+        and 0 <= seat < len(game.players)
+        and not game.players[seat].lost
+        and card is not None
+    }
+    if not values:
+        return None
+    best = max(values.values())
+    leaders = [seat for seat, value in values.items() if value == best]
+    return leaders[0] if len(leaders) == 1 else None
+
+
 def _condition_player(game: Game, context: OracleExecutionContext, whose):
     """The single seat a condition's ``player`` word names, or None.
 
@@ -3096,7 +3143,15 @@ def each_player_pays_any_mana(
 #: is actually about: CR 506.2 makes it somebody the *combat* named, so a bare
 #: imperative inside the offer ("defending player may **draw a card**",
 #: Sibilant Spirit) means that seat and not the attacker's controller.
-_EACH_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
+_EACH_ACTORS = frozenset({
+    "each_player", "each_opponent", "defending_player",
+    # "The player who reveals the card with the greatest mana value **may
+    # change the target or targets**" (Psychic Battle). One seat, and somebody
+    # the *reveal* named rather than somebody the resolution was holding — so
+    # the bare imperative inside the offer is that seat's to perform, exactly
+    # as "defending player may draw a card" is the defender's.
+    "revealed_greatest_mana_value",
+})
 
 #: …and the actors named by the **firing event** (CR 603.10), which are the same
 #: kind of seat as "defending player" above: somebody the event picked, not
@@ -3224,6 +3279,24 @@ def _offered_seats(
             return []
         return [] if game.players[seat].lost else [seat]
 
+    if actor == "revealed_greatest_mana_value":
+        # "…**the player who reveals the card with the greatest mana value**
+        # may …" (Psychic Battle.) The seat the per-seat reveal in front of
+        # this offer put strictly ahead; a tie, or nothing revealed, is nobody.
+        seat = _revealed_mana_value_leader(game, context)
+        card_name = context.card.name if context.card is not None else "Effect"
+        if seat is None:
+            # Said out loud, because the reveal just showed every player's
+            # card and "nothing happened" needs its reason beside it.
+            game.log.append(
+                f"{card_name}: no one card revealed has the greatest mana value"
+            )
+            return []
+        game.log.append(
+            f"{card_name}: {game.players[seat].name} revealed the card with "
+            "the greatest mana value"
+        )
+        return [seat]
     if actor == "damaged_player":
         # "…unless they pay {2} before that step" (Sabertooth Cobra). The seat
         # the damage event froze (``defending_player_index``, stamped by

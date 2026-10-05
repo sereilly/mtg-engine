@@ -221,6 +221,11 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("phases_in", ("this", "artifact", "phases", "in")),
     ("phases_in", ("this", "permanent", "phases", "in")),
     ("land_tapped_for_mana", ("a", "player", "taps", "a", "land", "for", "mana")),
+    # "Whenever a player chooses one or more targets" (Psychic Battle). The
+    # whole phrase is the event — "one or more" is CR 115.6's wording for "the
+    # object is targeted" and carries no number to read.
+    ("player_chooses_targets",
+     ("a", "player", "chooses", "one", "or", "more", "targets")),
     ("spell_cast", ("a", "player", "casts", "a", "spell")),
     # "Whenever a player **kicks** a spell" (Saproling Infestation). The cast
     # event under CR 702.33d's narrowing; `engine/oracle.py`'s pattern table

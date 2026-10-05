@@ -49,7 +49,7 @@ from dataclasses import replace
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
-from .lexer import PT
+from .lexer import PT, SELF
 from .nouns import parse_object_filter
 from .effects import parse_source_damage_lock
 from .delayed import contains_flip, parse_flip_stakes_sentence
@@ -646,6 +646,101 @@ def _attach_new_target_bound(
         return False
     stream.advance()
     steps[-1] = dataclasses.replace(last, new_target=noun)
+    return True
+
+
+def _offered_target_change(step: ast.Statement) -> "ast.ChangeEventTargets | None":
+    """The "change the target or targets" *step* offers, or None.
+
+    One guard for the two riders below, because both are sentences about the
+    same thing — the change the sentence in front of them offered — and the
+    question each has to ask before consuming a word is "was that sentence the
+    offer this describes?".
+    """
+    if isinstance(step, ast.May) and isinstance(step.action, ast.ChangeEventTargets):
+        return step.action
+    return None
+
+
+def _attach_tied_reveals_unchanged(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``If two or more cards are tied for greatest, the target or targets
+    remain unchanged.`` (Psychic Battle.)
+
+    It contributes **no step and no flag**, for
+    :func:`_attach_superlative_tie_break`'s reason one screen up: the offer in
+    front of it is made to "the player who reveals the card with the greatest
+    mana value", a described seat that is *strict* by construction (a tie names
+    nobody — ``handlers/control_flow._revealed_mana_value_leader``), and an
+    offer made to nobody changes nothing. So what these words say is exactly
+    what that offer already does.
+
+    **Guarded on both halves of the sentence in front of it**: the offer must
+    be to that described seat — the only one a "tied for greatest" among
+    revealed *cards* can be about — and what it offers must be the change of
+    targets this sentence says does not happen. Refuses without consuming, so
+    the creature tie-break and the life-total draw keep their own "if two or
+    more".
+    """
+    last = steps[-1] if steps else None
+    if _offered_target_change(last) is None:
+        return False
+    if last.actor.kind != "revealed_greatest_mana_value":
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "two", "or", "more", "cards", "are", "tied", "for", "greatest"
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "the", "target", "or", "targets", "remain", "unchanged"
+    ):
+        stream.reset(mark)
+        return False
+    return True
+
+
+def _attach_silent_target_change(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> bool:
+    """``Changing targets this way doesn't trigger abilities of permanents
+    named ~.`` (Psychic Battle.)
+
+    CR 115.7's change is itself a player choosing targets, so without this
+    sentence the card would trigger on its own effect — and a second copy on
+    the battlefield would trigger on the first one's. Folded onto the change
+    the sentence in front of it offered, as a flag the handler passes to the
+    announcement it makes.
+
+    The name is the lexer's SELF token and nothing else: the sentence silences
+    permanents named for *the card printing it*, which is the one name a card
+    can be held to without anything here knowing what it is — the arrangement
+    ``postmodifiers`` uses for "another creature named ~" (Goblin Artisans). A
+    different card's name behind "named" is a sentence no flag here describes,
+    and it refuses.
+    """
+    last = steps[-1] if steps else None
+    change = _offered_target_change(last)
+    if change is None:
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "changing", "targets", "this", "way", "doesn't", "trigger",
+        "abilities", "of", "permanents", "named",
+    ):
+        stream.reset(mark)
+        return False
+    token = stream.peek()
+    if token is None or token.kind != SELF:
+        stream.reset(mark)
+        return False
+    stream.advance()
+    steps[-1] = dataclasses.replace(
+        last, action=dataclasses.replace(change, silent_for_same_name=True)
+    )
     return True
 
 

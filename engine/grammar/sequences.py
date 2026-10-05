@@ -82,7 +82,7 @@ from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
     _attach_no_regeneration,
-    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_spend_only, _attach_superlative_tie_break, _attach_unpaid_penalty, _parse_exile_instead_rider)
+    _attach_unaffected_when_cost_paid, _attach_exchanged_this_way, _attach_tap_when_control_lost, _attach_riders, _attach_source_damage_lock, _attach_counter_cap, _attach_new_target_bound, _attach_silent_target_change, _attach_spend_only, _attach_superlative_tie_break, _attach_tied_reveals_unchanged, _attach_unpaid_penalty, _parse_exile_instead_rider)
 from .statements import (
     _parse_condition,
     parse_statement,
@@ -449,6 +449,20 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # the choice the sentence before it will make at resolution, not a
             # step of its own.
             if _attach_new_target_bound(stream, steps):
+                stream.accept_punct(".")
+                continue
+            # "If two or more cards are tied for greatest, the target or
+            # targets remain unchanged." / "Changing targets this way doesn't
+            # trigger abilities of permanents named ~." (Psychic Battle.) Two
+            # sentences about the change the sentence before them offered —
+            # the first restates that offer's own strictness and contributes
+            # nothing, the second is a flag on it. Beside the retarget bound
+            # above for the family's sake; each opens on words nothing else
+            # here reads behind an offered change and refuses without consuming.
+            if _attach_tied_reveals_unchanged(stream, steps):
+                stream.accept_punct(".")
+                continue
+            if _attach_silent_target_change(stream, steps):
                 stream.accept_punct(".")
                 continue
             if _attach_spend_only(stream, steps):

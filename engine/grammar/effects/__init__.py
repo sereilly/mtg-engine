@@ -219,7 +219,7 @@ from .zones import (
     parse_put_library_top_into_hand,
 )
 from .search import _parse_search_library
-from .retargeting import _parse_change_target
+from .retargeting import _parse_change_event_targets, _parse_change_target
 from .stack import (
     _parse_bid_life_contest,
     _parse_put_exiled_card_on_stack_as_copy,
@@ -426,6 +426,7 @@ __all__ = [
     "parse_reveal_top_and_separate",
     "parse_separate_into_piles",
     "_parse_can_be_targeted_as_though",
+    "_parse_change_event_targets",
     "_parse_change_target",
     "_parse_bid_life_contest",
     "_parse_copy_that_spell",

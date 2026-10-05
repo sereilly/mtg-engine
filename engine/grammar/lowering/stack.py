@@ -14,6 +14,7 @@ of modes the engine can carry out.
 import dataclasses
 
 from ...oracle_types import (BIDDING_WINNER, COUNTERED_ABILITY_SOURCE,
+                             EVENT_CHOSEN_TARGETS,
                              OracleInstruction)
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
@@ -196,6 +197,38 @@ _CHANGE_TARGET_CURRENT_TYPES = frozenset({"player", "creature", "source"})
 #: "you" is Reflecting Mirror's question. Anything else refuses: there is no
 #: other player the picker could name before the effect is on the stack.
 _CHANGE_TARGET_CURRENT_TARGETS = frozenset({"you"})
+
+
+def _lower_change_event_targets(
+    node: ast.ChangeEventTargets, produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """CR 115.7a — "…change the target or targets." (Psychic Battle.)
+
+    One instruction, where :func:`_lower_change_target` below needs two: that
+    sentence chooses *one* new target and writes it, so the choice is a step and
+    the write is the step behind it. This one changes every target the object
+    has, all or none, which is a number of choices only the resolution knows —
+    so the handler owns the whole loop and suspends inside it.
+
+    Refused unless the firing event froze the object the targets belong to
+    (``_events.EVENT_PRODUCES``): "the target or targets" is a back-reference,
+    and with nothing to refer back to the line would compile clean and change
+    nothing.
+
+    Read bare, the sentence is an order to the effect's own controller. Read
+    behind "<player> may", ``lowering/control_flow._offered_target_change``
+    folds the offer into this same instruction and writes who chooses and that
+    they may decline — see there for why it is not a ``may`` around this.
+    """
+    if EVENT_CHOSEN_TARGETS not in produced:
+        raise LoweringError(
+            "\"the target or targets\" needs a trigger whose event chose them",
+            node=node,
+        )
+    payload: dict[str, object] = {}
+    if node.silent_for_same_name:
+        payload["silent_for_same_name"] = True
+    return (OracleInstruction("change_event_object_targets", "", payload),)
 
 
 def _lower_change_target(node: ast.ChangeTarget) -> tuple[OracleInstruction, ...]:

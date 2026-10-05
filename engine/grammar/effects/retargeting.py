@@ -187,6 +187,25 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
     return ast.ChangeTarget(subject, current_target=current)
 
 
+def _parse_change_event_targets(stream: TokenStream) -> "ast.ChangeEventTargets | None":
+    """``change the target or targets`` (Psychic Battle) — the fourth
+    arrangement, and the only one that names no spell: what it re-aims is the
+    object the firing event was about.
+
+    Exactly these five words and nothing after them. "Change the target **of**
+    …" is :func:`_parse_change_target`'s and names its own spell; a noun phrase
+    behind "or targets" would be a restriction on *which* targets, which
+    CR 115.7a does not let this wording make (all of them, or none) and no
+    handler could honour. Returns None without consuming for every other
+    "change the …" sentence.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("change", "the", "target", "or", "targets"):
+        stream.reset(mark)
+        return None
+    return ast.ChangeEventTargets()
+
+
 def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None":
     """``If target spell has only one target and that target is a <noun>,
     change that spell's target to another <noun>.`` (Meddle.)

@@ -13,6 +13,7 @@ from ..faces import is_face, spell_named, whole_card
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
+from ..resumption import run_resumable
 from ._common import _card_matches_filter, count_from_payload, resolve_amount
 from .registry import effect_handler
 
@@ -120,6 +121,11 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         )
     )
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
+    if context.target_permanent_index is not None:
+        # CR 707.10c: "You may choose new targets for the copy" — and this
+        # caster did. A copy that kept the original's targets chose nothing,
+        # which is why ``_stack_push`` announces no copy on its own.
+        game.announce_targets_chosen(game.stack[-1], chooser=caster_index)
     return True, "resolved"
 
 
@@ -1530,6 +1536,9 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
         game.log.append(
             f"{card_name}: {item.card.name} now targets {permanent.card.name}"
         )
+        # CR 115.7a: the retargeting effect's controller chose a new target for
+        # the object, which is a player choosing a target.
+        game.announce_targets_chosen(item, chooser=game.seat_index(context.caster))
         return True, "resolved"
     seat = chosen.get("seat")
     if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -1552,6 +1561,213 @@ def change_target_spell_target(game: Game, instruction: OracleInstruction, conte
     game.log.append(
         f"{card_name}: {item.card.name} now targets {game.players[seat].name}"
     )
+    game.announce_targets_chosen(item, chooser=game.seat_index(context.caster))
+    return True, "resolved"
+
+
+#: Scratchpad key each slot's prompt answers into, in turn. Private to the
+#: handler below: it is read by the step behind the prompt and cleared there.
+_EVENT_TARGET_PICK = "event_target_change_pick"
+
+
+def _target_option(game: Game, target) -> dict:
+    """One candidate as a ``retarget_choice`` option.
+
+    The public keys are the ones that prompt has always carried (``kind``,
+    ``seat`` / ``permanent_id``, ``name``); the descriptor itself rides under a
+    private key so the answer is the very object ``change_options`` offered and
+    not a second reading of it.
+    """
+    from ..stack_targets import target_label
+
+    return {
+        "kind": target.kind,
+        "seat": target.seat,
+        "permanent_id": target.permanent_id,
+        "name": target_label(game, target),
+        "_stack_item": target.stack_item,
+        "_stamp": target.stamp,
+        "_target": target,
+    }
+
+
+@effect_handler("change_event_object_targets")
+def change_event_object_targets(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"…may change the target or targets." (Psychic Battle — CR 115.7a.)
+
+    The object is the one **the firing event was about** — the spell or ability
+    a player just chose targets for, frozen by identity when the ability
+    triggered (CR 603.10). The seat that chooses is payload: this effect's
+    controller for the bare sentence, or the seat "the player who reveals the
+    card with the greatest mana value" names, through the one reader an offer
+    to that seat goes through (``control_flow._offered_seats``) — and where
+    that names nobody (a tie, nothing revealed) nothing is changed.
+
+    CR 115.7a, each sentence of it:
+
+    * "each target can be changed only to **another legal target**" — the
+      candidates are ``stack_targets.change_slots``', enumerated through the
+      list the object's own picker and announcement gate read, minus the
+      target the slot already names;
+    * "if all the targets aren't changed to other legal targets, **none of them
+      are changed**" — every slot is chosen before anything is written, each
+      pick is offered only while the slots behind it can still be filled
+      (``change_options``), and ``apply_target_change`` writes all of them or
+      nothing;
+    * CR 115.7e — only the final set is judged, which is why a two-target
+      spell may have its targets exchanged.
+
+    One prompt per target, in announcement order, each suspending this
+    resolution until it is answered (``run_resumable``). Where the sentence
+    says *may*, the first prompt carries "leave the targets as they are" as an
+    answer — one decision, not a yes/no in front of a picker. A
+    **non-interactive** seat is not asked: ``ai_policy.choose_target_change``
+    is its stated policy, read on the spot, and "leave it" is one of its
+    answers. On the spot matters: the object is the next thing to resolve, and
+    a queued offer drained after the stack empties would be answered too late
+    (``lowering/control_flow._offered_target_change``).
+
+    The change is a player choosing targets, so it is announced through the
+    one seam — silenced for permanents sharing this one's name when the card
+    prints that sentence.
+    """
+    from ..stack_targets import (
+        TARGETS_CHOSEN_ITEM, apply_target_change, change_options, change_slots,
+        target_label,
+    )
+
+    card_name = getattr(context.card, "name", "")
+    item = (context.trigger_context or {}).get(TARGETS_CHOSEN_ITEM)
+    if item is None or not any(waiting is item for waiting in game.stack):
+        game.log.append(
+            f"{card_name}: the spell or ability whose targets were chosen is "
+            "no longer on the stack"
+        )
+        return True, "resolved"
+    subject = item.card.name
+    unchanged = f"{card_name}: {subject}'s targets remain unchanged"
+    slots = change_slots(game, item)
+    if isinstance(slots, str):
+        game.log.append(f"{unchanged} ({slots})")
+        return True, "resolved"
+    if not change_options(slots, []):
+        game.log.append(f"{unchanged} (it has no other legal targets)")
+        return True, "resolved"
+    who = instruction.payload.get("chooser", "you")
+    if who == "you":
+        chooser = game.seat_index(context.caster)
+    else:
+        from .control_flow import _offered_seats
+
+        seats = _offered_seats(game, who, context)
+        if not seats:
+            game.log.append(unchanged)
+            return True, "resolved"
+        chooser = seats[0]
+    optional = bool(instruction.payload.get("optional"))
+    chooser_name = game.players[chooser].name
+    picks: list = []
+
+    def finish() -> None:
+        before = ", ".join(target_label(game, slot.current) for slot in slots)
+        if len(picks) != len(slots) or not apply_target_change(game, item, slots, picks):
+            game.log.append(unchanged)
+            return
+        after = ", ".join(target_label(game, pick) for pick in picks)
+        game.log.append(
+            f"{card_name}: {chooser_name} changed {subject}'s "
+            f"target{'s' if len(slots) > 1 else ''} from {before} to {after}"
+        )
+        silently_for = None
+        if instruction.payload.get("silent_for_same_name"):
+            # "…permanents **named** <this one>": the name this permanent has
+            # *now* (CR 707.2 — a copy is named what it copies), and the
+            # card's printed name once the permanent is gone.
+            source = context.source_permanent
+            silently_for = (
+                source.effective_card.name if source is not None else card_name
+            )
+        game.announce_targets_chosen(item, chooser=chooser, silently_for=silently_for)
+
+    if chooser not in game.interactive_seats:
+        from ..ai_policy import choose_target_change
+
+        chosen = choose_target_change(game, chooser, item, slots) if optional else None
+        if chosen is None and not optional:
+            # A change the sentence orders: the first complete one, in the
+            # order the enumeration lists the candidates.
+            chosen = []
+            while len(chosen) < len(slots):
+                chosen.append(change_options(slots, chosen)[0])
+        if chosen is None:
+            game.log.append(f"{card_name}: {chooser_name} left {subject}'s targets as they were")
+            return True, "resolved"
+        picks.extend(chosen)
+        finish()
+        return True, "resolved"
+
+    state = {"abandoned": False}
+
+    def absorb() -> None:
+        # The answer to the slot before this step, exactly once.
+        if _EVENT_TARGET_PICK not in context.results:
+            return
+        answer = context.results.pop(_EVENT_TARGET_PICK)
+        if isinstance(answer, dict) and answer.get("_target") is not None:
+            picks.append(answer["_target"])
+        else:
+            # "Leave them as they are", or every candidate left between the
+            # question and the answer (``_resolve_retarget_choice``). CR 115.7a
+            # either way: nothing is changed.
+            state["abandoned"] = True
+            state["declined"] = isinstance(answer, dict) and answer.get("kind") == "keep"
+
+    def step(position) -> None:
+        absorb()
+        if position is None:
+            if state.get("declined"):
+                game.log.append(
+                    f"{card_name}: {chooser_name} left {subject}'s targets as they were"
+                )
+            elif state["abandoned"]:
+                game.log.append(unchanged)
+            else:
+                finish()
+            return
+        if state["abandoned"]:
+            return
+        options = change_options(slots, picks)
+        if not options:
+            state["abandoned"] = True
+            return
+        # Declining is offered once, with the first target: after it, the
+        # change is under way and CR 115.7a leaves no half of one to keep.
+        may_decline = optional and position == 0
+        if len(options) == 1 and not may_decline:
+            # A choice with one answer is not a question (``choose_new_spell_target``).
+            context.results[_EVENT_TARGET_PICK] = _target_option(game, options[0])
+            return
+        current = target_label(game, slots[position].current)
+        game.arm_retarget_choice(
+            chooser,
+            card_name=card_name,
+            prompt=(
+                f"Choose the new target for {subject} (now {current})."
+                if len(slots) == 1 else
+                f"Choose the new target for {subject}: target {position + 1} "
+                f"of {len(slots)} (now {current})."
+            ),
+            result_key=_EVENT_TARGET_PICK,
+            options=(
+                [{"kind": "keep", "name": "Leave the targets as they are"}]
+                if may_decline else []
+            ) + [_target_option(game, option) for option in options],
+            context=context,
+        )
+
+    # One step per slot and a last one that writes. The loop is the last thing
+    # this handler does, which is ``engine/resumption.py``'s other half.
+    run_resumable(game, [*range(len(slots)), None], step)
     return True, "resolved"
 
 

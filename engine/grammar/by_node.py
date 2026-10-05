@@ -57,7 +57,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_add_mana_for_tappe
                        _lower_change_text, _lower_counter_ability, _lower_choose_target,
                        _lower_destroy_countered_ability_source,
                        _lower_put_graveyard_position_onto_battlefield,
-                       _lower_waive_shroud, _lower_change_target, _lower_counter_spell,
+                       _lower_waive_shroud, _lower_change_event_targets, _lower_change_target, _lower_counter_spell,
                        _lower_put_exiled_card_on_stack_as_copy,
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
@@ -564,6 +564,10 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "…change **the target or targets**." (Psychic Battle.) A back-reference
+    # to what the firing event froze, so it is here for ``ast.Attach``'s
+    # reason: with no such record the five words name nothing.
+    ast.ChangeEventTargets: _lower_change_event_targets,
     # "Counter target spell unless its controller pays {1} **for each card
     # revealed this way**." (Brine Seer, Scent of Brine.) It left the name-only
     # table above for ``ast.Attach``'s reason: the price is a rate over a record
