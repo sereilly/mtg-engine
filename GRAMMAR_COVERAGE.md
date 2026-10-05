@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 85.5% | 83.5% | 62.7% | 114 |
+| PLS *(measured)* | 143 | 255 | 87.8% | 87.5% | 65.9% | 121 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -60,17 +60,17 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | ---: | ---: | --- | --- |
 | 543 | 254 | expected a subject |  |
 | 152 | 79 | unrecognized effect verb |  |
-| 132 | 67 | unconsumed text |  |
+| 129 | 64 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
-| 24 | 8 | expected what this creature can't block, or a duration |  |
+| 23 | 7 | expected what this creature can't block, or a duration |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 19 | 13 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
+| 5 | 1 | expected 'card' |  |
 | 5 | 5 | continuous keyword grant needs the CR 613 layers engine | phase 6 (CR 613 layers) |
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
@@ -81,8 +81,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 2 | 1 | expected 'top' |  |
+| 1 | 1 | expected what to gain control of |  |
 
 ## Cards executing through the grammar
 
@@ -2182,6 +2182,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+0 until end of turn.`
 - **Disappear**
   - `{U}: Return enchanted creature and this Aura to their owners' hands.`
+- **Disciple of Kangee**
+  - `{U}, {T}: Target creature gains flying and becomes blue until end of turn.`
 - **Discontinuity**
   - `End the turn. (Exile all spells and abilities from the stack, including this card. The player whose turn it is discards down to their maximum hand size. Damage wears off, and "this turn" and "until end of turn" effects end.)`
 - **Discordant Dirge**
@@ -2267,6 +2269,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}: Enchanted creature deals 1 damage to target creature with flying.`
 - **Do or Die**
   - `Separate all creatures target player controls into two piles. Destroy all creatures in the pile of that player's choice. They can't be regenerated.`
+- **Dominaria's Judgment**
+  - `Until end of turn, creatures you control gain protection from white if you control a Plains, from blue if you control an Island, from black if you control a Swamp, from red if you control a Mountain, and from green if you control a Forest.`
 - **Dominate**
   - `Gain control of target creature with mana value X or less.`
 - **Dominating Licid**
@@ -3720,6 +3724,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature is dealt damage, each opponent gains that much life.`
 - **Groundskeeper**
   - `{1}{G}: Return target basic land card from your graveyard to your hand.`
+- **Guard Dogs**
+  - `{2}{W}, {T}: Choose a permanent you control. Prevent all combat damage target creature would deal this turn if it shares a color with that permanent.`
 - **Guerrilla Tactics**
   - `Guerrilla Tactics deals 2 damage to any target.`
   - `When a spell or ability an opponent controls causes you to discard this card, it deals 4 damage to any target.`
@@ -3912,6 +3918,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}, {T}: Reveal cards from the top of your library until you reveal a basic land card. Put that card into your hand and all other cards revealed this way into your graveyard.`
 - **Heroes' Reunion**
   - `Target player gains 7 life.`
+- **Heroic Defiance**
+  - `Enchanted creature gets +3/+3 unless it shares a color with the most common color among all permanents or a color tied for most common.`
 - **Heroic Intervention**
   - `Permanents you control gain hexproof and indestructible until end of turn.`
 - **Heroism**
@@ -6645,6 +6653,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Counter target instant or sorcery spell. Search its controller's graveyard, hand, and library for all cards with the same name as that spell and exile them. Then that player shuffles.`
 - **Questing Phelddagrif**
   - `{G}: This creature gets +1/+1 until end of turn. Target opponent creates a 1/1 green Hippo creature token.`
+  - `{W}: This creature gains protection from black and from red until end of turn. Target opponent gains 2 life.`
   - `{U}: This creature gains flying until end of turn. Target opponent may draw a card.`
 - **Quickening Licid**
   - `{1}{W}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {W} to end this effect.`
@@ -7232,6 +7241,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Rolling Thunder deals X damage divided as you choose among any number of targets.`
 - **Rookie Mistake**
   - `Until end of turn, target creature gets +0/+2 and another target creature gets -2/-0.`
+- **Root Greevil**
+  - `{2}{G}, {T}, Sacrifice this creature: Destroy all enchantments of the color of your choice.`
 - **Root Maze**
   - `Artifacts and lands enter tapped.`
 - **Root Spider**
@@ -7381,6 +7392,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Samite Archer**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: This creature deals 1 damage to any target.`
+- **Samite Elder**
+  - `{T}: Choose target permanent you control. Creatures you control gain protection from each of that permanent's colors until end of turn.`
 - **Samite Healer**
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to any target this turn.`
@@ -7939,6 +7952,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Simoon**
   - `Simoon deals 1 damage to each creature target opponent controls.`
   - `Simoon deals 1 damage to each creature target opponent controls.`
+- **Singe**
+  - `Singe deals 1 damage to target creature. That creature becomes black until end of turn.`
 - **Singing Tree**
   - `{T}: Target attacking creature has base power 0 until end of turn.`
 - **Sinkhole**
