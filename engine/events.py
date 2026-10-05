@@ -929,6 +929,29 @@ _TAPPED_CONTROLLER_SCOPES = {
 }
 
 
+@event_filter("player_chooses_targets")
+def _player_chooses_targets_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """"Whenever a player chooses one or more targets" (Psychic Battle), and
+    the one printed exception to it.
+
+    "Changing targets this way **doesn't trigger abilities of permanents named
+    Psychic Battle**." The change *is* a player choosing targets, so it is
+    announced like any other (`Game.announce_targets_chosen`) and carries the
+    name that must not answer. The comparison is by the observer's
+    **effective** name (CR 707.2: a Clone of the enchantment is "named" what it
+    copies), against the name the changing permanent had when it made the
+    change — two names read off two permanents, neither of them written here.
+    """
+    from .stack_targets import TARGETS_CHANGED_SILENTLY_FOR
+
+    silenced = event.payload.get(TARGETS_CHANGED_SILENTLY_FOR)
+    if silenced is None:
+        return True
+    return permanent.effective_card.name != silenced
+
+
 @event_filter("self_becomes_target")
 def _self_becomes_target_filter(
     game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event

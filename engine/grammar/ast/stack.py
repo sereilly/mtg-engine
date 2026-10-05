@@ -229,6 +229,30 @@ class CounterSpell:
 
 
 @dataclass(frozen=True)
+class ChangeEventTargets:
+    """``…change the target or targets.`` (Psychic Battle.)
+
+    CR 115.7a with nothing chosen by the sentence itself: the object re-aimed
+    is the one **the firing event was about** — "whenever a player chooses one
+    or more targets" — so there is no ``subject`` to parse, and the node is
+    lowerable only under an event that froze that object. Beside
+    :class:`ChangeTarget` rather than a flag on it, because every field that
+    node carries is a restriction on a spell *this* effect targets, and this
+    effect targets nothing.
+
+    "The target **or targets**": every target of the object, however many, and
+    all of them or none (CR 115.7a's last sentence) — which is the handler's
+    arithmetic, not a field.
+
+    ``silent_for_same_name`` is the trailing "Changing targets this way doesn't
+    trigger abilities of permanents named ~." It arrives through a rider and
+    names the card by the lexer's SELF token, so nothing here knows a name.
+    """
+
+    silent_for_same_name: bool = False
+
+
+@dataclass(frozen=True)
 class ChangeTarget:
     """``Change the target of target spell with a single target if that target
     is you. The new target must be a player.`` (Reflecting Mirror.)

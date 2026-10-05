@@ -200,6 +200,23 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
         # field reads it beside a kind it knows, and one that does not know
         # this kind refuses it by name rather than reading the phrase as a
         # presence test.
+        # "…**the player who reveals the card with the greatest mana value**
+        # may change the target or targets." (Psychic Battle.) The third
+        # described seat, and the first answered by a *record* rather than by
+        # the board: "each player reveals the top card of their library" one
+        # sentence up wrote one card per seat, and this names the seat whose
+        # card is strictly ahead. A tie names nobody, for the reason it does
+        # two branches up — and the card says so itself in its next sentence.
+        #
+        # The whole phrase is required. "The card with the greatest mana value"
+        # is the only superlative the per-seat reveal record is read by, and a
+        # reader that took a shorter prefix would name a seat for a comparison
+        # nothing makes.
+        if stream.accept_phrase(
+            "who", "reveals", "the", "card", "with", "the", "greatest",
+            "mana", "value",
+        ):
+            return ast.PlayerRef("revealed_greatest_mana_value")
         most_mark = stream.mark()
         if stream.accept_phrase("who", "controls", "the", "most"):
             try:

@@ -54,6 +54,7 @@ from .effects import (
     _parse_attach,
     _parse_note_mana_spent,
     _parse_change_base_pt,
+    _parse_change_event_targets,
     _parse_change_target,
     _parse_change_text,
     _parse_choose_cards_in_hand,
@@ -303,6 +304,13 @@ def parse_imperative_verb(
         # Third of the three "Change the …" templates, and like the first it
         # refuses without consuming — so the text rewrite below keeps every
         # refusal it has today.
+        # "…change the target or targets." (Psychic Battle.) The object is the
+        # firing event's rather than one this sentence names; asked first
+        # because it refuses without consuming and the production below reads
+        # the same three opening words.
+        event_retarget = _parse_change_event_targets(stream)
+        if event_retarget is not None:
+            return event_retarget
         retarget = _parse_change_target(stream)
         if retarget is not None:
             return retarget

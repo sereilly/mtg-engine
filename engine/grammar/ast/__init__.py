@@ -385,6 +385,7 @@ from .exile import (
 )
 from .stack import (
     BidLifeContest,
+    ChangeEventTargets,
     ChangeTarget,
     ChooseTarget,
     CopySpell,
@@ -816,6 +817,7 @@ __all__ = [
     "CopyThatSpell",
     "CounterAbility",
     "DestroyCounteredAbilitySource",
+    "ChangeEventTargets",
     "ChangeTarget",
     "ChooseTarget",
     "PutExiledCardOnStackAsCopy",

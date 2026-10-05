@@ -5103,6 +5103,21 @@ class PendingChoicesMixin:
                 seat = option.get("seat")
                 if isinstance(seat, int) and 0 <= seat < len(self.players) and not self.players[seat].lost:
                     live.append(position)
+            elif option.get("kind") == "keep":
+                # "…**may** change the target or targets": leaving them as they
+                # are is one of the answers, and it cannot stop being legal.
+                live.append(position)
+            elif option.get("kind") == "stack":
+                # "Change the target or targets" of a counterspell (Psychic
+                # Battle): the candidate is another object on the stack, and it
+                # is live while it is still there.
+                if any(waiting is option.get("_stack_item") for waiting in self.stack):
+                    live.append(position)
+            elif option.get("kind") == "graveyard":
+                # …and of a Raise Dead: a card in a graveyard, live while a
+                # copy of it is still in that pile (``graveyard_index_of``).
+                if self.graveyard_index_of(option.get("_stamp")) is not None:
+                    live.append(position)
             elif self.permanent_by_id(option.get("permanent_id")) is not None:
                 live.append(position)
         return live
@@ -7511,6 +7526,9 @@ class PendingChoicesMixin:
         copy_item = choice.data.get("_copy")
         if match is None or copy_item is None:
             return False
+        from ...stack_targets import chosen_targets
+
+        before = chosen_targets(self, copy_item)
         if match.get("kind") == "player":
             copy_item.target_player_index = match.get("seat")
             copy_item.target_permanent_index = None
@@ -7528,6 +7546,13 @@ class PendingChoicesMixin:
         self.log.append(
             f"{choice.data.get('card_name', 'Copy')} (copy) targets {label}"
         )
+        # CR 707.10c: "you may choose new targets for the copy". Keeping the
+        # original's target is declining the offer — nothing was chosen — so
+        # only an answer that moved the copy announces a choice.
+        if chosen_targets(self, copy_item) != before:
+            self.announce_targets_chosen(
+                copy_item, chooser=choice.player_index, newly_targeted=True,
+            )
         return True
 
     def _default_copy_spell_target(self, choice: PendingChoice) -> None:
@@ -7658,6 +7683,7 @@ class PendingChoicesMixin:
             self.check_state_based_actions()
             return True
         option = options[mode_index]
+        queued = self._choice_is_queued(choice)
         if option["spec"].get("requires_target") and not choice.data.get("_keep_targets"):
             target = (
                 self._select_trigger_mode_target(option, target) if target is not None
@@ -7686,6 +7712,11 @@ class PendingChoicesMixin:
                 else f" targeting {self.players[target['seat']].name}"
             )
         self.log.append(f'{card_name}: chose "{label}"{chosen_for}')
+        # CR 700.2b / CR 603.3d: the mode and its targets are one announcement,
+        # and this answer is the moment it is complete. A copy keeps the
+        # targets it inherited (``_keep_targets``, CR 707.10) and chose none.
+        if not choice.data.get("_keep_targets"):
+            self._announce_answered_targets(item, choice, queued)
         return True
 
     def confirm_trigger_target(
@@ -7736,11 +7767,13 @@ class PendingChoicesMixin:
             }
             if seat not in offered_seats:
                 return False
+            queued = self._choice_is_queued(choice)
             self.discard_pending_choice(choice)
             item.target_player_index = seat
             item.target_permanent_index = None
             item.target_permanent_id = None
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
+            self._announce_answered_targets(item, choice, queued)
             return True
         offered = {
             target.get("permanent_id")
@@ -7755,12 +7788,46 @@ class PendingChoicesMixin:
         controller = self.controller_index_of(perm)
         if controller is None:
             return False
+        queued = self._choice_is_queued(choice)
         self.discard_pending_choice(choice)
         item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
         self.log.append(f"{card_name}: targets {perm.card.name}")
+        self._announce_answered_targets(item, choice, queued)
         return True
+
+    def _choice_is_queued(self, choice: PendingChoice) -> bool:
+        """Whether *choice* is sitting on the queue rather than being answered
+        the moment it was armed (``ChoiceSpec.default_at_arm``).
+
+        Asked by the two answers that finish a triggered ability's
+        announcement, and it is what makes "a player chose targets" fire
+        exactly once: a default taken at arm runs **inside** ``_stack_push``,
+        which announces at its own end, while a queued prompt is answered after
+        that method returned without announcing — because the choice was still
+        owed.
+        """
+        return any(waiting is choice for waiting in self.pending_choices)
+
+    def _announce_answered_targets(self, item, choice: PendingChoice, queued: bool) -> None:
+        """CR 603.3d's choice, announced when the answer is what made it.
+
+        Only for an answer that arrived off the queue (see
+        :meth:`_choice_is_queued`); the seat that answered is the chooser,
+        which is the ability's controller unless the card names another
+        ("**that player** chooses target player who…", the Exodus Oaths).
+
+        **"Becomes the target" is announced either way** (CR 603.2). The object
+        was pushed before this answer existed, so ``_stack_push_object``'s
+        announcement saw no target on it at all — whether the answer then came
+        from a player or from a default taken at arm. What it must not do twice
+        is the *choice* announcement, which ``_stack_push`` makes at its own
+        end for the at-arm case.
+        """
+        self._announce_targeting(item)
+        if queued:
+            self.announce_targets_chosen(item, chooser=choice.player_index)
 
     def _default_trigger_target(self, choice: PendingChoice) -> bool:
         """What a non-interactive seat answers with: the seat the resolution

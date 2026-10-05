@@ -244,6 +244,15 @@ REVEALED_THIS_WAY = "revealed_this_way"
 # reader handed either would lose which seat each card belongs to.
 REVEALED_TOP_CARDS_BY_SEAT = "revealed_top_cards_by_seat"
 
+#: What the event "a player chooses one or more targets" leaves for the effect
+#: behind it: the stack object those targets were chosen for (CR 603.10). Not a
+#: scratchpad key a *step* writes — the firing event froze it, into the
+#: trigger's context under ``stack_targets.TARGETS_CHOSEN_ITEM`` — but named
+#: here beside the per-seat reveal record because the lowering asks for both
+#: the same way: "the target or targets" is a back-reference, and a sentence
+#: printing it under any other event would compile clean and change nothing.
+EVENT_CHOSEN_TARGETS = "event_chosen_targets"
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

@@ -2665,6 +2665,26 @@ class GameHelpersMixin:
 
         if item is not None and grants_stack_static(getattr(item, "card", None)):
             self._recompute_continuous_effects()
+        # "Whenever a player chooses one or more targets" (CR 601.2c / 602.2b /
+        # 603.3d). Last, because this is the first moment the announcement is
+        # whole: the ids are stamped, and a triggered ability's own choice has
+        # been made if a non-interactive seat made it. Three exclusions, each a
+        # rule rather than a list of callers:
+        #
+        # * a **copy** inherits the original's targets (CR 707.10) -- nobody
+        #   chose anything, and the copy's re-aiming prompt announces for
+        #   itself if its controller takes it;
+        # * an object whose target prompt is **still owed** has not chosen yet;
+        #   the answer announces (``_resolve_trigger_target``);
+        # * an object the stack no longer holds was removed for having no legal
+        #   target (CR 603.3d) or mode (CR 700.2b).
+        if (
+            item is not None
+            and not item.is_copy
+            and self.announcement_choice_for(item) is None
+            and any(waiting is item for waiting in self.stack)
+        ):
+            self.announce_targets_chosen(item)
         return item
 
     def _stack_push_object(self, item) -> None:
@@ -3000,6 +3020,82 @@ class GameHelpersMixin:
             targeted_by_card=item.card,
             event_subject_player=item.caster_index,
         )
+
+    def announce_targets_chosen(
+        self, item, *, chooser: int | None = None,
+        silently_for: str | None = None,
+        newly_targeted: bool = False,
+    ) -> int:
+        """"Whenever a player chooses one or more targets" (Psychic Battle) --
+        the one announcement of CR 601.2c's choice, for every way a stack
+        object comes to have targets. Returns how many abilities triggered.
+
+        **One seam, because the choice has several ways in** and a fire site
+        wired into one of them is this engine's recurring defect
+        (``_stack_push_object``'s own docstring tells that story about
+        ``self_becomes_target``). The callers are the whole census:
+
+        * ``_stack_push`` -- a spell as it is cast (CR 601.2c), an ability as
+          it is activated (CR 602.2b), and a triggered ability whose target its
+          fire site bound or a non-interactive seat chose on the spot;
+        * ``_resolve_trigger_target`` / ``_resolve_mode_choice`` -- a triggered
+          ability whose controller was asked (CR 603.3d, CR 700.2b);
+        * ``_resolve_copy_spell_target`` and ``copy_top_stack_spell`` -- a copy
+          whose controller chose new targets (CR 707.10c);
+        * ``change_target_spell_target`` and ``change_event_object_targets``
+          -- a target changed by an effect (CR 115.7).
+
+        **Whether there is anything to announce is asked, never assumed**:
+        ``stack_targets.chosen_targets`` reads the object's own compiled
+        program and printed line, so a creature spell with a stray index, a
+        sacrificed cost, a "source of your choice" and an "up to one" naming
+        nobody all announce nothing (CR 115.6: an object is targeted only if
+        one or more targets have been chosen for it).
+
+        *chooser* is the seat that made the choice, where it is not the
+        object's controller (a changed target is chosen by whoever the changing
+        effect says). *silently_for* is "Changing targets this way doesn't
+        trigger abilities of permanents named <name>": the announcement still
+        happens -- another card watching the same event would see it -- and
+        carries the name that must not answer. The caller reads it off the
+        changing permanent's **effective** card, so a copy of that permanent is
+        silenced with it (CR 707.2); nothing here knows a name.
+
+        The object rides the event **by identity** (``TARGETS_CHOSEN_ITEM``):
+        CR 603.10's "looks back" for this event is at the object the targets
+        were chosen for, several look-alikes may be on the stack at once, and a
+        ``StackItem`` compares by value.
+
+        *newly_targeted* is the other announcement the same moment owes, for
+        every caller but the first: "…**becomes the target** of a spell or
+        ability" (CR 603.2, Skulking Ghost). ``_stack_push_object`` announces
+        that for the targets an object is *pushed* with, and until this seam
+        existed that was the only site — so a triggered ability whose
+        controller was asked for its target, a copy that was re-aimed and a
+        spell Deflection moved all pointed at a permanent that never heard
+        about it. A Man-o'-War entering from a graveyard bounced a Skulking
+        Ghost it should have made its controller sacrifice. Same shape as the
+        defect that method's docstring records, one layer up: one event,
+        several ways in, the fire site wired into one of them.
+        """
+        from ..events import emit
+        from ..stack_targets import TARGETS_CHOSEN_ITEM, TARGETS_CHANGED_SILENTLY_FOR, has_targets
+
+        if item is None:
+            return 0
+        if newly_targeted:
+            self._announce_targeting(item)
+        if not has_targets(self, item):
+            return 0
+        seat = item.caster_index if chooser is None else chooser
+        payload = {
+            TARGETS_CHOSEN_ITEM: item,
+            # "That player" under this event is the seat that chose.
+            "event_subject_player": seat,
+        }
+        if silently_for is not None:
+            payload[TARGETS_CHANGED_SILENTLY_FOR] = silently_for
+        return emit(self, "player_chooses_targets", subject=None, **payload)
 
     def _destroy_swept_permanents(
         self,

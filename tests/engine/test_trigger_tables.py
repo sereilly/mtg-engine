@@ -164,6 +164,9 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     ),
     "land_tapped_for_mana": "whenever a player taps a land for mana",
     "spell_cast": "whenever a player casts a spell",
+    # Psychic Battle. CR 601.2c's choice as its own event: a spell's targets,
+    # an ability's and a target changed by an effect all announce it.
+    "player_chooses_targets": "whenever a player chooses one or more targets",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
     # Multani's Presence. CR 701.6a's cancel rather than a cast, and the one

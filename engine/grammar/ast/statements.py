@@ -226,6 +226,7 @@ from .exile import (
 )
 from .stack import (
     BidLifeContest,
+    ChangeEventTargets,
     ChangeTarget,
     ChooseTarget,
     CopySpell,
@@ -315,7 +316,7 @@ Effect = Union[
     MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,
-    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
+    Regenerate, ReanimateEnchantedCard, ChangeTarget, ChangeEventTargets, ChooseTarget, WaiveShroud, CopySpell, CopyThatSpell, CounterAbility, CounterSpell, BidLifeContest, DestroyCounteredAbilitySource, ModalNode, PutExiledCardOnStackAsCopy, ReturnToZone, ChoosePermanent, CreateToken, CreateCopyToken, AddMana,
     PutOnLibraryTop, PutOnLibraryBottom, PutGraveyardTopOnLibraryBottom,
     PutOntoBattlefield, PutGraveyardPositionOntoBattlefield,
     RevealTopToHandOrBottom, CreateEmblem, SkipPhase, SkipStep,

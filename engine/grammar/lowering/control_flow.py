@@ -27,7 +27,7 @@ time: what differs between the callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction
+from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -137,7 +137,14 @@ OFFERABLE_ACTORS: frozenset[str] = frozenset(
      # about — the same record its own counter placement reads, so the player
      # offered the price and the player who takes the counter for refusing it
      # are one answer rather than two.
-     "damaged_player"}
+     "damaged_player",
+     # "**The player who reveals the card with the greatest mana value** may
+     # change the target or targets." (Psychic Battle.) A seat *described* by
+     # a record an earlier step of the same effect wrote — "each player reveals
+     # the top card of their library" — so it is admitted only behind that
+     # step (see ``_lower_may``), and ``_offered_seats`` names it by the strict
+     # maximum: a tie offers to nobody.
+     "revealed_greatest_mana_value"}
 )
 
 
@@ -256,7 +263,14 @@ def _lower_unless_player_pays(
 #: ``tests/engine/test_grammar_layering.py``: the lowering decides what "that
 #: player" compiles to and the handler decides which seat it resolves against,
 #: and the two answering differently is the offer burning the wrong player.
-_SEAT_SET_ACTORS = frozenset({"each_player", "each_opponent", "defending_player"})
+_SEAT_SET_ACTORS = frozenset({
+    "each_player", "each_opponent", "defending_player",
+    # A seat the *reveal* picked rather than one the resolution was holding,
+    # which is this set's whole definition: "…may **draw a card**" behind it is
+    # the revealer's draw, and "change the target or targets" is the
+    # revealer's choice.
+    "revealed_greatest_mana_value",
+})
 
 
 #: Instruction kinds that arm a prompt of their own and whose *decline* is the
@@ -368,6 +382,65 @@ def _may_assign_as_unblocked_static(
     return (OracleInstruction("may_assign_as_unblocked", "", {}),)
 
 
+#: The seats a change of targets can be handed to. Closed, and for a reason
+#: the generic offer does not have: the handler seats the chooser *itself*, at
+#: the moment the change is made, and knows these two — the effect's own
+#: controller, and the seat the per-seat reveal put ahead. Every other
+#: reference would reach a default and re-aim a spell by the wrong player's
+#: choice, so it refuses.
+_TARGET_CHANGE_CHOOSERS = frozenset({"you", "revealed_greatest_mana_value"})
+
+
+def _offered_target_change(
+    node: ast.May, action: tuple[OracleInstruction, ...],
+) -> tuple[OracleInstruction, ...]:
+    """"<player> **may** change the target or targets." (Psychic Battle.)
+
+    The offer and the change are **one instruction**, not a ``may`` around one,
+    and the reason is when the answer is taken. An ``optional_pay`` is a
+    queued prompt: with no interactive seat it is answered by whoever drains
+    the queue, which on the headless and AI paths is after the stack has
+    emptied (``StackMixin._settle``). For every other offer that is a harmless
+    reordering. For this one it is the whole card — the object whose targets
+    may be changed is the next thing to resolve, so an answer taken afterwards
+    changes the targets of something that has already happened.
+
+    So the handler asks while it resolves: a non-interactive seat's policy is
+    read on the spot, and an interactive seat is asked through a prompt that
+    suspends this resolution and carries "leave them as they are" as one of its
+    answers — which is what *may* means here, with no separate yes/no in front
+    of it.
+
+    Deliberately narrow, like every collapse this lowering makes: a cost, an
+    if-you-do, an otherwise or a reflexive behind the offer is a sentence the
+    one instruction cannot express, and it refuses by name rather than
+    dropping the clause.
+    """
+    if (
+        node.cost is not None or node.life_cost is not None
+        or node.then is not None or node.otherwise is not None
+        or node.reflexive is not None or node.life_alternative is not None
+        or node.cost_alternatives or node.option_effects
+    ):
+        raise LoweringError(
+            "an offered change of targets carries no cost and no branch",
+            node=node,
+        )
+    if node.actor.kind not in _TARGET_CHANGE_CHOOSERS:
+        raise LoweringError(
+            f"no handler seats {node.actor.kind!r} to change another object's targets",
+            node=node,
+        )
+    if len(action) != 1 or action[0].kind != "change_event_object_targets":
+        raise LoweringError("an offered change of targets is one instruction", node=node)
+    return (
+        OracleInstruction(
+            action[0].kind, action[0].value,
+            {**action[0].payload, "chooser": node.actor.kind, "optional": True},
+        ),
+    )
+
+
 def _lower_may(
     node: ast.May, produced: frozenset[str], event: str | None = None,
     event_subject: object | None = None,
@@ -463,6 +536,19 @@ def _lower_may(
             "\"defending player\" names a seat this event did not record",
             node=node,
         )
+    if (
+        node.actor.kind == "revealed_greatest_mana_value"
+        and REVEALED_TOP_CARDS_BY_SEAT not in produced
+    ):
+        # The seat is read off the per-seat reveal record, and with no step in
+        # front of this one that wrote it the comparison is over nothing: the
+        # offer would be made to nobody on every board, which is an optional
+        # effect that silently never happens.
+        raise LoweringError(
+            "\"the player who reveals the card with the greatest mana value\" "
+            "needs an earlier step in which each player revealed one",
+            node=node,
+        )
     if node.actor.kind not in OFFERABLE_ACTORS:
         # Idiom 2, for the seat an offer is made to. ``_offered_seats`` knows
         # four references and reads every other one as ``context.target`` — so
@@ -474,6 +560,8 @@ def _lower_may(
         raise LoweringError(
             f"no offer names {node.actor.kind!r} as its payer", node=node
         )
+    if isinstance(node.action, ast.ChangeEventTargets):
+        return _offered_target_change(node, action)
     actor = node.actor.kind
     if actor == "that_player" and LOOP_BOUND_OBJECT in produced:
         # "For each creature, its controller sacrifices a permanent of their

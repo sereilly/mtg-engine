@@ -3912,6 +3912,105 @@ def toll_decline_is_smaller_loss(
     )
 
 
+def _target_change_side(game: Game, item) -> str | None:
+    """Whose side the object's controller wanted its target on — "opponent"
+    for an effect that hampers what it targets, "you" for one that helps —
+    or None where the compiled program does not say.
+
+    The same readers every other aiming decision here uses
+    (``spell_target_side`` for a spell, ``ability_target_side`` /
+    ``activation_target_side`` for an ability), so "which way does this effect
+    cut" has one answer whether the seat is choosing the target or changing it.
+    """
+    from .ai_valuation import activation_target_side
+
+    instruction = getattr(item, "ability_instruction", None)
+    if instruction is not None:
+        return ability_target_side(instruction) or activation_target_side(instruction)
+    if getattr(item, "is_ability", False):
+        return None
+    spell = item.card
+    side = spell_target_side(spell)
+    if side is not None:
+        return side
+    # A spell whose steps carry no ``targets`` description for that reader
+    # ("any target", Lightning Bolt) is still read by its instruction's family,
+    # exactly as an ability of the same effect is one branch up. An instant or
+    # sorcery only: a permanent spell's instructions are a mirror of what the
+    # permanent does, not a program the spell runs.
+    printed_types = (spell.type_line or "").lower()
+    if "instant" not in printed_types and "sorcery" not in printed_types:
+        return None
+    executed = game._select_executable_instruction(
+        spell, getattr(item, "chosen_mode_index", None)
+    )
+    if executed is None:
+        return None
+    return ability_target_side(executed) or activation_target_side(executed)
+
+
+def choose_target_change(game: Game, seat: int, item, slots) -> "list | None":
+    """What a non-interactive *seat* does when it "may change the target or
+    targets" of *item* (Psychic Battle): the picks, one per slot, or None to
+    leave them as they are.
+
+    The stated policy, and it is one sentence: **move harm off my side, move
+    help onto it, and otherwise leave it.**
+
+    * an effect its controller aimed to *hurt* (the program's side is
+      "opponent") that points at this seat or something it controls is moved —
+      to the controller's own side where a legal target is there, else to any
+      target that is not this seat's;
+    * an effect aimed to *help* (side "you") that somebody else controls and
+      that is not already on this seat's side is moved onto it;
+    * everything else — an effect with no derivable side, a harmful one
+      already pointing elsewhere, this seat's own helpful one — is left alone.
+
+    **One target only.** CR 115.7a makes a change all-or-nothing, so moving a
+    several-target effect means accepting a new target for every slot, and
+    whether that is a gain is a trade this policy does not price — "make no
+    trades", the rule ``_default_optional_pay`` already keeps.
+
+    Deterministic: candidates are taken in the order the enumeration lists
+    them, which is board order.
+    """
+    if len(slots) != 1:
+        return None
+    slot = slots[0]
+    if slot.current.kind not in ("player", "permanent"):
+        return None
+    side = _target_change_side(game, item)
+    if side is None:
+        return None
+
+    def controller_of(target) -> int | None:
+        if target.kind == "player":
+            return target.seat
+        if target.kind != "permanent":
+            return None
+        permanent = game.permanent_by_id(target.permanent_id)
+        return None if permanent is None else game.controller_index_of(permanent)
+
+    candidates = [
+        candidate for candidate in slot.candidates
+        if candidate.kind in ("player", "permanent")
+    ]
+    mine = controller_of(slot.current) == seat
+    if side == "opponent":
+        if not mine:
+            return None
+        elsewhere = [c for c in candidates if controller_of(c) != seat]
+        back_at_them = [c for c in elsewhere if controller_of(c) == item.caster_index]
+        pick = (back_at_them or elsewhere or [None])[0]
+        return None if pick is None else [pick]
+    if side == "you":
+        if mine or item.caster_index == seat:
+            return None
+        onto_mine = [c for c in candidates if controller_of(c) == seat]
+        return [onto_mine[0]] if onto_mine else None
+    return None
+
+
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked declines one link of an "unless **any
     player** pays" chain (`handlers/control_flow.unless_player_pays`).

@@ -681,6 +681,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # separate effect, it is the retarget deciding what it will do.
     "choose_new_spell_target": "retargeting",
     "change_target_spell_target": "retargeting",
+    # "…change the target or targets." (Psychic Battle.) The same CR 115.7a
+    # change with the object named by the firing event instead of targeted.
+    "change_event_object_targets": "retargeting",
     # "Choose target creature." — a sentence whose whole content is CR 601.2c's
     # choosing of targets, printed by a spell whose *next* sentence says what
     # becomes of what it chose. Its own category rather than borrowing one,

@@ -38,13 +38,18 @@ because nothing left behind reads it, and ``parse_target_spec`` and
 ``parse_player_ref`` are one layer down rather than siblings, so both modules
 keep them. There is no import between the two in either direction.
 
-A **parse-only family**, like ``search``, ``reveal``, ``text_changes`` and
-``damage_locks`` before it. All three arrangements build one ``ast.ChangeTarget``
-— which is what makes them three arrangements rather than three effects — and it
-lives in ``ast/stack.py`` beside the counters and the copies and lowers in
-``lowering/stack.py`` beside theirs, both a long way from the guard. A
-near-empty ``lowering/retargeting.py`` would buy back the symmetry and cost the
-thing symmetry is for.
+The first three arrangements build one ``ast.ChangeTarget`` — which is what
+makes them three arrangements rather than three effects — and it lives in
+``ast/stack.py`` beside the counters and the copies. This was a **parse-only
+family** until Invasion's closing round: the one lowering sat in
+``lowering/stack.py`` and a near-empty ``lowering/retargeting.py`` "would buy
+back the symmetry and cost the thing symmetry is for". The fourth arrangement
+below is a second node with a second lowering, that module had reached 981
+lines, and ``lowering/retargeting.py`` now holds both.
+
+    _parse_change_event_targets  "…change the target or targets." (Psychic
+                                 Battle) — the object is the one the firing
+                                 event was about, so there is no spell to parse
 """
 
 from .. import ast
@@ -185,6 +190,25 @@ def _parse_change_target(stream: TokenStream) -> "ast.ChangeTarget | None":
         if current is None:
             raise stream.error("expected who that target has to be")
     return ast.ChangeTarget(subject, current_target=current)
+
+
+def _parse_change_event_targets(stream: TokenStream) -> "ast.ChangeEventTargets | None":
+    """``change the target or targets`` (Psychic Battle) — the fourth
+    arrangement, and the only one that names no spell: what it re-aims is the
+    object the firing event was about.
+
+    Exactly these five words and nothing after them. "Change the target **of**
+    …" is :func:`_parse_change_target`'s and names its own spell; a noun phrase
+    behind "or targets" would be a restriction on *which* targets, which
+    CR 115.7a does not let this wording make (all of them, or none) and no
+    handler could honour. Returns None without consuming for every other
+    "change the …" sentence.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("change", "the", "target", "or", "targets"):
+        stream.reset(mark)
+        return None
+    return ast.ChangeEventTargets()
 
 
 def _parse_conditional_retarget(stream: TokenStream) -> "ast.ChangeTarget | None":

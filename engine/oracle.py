@@ -1149,6 +1149,16 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("spell_cast",
      r"whenever a player casts a (?P<cast_colors>(?:white|blue|black|red|green)"
      r"(?:,? (?:or )?(?:white|blue|black|red|green))+) spell"),
+    # "Whenever a player chooses one or more targets" (Psychic Battle).
+    # CR 601.2c's choice as an event of its own, and deliberately not a
+    # narrowing of the cast row below: a spell's targets, an activated
+    # ability's (CR 602.2b), a triggered ability's (CR 603.3d) and a target
+    # changed by an effect (CR 115.7) are all this event, and three of those
+    # four are not casts. Announced by `Game.announce_targets_chosen`, the one
+    # seam every way a stack object comes to have targets goes through; "one or
+    # more" is CR 115.6's own wording and is what that seam asks before it
+    # announces anything.
+    ("player_chooses_targets",      r"whenever a player chooses one or more targets"),
     ("spell_cast",                  r"whenever a player casts a (?P<color_word>white|blue|black|red|green) spell"),
     # "Whenever a player casts a **multicolored** spell". Printed where a
     # colour word goes and not a colour (CR 105.4) — a count of them, two or
