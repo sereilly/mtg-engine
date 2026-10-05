@@ -424,8 +424,13 @@ _TARGET_STEP_KEYS = ("steps", "then", "else", "action", "otherwise", "effect")
 #: Stitcher and Triassic Egg *sacrificed themselves* for nothing — which is the
 #: precise failure this gate replaced a per-kind if-chain to end, still live in
 #: the one family the if-chain had never named.
+#: ``prevent_damage_by_target_spell_until_eot`` (Hidden Retreat) is
+#: ``counter_stack_ability``'s row again, for a *spell*: the noun phrase goes
+#: into ``card_types`` and no ``targets`` description rides beside it, so the
+#: card from hand went back on the library with the stack empty.
 _QUANTIFIERLESS_TARGET_KINDS = frozenset({
     "grant_banding_to_target", "counter_stack_ability",
+    "prevent_damage_by_target_spell_until_eot",
     "reanimate_creature", "reanimate_creature_to_battlefield",
     "reanimate_aura_onto_source",
     "return_creature_from_graveyard_to_hand", "exile_target_graveyard_card",
@@ -463,20 +468,12 @@ _UNCHECKED_CAST_TARGET_KINDS = frozenset({
 })
 
 
-#: The narrowings of a **stack** target that a spell's announcement and its
-#: resolution re-ask through the picker's own enumeration
-#: (:meth:`LegalityMixin.described_stack_target_refusal`). Exactly the keys no
-#: per-kind arm in ``_validate_cast_targets`` reads *and* whose enumeration
-#: reader is the handler's own (``_spell_targets_matching``,
-#: ``_stack_controller_ok``, the ability list) — so the gate can only refuse
-#: what the handler would have declined anyway. The card-type keys are left
-#: out on purpose: the enumeration reads them through ``primary_type`` where
-#: the handler reads every printed type, and gating on that would refuse a
-#: legal cast (an artifact creature spell named by "artifact spell").
-_DESCRIBED_STACK_SPEC_KEYS = (
-    "stack_targets_filter", "stack_targets_source", "stack_controller",
-    "stack_include_abilities",
-)
+#: The cast-spec kinds whose target may be **an object on the stack**, and so
+#: the kinds :meth:`LegalityMixin._offered_stack_targets` answers for. ``stack``
+#: is a spell or ability and nothing else; ``spell_or_permanent`` (the Laces,
+#: Unsubstantiate) is a spell *or* a battlefield permanent, and only its stack
+#: half is asked there.
+_STACK_TARGET_KINDS = frozenset({"stack", "spell_or_permanent"})
 
 
 def _resolution_rechecks_description(spec: dict) -> bool:
@@ -2018,12 +2015,24 @@ class LegalityMixin:
                 return repeated
         quantifiers = _ability_target_quantifiers(instruction)
         mandatory = "target" in quantifiers
-        if not mandatory:
+        if not mandatory and not (
+            kind in _STACK_TARGET_KINDS and target_stack_item is not None
+        ):
             # No mandatory target to enforce — an all-"up to" target may choose
             # none, and a kind with no target quantifier resolves its own choice
             # (a shield's "of your choice", an attacker the handler picks). Only
             # a *named* target still has to be legal, which the per-kind pickers
             # and the resolution already check for these.
+            #
+            # **Except on the stack, where nothing checked it.** A named stack
+            # object falls through to the comparison below whether or not the
+            # walk above found the word: Goblin Artisans' "counter target
+            # artifact spell you control" sits in a conditional branch the walk
+            # deliberately does not enter, so its activation could name an
+            # opponent's Lightning Bolt — the picker never offered it and
+            # nothing between the picker and the handler asked. The spell
+            # side's gate is `cast_stack_target_refusal`; this is the same
+            # question of an ability, through the same enumeration.
             return None
         ability_instruction = targeting_instruction(instruction)
         valid = self._enumerate_targets(
@@ -2465,12 +2474,70 @@ class LegalityMixin:
                 return refused
         return None
 
+    def _offered_stack_targets(
+        self, caster_index: int, card: CardDefinition, spec: dict,
+    ) -> "list | None":
+        """The stack objects *spec*'s printed target phrase admits, by
+        identity and in stack order (bottom first), or None when *spec* names
+        nothing on the stack.
+
+        **The one enumeration** every question about a spell's stack target is
+        asked through — the picker's own (``_enumerate_stack_targets``, which
+        the client is handed), turned back from top-first indices into the
+        objects. Three callers, and they are the three moments the rule has:
+        :meth:`cast_stack_target_refusal` (CR 601.2c, at announcement),
+        :meth:`default_stack_target` for a caller that named nothing, and
+        :meth:`illegal_targets_refusal` (CR 608.2b, at resolution). A fourth
+        reading of the phrase is how the first three come to disagree.
+
+        ``spell_or_permanent`` is in it for its stack half (the Laces,
+        Unsubstantiate): "target **spell** or creature" admits a spell and
+        nothing else on the stack, and the enumeration already says so — an
+        ability is not a spell (CR 113.7a). Its permanent half is
+        :meth:`cast_target_refusal`'s.
+        """
+        if spec.get("kind") not in _STACK_TARGET_KINDS:
+            return None
+        depth = len(self.stack)
+        chosen: set[int] = set()
+        for entry in self._enumerate_stack_targets(caster_index, card, spec):
+            index = entry.get("stack_index")
+            if (
+                entry.get("kind") == "stack"
+                and isinstance(index, int)
+                and 0 <= depth - 1 - index < depth
+            ):
+                chosen.add(depth - 1 - index)
+        return [self.stack[index] for index in sorted(chosen)]
+
+    def _stack_target_spec(
+        self, card: CardDefinition, *, from_zone: str = "hand",
+    ) -> dict | None:
+        """*card*'s cast spec where :meth:`_offered_stack_targets` is the
+        question to ask of it, else None.
+
+        Instants and sorceries, non-modal, for :meth:`cast_target_refusal`'s
+        reasons: a permanent spell's derived spec is its trigger's, and a modal
+        spell's is mode 0's — Blue Elemental Blast cast in its *destroy* mode
+        would be asked for a red spell.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes:
+            return None
+        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        if spec is None or spec.get("kind") not in _STACK_TARGET_KINDS:
+            return None
+        return spec
+
     def cast_stack_target_refusal(
         self, caster_index: int, card: CardDefinition, target_stack_item,
         *, from_zone: str = "hand",
     ) -> str | None:
-        """CR 601.2c for a **named spell on the stack**: it must be one the
-        printed target phrase admits. Returns the refusal, or None.
+        """CR 601.2c for a spell whose target is **an object on the stack**:
+        the one named must be one the printed target phrase admits, and with
+        none named there must be one to name. Returns the refusal, or None.
 
         The stack half of :meth:`cast_target_refusal`, which leaves ``stack``
         specs alone (``_UNCHECKED_CAST_TARGET_KINDS``) because it compares
@@ -2484,109 +2551,75 @@ class LegalityMixin:
         on Spite, the pool's first *spell* to print "target noncreature spell";
         twenty shipped spells carried a narrowing the arm did not ask.
 
-        The answer is the picker's own list — ``_enumerate_stack_targets`` over
-        the spec ``derive_cast_spec`` gives the client — so the gate and the
-        picker are one enumeration rather than two readings of one phrase
-        (idiom #9: the picker's list is a hint and the engine re-checks the
-        answer). Compared by identity: ``StackItem`` compares by value, and two
-        casts of one card at one target are equal.
+        **One gate, where Invasion's first wave left two.** W1G2 built this
+        for a *named* spell over the picker's whole list; W1G8 built
+        ``described_stack_target_refusal`` beside it for four spec keys
+        (Teferi's Response), with two behaviours the first lacked — a bare
+        announcement is refused when there is nothing to name, and the
+        description is re-asked at resolution. The second was scoped narrowly
+        because the picker then read a spell's card type off ``primary_type``
+        where the handler reads every printed type; that is fixed
+        (``_spell_is_one_of``, held by ``test_announced_stack_target``), and
+        with it the reason for two scopes. Both behaviours are kept, for every
+        key, because both are the rule rather than Teferi's Response:
 
-        Only what was **named** is asked, for :meth:`cast_target_refusal`'s
-        reason: "is there any legal target at all" stays the arm's question.
-        Instants and sorceries, non-modal, for that method's reasons too — a
-        permanent spell's spec is its trigger's, and a modal spell's is mode
-        0's.
+        * **nothing named, nothing to name** is CR 601.2c's own first half —
+          a spell that targets cannot be cast without a legal target. The
+          counter arm asked it as "is the stack empty", which let Remove Soul
+          be cast bare at a lone Lightning Bolt and Counterspell at a lone
+          activated ability, and no arm asked it at all of a spell whose
+          counter sits in a ``sequence`` (Arcane Denial, Absorb, Rewind: cast
+          onto an empty stack, the trailing sentence resolving for free).
+        * **the resolution re-check** is CR 608.2b, in
+          :meth:`illegal_targets_refusal`.
+
+        The answer is :meth:`_offered_stack_targets` — the picker's own list —
+        so the gate and the picker are one enumeration rather than two readings
+        of one phrase (idiom #9: the picker's list is a hint and the engine
+        re-checks the answer). Compared by identity: ``StackItem`` compares by
+        value, and two casts of one card at one target are equal.
+
+        A ``spell_or_permanent`` spec is asked only what was **named** on the
+        stack: with nothing named its legal target may be a permanent, and
+        "is there any legal target at all" across both zones is the bare-cast
+        question :meth:`cast_target_refusal` owns.
         """
-        if target_stack_item is None:
-            return None
-        if card.primary_type not in ("instant", "sorcery"):
-            return None
-        program = compile_card_oracle(card)
-        if program.modes:
-            return None
-        spec = derive_cast_spec(card, program, from_zone=from_zone)
-        if spec is None or spec.get("kind") != "stack":
-            return None
-        depth = len(self.stack)
-        offered = {
-            depth - 1 - entry["stack_index"]
-            for entry in self._enumerate_stack_targets(caster_index, card, spec)
-            if entry.get("kind") == "stack" and entry.get("stack_index") is not None
-        }
-        for index, item in enumerate(self.stack):
-            if item is target_stack_item:
-                return None if index in offered else f"no valid target for {card.name}"
-        return f"no valid target for {card.name}"
-
-    # **Two gates for one rule, both kept at the merge.** W1G2 (above) and W1G8
-    # (below) each built CR 601.2c for a spell that targets an object on the
-    # stack, in the same wave. They differ in scope - the first asks the
-    # picker's whole list, the second only the keys in
-    # ``_DESCRIBED_STACK_SPEC_KEYS``, left narrow because the picker then read
-    # a spell's card type off ``primary_type`` (fixed since) - and the second
-    # also refuses a bare announcement with nothing to name and is re-asked at
-    # resolution. Both are called from the cast path; where both apply they
-    # agree. Folding them into one is INV W2G3's first job.
-    def _described_stack_targets(
-        self, caster_index: int, card: CardDefinition, spec: dict,
-    ) -> "list | None":
-        """The stack objects *spec*'s printed description admits, by identity,
-        or None when this spec is not one the question is asked of.
-
-        "Counter target spell or ability **an opponent controls that targets a
-        land you control**" (Teferi's Response): everything after the noun is a
-        restriction on what may be chosen (CR 115.1), and until this nothing
-        asked it of a *spell's* stack target — the announcement gate skips the
-        ``stack`` kind and the per-kind arm reads the colour alone, so the
-        spell could be aimed at any object and the handler declined after the
-        cost was paid. For a card with a sentence behind the counter that is
-        not a wasted card but a free one: Teferi's Response drew its two cards
-        for {1}{U} off any object at all.
-
-        The enumeration is the picker's own, turned back from top-first
-        indices into the objects, so the offer and the gate are one reading.
-        """
-        if spec.get("kind") != "stack" or not any(
-            spec.get(key) for key in _DESCRIBED_STACK_SPEC_KEYS
-        ):
-            return None
-        depth = len(self.stack)
-        offered = []
-        for entry in self._enumerate_stack_targets(caster_index, card, spec):
-            index = entry.get("stack_index")
-            if isinstance(index, int) and 0 <= depth - 1 - index < depth:
-                offered.append(self.stack[depth - 1 - index])
-        return offered
-
-    def described_stack_target_refusal(
-        self, caster_index: int, card: CardDefinition, target_stack_item, *,
-        from_zone: str = "hand",
-    ) -> str | None:
-        """CR 601.2c for a spell whose target is **an object on the stack**
-        with a printed description: the one named must be one the picker would
-        have offered, and with none named there must be one to offer.
-
-        :meth:`cast_target_refusal`'s twin for the zone it leaves out, and
-        beside it for its reason — asked from the one cast path, before any
-        mana is spent. Scoped by :data:`_DESCRIBED_STACK_SPEC_KEYS`; every
-        other counterspell keeps the arm it has.
-        """
-        if card.primary_type not in ("instant", "sorcery"):
-            return None
-        program = compile_card_oracle(card)
-        if program.modes:
-            return None
-        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        spec = self._stack_target_spec(card, from_zone=from_zone)
         if spec is None:
             return None
-        offered = self._described_stack_targets(caster_index, card, spec)
-        if offered is None:
-            return None
+        refused = f"no valid target for {card.name}"
+        offered = self._offered_stack_targets(caster_index, card, spec)
         if target_stack_item is None:
-            return None if offered else f"no valid target for {card.name}"
+            if spec.get("kind") != "stack":
+                return None
+            return None if offered else refused
         if not any(item is target_stack_item for item in offered):
-            return f"no valid target for {card.name}"
+            return refused
         return None
+
+    def default_stack_target(
+        self, caster_index: int, card: CardDefinition, *, from_zone: str = "hand",
+    ) -> tuple[bool, object]:
+        """``(answered, item)``: the object a **bare** cast of *card* is taken
+        to name — the topmost one its target phrase admits.
+
+        *answered* is False where the question is not this gate's (see
+        :meth:`_stack_target_spec`; a ``spell_or_permanent`` spec too, whose
+        unnamed target may be a permanent), and the caller keeps whatever it
+        did before. Where it is True the item is the whole answer, None
+        included: nothing admitted means nothing is named.
+
+        A caller that names nothing — the AI's fallback, a script, a test — is
+        owed *a legal* choice, and until this the choice was a fourth reading
+        of the phrase: a regex over the oracle text that knew the colour word
+        and nothing else, so a bare Remove Soul above a creature spell and an
+        instant was aimed at whichever was on top.
+        """
+        spec = self._stack_target_spec(card, from_zone=from_zone)
+        if spec is None or spec.get("kind") != "stack":
+            return False, None
+        offered = self._offered_stack_targets(caster_index, card, spec)
+        return True, (offered[-1] if offered else None)
 
     def illegal_targets_refusal(self, item) -> str | None:
         """CR 608.2b: whether *item* must leave the stack without resolving.
@@ -2787,14 +2820,20 @@ class LegalityMixin:
             if still_there and not program.modes:
                 # …and its second: "that targets a land you control" stops
                 # being true when the land leaves or the object is re-aimed
-                # (Teferi's Response). Re-asked through the announcement's own
-                # enumeration, for the specs that gate asks it of.
-                offered = self._described_stack_targets(
+                # (Teferi's Response), "red" when the spell is recoloured in
+                # response, "with a single target" when it is not one any
+                # more. Re-asked through the announcement's own enumeration —
+                # for **every** stack spec, as the announcement is, where it
+                # was four keys: a description the handler re-read for itself
+                # was a description only its own sentence honoured, and the
+                # sentence behind it ran regardless (Exclude drew its card
+                # for countering nothing).
+                admitted = self._offered_stack_targets(
                     item.caster_index, card, spec
                 )
-                if offered is not None:
+                if admitted is not None:
                     still_there = any(
-                        obj is item.target_stack_item for obj in offered
+                        obj is item.target_stack_item for obj in admitted
                     )
             legality.append(still_there)
 
