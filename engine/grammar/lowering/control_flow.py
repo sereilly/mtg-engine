@@ -31,7 +31,8 @@ from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
-from ._collapses import (_each_player_optional_discard,
+from ._collapses import (offered_seat_performs, without_restated_target,
+                         _each_player_optional_discard,
                          _each_player_optional_draw,
                          _each_player_optional_pay_mana,
                          _each_player_optional_tap,
@@ -468,6 +469,9 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
+    # "Target opponent may **draw a card**": the bare imperative's subject is
+    # the seat the offer names, not the ability's controller.
+    node = offered_seat_performs(node)
     for collapse in (
         _each_player_optional_discard,
         _each_player_optional_pay_mana,
@@ -633,6 +637,7 @@ def _lower_may(
     elif node.actor.kind == "target_player":
         # The same announcement with no "opponent" in it (Rhystic Syphon).
         payload["targets"] = {"quantifier": "target", "kind": "player"}
+    action = without_restated_target(action, payload.get("targets"))
     if node.cost is not None:
         if not isinstance(node.cost, ast.ManaCost):
             raise LoweringError("only mana costs can be offered optionally", node=node)

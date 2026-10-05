@@ -633,7 +633,7 @@ def grant_team_keyword_until_eot(game: Game, instruction: OracleInstruction, con
     noun = "permanent(s)" if every_permanent else "creature(s)"
     game.log.append(
         f"{context.card.name}: {granted} {noun} gain "
-        f"{', '.join(_named_keywords(keywords, context))}"
+        f"{', '.join(_named_set_keywords(game, keywords, context))}"
         + DURATION_WORDS.get(lifetime["duration"], "")
     )
     return True, "resolved"
@@ -2198,7 +2198,8 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     pick is a protection from the wrong things, and doing nothing is the honest
     failure.
     """
-    from ..grammar.keywords import CHOSEN_COLOR_PROTECTIONS
+    from ..grammar.keywords import (
+        CHOSEN_COLOR_PROTECTIONS, PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS)
     from ..keywords import (LINE_DERIVED_KEYWORDS, grant_ability_line,
                             keyword_ability_name)
     from ..oracle_types import CHOSEN_COLOR_THIS_WAY
@@ -2219,6 +2220,19 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
         return
     if not keyword.startswith("protection from "):
         grant_keyword(permanent, keyword, **lifetime)
+        return
+    if keyword == PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS:
+        # "…protection from each of **that permanent's colors**" (Samite
+        # Elder). CR 702.16g: one protection ability per colour, and which
+        # colours is read off the permanent the "Choose target permanent …"
+        # step in front recorded — now, as the effect is applied (CR 608.2h),
+        # and through layer 5, so a permanent something has recoloured gives
+        # protection from the colour it currently is. A colourless one names
+        # no colour and grants nothing; so does a record that is missing or
+        # whose permanent has left, which is the honest failure rather than a
+        # guessed colour.
+        for word in _recorded_permanents_color_words(game, context):
+            permanent.metadata[f"protection_from_{word}"] = True
         return
     if keyword in CHOSEN_COLOR_PROTECTIONS:
         # Three printed phrasings and **one channel**: whichever seat was asked
@@ -2252,6 +2266,28 @@ _COLOR_SYMBOL_TO_WORD = {
 }
 
 
+def _recorded_permanents_color_words(game, context) -> tuple[str, ...]:
+    """The colour words of the permanent this resolution's "Choose target
+    permanent …" step recorded, in WUBRG order — empty when nothing was
+    recorded, the permanent has left, or it is colourless.
+
+    Read through ``Game._effective_colors`` (CR 613 layer 5), never off the
+    printed card: "that permanent's colors" are the ones it has as the effect
+    is applied.
+    """
+    from ..oracle_types import CHOSEN_TARGET_PERMANENTS
+
+    recorded = (getattr(context, "results", None) or {}).get(CHOSEN_TARGET_PERMANENTS) or ()
+    colors: set[str] = set()
+    for permanent_id in recorded:
+        chosen = game.permanent_by_id(permanent_id)
+        if chosen is not None:
+            colors |= set(game._effective_colors(chosen))
+    return tuple(
+        word for symbol, word in _COLOR_SYMBOL_TO_WORD.items() if symbol in colors
+    )  # _recorded_permanents_color_words
+
+
 def _named_keywords(keywords, context) -> tuple[str, ...]:
     """*keywords* as the log names them: a chosen-colour protection by the
     colour this resolution's choosing step recorded, so the log says
@@ -2267,6 +2303,25 @@ def _named_keywords(keywords, context) -> tuple[str, ...]:
         else keyword
         for keyword in keywords
     )
+
+
+def _named_set_keywords(game, keywords, context) -> tuple[str, ...]:
+    """:func:`_named_keywords` with a colour *set* spelled out as well: "each of
+    that permanent's colors" (Samite Elder) is logged as the protections it
+    actually granted — or as no protection at all, for a colourless choice —
+    rather than as the printed phrase."""
+    from ..grammar.keywords import PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS
+
+    named: list[str] = []
+    for keyword in _named_keywords(keywords, context):
+        if keyword != PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS:
+            named.append(keyword)
+            continue
+        words = _recorded_permanents_color_words(game, context)
+        named.extend(f"protection from {word}" for word in words)
+        if not words:
+            named.append("no protection (no colour to be protected from)")
+    return tuple(named)  # _named_set_keywords
 
 
 def _remove_one_keyword(permanent, keyword: str, *, duration=None, seat=None) -> None:

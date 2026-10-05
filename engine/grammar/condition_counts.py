@@ -218,10 +218,21 @@ def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None
         stream.reset(mark)
         return None
     if accept_target_pronoun(stream) and stream.accept_phrase(
-        "shares", "a", "color", "with", "the", "most", "common", "color",
-        *_CENSUS_SCOPE, "or", "a", "color", "tied", "for", "most", "common",
+        "shares", "a", "color", "with",
     ):
-        return ast.SharesMostCommonColor()
+        if stream.accept_phrase(
+            "the", "most", "common", "color",
+            *_CENSUS_SCOPE, "or", "a", "color", "tied", "for", "most", "common",
+        ):
+            return ast.SharesMostCommonColor()
+        # "…if it shares a color with **that permanent**" (Guard Dogs). The
+        # same relation with one object on the far side instead of the census:
+        # the permanent an earlier sentence of this effect chose. Read here
+        # because the two clauses share every word up to this one, and a second
+        # reader of "it shares a color with" would be a second opinion about
+        # which object "it" is.
+        if stream.accept_phrase("that", "permanent"):
+            return ast.SharesColorWithChosenPermanent()
     stream.reset(mark)
     return None
 

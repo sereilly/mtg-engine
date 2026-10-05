@@ -15,11 +15,13 @@ from __future__ import annotations
 
 import dataclasses
 
-from ...oracle_types import CHOSEN_COLOR_THIS_WAY, OracleInstruction
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
+                             OracleInstruction)
 from ...subject_filters import untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
 from ..keywords import (PROTECTION_FROM_CHOSEN_COLOR,
+                        PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS,
                         PROTECTION_FROM_TARGETS_CONTROLLERS_CHOSEN_COLOR,
                         PROTECTION_FROM_THE_CHOSEN_COLOR)
 from ..vocabulary import IMPLEMENTED_KEYWORDS
@@ -194,6 +196,21 @@ def _chosen_color_prelude(
         raise LoweringError(
             "'the chosen color' reads a colour an earlier sentence of this "
             "effect chose, and none did",
+            node=node,
+        )
+    if (
+        PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS in node.keywords
+        and CHOSEN_TARGET_PERMANENTS not in produced
+    ):
+        # "…protection from each of **that permanent's colors**" (Samite
+        # Elder). The same rule one record over: the words name the permanent a
+        # "Choose target permanent …" sentence earlier in this effect recorded,
+        # and read under any other sentence they would grant from an object
+        # nobody chose — which the handler answers with no protection at all,
+        # on a card reporting supported.
+        raise LoweringError(
+            "'that permanent's colors' reads a permanent an earlier sentence "
+            "of this effect chose, and none did",
             node=node,
         )
     if PROTECTION_FROM_CHOSEN_COLOR not in node.keywords:

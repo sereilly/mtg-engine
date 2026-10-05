@@ -32,7 +32,8 @@ from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
                       count_from_payload, count_spec_in_resolution,
                       resolve_amount,
                       resolve_target_permanent,
-                      resolve_target_permanents, seats_matching_deed)
+                      resolve_target_permanents, seats_matching_deed,
+                      described_target_predicate)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -85,8 +86,21 @@ def choose_target_permanent(game: Game, instruction: OracleInstruction, context:
 
     It still refuses when the target is gone (CR 608.2b), so the log says the
     spell found nothing rather than saying nothing at all.
+
+    **The chosen object is whatever the printed noun phrase admits.** "Choose
+    target **permanent** you control." (Samite Elder.) The resolver's default
+    asks for a creature — every card that printed this sentence before named
+    one — so an artifact or a land the player chose failed it, fell through to
+    the scan, and the first creature on that battlefield was recorded in its
+    place: the Elder's team got protection from the Elder's own colour whatever
+    was aimed at. A description that names no creature is therefore resolved
+    against itself, through ``subject_matches``; one that does keeps the
+    default, so no shipped card's resolution moves.
     """
-    chosen = resolve_target_permanent(game, context)
+    chosen = resolve_target_permanent(
+        game, context,
+        predicate=described_target_predicate(game, instruction, context),
+    )
     if chosen is None:
         game.log.append(f"{context.card.name} had no legal target")
         return True, "no target"
@@ -797,13 +811,22 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
     A target that is no longer legal is simply skipped (CR 608.2b); the rest of
     the effect still happens, which is what `resolve_target_permanents` gives
     without a per-slot fallback that would recolour the same creature twice.
+
+    **A target is whatever the printed noun phrase admits.** "{T}: Target
+    **permanent** becomes colorless until end of turn." (Ersatz Gnomes; Aurora
+    Griffin prints it with "white".) The resolver's default is a creature, so
+    an enchantment, an artifact or a land the player aimed at was dropped and
+    the ability resolved as "no creature to recolour" with its cost paid.
     """
     written = _colour_to_write(game, instruction, context)
     if written is None:
         return True, "resolved"
-    targets = resolve_target_permanents(game, context)
+    targets = resolve_target_permanents(
+        game, context,
+        predicate=described_target_predicate(game, instruction, context),
+    )
     if not targets:
-        game.log.append(f"{context.card.name}: no creature to recolour")
+        game.log.append(f"{context.card.name}: nothing to recolour")
         return True, "resolved"
     for perm in targets:
         perm.metadata["color_override_until_eot"] = written

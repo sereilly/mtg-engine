@@ -3044,6 +3044,45 @@ def names_a_target_list(instruction) -> bool:
     )
 
 
+def described_target_predicate(
+    game: Game, instruction, context: OracleExecutionContext
+) -> "Callable[[Permanent], bool] | None":
+    """The predicate a resolver should hold a chosen permanent to when the
+    instruction's printed target is **not a creature** — or None, which is the
+    resolvers' own default (a creature).
+
+    "{W}: Target **permanent** becomes white until end of turn." (Aurora
+    Griffin.) Both target resolvers default to ``is_creature``, because nearly
+    every sentence that reaches them names one. A handler written for those
+    sentences and then handed a description that names an artifact, a land or
+    any permanent at all drops what the player chose — the plural resolver
+    answers "nothing was chosen" and the singular one falls through to its scan
+    and finds a creature nobody aimed at. Either way the picker offered the
+    permanent, the cost was paid and the effect went somewhere else or nowhere.
+
+    So the description the lowering wrote for the *picker* is read back for the
+    *resolution*: one printed noun phrase, asked through ``subject_matches``
+    both times. A description that names a creature answers None and keeps the
+    default, so no instruction that worked before resolves differently.
+    """
+    described = (instruction.payload.get("targets") or {}).get("filter")
+    if not isinstance(described, dict) or described.get("type_filter") == "creature":
+        return None
+    from ..subject_filters import subject_matches
+
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+
+    def admits(candidate: Permanent) -> bool:
+        return subject_matches(
+            game, candidate, described, observer=observer,
+            source=context.source_permanent,
+        )
+
+    return admits  # described_target_predicate
+
+
 def resolve_target_permanents(
     game: Game,
     context: OracleExecutionContext,

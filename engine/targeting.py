@@ -1436,6 +1436,20 @@ def _life_gain_spec(payload: dict) -> dict | None:
     "any target".
     """
     if payload.get("recipient") != "target":
+        # "…**you** gain 2 life for each black and/or red creature **target
+        # opponent** controls." (Honorable Scout.) Who gains the life is fixed
+        # and something is chosen all the same: the seat sits inside the
+        # *count's* noun phrase, which ``count_spec`` lifts onto the spec's
+        # ``owner`` exactly as it does for a counted draw
+        # (:func:`_counted_scope_spec`, Theft of Dreams). That function reads
+        # ``x_from_count``; a per-each life gain carries the same spec under
+        # ``per_each``, and with nobody reading it there the trigger went on the
+        # stack with no target — right in a duel, no choice of opponent at three
+        # seats, and invisible to "becomes the target of". The shared pronoun
+        # reader answers None for every owner the rules already fix.
+        counted = payload.get("per_each")
+        if isinstance(counted, dict):
+            return player_pronoun_spec(counted.get("owner"))
         return None
     return _from_targets_payload(payload.get("targets")) or {"kind": "player"}
 
@@ -3107,7 +3121,32 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
     creature you control … fights **up to one** target creature you don't
     control"), which is how the AI's reader and the engine's came to disagree
     about which spells need a target at all.
+
+    **"Nothing to point at" is an answer about one step, not about the steps
+    behind it.** A row answering ``{"kind": "none"}`` is the positive statement
+    that its instruction chooses nothing ("this creature gains protection from
+    black and from red until end of turn"), and it used to end the walk — so a
+    sequence opening on one hid the target the next sentence announces ("…
+    **Target opponent** gains 2 life", Questing Phelddagrif), the ability
+    derived no picker and the client sent a bare activation. The same card's
+    other two abilities open on a kind with no row at all and were read
+    straight through to their target, which is the accident that made the
+    difference a fact about which keyword was granted. So a "none" is kept as
+    the answer of last resort: returned only when nothing behind it describes a
+    choice.
     """
+    nothing: "tuple[dict, object] | None" = None
+
+    def chosen(slot):
+        """*slot* when it describes a choice; None — remembering it — when it
+        is the positive "nothing" answer, or no answer at all."""
+        nonlocal nothing
+        if slot is not None and slot[0].get("kind") == "none":
+            if nothing is None:
+                nothing = slot
+            return None
+        return slot  # chosen
+
     for instruction in instructions:
         # "…**target opponent** loses 2 life unless… You may repeat this
         # process any number of times." (Forbidden Ritual.) A repeated process
@@ -3134,7 +3173,7 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
             "repeat_process_on_request",
         ):
             nested = _first_described_slot(instruction.payload.get("steps") or ())
-            if nested is not None:
+            if chosen(nested) is not None:
                 return nested
             continue
         if instruction.kind == "if_then":
@@ -3148,7 +3187,7 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
                 tuple(instruction.payload.get("then") or ())
                 + tuple(instruction.payload.get("else") or ())
             )
-            if nested is not None:
+            if chosen(nested) is not None:
                 return nested
             # "If **target opponent** controls more lands than you, …" (Tithe.)
             # The instance of the word "target" is in the *condition*, and
@@ -3178,7 +3217,7 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
                 tuple(instruction.payload.get("unpaid") or ())
                 + tuple(instruction.payload.get("paid") or ())
             )
-            if nested is not None:
+            if chosen(nested) is not None:
                 return nested
             continue
         if instruction.kind == "choose_one":
@@ -3209,7 +3248,7 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
             ]
             specs = [slot[0] if slot is not None else None for slot in described]
             if specs and all(spec == specs[0] for spec in specs[1:]):
-                if described[0] is not None:
+                if chosen(described[0]) is not None:
                     return described[0]
             continue
         if instruction.kind == "may":
@@ -3255,14 +3294,14 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
                 # it, which has not happened yet.
                 + tuple(instruction.payload.get("otherwise") or ())
             )
-            if nested is not None:
+            if chosen(nested) is not None:
                 return nested
             continue
         spec = _from_instruction(instruction)
-        if spec is not None:
+        if spec is not None and chosen((spec, instruction)) is not None:
             return spec, instruction
 
-    return None
+    return nothing
 
 
 #: The divisions whose spec carries the quantity being divided.

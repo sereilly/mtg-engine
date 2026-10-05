@@ -286,10 +286,16 @@ def parse_subject_verb(
                 control = _parse_gain_control(stream)
                 if control is not None:
                     return control
-            return _with_predicate_list(stream, _with_untap_conjunct(
-                stream, _with_damage_conjunct(
+            # "Target creature gains flying **and becomes blue until end of
+            # turn**." (Disciple of Kangee.) The tail the pump verb above
+            # already carries, on the second verb that prints it: one target
+            # (CR 601.2c), a keyword and a colour, one window.
+            return _with_predicate_list(stream, _with_gained_type_conjunct(
+                stream,
+                _with_untap_conjunct(stream, _with_damage_conjunct(
                     stream, _parse_gains(stream, source_spec), source_target
-                ), source_target,
+                ), source_target),
+                source_target,
             ), source_target)
         if token.text in ("loses", "lose"):
             # "…**that player loses all unspent mana**" (Drain Power, Mana

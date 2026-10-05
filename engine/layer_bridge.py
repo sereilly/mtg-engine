@@ -37,7 +37,7 @@ from .auras import (
 )
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
-from .enter_effects import own_chosen_color
+from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
 from .global_statics import (global_static_sources, global_statics_applying_to,
                              removes_all_abilities)
 from .continuous import (
@@ -921,6 +921,26 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             )
         )
 
+    # "All Goblins … **are Zombies in addition to their other creature
+    # types**." (Dralnu's Crusade.) CR 205.1b's addition: no replacement flag,
+    # so the Goblin keeps "goblin" and every other subtype it had.
+    #
+    # **After** the chosen-type replacement above, and that order is CR 613.8a
+    # rather than convenience: this static's scope is a creature type, so an
+    # effect that sets creature types changes the set of objects it applies to
+    # — it *depends* on that effect and applies after it whichever is older.
+    # Both share this layer's derived stamp, so position in the list is what
+    # decides, and read the other way a Bears that Conspiracy made a Goblin was
+    # given "zombie" and then had it replaced away.
+    for static in global_statics_applying_to(perm):
+        if static.adds_subtypes:
+            effects.append(
+                add_types(
+                    only, subtypes=list(static.adds_subtypes), timestamp=0,
+                    label=f"{static.name}:{'+'.join(static.adds_subtypes)}",
+                )
+            )
+
     # "…it becomes your choice of … a 1/6 **Wall** artifact creature with
     # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is
     # layer 6; its creature type is here, added rather than replacing, and
@@ -1142,6 +1162,33 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 [_COLOR_WORD_SYMBOLS[word] for word in static.sets_colors],
                 timestamp=2,
                 label="board-wide colour",
+            )
+        )
+
+    # "All nonland permanents are **the chosen color**." (Shifting Sky.) The
+    # same channel with the colour read off the **source** rather than off the
+    # sentence — chosen as that permanent entered (CR 614.1c) and recorded on
+    # it — so this walks the source/static *pairs*, the way layer 4 reads
+    # Conspiracy's chosen creature type. Derived on every recompute like the
+    # rest of the family: a second answer to the entry prompt is the colour the
+    # board then is, and the source leaving ends the effect by dropping out of
+    # the list.
+    for source, static in global_static_sources(
+        perm.metadata.get("global_static_sources") or ()
+    ):
+        if not static.sets_chosen_color:
+            continue
+        chosen = source.metadata.get(CHOSEN_COLOR_KEY)
+        if not chosen:
+            # The source is still entering, or the choice was never made. No
+            # contribution rather than an empty set: turning every nonland
+            # permanent colourless on the strength of an unanswered choice is
+            # the card doing something it does not say.
+            continue
+        effects.append(
+            set_colors(
+                scope_only(oid), [str(chosen)], timestamp=2,
+                label="board-wide chosen colour",
             )
         )
 

@@ -132,6 +132,17 @@ class StaticAbilityNode:
     #: Meaningless without ``condition``, which is what it is the complement of;
     #: the production that fills it only reaches this line after one parsed.
     otherwise: Statement | None = None
+    #: "Enchanted creature gets +3/+3 **unless** it shares a color with the
+    #: most common color among all permanents …" (Heroic Defiance.) The printed
+    #: word that puts the effect on the condition's *false* side, and a flag
+    #: for ``Conditional.negated``'s reason one module over: negation is not
+    #: something every condition node carries, so the lowering moves the effect
+    #: to the complement arm instead — which is the arm ``otherwise`` already
+    #: is, and why the two are never set together.
+    #:
+    #: Continuous, like everything on this node: the bonus is there exactly
+    #: while the condition is false, re-asked on every recompute (CR 611.3b).
+    unless: bool = False
 
 
 @dataclass(frozen=True)

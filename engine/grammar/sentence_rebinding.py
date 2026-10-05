@@ -329,13 +329,14 @@ def restates_target(spec, bound: "ast.TargetSpec") -> bool:
 def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
     """*node* with every bare "that <noun>" back-reference set to *bound*.
 
-    Two node types, listed rather than walked: an :class:`ast.LoseKeyword`
-    subject ("…**and that creature** loses flying", Burning Palm Efreet) and an
-    :class:`ast.DealDamage` recipient ("…damage equal to its power **to that
-    creature**", Abyssal Hunter). Both are the same printed back-reference in
-    the same position, and both are the *object* of their clause — which is
-    what makes them the pronoun this resolves and not, say, the "that creature"
-    a trigger's event bound.
+    Three node types, listed rather than walked: an :class:`ast.LoseKeyword`
+    subject ("…**and that creature** loses flying", Burning Palm Efreet), an
+    :class:`ast.BecomeColor` subject ("**That creature** becomes black until end
+    of turn", Singe) and an :class:`ast.DealDamage` recipient ("…damage equal to
+    its power **to that creature**", Abyssal Hunter). All are the same printed
+    back-reference, and each is the *object* of its clause — which is what makes
+    them the pronoun this resolves and not, say, the "that creature" a trigger's
+    event bound.
 
     Not a :func:`_walk_specs` rewrite over every spec, which is what the four
     general rebinders do. See
@@ -354,6 +355,17 @@ def _rebind_clause_bound_noun(node, bound: "ast.TargetSpec"):
         # it on the one card in the pool that prints the shape.
         return node
     if isinstance(node, ast.LoseKeyword):
+        if restates_target(node.subject, bound):
+            return replace(node, subject=bound)
+    if isinstance(node, ast.BecomeColor):
+        # "Singe deals 1 damage to target creature. **That creature** becomes
+        # black until end of turn." (Singe.) The third node this back-reference
+        # is the subject of, and the same one: the spell announced one creature
+        # (CR 601.2c) and both sentences act on it, so both instructions carry
+        # the identical ``targets`` payload and the picker asks once. Unbound,
+        # the lowering refuses it as "an object nobody targeted" — which is the
+        # right answer to a sentence with no target in front of it, and stays
+        # that answer wherever ``restates_target`` declines.
         if restates_target(node.subject, bound):
             return replace(node, subject=bound)
     if isinstance(node, ast.DealDamage) and len(node.recipients) == 1:

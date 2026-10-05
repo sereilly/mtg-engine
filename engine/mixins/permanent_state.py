@@ -38,6 +38,7 @@ from ..enter_effects import (
     enters_with_named_counter,
     LOSE_LIFE_EQUAL_TO_TOTAL_ON_ENTER,
     choosable_bodies,
+    own_chosen_protection_color,
 )
 from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
                      CHOSEN_PROTECTION_COLOR, aura_protection_colors,
@@ -2294,6 +2295,21 @@ class PermanentStateMixin:
                 game.controller_index_of(permanent)
                 == game.controller_index_of(source)
             )
+        if static.applies_to == "creature_type":
+            # "All **Goblins** are black and are Zombies …" (Dralnu's Crusade.)
+            # Through the layer-4 accessor, so a creature another effect has
+            # made a Goblin is one and a Goblin that has lost the type is not.
+            # Not self-referential the way the artifact row above is: the type
+            # this static adds is never the type its own scope names.
+            return bool(static.subtypes) and all(
+                permanent.has_type(subtype) for subtype in static.subtypes
+            )
+        if static.applies_to == "nonland_permanent":
+            # "All **nonland** permanents are the chosen color." (Shifting Sky.)
+            # The branch above with no seat to compare: every battlefield's
+            # nonland permanents, through the same layer accessor and for the
+            # same reason — an animated land is still a land and stays out.
+            return not permanent.has_type("land")
         if static.applies_to == "permanent":
             # "**All permanents** are colorless." (Thran Lens.) The widest noun
             # this table prints, and the one scope with nothing to test:
@@ -3049,6 +3065,14 @@ class PermanentStateMixin:
                     part = part.strip()
                     if part.startswith("protection from "):
                         _absorb(part[len("protection from "):].strip())
+        # "This creature has protection from **the chosen color**." (Voice of
+        # All.) The permanent's own static, spending the choice it made as it
+        # entered (CR 614.1c). **Derived**, like every grant below: read off the
+        # entry record on each ask, so a late answer to the prompt is the colour
+        # it then has, and nothing has to remove it when the ability goes.
+        own_chosen = own_chosen_protection_color(permanent)
+        if own_chosen is not None:
+            qualities.add(("color", own_chosen))
         # Two sources with different lifetimes, which is why both exist.
         #
         # An Aura's protection lasts exactly as long as it is attached, so it is

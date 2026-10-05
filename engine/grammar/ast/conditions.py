@@ -577,6 +577,26 @@ class SharesMostCommonColor:
 
 
 @dataclass(frozen=True)
+class SharesColorWithChosenPermanent:
+    """"Prevent all combat damage target creature would deal this turn **if it
+    shares a color with that permanent**." (Guard Dogs.)
+
+    CR 105.2's relation between two objects, both named by back-reference:
+    "it" is the target the guarded effect announced — :class:`ItIsColor`'s
+    pronoun, carried no more than that node carries it — and "that permanent"
+    is the one a "Choose a permanent you control." sentence earlier in the same
+    effect picked as it resolved. Neither is on the node, because neither is in
+    the clause: which half of the resolution context "it" names is only
+    knowable beside the effect, and the chosen permanent is a record the
+    lowering has to find a producer for.
+
+    The census clause one node up asks the same target about the *board*; this
+    asks it about one other object, which is ``object_colors.share_a_color``
+    over two colour sets.
+    """
+
+
+@dataclass(frozen=True)
 class TurnIsYours:
     """"**During your turn**, creatures you control get +2/+0." / "**During
     turns other than yours**, creatures you control get -0/-2." (Vibrating
@@ -692,6 +712,7 @@ Condition = Union[
     SelfInGraveyardWithCardsAbove,
     SelfIsOnlyCardOfTypeInGraveyard,
     SharesMostCommonColor,
+    SharesColorWithChosenPermanent,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,

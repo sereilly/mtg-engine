@@ -105,6 +105,80 @@ def _names_the_chosen_cards(stream: TokenStream) -> bool:
     )
 
 
+def _names_that_permanents_colors(stream: TokenStream) -> bool:
+    """Whether the rest of the line says "that permanent's colors" anywhere.
+
+    :func:`_names_the_chosen_cards`' twin one characteristic over, and a token
+    scan for its reason: the binder is a phrase inside a keyword list, not a
+    production, so the question is asked over the rest of the line. "Choose
+    target permanent you control. Creatures you control gain protection from
+    each of **that permanent's colors** until end of turn." (Samite Elder.)
+    """
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    return any(
+        window == ("that", "permanent", "'s", "colors")
+        for window in zip(words, words[1:], words[2:], words[3:])
+    )
+
+
+def _parse_choose_untargeted_permanent(stream: TokenStream) -> "ast.ChoosePermanent | None":
+    """``Choose a permanent you control.`` — a pick made as the effect resolves
+    (CR 608.2d), with **no** printed "target".
+
+    "Choose a permanent you control. Prevent all combat damage target creature
+    would deal this turn if it shares a color with **that permanent**." (Guard
+    Dogs.) The bare-imperative spelling of the sentence ``player_verbs`` reads
+    with a subject in front of it ("defending player chooses an untapped
+    creature they control"): with no subject the chooser is the effect's own
+    controller, and it is the same node and the same prompt.
+
+    CR 115.10a is the whole difference from :func:`_parse_choose_target` below:
+    nothing is a target unless the text says "target", so this pick is one of
+    CR 608.2d's choices made while the effect is applied — nothing is announced
+    for it, hexproof and protection do not stop it, and no picker is raised as
+    the ability goes on the stack.
+
+    **Only a sentence when a later one reads what it chose**, for this module's
+    standing reason — a choice nothing spends is an instruction that performs
+    nothing while the card reports supported. One binder today: a clause
+    comparing colours with "that permanent". Declines without consuming for
+    everything else, so every other "choose" keeps the reading it has.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    try:
+        chosen = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        chosen is None
+        or chosen.targeted
+        or chosen.quantifier != "a"
+        or chosen.count != 1
+        or chosen.filter.zone != "battlefield"
+    ):
+        stream.reset(mark)
+        return None
+    after_filter = stream.mark()
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    words = [str(token.text).lower() for token in stream.tokens[stream.pos:]]
+    binds = any(
+        window == ("shares", "a", "color", "with", "that", "permanent")
+        for window in zip(*(words[offset:] for offset in range(6)))
+    )
+    # The sentence boundary goes back, for the reason the targeted form's
+    # ``reset(after_filter)`` gives: the sentence loop is what consumes it.
+    stream.reset(after_filter)
+    if not binds:
+        stream.reset(mark)
+        return None
+    return ast.ChoosePermanent(ast.PlayerRef("you"), chosen)
+
+
 def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTarget | None":
     """``Choose target creature.`` — a sentence whose whole content is
     CR 601.2c's choosing of targets (Reincarnation, Glyph of Life).
@@ -212,6 +286,13 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
         # is not a production at all, so the question is asked over the rest of
         # the line exactly as the player arm asks its own.
         binds = _names_the_chosen_cards(stream)
+    if not binds:
+        # …or one reading a *characteristic* of what was chosen: "…gain
+        # protection from each of **that permanent's colors**" (Samite Elder).
+        # The fourth answer to the one question; the keyword-list reader is
+        # what consumes the words, and its lowering is what refuses them where
+        # no step in front recorded a permanent.
+        binds = _names_that_permanents_colors(stream)
     if not binds:
         # …or a loop over the set this sentence just named — "**For each of
         # those creatures,** its controller may pay …" (Winter's Chill). The

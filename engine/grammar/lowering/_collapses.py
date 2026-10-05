@@ -26,6 +26,8 @@ itself — who is asked, what it costs, and which of its branches runs.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import COUNTERED_SPELL_CONTROLLER, OracleInstruction
 from ...subject_filters import untestable_filter_keys
 from .. import ast
@@ -214,6 +216,90 @@ def _referent_seat_optional_draw(
                 "drawer_seat_record": COUNTERED_SPELL_CONTROLLER,
             },
         ),
+    )
+
+
+#: The actors that are a **target the announcement chose** (CR 601.2c /
+#: 602.2b): one seat, held in ``context.target`` for the whole resolution.
+_TARGETED_ACTORS = frozenset({"target_opponent", "target_player"})
+
+
+def offered_seat_performs(node: ast.May) -> ast.May:
+    """"**Target opponent** may draw a card." (Phelddagrif, Soldevi Heretic,
+    Questing Phelddagrif.) *node* with the offer's bare imperative given the
+    subject the sentence gives it.
+
+    The parser reads "draw a card" inside the offer as it reads it anywhere —
+    a bare imperative, so ``Draw(player=you)`` (CR 608.2c: an effect with no
+    printed subject is its controller's). But the sentence has a subject and it
+    is printed: the seat that is offered is the seat that draws. Left alone the
+    action lowered to ``draw_controller_cards``, so the opponent was asked and
+    the ability's **own controller drew** — three shipped activations that
+    handed their controller the card the text gives away, on a card that
+    compiled supported with every sentence claimed.
+
+    Fixed here, in the node, rather than by moving ``context.caster`` when the
+    offer is taken (which is what ``_offer_to_seat`` does for a *set* of
+    seats). The other two cards in the pool that offer something to a targeted
+    seat are why: Amulet of Quoz's decline branch is "**you** flip a coin" and
+    Soul Echo's action is a choice about damage "dealt to **you**" — both say
+    "you" of the ability's controller in so many words, and a moved caster
+    would hand the flip and the counters to the opponent. So only the subject
+    of the one clause that had none is rewritten, to the seat the announcement
+    chose; the offer keeps its own target description beside it, and both name
+    the same announcement.
+
+    **Draw alone, and anything else refuses.** A bare imperative of another
+    kind ("target opponent may discard a card") has the same missing subject
+    and no reading here; admitting it would be the controller performing an
+    action the card offers somebody else, silently, which is the defect this
+    function exists for.
+    """
+    if not (
+        isinstance(node.actor, ast.PlayerRef)
+        and node.actor.kind in _TARGETED_ACTORS
+    ):
+        return node
+    action = node.action
+    performer = getattr(action, "player", None)
+    if not (isinstance(performer, ast.PlayerRef) and performer.kind == "you"):
+        # No action, or one that names its own seat ("…may ante the top card of
+        # **their** library"): nothing here is missing a subject.
+        return node
+    if not isinstance(action, ast.Draw):
+        raise LoweringError(
+            "no handler has a targeted player perform this offered action",
+            node=node,
+        )
+    return dataclasses.replace(
+        node, action=dataclasses.replace(action, player=node.actor)
+    )
+
+
+def without_restated_target(
+    action: "tuple[OracleInstruction, ...]", announced: "dict | None",
+) -> "tuple[OracleInstruction, ...]":
+    """*action* with the offer's own announcement described once.
+
+    The other half of :func:`offered_seat_performs`. The re-pointed draw lowers
+    as "target opponent draws a card" and so describes a target of its own —
+    the *same* one the offer around it already describes, since the sentence
+    prints the word once. Two descriptions of one announcement read as two
+    announcements: ``describe_sequence_target_roles`` counts described slots,
+    and Soldevi Heretic ("Prevent the next 2 damage … to **target creature**
+    this turn. **Target opponent** may draw a card.") stopped being the
+    creature-and-player pair it is the moment its draw said "target" a second
+    time. So the step keeps its kind — the handler reads the chosen seat off
+    the context either way — and the offer keeps the one description.
+    """
+    if not announced:
+        return action
+    return tuple(
+        OracleInstruction(step.kind, step.value, {
+            key: value for key, value in step.payload.items() if key != "targets"
+        })
+        if step.payload.get("targets") == announced else step
+        for step in action
     )
 
 

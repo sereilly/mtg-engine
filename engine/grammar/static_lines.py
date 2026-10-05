@@ -216,8 +216,10 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
         stream.reset(mark)
         return None
     if not stream.accept_phrase("as", "long", "as"):
-        stream.reset(mark)
-        return None
+        unless = _parse_static_unless(stream, statement)
+        if unless is None:
+            stream.reset(mark)
+        return unless
     # "…**as long as it's not attacking**" over a distributive subject
     # (Arcades Sabboth). Tried first, and only for that subject, because the two
     # readings of "it" differ: over "each creature you control" it is a member
@@ -264,6 +266,43 @@ def _parse_static_condition_line(stream: TokenStream) -> ast.StaticAbilityNode |
         stream.reset(mark)
         return None
     return ast.StaticAbilityNode(statement, condition, otherwise=otherwise)
+
+
+def _parse_static_unless(
+    stream: TokenStream, statement: ast.Statement
+) -> ast.StaticAbilityNode | None:
+    """``<continuous P/T bonus> unless <condition>.``
+
+    "Enchanted creature gets +3/+3 **unless** it shares a color with the most
+    common color among all permanents or a color tied for most common."
+    (Heroic Defiance.) "As long as" with the polarity printed the other way
+    round: the bonus exists exactly while the condition is *false*. The
+    sentence loop reads the same word after a one-shot as an ``ast.Conditional``
+    — tested once as the effect resolves — and reading this line that way gives
+    an Aura whose +3/+3 is decided the moment it is cast and never again.
+
+    **A durationless pump and nothing else**, which is the ordering rule rather
+    than caution. "This creature can't attack unless defending player controls
+    an Island" and its whole family are read by ``engine/combat_restrictions``
+    as a table, reached only where every production refuses the line in full;
+    a production that took any static statement behind "unless" would parse
+    those sentences and take the table's lines away. A bonus to power and
+    toughness is the one shape no table reads behind this word.
+
+    Returns None on anything else; the caller rewinds.
+    """
+    if not (isinstance(statement, ast.Pump) and _looks_static(statement)):
+        return None
+    if not stream.accept_word("unless"):
+        return None
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        return None
+    stream.accept_punct(".")
+    if not stream.exhausted:
+        return None
+    return ast.StaticAbilityNode(statement, condition, unless=True)
 
 
 def _accept_static_otherwise(

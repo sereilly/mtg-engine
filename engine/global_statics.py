@@ -56,6 +56,16 @@ class GlobalStatic:
     # per colour per type. A tuple, because a frozen dataclass has to stay
     # hashable.
     colors: tuple[str, ...] = ()
+    # "All **Goblins** are …" (Dralnu's Crusade). The creature-type narrowing
+    # the scope carries, as data beside the scope word for the reason
+    # ``colors`` is: "all Goblins" and "all Elves" are one mechanism over
+    # different sets. Singular and lower-case, the spelling ``has_type`` reads.
+    subtypes: tuple[str, ...] = ()
+    # "…and **are Zombies in addition to their other creature types**."
+    # (Dralnu's Crusade.) CR 205.1b's printed addition, layer 4: the type is
+    # *added*, so a Goblin under it is a Goblin Zombie — which is the whole
+    # difference from ``sets_creature_type`` below, CR 205.1a's replacement.
+    adds_subtypes: tuple[str, ...] = ()
     # "If this enchantment leaves the battlefield, this effect continues until
     # end of turn." (Titania's Song.) A continuous effect that outlives its
     # source: the source stops existing, the effect does not.
@@ -82,6 +92,13 @@ class GlobalStatic:
     # every recompute. So the word cannot ride the template the way a colour
     # word does, and what the table can say is only that this static sets one.
     sets_creature_type: bool = False
+    # "All nonland permanents **are the chosen color**." (Shifting Sky.) The
+    # colour row above with ``sets_creature_type``'s reason for being a flag:
+    # the colour this static sets is not on the card at all — it is the one the
+    # source permanent chose as it entered (CR 614.1c), read off that permanent
+    # at every recompute. So ``sets_colors`` cannot carry it, and what the
+    # table can say is only that this static sets one.
+    sets_chosen_color: bool = False
     # "**The same is true** for spells you control and nonland cards you own
     # that aren't on the battlefield." The rest of the same sentence, and a flag
     # rather than a second static because it names no new effect -- it says the
@@ -305,6 +322,51 @@ _TEMPLATES: tuple[tuple[re.Pattern[str], GlobalStatic], ...] = (
         GlobalStatic(name="board_wide_color", applies_to=""),
     ),
     (
+        # Dralnu's Crusade: "All Goblins are black and are Zombies in addition
+        # to their other creature types." One sentence over one subject in
+        # **two layers** — the colour is layer 5 and *set* (CR 105.3: a red
+        # Goblin under it is black, not red-and-black), the type is layer 4 and
+        # *added* (CR 205.1b) — and one static for Humility's reason: two rows
+        # would be two timestamps for a card that has one, and a reader could
+        # then have the colour without the type.
+        #
+        # All three printed words are payload: the tribe, the colour and the
+        # added type. Both type words are checked against the creature-type
+        # catalog in ``global_static_for`` (never a literal list), so a noun
+        # that is not a creature type leaves the line unclaimed rather than
+        # producing a static whose scope nothing can satisfy.
+        #
+        # Read in front of the Darkest Hour row beside it, which it cannot
+        # collide with: that one's scope is three fixed nouns and its sentence
+        # ends at the colour word.
+        re.compile(
+            r"^all (?P<tribe>[a-z]+(?:-[a-z]+)?) are "
+            r"(?P<sets>white|blue|black|red|green) and are "
+            r"(?P<added>[a-z]+(?:-[a-z]+)?) in addition to their other "
+            r"creature types$"
+        ),
+        GlobalStatic(name="tribe_recoloured_and_retyped", applies_to="creature_type"),
+    ),
+    (
+        # Shifting Sky. Darkest Hour's sentence with the colour chosen as the
+        # enchantment entered instead of printed, and Celestial Dawn's noun with
+        # no controller narrowing: every player's nonland permanents, the Sky
+        # itself among them (it is a nonland permanent, and no template here
+        # exempts its own source unless the card says "other").
+        #
+        # Its own row rather than a seventh word in the alternation above,
+        # because "the chosen color" is not a colour word: the row above reads
+        # its colour off the sentence and this one reads it off a record, and a
+        # reader handed ``sets_colors=("the chosen color",)`` would look the
+        # phrase up in a map of five words.
+        re.compile(r"^all nonland permanents are the chosen color$"),
+        GlobalStatic(
+            name="board_wide_chosen_color",
+            applies_to="nonland_permanent",
+            sets_chosen_color=True,
+        ),
+    ),
+    (
         re.compile(
             r"^each noncreature artifact loses all abilities and becomes an "
             r"artifact creature with power and toughness each equal to its "
@@ -384,6 +446,25 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
                     pt_from_mana_value=static.pt_from_mana_value,
                     grants_ability=static.grants_ability,
                     continues_until_eot=True,
+                )
+            if groups.get("tribe"):
+                # Dralnu's Crusade. The two type words singularised and held to
+                # the creature-type catalog; imported here rather than at
+                # module scope, because this module is imported long before
+                # ``engine.grammar`` finishes and stays free of engine imports
+                # at import time.
+                from .grammar.vocabulary import CREATURE_TYPES, singular
+
+                tribe = singular(groups["tribe"])
+                added = singular(groups["added"])
+                if tribe not in CREATURE_TYPES or added not in CREATURE_TYPES:
+                    continue
+                return GlobalStatic(
+                    name=static.name,
+                    applies_to=static.applies_to,
+                    subtypes=(tribe,),
+                    adds_subtypes=(added,),
+                    sets_colors=(groups["sets"],),
                 )
             sets = groups.get("sets")
             if sets:

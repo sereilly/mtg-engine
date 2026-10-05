@@ -431,7 +431,16 @@ def _lower_choose_permanent(
     # "target" was printed in front of the noun, and the untargeted branch is
     # the one where dropping it costs most: nothing announced the choice, so
     # there is no announcement-time check to catch the widened set either.
-    if described.controller is not None:
+    if described.controller == "you" and node.chooser.kind == "you":
+        # "Choose a permanent **you control**." (Guard Dogs.) The chooser is
+        # the effect's own controller, and so is "you" (CR 109.5) — one seat,
+        # and the one ``permanent_choice_candidates`` already measures a
+        # relative key from. So the word stays in the filter, where
+        # ``subject_matches`` answers it against that observer, rather than
+        # being lifted into a scope written for a seat the handler has to look
+        # up.
+        pass
+    elif described.controller is not None:
         if described.controller != "that_player":
             raise LoweringError(
                 "the choice cannot be scoped to this player's battlefield",

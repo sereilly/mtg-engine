@@ -27,6 +27,7 @@ from . import ast
 from .errors import GrammarError
 from .paragraphs import _parse_reassign_blockers_between_attackers
 from .choices import (_parse_choose_target, _parse_choose_then_gain,
+                      _parse_choose_untargeted_permanent,
                       _parse_choose_then_swap)
 from .delay_openers import parse_trailing_delay
 from .delayed import _parse_create_delayed_trigger, wrap_in_trailing_delay
@@ -364,6 +365,12 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
     chosen = _parse_choose_target(stream, parse_statement)
     if chosen is not None:
         return chosen
+    # "Choose **a** permanent you control." (Guard Dogs.) The untargeted twin
+    # (CR 115.10a, 608.2d: chosen on resolution), behind the targeted one and
+    # declining on the same terms — unless a later sentence reads what it chose.
+    picked = _parse_choose_untargeted_permanent(stream)
+    if picked is not None:
+        return picked
     # "Choose flying, first strike, trample, or rampage 3. <source> gains that
     # ability …" (Gabriel Angelfire) / "Choose a basic land type. This creature
     # gains landwalk of the chosen type …" (Giant Slug). The same rule as the

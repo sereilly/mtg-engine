@@ -57,6 +57,7 @@ from .effects import (
     _parse_unpaid_penalty_sentence,
 )
 from .errors import GrammarError
+from .keywords import _protection_quality_name
 from .lexer import (PUNCT, QUOTE)
 from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _attach_sacrifice_when_control_lost,
@@ -305,6 +306,72 @@ def _parse_statement_alternatives(
             tuple(options), tuple(stream.text_between(a, b) for a, b in spans)
         )
     )
+
+
+def _with_conditional_protections(
+    stream: TokenStream, statement: "ast.Conditional"
+) -> ast.Statement:
+    """``… gain protection from white if <c1>, from blue if <c2>, …, and from
+    green if <c5>.`` — a list of protections, each behind a condition of its
+    own.
+
+    "Until end of turn, creatures you control gain protection from white if you
+    control a Plains, **from blue if you control an Island, from black if you
+    control a Swamp, from red if you control a Mountain, and from green if you
+    control a Forest**." (Dominaria's Judgment.) CR 702.16g's shorthand with a
+    clause on every member: the keyword word is printed once and each further
+    "from <quality> if <condition>" is another protection ability with its own
+    gate. So the sentence is a conjunction of the one this loop has just folded
+    — "<grant> if <condition>" — repeated with the quality and the condition
+    changed and everything else (the subject, the duration) shared. Each member
+    lowers to the ``if_then`` over a grant the single spelling already lowers
+    to, so the conditions are asked and the creatures counted as the spell
+    resolves (CR 608.2h, CR 611.2c), one colour at a time.
+
+    Here rather than in the keyword-list reader, because a member carries a
+    *condition* and that reader is two layers below the one that parses them.
+
+    The list has to **close** on ", and from …", for
+    ``conjuncts._with_predicate_list``'s reason: a comma is also how a sentence
+    goes on to say something else, and a list half-taken would be a conjunction
+    of the members that happened to parse with the rest left as unconsumed text
+    blamed on the wrong clause. Anything short of a closed list of at least two
+    is rewound whole, and the single conditional grant is what the caller keeps.
+    """
+    grant = statement.then
+    if not (
+        isinstance(grant, ast.GainKeyword)
+        and len(grant.keywords) == 1
+        and grant.keywords[0].startswith("protection from ")
+        and not grant.choose_one
+    ):
+        return statement
+    mark = stream.mark()
+    members: list[ast.Statement] = [statement]
+    closed = False
+    while not closed and stream.accept_punct(","):
+        closed = bool(stream.accept_word("and"))
+        if not stream.accept_word("from"):
+            closed = False
+            break
+        quality = _protection_quality_name(stream)
+        if quality is None or not stream.accept_word("if"):
+            closed = False
+            break
+        try:
+            condition = _parse_condition(stream)
+        except GrammarError:
+            closed = False
+            break
+        members.append(
+            ast.Conditional(
+                condition, dataclasses.replace(grant, keywords=(quality,))
+            )
+        )
+    if not closed or len(members) < 2:
+        stream.reset(mark)
+        return statement
+    return ast.Conjunction(tuple(members))
 
 
 def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
@@ -638,7 +705,9 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             except GrammarError:
                 stream.reset(if_mark)
             else:
-                statement = ast.Conditional(condition, statement)
+                statement = _with_conditional_protections(
+                    stream, ast.Conditional(condition, statement)
+                )
         # "…deals 2 damage to that player **unless one of their opponents was
         # dealt damage this turn**." (Antagonism.) The same trailing clause with
         # the printed word that puts the body on the *false* branch. Read here,

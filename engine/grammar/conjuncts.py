@@ -268,7 +268,12 @@ def _with_gained_type_conjunct(
     except GrammarError:
         stream.reset(mark)
         return statement
-    return ast.Conjunction((statement, joined))
+    # "Target creature gains flying and becomes blue **until end of turn**."
+    # (Disciple of Kangee.) The window is printed once, behind the last clause,
+    # and is the whole sentence's (CR 611.2a) — so the first half wears it
+    # where it printed none of its own, for the reason the keyword-loss joiner
+    # above gives.
+    return ast.Conjunction((_share_trailing_duration(statement, joined), joined))
 
 
 #: The verbs a listed predicate may open on, and the production each one is.
