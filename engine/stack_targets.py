@@ -136,19 +136,25 @@ _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 #: * "(spells|abilities) … that target(s) …" / "that targets only …" — a
 #:   description of somebody else's object;
 #: * "chooses one or more targets" — Psychic Battle's own condition;
-#: * "the target or targets" / "change the target of" / "that spell's target"
-#:   / "that target" / "the new target" / "a single target" / "only one
-#:   target" / "a new target" / "new targets" — CR 115.7's vocabulary for the
-#:   targets of the object being re-aimed. The object doing the re-aiming says
-#:   "target spell" for its own choice, which none of these erase.
+#: * "for each target [beyond the first]" — a cost counted off the targets the
+#:   sentence behind it chooses (Fireball, Phyrexian Purge), not a second
+#:   choice;
+#: * "the target or targets" / "change the target of" / "changing targets" /
+#:   "that spell's target" / "that target" / "the new target" / "a single
+#:   target" / "only one target" / "a new target" / "new targets" — CR 115.7's
+#:   vocabulary for the targets of the object being re-aimed. The object doing
+#:   the re-aiming says "target spell" for its own choice, which none of these
+#:   erase.
 _NOT_A_CHOICE = re.compile(
     r"can't be the targets? of[^.;]*"
     r"|becomes? the targets? of[^,.;]*"
     r"|(?:spells?|abilit(?:y|ies))[^.,;]*? that (?:can )?targets?(?: only)?[^.,;]*"
     r"|that targets? only[^.,;]*"
     r"|chooses? one or more targets"
+    r"|for each target(?: beyond the first)?\b"
     r"|the target or targets"
     r"|change (?:the|a) target of"
+    r"|changing targets"
     r"|(?:that|this) (?:spell|ability)'s targets?"
     r"|(?:that|the new|a new|a single|only one|its) target\b"
     r"|new targets"
