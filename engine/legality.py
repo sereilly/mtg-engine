@@ -3645,12 +3645,11 @@ class LegalityMixin:
             # the announcement gate (INV W1G2), which is what found it. The
             # complement below already asked the handler's reader for exactly
             # this reason.
-            stack_card_types = spec.get("stack_card_types")
-            if stack_card_types:
-                from .handlers.stack import _spell_is_one_of
+            from .handlers.stack import _spell_is_one_of
 
-                if not _spell_is_one_of(item_card, stack_card_types):
-                    continue
+            stack_card_types = spec.get("stack_card_types")
+            if stack_card_types and not _spell_is_one_of(item_card, stack_card_types):
+                continue
             # Null Brooch: "target **noncreature** spell" — the complement,
             # asked through ``_spell_is_one_of`` rather than through
             # ``primary_type`` above it. That is the handler's own reader, and
