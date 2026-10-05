@@ -44,7 +44,8 @@ from __future__ import annotations
 import re
 
 from .activation_zones import BATTLEFIELD, ability_functions_from
-from .cast_costs import additional_costs, costs_charged_from, kicker_cost
+from .cast_costs import (additional_costs, costs_charged_from, kicker_costs,
+                         kickers_paid)
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
 from .oracle_types import _COLOR_WORD_TO_SYMBOL
@@ -2563,8 +2564,45 @@ def _cast_cost_picker(
     return None
 
 
-def _as_kicked(instructions, was_kicked: bool) -> tuple:
-    """*instructions* as a cast that was (or was not) kicked will run them.
+def _kickers_announced(card, optional_cost_payments) -> "tuple[str, ...] | None":
+    """Which of *card*'s kicker costs an announcement takes, by key -- or None
+    when there is no announcement to read or *card* prints no kicker.
+
+    The one place the picker turns CR 601.2b's answer so far
+    (*optional_cost_payments*, the map the offer prompt re-asks the spec with)
+    into CR 702.33's: through ``cast_costs.kickers_paid``, the reader the
+    resolution itself asks, over a record shaped like the one the cast will
+    write. So "kicked", and "kicked with **which** cost" (CR 702.33b: a
+    Battlemage prints two), mean to the picker exactly what they will mean to
+    the spell.
+
+    None is "the caller is asking about the card, not about a cast" and reads
+    every arm; an empty tuple is a cast that declined every kicker.
+    """
+    if optional_cost_payments is None:
+        return None
+    if not kicker_costs(card.oracle_text or ""):
+        return None
+    return kickers_paid(card, {"additional_costs_paid": optional_cost_payments})
+
+
+def _kicker_gate_holds(gate: dict, paid) -> bool:
+    """Whether a ``was_kicked`` condition will hold for a cast that paid the
+    kicker costs *paid*.
+
+    The picker's reading of ``handlers/control_flow``'s evaluator, one branch
+    each: the unqualified question is "any of them" (CR 702.33d), and one
+    carrying ``kicker`` -- "kicked with its {1}{G} kicker", CR 702.33f -- is
+    about that one cost.
+    """
+    wanted = gate.get("kicker")
+    answer = bool(paid) if wanted is None else str(wanted) in tuple(paid)
+    return answer != bool(gate.get("negated"))
+
+
+def _as_kicked(instructions, paid) -> tuple:
+    """*instructions* as a cast that paid the kicker costs *paid* (a tuple of
+    keys; empty for an unkicked cast) will run them.
 
     CR 702.33g: "If part of a spell's ability has its effect only if that spell
     was kicked, and that part of the ability includes any targets, the spell's
@@ -2580,13 +2618,19 @@ def _as_kicked(instructions, was_kicked: bool) -> tuple:
     carrying it as an ``intervening_if`` stays only when the gate will hold.
     Everything else is walked through the wrappers ``_WRAPPER_STEP_KEYS``
     already names, so a gate inside a ``sequence`` is found where it is.
+
+    *paid* is which costs, not whether: a card may print two kickers
+    (CR 702.33b) and gate one trigger on each ("if it was kicked with its
+    {1}{G} kicker", CR 702.33f), so a Battlemage kicked only with its second
+    cost names the second trigger's target and not the first's. Each gate is
+    asked through :func:`_kicker_gate_holds`.
     """
     kept: list = []
     for instruction in instructions:
         payload = instruction.payload or {}
         gate = payload.get("intervening_if")
         if isinstance(gate, dict) and gate.get("kind") == "was_kicked":
-            if was_kicked == bool(gate.get("negated")):
+            if not _kicker_gate_holds(gate, paid):
                 continue
         condition = payload.get("condition")
         if (
@@ -2594,15 +2638,15 @@ def _as_kicked(instructions, was_kicked: bool) -> tuple:
             and isinstance(condition, dict)
             and condition.get("kind") == "was_kicked"
         ):
-            arm = "then" if was_kicked != bool(condition.get("negated")) else "else"
-            kept.extend(_as_kicked(tuple(payload.get(arm) or ()), was_kicked))
+            arm = "then" if _kicker_gate_holds(condition, paid) else "else"
+            kept.extend(_as_kicked(tuple(payload.get(arm) or ()), paid))
             continue
         rewritten = None
         for key in _WRAPPER_STEP_KEYS.get(instruction.kind, ()):
             steps = tuple(payload.get(key) or ())
             if not steps:
                 continue
-            viewed = _as_kicked(steps, was_kicked)
+            viewed = _as_kicked(steps, paid)
             if viewed != steps:
                 rewritten = {**(rewritten or payload), key: viewed}
         if rewritten is not None:
@@ -2614,20 +2658,22 @@ def _as_kicked(instructions, was_kicked: bool) -> tuple:
 
 
 def _cast_target_spec(
-    card, program, *, was_kicked: bool | None = None
+    card, program, *, kickers: "tuple[str, ...] | None" = None
 ) -> dict | None:
     """What *card* announces as a **target** when it is cast (CR 601.2c), or
     None when it targets nothing. The cost half of the announcement is
     :func:`_cast_cost_picker`; :func:`derive_cast_spec` is the two together.
 
-    *was_kicked* is CR 702.33g's answer when the caller has one: True or False
-    reads the program through :func:`_as_kicked`, and None -- a caller asking
-    about the card rather than about an announcement -- reads every arm, which
-    is what this did before the pool printed a kicker."""
+    *kickers* is CR 702.33g's answer when the caller has one
+    (:func:`_kickers_announced`): a tuple of the kicker costs the cast paid --
+    empty for one that declined -- reads the program through
+    :func:`_as_kicked`, and None -- a caller asking about the card rather than
+    about an announcement -- reads every arm, which is what this did before the
+    pool printed a kicker."""
     def viewed(instructions):
-        if was_kicked is None:
+        if kickers is None:
             return instructions
-        return _as_kicked(tuple(instructions), was_kicked)
+        return _as_kicked(tuple(instructions), kickers)
 
     graveyard_aura = _ENCHANT_GRAVEYARD_LINE.search(program.normalized_text or "")
     if graveyard_aura is not None:
@@ -2662,13 +2708,50 @@ def _cast_target_spec(
     # CR 603.3d would choose it when the trigger goes on the stack. That is a
     # standing approximation, not a targeting question — but while it holds, the
     # prompt has to be raised at cast time or the trigger has no target at all.
-    return _from_instructions(viewed([
+    #
+    # The **first** one that describes a target, and only that one: a cast
+    # carries one set of target fields, so a second entry trigger with a target
+    # of its own (a Battlemage kicked with both costs) is announced by nobody
+    # here and chooses on the stack -- see
+    # ``resolution._apply_self_enters_battlefield_triggers``, which spends the
+    # announcement on exactly the trigger this reads.
+    return _from_instructions(viewed(_entry_trigger_instructions(program)))
+
+
+def _entry_trigger_instructions(program) -> list:
+    """Every supported "when this enters" trigger's instruction, in printed
+    order -- the list a permanent spell's cast-time picker is derived from."""
+    return [
         ability.instruction
         for ability in program.triggered_abilities
         if ability.supported
         and ability.instruction is not None
         and ability.condition.kind == "enters_battlefield"
-    ]))
+    ]
+
+
+def entry_trigger_instructions(
+    card, program, *, optional_cost_payments: dict | None = None
+) -> tuple:
+    """The entry-trigger instructions a cast of *card* announced with
+    *optional_cost_payments* will fire, in printed order.
+
+    :func:`_cast_target_spec`'s own list, made askable: the picker reads the
+    first of these that describes a target, and a caller deciding whether an
+    optional cost is worth paying (``ai_policy``) needs the whole list -- which
+    triggers a kicker **buys** is the difference between this for the
+    announcement and this for ``{}``.
+
+    Read through :func:`_as_kicked` when the caller gives an announcement and
+    the card prints a kicker (CR 702.33g), so a Battlemage's "if it was kicked
+    with its {2}{R} kicker" trigger is in the list only for a cast that paid
+    {2}{R}. With none given, every trigger the card prints.
+    """
+    instructions = tuple(_entry_trigger_instructions(program))
+    kickers = _kickers_announced(card, optional_cost_payments)
+    if kickers is None:
+        return instructions
+    return _as_kicked(instructions, kickers)
 
 
 def derive_cast_spec(
@@ -2697,12 +2780,10 @@ def derive_cast_spec(
     # decides the cost picker one line up -- and only for a card that prints a
     # kicker at all. A caller that passes none is asking about the card, and
     # gets every arm.
-    was_kicked: bool | None = None
-    if optional_cost_payments is not None:
-        kicker = kicker_cost(card.oracle_text or "")
-        if kicker is not None:
-            was_kicked = int(optional_cost_payments.get(kicker, 0) or 0) > 0
-    target_spec = _cast_target_spec(card, program, was_kicked=was_kicked)
+    target_spec = _cast_target_spec(
+        card, program,
+        kickers=_kickers_announced(card, optional_cost_payments),
+    )
     if cost_spec is None:
         return target_spec
     if target_spec is None:
@@ -2750,13 +2831,9 @@ def cast_target_slot(
     if "instant" not in type_line and "sorcery" not in type_line:
         return None
     instructions = tuple(program.instructions)
-    if optional_cost_payments is not None:
-        kicker = kicker_cost(card.oracle_text or "")
-        if kicker is not None:
-            instructions = _as_kicked(
-                instructions,
-                int(optional_cost_payments.get(kicker, 0) or 0) > 0,
-            )
+    kickers = _kickers_announced(card, optional_cost_payments)
+    if kickers is not None:
+        instructions = _as_kicked(instructions, kickers)
     return _first_described_slot(instructions)
 
 

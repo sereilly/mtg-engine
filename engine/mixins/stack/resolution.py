@@ -12,7 +12,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 from ...auras import aura_enchant_clause
-from ...cast_costs import KICKED, buyback_paid, kicked
+from ...cast_costs import (KICKED, KICKED_WITH, buyback_paid, kicked,
+                           kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...enter_effects import copy_on_enter_type
@@ -1326,6 +1327,13 @@ class StackResolutionMixin:
             # omission: it was not cast, so it was not kicked.
             if kicked(card, choices):
                 permanent.metadata[KICKED] = True
+                # ...and **which** of its kicker costs paid for it
+                # (CR 702.33b: a Battlemage prints two). "If it was kicked with
+                # its {1}{G} kicker" is CR 702.33f's question about one of
+                # them, asked of the permanent for the same reason the flag
+                # above is. A tuple of the recorded keys, so the entry trigger
+                # and the announcement that paid name a cost by one string.
+                permanent.metadata[KICKED_WITH] = kickers_paid(card, choices)
             # "…the controller of **the permanent it becomes** sacrifices it at
             # the beginning of the next cleanup step" (Mirage's flash Auras).
             # The answer was frozen as the spell was announced, because that is
@@ -1724,8 +1732,27 @@ class StackResolutionMixin:
         that has a target to choose goes on the stack instead, where
         ``_choose_trigger_targets`` asks for it as CR 603.3d says (a
         non-interactive seat takes the picker's stated default). One with
-        nothing to choose stays inline, which is the approximation unchanged."""
+        nothing to choose stays inline, which is the approximation unchanged.
+
+        **An announcement is spent by the one trigger it was made for.** The
+        cast's picker is derived from the *first* entry trigger that describes
+        a target (``targeting._first_described_slot``, over the triggers a cast
+        kicked this way will fire -- CR 702.33g), so that trigger is the only
+        one anybody chose for. A second trigger with a target of its own was
+        announced by nobody, exactly as on an entry nothing cast, and handing
+        it the first one's target is two wrong answers: "destroy target land"
+        handed two creatures finds its target gone and does nothing, and
+        "destroy target enchantment" handed a *player* falls to the handler's
+        fallback scan and destroys whichever enchantment that seat controls --
+        the caster's own, when the discard was aimed at themselves. So once a
+        choosing trigger has taken the announcement, every later choosing
+        trigger goes on the stack and chooses there (CR 603.3d).
+
+        Nothing shipped before Planeshift could reach this: no permanent in the
+        pool printed two entry triggers that each choose a target until the
+        Battlemages ("Kicker {2}{U} and/or {2}{R}", one trigger per cost)."""
         program = compile_card_oracle(permanent.effective_card)
+        announcement_spent = False
         for trig in program.triggered_abilities:
             if (
                 trig.condition.kind not in INLINE_TRIGGER_CONDITIONS
@@ -1733,9 +1760,8 @@ class StackResolutionMixin:
                 or trig.instruction is None
             ):
                 continue
-            if not targets_announced and self._entry_trigger_chooses_a_target(
-                trig.instruction
-            ):
+            chooses = self._entry_trigger_chooses_a_target(trig.instruction)
+            if chooses and (not targets_announced or announcement_spent):
                 self._enqueue_triggered_ability(
                     controller_index=controller_index,
                     source_permanent=permanent,
@@ -1773,6 +1799,10 @@ class StackResolutionMixin:
                     f"{permanent.card.name}'s trigger did nothing: its condition is not met"
                 )
                 continue
+            # Only a trigger that *fired* spends the announcement: one whose
+            # "if" was false (a Battlemage kicked with its second cost alone)
+            # was never the trigger the picker described.
+            announcement_spent = announcement_spent or chooses
             self._execute_oracle_instruction(trig.instruction, context)
 
     def _entry_trigger_chooses_a_target(self, instruction: OracleInstruction) -> bool:

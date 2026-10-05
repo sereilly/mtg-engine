@@ -1410,16 +1410,51 @@ def buyback_paid(card: CardDefinition, choices: dict | None) -> bool:
 #: it becomes. Present and true, or absent.
 KICKED = "kicked"
 
+#: ...and **which** kicker costs paid for it: a tuple of canonical keys
+#: (:func:`kickers_paid`), stamped beside :data:`KICKED` and present exactly
+#: when that is. "When this creature enters, if it was kicked **with its {1}{G}
+#: kicker**, ..." (the Battlemages, CR 702.33f) is asked of the permanent after
+#: the stack item is gone, so the answer has to have travelled with it.
+#:
+#: A second key rather than a richer value under the first, so every reader
+#: that asks only "was it kicked?" -- the entry replacement, Skizzik's end
+#: step -- keeps the truth test it has. And CR 400.7 for both alike: a
+#: permanent that leaves and returns is a new object with neither, and one
+#: nothing cast (a reanimation, a token copy, a Clone that *entered as* a
+#: Battlemage -- cast as a Clone, which prints no kicker) was never stamped.
+KICKED_WITH = "kicked_with"
+
 #: "Kicker {2}", "Kicker {1}{G}", "Kicker {X}{2}". One run of mana symbols.
 #:
-#: Deliberately *not* "Kicker {1}{G} and/or {2}{U}" (Planeshift's two-kicker
-#: cards): the reader below would take it -- "and/or" is two independent offers
-#: to ``_optional_mana_offers`` -- but those cards ask *which* kicker was paid
-#: ("if it was kicked with its {1}{G} kicker"), a condition nothing here answers,
-#: and admitting the cost without the question is a wording claimed and never
-#: exercised. It stays a line :func:`unread_cost_sentence` reports.
+#: "Kicker {1}{G} and/or {2}{U}" (Planeshift's two-kicker cards) is
+#: :data:`_KICKER_PAIR_LINE` below, its own pattern and its own reader
+#: (:func:`_kicker_line_offers`): this one stays the single cost it has always
+#: been, so a reader that asks for *the* kicker of a one-kicker card is
+#: unchanged.
 _KICKER_LINE = re.compile(
     r"^kicker\s+(?P<cost>(?:\{[^{}]+\})+)$", re.IGNORECASE
+)
+
+#: "Kicker **{1}{G} and/or {2}{U}**" (the five Battlemages). CR 702.33b: "The
+#: phrase 'Kicker [cost 1] and/or [cost 2]' means the same thing as 'Kicker
+#: [cost 1], kicker [cost 2].'" -- two kicker abilities on one card, each an
+#: optional additional cost of its own, either or both of which the caster may
+#: announce (CR 601.2b).
+#:
+#: It was refused on purpose until the *question* existed. The cost half was
+#: never the difficulty -- "and/or" is already two independent offers to
+#: ``_optional_mana_offers`` -- but every card printing the pair also prints
+#: "if it was kicked **with its {1}{G} kicker**" (CR 702.33f: a linked ability
+#: that refers to one specific kicker cost), and a cost admitted without that
+#: answer is a wording claimed and never exercised. :func:`kicked_with` is the
+#: answer and :data:`KICKED_WITH` is where a permanent keeps it.
+#:
+#: Exactly two runs. CR 702.33b names two, every printing has two, and a third
+#: would be a sentence nobody has read.
+_KICKER_PAIR_LINE = re.compile(
+    r"^kicker\s+(?P<first>(?:\{[^{}]+\})+)\s+and/or\s+"
+    r"(?P<second>(?:\{[^{}]+\})+)$",
+    re.IGNORECASE,
 )
 
 #: Any line that *is* a kicker keyword line, readable or not -- the wider shape
@@ -1456,6 +1491,48 @@ def _kicker_line_offer(line: str) -> tuple[str, str] | None:
     return key, BUYBACK_RULES_TEXT.format(cost=key)
 
 
+def _kicker_line_offers(line: str) -> tuple[tuple[str, ...], str] | None:
+    """``(announcement keys, rules sentence)`` for one kicker line, or None.
+
+    The plural of :func:`_kicker_line_offer`, and the function every reader of
+    "which offers are this card's kickers?" asks -- because CR 702.33b lets one
+    line print two ("Kicker {1}{G} and/or {2}{U}") and a reader that knew one
+    key would call a Battlemage kicked with its second cost unkicked.
+
+    A line that function reads is answered through it, as a one-key tuple, so
+    whatever cost shapes it grows are kicker costs here with no edit. What this
+    adds is the pair: the two runs go to the cost table as **one** sentence --
+    "you may pay {1}{G} and/or {2}{U}", which ``_optional_mana_offers`` already
+    reads as two independent offers -- and both keys are read back off the
+    :class:`AdditionalCost` that sentence produces, for
+    ``_buyback_line_offer``'s reason: the key is what the announcement is
+    recorded under and what :func:`kicked_with` reads it back by.
+
+    Refused (None, so :func:`unread_cost_sentence` reports the card) when the
+    sentence does not come back as exactly two offers -- two runs spelling one
+    cost would share a key, and "which kicker" would have no answer -- or when
+    either prints an {X}: the announcement carries one X and two offers would
+    each want their own.
+    """
+    single = _kicker_line_offer(line)
+    if single is not None:
+        return (single[0],), single[1]
+    stripped = " ".join(_BUYBACK_REMINDER.sub("", line or "").split())
+    stripped = stripped.strip().rstrip(".")
+    match = _KICKER_PAIR_LINE.match(stripped)
+    if match is None:
+        return None
+    read = _printed_additional_cost(BUYBACK_RULES_TEXT.format(
+        cost=f"{match.group('first')} and/or {match.group('second')}"
+    ))
+    if read is None or len(read.optional_mana) != 2 or read.optional_key:
+        return None
+    if any(offer.x_count or offer.repeatable for offer in read.optional_mana):
+        return None
+    keys = tuple(offer.symbols for offer in read.optional_mana)
+    return keys, BUYBACK_RULES_TEXT.format(cost=" and/or ".join(keys))
+
+
 def is_kicker_line(line: str) -> bool:
     """Whether *line* is a printed kicker keyword line, readable or not."""
     stripped = _BUYBACK_REMINDER.sub("", line or "").strip()
@@ -1463,9 +1540,12 @@ def is_kicker_line(line: str) -> bool:
 
 
 def expand_kicker_line(line: str) -> str | None:
-    """The CR 702.33a rules text for one printed kicker line, or None."""
-    offer = _kicker_line_offer(line)
-    return None if offer is None else offer[1]
+    """The CR 702.33a rules text for one printed kicker line, or None.
+
+    Through :func:`_kicker_line_offers`, so a line printing two kicker costs
+    (CR 702.33b) becomes the one sentence that offers both."""
+    offers = _kicker_line_offers(line)
+    return None if offers is None else offers[1]
 
 
 def expand_kicker_lines(oracle_text: str) -> str:
@@ -1484,8 +1564,20 @@ def expand_kicker_lines(oracle_text: str) -> str:
 
 
 @lru_cache(maxsize=None)
-def kicker_cost(oracle_text: str) -> str | None:
-    """The canonical key *oracle_text*'s kicker keyword offers, or None.
+def kicker_costs(oracle_text: str) -> tuple[str, ...]:
+    """Every canonical key *oracle_text*'s kicker keyword offers, in printed
+    order -- empty for a card printing no kicker.
+
+    **The one answer to "which of this card's offers are its kickers?"**, and a
+    tuple because CR 702.33b lets a card print two ("Kicker {1}{G} and/or
+    {2}{U}"). Every reader of that question -- :func:`kicked`,
+    :func:`kicked_with`, the cast picker's CR 702.33g view, the offer prompt's
+    label -- asks this, so a second kicker cost is a second key here rather
+    than a second code path in each of them.
+
+    A key is whatever the announcement is recorded under: ``mana_cost_label``'s
+    spelling for a mana cost, and whatever :func:`_kicker_line_offer` returns
+    for any other shape it reads. Nothing here assumes mana.
 
     Read off the **printed** text, which is what a resolving spell's
     ``CardDefinition`` still carries -- the rewrite happens inside the compiler
@@ -1493,33 +1585,90 @@ def kicker_cost(oracle_text: str) -> str | None:
     every spell that is cast and every one that resolves.
     """
     if "icker" not in (oracle_text or ""):
-        return None
+        return ()
+    keys: list[str] = []
     for line in oracle_text.split("\n"):
-        offer = _kicker_line_offer(line)
-        if offer is not None:
-            return offer[0]
-    return None
+        offers = _kicker_line_offers(line)
+        if offers is None:
+            continue
+        keys.extend(key for key in offers[0] if key not in keys)
+    return tuple(keys)
+
+
+def kicker_cost(oracle_text: str) -> str | None:
+    """The canonical key of *oracle_text*'s **first** kicker cost, or None.
+
+    The singular, for a caller that wants one key to announce (a test kicking a
+    card, a label). "Was it kicked?" is never this function's question: a card
+    may print two kicker costs (CR 702.33b) and paying only the second kicks
+    the spell, so every reader of the *answer* goes through :func:`kicked` /
+    :func:`kicked_with` / :func:`kicker_costs`.
+    """
+    keys = kicker_costs(oracle_text or "")
+    return keys[0] if keys else None
+
+
+def kickers_paid(card: CardDefinition, choices: dict | None) -> tuple[str, ...]:
+    """The kicker costs of *card* this cast paid, by key, in printed order
+    (CR 702.33d: "declared the intention to pay **any or all** of its kicker
+    costs").
+
+    *choices* is the spell's own stack record, where the announcement survives
+    (the pool that paid is empty by resolution, CR 500.5). Empty for a card
+    printing no kicker and for an object nothing cast, which has no ``choices``
+    to read.
+
+    The one reader of the record: :func:`kicked` is "is this non-empty?",
+    :func:`kicked_with` is "is this key in it?", and
+    ``resolution._resolve_card`` copies it onto the permanent
+    (:data:`KICKED_WITH`) for the sentences asked after the stack item is gone.
+    """
+    keys = kicker_costs(getattr(card, "oracle_text", "") or "")
+    if not keys:
+        return ()
+    paid = (choices or {}).get("additional_costs_paid") or {}
+    taken: list[str] = []
+    for key in keys:
+        try:
+            if int(paid.get(key, 0) or 0) > 0:
+                taken.append(key)
+        except (TypeError, ValueError):
+            continue
+    return tuple(taken)
 
 
 def kicked(card: CardDefinition, choices: dict | None) -> bool:
     """Whether this cast of *card* was kicked (CR 702.33d).
 
     *choices* is the spell's own stack record. CR 702.33d settles the answer at
-    the announcement ("declared the intention to pay"), and ``choices`` is where
-    the announcement survives: the pool that paid is empty by resolution
-    (CR 500.5).
+    the announcement ("declared the intention to pay **any or all** of its
+    kicker costs"), and ``choices`` is where the announcement survives: the
+    pool that paid is empty by resolution (CR 500.5).
+
+    Any of them: a Battlemage that paid only its second kicker is a kicked
+    spell to Ertai's Trickery and to "whenever a player kicks a spell".
 
     False for a card printing no kicker and for an object nothing cast, which
     has no ``choices`` to read.
     """
-    cost = kicker_cost(getattr(card, "oracle_text", "") or "")
-    if cost is None:
-        return False
-    paid = (choices or {}).get("additional_costs_paid") or {}
-    try:
-        return int(paid.get(cost, 0) or 0) > 0
-    except (TypeError, ValueError):
-        return False
+    return bool(kickers_paid(card, choices))
+
+
+def kicked_with(card: CardDefinition, choices: dict | None, key: str) -> bool:
+    """Whether this cast of *card* paid the kicker cost *key* (CR 702.33f:
+    "if it was kicked with its [A] kicker" is linked to one specific kicker
+    cost, and "refers only to that kicker ability").
+
+    *key* is the canonical spelling the offer is recorded under -- what
+    ``lowering/_cost_records.optional_cost_key`` makes of the printed symbols,
+    so the sentence that asks and the payment that answers name one string.
+
+    False when *card* prints no kicker of that cost, **whatever the record
+    says**: an unrelated optional cost that happens to share the symbols
+    (a "you may pay {1}{G}" beside a different kicker) was not a kicker
+    payment, and CR 702.33f's reference is to the kicker alone.
+    """
+    return key in kickers_paid(card, choices)
 
 
 @compilation_cache
@@ -1721,11 +1870,15 @@ __all__ = [
     "expand_buyback_lines",
     "is_buyback_line",
     "KICKED",
+    "KICKED_WITH",
     "expand_kicker_line",
     "expand_kicker_lines",
     "is_kicker_line",
     "kicked",
+    "kicked_with",
     "kicker_cost",
+    "kicker_costs",
+    "kickers_paid",
     "optional_x_offers",
     "read_return_clause",
     "read_sacrifice_all_clause",

@@ -66,7 +66,7 @@ from ._events import COUNTED_NUMBER
 # the declaration it reads are exactly the pair a second spelling makes vacuous —
 # which is what these two files did to each other until Pyromancy gave the
 # channel a second reader.
-from ._cost_records import DISCARDED_FOR_COST
+from ._cost_records import DISCARDED_FOR_COST, optional_cost_key
 
 
 def lower_record_condition(
@@ -569,8 +569,41 @@ def lower_record_condition(
                 node=condition,
             )
         payload: dict[str, object] = {"kind": "was_kicked"}
+        if (
+            subject is not None
+            and subject.quantifier == "it"
+            and event is None
+            and referent == "spell"
+        ):
+            # "Counter target spell **if it was kicked**." (Ertai's Trickery.)
+            # The pronoun names the spell this effect targets, not the spell
+            # that is asking -- ``ItIsColor``'s referent ("Counter target spell
+            # if it's red") and settled the same way, off the branch this
+            # guards (CR 608.2c: the instruction and its "if" are one
+            # sentence). The parse cannot tell: a bare "it" reads as the source
+            # everywhere, which is right under a trigger ("When this creature
+            # enters, if it was kicked") and was wrong here -- the card asked
+            # whether *Ertai's Trickery* had been kicked, which prints no
+            # kicker, so it compiled supported and countered nothing, ever.
+            #
+            # Its own kind, as that clause has one: every reader of
+            # ``was_kicked`` (the cast picker's CR 702.33g view, the AI's "what
+            # does this offer buy") is asking about the card's *own* kicker and
+            # must not mistake this for it. "This spell was kicked" (subject
+            # None) and a named source are untouched: only the bare pronoun
+            # beside a targeted spell is rebound.
+            payload = {"kind": "target_was_kicked", "target": referent}
         if condition.negated:
             payload["negated"] = True
+        if condition.kicker is not None:
+            # "…kicked **with its {1}{G} kicker**" (CR 702.33f). The printed
+            # cost travels as the key the payment was recorded under
+            # (CR 601.2b's announcement, ``additional_costs_paid``), spelled by
+            # the one function every reader of an optional cost's record uses
+            # -- so "{1}{G}" here and the offer the kicker rewrite produced are
+            # one string, and a sentence naming a cost no payment can spend
+            # refuses there rather than reading back a key nothing wrote.
+            payload["kicker"] = optional_cost_key(condition.kicker)
         return payload
     if isinstance(condition, ast.AdditionalCostWasPaid):
         # "**If this spell's additional cost was paid**, …" (Undergrowth.) No
