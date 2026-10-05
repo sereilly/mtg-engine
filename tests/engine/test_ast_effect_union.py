@@ -14,9 +14,27 @@ wrong answer and write code around it. Nothing but a test can hold this,
 because nothing else ever evaluates it.
 
 The check runs off the *dispatch*, not off a second list: whatever
-`lower_statement` matches with `isinstance(statement, ast.X)` is by definition a
-statement, so the union has to name it. A new leaf that someone wires into the
-dispatch and forgets to add here fails on the same day rather than years later.
+`lower_statement` lowers is by definition a statement, so the union has to name
+it. A new leaf that someone wires into the dispatch and forgets to add here
+fails on the same day rather than years later.
+
+**This guard went blind twice, and both times by keeping a copy.** It read the
+dispatch as `isinstance(statement, ast.X)` in `lower.py`, which was the whole
+dispatch when it was written; the chain then moved to `statement_dispatch.py`
+and most of it became the four type-keyed tables in `by_node.py`, so by
+Planeshift it was examining **nine** of about 210 dispatched nodes. And it read
+the families off a hand-written list of module names that five splits never
+updated (`tapping`, `control_changes`, `mana`, `library`, `exile`, then
+`separations`), so six of fourteen families were outside it. Both were found by
+a Phase 0 split moving five nodes out of a listed module - a split must not
+shrink what a guard reads, and this one would have. Widened, it named two
+leaves on the day: `BinRevealedCard` and `GraveyardTopToLibrary`, each built
+by a production and lowered through `by_node`, and in neither union.
+
+So the families are the layering guard's own `AST_FAMILIES` now, the dispatch
+is read off the tables' keys and off both modules that still match by
+`isinstance`, and each population carries a floor - a guard over nine nodes
+passed for as long as it did because nothing asked how many it had looked at.
 """
 
 from __future__ import annotations
@@ -28,18 +46,40 @@ from pathlib import Path
 
 import pytest
 
-from engine.grammar import ast
+from engine.grammar import ast, by_node
+
+from .test_grammar_layering import AST_FAMILIES
 
 REPO = Path(__file__).resolve().parent.parent.parent
-AST_DIR = REPO / "engine" / "grammar" / "ast"
-# `shuffles` is here because its five nodes were in `board` until Planeshift's
-# Phase 0, and a split must not shrink what this guard reads. Five earlier ones
-# did exactly that — `tapping` and `control_changes` out of `board`; `mana`,
-# `library` and `exile` out of `cards` — and are still unlisted, as is
-# `separations`. `library` has two leaves the second test below would name
-# (`BinRevealedCard`, `GraveyardTopToLibrary`), so listing it is a decision
-# about those two rather than a one-word edit.
-FAMILIES = ["damage", "characteristics", "board", "shuffles", "cards", "stack", "combat", "game"]
+GRAMMAR_DIR = REPO / "engine" / "grammar"
+AST_DIR = GRAMMAR_DIR / "ast"
+#: The layering guard's list, not a second one: it is the list a new `ast/`
+#: family has to join to import anything, so a family cannot exist without
+#: being read here.
+FAMILIES = AST_FAMILIES
+
+#: The modules that still dispatch by `isinstance`. `lower.py` is the entry
+#: point and keeps a handful; the chain itself is `statement_dispatch.py`.
+_ISINSTANCE_DISPATCHERS = ("lower.py", "statement_dispatch.py")
+#: The four type-keyed registries `lower_statement` consults before the chain.
+_TABLES = (
+    "_BY_NODE_TYPE",
+    "_BY_NODE_TYPE_WITH_EVENT",
+    "_BY_NODE_TYPE_WITH_PRODUCED",
+    "_BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED",
+)
+#: Floors, each well under today's count (226 leaves, about 210 dispatched,
+#: 169 of them through the tables) and far over what the guard read while it
+#: was blind (nine).
+#: Where a dispatched node may live besides a family: the roof's control-flow
+#: nodes (`Sequence`, `May`, `Conditional`, ...), the line layer's ability
+#: lines, and two names the `isinstance` scan picks up from the vocabulary
+#: floors (`RawEffect`, and `TargetSpec` in a subject test). None of these is a
+#: leaf effect, which is why the union is not asked about them.
+_NON_FAMILY_HOMES = {"statements", "lines", "_core", "_targets"}
+_LEAF_FLOOR = 200
+_DISPATCHED_FLOOR = 180
+_TABLE_KEY_FLOOR = 150
 
 # Leaf nodes that are deliberately not statements. Each needs a reason, because
 # the whole failure this guards is a name going missing without one.
@@ -84,21 +124,55 @@ def _family_leaves() -> dict[str, str]:
     return leaves
 
 
+def _table_keys() -> set[str]:
+    """Node names the four `by_node` registries are keyed by.
+
+    Read off the live dicts rather than out of the source: the keys are the
+    classes `lower_statement` looks `type(statement)` up by, so this is the
+    dispatch itself and cannot disagree with it.
+    """
+    return {
+        node.__name__ for table in _TABLES for node in getattr(by_node, table)
+    }
+
+
 def _dispatched_by_lowering() -> set[str]:
-    """Node names `lower_statement` matches with isinstance."""
-    source = (REPO / "engine" / "grammar" / "lower.py").read_text(encoding="utf-8")
-    return set(re.findall(r"isinstance\([a-z_]+, *ast\.([A-Z]\w+)\)", source)) | set(
-        re.findall(r"isinstance\([a-z_]+, *\(([^)]*)\)\)", source)
-    ).union(
-        name
-        for group in re.findall(r"isinstance\([a-z_]+, *\(([^)]*)\)\)", source)
-        for name in re.findall(r"ast\.([A-Z]\w+)", group)
+    """Node names `lower_statement` lowers: a table key, or an `isinstance` arm."""
+    names = _table_keys()
+    for module in _ISINSTANCE_DISPATCHERS:
+        source = (GRAMMAR_DIR / module).read_text(encoding="utf-8")
+        names |= set(re.findall(r"isinstance\([a-z_]+, *ast\.([A-Z]\w+)\)", source))
+        for group in re.findall(r"isinstance\([a-z_]+, *\(([^)]*)\)\)", source):
+            names |= set(re.findall(r"ast\.([A-Z]\w+)", group))
+    return names
+
+
+def test_the_guard_reads_the_whole_dispatch_and_every_family():
+    """A guard over an empty - or a ninth of a - population passes. These
+    floors are what would have said so."""
+    for table in _TABLES:
+        assert isinstance(getattr(by_node, table, None), dict), (
+            f"`by_node.{table}` is gone or renamed: this guard reads the "
+            "dispatch through it"
+        )
+    assert len(_table_keys()) >= _TABLE_KEY_FLOOR, len(_table_keys())
+    dispatched = {n for n in _dispatched_by_lowering() if hasattr(ast, n)}
+    assert len(dispatched) >= _DISPATCHED_FLOOR, len(dispatched)
+    leaves = _family_leaves()
+    assert len(leaves) >= _LEAF_FLOOR, len(leaves)
+    # Every dispatched node is defined in a module this guard reads. Asked of
+    # the nodes rather than of the directory listing: a new `ast/` module that
+    # holds something `lower_statement` lowers fails here until it is a family
+    # the layering guard lists, which is the list `FAMILIES` is.
+    homes = {getattr(ast, name).__module__.rsplit(".", 1)[-1] for name in dispatched}
+    assert homes <= set(FAMILIES) | _NON_FAMILY_HOMES, sorted(
+        homes - set(FAMILIES) - _NON_FAMILY_HOMES
     )
 
 
 def test_every_dispatched_node_is_in_the_effect_union():
     dispatched = {n for n in _dispatched_by_lowering() if hasattr(ast, n)}
-    assert dispatched, "found no isinstance dispatch in lower.py — the guard is vacuous"
+    assert dispatched, "found no dispatch at all — the guard is vacuous"
     leaves = _family_leaves()
     missing = sorted(
         name for name in dispatched if name in leaves and name not in _union_members()
