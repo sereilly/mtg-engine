@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..color_changes import change_color
+from ..color_changes import change_color, change_spell_color
 from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
@@ -487,13 +487,19 @@ _SYMBOL_TO_LAND_TYPE = LAND_TYPE_WORDS
 def mark_text_modified(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     card = context.card
-    perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    # Resolve the actual targeted permanent (default to the first one).
-    target_perm = None
-    if perm_idx is not None and 0 <= perm_idx < len(target.battlefield):
-        target_perm = target.battlefield[perm_idx]
-    elif target.battlefield:
-        target_perm = target.battlefield[0]
+    # The permanent the announcement named, **by id** (CR 400.7), through the
+    # resolver every other targeted handler uses — "target permanent", so the
+    # predicate is every permanent rather than its creature default. This read
+    # the slot alone and fell back to the first permanent on that battlefield,
+    # so a Sleight of Mind announced by id (which is how every target reaches
+    # the engine from the wire once its slot has moved, and how a headless
+    # caller names one at all) rewrote whatever stood first: aimed at a
+    # Darkest Hour beside a Grizzly Bears, it "changed B text to W on Grizzly
+    # Bears". The recolour handler below was moved off the slot for the same
+    # reason; this one was left behind.
+    target_perm = resolve_target_permanent(
+        game, context, player=target, predicate=lambda p: True,
+    )
     # "target **white enchantment you control that doesn't have cumulative
     # upkeep**" (Balduvian Shaman). The Lace cycle prints no narrowing at all
     # and carries no description, so this is the whole of the check for it; a
@@ -609,9 +615,21 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # override — its own key, never ``new_color``: that one is what the spell
     # was announced with (a text change's word, a mana spell's colour), and one
     # key for both made every such spell the colour it announced.
+    #
+    # Written through ``change_spell_color``, which stamps it (CR 613.7b): the
+    # effect goes on applying to the permanent a permanent spell becomes
+    # (CR 400.7a), and it can only be handed over with the timestamp it was
+    # created at if it was given one. The value is ``_colour_override_value``'s
+    # — the empty tuple for "becomes colorless" (Ersatz Gnomes), where the bare
+    # payload word used to be stored and read back as a colour named
+    # "colorless".
     if context.stack_target is not None and symbol:
-        context.stack_target.choices["color_override"] = symbol
-        game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
+        written = _colour_override_value(symbol)
+        change_spell_color(context.stack_target, written)
+        game.log.append(
+            f"{context.stack_target.card.name} (on the stack) became "
+            f"{_colour_override_word(written)}"
+        )
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
     # nobody targeted it, the firing bound it, and which half fired decides how
@@ -959,8 +977,8 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
         target_land, "swamp", source=MIRE_COUNTER, label=context.card.name
     )
     # A land that became a Swamp is one a Swamp-scoped static now reaches
-    # (Kormus Bell) — CR 613 layer 4, decided for the whole board.
-    game._refresh_dynamic_creatures()
+    # (Kormus Bell) — CR 613 layer 4, decided for the whole board, at the
+    # resolution seam (``resolve_top_of_stack``) rather than here.
     game.log.append(f"{target_land.card.name} got a mire counter and became a Swamp")
 
     # Remember this land on the activating artifact so its death trigger can later
@@ -1019,24 +1037,35 @@ _ANIMATION_PAYLOAD_KEYS = frozenset({
 def _animation_record(payload: dict) -> dict:
     """The record both animation handlers write, from the lowered payload.
 
-    One builder because the two handlers disagree about *which key* it goes on
-    and about nothing else — and because the replacement half below has two
-    fields that have to travel together: a record claiming CR 205.1a without a
-    timestamp would replace the printed types and then lose every ordering
-    argument against the "becomes an enchantment" effect printed to undo it.
+    One builder because the handlers disagree about *which key* it goes on and
+    about nothing else — which makes this the write API for an animation, the
+    way ``type_changes.gain_types`` is for a gained type: **the stamp is in
+    here**, so no animation can be recorded without one.
 
-    Both keys are written **only** when the sentence claimed the replacement,
-    so every record an addition writes is byte-identical to the one it wrote
-    before this existed — the same rule the payload key itself follows.
+    CR 613.7b: "A continuous effect generated by the resolution of a spell or
+    ability receives a timestamp at the time it's created." Every record, the
+    additions too. Only a replacement used to carry one (CR 205.1a, "it
+    becomes a 2/2 Gargoyle creature", against the "becomes an enchantment"
+    printed to undo it), on the argument that additions commute — and they do
+    with each other. They do not with an effect that *sets*: an addition that
+    read as older than everything was applied before a card-type set whichever
+    came first, so a permanent animated **after** it had been made an
+    enchantment and nothing else would not have been a creature. No pair of
+    cards in the pool arranges that today (the set effects aim at a creature,
+    and what animates is aimed at a land or an artifact); the stamp is what
+    keeps the next one from being ordered by which channel it was written on.
+
+    ``replaces_types`` is still written only when the sentence claimed the
+    replacement — the same rule the payload key itself follows.
     """
     record = {
         "subtypes": list(payload.get("subtypes") or ()),
         "keywords": list(payload.get("keywords") or ()),
         "card_types": list(payload.get("card_types") or ()),
+        "timestamp": next_timestamp(),
     }
     if payload.get("replaces_types"):
         record["replaces_types"] = True
-        record["timestamp"] = next_timestamp()
     return record
 
 
@@ -1185,10 +1214,11 @@ def _animate_self(
     # A permanent that became a creature is one a creature-scoped static now
     # reaches, and where that static applies is layer 4's question for the
     # whole board (CR 613.8a: "Creatures you control are the chosen type"
-    # depends on this effect and applies after it). Recomputed here, as every
-    # other type-writing handler does, so the board the resolution leaves is
-    # the one a reader finds — not the one the next state-based pass makes.
-    game._refresh_dynamic_creatures()
+    # depends on this effect and applies after it). **Not recomputed here.**
+    # The board a resolution leaves is recomputed once, at the seam every
+    # resolution passes (``resolve_top_of_stack``) — this handler and five
+    # like it each did their own for the round that seam did not exist, which
+    # is a rule with as many fire sites as there are handlers that remember.
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
     )
@@ -1326,8 +1356,8 @@ def _animate_target(
     _grant_animation_abilities(target, payload, until_eot=until_eot)
     _grant_animation_protection(target, payload, context)
     _record_animation_colors(target, payload, until_eot=until_eot)
-    # See ``_animate_self``: layer 4 is decided for the whole board.
-    game._refresh_dynamic_creatures()
+    # See ``_animate_self``: layer 4 is decided for the whole board, at the
+    # resolution seam.
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
         f"{duration} ({context.card.name})"
@@ -1395,8 +1425,8 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
     if not animated:
         game.log.append(f"{context.card.name}: nothing to animate")
         return True, "resolved"
-    # See ``_animate_self``: layer 4 is decided for the whole board.
-    game._refresh_dynamic_creatures()
+    # See ``_animate_self``: layer 4 is decided for the whole board, at the
+    # resolution seam.
     game.log.append(
         f"{context.card.name} animated "
         + ", ".join(perm.card.name for perm in animated)
@@ -1464,7 +1494,6 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
                 source=f"{duration}:{next_timestamp()}",
                 label=context.card.name,
             )
-        game._refresh_dynamic_creatures()
         game.log.append(
             ", ".join(land.card.name for land in chosen[:maximum])
             + f" each became a {land_type.title()} ({context.card.name})"
@@ -1514,8 +1543,8 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
     # A land that became a Forest is one a Forest-scoped static now reaches
     # (Living Lands), and one that became a Mountain is one Conversion does —
     # each of them depends on this effect (CR 613.8a), and where a dependent
-    # static applies is decided for the whole board.
-    game._refresh_dynamic_creatures()
+    # static applies is decided for the whole board, at the resolution seam
+    # (``resolve_top_of_stack``).
     game.log.append(
         f"{target.card.name} became a {land_type.title()} ({context.card.name})"
     )

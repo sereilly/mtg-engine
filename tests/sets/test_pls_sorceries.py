@@ -45,6 +45,7 @@ from engine.models import (CardDefinition as _w1g8s_Card,  # noqa: E402
 from engine.oracle import compile_card_oracle as _w1g8s_compile  # noqa: E402
 
 from tests.helpers import resolve_stack as _w1g8s_resolve_stack  # noqa: E402
+from engine.color_changes import change_color
 
 
 def _w1g8s_lea():
@@ -1297,8 +1298,8 @@ def _w1g6_strafe_table(set_pool, swapped):
     for perm in (wurm, giant):
         w1g6_game._put_permanent_onto_battlefield(1, perm, None)
     if swapped:
-        wurm.metadata["color_override_until_eot"] = "R"
-        giant.metadata["color_override_until_eot"] = "G"
+        change_color(wurm, "R", until_eot=True)
+        change_color(giant, "G", until_eot=True)
         w1g6_game._recompute_continuous_effects()
     w1g6_game.players[0].hand.extend([set_pool("PLS")["Strafe"]] * 2)
     nonred, red = (giant, wurm) if swapped else (wurm, giant)

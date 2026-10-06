@@ -427,3 +427,60 @@ def test_the_untap_candidate_filter_asks_the_engines_own_predicate():
     for index in options["candidate_indices"]:
         assert permanent_in_limited_scope(battlefield[index], "artifact")
         assert battlefield[index].card.primary_type not in ("land", "creature")
+
+
+# --- CR 400.7a on the wire: a spell an effect recoloured --------------------
+
+
+def _j6_spell_on_the_stack(pool, recolourer):
+    """A Grizzly Bears spell with *recolourer*'s effect resolved onto it."""
+    from web.serialization import _serialize_stack_item
+
+    game = Game(
+        players=[PlayerState(name="P1"), PlayerState(name="P2")],
+        enforce_mana_costs=False,
+    )
+    game.active_player_index = 0
+    game.players[0].hand.append(pool["Grizzly Bears"])
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    if pool[recolourer].primary_type == "instant":
+        game.players[0].hand.append(pool[recolourer])
+        assert game.queue_from_hand(0, recolourer, target_stack_index=0).supported
+    else:
+        source = Permanent(card=pool[recolourer])
+        game._put_permanent_onto_battlefield(0, source, None)
+        source.metadata["summoning_sickness_turn"] = -99
+        assert game.queue_permanent_ability(
+            0, recolourer, ability_index=0, target_stack_index=0,
+        ).supported
+    assert game.resolve_top_of_stack()
+    (item,) = game.stack
+    return game, item, _serialize_stack_item(item, game)
+
+
+def test_j6_a_laced_spell_and_the_permanent_it_becomes_are_badged_alike(pool):
+    """The stack card is badged with the lace's colour, and so is the
+    permanent once the spell resolves — the effect is the same effect
+    (CR 400.7a), so the canvas reads the same field off both objects and the
+    ``colors`` beside it are the layers' answer both times."""
+    game, _item, wire = _j6_spell_on_the_stack(pool, "Deathlace")
+    assert wire["color_override"] == "B"
+    assert wire["card"]["color_override"] == "B"
+    assert wire["card"]["colors"] == ["B"]
+
+    resolve_stack(game)
+    (bears,) = game.controlled_by(0)
+    data = _serialize_permanent(bears, game)
+    assert data["color_override"] == "B"
+    assert data["colors"] == ["B"]
+
+
+def test_j6_a_spell_made_colourless_is_sent_with_no_colours(pool):
+    """Ersatz Gnomes' "Target spell becomes colorless." The wire said the
+    spell's colours were ``["colorless"]`` — a sixth colour — and badged it
+    with a symbol that does not exist. No colours (CR 105.2c), and "C" for the
+    badge, the colourless swatch the canvas already carries."""
+    _game, _item, wire = _j6_spell_on_the_stack(pool, "Ersatz Gnomes")
+    assert wire["card"]["colors"] == []
+    assert wire["color_override"] == "C"
+    assert wire["card"]["color_override"] == "C"

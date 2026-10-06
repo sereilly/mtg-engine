@@ -42,6 +42,7 @@ from engine.layer_bridge import SET_CARD_TYPES
 from engine.models import Permanent
 from engine.pt import add_pt_modifier
 from tests.helpers import resolve_stack
+from engine.color_changes import change_color
 
 _GATE = "every target is illegal (608.2b)"
 
@@ -93,7 +94,7 @@ def test_sever_soul_whose_target_turned_black_is_countered_and_gains_nothing(cat
     game = _w2g2_table(spell, theirs=[named])
     _w2g2_cast(game, spell, named)
 
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert game.is_on_battlefield(named)
@@ -110,7 +111,7 @@ def test_spinning_darkness_deals_no_damage_to_a_target_that_turned_black(catalog
     game = _w2g2_table(spell, theirs=[named])
     _w2g2_cast(game, spell, named)
 
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert named.damage_marked == 0, game.log
@@ -131,7 +132,7 @@ def test_ritual_of_the_machine_steals_no_bystander_when_its_target_turns_black(c
     _w2g2_cast(game, spell, named)
     assert not game.is_on_battlefield(fodder), "the additional cost was paid"
 
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert game.controller_index_of(named) == 1, game.log
@@ -191,7 +192,7 @@ def test_dregs_of_sorrow_whose_only_target_turned_black_draws_nothing(catalog_by
     game.players[0].library = [catalog_by_name["Island"]] * 3
     _w2g2_cast(game, spell, named, x_value=1)
 
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert len(game.players[0].hand) == 0, game.log
@@ -231,7 +232,7 @@ def test_one_illegal_target_of_two_leaves_the_spell_resolving_for_the_other(cata
     game = _w2g2_table(spell, theirs=[first, second])
     _w2g2_cast(game, spell, first, second)
 
-    first.metadata["color_override"] = ("B",)
+    change_color(first, ("B",))
     resolve_stack(game)
 
     assert game.is_on_battlefield(first), "the illegal target is left alone"
@@ -306,11 +307,11 @@ def test_a_creature_made_an_artifact_is_an_artifact_target(catalog_by_name):
     """"That creature becomes an artifact in addition to its other types."
     The picker read the printed type line, so a Bear made an artifact (Xenic
     Poltergeist, Ashnod's Transmogrant) was never a legal "target artifact"."""
-    from engine.layer_bridge import GAINED_TYPES
+    from engine.type_changes import gain_types
 
     spell = catalog_by_name["Shatter"]
     bear = _w2g2_perm(catalog_by_name["Grizzly Bears"])
-    bear.metadata[GAINED_TYPES] = [{"card_types": ["artifact"], "source": "test"}]
+    gain_types(bear, card_types=["artifact"], source="test")
     game = _w2g2_table(spell, theirs=[bear])
 
     _w2g2_cast(game, spell, bear)

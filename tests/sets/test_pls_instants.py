@@ -45,6 +45,7 @@ from engine.oracle import compile_card_oracle as _w1g8i_compile  # noqa: E402
 
 from tests.helpers import (_damage_dealt as _w1g8i_dealt,  # noqa: E402
                            resolve_stack as _w1g8i_resolve_stack)
+from engine.color_changes import change_color
 
 
 def _w1g8i_lea():
@@ -2054,7 +2055,7 @@ def test_w1g6_dominarias_judgment_reads_land_types_through_the_layers(set_pool):
 
 def _w1g6_turn(game, perm, colour):
     """Turn *perm* *colour* for the turn through layer 5's turn-long channel."""
-    perm.metadata["color_override_until_eot"] = colour
+    change_color(perm, colour, until_eot=True)
     game._recompute_continuous_effects()
     return perm  # _w1g6_turn (instants)
 

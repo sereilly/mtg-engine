@@ -32,6 +32,7 @@ from engine import Game, PlayerState
 from engine.models import CardDefinition, Permanent
 
 from tests.helpers import resolve_stack
+from engine.color_changes import change_color
 
 
 def _w1g3_creature(name: str, power: int, toughness: int, *,
@@ -819,7 +820,7 @@ def test_w1g4_ascendant_evincar_reads_colour_through_the_layers(set_pool):
     game._refresh_dynamic_creatures()
     assert (bear.effective_power, bear.effective_toughness) == (1, 1)
 
-    bear.metadata["color_override"] = ("B",)
+    change_color(bear, ("B",))
     game._recalculate_lord_buffs()
     game._refresh_dynamic_creatures()
     assert "B" in bear.effective_colors

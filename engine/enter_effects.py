@@ -195,22 +195,29 @@ def _says_it_is_the_chosen_color(oracle_text: str) -> bool:
     return any(is_the_chosen_color_line(line) for line in oracle_text.splitlines())
 
 
-def own_chosen_color(permanent) -> str | None:
+def own_chosen_color(permanent, card=None) -> str | None:
     """The colour *permanent*'s own "is the chosen color" static gives it, or
     ``None`` when it prints no such line or has not chosen yet.
 
-    Read off ``effective_card`` — layer 1's copy and layer 3's text change are
+    Read off the card layers 1 and 3 leave — the copy and the text change are
     both below layer 5 (CR 613.1), so a Clone of an Alloy Golem is the colour
     the *Clone* chose as it entered — and off the record the entry choice
     wrote. Derived on every recompute rather than stamped onto the colour
-    override when the choice is answered: a stamped override would survive the
-    ability being removed, and a late answer to the entry prompt would have
-    nothing to re-read.
+    override when the choice is answered: a late answer to the entry prompt
+    would have nothing to re-read.
+
+    *card* is that card, when the caller holds the one layer 5 should read:
+    ``Permanent.card_before_layer_6``, the text **before** layer 6 takes
+    abilities away. An Alloy Golem under Humility is still the colour it
+    chose — the ability is removed a layer after its colour is decided
+    (CR 613.1e, 613.1f) — and the default here, ``effective_card``, has
+    already struck it out.
     """
     chosen = permanent.metadata.get(CHOSEN_COLOR_KEY)
     if not chosen:
         return None
-    if not _says_it_is_the_chosen_color(permanent.effective_card.oracle_text or ""):
+    text = (card if card is not None else permanent.effective_card).oracle_text
+    if not _says_it_is_the_chosen_color(text or ""):
         return None
     return str(chosen)
 

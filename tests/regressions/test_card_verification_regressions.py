@@ -11,6 +11,7 @@ import pytest
 from engine import Game, PlayerState, load_cards
 from engine.models import CardDefinition, Permanent
 from tests.helpers import LEA_PATH
+from engine.color_changes import change_color
 
 
 @pytest.fixture(scope="module")
@@ -786,7 +787,7 @@ class TestLifelace:
         from web.app import _serialize_permanent
 
         target = Permanent(card=cards["Grizzly Bears"])
-        target.metadata["color_override"] = "G"
+        change_color(target, "G")
         p1 = PlayerState(name="P1", battlefield=[target])
         p2 = PlayerState(name="P2")
         game = _game(p1, p2)

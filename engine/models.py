@@ -667,6 +667,69 @@ class Permanent:
             base = _without_keyword_parts(base, tuple(sorted(set(stripped))))
         return base
 
+    @property
+    def card_before_layer_6(self) -> "CardDefinition":
+        """This permanent's card as **layers 4 and 5** read it — what it says
+        before layer 6 has taken anything away.
+
+        CR 613.1 applies the layers in order, every time: type-changing
+        effects (layer 4), then colour-changing ones (layer 5), then the
+        ability-removing ones (layer 6). So an ability that generates a
+        layer-4 or layer-5 effect is still there when that effect is applied,
+        whatever layer 6 goes on to do to it — and CR 613.6 carries the rest
+        of the same effect through the later layers "even if the ability
+        generating the effect is removed during this process". A Blood Moon
+        that Opalescence has made a creature, under Humility, still makes
+        nonbasic lands Mountains; a Kormus Bell that Titania's Song has
+        stripped still makes Swamps 1/1 black creatures.
+
+        :attr:`effective_card` is the wrong question to ask for that. It is
+        "what does this permanent say *now*", the finished answer, with layer
+        6's removals struck out — right for an activation, a trigger, a
+        keyword or an anthem, each of which exists only if the ability
+        survived, and the reason every layer-4 static read off it vanished
+        with its source's abilities.
+
+        So: the same card :attr:`effective_card` returns, unless layer 6 is
+        taking this permanent's abilities away; then layers 1 and 3 of it
+        alone (the copy and the text change, CR 613.1a and 613.1c). CR 305.7's
+        loss is **not** a layer-6 removal — it is part of the layer-4 effect
+        that set the land's type — so a land that has lost its abilities that
+        way reads here exactly as it reads everywhere: with none.
+
+        Here rather than beside its readers because layer 3 is applied in one
+        place (``tests/engine/test_layer_reads.py``), and this is that place.
+        """
+        from .keywords import removed_ability_lines
+
+        if lost_abilities_to_type_change(self) or not (
+            _abilities_stripped(self) or removed_ability_lines(self)
+        ):
+            return self.effective_card
+        return self.card_through_layer_3
+
+    @property
+    def card_through_layer_3(self) -> "CardDefinition":
+        """This permanent's own text: the printed card after **layer 1** (what
+        it copies, CR 707.2) and **layer 3** (what a text change rewrote,
+        CR 612) — and nothing a later layer adds or takes away.
+
+        The first two steps of :attr:`effective_card`, on their own, for the
+        one family that cannot ask for the rest: *whether this permanent is
+        the source of a board-wide static* (``global_statics
+        .global_static_sources``). ``effective_card`` appends the abilities
+        those very statics grant, so asking it would make the answer depend on
+        itself — two Aura Fluxes each grant the other an ability — and that
+        family therefore read the **printed** card. Which skipped the two
+        layers that have no cycle in them: a Darkest Hour whose "black" a
+        Sleight of Mind had made "white" went on making creatures black, and a
+        Copy Artifact that had become a Thran Lens was a source of nothing.
+        """
+        base = copiable_card(self)
+        if has_text_changes(self):
+            base = apply_text_changes(base, text_changes(self))
+        return base
+
     def has_type(self, card_type: str) -> bool:
         """Whether this permanent currently has the given card type or subtype.
 

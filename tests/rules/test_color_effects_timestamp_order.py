@@ -831,3 +831,692 @@ def test_a_darkest_hour_arriving_after_alloy_golem_makes_it_black(
     game.remove_from_battlefield(hour)
     game._recompute_continuous_effects()
     assert _w2g4_colours(game, golem) == ["R"], "and its own colour again when the Hour leaves"
+
+
+# --- CR 400.7a: a recoloured permanent *spell* ------------------------------
+#
+# Everything above recolours a permanent. "Target **spell** or permanent
+# becomes black" is also said of a spell, and CR 400.7a says what follows:
+# "Effects from spells, activated abilities, and triggered abilities that
+# change the characteristics or controller of a permanent spell on the stack
+# continue to apply to the permanent that spell becomes." The stack item held
+# the lace under a key its resolution never read, so a Deathlaced creature
+# spell was black on the stack and its printed colour as a permanent — for
+# every card in the pool that can aim a recolour at a spell.
+#
+# The census: every such card (found by asking the engine's own picker what
+# each recolouring instruction may be aimed at, not listed by hand), onto
+# every kind of permanent spell, then against the other colour effects in
+# both orders. The effect carries **the timestamp it was created at**
+# (CR 613.7b); the permanent's own is the moment it entered (CR 613.7d) and
+# is later, which is observable on exactly one card — Alloy Golem, whose own
+# "is the chosen color" is stamped by the object it is on (CR 613.7a).
+
+
+def _j6_stack_recolourers():
+    """Every pool card with a recolouring instruction its picker lets a player
+    aim at a spell on the stack: ``{name: ("spell", None) | ("ability", index)}``.
+
+    Asked of ``targeting`` — the derivation the cast gate, the activation gate
+    and the web picker all read — so the list is what a player can do, and a
+    card whose text says "target spell" while its picker offers permanents
+    only lands in the second return value instead.
+    """
+    import re
+
+    from engine.grammar.lowering.categories import INSTRUCTION_CATEGORIES
+    from engine.oracle import compiled_units
+    from engine.targeting import derive_activation_spec, derive_cast_spec
+
+    def recolours(instruction):
+        return any(
+            INSTRUCTION_CATEGORIES.get(step.kind) == "recolor"
+            for step in _w2g4_instructions(instruction)
+        )
+
+    aimable = ("stack", "spell_or_permanent")
+    found, text_only = {}, set()
+    pool = _w2g4_whole_pool()
+    for card, program in compiled_units(pool):
+        hit = None
+        if card.primary_type in ("instant", "sorcery") and any(
+            recolours(step) for step in program.instructions
+        ):
+            spec = derive_cast_spec(card, program) or {}
+            if spec.get("kind") in aimable:
+                hit = ("spell", None)
+        for index, ability in enumerate(program.activated_abilities):
+            if ability.instruction is None or not recolours(ability.instruction):
+                continue
+            spec = derive_activation_spec(ability) or {}
+            if spec.get("kind") in aimable:
+                hit = ("ability", index)
+        if hit is not None:
+            found[card.name] = hit
+        elif re.search(
+            r"target spell\b[^.]*\bbecomes?\b", card.oracle_text or "", re.I
+        ):
+            text_only.add(card.name)
+    return len(pool), found, text_only
+
+
+_J6_STACK_RECOLOURERS = {
+    "Chaoslace": ["R"], "Deathlace": ["B"], "Lifelace": ["G"],
+    "Purelace": ["W"], "Thoughtlace": ["U"],
+    # "{T}: Target spell becomes colorless." — CR 105.2c: no colour at all.
+    "Ersatz Gnomes": [],
+}
+
+#: Printed "target spell … becomes <colour>" whose **picker offers no spell**:
+#: Blind Seer's "Target spell or permanent becomes the color of your choice
+#: until end of turn" loses "spell or" in the noun parser (the union of two
+#: generic nouns restricts nothing, so the filter is a bare permanent's), and
+#: the chosen-colour lowering describes what is left. The write API and the
+#: carry below take its duration already
+#: (``test_j6_a_turn_long_recolour_of_a_spell_lasts_the_turn_on_the_permanent``);
+#: what is missing is the announcement. Pinned so the day it is aimable it
+#: moves into the census above rather than staying a card nothing drives.
+_J6_PICKER_OFFERS_NO_SPELL = {"Blind Seer"}
+
+#: One permanent spell of each card type that is cast (a land is played, never
+#: a spell), with its printed colours. The Aura is aimed at a creature.
+_J6_PERMANENT_SPELLS = {
+    "creature": ("Grizzly Bears", ["G"]),
+    "artifact": ("Sol Ring", []),
+    "enchantment": ("Castle", ["W"]),
+    "aura": ("Sinister Strength", ["B"]),
+}
+
+
+def _j6_cast_onto_stack(game, card, *, at=None):
+    """Seat 0 casts *card* and leaves it on the stack. Returns its item."""
+    game.players[0].hand.append(card)
+    cast = game.queue_from_hand(
+        0, card.name,
+        **({} if at is None else {"target_permanent_ids": [at.permanent_id]}),
+    )
+    assert cast.supported, cast.details
+    return game.stack[-1]  # _j6_cast_onto_stack
+
+
+def _j6_recolour_spell(game, card, how, item, sources):
+    """Aim *card*'s recolour at the spell *item* through the engine's own
+    cast or activation path, and resolve just that."""
+    index = game.stack.index(item)
+    kind, ability = how
+    if kind == "spell":
+        game.players[0].hand.append(card)
+        done = game.queue_from_hand(0, card.name, target_stack_index=index)
+    else:
+        source = sources[card.name]
+        source.tapped = False
+        done = game.queue_permanent_ability(
+            0, card.name, ability_index=ability, target_stack_index=index,
+        )
+    assert done.supported, done.details
+    assert game.stack[-1] is not item
+    assert game.resolve_top_of_stack()
+    assert game.stack[-1] is item  # _j6_recolour_spell
+
+
+def _j6_became(game, item):
+    """Resolve the permanent spell *item* and return the permanent."""
+    before = {id(p) for p in game.controlled_by(0)}
+    assert game.resolve_top_of_stack()
+    _w2g4_settle(game, None)
+    return next(
+        p for p in game.controlled_by(0)
+        if p.card is item.card and id(p) not in before
+    )  # _j6_became
+
+
+@pytest.mark.cr("400.7a", "613.7b")
+def test_j6_the_cards_that_can_recolour_a_spell_are_the_ones_driven_here():
+    """The floor: the matrix below names its cards by hand, so the picker is
+    asked what the pool really offers. A seventh card that can aim a recolour
+    at a spell, or one of these six that no longer can, fails here."""
+    pool_size, found, text_only = _j6_stack_recolourers()
+    assert set(found) == set(_J6_STACK_RECOLOURERS), (
+        sorted(set(found) ^ set(_J6_STACK_RECOLOURERS))
+    )
+    assert text_only == _J6_PICKER_OFFERS_NO_SPELL, text_only
+    assert pool_size >= 4700, pool_size
+
+
+@pytest.mark.cr("400.7a", "613.7b", "613.7d", "105.3", "105.2c")
+@pytest.mark.parametrize("spell_kind", sorted(_J6_PERMANENT_SPELLS))
+@pytest.mark.parametrize("recolourer", sorted(_J6_STACK_RECOLOURERS))
+def test_j6_a_recoloured_permanent_spell_is_that_colour_as_a_permanent(
+    catalog_by_name, set_pool, recolourer, spell_kind,
+):
+    """Lace the spell, let it resolve: the permanent is the lace's colour, the
+    effect has the timestamp it was created at, and that is earlier than the
+    permanent's own."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    _size, found, _text_only = _j6_stack_recolourers()
+    how = found[recolourer]
+    wanted = _J6_STACK_RECOLOURERS[recolourer]
+    name, printed = _J6_PERMANENT_SPELLS[spell_kind]
+    if wanted == printed:
+        pytest.skip("the lace prints the spell's own colour: nothing to tell apart")
+
+    game = _w2g4_table()
+    sources = {}
+    if how[0] == "ability":
+        sources[recolourer] = _w2g4_enter(game, card(recolourer))
+    host = _w2g4_enter(game, card("Hill Giant")) if spell_kind == "aura" else None
+    item = _j6_cast_onto_stack(game, card(name), at=host)
+    assert sorted(game._stack_item_colors(item)) == printed
+
+    before = _j6_stamp()
+    _j6_recolour_spell(game, card(recolourer), how, item, sources)
+    after = _j6_stamp()
+    assert sorted(game._stack_item_colors(item)) == wanted, "on the stack"
+
+    perm = _j6_became(game, item)
+    assert _w2g4_colours(game, perm) == wanted, (
+        f"CR 400.7a: {recolourer}'s effect goes on applying to the permanent "
+        f"the {name} spell became"
+    )
+    (effect,) = [
+        effect for effect in _j6_colour_effects(perm) if effect.label == "colour change"
+    ]
+    assert before < effect.timestamp < after, "the stamp it was created at"
+    assert effect.timestamp < perm.timestamp, "CR 613.7d: it entered afterwards"
+    # Indefinite: it outlives the turn.
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, perm) == wanted
+
+
+def _j6_stamp():
+    from engine.continuous import next_timestamp
+
+    return next_timestamp()  # _j6_stamp
+
+
+def _j6_colour_effects(perm):
+    from engine.layer_bridge import collect_color_effects
+
+    return collect_color_effects(perm, id(perm))  # _j6_colour_effects
+
+
+@pytest.mark.cr("400.7a", "613.7", "613.7a")
+def test_j6_a_laced_spell_meets_the_statics_in_timestamp_order(
+    catalog_by_name, set_pool,
+):
+    """A Darkest Hour that was already out is earlier than the lace, so the
+    permanent is the lace's colour; one that arrives after the permanent is
+    later than both, so it is black — and the lace shows again when it leaves."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    older = _w2g4_enter(game, card("Darkest Hour"))
+    item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
+    _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
+    bears = _j6_became(game, item)
+    assert _w2g4_colours(game, bears) == ["W"]
+
+    game.remove_from_battlefield(older)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == ["W"]
+    newer = _w2g4_cast(game, card("Darkest Hour"))
+    assert _w2g4_colours(game, bears) == ["B"]
+    game.remove_from_battlefield(newer)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == ["W"]
+
+
+@pytest.mark.cr("400.7a", "613.7a", "613.7d")
+def test_j6_a_laced_alloy_golem_is_the_colour_it_chooses_as_it_enters(
+    catalog_by_name, set_pool,
+):
+    """The one place the two stamps are observable. Deathlace on the Golem
+    *spell* is created first; the Golem's own "is the chosen color" has the
+    timestamp the Golem gets as it enters (CR 613.7a, 613.7d), which is later
+    — so the Golem is the chosen colour. The same lace cast on the Golem once
+    it is on the battlefield is the later effect, and the Golem is black."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    item = _j6_cast_onto_stack(game, card("Alloy Golem"))
+    _j6_recolour_spell(game, card("Deathlace"), ("spell", None), item, {})
+    assert sorted(game._stack_item_colors(item)) == ["B"]
+    assert game.resolve_top_of_stack()
+    _w2g4_settle(game, "R")
+    golem = next(p for p in game.controlled_by(0) if p.card.name == "Alloy Golem")
+    assert _w2g4_colours(game, golem) == ["R"]
+
+    _w2g4_cast(game, card("Deathlace"), at=golem)
+    assert _w2g4_colours(game, golem) == ["B"]
+
+
+@pytest.mark.cr("400.7a", "613.7")
+def test_j6_of_two_laces_on_one_spell_the_later_is_what_it_becomes(
+    catalog_by_name, set_pool,
+):
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
+    _j6_recolour_spell(game, card("Deathlace"), ("spell", None), item, {})
+    _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
+    assert sorted(game._stack_item_colors(item)) == ["W"]
+    assert _w2g4_colours(game, _j6_became(game, item)) == ["W"]
+
+
+@pytest.mark.cr("400.7a", "613.7", "514.2")
+@pytest.mark.parametrize("turn_long_first", [True, False])
+def test_j6_a_turn_long_recolour_of_a_spell_lasts_the_turn_on_the_permanent(
+    catalog_by_name, set_pool, turn_long_first,
+):
+    """The duration travels with the effect. No card in the pool can aim an
+    "until end of turn" recolour at a spell today (Blind Seer prints it and
+    its picker offers no spell — ``_J6_PICKER_OFFERS_NO_SPELL``), so the
+    effect is created through the write API a handler would call; everything
+    after that is the engine's own resolution and cleanup.
+
+    A turn-long black and an indefinite white on one spell: the later of the
+    two is what the spell is and what the permanent is, and at cleanup the
+    turn-long one ends and the indefinite one is what is left."""
+    from engine.color_changes import change_spell_color
+
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
+    if turn_long_first:
+        change_spell_color(item, "B", until_eot=True)
+        _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
+    else:
+        _j6_recolour_spell(game, card("Purelace"), ("spell", None), item, {})
+        change_spell_color(item, "B", until_eot=True)
+    later = ["W"] if turn_long_first else ["B"]
+    assert sorted(game._stack_item_colors(item)) == later
+
+    bears = _j6_became(game, item)
+    assert _w2g4_colours(game, bears) == later
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, bears) == ["W"]
+
+    # …and alone, it ends and leaves the printed colour.
+    item = _j6_cast_onto_stack(game, card("Grizzly Bears"))
+    change_spell_color(item, "U", until_eot=True)
+    second = _j6_became(game, item)
+    assert _w2g4_colours(game, second) == ["U"]
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, second) == ["G"]
+
+
+@pytest.mark.cr("400.7a", "105.2c")
+def test_j6_a_spell_made_colourless_has_no_colour_and_shares_none(
+    catalog_by_name, set_pool,
+):
+    """Ersatz Gnomes' "Target spell becomes colorless" stored the word and
+    every reader took it for a colour: two such spells *shared* one."""
+    from engine.object_colors import share_a_color
+
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    gnomes = _w2g4_enter(game, card("Ersatz Gnomes"))
+    first = _j6_cast_onto_stack(game, card("Grizzly Bears"))
+    _j6_recolour_spell(
+        game, card("Ersatz Gnomes"), ("ability", 0), first, {"Ersatz Gnomes": gnomes},
+    )
+    second = _j6_cast_onto_stack(game, card("Hill Giant"))
+    _j6_recolour_spell(
+        game, card("Ersatz Gnomes"), ("ability", 0), second, {"Ersatz Gnomes": gnomes},
+    )
+    assert game._stack_item_colors(first) == ()
+    assert game._stack_item_colors(second) == ()
+    assert not share_a_color(
+        game._stack_item_colors(first), game._stack_item_colors(second)
+    )
+
+
+@pytest.mark.cr("707.2", "707.10")
+def test_j6_a_copy_of_a_laced_spell_is_not_laced(catalog_by_name, set_pool):
+    """CR 707.2: a copy takes the copiable values and the choices made in
+    casting; "other effects … are not copied". The lace rode the same dict as
+    the choices and went with them, so a Forked copy of a Deathlaced Lightning
+    Bolt was black."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    bolt = _j6_cast_onto_stack(game, card("Lightning Bolt"))
+    _j6_recolour_spell(game, card("Deathlace"), ("spell", None), bolt, {})
+    assert sorted(game._stack_item_colors(bolt)) == ["B"]
+
+    game.players[0].hand.append(card("Fork"))
+    forked = game.queue_from_hand(0, "Fork", target_stack_index=game.stack.index(bolt))
+    assert forked.supported, forked.details
+    assert game.resolve_top_of_stack()
+    copy = game.stack[-1]
+    assert copy.is_copy and copy.card is bolt.card
+    assert sorted(game._stack_item_colors(copy)) == ["R"], "the printed colour"
+    assert sorted(game._stack_item_colors(bolt)) == ["B"], "the original keeps its lace"
+
+
+# --- a static whose *scope* is a colour, and the seam that judges it --------
+#
+# "**Green** creatures have "Cumulative upkeep {1}."" (Breath of Dreams),
+# "**White** creatures get +1/+1." (Crusade), "**Black** creatures get +1/+1."
+# (Bad Moon.) Each reads layer 5's finished answer from a later layer — the
+# granted ability is layer 6 and an anthem is layer 7c — so none of them can
+# *depend* on a colour effect (CR 613.8a holds a dependency only between two
+# effects "in the same layer"). What they need is to be asked again whenever a
+# colour has moved (CR 611.3a), and they were not:
+#
+# * a spell or ability that resolved left the board as its last handler left
+#   it. A lace has no reason to know a colour-scoped static exists, so a Bears
+#   laced black under Breath of Dreams kept the green creatures' upkeep, and
+#   one laced white under a Crusade was not pumped, until a state-based check
+#   came by (18 of the 210 rows below);
+# * the cleanup step ended the turn's colour effects and recomputed nothing
+#   unless a control change had also ended (12 rows);
+# * inside one refresh, the Breath's colour scope was judged in the loop that
+#   records which permanents "All creatures are black" reaches — against the
+#   list the previous refresh had left (10 of 10 rows where a colour static
+#   left and one pass ran).
+#
+# The census is every effect of the matrix above, on every subject it reaches,
+# under each of the three, in both orders. Its statement is one invariant:
+# **when an engine call returns, a recompute changes nothing.**
+
+_J6_SCOPED = {"Breath of Dreams": "G", "Crusade": "W", "Bad Moon": "B"}
+
+
+def _j6_reading(game, perm):
+    """What a colour-scoped static decides about *perm*, and what it reads."""
+    return {
+        "colours": _w2g4_colours(game, perm),
+        "creature": perm.is_creature,
+        "pt": (perm.effective_power, perm.effective_toughness),
+        "cumulative upkeep": "cumulative upkeep {1}"
+        in (perm.effective_card.oracle_text or "").lower(),
+    }  # _j6_reading
+
+
+def _j6_assert_settled(game, perm, when, *, one_pass=False):
+    """A recompute now must change nothing: the board the engine left is the
+    board. *one_pass* asks it of a single refresh rather than the pair
+    ``_recompute_continuous_effects`` runs."""
+    left = _j6_reading(game, perm)
+    if one_pass:
+        game._refresh_dynamic_creatures()
+    else:
+        game._recompute_continuous_effects()
+    assert left == _j6_reading(game, perm), f"stale {when}"
+    return left  # _j6_assert_settled
+
+
+def _j6_scoped_rows():
+    rows = []
+    for static in _J6_SCOPED:
+        for effect, spec in _W2G4_EFFECTS.items():
+            subjects = [
+                kind for kind in sorted(spec["reaches"])
+                if _W2G4_RESERVED.get(kind) in (None, effect)
+            ]
+            rows.append((static, effect, tuple(subjects)))
+    return rows  # _j6_scoped_rows
+
+
+_J6_SCOPED_ROWS = _j6_scoped_rows()
+
+
+def _j6_colour_into_or_out_of(spec, scope, printed):
+    """The colour a choosing effect is answered with: the scope's own, so the
+    subject enters it — or, where it starts there, another, so it leaves."""
+    if spec["colour"] is not None:
+        return None
+    if printed != [scope]:
+        return scope
+    return next(c for c in _W2G4_ALL if c != scope)  # _j6_colour_into_or_out_of
+
+
+@pytest.mark.cr("611.3a", "613.8a", "514.2", "608.2")
+@pytest.mark.parametrize(
+    "static, effect, subjects", _J6_SCOPED_ROWS,
+    ids=[f"{s}|{e}" for s, e, _subjects in _J6_SCOPED_ROWS],
+)
+def test_j6_a_colour_scoped_static_is_judged_as_each_colour_effect_arrives_and_ends(
+    catalog_by_name, set_pool, static, effect, subjects,
+):
+    """*static* out, then the colour effect — and the other way round — on each
+    subject: after every step the static reaches the permanent exactly if it
+    is a creature of the scope's colour, without anything recomputing the
+    board on the test's behalf."""
+    spec = _W2G4_EFFECTS[effect]
+    scope = _J6_SCOPED[static]
+    for subject_kind in subjects:
+        printed = _W2G4_SUBJECTS[subject_kind][1]
+        for static_first in (True, False):
+            where = f"{effect} on the {subject_kind}, {static} " + (
+                "first" if static_first else "second"
+            )
+            case = _W2G4Case(catalog_by_name, set_pool)
+            case.prepare([effect])
+            game = case.game
+            card = case._card(static)
+            colour = _j6_colour_into_or_out_of(spec, scope, printed)
+            if static_first:
+                _w2g4_cast(game, card)
+            if effect != "own_chosen":
+                case.enter_subject(subject_kind)
+                _j6_assert_settled(game, case.subject, f"as the subject entered ({where})")
+            case.apply(effect, colour)
+            if not static_first:
+                _w2g4_cast(game, card)
+            now = _j6_assert_settled(game, case.subject, f"after both arrived ({where})")
+            if static == "Breath of Dreams":
+                # The one of the three whose reach can be read off the
+                # permanent with nothing else pumping it.
+                assert now["cumulative upkeep"] == (
+                    now["creature"] and scope in now["colours"]
+                ), where
+
+            if spec["ends"] == "leaves":
+                game.remove_from_battlefield(case.made.pop(effect))
+                # One refresh pass, not the two a recompute runs: the order
+                # *inside* a pass is what is being asked.
+                game._refresh_dynamic_creatures()
+                game._recalculate_lord_buffs()
+                after = _j6_assert_settled(
+                    game, case.subject, f"one pass after the effect left ({where})",
+                    one_pass=True,
+                )
+                _j6_assert_settled(game, case.subject, f"after the effect left ({where})")
+            elif spec["ends"] == "cleanup":
+                game.resolve_cleanup_step(0)
+                after = _j6_assert_settled(
+                    game, case.subject, f"after cleanup ended the effect ({where})",
+                )
+            else:
+                continue
+            if static == "Breath of Dreams":
+                assert after["cumulative upkeep"] == (
+                    after["creature"] and scope in after["colours"]
+                ), where
+
+
+@pytest.mark.cr("611.3a")
+def test_j6_the_colour_scope_census_examined_every_effect_under_every_static():
+    """The floor: three statics by eighteen effects, and no fewer games than
+    the 210 the defect was measured over."""
+    assert {static for static, _e, _s in _J6_SCOPED_ROWS} == set(_J6_SCOPED)
+    assert {effect for _s, effect, _subjects in _J6_SCOPED_ROWS} == set(_W2G4_EFFECTS)
+    games = sum(2 * len(subjects) for _s, _e, subjects in _J6_SCOPED_ROWS)
+    assert games >= 210, games
+    assert all(subjects for _s, _e, subjects in _J6_SCOPED_ROWS)
+
+
+@pytest.mark.cr("611.3a", "613.8a")
+def test_j6_the_three_colour_scoped_statics_are_the_kinds_the_pool_has():
+    """What the census stands in for. A board-wide static with a colour in its
+    scope is either a ``global_statics`` row carrying ``colors`` — one card,
+    Breath of Dreams — or a lord buff whose filter names a colour, of which
+    Crusade and Bad Moon are two of many and all one mechanism
+    (``_recalculate_lord_buffs``). A second global static with a colour scope
+    is a second thing ``_refresh_global_statics`` has to defer, and it should
+    be driven here by name."""
+    from engine import global_statics
+    from engine.oracle import compiled_units
+
+    pool = _w2g4_whole_pool()
+    scoped = {
+        card.name for card, _program in compiled_units(pool)
+        if (static := global_statics.global_static_for(card.oracle_text or ""))
+        is not None and static.colors
+    }
+    assert scoped == {"Breath of Dreams"}
+    assert len(pool) >= 4700, len(pool)
+
+
+@pytest.mark.cr("611.3a", "702.24a")
+def test_j6_breath_of_dreams_charges_the_creature_that_is_green_now(
+    catalog_by_name, set_pool,
+):
+    """In the cards' words, to the upkeep. Breath of Dreams out; Deathlace the
+    Grizzly Bears and Lifelace the Goblin Raider. The Raider is the green
+    creature now: it has the cumulative upkeep the moment the lace resolves,
+    and it — not the Bears — is sacrificed when its controller declines."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    _w2g4_cast(game, card("Breath of Dreams"))
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    raider = _w2g4_enter(game, card("Goblin Raider"))
+    assert _j6_reading(game, bears)["cumulative upkeep"]
+    assert not _j6_reading(game, raider)["cumulative upkeep"]
+
+    _w2g4_cast(game, card("Deathlace"), at=bears)
+    _w2g4_cast(game, card("Lifelace"), at=raider)
+    assert not _j6_reading(game, bears)["cumulative upkeep"]
+    assert _j6_reading(game, raider)["cumulative upkeep"]
+
+    game.interactive_seats = set()
+    game.resolve_upkeep(
+        0, human_choices={"Goblin Raider": False, "Breath of Dreams": True},
+    )
+    game._settle()
+    board = list(game.controlled_by(0))
+    assert bears in board
+    assert raider not in board
+
+
+@pytest.mark.cr("611.3a", "613.4c", "514.2")
+def test_j6_a_crusade_pumps_the_creature_that_is_white_now(catalog_by_name, set_pool):
+    """Crusade out, Heaven's Gate on the Grizzly Bears ("…become white until
+    end of turn"): a 3/3 as the spell resolves, and a 2/2 again as cleanup
+    ends it — it stayed a 3/3 green creature into the next turn."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    _w2g4_cast(game, card("Crusade"))
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+    _w2g4_cast(game, card("Heaven's Gate"), at=bears)
+    assert _w2g4_colours(game, bears) == ["W"]
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, bears) == ["G"]
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+# --- layers 1 and 3 under a board-wide static -------------------------------
+#
+# Whether a permanent is the source of a board-wide static was read off its
+# **printed** card, because ``Permanent.effective_card`` appends the abilities
+# those statics grant and so cannot be asked (two Aura Fluxes each grant the
+# other one). The printed card skips the two layers that have no cycle in
+# them and are below every layer such a static applies in: layer 1, what the
+# permanent copies (CR 707.2), and layer 3, what a text change rewrote
+# (CR 612). So a Sleight of Mind on Darkest Hour made its text "All creatures
+# are white" and its creatures black.
+
+_J6_REWORDED_STATICS = {
+    # static: (witness, the word Sleight of Mind replaces, with, colours after)
+    "Darkest Hour": ("Grizzly Bears", "B", "W", ["W"]),
+    "Celestial Dawn": ("Grizzly Bears", "W", "R", ["R"]),
+    "Dralnu's Crusade": ("Goblin Raider", "B", "U", ["U"]),
+}
+
+
+def _j6_sleight(game, card, permanent, old, new):
+    """Seat 0 casts Sleight of Mind on *permanent*: *old* becomes *new*."""
+    game.players[0].hand.append(card)
+    cast = game.queue_from_hand(
+        0, card.name, target_permanent_ids=[permanent.permanent_id],
+        old_color=old, new_color=new,
+    )
+    assert cast.supported, cast.details
+    _w2g4_settle(game, None)  # _j6_sleight
+
+
+@pytest.mark.cr("613.1c", "613.1e", "612.1")
+@pytest.mark.parametrize("static", sorted(_J6_REWORDED_STATICS))
+def test_j6_a_text_change_on_a_colour_static_changes_the_colour_it_sets(
+    catalog_by_name, set_pool, static,
+):
+    """Layer 3 before layer 5: the static sets the colour its text now names,
+    as the Sleight resolves."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    witness_name, old, new, wanted = _J6_REWORDED_STATICS[static]
+    game = _w2g4_table()
+    witness = _w2g4_enter(game, card(witness_name))
+    source = _w2g4_cast(game, card(static))
+    before = _w2g4_colours(game, witness)
+    assert before != wanted
+
+    _j6_sleight(game, card("Sleight of Mind"), source, old, new)
+    assert _w2g4_colours(game, witness) == wanted, (
+        f"{static} says {source.effective_card.oracle_text!r}"
+    )
+
+
+@pytest.mark.cr("613.1c", "613.1f", "612.1")
+def test_j6_a_text_change_on_a_colour_scope_moves_the_scope(catalog_by_name, set_pool):
+    """Breath of Dreams' "**Green** creatures have …" reworded to "Red
+    creatures": the Goblin Raider has the upkeep and the Grizzly Bears does
+    not."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    raider = _w2g4_enter(game, card("Goblin Raider"))
+    breath = _w2g4_cast(game, card("Breath of Dreams"))
+    assert _j6_reading(game, bears)["cumulative upkeep"]
+    assert not _j6_reading(game, raider)["cumulative upkeep"]
+
+    _j6_sleight(game, card("Sleight of Mind"), breath, "G", "R")
+    assert not _j6_reading(game, bears)["cumulative upkeep"]
+    assert _j6_reading(game, raider)["cumulative upkeep"]
+
+
+@pytest.mark.cr("613.1a", "707.2", "613.1e")
+def test_j6_a_copy_of_a_colour_static_is_one(catalog_by_name, set_pool):
+    """Layer 1. Copy Artifact enters as a copy of Thran Lens: it *is* a Thran
+    Lens (CR 707.2), and when the original leaves, all permanents are still
+    colourless. Read off the printed card, the copy was an enchantment that
+    said nothing."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    lens = _w2g4_enter(game, card("Thran Lens"))
+    assert _w2g4_colours(game, bears) == []
+
+    game.players[0].hand.append(card("Copy Artifact"))
+    cast = game.queue_from_hand(
+        0, "Copy Artifact", target_permanent_ids=[lens.permanent_id],
+    )
+    assert cast.supported, cast.details
+    for _ in range(20):
+        if game.stack:
+            game.resolve_top_of_stack()
+        for choice in list(game.pending_choices):
+            game.auto_resolve_pending_choices(choice.player_index, kinds=[choice.kind])
+        if not game.stack and not game.pending_choices:
+            break
+    copy = next(p for p in game.controlled_by(0) if p.card.name == "Copy Artifact")
+    assert copy.effective_card.name == "Thran Lens"
+
+    game.remove_from_battlefield(lens)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == [], "the copy is a Thran Lens too"
+    game.remove_from_battlefield(copy)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == ["G"]

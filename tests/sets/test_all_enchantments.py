@@ -32,6 +32,7 @@ from engine.auras import attach_aura, aura_static_pt_grant, detach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
+from engine.color_changes import change_color
 
 
 def _w1g3_creature(name: str, power: int, toughness: int, colors=()):
@@ -141,7 +142,7 @@ def test_phyrexian_boon_swaps_arms_when_the_creature_changes_colour(set_pool):
     game._refresh_dynamic_creatures()
     assert (host.effective_power, host.effective_toughness) == (2, 1)
 
-    host.metadata["color_override"] = ("B",)
+    change_color(host, ("B",))
     game._refresh_dynamic_creatures()
     assert (host.effective_power, host.effective_toughness) == (5, 4)
 

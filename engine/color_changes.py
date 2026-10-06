@@ -51,11 +51,34 @@ a board-wide static and a permanent's own "is the chosen color" by
 ``Permanent.timestamp`` (CR 613.7a, 613.7d), an Aura by the moment it became
 attached (CR 613.7e) — which is that same field, re-stamped by
 ``auras.attach_aura``.
+
+A spell on the stack carries the same two slots
+----------------------------------------------
+
+"Target **spell** or permanent becomes black" is said of an object that has no
+metadata and no layer stack: a ``StackItem``. Its recolour is the same effect
+with the same two possible durations, so it is the same record on a different
+holder — the item's ``choices`` — written by :func:`change_spell_color` and
+read by :func:`spell_color_override`. And it has to be the *same* record,
+stamp and all, because of what happens next:
+
+    400.7a  Effects from spells, activated abilities, and triggered abilities
+            that change the characteristics or controller of a permanent spell
+            on the stack continue to apply to the permanent that spell becomes.
+
+:func:`carry_spell_color_changes` is that rule: each slot the spell holds is
+written onto the permanent **with the timestamp it was created at**
+(CR 613.7b), not a fresh one. The permanent's own timestamp is the moment it
+entered (CR 613.7d) and is therefore *later* — so a Deathlaced Alloy Golem is
+the colour its controller chooses as it enters, where a Golem laced on the
+battlefield is black. The stack item used to hold a bare symbol under one key,
+which the resolution never read: a Deathlaced creature spell was black on the
+stack and its printed colour as a permanent.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, MutableMapping
 
 from .continuous import next_timestamp
 
@@ -94,8 +117,38 @@ _SLOTS = (
 #: behind for a later reader to find.
 UNTIL_EOT_KEYS = (COLOR_OVERRIDE_UNTIL_EOT, COLOR_OVERRIDE_UNTIL_EOT_TIMESTAMP)
 
+#: The four keys a **spell on the stack** carries its recolour under, in
+#: ``StackItem.choices`` — the two slots and their stamps, spelled exactly as a
+#: permanent's are because they are the same record (CR 400.7a hands one to the
+#: other). ``game_types.CHOICE_KEYS`` declares them from here rather than
+#: spelling them a second time.
+SPELL_COLOR_KEYS = (
+    COLOR_OVERRIDE, COLOR_OVERRIDE_TIMESTAMP,
+    COLOR_OVERRIDE_UNTIL_EOT, COLOR_OVERRIDE_UNTIL_EOT_TIMESTAMP,
+)
 
-def change_color(perm: Permanent, colors: Any, *, until_eot: bool = False) -> int:
+
+def _write_slot(
+    holder: MutableMapping, colors: Any, *, until_eot: bool, timestamp: int | None
+) -> int:
+    """Write one slot on *holder* — a permanent's metadata or a stack item's
+    choices — and stamp it. The one place either is written."""
+    if colors is None:
+        raise ValueError(
+            "change_color needs a colour; None is an empty slot, and CR 105.2c's "
+            "colourless is the empty tuple"
+        )
+    value_key, stamp_key, _label = _SLOTS[1 if until_eot else 0]
+    stamp = next_timestamp() if timestamp is None else int(timestamp)
+    holder[value_key] = colors
+    holder[stamp_key] = stamp
+    return stamp
+
+
+def change_color(
+    perm: Permanent, colors: Any, *, until_eot: bool = False,
+    timestamp: int | None = None,
+) -> int:
     """Layer 5: *perm* becomes *colors* from now (CR 613.7b). Returns the stamp.
 
     *colors* is stored as given — a symbol, a sequence of symbols, or the empty
@@ -105,17 +158,109 @@ def change_color(perm: Permanent, colors: Any, *, until_eot: bool = False) -> in
     A second write to the same slot replaces the first and takes a fresh
     timestamp. Both would have ended together, so the earlier one could never
     again be the effect that applies last.
+
+    *timestamp* is for exactly one caller: an effect that **already exists**
+    and is being handed from one object to the object it became
+    (:func:`carry_spell_color_changes`, CR 400.7a). An effect keeps the
+    timestamp it was created with (CR 613.7b), so that caller passes it; every
+    effect being *created* leaves it out and is stamped off the clock here.
     """
-    if colors is None:
-        raise ValueError(
-            "change_color needs a colour; None is an empty slot, and CR 105.2c's "
-            "colourless is the empty tuple"
-        )
-    value_key, stamp_key, _label = _SLOTS[1 if until_eot else 0]
-    stamp = next_timestamp()
-    perm.metadata[value_key] = colors
-    perm.metadata[stamp_key] = stamp
-    return stamp
+    return _write_slot(
+        perm.metadata, colors, until_eot=until_eot, timestamp=timestamp
+    )
+
+
+# ---------------------------------------------------------------------------
+# A spell on the stack (CR 400.7a)
+# ---------------------------------------------------------------------------
+
+
+def change_spell_color(item: Any, colors: Any, *, until_eot: bool = False) -> int:
+    """Layer 5 for a spell on the stack: *item* becomes *colors* from now
+    (CR 613.7b). Returns the stamp.
+
+    The Lace cycle's "target **spell** …", Ersatz Gnomes' "Target spell becomes
+    colorless", Blind Seer's "…until end of turn". The same two slots a
+    permanent has, on the item's ``choices``, so that the permanent the spell
+    becomes can be handed them whole (:func:`carry_spell_color_changes`).
+
+    *colors* as :func:`change_color` takes it: a symbol, a sequence of them, or
+    the **empty tuple** for colourless — never the word "colorless", which this
+    key held for Ersatz Gnomes and which every reader then took for a sixth
+    colour two such spells shared.
+    """
+    return _write_slot(item.choices, colors, until_eot=until_eot, timestamp=None)
+
+
+def _spell_slots(choices: Any) -> list[tuple[Any, int, bool]]:
+    """``(value, timestamp, until_eot)`` for each slot *choices* holds."""
+    if not choices:
+        return []
+    found = []
+    for value, stamp, until_eot in (
+        (choices.get(COLOR_OVERRIDE), choices.get(COLOR_OVERRIDE_TIMESTAMP), False),
+        (
+            choices.get(COLOR_OVERRIDE_UNTIL_EOT),
+            choices.get(COLOR_OVERRIDE_UNTIL_EOT_TIMESTAMP), True,
+        ),
+    ):
+        # ``is not None``: the empty tuple is colourless (CR 105.2c).
+        if value is not None:
+            found.append((value, int(stamp or 0), until_eot))
+    return found
+
+
+def spell_color_override(item: Any) -> tuple[str, ...] | None:
+    """The colours an effect has made the spell *item*, or None if none has.
+
+    Of the two slots, the one with the **later timestamp** (CR 613.7) — each
+    sets the colour outright (CR 105.3), so the later is the whole answer. A
+    stable sort over the slot order, so two unstamped values (a stack item
+    built by hand) keep the order they had as constants: indefinite, then
+    turn-long.
+
+    The empty tuple is a real answer — colourless — and is not None.
+    """
+    slots = _spell_slots(getattr(item, "choices", None))
+    if not slots:
+        return None
+    value, _stamp, _until_eot = max(
+        enumerate(slots), key=lambda entry: (entry[1][1], entry[0])
+    )[1]
+    return _as_colors(value)
+
+
+def carry_spell_color_changes(choices: Any, perm: Permanent) -> int:
+    """CR 400.7a: the colour effects on a permanent **spell** go on applying to
+    the permanent it becomes. Returns how many were carried.
+
+    Each with the timestamp it was created at (CR 613.7b) and the duration it
+    was created with: an indefinite lace stays indefinite, and a Blind Seer's
+    "until end of turn" lands in the slot the cleanup step sweeps. Called as
+    the permanent is built, before it enters — so an entry replacement that
+    asks its colour is answered, and so the permanent's own timestamp
+    (CR 613.7d, stamped as it enters) is the later one, which is the truth.
+    """
+    carried = 0
+    for value, stamp, until_eot in _spell_slots(choices):
+        change_color(perm, value, until_eot=until_eot, timestamp=stamp)
+        carried += 1
+    return carried
+
+
+def without_spell_color_changes(choices: Any) -> dict:
+    """*choices* for a **copy** of the spell: everything but what an effect did
+    to the original's colour.
+
+    CR 707.2: a copy acquires the copiable values — the printed
+    characteristics as modified by other copy effects — and "other effects
+    (including type-changing and text-changing effects) … are not copied". A
+    lace is such an effect.
+    """
+    return {
+        key: value for key, value in dict(choices or {}).items()
+        if key not in SPELL_COLOR_KEYS
+    }
 
 
 def clear_derived_color_changes(perm: Permanent) -> None:
@@ -191,6 +336,8 @@ def _as_colors(value: Any) -> tuple[str, ...]:
 __all__ = [
     "COLOR_OVERRIDE", "COLOR_OVERRIDE_TIMESTAMP", "COLOR_OVERRIDE_UNTIL_EOT",
     "COLOR_OVERRIDE_UNTIL_EOT_TIMESTAMP", "DERIVED_COLOR_CHANGES",
-    "UNTIL_EOT_KEYS", "add_derived_color_change", "change_color",
-    "clear_derived_color_changes", "color_changes",
+    "SPELL_COLOR_KEYS", "UNTIL_EOT_KEYS", "add_derived_color_change",
+    "carry_spell_color_changes", "change_color", "change_spell_color",
+    "clear_derived_color_changes", "color_changes", "spell_color_override",
+    "without_spell_color_changes",
 ]

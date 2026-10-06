@@ -60,9 +60,9 @@ from ..enter_tapped_statics import (
 )
 from ..land_animation import (
     LAND_ANIMATION_KIND,
+    LAND_ANIMATIONS_REACHING,
     LandAnimation,
     land_animation_from_payload,
-    land_animation_reaches,
     land_animation_reaches_types,
 )
 from ..zone_copies import (
@@ -1516,7 +1516,17 @@ class PermanentStateMixin:
         """
         statics: list[TypeStatic] = []
         for source in all_permanents:
-            for instr in compile_card_oracle(source.effective_card).instructions:
+            # **The source's text before layer 6** (its ``card_before_layer_6``),
+            # not ``effective_card``. These are layer-4 effects, applied while
+            # the ability that generates them is still there (CR 613.1: layer
+            # 4, then 5, then 6) and carried through their later layers
+            # whatever becomes of it (CR 613.6). Read off the finished text,
+            # a Blood Moon that Opalescence and Humility had made a creature
+            # with no abilities stopped making Mountains, and a Kormus Bell
+            # under Titania's Song stopped waking Swamps — twelve statics,
+            # every one this loop gathers.
+            source_card = source.card_before_layer_6
+            for instr in compile_card_oracle(source_card).instructions:
                 if instr.kind == STATIC_LAND_TYPE_KIND:
                     # "Basic lands of **the first chosen type** are **the
                     # second chosen type**." (Illusionary Terrain.) The
@@ -1537,9 +1547,7 @@ class PermanentStateMixin:
                         source, land_animation_from_payload(instr.payload),
                     ))
             host = source.metadata.get("attached_to")
-            if host is not None and aura_animates_artifact(
-                source.effective_card.oracle_text
-            ):
+            if host is not None and aura_animates_artifact(source_card.oracle_text):
                 statics.append(self._attached_animation_static(source, host))
         from ..global_statics import changes_types
 
@@ -2437,6 +2445,30 @@ class PermanentStateMixin:
                     applied is found for applied in reach.get(id(found.payload), ())
                 ))
         self._refresh_land_animation(all_permanents, reach)
+        # **Layer 5 before a scope that asks about colour.** "**Green**
+        # creatures have …" (Breath of Dreams) reads what colour a permanent
+        # is, and part of that answer is the list this loop writes: "All
+        # creatures are black" (Darkest Hour) is on a creature as a source
+        # recorded here. Judged in the one loop, the colour scope read the
+        # list the *previous* refresh had left — so a Bears a Darkest Hour had
+        # just stopped reaching was still black to the Breath for a pass, and
+        # went without its upkeep.
+        #
+        # Not a dependency: CR 613.8a holds one only between two effects "in
+        # the same layer", and the granted ability is layer 6 reading a layer
+        # 5 that is finished by then. It is the order the refresh writes in.
+        # So the statics whose scope asks about colour are judged in a second
+        # walk, after the first has recorded every static that *sets* one —
+        # none of which has a colour scope of its own (held to the pool by
+        # ``tests/rules/test_color_effects_timestamp_order.py``), so one
+        # deferral is the whole order.
+        def asks_colour(static) -> bool:
+            return bool(static.colors) and not changes_types(static)
+
+        colour_scoped = any(asks_colour(static) for _source, static in sources)
+        colour_scoped_on_stack = any(
+            asks_colour(static) for _item, static in stack_sources
+        )
         for perm in all_permanents:
             reached_by = reach.get(id(perm), ())
             # **A static's own source is not exempt.** The scope is whatever
@@ -2457,7 +2489,8 @@ class PermanentStateMixin:
             applying = [
                 source
                 for source, static in sources
-                if (
+                if not asks_colour(static)
+                and (
                     # A type-changing static applies to exactly what the
                     # layer-4 pass found it reaching (CR 613.6)…
                     any(found is type_static_of.get(id(source)) for found in reached_by)
@@ -2485,12 +2518,98 @@ class PermanentStateMixin:
             applying_from_stack = [
                 static
                 for _item, static in stack_sources
-                if self._global_static_applies(static, perm, None, self)
+                if not asks_colour(static)
+                and self._global_static_applies(static, perm, None, self)
             ]
             if applying_from_stack:
                 perm.metadata[STACK_STATICS_KEY] = applying_from_stack
             else:
                 perm.metadata.pop(STACK_STATICS_KEY, None)
+        # **Layer 6 before a static that is all layer 6 or later.** The walk
+        # above has recorded which permanents "All creatures lose all
+        # abilities" reaches, so whether a *source* still has the ability that
+        # makes it one can be asked now — of this pass, not the last.
+        #
+        # A static with a layer-4 or layer-5 part is past caring: its effect
+        # began to apply while the ability was there, and CR 613.6 carries it
+        # through every later layer "even if the ability generating the effect
+        # is removed during this process" (Titania's Song, Opalescence,
+        # Conspiracy, Darkest Hour — and ``_board_type_statics`` reads the
+        # land-type family the same way). One whose *whole* effect is layer 6
+        # or later is the opposite case. "All artifacts have "…sacrifice this
+        # artifact unless you pay {2}"" (Energy Flux) meets Humility in the
+        # same layer, and applying Humility would end the Flux's effect
+        # altogether — CR 613.8a's dependency on an effect's *existence* — so
+        # the removal applies first whichever is older, and the Flux grants
+        # nothing. The printed text said otherwise for as long as the source
+        # stayed on the battlefield: an Energy Flux that Opalescence and
+        # Humility had made a 1/1 with no abilities went on taxing artifacts.
+        #
+        # The remover itself is not asked. Humility under Opalescence strips
+        # its own ability and applies all the same (an effect cannot depend on
+        # itself), and two of them strip each other to the same board.
+        from ..global_statics import removes_all_abilities
+        from ..keywords import all_abilities_removed
+
+        def later_layers_only(static) -> bool:
+            return not (
+                changes_types(static) or static.sets_colors is not None
+                or static.sets_chosen_color or static.removes_abilities
+            )
+
+        gone = {
+            id(source) for source, static in sources
+            if later_layers_only(static)
+            and (removes_all_abilities(source) or all_abilities_removed(source))
+        }
+        if gone:
+            sources = [pair for pair in sources if id(pair[0]) not in gone]
+            for perm in all_permanents:
+                recorded = perm.metadata.get("global_static_sources")
+                if not recorded:
+                    continue
+                kept = [source for source in recorded if id(source) not in gone]
+                if kept:
+                    perm.metadata["global_static_sources"] = kept
+                else:
+                    perm.metadata.pop("global_static_sources", None)
+        # The second walk: every colour-setting static is on the permanents it
+        # reaches, so layer 5 is this pass's and a colour scope can be asked.
+        # Each list is rebuilt in the sources' own order rather than appended
+        # to, so which static is recorded first does not come to depend on
+        # which walk judged it.
+        if colour_scoped:
+            for perm in all_permanents:
+                recorded = perm.metadata.get("global_static_sources") or ()
+                applying = [
+                    source
+                    for source, static in sources
+                    if (
+                        self._global_static_applies(static, perm, source, self)
+                        if asks_colour(static)
+                        else any(source is held for held in recorded)
+                    )
+                ]
+                if applying:
+                    perm.metadata["global_static_sources"] = applying
+                else:
+                    perm.metadata.pop("global_static_sources", None)
+        if colour_scoped_on_stack:
+            for perm in all_permanents:
+                recorded = perm.metadata.get(STACK_STATICS_KEY) or ()
+                applying_from_stack = [
+                    static
+                    for _item, static in stack_sources
+                    if (
+                        self._global_static_applies(static, perm, None, self)
+                        if asks_colour(static)
+                        else any(static is held for held in recorded)
+                    )
+                ]
+                if applying_from_stack:
+                    perm.metadata[STACK_STATICS_KEY] = applying_from_stack
+                else:
+                    perm.metadata.pop(STACK_STATICS_KEY, None)
 
     #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
     #: every filter payload in the engine spells a colour with. One map rather
@@ -2677,24 +2796,6 @@ class PermanentStateMixin:
                     return True
         return False
 
-    def _board_land_animations(
-        self, all_permanents: list[Permanent]
-    ) -> list[tuple[Permanent, LandAnimation]]:
-        """Every land animator on the battlefield, **with its source**.
-
-        The source travels with the animation because the template can name it:
-        "Lands **you control** are 2/2 creatures…" (Natural Emergence) is the
-        lands of whoever controls that enchantment (CR 109.5), which a bare
-        ``LandAnimation`` cannot say. Read by the layer-4 refresh below and by
-        ``_recalculate_lord_buffs``' layer-6 pass, so the two walk one list.
-        """
-        return [
-            (perm, land_animation_from_payload(instr.payload))
-            for perm in all_permanents
-            for instr in compile_card_oracle(perm.effective_card).instructions
-            if instr.kind == LAND_ANIMATION_KIND
-        ]
-
     def _refresh_land_animation(
         self, all_permanents: list[Permanent], reach: dict[int, list[TypeStatic]],
     ) -> None:
@@ -2728,16 +2829,26 @@ class PermanentStateMixin:
         """
         position = {id(perm): index for index, perm in enumerate(all_permanents)}
         for permanent in all_permanents:
+            # Every animator the pass found reaching this land, recorded for
+            # the layers after this one (CR 613.6: "the same set of objects in
+            # each other applicable layer") — the layer-6 keyword pass in
+            # ``_recalculate_lord_buffs`` reads it rather than asking the noun
+            # phrase a second time of a layer 4 that has moved on.
+            reaching = [
+                (static.source, static.payload)
+                for static in reach.get(id(permanent), ())
+                if isinstance(static.payload, LandAnimation)
+            ]
+            if reaching:
+                permanent.metadata[LAND_ANIMATIONS_REACHING] = reaching
+            else:
+                permanent.metadata.pop(LAND_ANIMATIONS_REACHING, None)
             # The first animator, in battlefield order, of those the pass found
             # reaching this land: its size and colour are the ones written.
             # (Two animators reaching one land both make it a creature; whose
             # size it then has is layer 7b's question and is unchanged here.)
             animator, animation = min(
-                (
-                    (static.source, static.payload)
-                    for static in reach.get(id(permanent), ())
-                    if isinstance(static.payload, LandAnimation)
-                ),
+                reaching,
                 key=lambda pair: position.get(id(pair[0]), len(position)),
                 default=(None, None),
             )
@@ -4151,17 +4262,18 @@ class PermanentStateMixin:
         # Emergence.) Layer 6, and written here for step 3's reason: this pass
         # owns the derived-grant channel's clear and rebuild, so a grant made
         # by the layer-4 refresh would be wiped the next time this ran alone.
-        # Which lands is the same predicate that refresh asks
-        # (``land_animation_reaches``), so a land cannot have the keyword
-        # without being one the animator reaches.
-        for source_perm, animation in self._board_land_animations(all_perms):
-            if not animation.keywords:
-                continue
-            for target_perm in all_perms:
-                if not land_animation_reaches(
-                    self, source_perm, animation, target_perm
-                ):
-                    continue
+        # Which lands is **the layer-4 pass's answer**, read off the record
+        # it left on each land (``LAND_ANIMATIONS_REACHING``), and not the
+        # noun phrase asked again here. CR 613.6: the effect started to apply
+        # in layer 4 and "will continue to be applied to the same set of
+        # objects" in this one — a set decided against that layer's
+        # intermediate state, which the finished layer this pass could ask
+        # may no longer describe. So a land cannot have the keyword without
+        # being one the animator made a creature, by construction.
+        for target_perm in all_perms:
+            for _source_perm, animation in (
+                target_perm.metadata.get(LAND_ANIMATIONS_REACHING) or ()
+            ):
                 for keyword in animation.keywords:
                     add_derived_grant(target_perm, keyword)
 

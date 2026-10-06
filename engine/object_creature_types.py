@@ -76,10 +76,12 @@ def creature_type_override_for_seat(game, seat) -> str | None:
     from .global_statics import global_static_for
 
     for permanent in game.controlled_by(index):
-        # The printed text, for ``global_static_sources``' reason exactly: the
-        # effective card folds in abilities these very statics grant, so asking
-        # it here would make the answer depend on itself.
-        static = global_static_for(getattr(permanent.card, "oracle_text", "") or "")
+        # The text after layers 1 and 3, for ``global_static_sources``' reason
+        # exactly: the effective card folds in abilities these very statics
+        # grant, so asking it here would make the answer depend on itself.
+        static = global_static_for(
+            getattr(permanent.card_through_layer_3, "oracle_text", "") or ""
+        )
         if static is None or not static.sets_creature_type:
             continue
         if not static.extends_to_spells_and_cards:

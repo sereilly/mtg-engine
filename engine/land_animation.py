@@ -51,6 +51,21 @@ from functools import lru_cache
 # of the template adds no dispatch.
 LAND_ANIMATION_KIND = "animate_all_lands"
 
+#: Where the continuous-effects refresh records, on each land, **which
+#: animators reached it** — a list of ``(source permanent, LandAnimation)`` in
+#: the order the board-wide layer-4 pass applied them
+#: (``engine/type_statics.py``). Derived: cleared and rebuilt every refresh.
+#:
+#: CR 613.6: an effect that starts to apply in one layer "will continue to be
+#: applied to the same set of objects in each other applicable layer". An
+#: animator starts in layer 4 (the creature type) and goes on in layer 5 (its
+#: colour), layer 6 (its keywords) and layer 7b (its size) — so the set is
+#: decided once, by that pass, and every later layer reads it here. The
+#: layer-6 half used to ask the noun phrase again of the *finished* layer 4
+#: (:func:`land_animation_reaches`), which is a second answer to a question
+#: the pass had already settled against the layer's intermediate state.
+LAND_ANIMATIONS_REACHING = "land_animations_reaching"
+
 
 @dataclass(frozen=True)
 class LandAnimation:
@@ -292,6 +307,7 @@ def _reaches(game, source, animation: LandAnimation, permanent, has) -> bool:
 
 __all__ = [
     "LAND_ANIMATION_KIND",
+    "LAND_ANIMATIONS_REACHING",
     "LandAnimation",
     "land_animation_for",
     "land_animation_from_payload",

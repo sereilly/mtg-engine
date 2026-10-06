@@ -308,11 +308,17 @@ class CleanupStepMixin:
                     if permanent.metadata.pop(TAP_WHEN_CONTROL_LOST, False):
                         self.become_tapped(permanent)
         # A control change that ended is a change to who controls what, so the
-        # battlefield projection and every derived characteristic are rebuilt —
-        # the same pair `change_control`'s callers run when one begins.
+        # battlefield projection is rebuilt — and then, **whatever ended**,
+        # every derived characteristic (CR 514.2 ends the turn's effects; CR
+        # 611.3a re-asks each static what it applies to). The recompute used
+        # to be inside the branch, for a control change alone, so a turn-long
+        # recolour, type or keyword that ended here left the statics judged
+        # against the turn that had just finished: a Bears made white by
+        # Heaven's Gate kept a Crusade's +1/+1 as a green creature until the
+        # next state-based check, a turn later.
         if control_reverted:
             self._sync_control()
-            self._recompute_continuous_effects()
+        self._recompute_continuous_effects()
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)
         self.exile_until_eot.clear()

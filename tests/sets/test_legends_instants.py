@@ -11,6 +11,7 @@ from engine import Game, PlayerState
 from engine.auras import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from engine.color_changes import change_color
 
 
 def _creature(name: str, colors: tuple[str, ...] = ("G",)) -> CardDefinition:
@@ -86,7 +87,7 @@ def test_a_permanent_lace_outlives_a_turn_long_colour_change(set_pool):
     indefinite (CR 105 and the Lace cycle print no duration); Dwarven Song's
     ends with the turn. Sharing a key would make cleanup drop both."""
     laced = Permanent(card=_creature("Laced", colors=("G",)))
-    laced.metadata["color_override"] = "R"
+    change_color(laced, "R")
     p1 = PlayerState(name="P1", hand=[set_pool("LEG")["Heaven's Gate"]], battlefield=[laced])
     game = Game(players=[p1, PlayerState(name="P2")])
 

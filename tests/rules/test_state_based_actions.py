@@ -1038,13 +1038,11 @@ def test_704_5p_reads_the_layer_4_answer_to_is_this_an_aura():
     that permanent, and 704.5m then put it into the graveyard as an unattached
     Aura — half a resolution after the sentence that attached it.
     """
-    from engine.layer_bridge import GAINED_TYPES
+    from engine.type_changes import gain_types
 
     host = Permanent(card=_mk_creature("Host", 2, 2))
     became = Permanent(card=_mk_card("Becomes An Aura", "Enchantment"))
-    became.metadata[GAINED_TYPES] = [
-        {"card_types": [], "subtypes": ["aura"], "duration": "permanent"}
-    ]
+    gain_types(became, subtypes=["aura"], duration="permanent")
     p1 = PlayerState(name="P1", battlefield=[host, became])
     game = Game(players=[p1, PlayerState(name="P2")])
     game._sync_control()

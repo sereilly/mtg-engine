@@ -307,7 +307,12 @@ def test_no_acknowledgement_has_gone_stale(entry):
 POSITIONAL_BASELINE: dict[str, int] = {
     "engine/ai_policy.py": 11,
     "engine/handlers/_common.py": 2,
-    "engine/handlers/board_misc.py": 2,
+    # `engine/handlers/board_misc.py` left this table in the round after
+    # Seventh Edition. Its two reads were one handler, `mark_text_modified`,
+    # taking a text change's target by battlefield slot and falling back to
+    # slot 0 -- the bug this ratchet is about, again: a Sleight of Mind
+    # announced by id named no slot, so it rewrote whichever permanent stood
+    # first (tests/regressions/test_text_change_target_identity.py).
     "engine/handlers/combat.py": 2,
     # `engine/handlers/damage.py` left this table at Weatherlight's second
     # wave. Its one read was the divided-damage list resolving a target by

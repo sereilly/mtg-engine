@@ -51,6 +51,7 @@ from engine.replacements import (  # noqa: E402
 
 from tests.helpers import (_damage_dealt as _w1g8e_dealt,  # noqa: E402
                            resolve_stack as _w1g8e_resolve_stack)
+from engine.color_changes import change_color
 
 
 def _w1g8e_lea():
@@ -1155,7 +1156,7 @@ def _w1g6_colors(game, perm):
 def _w1g6_recolor(game, perm, colour):
     """Turn *perm* *colour* until end of turn, through layer 5's turn-long
     channel — what "becomes black until end of turn" writes."""
-    perm.metadata["color_override_until_eot"] = colour
+    change_color(perm, colour, until_eot=True)
     game._recompute_continuous_effects()
     assert _w1g6_colors(game, perm) == [colour]
     return perm  # _w1g6_recolor
@@ -1448,7 +1449,7 @@ def test_w1g6_heroic_defiance_follows_the_census_and_the_creatures_colour(set_po
     game._recompute_continuous_effects()
     assert (bears.effective_power, bears.effective_toughness) == (2, 2), "all tied"
 
-    bears.metadata["color_override"] = ()
+    change_color(bears, ())
     game._recompute_continuous_effects()
     assert _w1g6_colors(game, bears) == []
     assert (bears.effective_power, bears.effective_toughness) == (5, 5)

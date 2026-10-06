@@ -350,6 +350,15 @@ class PendingChoicesMixin:
             answered = apply()
         finally:
             self.resolving_stack_item = previous
+        # An answer is a step of a resolution (CR 608.2), so the resolution
+        # seam's recompute (``resolve_top_of_stack``) is owed here too: the
+        # colour a player has just named for Prismatic Lace decides which
+        # colour-scoped statics reach the permanent, and the next reader may
+        # be the next prompt of the same resolution, on screen. The release
+        # below ends in a state-based check — which recomputes — only for the
+        # *last* answer of an object the priority path was holding.
+        if answered:
+            self._recompute_continuous_effects()
         if item is not None:
             self._release_stack_item(item)
         return answered
@@ -3017,11 +3026,10 @@ class PendingChoicesMixin:
             # and once it is, every type-scoped static on the board has a
             # different land to reach or to pass by (CR 613.8a — "All
             # Mountains are Plains" depends on the choice that makes a
-            # Mountain). The other land-type answers below recompute the board
-            # for the same reason; this one did not, so the land read as its
-            # new type and as nothing a static says of that type until some
-            # later action happened to refresh it.
-            self._recompute_continuous_effects()
+            # Mountain). Recomputed by ``_answer_pending_choice``, the seam
+            # every answer passes: this one did not for a while, so the land
+            # read as its new type and as nothing a static says of that type
+            # until some later action happened to refresh it.
         self.discard_pending_choice(choice)
         return True
 
@@ -4443,16 +4451,16 @@ class PendingChoicesMixin:
                     # A chosen colour can condition a static (Jihad's anthem),
                     # and the board was last computed against the default.
                     self._recalculate_lord_buffs()
-                if word is not None:
-                    # …and a chosen creature type *is* a static's effect
-                    # ("Creatures you control are the chosen type", Conspiracy)
-                    # — CR 613 layer 4, where which permanents every other
-                    # type-scoped static reaches was last decided against the
-                    # default. Dralnu's Crusade's "All Goblins" did not include
-                    # the Goblins this answer had just made until some later
-                    # action happened to recompute the board; and a lord's "Elf
-                    # creatures get +1/+1" reads the same types one layer up.
-                    self._recompute_continuous_effects()
+                # …and a chosen creature type *is* a static's effect
+                # ("Creatures you control are the chosen type", Conspiracy) —
+                # CR 613 layer 4, where which permanents every other
+                # type-scoped static reaches was last decided against the
+                # default. Dralnu's Crusade's "All Goblins" did not include the
+                # Goblins this answer had just made until some later action
+                # happened to recompute the board; and a lord's "Elf creatures
+                # get +1/+1" reads the same types one layer up. It is
+                # recomputed by ``_answer_pending_choice``, after every answer
+                # and not just the ones that remembered to.
             self.discard_pending_choice(choice)
             return True
         # "…choose **two basic land types**." (Illusionary Terrain.) A fourth

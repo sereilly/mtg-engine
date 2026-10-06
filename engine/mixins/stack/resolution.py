@@ -16,6 +16,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
                            kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
+from ...color_changes import carry_spell_color_changes
 from ...classifier import CardClassification, classify_card
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
@@ -1189,6 +1190,21 @@ class StackResolutionMixin:
         finally:
             self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
+        # **The resolution seam** (CR 611.3a: a static ability's effect applies
+        # at any given moment to whatever its text indicates). Whatever this
+        # object just did — recoloured a creature, changed a type, moved a
+        # permanent, put a counter on one — the board-wide statics are judged
+        # again here, once, before anything else reads the board: the prompt
+        # the resolution may have armed, the next object down the stack, a
+        # client polling the state.
+        #
+        # There was no recompute here. A handler that knew its effect could
+        # move a static's reach did its own (eight of the type-changing ones,
+        # after last round), and every other resolution left the board as its
+        # last handler happened to leave it until a state-based check came by:
+        # a Bears laced black under Breath of Dreams kept the green creatures'
+        # upkeep, and one laced white under a Crusade was not pumped.
+        self._recompute_continuous_effects()
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).
@@ -1546,6 +1562,17 @@ class StackResolutionMixin:
             # reads the right owner too.
             if owner_seat != caster_index:
                 permanent.metadata["owner_player_index"] = owner_seat
+            # CR 400.7a: "Effects … that change the characteristics … of a
+            # permanent spell on the stack continue to apply to the permanent
+            # that spell becomes." A Deathlaced creature spell was black on the
+            # stack and its printed colour as a permanent, because the lace
+            # was a key on the stack item and this function never read it.
+            # Handed over with the timestamp the effect was created at
+            # (CR 613.7b) and the duration it was created with — and before
+            # the entry, so the permanent's own timestamp (CR 613.7d, stamped
+            # in ``_put_permanent_onto_battlefield``) is the later of the two,
+            # which is what happened.
+            carry_spell_color_changes(choices, permanent)
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
