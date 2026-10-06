@@ -489,6 +489,37 @@ def test_the_death_observer_reads_what_the_observer_says_now(_by_name):
     assert int(clone.metadata.get("plus_counters", 0)) == 1
 
 
+@pytest.mark.cr("707.2", "305.6")
+def test_a_clone_of_an_animated_forest_is_a_land_and_taps_for_mana(_by_name):
+    """Living Lands makes a Forest a creature, and a Clone may copy it: the
+    Clone is then a Forest (the copiable values are the land's). The tap seam
+    and the payment planner's list each asked the Clone's *printed* type and
+    found a creature, so it could not be tapped for mana at all."""
+    from engine.board_payment import board_can_pay
+    from engine.mana_payment import untapped_mana_lands
+
+    game = _new_game(_by_name)
+    _put(game, _by_name, "Living Lands")
+    forest = _put(game, _by_name, "Forest")
+    game.players[0].hand.append(_by_name["Clone"])
+    result = game.cast_from_hand(0, "Clone", target_permanent_ids=[forest.permanent_id])
+    assert result.supported, result.details
+    resolve_stack(game)
+    clone = _find(game, "Clone")
+    _nosick(clone)
+    game._recompute_continuous_effects()
+    assert clone.copied_from == "Forest" and clone.has_type("forest")
+    assert clone.is_creature
+
+    forest.tapped = True
+    game.enforce_mana_costs = True
+    assert game.land_mana_tap_refusal(clone) is None
+    assert [p.card.name for p in untapped_mana_lands(game.controlled_by(0))] == ["Clone"]
+    assert board_can_pay(game, 0, {"G": 1})
+    assert game.tap_land_for_mana(0, "Clone", "G", permanent_id=clone.permanent_id)
+    assert game.players[0].mana_pool.get("G", 0) == 1 and clone.tapped
+
+
 @pytest.mark.cr("202.3", "707.2")
 def test_a_copys_mana_value_is_the_copied_objects(_by_name):
     """"…power and toughness each equal to its mana value" (Titania's Song).

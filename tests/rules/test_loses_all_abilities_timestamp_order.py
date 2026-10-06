@@ -490,6 +490,42 @@ def test_energy_flux_and_titanias_song_in_both_orders(_by_name):
     assert len(upkeep_abilities(game)) == 1
 
 
+@pytest.mark.cr("613.1f", "305.6")
+def test_an_animated_land_under_humility_does_not_tap_for_mana(_by_name):
+    """The mana ability a basic land type gives is an ability, and Humility
+    takes it. The card's ruling of 2007-02-01: "Removes all creature
+    abilities. This includes mana abilities. Animated lands will also lose
+    the ability to tap for mana." The tap seam's summary path asked nothing,
+    so a Forest that Living Lands had made a creature went on tapping."""
+    from engine.board_payment import board_can_pay
+    from engine.mana_payment import taps_for_payment, untapped_mana_lands
+
+    game = _new_game(_by_name)
+    _put(game, _by_name, "Living Lands")
+    forest = _put(game, _by_name, "Forest")
+    island = _put(game, _by_name, "Island")
+    game.enforce_mana_costs = True
+    assert forest.is_creature and not island.is_creature
+    assert game.tap_land_for_mana(0, "Forest", "G", permanent_id=forest.permanent_id)
+    assert game.players[0].mana_pool.get("G", 0) == 1
+
+    game = _new_game(_by_name)
+    _put(game, _by_name, "Living Lands")
+    forest = _put(game, _by_name, "Forest")
+    island = _put(game, _by_name, "Island")
+    _put(game, _by_name, "Humility")
+    game.enforce_mana_costs = True
+    assert (forest.effective_power, forest.effective_toughness) == (1, 1)
+    assert game.land_mana_tap_refusal(forest) == "no_mana_ability"
+    assert not taps_for_payment(forest)
+    assert not game.tap_land_for_mana(0, "Forest", "G", permanent_id=forest.permanent_id)
+    assert game.players[0].mana_pool.get("G", 0) == 0 and not forest.tapped
+    # The Island is no creature, and Humility says nothing of it.
+    assert [p.card.name for p in untapped_mana_lands(game.controlled_by(0))] == ["Island"]
+    assert board_can_pay(game, 0, {"U": 1}) and not board_can_pay(game, 0, {"G": 1})
+    assert game.tap_land_for_mana(0, "Island", "U", permanent_id=island.permanent_id)
+
+
 @pytest.mark.cr("613.1f", "613.7e")
 def test_a_ward_older_than_humility_protects_nothing(_by_name):
     """Protection is an ability like any other, on a reader of its own."""

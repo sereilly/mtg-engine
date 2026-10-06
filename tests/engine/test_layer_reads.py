@@ -398,7 +398,6 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "handlers/prevention.py": 1,
     "handlers/stack.py": 2,
     "handlers/tapping.py": 2,
-    "mana_payment.py": 1,
     "mixins/effects.py": 1,
     "mixins/game_ending.py": 1,
     "mixins/helpers.py": 1,
@@ -407,7 +406,6 @@ PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "mixins/stack/casting.py": 3,
     "mixins/stack/choices.py": 7,
     "mixins/stack/resolution.py": 1,
-    "mixins/turn_management.py": 1,
     "phases/untap_step.py": 2,
     "phases/upkeep_step.py": 3,
 }

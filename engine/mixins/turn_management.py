@@ -5,6 +5,7 @@ import random
 
 from ..auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
+from ..keywords import abilities_lost_at
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
 from ..land_mana_swaps import production_snapshot, substitute_production
@@ -553,7 +554,10 @@ class TurnManagementMixin:
         never did, had it all along. One predicate, asked by both, so what the
         planner counts and what the tap makes cannot disagree.
         """
-        if land is None or land.card.primary_type != "land" or land.tapped:
+        # ``has_type``, not the printed line: a Clone that copied a Forest some
+        # Living Lands had animated is a Forest (CR 707.2) and taps for {G}.
+        # Asked of the Clone's own card it was a creature, and no land at all.
+        if land is None or not land.has_type("land") or land.tapped:
             return "not_an_untapped_land"
 
         # Tapping a land for mana *is* activating its mana ability (CR 106.12),
@@ -587,6 +591,19 @@ class TurnManagementMixin:
         if mana_ability is None and not land.effective_produced_mana:
             if not land.basic_land_types:
                 return "no_mana_ability"
+        # **A land that has lost all abilities has lost this one too**
+        # (CR 613.1f). The mana ability a basic land type gives is an ability
+        # like any other — CR 305.6 calls it intrinsic, not exempt — and
+        # Humility's own ruling says so: "Removes all creature abilities. This
+        # includes mana abilities. Animated lands will also lose the ability
+        # to tap for mana." (2007-02-01.) A Forest under Living Lands and a
+        # Humility is a 1/1 that taps for nothing. What is left to tap for is
+        # a mana ability an effect granted it *afterwards*, which is the
+        # compiled one above — the walk is over the effective card, where
+        # only the newer grants remain. The summary path below is the type's
+        # ability and the printed card's, and it asked nothing.
+        if mana_ability is None and abilities_lost_at(land) is not None:
+            return "no_mana_ability"
 
         # **And a land whose mana ability costs more than the tap cannot be
         # tapped for mana here either** (CR 602.2b: every cost, at one moment).

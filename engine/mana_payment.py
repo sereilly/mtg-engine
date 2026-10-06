@@ -624,7 +624,7 @@ def untapped_mana_lands(permanents: Iterable["Permanent"]) -> list["Permanent"]:
     return [
         perm
         for perm in permanents
-        if perm.card.primary_type == "land"
+        if perm.has_type("land")
         and not perm.tapped
         and perm.effective_produced_mana
         and taps_for_payment(perm)
@@ -667,6 +667,13 @@ def taps_for_payment(land) -> bool:
         # land under Blanket of Night taps for {B} at the seam, and this
         # answered for the whole land by the ability it prints.
         return bool(TurnManagementMixin._gained_type_mana(land))
+    # A land that has lost all abilities (an animated one under Humility) has
+    # lost the mana ability its type gives it with the rest — the seam's own
+    # refusal, asked here so the planner does not count what it will not tap.
+    from .keywords import abilities_lost_at
+
+    if abilities_lost_at(land) is not None:
+        return False
     return bool(land.effective_produced_mana or land.basic_land_types)
 
 
