@@ -933,6 +933,19 @@ def _play_activations(
             ability_index=hand_activation.ability_index,
             hand_index=hand_activation.hand_index,
         )
+        if result.supported:
+            # `activate_from_hand` is the **queue** form — the web's, which
+            # leaves the ability on the stack for the table to respond to
+            # (CR 117.3c). `activate_permanent_ability`, above, settles what it
+            # queues; this entry point has no such twin, so the settling is
+            # done here, with the engine's own loop. Without it a cycling
+            # ability sat on the stack through the rest of the main phase and
+            # the step ended around it — every simulated cycle in a precombat
+            # main phase, which is why all three Urza's sets exited 1 on
+            # `steps_left_owing` and no other set printed the keyword to show
+            # it.
+            game._settle()
+            game.clear_priority_window()
         _resolve_pending_choices(game)
         report.interaction_count += 1
         report.log_lines.append(

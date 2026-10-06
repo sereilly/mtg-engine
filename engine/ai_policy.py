@@ -1317,6 +1317,18 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if ability.cost.put_counter_filter is not None:
             continue
 
+        # "{1}{B}, Pay 2 life: …" (Phyrexian Reclamation). Life is the one cost
+        # here the score below never weighed, so the seat paid it every main
+        # phase down to 1 — and then proposed it once more, which the engine
+        # refuses (CR 119.4: a player can pay life only up to their total) and
+        # the simulator counts as a seat doing nothing. The reserve is the one
+        # `FOREIGN_ACTIVATION_LIFE_RESERVE`, `BUYBACK_LIFE_RESERVE` and
+        # `X_LIFE_RESERVE` already keep, for their reason: the last points of
+        # life are the ones that lose the game.
+        life_cost = int(ability.cost.pay_life or 0)
+        if life_cost and player.life - life_cost < ACTIVATION_LIFE_RESERVE:
+            continue
+
         # "Remove a +1/+1 counter from a creature you control" (Spike Rogue).
         # The same trade in the opposite direction and the same reason the
         # policy cannot price it: the score below reads the *effect*, so moving
@@ -1709,6 +1721,10 @@ def _choose_activation_role_targets(
 #: "Pay 5 life: Destroy this enchantment" (Volrath's Dungeon) is removal
 #: bought with life, and a seat this low spends its life staying alive.
 FOREIGN_ACTIVATION_LIFE_RESERVE = 10
+#: …and when it pays life for an ability of its own (`choose_activation_action`).
+#: The same number for the same reason; a separate name because it is a
+#: separate weight, and tuning one should not move the other.
+ACTIVATION_LIFE_RESERVE = 10
 #: Taking an opponent's permanent off the battlefield, before what the
 #: permanent itself is worth (`_permanent_value`).
 FOREIGN_REMOVAL_SCORE = 3.0
