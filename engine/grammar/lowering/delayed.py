@@ -33,6 +33,7 @@ import dataclasses
 from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._delays import bind_announced_subjects
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
                       CHOSEN_PLAYER, CREATED_TOKEN, CREATED_TOKENS,
                       binds_block_pair,
@@ -271,6 +272,14 @@ _BOUND_TO_THE_DELAYS_OBJECT = frozenset({
 })
 
 
+#: The payload keys under which a delayed entry is about (or watches) an
+#: **object**. An entry carrying none names a step and nothing else.
+_OBJECT_BINDINGS = (
+    "binds_target", "binds_recorded", "binds_event_subject", "binds_block_pair",
+    "binds_attached_host", "watches",
+)
+
+
 #: Which resolution record names the seat a :data:`EVENTS_SEATED_BY_BOUND_PLAYER`
 #: event fires on. The value is what ``handlers/board_misc.create_delayed_trigger``
 #: routes its ``binds_player`` read on, and every event in that set must have a
@@ -360,10 +369,12 @@ def _lower_create_delayed_trigger(
     # Gated on a producer, and **without refusing** when there is none — which
     # is the one place this differs from every other back-reference here. "That
     # player" has other producers: Lodestone Bauble's is the graveyard owner its
-    # own target named, read off the resolution rather than out of the
-    # scratchpad. So the absence of a chosen player does not mean the words name
-    # nobody; it means they name somebody else, and the entry keeps the reading
-    # it already had.
+    # own target named, held by the resolution rather than in the scratchpad.
+    # So the absence of a chosen player does not mean the words name nobody; it
+    # means they name somebody else, and ``bind_announced_subjects`` at the
+    # foot of this function freezes *that* seat. (It used to say "the entry
+    # keeps the reading it already had", and the reading it had was the firing
+    # resolution's default seat: the Bauble's draw went to an opponent.)
     #
     # …and gated first on the *event*, because an event that freezes a player of
     # its own already answers "that player" — "whenever a player taps a Mountain
@@ -569,6 +580,23 @@ def _lower_create_delayed_trigger(
             raise LoweringError(
                 "this delay's opener names no target it can bind", node=node
             )
+    # What the *creating* spell or ability announced, where this sentence names
+    # it again (Sapphire Charm's "target player", Lodestone Bauble's "that
+    # player", Horn of Plenty's "they", Barreling Attack's "it"). Last, so it
+    # reads the bindings every branch above settled — an entry about an
+    # *object* takes its players from that object ("that creature's
+    # controller", Basalt Golem), so only one naming a step alone is asked.
+    about_a_step = not any(payload.get(key) for key in _OBJECT_BINDINGS)
+    bind_announced_subjects(
+        payload,
+        step_delay=node.once and about_a_step,
+        says_that_player=(
+            about_a_step
+            and node.event not in _EVENT_SUBJECT_PLAYERS
+            and _names_a_chosen_player(node.effect)
+        ),
+        creator_froze_a_player=creating_event in _EVENT_SUBJECT_PLAYERS,
+    )
     subject = _delayed_filter_payload(node.subject, node)
     if subject:
         payload["subject_filter"] = subject

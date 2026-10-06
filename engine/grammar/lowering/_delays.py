@@ -15,11 +15,113 @@ A floor, not a family: eight lowering families read
 :func:`end_step_action_on_made_permanent` is the one builder here, and it is
 here for the tables' reason: it answers "which object is this delayed entry
 about" for the case where the creating effect *made* that object a step ago.
+:func:`bind_announced_subjects` is the same question asked of what the
+creating spell or ability **announced** — a player, or a target the delayed
+sentence names again.
 """
 
 from __future__ import annotations
 
 from ...oracle_types import OracleInstruction
+
+#: ``binds_player`` values naming **where the seat is read from** as the entry
+#: is armed (``handlers/board_misc.create_delayed_trigger`` routes on them).
+#: The player the creating resolution holds — the one its spell or ability
+#: announced (CR 601.2c/602.2b), or the seat its announced object sits with.
+RESOLUTION_PLAYER = "resolution_player"
+#: The seat the creating *trigger's* event froze (CR 603.10) — the trigger
+#: context key of the same name, which every ``_EVENT_SUBJECT_PLAYERS`` fire
+#: site stamps.
+EVENT_SUBJECT_SEAT = "event_subject_player"
+#: The payload key saying the entry's bound object reaches the delayed ability
+#: on the **target channel** — see :func:`bind_announced_subjects`.
+BOUND_AS_TARGET = "bound_as_target"
+
+
+def _target_descriptions(value, kind: str) -> list[OracleInstruction]:
+    """Every instruction under *value* carrying a ``targets`` description of
+    *kind* whose quantifier is the word "target"."""
+    found: list[OracleInstruction] = []
+    if isinstance(value, OracleInstruction):
+        described = value.payload.get("targets")
+        if (
+            isinstance(described, dict)
+            and described.get("kind") == kind
+            and described.get("quantifier") == "target"
+        ):
+            found.append(value)
+        value = value.payload
+    if isinstance(value, dict):
+        value = tuple(value.values())
+    if isinstance(value, (list, tuple)):
+        for inner in value:
+            found.extend(_target_descriptions(inner, kind))
+    return found
+
+
+def bind_announced_subjects(
+    payload: dict, *, step_delay: bool, says_that_player: bool,
+    creator_froze_a_player: bool,
+) -> None:
+    """Bind a delayed ability to what its **creating** spell or ability
+    announced, where its sentence names that again (CR 603.7c).
+
+    Three printings, one failure. Each compiled, armed an entry about nobody,
+    and resolved a step or a turn later against whatever the *firing*
+    resolution happened to carry — the controller's first opponent:
+
+    * "**Target player** draws a card at the beginning of the next turn's
+      upkeep." (Sapphire Charm.) CR 115.1a: the spell ability says "target", so
+      the *spell* is targeted and CR 601.2c picks the player as it is cast. The
+      description is hoisted onto this wrapper — what the picker and the cast
+      gates read, as Silent Assassin's object already is — and taken off the
+      inner step, which would otherwise make the delayed ability announce a
+      second target of its own as it fires. Only for a one-shot delay naming a
+      step (*step_delay*): a repeating "whenever … this turn" ability really
+      does choose anew each time it triggers (CR 603.3d, Gaze of Pain).
+    * "**That player** draws a card at the beginning of the next turn's
+      upkeep." (Lodestone Bauble.) The seat the creating ability already held.
+    * "…**they** draw a card at the beginning of the next end step." (Horn of
+      Plenty.) The seat the creating *trigger's* event froze
+      (*creator_froze_a_player*).
+
+    And the object half: "When **that creature** becomes blocked this turn,
+    **it** gets +1/+1 …" (Barreling Attack) binds the spell's target and then
+    describes it again on the inner pump, so the delayed ability chose a
+    creature of its own as it fired. :data:`BOUND_AS_TARGET` hands the bound
+    object over on the channel that description reads.
+    """
+    instruction = payload["instruction"]
+    if payload.get("binds_target") and _target_descriptions(instruction, "object"):
+        payload[BOUND_AS_TARGET] = True
+    if "binds_player" in payload:
+        return
+    named = _target_descriptions(instruction, "player")
+    if step_delay and len(named) == 1 and "targets" not in payload:
+        payload["targets"] = dict(named[0].payload["targets"])
+        payload["instruction"] = _without_targets(instruction, named[0])
+        payload["binds_player"] = RESOLUTION_PLAYER
+    elif says_that_player:
+        payload["binds_player"] = (
+            EVENT_SUBJECT_SEAT if creator_froze_a_player else RESOLUTION_PLAYER
+        )
+
+
+def _without_targets(value, described: OracleInstruction):
+    """*value* rebuilt with *described*'s ``targets`` key removed — every other
+    instruction, and every other key, exactly as it was."""
+    if isinstance(value, OracleInstruction):
+        inner = {
+            key: _without_targets(item, described)
+            for key, item in value.payload.items()
+            if not (value is described and key == "targets")
+        }
+        return OracleInstruction(value.kind, value.value, inner)
+    if isinstance(value, dict):
+        return {key: _without_targets(item, described) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_without_targets(item, described) for item in value)
+    return value
 
 
 #: Delayed-trigger events (CR 603.7) whose entry names a **particular object**

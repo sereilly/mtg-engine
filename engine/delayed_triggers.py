@@ -421,6 +421,21 @@ class DelayedTrigger:
     #: alternative was a branch in ``_offered_seats`` for a key only this card
     #: writes.
     bound_player_index: int | None = None
+    #: Whether the bound object reaches the delayed ability on the **target
+    #: channel** as well as in its context. "Target creature gains trample
+    #: until end of turn. When that creature becomes blocked this turn, **it**
+    #: gets +1/+1 … for each creature blocking it." (Barreling Attack.) The
+    #: inner sentence is an ordinary targeted pump — the pronoun was rebound to
+    #: the description the first sentence announced — so it reads the stack
+    #: item's target, and a delayed ability carried none: it *chose* a creature
+    #: of its own as it fired (CR 603.3d), which with two creatures on the
+    #: board was not the one the spell had named.
+    #:
+    #: A flag the lowering sets rather than the rule for every entry, because
+    #: most bound sentences are read by a handler that asks the context for
+    #: the id (``destroy_bound_permanent``) and name no target at all; stamping
+    #: those would announce a "becomes the target" nothing targeted.
+    bound_as_target: bool = False
     #: CR 608.2h, the value half: what the creating effect knew and the
     #: delayed ability refers to — "that spell's mana value". Merged *under*
     #: the firing event's own context, so an event that measures the same key
@@ -563,10 +578,27 @@ class DelayedTrigger:
         *,
         source_permanent: "Permanent | None" = None,
         trigger_context: dict | None = None,
+        game: "Game | None" = None,
     ) -> dict:
         """The ``_enqueue_triggered_ability`` kwargs for one firing of this
         ability. One builder for every site, so a delayed trigger reaches the
-        stack the same way wherever it was announced."""
+        stack the same way wherever it was announced.
+
+        *game* is what :attr:`bound_as_target` needs: an id names a battlefield
+        as well as an object, and the resolver scopes the id to the seat it is
+        handed, so the bound permanent's controller travels with it. A bound
+        object that has left still hands its id over — an id that resolves to
+        nothing is CR 608.2b's fizzle at the resolver, where an absent one
+        would send the ability looking for a new target.
+        """
+        target_player_index = self.bound_player_index
+        target_permanent_id = None
+        if self.bound_as_target and self.bound_permanent_id is not None:
+            target_permanent_id = self.bound_permanent_id
+            bound = game.permanent_by_id(target_permanent_id) if game is not None else None
+            seat = game.controller_index_of(bound) if bound is not None else None
+            if seat is not None:
+                target_player_index = seat
         context = dict(self.captured)
         # CR 603.7c: an ability that refers to a particular object carries that
         # object with it. The effect addresses it by id, so a clause reading
@@ -586,7 +618,8 @@ class DelayedTrigger:
             # creating ability targeted, handed over on the field every "that
             # player" in this engine already reads. None on every other entry,
             # which leaves the stack item exactly as it was.
-            "target_player_index": self.bound_player_index,
+            "target_player_index": target_player_index,
+            "target_permanent_id": target_permanent_id,
             "trigger_context": context,
             # CR 603.7d again, on the channel the *effect*-scoped readers
             # ask. ``permanents_from`` and ``amount_from`` mean "a step of
@@ -724,6 +757,7 @@ def fire_delayed_triggers(
                 or source_permanent
             ),
             trigger_context=trigger_context,
+            game=game,
         )
         for entry in fired
     ])
