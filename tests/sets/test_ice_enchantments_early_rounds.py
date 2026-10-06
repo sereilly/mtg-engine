@@ -564,7 +564,13 @@ def test_meltings_contribution_does_not_accumulate(set_pool):
     for _ in range(5):
         game._refresh_dynamic_creatures()
 
-    assert island.metadata.get("derived_lost_supertypes") == ["snow"]
+    # One contribution, however many passes — and it is a record now rather
+    # than a bare word: the removal carries Melting's own timestamp (CR 613.7a)
+    # so a supertype an effect adds *after* Melting arrived is ordered against
+    # it. The word is the same and there is still exactly one of it.
+    removals = island.metadata.get("derived_lost_supertypes")
+    assert [removal["supertype"] for removal in removals] == ["snow"]
+    assert [removal["timestamp"] for removal in removals] == [melting.timestamp]
 def test_melting_does_not_stop_a_land_being_basic(set_pool):
     """The sentence names one supertype. A land Melting has thawed is still a
     basic land, so Blood Moon still passes it by (CR 205.4b)."""

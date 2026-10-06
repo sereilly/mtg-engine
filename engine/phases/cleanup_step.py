@@ -25,7 +25,7 @@ from ..control import end_until_eot_control_changes
 from ..handlers.board_misc import LAND_TYPE_UNTIL_EOT
 from ..handlers.control_changes import TAP_WHEN_CONTROL_LOST
 from ..land_types import end_land_type_changes_from
-from ..layer_bridge import GAINED_TYPES
+from ..type_changes import end_type_changes
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
 from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
@@ -241,13 +241,10 @@ class CleanupStepMixin:
                 # with another duration are left alone: a permanent one
                 # (Ashnod's Transmogrant) outlives every turn boundary there is,
                 # which is why this cannot be a plain key in the sweep above.
-                gained = permanent.metadata.get(GAINED_TYPES)
-                if gained:
-                    kept = [g for g in gained if g.get("duration") != "until_end_of_turn"]
-                    if kept:
-                        permanent.metadata[GAINED_TYPES] = kept
-                    else:
-                        permanent.metadata.pop(GAINED_TYPES, None)
+                end_type_changes(
+                    permanent,
+                    lambda record: record.get("duration") == "until_end_of_turn",
+                )
                 # A granted "protection from <colour>" is one key per colour
                 # rather than a fixed name, so it is swept by prefix. Listing
                 # five keys would work today and be one entry short the day a

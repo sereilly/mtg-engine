@@ -1404,7 +1404,7 @@ def attached_subject_triggers(game, host, condition_kinds, payload_key):
 
 #: What a permanent that *became* an Aura was given (Necromancy). The record the
 #: sentence "it becomes an Aura with "enchant <quality>."" leaves behind: the
-#: subtype is CR 613 layer 4 and goes on ``layer_bridge.GAINED_TYPES`` like any
+#: subtype is CR 613 layer 4 and goes through ``type_changes.gain_types`` like any
 #: other gained type, and this is the other half — the enchant ability (CR 702.5)
 #: that says what the permanent may legally be attached to.
 #:
@@ -1458,7 +1458,7 @@ def end_became_aura_effect(game, permanent) -> bool:
     Returns whether there was an effect to end.
     """
     from .keywords import restore_ability_line
-    from .layer_bridge import GAINED_TYPES, LOST_TYPES
+    from .type_changes import end_type_changes
 
     record = permanent.metadata.pop(BECAME_AURA_ENCHANT, None)
     if record is None:
@@ -1466,15 +1466,7 @@ def end_became_aura_effect(game, permanent) -> bool:
     host = permanent.metadata.get("attached_to")
     if host is not None:
         detach_aura(permanent, host)
-    for key in (GAINED_TYPES, LOST_TYPES):
-        entries = permanent.metadata.get(key)
-        if not entries:
-            continue
-        kept = [entry for entry in entries if not entry.get(BECAME_AURA_RECORD)]
-        if kept:
-            permanent.metadata[key] = kept
-        else:
-            permanent.metadata.pop(key, None)
+    end_type_changes(permanent, lambda entry: bool(entry.get(BECAME_AURA_RECORD)))
     line = record.get("ability_line")
     if line:
         restore_ability_line(permanent, str(line))

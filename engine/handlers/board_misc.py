@@ -8,7 +8,8 @@ from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
 from ..auras import BECAME_AURA_ENCHANT, BECAME_AURA_RECORD
-from ..layer_bridge import GAINED_TYPES, SET_CARD_TYPES
+from ..layer_bridge import SET_CARD_TYPES
+from ..type_changes import gain_types, lose_types
 from ..oracle_types import _COLOR_WORD_TO_SYMBOL
 from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
@@ -957,6 +958,9 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
     change_land_type(
         target_land, "swamp", source=MIRE_COUNTER, label=context.card.name
     )
+    # A land that became a Swamp is one a Swamp-scoped static now reaches
+    # (Kormus Bell) — CR 613 layer 4, decided for the whole board.
+    game._refresh_dynamic_creatures()
     game.log.append(f"{target_land.card.name} got a mire counter and became a Swamp")
 
     # Remember this land on the activating artifact so its death trigger can later
@@ -1178,6 +1182,13 @@ def _animate_self(
     _grant_animation_abilities(source, payload, until_eot=until_eot)
     _grant_animation_protection(source, payload, context)
     _record_animation_colors(source, payload, until_eot=until_eot)
+    # A permanent that became a creature is one a creature-scoped static now
+    # reaches, and where that static applies is layer 4's question for the
+    # whole board (CR 613.8a: "Creatures you control are the chosen type"
+    # depends on this effect and applies after it). Recomputed here, as every
+    # other type-writing handler does, so the board the resolution leaves is
+    # the one a reader finds — not the one the next state-based pass makes.
+    game._refresh_dynamic_creatures()
     game.log.append(
         f"{context.card.name} becomes a {power}/{toughness} creature {duration}"
     )
@@ -1315,6 +1326,8 @@ def _animate_target(
     _grant_animation_abilities(target, payload, until_eot=until_eot)
     _grant_animation_protection(target, payload, context)
     _record_animation_colors(target, payload, until_eot=until_eot)
+    # See ``_animate_self``: layer 4 is decided for the whole board.
+    game._refresh_dynamic_creatures()
     game.log.append(
         f"{target.card.name} becomes a {power}/{toughness} creature "
         f"{duration} ({context.card.name})"
@@ -1382,6 +1395,8 @@ def animate_matching_until_eot(game: Game, instruction: OracleInstruction, conte
     if not animated:
         game.log.append(f"{context.card.name}: nothing to animate")
         return True, "resolved"
+    # See ``_animate_self``: layer 4 is decided for the whole board.
+    game._refresh_dynamic_creatures()
     game.log.append(
         f"{context.card.name} animated "
         + ", ".join(perm.card.name for perm in animated)
@@ -1449,6 +1464,7 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
                 source=f"{duration}:{next_timestamp()}",
                 label=context.card.name,
             )
+        game._refresh_dynamic_creatures()
         game.log.append(
             ", ".join(land.card.name for land in chosen[:maximum])
             + f" each became a {land_type.title()} ({context.card.name})"
@@ -1495,6 +1511,11 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
         )
         return True, "resolved"
     change_land_type(target, land_type, source=source, label=context.card.name)
+    # A land that became a Forest is one a Forest-scoped static now reaches
+    # (Living Lands), and one that became a Mountain is one Conversion does —
+    # each of them depends on this effect (CR 613.8a), and where a dependent
+    # static applies is decided for the whole board.
+    game._refresh_dynamic_creatures()
     game.log.append(
         f"{target.card.name} became a {land_type.title()} ({context.card.name})"
     )
@@ -3079,8 +3100,8 @@ def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context
 
     Two layers in one sentence, and one instruction for both because the
     permanent is not in a legal state between them. CR 613 layer 4 gives it the
-    Aura subtype, on the same ``GAINED_TYPES`` channel :func:`gain_type` above
-    writes — so every reader of "is this an Aura?" (``equipment.attachment_refusal``,
+    Aura subtype, through the same ``type_changes.gain_types`` :func:`gain_type`
+    below writes — so every reader of "is this an Aura?" (``equipment.attachment_refusal``,
     the CR 704.5m sweep, the P/T derivation) gets one answer from the layer
     system rather than from a rewritten card. CR 613 layer 6 gives it the enchant
     ability (CR 702.5), recorded under ``auras.BECAME_AURA_ENCHANT``.
@@ -3112,25 +3133,20 @@ def become_aura_with_enchant(game: Game, instruction: OracleInstruction, context
     marker = {BECAME_AURA_RECORD: True} if instruction.payload.get(
         "loses_own_ability"
     ) or lost else {}
-    source.metadata.setdefault(GAINED_TYPES, []).append({
-        "card_types": gained_types,
-        "subtypes": ["aura"],
-        "duration": "permanent",
-        "pt_from_mana_value": False,
-        "source": context.card.name if context.card else "effect",
-        "seat": seat,
-        **marker,
-    })
+    # One sentence, one moment: the removal is stamped first and the addition
+    # just after it, so the card types the sentence sets land on top of the
+    # ones it replaces whatever else is on the permanent (CR 205.1a, 613.7b).
     if lost:
-        from ..layer_bridge import LOST_TYPES
-
-        source.metadata.setdefault(LOST_TYPES, []).append({
-            "card_types": list(lost[0]),
-            "subtypes": list(lost[1]),
-            "source": context.card.name if context.card else "effect",
-            "seat": seat,
-            **marker,
-        })
+        lose_types(
+            source, card_types=lost[0], subtypes=lost[1],
+            source=context.card.name if context.card else "effect",
+            seat=seat, **marker,
+        )
+    gain_types(
+        source, card_types=gained_types, subtypes=["aura"],
+        source=context.card.name if context.card else "effect",
+        duration="permanent", pt_from_mana_value=False, seat=seat, **marker,
+    )
     # "This creature **loses this ability**" (CR 613 layer 6). The line is the
     # one being resolved, read off the context rather than matched by text: a
     # permanent may carry two abilities whose printed words differ only in a
@@ -3217,7 +3233,8 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
     each equal to its mana value."
 
     Nothing on the permanent's own card is touched. The gained type is a record
-    the CR 613 bridge reads on every recompute (`layer_bridge.GAINED_TYPES`),
+    the CR 613 bridge reads on every recompute (`type_changes.gain_types`,
+    stamped as the effect is created — CR 613.7b),
     so the permanent stops being an artifact by the record going away rather
     than by anything being restored — the same shape Animate Artifact and the
     board-wide statics already use, and the reason none of them has to stash an
@@ -3240,22 +3257,23 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
         game.log.append(f"{context.card.name}: no valid target")
         return True, "resolved"
 
-    record = {
-        "card_types": list(payload.get("card_types") or ()),
-        "duration": str(payload.get("duration", "permanent")),
-        "pt_from_mana_value": bool(payload.get("pt_from_mana_value")),
-        "source": context.card.name if context.card else "effect",
+    card_types = [str(word) for word in (payload.get("card_types") or ())]
+    gain_types(
+        target_perm,
+        card_types=card_types,
+        source=context.card.name if context.card else "effect",
+        duration=str(payload.get("duration", "permanent")),
+        pt_from_mana_value=bool(payload.get("pt_from_mana_value")),
         # "…until **your** next upkeep" — whose upkeep ends it. Recorded when
         # the ability resolves rather than looked up when it expires: by then
         # the source may be gone, and CR 109.5 makes this the controller of the
         # ability, not of the permanent it was pointed at.
-        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
-    }
-    target_perm.metadata.setdefault(GAINED_TYPES, []).append(record)
+        seat=game.players.index(context.caster) if context.caster in game.players else 0,
+    )
     game._refresh_dynamic_creatures()
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} becomes "
-        + " ".join(record["card_types"])
+        + " ".join(card_types)
     )
     return True, "resolved"
 
@@ -3368,19 +3386,24 @@ def change_supertype(game: Game, instruction: OracleInstruction, context: Oracle
     """Arcum's Weathervane: "{2}, {T}: Target nonsnow basic land becomes snow."
     and "{2}, {T}: Target snow land is no longer snow."
 
-    CR 205.4a's half of the type line, changed in CR 613 layer 4 — the same two
-    channels :func:`gain_type` writes, with the supertype in the record instead
-    of a card type. Nothing on the permanent's own card is touched, so the land
-    stops being snow by the record going away rather than by anything being
-    restored.
+    CR 205.4a's half of the type line, changed in CR 613 layer 4 — the same
+    write API :func:`gain_type` goes through, with the supertype in the record
+    instead of a card type. Nothing on the permanent's own card is touched, so
+    the land stops being snow by the record going away rather than by anything
+    being restored.
+
+    **Each activation is its own effect with its own timestamp** (CR 613.7b),
+    and that is what makes the two sentences undo each other: of "becomes
+    snow" and "is no longer snow" on one land the later is what the land is,
+    and against Melting's "All lands are no longer snow" a land frozen *after*
+    Melting arrived is snow. Both were recorded unstamped and applied
+    additions-first, so a thaw beat every freeze whichever came last.
 
     The polarity is payload, so one handler answers both printed sentences. It
     reaches the *computed* readers — ``Permanent.has_supertype`` and the eight
     call sites that ask it — which is what makes a thawed Snow-Covered Forest
     stop satisfying snow forestwalk and stop counting for Drift of the Dead.
     """
-    from ..layer_bridge import LOST_TYPES
-
     payload = instruction.payload
     filters = (payload.get("targets") or {}).get("filter") or {}
 
@@ -3396,15 +3419,13 @@ def change_supertype(game: Game, instruction: OracleInstruction, context: Oracle
 
     word = str(payload.get("supertype", "")).lower()
     gained = bool(payload.get("gained", True))
-    record = {
-        "supertypes": [word],
-        "duration": str(payload.get("duration", "permanent")),
-        "source": context.card.name if context.card else "effect",
-        "seat": game.players.index(context.caster) if context.caster in game.players else 0,
-    }
-    target_perm.metadata.setdefault(
-        GAINED_TYPES if gained else LOST_TYPES, []
-    ).append(record)
+    (gain_types if gained else lose_types)(
+        target_perm,
+        supertypes=[word],
+        source=context.card.name if context.card else "effect",
+        duration=str(payload.get("duration", "permanent")),
+        seat=game.players.index(context.caster) if context.caster in game.players else 0,
+    )
     game._refresh_dynamic_creatures()
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} "
