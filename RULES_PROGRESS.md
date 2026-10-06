@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2782 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2801 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -124,7 +124,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 102. Players
 
 - [x] **102.1** A player is one of the people in the game. The active player is the player whose turn it is. The ... *(2 tests)*
-- [x] **102.2** In a two-player game, a player’s opponent is the other player. *(3 tests)*
+- [x] **102.2** In a two-player game, a player’s opponent is the other player. *(5 tests)*
 - [x] **102.3** In a multiplayer game between teams, a player’s teammates are the other players on their team, an... *(1 tests)*
 
 ### 103. Starting the Game
@@ -667,7 +667,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(297 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(303 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(29 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -686,7 +686,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(80 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(90 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(22 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(119 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(123 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -886,9 +886,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(11 tests, subrules b)*
-- [x] **702.16** Protection *(53 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(57 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
-- [x] **702.18** Shroud *(5 tests, subrules a)*
+- [x] **702.18** Shroud *(9 tests, subrules a)*
 - [x] **702.19** Trample *(11 tests, subrules bdf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(37 tests, subrules abcdefghjk)*
@@ -1014,5 +1014,5 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 
 ## Cited outside tracked scope (consider widening SCOPE)
 
-- **702.33** Keyword Abilities (10 tests)
+- **702.33** Keyword Abilities (12 tests)
 - **723.5** Controlling Another Player (3 tests)
