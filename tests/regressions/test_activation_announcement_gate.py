@@ -7,19 +7,19 @@ an ability that owes a target is unactivatable while the picker offers none.
 
 They were one list only for an ability whose *mandatory-target walk* found a
 ``targets`` description with the bare quantifier. For every other ability the
-gate returned before it looked at what was named. Measured on the tree before
-this file (30 shipped sets, 818 abilities whose spec names something to
-choose, a mirrored board of ten permanents a side):
+gate returned before it looked at what was named. These sweeps, run on the
+tree before this file (30 shipped sets, 818 abilities whose spec names
+something to choose, the mirrored board below):
 
-* **1,771 of 16,562 named announcements** were accepted naming something the
-  picker does not offer, on **151 abilities** — an "any target" ping aimed at
+* **1,538 of 14,114 named announcements** were accepted naming something the
+  picker does not offer, on **159 abilities** — an "any target" ping aimed at
   a Sol Ring (93 abilities carry ``any_target``, which the walk did not read
   as owing anything), a bounce / a base-P/T set / "you may tap or untap target
   creature" aimed at an opponent's Island, "target opponent gains control of
   this artifact" naming the activator;
-* **24 of 378 abilities** printing a mandatory "target" could be activated with
+* **21 of 378 abilities** printing a mandatory "target" could be activated with
   no legal target anywhere, and paid for;
-* driven through ``queue_permanent_ability``, **59 of 689** activations naming
+* driven through ``queue_permanent_ability``, **135 of 698** activations naming
   an unoffered permanent went on the stack.
 
 All three are 0 here. The gate asks one question of every ability now —

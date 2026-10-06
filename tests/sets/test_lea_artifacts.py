@@ -357,8 +357,14 @@ def test_cyclopean_tomb_does_not_target_swamp(all_cards):
     result = game.activate_permanent_ability(
         0, "Cyclopean Tomb", target_player_index=1, target_permanent_index=0
     )
-    # Resolves, but a Swamp is not a legal target so no counter is placed.
-    assert result.supported
+    # A Swamp is not a legal target for "target non-Swamp land", so the
+    # activation is refused with nothing paid (CR 602.2b through 601.2c). This
+    # asserted the opposite — "resolves, but … no counter is placed" — which
+    # was the activation gate not looking at a named target for a kind whose
+    # row carries no ``targets`` description: the Tomb was tapped for nothing.
+    assert not result.supported
+    assert result.details == "no valid target for Cyclopean Tomb"
+    assert not p1.battlefield[0].tapped and game.stack == []
     assert p2.battlefield[0].metadata.get("mire_counter") is None
 
 

@@ -1426,11 +1426,19 @@ def test_wave_elemental_taps_the_ground_and_not_the_sky(set_pool):
     game.start_turn(0)
     game._close_current_priority_step()
 
+    # Naming the flier is an illegal announcement and is refused unpaid (CR
+    # 602.2b); it used to be accepted and the flier quietly left untapped.
+    named = [ground[0].permanent_id, ground[1].permanent_id]
+    refused = game.activate_permanent_ability(
+        0, "Wave Elemental", permanent_index=0, target_player_index=1,
+        target_permanent_ids=[*named, flier.permanent_id],
+    )
+    assert not refused.supported
+    assert game.is_on_battlefield(elemental) and game.stack == []
+
     result = game.activate_permanent_ability(
         0, "Wave Elemental", permanent_index=0, target_player_index=1,
-        target_permanent_ids=[
-            ground[0].permanent_id, ground[1].permanent_id, flier.permanent_id
-        ],
+        target_permanent_ids=named,
     )
     assert result.supported, result.details
     game.resolve_stack()
