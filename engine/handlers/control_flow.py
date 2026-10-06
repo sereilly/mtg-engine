@@ -3177,6 +3177,16 @@ def _action_is_takeable(
         return any(
             _card_matches_filter(card, described) for card in player.hand
         )
+    # "You may **exile a card from your hand**. If you do, untap this land."
+    # (Forsaken City.) A hand with no eligible card has nothing to give, which
+    # is the rule the handler already states for itself — "nothing eligible is
+    # an offer never made rather than an offer declined" — asked here, through
+    # the same candidate list its prompt offers, so the seat is not asked a
+    # question whose only honest answer is no.
+    if instruction.kind == "exile_chosen_card_from_hand":
+        from .zones import exile_from_hand_candidates
+
+        return bool(exile_from_hand_candidates(game, instruction.payload, player))
     return True
 
 
@@ -3840,6 +3850,14 @@ def _offer_to_seat(
         "_on_reflexive": on_reflexive,
         "_context": context,
     }
+    # "…**If you do**, untap this land." (Forsaken City.) Where the offered
+    # action is a pick the seat may still not make, the lowering names what
+    # "do" has to mean (``then_if``) and where the if-you-do steps start; the
+    # accept branch itself stays the plain steps every reader of it expects,
+    # and ``_pay_optional`` applies the gate as it runs them.
+    if instruction.payload.get("then_if") is not None:
+        entry["_then_if"] = dict(instruction.payload["then_if"])
+        entry["_then_from"] = len(_steps(instruction, "action"))
     # CR 118.8's alternative payment ("…pays {1} **or 1 life**", Erosion): one
     # offer the payer may cover either way, so it rides the same entry rather
     # than arming a second prompt whose decline would apply the penalty twice.

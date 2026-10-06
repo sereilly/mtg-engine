@@ -5667,31 +5667,41 @@ class PendingChoicesMixin:
         return True
 
     def _default_exile_from_hand_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: **decline**.
+        """The stated policy: **a card** — the cheapest one to give up.
 
-        The opposite of the put-onto-the-battlefield pick beside it, and for the
-        same kind of reason stated the other way round. That offer trades a card
-        in hand for a permanent on the battlefield, which is more board; this
-        one trades a card in hand for a card in exile plus a charge counter, and
-        the permission to cast it is only worth anything to a seat that then
-        spends the noted mana on it. A headless seat that took the offer would
-        bury a card every time the artifact was activated.
+        This said "decline" for the offered printing, on the reasoning that a
+        headless seat taking Ice Cauldron's offer would bury a card every time
+        the artifact was activated. But the pick is not where that decision is
+        made. "You may exile a card from your hand" is an ``optional_pay`` in
+        front of this prompt, and *that* is the offer a seat nobody asks
+        declines or takes (``_default_optional_pay``, and the trade it weighs);
+        this prompt exists only once the offer has been taken. A seat that
+        took it and then answered "no card" had said yes and no to one
+        question — which is how Forsaken City's "If you do, untap this land"
+        came to be an untap nobody could pay for honestly, and why the AI's
+        pricing of that trade had to refuse it outright.
 
-        **A mandatory exile has no decline to take**, so the policy there is the
-        one ``_default_discard`` states: the lowest-index eligible card. Which
-        cards are eligible at all is the printed phrase's business and is read
-        off the same list the interactive seat is offered, never a second copy.
+        So: the eligible card with the **lowest mana value**, the lowest hand
+        slot among equals. One number printed on every card and nothing a
+        valuation would have to explain; a seat that should keep its lands
+        wants a weight in ``engine/ai_valuation.py`` rather than a branch here.
+
+        **A mandatory exile** keeps the policy ``_default_discard`` states —
+        the lowest-index eligible card — for the reason it always had: Mind
+        Swords and Parallax Nexus take whatever is in front. Which cards are
+        eligible at all is the printed phrase's business and is read off the
+        same list the interactive seat is offered, never a second copy.
         """
-        if not (choice.data.get("_payload") or {}).get("optional", True):
-            live = self.live_exile_from_hand_choices(choice)
-            if live and self._resolve_exile_from_hand_choice(choice, live[0]):
-                return
-            # Nothing eligible: the offer was never made rather than declined,
-            # which is the rule ``exile_chosen_card_from_hand`` states, and the
-            # prompt has to come off the queue or the resolution never finishes.
-            self.discard_pending_choice(choice)
+        live = self.live_exile_from_hand_choices(choice)
+        if live and (choice.data.get("_payload") or {}).get("optional", True):
+            hand = self.players[choice.player_index].hand
+            live = sorted(live, key=lambda slot: (hand[slot].cmc, slot))
+        if live and self._resolve_exile_from_hand_choice(choice, live[0]):
             return
-        self._resolve_exile_from_hand_choice(choice, None)
+        # Nothing eligible: the offer was never made rather than declined,
+        # which is the rule ``exile_chosen_card_from_hand`` states, and the
+        # prompt has to come off the queue or the resolution never finishes.
+        self.discard_pending_choice(choice)
 
     # -- The two face-down piles (Phyrexian Portal) --------------------------
 
@@ -8114,8 +8124,26 @@ class PendingChoicesMixin:
 
         Returns whether anything ran, so the legacy life/draw/damage fields stay
         the fallback for entries that predate instruction branches.
+
+        **"If you do" is asked of the doing, where taking the offer is not
+        it.** An accept branch whose action is a pick out of a hidden zone
+        carries ``_then_if`` — the record that pick writes when it happens —
+        and the steps from ``_then_from`` on wait behind it: "You may exile a
+        card from your hand. If you do, untap this land" (Forsaken City)
+        untapped for a seat that accepted and then exiled nothing. Applied
+        here, as the branch runs, rather than baked into the branch: the pick
+        suspends the resolution, so the condition has to be an instruction in
+        the sequence for it to be asked after the answer.
         """
-        return self._run_optional_steps(entry, entry.get(key) or ())
+        steps = tuple(entry.get(key) or ())
+        gate = entry.get("_then_if") if key == "_on_accept" else None
+        if gate is not None:
+            start = int(entry.get("_then_from", 0))
+            if steps[start:]:
+                steps = steps[:start] + (OracleInstruction("if_then", "", {
+                    "condition": dict(gate), "then": steps[start:], "else": (),
+                }),)
+        return self._run_optional_steps(entry, steps)
 
     def _run_optional_steps(self, entry: dict, steps) -> bool:
         """Run *steps* against the entry's frozen resolution context.

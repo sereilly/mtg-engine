@@ -1763,3 +1763,58 @@ def test_int_becoming_the_color_of_your_choice_points_at_nothing(set_pool, name)
     )
     assert _int_c_activation_spec(recolor) == {"kind": "none"}
 # --- end INTEGRATOR: a colour choice is not a target ---
+
+
+# --- R3 J8: Metathran Aerostat returns only for a creature it put down ---
+#
+# "{X}{U}: You may put a creature card with mana value X from your hand onto
+# the battlefield. **If you do**, return this creature to its owner's hand."
+# Found by the sweep Forsaken City's defect asked for: the offer taken over a
+# hand with no creature of that mana value put nothing down and returned the
+# Aerostat anyway — {X}{U} to lift it out from under anything.
+#
+# The pool-wide census is `tests/engine/test_if_you_do_follows_the_doing.py`.
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_aerostat(set_pool, *, hand):
+    lea = set_pool("LEA")
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(name="P1", hand=[lea[name] for name in hand]),
+        _R3J8PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    ship = _R3J8Permanent(card=set_pool("INV")["Metathran Aerostat"])
+    ship.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(0, ship, None)
+    assert game.activate_permanent_ability(0, "Metathran Aerostat", x_value=2).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True)
+    return game, ship
+
+
+def test_r3j8_metathran_aerostat_stays_when_nothing_was_put_down(set_pool):
+    """X is 2 and the hand holds a six-drop: no card is eligible, nothing
+    enters, and the Aerostat is still on the battlefield."""
+    game, ship = _r3j8_aerostat(set_pool, hand=["Shivan Dragon"])
+    _r3j8_resolve_stack(game)
+
+    assert game.is_on_battlefield(ship)
+    assert [c.name for c in game.players[0].hand] == ["Shivan Dragon"]
+
+
+def test_r3j8_metathran_aerostat_trades_places_with_the_creature_it_put(set_pool):
+    """The control: a two-drop in hand goes onto the battlefield and the
+    Aerostat goes back to its owner's hand."""
+    game, ship = _r3j8_aerostat(set_pool, hand=["Grizzly Bears"])
+    assert game.pending_choice_of("put_from_hand_choice", 0) is not None
+    assert game.confirm_put_from_hand_choice(0, 0)
+    _r3j8_resolve_stack(game)
+
+    assert [p.card.name for p in game.controlled_by(0)] == ["Grizzly Bears"]
+    assert [c.name for c in game.players[0].hand] == ["Metathran Aerostat"]
+# end of the R3 J8 block

@@ -295,6 +295,35 @@ def _offered(step: OracleInstruction) -> OracleInstruction:
     return OracleInstruction(step.kind, step.value, {**step.payload, "optional": True})
 
 
+#: Offered actions that are **a pick out of a hidden zone**, so that taking the
+#: offer does not yet mean the action happened: the seat may hold nothing
+#: eligible, or decline the pick itself. For these — and only these — "If you
+#: do" has to ask the pick's own record rather than the offer's answer.
+#: "You may exile a card from your hand. **If you do**, untap this land"
+#: (Forsaken City) untapped for a seat that accepted and then exiled nothing,
+#: and "You may put a creature card with mana value X from your hand onto the
+#: battlefield. **If you do**, return this creature to its owner's hand"
+#: (Metathran Aerostat) bounced itself over a hand with no such card.
+#:
+#: Not every recorded action: "you may search your library … if you do, you
+#: skip your draw step" (Elfhame Sanctuary) is true of a search that found
+#: nothing, so a found-cards record would be the wrong question there.
+_PICKS_BEHIND_AN_OFFER = frozenset({
+    "exile_chosen_card_from_hand", "put_chosen_card_from_hand_onto_battlefield",
+})
+
+
+def _if_you_do_gate(action: tuple[OracleInstruction, ...]) -> dict | None:
+    """The condition an offer's if-you-do branch waits on, or None when taking
+    the offer is the doing — see :data:`_PICKS_BEHIND_AN_OFFER`."""
+    if len(action) != 1 or action[0].kind not in _PICKS_BEHIND_AN_OFFER:
+        return None
+    recorded = sorted(produced_keys(action[0]))
+    if len(recorded) != 1:
+        return None
+    return {"kind": "it_happened", "key": recorded[0]}
+
+
 #: Instruction kinds that ask the player *performing* them to choose something,
 #: and so have to be told which seat that is when an offer is made to somebody
 #: other than the effect's controller. Exactly one today: an offer whose action
@@ -740,6 +769,12 @@ def _lower_may(
         payload["action"] = tuple(_performed_by(step, actor) for step in action)
     if then:
         payload["then"] = then
+        # Beside the branch rather than wrapped round it, so every reader of
+        # an offer's accept branch (the handler, the AI's pricing of it) still
+        # sees the steps it always saw.
+        gate = _if_you_do_gate(action)
+        if gate is not None:
+            payload["then_if"] = gate
     if otherwise:
         payload["otherwise"] = otherwise
     # CR 603.12: a separate key, never merged into `then`, because the handler
