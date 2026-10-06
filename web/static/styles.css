@@ -2076,6 +2076,16 @@ h2.targeting-valid {
   min-width: 40px;
 }
 
+/* The typed half of an "as this enters, choose …" prompt: a card name, a
+   creature type, a land type. */
+.prompt-choice-input,
+.prompt-choice-select {
+  min-width: 150px;
+  max-width: 100%;
+  padding: 4px 6px;
+  margin: 4px 0;
+}
+
 .prompt-choice-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;

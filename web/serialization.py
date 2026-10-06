@@ -16,6 +16,7 @@ import re
 from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
+from engine.enter_effects import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
 from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
@@ -485,6 +486,21 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # third copy of one card's quoted text, so a lord granting anything else
         # showed the player nothing.
         "granted_abilities": list(derived_ability_lines(perm)),
+        # What this permanent chose **as it entered** (CR 614.1c), as
+        # ``[{"label": "Chosen color", "value": "green"}, …]``: the opponent a
+        # Black Vise watches, the colour a Ward protects from, the name a
+        # Meddling Mage or a Runed Halo forbids. Every one of them is the whole
+        # of what the card *does*, and none of them was on the wire — the
+        # engine wrote the record and read it at every seam it owns, and a
+        # player facing an opponent's Voice of All learned its colour by having
+        # a spell fizzle. The fifth ``web/`` site of the display-list class
+        # (shadow, protection from a card type, ``is_aura``, the noncreature
+        # badges), and derived for that reason: read off
+        # ``enter_effects.ENTRY_CHOICES``, the engine's own table of what an
+        # entry records, never off a list of keys kept here. Public by rule —
+        # these choices are made in the open as the permanent enters — so every
+        # viewer is sent them.
+        "entry_choices": chosen_as_entered(game, perm),
         # Name of the creature this permanent is a copy of (Clone / Vesuvan
         # Doppelganger), so the UI can badge the copy.
         "copied_from": perm.copied_from,

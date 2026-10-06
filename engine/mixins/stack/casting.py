@@ -27,22 +27,8 @@ from ...alternative_costs import (AlternativeCost, alternative_costs,
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
                            buyback_cost, cast_announces_x, kicked,
                            optional_x_offers)
-from ...auras import controller_cast_ban
-# `own_cast_ban` beside `auras.controller_cast_ban` above, and named apart from
-# it deliberately: both answer "which permanent forbids this seat this spell",
-# and the seat each one means is different — the Aura's is the *host's*
-# controller and this one's is the permanent's own. Named alike they would be
-# one import shadowing the other, silently, with the surviving reader answering
-# the wrong question for both cards.
-from ...cast_restrictions import (check_cast_timing, chosen_name_ban,
-                                  same_name_as_permanent_ban,
-                                  most_permanents_cast_ban,
-                                  combat_play_ban,
-                                  global_play_timing,
-                                  global_cast_ban, own_cast_ban,
-                                  last_cast_color_ban,
-                                  spell_cap_ban)
-from ...search_filters import card_has_type
+from ...cast_prohibitions import cast_prohibition
+from ...cast_restrictions import check_cast_timing
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
                             sacrifices_at_cleanup_if_cast_at_instant_speed)
 from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
@@ -1104,208 +1090,26 @@ class SpellCastingMixin:
                 self.log.append(details)
                 return SimulationResult(card.name, False, classification.effect_kind, details)
 
-        banning_card = self._set_lockout_banning_card(card)
-        if banning_card is not None:
-            details = f"can't cast or play {card.name}: banned by {banning_card}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Enchanted creature's controller can't cast creature spells."
-        # (Brand of Ill Omen.) A restriction imposed on a *player* by something
-        # on the battlefield rather than a timing gate the spell prints about
-        # itself, which is why it is asked here beside the lockout above and not
-        # through `check_cast_timing` — that reader looks at the casting card's
-        # own oracle text, and this sentence is on a card the caster may not
-        # even control.
-        forbidding_aura = controller_cast_ban(self, caster_index, card)
-        if forbidding_aura is not None:
-            details = f"can't cast {card.name}: {forbidding_aura}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "**You** can't cast creature spells." (Steel Golem.) The same CR
-        # 601.3a prohibition with the seat printed as "you", so it is asked of
-        # the caster's **own** battlefield alone — an opponent's Steel Golem
-        # says nothing about your creature spells, which is the whole of what
-        # separates this from the board-wide ban below. Beside the two rather
-        # than folded into either: what differs between the three is the scope,
-        # and a scope taken from the wrong half of a sentence bans the wrong
-        # players.
-        forbidding_own = own_cast_ban(self, caster_index, card)
-        if forbidding_own is not None:
-            details = f"can't cast {card.name}: {forbidding_own}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Until end of turn, **target player** can't cast instant or sorcery
-        # spells." (Abeyance.) The same CR 601.3 prohibition with no permanent
-        # behind it: a resolved effect named the seat and the window, so there is
-        # no card text for the three board scans around this to find. Asked here
-        # beside them because it is the same question at the same moment, and
-        # through `spell_prohibitions.py` because that record's one writer and
-        # one reader are named for each other — a prohibition recorded and not
-        # asked is an effect that resolves, logs itself and changes nothing.
-        from ...spell_prohibitions import casting_forbidden_this_turn
-
-        forbidden_type = casting_forbidden_this_turn(self, caster_index, card)
-        if forbidden_type is not None:
-            details = (
-                f"can't cast {card.name}: {self.players[caster_index].name} "
-                f"can't cast {forbidden_type} spells this turn"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Creature spells can't be cast." (Aether Storm.) The same CR 601.3a
-        # prohibition with no seat in the sentence, so it is asked of every
-        # battlefield and binds the enchantment's own controller too. Beside the
-        # Aura ban above rather than folded into it: what differs is the scope,
-        # and the two sentences say it in different words.
-        forbidding_permanent = global_cast_ban(self, card)
-        if forbidding_permanent is not None:
-            details = f"can't cast {card.name}: {forbidding_permanent}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "A player who controls more permanents than each other player can't
-        # play lands or cast artifact, creature, or enchantment spells."
-        # (Damping Engine.) The same CR 601.3a prohibition over a seat the
-        # *board* names rather than the sentence — so it is asked of every
-        # battlefield beside the bans above and binds its own controller the
-        # moment they are the one who is ahead.
-        leading = most_permanents_cast_ban(self, caster_index, card)
-        if leading is not None:
-            details = (
-                f"can't cast {card.name}: {leading} stops the player who "
-                "controls the most permanents"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Spells with the chosen names can't be cast **and lands with the
-        # chosen names can't be played**." (Null Chamber.) The same CR 601.3a
-        # prohibition keyed on what a card is *called* rather than on its type,
-        # and one gate for both halves of the printed sentence: playing a land
-        # reaches this function too, and the land-drop refusal above is behind
-        # `enforce_mana_costs` while a prohibition is not.
-        # "Players can cast spells and activate abilities only during their own
-        # turns." (City of Solitude.) The *timing* half of CR 601.3a, and a
-        # board scan for the reason the two bans above are: the sentence is
-        # printed on a permanent and names no seat, so it binds its own
-        # controller too. Nothing about the spell decides it — only whose turn
-        # it is — which is why it sits beside them rather than in
-        # `check_cast_timing`, whose whole table reads the *casting card's* own
-        # printed clause.
-        # "Each player can't cast more than one spell each turn." (Arcane
-        # Laboratory.) The same CR 601.3a prohibition counting *casts* instead
-        # of naming a type, so it is asked of every battlefield beside the two
-        # bans above and binds the enchantment's own controller too. The tally
-        # it reads is appended to further down this function, which is what
-        # makes "more than one" mean "you have already cast one".
-        spell_cap = spell_cap_ban(self, caster_index)
-        if spell_cap is not None:
-            details = (
-                f"can't cast {card.name}: {spell_cap} caps this turn's spells"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Players can't cast spells that share a color with the spell most
-        # recently cast this turn." (Mana Maze.) The same CR 601.3a prohibition
-        # comparing the spell being announced against the last one anybody
-        # cast, so it is asked of every battlefield beside the cap above. The
-        # ledger it reads is appended to further down this function, at
-        # CR 601.2i — so "most recently cast" is the spell before this one.
-        maze = last_cast_color_ban(self, caster_index, card)
-        if maze is not None:
-            details = (
-                f"can't cast {card.name}: it shares a color with the spell "
-                f"most recently cast this turn ({maze})"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        wrong_turn = global_play_timing(self, caster_index)
-        if wrong_turn is not None:
-            details = (
-                f"can't cast {card.name} on another player's turn ({wrong_turn})"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "During combat, players can't cast instant spells or activate
-        # abilities that aren't mana abilities." (Hand to Hand.) The casting
-        # half of the one sentence `mixins/stack/activation.py` reads for its
-        # activation half — the same arrangement City of Solitude's line has one
-        # gate up, and asked through the same reader so a card that stops a
-        # combat trick cannot come to let an Icy Manipulator through.
+        # **CR 601.3: no rule or effect prohibits this player from casting
+        # it** (and CR 305.1's twin for a land being played). One predicate,
+        # `engine/cast_prohibitions.py`, asked here before any cost is
+        # determined or paid — and asked by exactly two other readers, the
+        # AI's proposal gate and the web's castable highlight, so what this
+        # refuses is never proposed and never glows.
         #
-        # ``card_has_type``, not ``primary_type``: CR 205.2a gives a card every
-        # type its line names, so an instant that is also something else is
-        # still an instant spell.
-        combat_ban = combat_play_ban(self)
-        if combat_ban is not None and card_has_type(card, combat_ban[1]):
-            details = (
-                f"can't cast {card.name} during combat ({combat_ban[0]})"
-            )
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "…players and permanents can't be the targets of spells or activated
-        # abilities." (Peace Talks.) CR 601.2c: a spell that must choose a
-        # target and has none legal cannot be announced at all, so the refusal
-        # lands here with nothing spent.
-        #
-        # Asked of the *spec* rather than left to ``cast_target_refusal``,
-        # which checks only what the caller **named** among permanents — a
-        # Lightning Bolt aimed at a face names no permanent and reached no
-        # check, so it resolved through the ban. Instants and sorceries only,
-        # for that method's own reason: ``derive_cast_spec`` reads a permanent
-        # spell's *trigger's* targets, which are chosen later (CR 603.3d), and
-        # gating the cast on them refuses to cast the creature at all.
-        # Instants, sorceries **and Auras**. An Aura spell is targeted
-        # (CR 115.1b) and its enchant line is the target, so its derived spec is
-        # its own rather than a trigger's — which is the one thing that makes a
-        # permanent spell's spec unsafe to gate on here. Every other permanent
-        # spell is excluded for ``cast_target_refusal``'s reason:
-        # ``derive_cast_spec`` reads a creature's ETB trigger targets, chosen
-        # later (CR 603.3d), and gating the cast on them refuses to cast the
-        # creature at all.
-        # CR 113.3c, through the one predicate the AI's proposal path also asks
-        # (`legality.targeting_ban_refusal`). It was spelled out here and
-        # nowhere else, so the AI kept offering Auras into Peace Talks' two-turn
-        # ban — thirty refused casts across eight games at Visions' Phase 5.
-        from ...legality import targeting_ban_refusal
-
-        banned = targeting_ban_refusal(self, card, from_zone=from_zone)
-        if banned is not None:
-            self.log.append(banned)
+        # This was a run of thirteen `if` blocks, each naming its own predicate
+        # and each returning before anything was spent. The predicates are
+        # unchanged and are asked in the order they stood here; what moved is
+        # the *list*, because the two other readers kept their own shorter
+        # copies of it (seven and two) and every ban added to this one alone
+        # was a card whose owner was offered a cast that could not be made.
+        # A new prohibition is a row in that module's table, never a block here.
+        prohibition = cast_prohibition(self, caster_index, card, from_zone=from_zone)
+        if prohibition is not None:
+            self.log.append(prohibition.details)
             return SimulationResult(
-                card.name, False, classification.effect_kind, banned
+                card.name, False, classification.effect_kind, prohibition.details
             )
-
-        naming_permanent = chosen_name_ban(self, card)
-        if naming_permanent is not None:
-            details = f"can't play {card.name}: {naming_permanent}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
-
-        # "Players can't cast spells with the same name as a nontoken
-        # permanent." / "…can't play nonbasic lands with the same name…"
-        # (Cornered Market.) The row above with the names read off the board
-        # rather than chosen as the permanent entered, so what it forbids
-        # changes with every resolution — which is why it is asked here, at the
-        # announcement, and not recorded anywhere.
-        #
-        # Beside the chosen-name ban rather than folded into it, for the reason
-        # the three type-keyed bans above are three: what differs is where the
-        # name set comes from, and one reader told which every time is a reader
-        # that will eventually be told wrong.
-        matching_permanent = same_name_as_permanent_ban(self, card)
-        if matching_permanent is not None:
-            details = f"can't play {card.name}: {matching_permanent}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, classification.effect_kind, details)
 
         # What the spell points at, computed once: both taxes whose scope is
         # "that target this creature" need it, and the mana one is charged at

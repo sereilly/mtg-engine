@@ -29,9 +29,9 @@ from __future__ import annotations
 import pytest
 
 from engine import Game, PlayerState
+from engine.board_payment import board_can_pay
 from engine.card_loader import load_catalog
 from engine.mana_payment import fungible_colors_headroom
-from web.state_view import _can_afford_with_pool
 
 
 @pytest.fixture(scope="module")
@@ -158,18 +158,23 @@ def test_without_the_permission_the_cast_is_refused(catalog):
     ],
 )
 def test_the_affordability_display_agrees_with_the_payment(pool, cost):
-    """The client's own copy of the cascade, held to the engine's answer.
+    """What the castable highlight asks, held to the engine's answer.
 
     A display that says "no" where the engine says "yes" is a card the player
     cannot click, which is indistinguishable from an unimplemented card from
     the only seat that matters.
+
+    The display's question is ``board_payment.board_can_pay`` — the pool plus
+    what the untapped lands would add, matched to the cost. It was a private
+    copy of the payment's cascade in ``web/state_view`` (``_can_afford_with_
+    pool``); the copy is gone and the permission is read per unit of mana.
     """
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     payer = game.players[0]
     payer.spends_mana_as_any_color = True
     payer.mana_pool = dict(pool)
 
-    offered = _can_afford_with_pool(dict(pool), cost, payer)
+    offered = board_can_pay(game, 0, dict(cost))
     paid = game._pay_mana_cost_directly(payer, dict(cost))
 
     assert offered is paid is True
@@ -184,7 +189,7 @@ def test_the_affordability_display_still_refuses_what_cannot_be_paid():
     payer.spends_mana_as_any_color = True
     payer.mana_pool = _pool(G=1)
 
-    assert _can_afford_with_pool(_pool(G=1), _cost(W=1, U=1), payer) is False
+    assert board_can_pay(game, 0, _cost(W=1, U=1)) is False
     assert game._pay_mana_cost_directly(payer, _cost(W=1, U=1)) is False
     # And the pool is untouched by a payment that failed (CR 601.2h: partial
     # payments are not allowed).
