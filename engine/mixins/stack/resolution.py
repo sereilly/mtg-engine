@@ -852,11 +852,22 @@ class StackResolutionMixin:
                 "permanent_id": perm.permanent_id,
                 "name": perm.card.name,
             })
+        up_to = _target_is_up_to(getattr(instruction, "payload", None))
         if not offered:
             # "Up to one" with nothing to name is an announcement of zero
             # targets (CR 601.2c), not a choice that cannot be made — the
             # ability stays on the stack with no target and resolves.
-            if _target_is_up_to(getattr(instruction, "payload", None)):
+            #
+            # **And it says so on the object.** Left as an ability with empty
+            # target fields it was indistinguishable from one whose handler is
+            # expected to find its own target, and the scan under every
+            # single-target handler found one: with nothing but a shrouded
+            # creature across the table, Barrin, Tolarian Archmage and Roaming
+            # Ghostlight returned it to its owner's hand and Feline Sovereign
+            # destroyed it — the picker had offered nothing and the resolution
+            # acted on what the picker refused.
+            if up_to:
+                self.record_no_target_named(item)
                 return
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
@@ -878,6 +889,13 @@ class StackResolutionMixin:
                 printed,
                 sum(1 for entry in offered if entry["kind"] == "permanent"),
             )
+        # "Up to": naming **nobody** is one of the answers (CR 601.2c), and
+        # the prompt has to say so or the seat it asks cannot give it. It did
+        # not, so a player whose Barrin entered beside nothing but their own
+        # creatures was made to return one of them. Absent for every ability
+        # that owes its target, which keeps that prompt byte-identical.
+        if up_to:
+            several["up_to"] = True
         self.arm_pending_choice(
             "trigger_target", chooser_index,
             card_name=item.card.name,

@@ -2725,6 +2725,10 @@ class GameHelpersMixin:
             item.target_permanent_id = None
             announced_at_cast = False
         self._stack_push_object(item, announce=not announced_at_cast)
+        # "Up to one target …" activated with nothing named: the announcement
+        # is complete and names nobody (CR 601.2c). After the stamping, which
+        # is what turns an announced slot into the id this reads.
+        self._note_empty_announcement(item)
         self._choose_trigger_mode(
             item, targets_already_chosen=targets_already_chosen or announced_at_cast
         )
@@ -3197,6 +3201,72 @@ class GameHelpersMixin:
         if silently_for is not None:
             payload[TARGETS_CHANGED_SILENTLY_FOR] = silently_for
         return emit(self, "player_chooses_targets", subject=None, **payload)
+
+    def record_no_target_named(self, item) -> None:
+        """Write down that *item*'s announcement chose **zero targets**, which
+        "up to one target …" allows (CR 601.2c; CR 115.6: the object is then
+        not targeted).
+
+        The one writer of ``oracle_types.NAMED_NO_TARGET`` — see that
+        constant for why the empty target fields cannot carry the fact. Three
+        callers, each a way an "up to" announcement comes to name nobody:
+
+        * ``_arm_trigger_target_choice`` — a triggered ability going on the
+          stack with nothing it could legally name (CR 603.3d does not remove
+          it: zero is a choice that can be made);
+        * ``_resolve_trigger_targets`` — its controller was offered targets and
+          named none;
+        * :meth:`_note_empty_announcement` — an activated ability announced
+          with none.
+
+        Nothing is announced: "becomes the target" and "chooses one or more
+        targets" are both about a target that was chosen.
+        """
+        from ..oracle_types import NAMED_NO_TARGET
+
+        if item is None:
+            return
+        item.choices[NAMED_NO_TARGET] = True
+
+    def _note_empty_announcement(self, item) -> None:
+        """An **activated** ability whose printed target is "up to …" and that
+        was announced naming nothing has named nobody (CR 602.2b through
+        CR 601.2c) — record it, so its resolution does not go looking.
+
+        The activated half of the record :meth:`record_no_target_named` keeps,
+        and the half with no prompt behind it: an activation's targets arrive
+        with the action, so "none arrived" is the whole announcement. Until
+        this was written the resolution could not tell that from a target it
+        was expected to find, and the scan under every single-target handler
+        found one — the +1 of Basri Ket, of Basri, Devoted Paladin and of
+        Garruk, Unleashed put its counter or its +3/+3 on a creature with
+        shroud while the picker, correctly, offered nothing.
+
+        Bounded three ways, each the safe direction:
+
+        * ``item.activated`` — a triggered ability's announcement is made by
+          the push (``_choose_trigger_targets``), which knows whether it was
+          offered anything; a **spell** is left alone because every "up to"
+          spell in the pool prints a *count* and so resolves through the
+          several-slot readers, which already treat nothing named as nothing
+          chosen (``tests/engine/test_up_to_names_nobody_census.py`` pins all
+          of them);
+        * the printed target must be "up to" — an ability that owes a target
+          and names none is the activation gate's question, not this one's;
+        * ``stack_targets.chosen_targets`` must answer the empty tuple — None
+          is "this engine cannot say", and is not nobody.
+        """
+        from ..mixins.stack.resolution import _target_is_up_to
+        from ..stack_targets import chosen_targets
+
+        if item is None or not getattr(item, "activated", False) or item.is_copy:
+            return
+        instruction = item.ability_instruction
+        if instruction is None or not _target_is_up_to(instruction.payload):
+            return
+        if chosen_targets(self, item) != ():
+            return
+        self.record_no_target_named(item)
 
     def _destroy_swept_permanents(
         self,

@@ -46,7 +46,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             SWEPT_OWNER_SEATS,
-                            X_FROM_COUNT_PER_RECIPIENT)
+                            X_FROM_COUNT_PER_RECIPIENT, named_no_target)
 from ..oracle_types import OracleInstruction as _OracleInstruction
 from ..replacements import EXILE_ON_LEAVING_BATTLEFIELD
 from ..revealed_hands import reveal_hand_while_present
@@ -1991,6 +1991,15 @@ def return_creature_from_graveyard_to_hand(game: Game, instruction: OracleInstru
             )
         if not picked:
             game.log.append("No card was returned from the graveyard")
+        return True, "resolved"
+
+    # "Return **up to one** target creature card…" announced naming nobody
+    # (Liliana, Death Mage's +1; CR 601.2c). Every branch below this line is a
+    # pick somebody is owed — the named slot, then a scan of the pile — and
+    # an announcement that named nobody is owed none: it returned the first
+    # creature card in the graveyard for a player who had chosen zero.
+    if named_no_target(context.choices):
+        game.log.append("No card was returned from the graveyard")
         return True, "resolved"
 
     # Honor the caster's chosen graveyard card (Rule 601.2c). Regrowth

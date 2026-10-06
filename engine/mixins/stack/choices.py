@@ -8266,9 +8266,11 @@ class PendingChoicesMixin:
         other target creatures you control" (Basri's Acolyte). Checked the way
         the one-target answer is, against the list that was offered: each id
         once (CR 115.3: the same object is not chosen twice for one instance
-        of "target"), no more of them than the ability prints, and at least
-        one — an "up to" that names nobody is the stack object as it stands,
-        and needs no answer to be so.
+        of "target") and no more of them than the ability prints. An **empty**
+        list is the answer "nobody", accepted only from a prompt armed
+        ``up_to`` — and it is the answer for a one-target "up to" as well as a
+        several-target one, which is why a single-target prompt is answered
+        through here when it is declined.
 
         Written in the shape a *cast* writes the same announcement
         (``target_permanent_id`` a list, the seat settled only where every
@@ -8285,7 +8287,25 @@ class PendingChoicesMixin:
             for target in choice.data.get("targets") or ()
             if target.get("kind", "permanent") == "permanent"
         }
-        if not named or len(named) > ceiling or len(set(named)) != len(named):
+        if not named:
+            # **Nobody**, which only an "up to" may answer (CR 601.2c). The
+            # sentence above was written when the prompt could not be answered
+            # this way at all: it holds priority, so "needs no answer" left a
+            # seat that wanted to name nobody with no way to say so and no way
+            # to do anything else. The answer is recorded on the object
+            # (``record_no_target_named``) because its empty target fields
+            # would otherwise send the resolution looking for a target.
+            if not choice.data.get("up_to"):
+                return False
+            self.discard_pending_choice(choice)
+            item.target_permanent_id = None
+            item.target_permanent_index = None
+            self.record_no_target_named(item)
+            self.log.append(
+                f"{choice.data.get('card_name', 'Ability')}: names no target"
+            )
+            return True
+        if len(named) > ceiling or len(set(named)) != len(named):
             return False
         if any(permanent_id not in offered for permanent_id in named):
             return False

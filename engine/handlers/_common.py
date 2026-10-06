@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ..oracle_types import OracleInstruction
 from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, SACRIFICED_CARDS_BY_SEAT,
-                           SUBJECT_FROM_TRIGGER)
+                           SUBJECT_FROM_TRIGGER, named_no_target)
 from ..models import Permanent, PlayerState
 from ..search_filters import card_has_type, name_key
 
@@ -2951,7 +2951,15 @@ def resolve_target_permanent(
     Takes the game because identity is a *board* question: the id on the context
     means nothing without something to resolve it against. Every handler already
     receives the game as its first argument, so this reads the same way the
-    handler signature does."""
+    handler signature does.
+
+    **An announcement that named nobody resolves to nobody** (CR 601.2c: "up
+    to one target creature" at zero; CR 115.6). Asked here, above the picker,
+    because the picker's scan is what the empty target fields would otherwise
+    reach — and the record (``oracle_types.NAMED_NO_TARGET``) rides the
+    context's ``choices``, which the picker is not handed."""
+    if named_no_target(context.choices):
+        return None
     return pick_target_permanent(
         player if player is not None else context.target,
         _one_choice(context.target_permanent_index),

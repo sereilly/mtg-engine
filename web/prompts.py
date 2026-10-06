@@ -521,6 +521,11 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     # payload it always was.
     if int(choice.data.get("max_targets") or 1) > 1:
         payload["max_targets"] = int(choice.data["max_targets"])
+    # "**Up to** one target creature" (Barrin, Tolarian Archmage): naming
+    # nobody is one of the answers (CR 601.2c), and the client offers it only
+    # when told. Absent for an ability that owes its target, as above.
+    if choice.data.get("up_to"):
+        payload["up_to"] = True
     return payload
 
 

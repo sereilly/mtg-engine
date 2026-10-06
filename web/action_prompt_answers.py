@@ -222,7 +222,15 @@ def _action_trigger_target_confirm(session, req, seat_type):
     # announcement, so they arrive as one list. The engine re-checks every id
     # against the list it offered and the count against the printed one, so a
     # client cannot widen the announcement by sending more.
-    if req.target_permanent_ids:
+    #
+    # An **empty** list is the answer "nobody", which "up to one target …"
+    # allows (CR 601.2c). It has to be sent — absent is a malformed answer, as
+    # it always was — and the engine takes it only from a prompt it armed as
+    # an "up to", so an ability that owes its target cannot be skipped by
+    # sending one.
+    if req.target_permanent_ids is not None and (
+        req.target_permanent_ids or pending.data.get("up_to")
+    ):
         if not session.game.confirm_trigger_target(
             req.seat, permanent_ids=list(req.target_permanent_ids)
         ):

@@ -150,6 +150,15 @@ CHOICE_KEYS = (
     # announcement to the matcher is what keeps a cast-time choice and an
     # entry-time choice (An-Zerrin Ruins) answerable by one reader.
     "chosen_creature_type",
+    # The announcement named **no target, legally** ("up to one target
+    # creature" at zero — CR 601.2c, CR 115.6). Not a choice beyond the target
+    # but the record that the target choice was *made and came back empty*,
+    # which the empty target fields cannot say: they are just as empty for a
+    # bare headless announcement that leaves the pick to its handler. On this
+    # dict because it is the one thing that reaches the handler from the stack
+    # item with no second field to keep in step. ``oracle_types`` names the
+    # key and holds its one reader.
+    "named_no_target",
 )
 
 

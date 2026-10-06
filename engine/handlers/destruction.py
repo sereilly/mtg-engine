@@ -11,7 +11,8 @@ from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
                             LAST_TARGET_OWNER,
-                            OracleInstruction, PER_OBJECT_SEAT_RECORDS)
+                            OracleInstruction, PER_OBJECT_SEAT_RECORDS,
+                            named_no_target)
 from ..resumption import run_resumable
 from ._common import (one_recorded_permanent_id,
     attached_host,
@@ -886,6 +887,18 @@ def destroy_target_permanent(game: Game, instruction: OracleInstruction, context
         # outright without a seat. Two readings of one frozen fact rather than
         # one reading and one silent drop.
         singular_that_player = seat
+    # "Destroy **up to one** target artifact or enchantment…" announced naming
+    # nobody (CR 601.2c). The branch below this one hands an unnamed target to
+    # ``_destroy_target_permanent``, whose scan takes the first permanent the
+    # noun phrase describes — it is this handler's own fall-through, beside
+    # ``resolve_target_permanent``'s rather than through it, so the record is
+    # read here too. Feline Sovereign destroyed a shrouded artifact that way:
+    # the picker offered nothing, the ability went on the stack with no
+    # target, and the scan found the artifact the picker had refused.
+    if named_no_target(context.choices):
+        _record_destroyed_this_way(context, [], {})
+        game.log.append(f"{card.name}: no target was named")
+        return True, "resolved"
     # A later step of the same resolution may read the victim's controller
     # ("Destroy target creature. Its controller loses 2 life." — Liliana,
     # Death Mage), and by then the permanent is gone — record it now

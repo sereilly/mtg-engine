@@ -126,7 +126,15 @@ def test_w2g6_every_several_target_trigger_is_asked_for_all_of_them(pool):
         assert not game.confirm_trigger_target(
             0, permanent_ids=[offered[0], 999_999]
         ), f"{card.name}: something never offered"
-        assert not game.confirm_trigger_target(0, permanent_ids=[]), card.name
+        # An **empty** answer is refused only where the ability owes its
+        # targets. This line used to refuse it for every row, which pinned the
+        # defect it sat beside: all of these print "up to", CR 601.2c lets an
+        # "up to" name nobody, and the prompt holds priority — so the seat it
+        # asked could neither give that answer nor do anything else. Accepting
+        # it is held by tests/engine/test_up_to_names_nobody_census.py; here an
+        # accepted answer would end the prompt this test goes on to use.
+        if not asked.data.get("up_to"):
+            assert not game.confirm_trigger_target(0, permanent_ids=[]), card.name
         assert game.pending_choices == [asked], "a refused answer leaves it owed"
 
         assert game.confirm_trigger_target(0, permanent_ids=offered[:printed]), card.name
