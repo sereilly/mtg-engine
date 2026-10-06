@@ -205,10 +205,11 @@ def _abilities_stripped(permanent) -> bool:
     downstream asks "what does this permanent say?", and a reader that knew one
     channel would answer the other wrongly for whichever card it had not met.
     """
-    from .global_statics import removes_all_abilities
-    from .keywords import all_abilities_removed
+    from .keywords import abilities_lost_at
 
-    return removes_all_abilities(permanent) or all_abilities_removed(permanent)
+    # *When* it happened is the same question with more of an answer, and the
+    # readers that order a grant against the loss ask that one.
+    return abilities_lost_at(permanent) is not None
 
 
 def _without_any_abilities(card: "CardDefinition") -> "CardDefinition":
@@ -575,13 +576,37 @@ class Permanent:
         # the effective text, so the compiler produces it like any printed
         # ability and the upkeep step, the UI and the coverage scripts all see
         # it without knowing a static granted it.
-        from .global_statics import global_statics_applying_to
+        #
+        # **Each grant with the timestamp CR 613.7 gives it**, because one
+        # reader below orders them: "loses all abilities" (the blanket strike)
+        # takes what the permanent has when it applies, and a grant is kept
+        # only if it is newer. ``lost_at`` is that moment, or None.
+        from .global_statics import STACK_STATICS_KEY, global_static_sources
+        from .keywords import abilities_lost_at
 
+        lost_at = abilities_lost_at(self)
+
+        def _kept(stamp: int) -> bool:
+            return lost_at is None or stamp > lost_at
+
+        # A static ability's effect has its object's timestamp (CR 613.7a).
         granted = [
             static.grants_ability
-            for static in global_statics_applying_to(self)
-            if static.grants_ability
+            for source, static in global_static_sources(
+                self.metadata.get("global_static_sources") or ()
+            )
+            if static.grants_ability and _kept(source.timestamp)
         ]
+        # …and the same statics from a spell on the stack (CR 113.6b, Torrent
+        # of Lava). Kept whatever the loss's age: the refresh records the
+        # derived static and not the stack object, so there is no stamp to
+        # compare, and a spell still on the stack is nearly always the newer
+        # of the two (the exception is a Humble cast in response to it).
+        granted.extend(
+            static.grants_ability
+            for static in self.metadata.get(STACK_STATICS_KEY) or ()
+            if static.grants_ability
+        )
         # …and an ability granted to *this permanent alone* (Rapid Fire's
         # rampage), on the same channel and for the same reason: CR 702.23a
         # defines rampage as a triggered ability, so what a grant of it grants
@@ -592,14 +617,14 @@ class Permanent:
         from .keywords import (derived_ability_lines, granted_ability_lines,
                                removed_ability_lines)
 
-        granted.extend(granted_ability_lines(self))
+        granted.extend(granted_ability_lines(self, after=lost_at))
         # …and an ability a **lord on the battlefield** grants its tribe in
         # quotes ('All Slivers have "{2}: Regenerate this permanent."'). Same
         # channel and the same reason as the two above; the difference is only
         # that `_recalculate_lord_buffs` clears and rebuilds it from the board
         # on every recompute, so the lord leaving takes the sentence with it
         # (CR 611.3b) with nothing here to undo.
-        granted.extend(derived_ability_lines(self))
+        granted.extend(derived_ability_lines(self, after=lost_at))
         # …and an ability an **Aura attached to this permanent** grants
         # ('Enchanted land has "{T}: Counter target spell …"', Equinox). Derived
         # from the attachments on every read rather than recorded when the Aura
@@ -610,6 +635,10 @@ class Permanent:
                             aura_granted_line_derived_lines, auras_attached_to)
 
         for aura in auras_attached_to(self):
+            # An Aura's or Equipment's effect is stamped when it became
+            # attached (CR 613.7e), and one older than the loss is taken.
+            if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
+                continue
             # …bound to *this* Aura (CR 201.5a): a quote that names its own
             # Aura means the object granting it, so the name and the id of the
             # attachment go with the text.
@@ -645,12 +674,14 @@ class Permanent:
         # Titania's Song did — its own activation gate is the patch that was
         # needed for the second.
         #
-        # **Before the grants, and that ordering is the card.** CR 613.3 applies
-        # layer 6 in timestamp order, so an ability granted *after* the static
-        # survives it; appending the grants after the strike is that rule, and it
-        # is the same order the line-removal above already uses for its own
-        # reason.
-        if _abilities_stripped(self):
+        # **Before the grants, and that ordering is the card.** CR 613.7 applies
+        # layer 6 in timestamp order, so an ability granted *after* the loss
+        # survives it and one granted *before* it is taken with the printed
+        # text: ``granted`` holds only the grants newer than ``lost_at``, each
+        # channel above having been asked with its own stamp. It held every
+        # grant of any age — the strike reached the text and nothing else — so
+        # a creature given flying and then Humbled still flew.
+        if lost_at is not None:
             base = _without_any_abilities(base)
         if granted:
             base = _with_granted_abilities(base, tuple(granted))

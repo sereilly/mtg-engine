@@ -51,8 +51,9 @@ from ..cast_costs import KICKED
 from ..color_changes import add_derived_color_change, clear_derived_color_changes
 from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
-from ..keywords import (add_derived_ability_line, add_derived_grant,
-                        add_derived_removal, clear_derived_grants)
+from ..keywords import (abilities_lost_at, add_derived_ability_line,
+                        add_derived_grant, add_derived_removal,
+                        clear_derived_grants, protection_flag_granted_after)
 from ..landwalk import BOARD_NAMED_LANDWALKS, board_named_landwalks
 from ..enter_tapped_statics import (
     ENTER_TAPPED_STATIC_KIND,
@@ -3408,6 +3409,19 @@ class PermanentStateMixin:
         own_chosen = own_chosen_protection_color(permanent)
         if own_chosen is not None:
             qualities.add(("color", own_chosen))
+        # **Every grant below is asked its age** where the permanent has lost
+        # all abilities (CR 613.1f, CR 613.7): the loss takes the protection an
+        # older effect gave and leaves a newer one's, which is the rule
+        # ``Permanent.effective_card`` and layer 6 apply to every other kind of
+        # granted ability (``keywords.abilities_lost_at``). The printed ones
+        # above are already gone — they were read off the effective card. This
+        # reader asked nothing, so a Ward attached before a Humility went on
+        # protecting.
+        lost_at = abilities_lost_at(permanent)
+
+        def _kept(stamp: int) -> bool:
+            return lost_at is None or stamp > lost_at
+
         # Two sources with different lifetimes, which is why both exist.
         #
         # An Aura's protection lasts exactly as long as it is attached, so it is
@@ -3415,6 +3429,9 @@ class PermanentStateMixin:
         # nothing having to remove it. That grant used to be stamped into the
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
+            # CR 613.7e: stamped when it became attached.
+            if not _kept(int(aura.metadata.get("aura_timestamp", aura.timestamp))):
+                continue
             for word in aura_protection_colors(aura.effective_card.oracle_text):
                 if word == AMONG_CONTROLLED_PROTECTION_COLORS:
                     # "…protection from **each color among permanents you
@@ -3476,6 +3493,8 @@ class PermanentStateMixin:
                     continue
                 if not self._lord_buff_matches(permanent, lord, buff):
                     continue
+                if not _kept(lord.timestamp):
+                    continue
                 for word in buff.protection_from:
                     quality = self._protection_quality_of(word)
                     if quality is not None:
@@ -3522,6 +3541,8 @@ class PermanentStateMixin:
                             )
                         if recipient is not permanent:
                             continue
+                        if not _kept(granter.timestamp):
+                            continue
                         if not conditional_static_holds(
                             self, grant_seat, granter,
                             instr.payload.get("condition") or {},
@@ -3540,7 +3561,12 @@ class PermanentStateMixin:
         # printed one.
         for key in permanent.metadata:
             if key.startswith("protection_from_"):
-                quality = self._protection_quality_of(key[len("protection_from_"):])
+                word = key[len("protection_from_"):]
+                if lost_at is not None and not protection_flag_granted_after(
+                    permanent, word, lost_at
+                ):
+                    continue
+                quality = self._protection_quality_of(word)
                 if quality is not None:
                     qualities.add(quality)
         # No Sleight of Mind step here: the clause above was read off
@@ -4052,7 +4078,11 @@ class PermanentStateMixin:
                 continue
             for target_perm in _reached_by(source_perm, buff):
                 for keyword in buff.keywords:
-                    add_derived_grant(target_perm, keyword)
+                    # Stamped with the lord's own timestamp (CR 613.7a), which
+                    # is what orders the grant against a "loses all abilities".
+                    add_derived_grant(
+                        target_perm, keyword, timestamp=source_perm.timestamp
+                    )
                 for keyword in buff.lost_keywords:
                     add_derived_removal(target_perm, keyword)
                 # …and the sentence half of the same layer (CR 113.3): a quoted
@@ -4063,7 +4093,10 @@ class PermanentStateMixin:
                 # today, and putting the grant in the later pass would be the
                 # ordering bug the two passes exist to prevent, waiting.
                 if buff.granted_ability:
-                    add_derived_ability_line(target_perm, buff.granted_ability)
+                    add_derived_ability_line(
+                        target_perm, buff.granted_ability,
+                        timestamp=source_perm.timestamp,
+                    )
 
         # Pass 2b — layer 7c (CR 613.4c), over a board whose layer 6 is
         # complete.
@@ -4144,7 +4177,11 @@ class PermanentStateMixin:
                     if recipient is None:
                         continue
                 for keyword in cs_keywords:
-                    add_derived_grant(recipient, keyword)
+                    # The granting object's stamp (CR 613.7a/e): the permanent
+                    # itself, or the Aura that says "enchanted creature has …".
+                    add_derived_grant(
+                        recipient, keyword, timestamp=cs_perm.timestamp
+                    )
 
         # Step 3b: the keywords a land animator gives the lands it animates —
         # "Lands you control are 2/2 creatures **with first strike**." (Natural
@@ -4163,7 +4200,9 @@ class PermanentStateMixin:
                 ):
                     continue
                 for keyword in animation.keywords:
-                    add_derived_grant(target_perm, keyword)
+                    add_derived_grant(
+                        target_perm, keyword, timestamp=source_perm.timestamp
+                    )
 
         # Step 4: an ability an **Aura** grants its host in quotes *while the
         # host answers a criterion* — 'As long as enchanted permanent is red or
@@ -4188,7 +4227,7 @@ class PermanentStateMixin:
                 for line in conditional_ability_lines_for(
                     self, aura, aura_seat, host
                 ):
-                    add_derived_ability_line(host, line)
+                    add_derived_ability_line(host, line, timestamp=aura.timestamp)
 
     # Conditions a lord buff may hang on, keyed by what engine/lord_buffs.py
     # derives. A condition that table can name with no predicate here would be a

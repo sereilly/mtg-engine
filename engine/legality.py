@@ -2245,31 +2245,39 @@ class LegalityMixin:
         not in the list to be named. This arm used to refuse the land whole,
         granted abilities and all, at the door and in every list.
 
-        (Standing approximation, unchanged, on the *first* arm: "loses all
-        abilities" is a layer-6 effect with a timestamp, so an ability granted
-        after it survives — and that arm still takes those too.)
+        **And so does the first arm, for the abilities granted afterwards.**
+        "Loses all abilities" is a layer-6 effect with a timestamp (CR 613.7):
+        it takes what the permanent has when it applies, and
+        ``effective_card`` strikes exactly that — the printed text and every
+        line an *older* effect granted — and keeps a newer grant
+        (``keywords.abilities_lost_at``). So this arm too answers only for a
+        permanent with nothing left, or for an index past what is. It refused
+        the permanent whole: a Grizzly Bears under Humility given Hermetic
+        Study had the Study's ability on every list's source and a door that
+        would not open for it.
+
+        Both of the layer-6 channels now, where it asked only the board-wide
+        one: a creature a Humble or a Soul Sculptor named was refused by the
+        empty list further in, in other words.
         """
-        from .global_statics import global_statics_applying_to
+        from .keywords import abilities_lost_at
         from .land_types import lost_abilities_to_type_change
 
-        if any(
-            static.removes_abilities
-            for static in global_statics_applying_to(permanent)
-        ):
+        by_effect = abilities_lost_at(permanent) is not None
+        by_type = lost_abilities_to_type_change(permanent)
+        if not (by_effect or by_type):
+            return None
+        left = usable_activated_abilities(
+            compile_card_oracle(self.playable_card_of(permanent))
+        )
+        if left and (ability_index is None or 0 <= ability_index < len(left)):
+            return None
+        if by_effect:
             return f"{permanent.card.name} has lost all abilities"
-        if lost_abilities_to_type_change(permanent):
-            left = usable_activated_abilities(
-                compile_card_oracle(self.playable_card_of(permanent))
-            )
-            if not left or (
-                ability_index is not None
-                and not 0 <= ability_index < len(left)
-            ):
-                return (
-                    f"{permanent.card.name} lost its abilities when its land "
-                    "type was set (CR 305.7)"
-                )
-        return None
+        return (
+            f"{permanent.card.name} lost its abilities when its land "
+            "type was set (CR 305.7)"
+        )
 
     def usable_abilities_of(self, permanent, *, card=None) -> list:
         """The activated abilities *permanent* has to activate from the
