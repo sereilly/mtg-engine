@@ -703,7 +703,7 @@ def test_pride_of_lions_sends_its_damage_past_a_blocker(set_pool):
 
     Through the real combat steps: declared, blocked by the Bears, and the
     damage step taken with no assignment given, which is the offer accepted
-    (CR 510.1b in place of CR 510.1a). Four to the player; the blocker is
+    (CR 510.1b in place of CR 510.1c). Four to the player; the blocker is
     untouched and still deals its own two.
     """
     pool = set_pool("7ED")
@@ -730,7 +730,7 @@ def test_pride_of_lions_sends_its_damage_past_a_blocker(set_pool):
 
 def test_pride_of_lions_may_fight_its_blocker_instead(set_pool):
     """The other answer. The "may" is declined by assigning to the blocker,
-    which is CR 510.1a's ordinary assignment: the Bears die and no damage
+    which is CR 510.1c's ordinary assignment: the Bears die and no damage
     reaches the player. Without this half the line would be a restriction.
 
     Given at the damage step directly, as Lone Wolf's twin of this test does:
