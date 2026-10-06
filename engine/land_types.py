@@ -241,17 +241,69 @@ def lost_abilities_to_type_change(perm: Permanent) -> bool:
     Deliberately **not** answered from the layer-4 result. "Is this land a
     Mountain?" is true of a printed Mountain too, and a printed Mountain has
     lost nothing; the question here is whether an *effect* set the type, which
-    only the contributions can say. The last sentence of 305.7 — a land that
-    gains a type *in addition* keeps its rules text — is the same distinction,
-    and those are recorded on the separate ``GAINED_TYPES`` channel that this
-    deliberately does not read.
+    only the contributions can say.
 
-    Three readers, because an ability can act in three ways: layer 6 drops the
-    keywords, the activation gate refuses the activated ones, and the trigger
-    scan skips the triggered ones. One predicate for all three, so a land
-    cannot lose half its abilities.
+    **A contribution that adds is not one that sets.** The last sentence of
+    305.7 — "if a land gains one or more land types in addition to its own, it
+    keeps its land types and rules text" — is a field on the contribution
+    (``additive``, Blanket of Night's printed rider), and this used to answer
+    ``bool(land_type_changes(perm))``: any contribution at all. So with a
+    Blanket of Night out every land on the table had lost its abilities — a
+    Mishra's Factory was a Swamp that tapped for {B} and nothing else — which
+    is the dropped rider ``StaticLandTypeChange.additive`` warns about, one
+    reader further on.
+
+    **One reader: ``Permanent.effective_card``.** An ability acts in four ways
+    — a keyword layer 6 holds, an activated ability read off the compiled
+    program, a triggered one read off the card, a static one re-derived from
+    the text by whichever table knows its sentence — and this predicate was
+    asked at one place per way it had been noticed: layer 6, the activation
+    door, the trigger scan, then the land tap seam and two mana readers. The
+    fourth way had no place at all, so The Tabernacle at Pendrell Vale under
+    Blood Moon was a Mountain that still taxed every creature — and the
+    trigger scan that asked is one of two: thirty call sites read a card's
+    triggers directly (``trigger_utils.matching_triggers``) and never passed
+    it, so Glacial Chasm still charged its cumulative upkeep and five
+    depletion lands still ran their upkeep trigger. "What does this
+    permanent say?" has one accessor, and it strikes the land's own text there
+    — before the abilities other effects grant are appended, which is how
+    305.7's "this doesn't remove any abilities that were granted to the land
+    by other effects" is true by construction rather than by a second list.
+    The one family that must read a permanent *as printed*
+    (``global_statics.global_static_sources``, for the cycle its docstring
+    describes) asks here directly.
     """
-    return bool(land_type_changes(perm))
+    # ``effective_card`` asks this on every read of every permanent, and all
+    # but a few of them have no contribution at all.
+    metadata = perm.metadata
+    if not metadata.get(LAND_TYPE_EFFECTS) and not metadata.get(DERIVED_LAND_TYPES):
+        return False
+    return any(
+        not change.get("additive") for change in land_type_changes(perm)
+    )
+
+
+def added_land_types(perm: Permanent) -> tuple[str, ...]:
+    """The basic land types an effect gave *perm* **in addition to its own**
+    (CR 305.7's last sentence), when no effect has *set* its type.
+
+    Empty once anything sets the type: the set replaces every land type the
+    land had, an added one included or not as timestamps decide, and what the
+    land then makes is its new types' mana and nothing else — which is
+    ``Permanent.basic_land_types``' answer, not this one's.
+
+    The mana half of the rider. A land that gains a type "keeps its land types
+    and rules text, and it gains the new land types and mana abilities", so
+    what it can make is what it made **plus** the new type's symbol;
+    ``Permanent.effective_produced_mana`` used to read any difference between
+    the printed and the current types as a replacement.
+    """
+    changes = land_type_changes(perm)
+    if not changes or any(not change.get("additive") for change in changes):
+        return ()
+    return tuple(dict.fromkeys(
+        str(change.get("land_type") or "") for change in changes
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -659,9 +711,10 @@ def static_land_type_change_applies(
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
     "STATIC_LAND_TYPE_KIND", "StaticLandTypeChange",
-    "CHOSEN_LAND_TYPES", "add_derived_land_type", "change_land_type",
-    "clear_derived_land_types",
+    "CHOSEN_LAND_TYPES", "add_derived_land_type", "added_land_types",
+    "change_land_type", "clear_derived_land_types",
     "end_land_type_change", "end_land_type_changes_from", "land_type_changes",
+    "lost_abilities_to_type_change",
     "static_land_type_change_applies",
     "static_land_type_change_for", "static_land_type_change_payload",
     "resolve_static_land_type_change",

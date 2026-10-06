@@ -11,6 +11,8 @@ from . import shields as _shields
 # rules query, so this is not a function-local import.
 from .continuous import next_timestamp
 from .copies import copiable_card, copied_name
+# …and land_types the same: the layer system's types and nothing from here.
+from .land_types import added_land_types, lost_abilities_to_type_change
 from .text_changes import apply_text_changes, has_text_changes, text_changes
 
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
@@ -440,10 +442,22 @@ class Permanent:
         # that callers read positionally.
         current = self.basic_land_types
         printed = _printed_basic_types(self.card.type_line)
-        if current and set(current) != printed:
-            return self._swapped_mana(
-                tuple(_LAND_TYPE_MANA[land_type] for land_type in current)
-            )
+        if current and (
+            set(current) != printed or lost_abilities_to_type_change(self)
+        ):
+            typed = tuple(_LAND_TYPE_MANA[land_type] for land_type in current)
+            if added_land_types(self):
+                # "…in addition to its other land types" (Blanket of Night).
+                # CR 305.7's last sentence: the land "keeps its land types and
+                # rules text, and it gains the new land types and mana
+                # abilities" — so what it makes is what it made plus the new
+                # type's symbol. Read as a replacement, which is what any
+                # difference from the printed line used to mean here, a
+                # Mishra's Factory under a Blanket of Night made {B} and
+                # nothing else.
+                kept = self.effective_card.produced_mana
+                typed += tuple(symbol for symbol in kept if symbol not in typed)
+            return self._swapped_mana(typed)
         # A copy (Copy Artifact of a Mox / Sol Ring) produces the copied
         # card's mana, so read the effective card rather than the copier's own.
         return self._swapped_mana(self.effective_card.produced_mana)
@@ -535,6 +549,27 @@ class Permanent:
         base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))
+        # …and **CR 305.7**: a land whose subtype an effect *set* to a basic
+        # land type "loses all abilities generated from its rules text, its
+        # old land types, and any copiable effects affecting that land". That
+        # is exactly what layers 1 and 3 have just produced — the text as
+        # printed, as copied, as rewritten — so it is struck here, whole, and
+        # *here* is the point: everything appended below is an ability some
+        # other effect granted, which the same rule keeps ("this doesn't
+        # remove any abilities that were granted to the land by other
+        # effects"). Not layer 6 and not ordered by timestamp: the loss is
+        # part of the layer-4 effect itself, so an ability granted *before*
+        # the type was set survives it exactly as one granted after does.
+        #
+        # One strike for every reader, for the reason the blanket removal
+        # further down gives: an ability is four different things downstream,
+        # and the three that had been taught this rule one at a time left the
+        # fourth — a static ability, re-derived from the text by whichever
+        # table knows its sentence — reaching the whole board from a land
+        # that no longer had it. The mana ability of the new type is not text
+        # at all (CR 305.6); ``effective_produced_mana`` is that half.
+        if lost_abilities_to_type_change(self):
+            base = _without_any_abilities(base)
 
         # An ability granted by a board-wide static (Energy Flux) is appended to
         # the effective text, so the compiler produces it like any printed

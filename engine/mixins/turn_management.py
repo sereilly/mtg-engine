@@ -481,20 +481,23 @@ class TurnManagementMixin:
         summary is Scryfall's list of symbols the land can make and says nothing
         at all about what they cost.
 
-        **A land whose type an effect set has neither** (CR 305.7): it "loses
-        all abilities generated from its rules text … and gains the appropriate
-        mana ability for each new basic land type", which is the summary path.
-        ``land_types.lost_abilities_to_type_change`` named three readers — layer
-        6, the activation gate, the trigger scan — and this was the fourth that
-        did not ask: a Karplusan Forest under Blood Moon tapped for its printed
-        {C} through this seam while the activation path refused the very same
-        ability, and a Mishra's Workshop still made {C}{C}{C}.
+        **A land whose type an effect set has neither of its own** (CR 305.7):
+        it "loses all abilities generated from its rules text … and gains the
+        appropriate mana ability for each new basic land type", which is the
+        summary path. ``land_types.lost_abilities_to_type_change`` named three
+        readers — layer 6, the activation gate, the trigger scan — and this
+        was the fourth that did not ask: a Karplusan Forest under Blood Moon
+        tapped for its printed {C} through this seam while the activation path
+        refused the very same ability, and a Mishra's Workshop still made
+        {C}{C}{C}. It no longer asks either, because the walk below is over
+        the land's *effective* card, which is the land with its own text
+        struck — and what is left in it is what the rule keeps: a mana ability
+        another effect **granted** the land ("Lands you control have '{T}: Add
+        two mana of any one color.'", Overlaid Terrain), which the arm that
+        stood here returned in front of.
         """
-        from ..land_types import lost_abilities_to_type_change
         from ..mana_payment import is_mana_ability, land_text_is_run
 
-        if lost_abilities_to_type_change(land):
-            return None, False
         if not land_text_is_run(land):
             # A land none of whose text compiles (Rhystic Cave, until PCY
             # W3G1): the summary below would be its whole reading — free mana
@@ -602,9 +605,39 @@ class TurnManagementMixin:
         # pays, which is the path that works. Producing nothing is the honest
         # answer for a caller -- the AI's auto-tap, the web's land click -- that
         # asked to tap a land and cannot pay what the land asks.
-        if mana_ability is None and priced_mana_ability:
+        if (
+            mana_ability is None and priced_mana_ability
+            # …unless the land has a second, free one: the mana ability of a
+            # basic land type it *gained* (see ``_gained_type_mana``).
+            and not self._gained_type_mana(land)
+        ):
             return "priced_mana_ability"
         return None
+
+    @staticmethod
+    def _gained_type_mana(land) -> tuple[str, ...]:
+        """The mana symbols of the basic land types *land* gained "in addition
+        to its other land types" (Blanket of Night) — CR 305.7's last
+        sentence: it "keeps its land types and rules text, and it gains the
+        new land types **and mana abilities**".
+
+        So such a land has two kinds of mana ability, and they are not found
+        in the same place: what it prints is a compiled ability, and what the
+        gained type gives it is CR 305.6's intrinsic "{T}: Add [symbol]",
+        which is no text at all. Empty for every other land, a land whose type
+        an effect *set* included — that one has only the intrinsic ability,
+        which the summary path below already is.
+        """
+        from ..land_types import added_land_types
+
+        added = set(added_land_types(land))
+        if not added:
+            return ()
+        return tuple(
+            symbol
+            for land_type, symbol in zip(land.basic_land_types, land.basic_land_mana)
+            if land_type in added
+        )
 
     def tap_land_for_mana(
         self,
@@ -652,10 +685,33 @@ class TurnManagementMixin:
             if refusal in _LOGGED_TAP_REFUSALS:
                 self.log.append(f"{land.card.name}{_LOGGED_TAP_REFUSALS[refusal]}")
             return False
+        gained_symbol = None
         if ability_index is not None:
             mana_ability = self._chosen_land_mana_ability(land, ability_index)
         else:
             mana_ability, _priced = self._land_mana_abilities(land)
+            # "Each land is a Swamp **in addition to its other land types**."
+            # (Blanket of Night.) The land keeps the mana ability it prints
+            # and gains its new type's (CR 305.7's last sentence, CR 305.6), so
+            # the colour the seat asks for says which of the two it is
+            # activating: the gained type's when only that one makes it — and
+            # when the land's own mana ability costs more than the tap (a
+            # depletion land's), which this seam does not run and must not
+            # hand out free under the gained type's name. A land with no
+            # compiled ability at all (a basic, a dual) is the summary path's
+            # as it always was: its printed types and the gained one are both
+            # in ``effective_produced_mana``.
+            gained = self._gained_type_mana(land)
+            if gained and (
+                (mana_ability is None and _priced)
+                or (
+                    mana_ability is not None
+                    and chosen_color in gained
+                    and chosen_color not in (land.effective_card.produced_mana or ())
+                )
+            ):
+                mana_ability = None
+                gained_symbol = chosen_color if chosen_color in gained else gained[0]
 
         # CR 701.26a's event, announced by the one tap seam. City of Brass
         # ("Whenever this land becomes tapped, it deals 1 damage to you") and
@@ -776,7 +832,9 @@ class TurnManagementMixin:
             )
         else:
             produced = land.effective_produced_mana
-            if produced:
+            if gained_symbol is not None:
+                mana_symbol = gained_symbol
+            elif produced:
                 # A colour swapped away is still a legitimate request: the seat
                 # names the symbol the land prints and the swap decides what
                 # comes out, so the request is mapped through the swaps rather

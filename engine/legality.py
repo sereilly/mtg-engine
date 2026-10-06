@@ -2131,9 +2131,19 @@ class LegalityMixin:
         ):
             spec["division_total"] = defined
 
-    def lost_abilities_refusal(self, permanent) -> str | None:
+    def lost_abilities_refusal(
+        self, permanent, ability_index: int | None = None
+    ) -> str | None:
         """Why *permanent* has no activated ability to activate at all, or
         None: an effect took them away.
+
+        *ability_index* is the ability a door was asked for, when it was asked
+        for one by number. A land whose type was set and which another effect
+        granted an ability has a list again — a shorter one — and an index
+        past its end is one of the land's **own** abilities, named by a caller
+        still counting the printed card: refused for the same reason, rather
+        than answered as "no ability named" (which on the wire is a plain tap
+        for mana — the request asked for the Factory's animation and got {R}).
 
         Two rules, one answer, because every reader needs both or neither:
 
@@ -2155,9 +2165,20 @@ class LegalityMixin:
         made every turn. One predicate, and :meth:`usable_abilities_of` is the
         list that asks it.
 
-        (Standing approximation, unchanged: CR 305.7 leaves a land the
-        abilities *other effects granted* it, and this takes those too — as
-        the door always has.)
+        **CR 305.7 keeps what another effect granted**, and the second arm
+        answers only for a land that has nothing left: "this doesn't remove
+        any abilities that were granted to the land by other effects". The
+        land's *own* text is struck where it is read
+        (``Permanent.effective_card``), so the program the door and every list
+        compile holds exactly what the land was granted — an Aura's quoted
+        ability, a board-wide static's, an until-end-of-turn grant — and a
+        land with one is not refused here; an ability of its own is simply
+        not in the list to be named. This arm used to refuse the land whole,
+        granted abilities and all, at the door and in every list.
+
+        (Standing approximation, unchanged, on the *first* arm: "loses all
+        abilities" is a layer-6 effect with a timestamp, so an ability granted
+        after it survives — and that arm still takes those too.)
         """
         from .global_statics import global_statics_applying_to
         from .land_types import lost_abilities_to_type_change
@@ -2168,10 +2189,17 @@ class LegalityMixin:
         ):
             return f"{permanent.card.name} has lost all abilities"
         if lost_abilities_to_type_change(permanent):
-            return (
-                f"{permanent.card.name} lost its abilities when its land type "
-                "was set (CR 305.7)"
+            left = usable_activated_abilities(
+                compile_card_oracle(self.playable_card_of(permanent))
             )
+            if not left or (
+                ability_index is not None
+                and not 0 <= ability_index < len(left)
+            ):
+                return (
+                    f"{permanent.card.name} lost its abilities when its land "
+                    "type was set (CR 305.7)"
+                )
         return None
 
     def usable_abilities_of(self, permanent, *, card=None) -> list:

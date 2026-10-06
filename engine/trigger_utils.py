@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Container, Iterator, Sequence
 
-from .land_types import lost_abilities_to_type_change
 from .oracle import compile_card_oracle
 
 if TYPE_CHECKING:
@@ -59,15 +58,15 @@ def iter_triggered_abilities(
     for controller in (players if players is not None else game.players):
         controller_index = game.players.index(controller)
         for permanent in list(controller.battlefield):
-            # CR 305.7's losing half, third of the three places an ability can
-            # act. A land whose subtype an effect *set* to basic land types has
-            # no abilities from its rules text, and a triggered one is read off
-            # the card here rather than from the ability channel layer 6 strips
-            # — so City of Brass kept its damage trigger while reading as a
-            # Mountain. One predicate for all three readers (`land_types`), so
-            # a land cannot lose half its abilities.
-            if lost_abilities_to_type_change(permanent):
-                continue
+            # No CR 305.7 skip here, and there was one: a land whose type an
+            # effect had set was passed over whole. That took the triggered
+            # abilities another effect had *granted* it along with its own
+            # (a land creature under The Tabernacle at Pendrell Vale, a land
+            # wearing Farmstead), which the rule keeps — and it was one scan
+            # of many, so every site that reads a permanent's triggers without
+            # coming through here still fired the land's own. The effective
+            # card below is the land with its own text struck and what it was
+            # granted left in (``Permanent.effective_card``).
             card = permanent.effective_card if use_effective_card else permanent.card
             for trig in matching_triggers(
                 card, condition_kinds=condition_kinds, instruction_kinds=instruction_kinds

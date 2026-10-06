@@ -76,6 +76,7 @@ from ..land_types import (
     STATIC_SUPERTYPE_REMOVAL_KIND,
     add_derived_land_type,
     clear_derived_land_types,
+    lost_abilities_to_type_change,
     resolve_static_land_type_change,
     static_land_type_change_applies,
     static_supertype_removal_applies,
@@ -87,6 +88,7 @@ from ..layer_bridge import (
     land_animation_type_effect,
     land_type_effect,
     lost_supertype_effect,
+    seed_characteristics,
 )
 from ..type_changes import (
     LAND_ANIMATION_ORDER,
@@ -400,8 +402,20 @@ class PermanentStateMixin:
         # engine/grammar/registries.py also reads to tell the parser these lines
         # are already implemented — one string, two readers, so they cannot
         # drift apart.
-        if any(line for line in program.static_lines if ENTERS_TAPPED in line) or (
-            ENTERS_TAPPED in text and "unless" not in text
+        #
+        # "…enters tapped **unless** …" is a condition on the tapping and is
+        # not this unconditional line's to perform — which is a question about
+        # the *sentence* that says "enters tapped". It was asked of the whole
+        # text, so a card whose **other** sentence said "unless" never entered
+        # tapped: "This land enters tapped. When this land enters, sacrifice it
+        # unless you return an untapped Plains you control to its owner's
+        # hand." — Karoo and its four siblings (Coral Atoll, Dormant Volcano,
+        # Everglades, Jungle Basin) came in untapped, five of the 91 cards in
+        # the pool that say the words and the only five the two readings
+        # disagree about.
+        if any(line for line in program.static_lines if ENTERS_TAPPED in line) or any(
+            ENTERS_TAPPED in sentence and "unless" not in sentence
+            for sentence in re.split(r"[.\n]", text)
         ):
             permanent.tapped = True
 
@@ -1542,10 +1556,76 @@ class PermanentStateMixin:
             statics.append(by_source[id(source)])
         return statics, by_source
 
-    def _land_type_static(self, source: Permanent, payload: dict) -> TypeStatic:
-        """"All Mountains are Plains." — one land-type static, for the pass."""
+    def fold_land_type_statics_onto_entering(
+        self, permanent: Permanent, controller_index: int
+    ) -> None:
+        """Write onto *permanent* — a land about to enter under
+        *controller_index* — what the board's land-type statics will make of
+        it once it is there.
+
+        CR 614.12: an effect that modifies how a permanent enters is checked
+        against "the characteristics of the permanent **as it would exist on
+        the battlefield**, taking into account … continuous effects that
+        already exist and would apply to the permanent". With Blood Moon out
+        a nonbasic land enters as a Mountain: it has no "enters tapped" to
+        apply, no toll to pay, no counters to enter with (CR 305.7, and each
+        of those is a static ability of the land's own — CR 603.6d).
+
+        The board-wide pass (``_refresh_global_statics``) is what decides that
+        for a land on the battlefield, and it runs as the last thing an entry
+        does — after the entry replacements were asked and the entry state
+        was read, each of them of a land still reading as printed. So a
+        Karoo entered tapped under a Blood Moon, a Lotus Vale ate two lands,
+        and a Gemstone Mine came in with three counters for an ability it
+        did not have.
+
+        This is that pass for the one permanent, before any of those reads:
+        the land-type statics on the battlefield, applied by
+        ``engine/type_statics.py`` in its own order, with *controller_index*
+        standing in for the controller the permanent does not have yet. What
+        it writes is the derived contribution every reader already asks about
+        (``land_types.lost_abilities_to_type_change``, through
+        ``Permanent.effective_card``), and the entry's own recompute rebuilds
+        it from the board a moment later like any other.
+
+        Land types only. Whether an entering permanent is *also* something
+        else by then (a creature under Kormus Bell) changes nothing about the
+        abilities it has.
+        """
+        if "land" not in seed_characteristics(permanent).card_types:
+            return
+        clear_derived_land_types(permanent)
+        statics = []
+        for source in self.all_permanents():
+            for instr in compile_card_oracle(source.effective_card).instructions:
+                if instr.kind != STATIC_LAND_TYPE_KIND:
+                    continue
+                payload = resolve_static_land_type_change(instr.payload, source)
+                if payload is not None:
+                    statics.append(self._land_type_static(
+                        source, payload, entering=(permanent, controller_index),
+                    ))
+        if statics:
+            apply_type_statics([permanent], statics)
+
+    def _land_type_static(
+        self, source: Permanent, payload: dict, *,
+        entering: tuple[Permanent, int] | None = None,
+    ) -> TypeStatic:
+        """"All Mountains are Plains." — one land-type static, for the pass.
+
+        *entering* is a permanent that is on no battlefield yet and the seat
+        it is about to enter under (:meth:`fold_land_type_statics_onto_
+        entering`): "lands **you control**" is asked of that seat, because the
+        control seam has no answer for it until it has arrived.
+        """
         to_type = str(payload.get("to_type", ""))
         additive = bool(payload.get("additive"))
+
+        def holder(permanent: Permanent) -> int | None:
+            if entering is not None and permanent is entering[0]:
+                return entering[1]
+            return self.controller_index_of(permanent)
 
         def reaches(permanent: Permanent, types) -> bool:
             # Which lands a source reaches is `land_types.py`'s question, not
@@ -1562,8 +1642,7 @@ class PermanentStateMixin:
                 # `controller_index_of` resolves layer 2 and this runs on
                 # every refresh over every permanent.
                 same_controller=(
-                    self.controller_index_of(permanent)
-                    == self.controller_index_of(source)
+                    holder(permanent) == self.controller_index_of(source)
                     if payload.get("controller_only") else None
                 ),
             )
@@ -2292,6 +2371,18 @@ class PermanentStateMixin:
                                       global_static_sources)
         from ..stack_statics import stack_static_grant_sources
 
+        # Both derived layer-4 channels are cleared before anything is judged,
+        # so no candidate can read a previous pass's contribution as this
+        # pass's board (CR 611.3b: a static's effect lasts exactly as long as
+        # the rebuild keeps putting it back) — and before the sources are
+        # gathered, because *whether a land is a source at all* reads one of
+        # them: a land whose type an effect set has lost the ability that made
+        # it one (CR 305.7, ``global_static_sources``). Gathered first, as
+        # they were, a land Blood Moon had just stopped reaching stayed a
+        # non-source for a pass.
+        for perm in all_permanents:
+            clear_derived_land_types(perm)
+            clear_derived_type_changes(perm)
         sources = global_static_sources(all_permanents)
         # The same statics from the other zone (CR 113.6b): "As long as Torrent
         # of Lava is on the stack, each creature has …". Rebuilt from the stack
@@ -2316,15 +2407,26 @@ class PermanentStateMixin:
         sources = sources + [
             (perm, static) for perm, static in self.lingering_global_statics
         ]
-        # Both derived layer-4 channels are cleared before anything is judged,
-        # so no candidate can read a previous pass's contribution as this
-        # pass's board (CR 611.3b: a static's effect lasts exactly as long as
-        # the rebuild keeps putting it back).
-        for perm in all_permanents:
-            clear_derived_land_types(perm)
-            clear_derived_type_changes(perm)
         type_statics, type_static_of = self._board_type_statics(all_permanents, sources)
         reach = apply_type_statics(all_permanents, type_statics)
+        # **CR 305.7, now that layer 4 is this pass's.** The pass has just
+        # written which lands a board-wide static sets the type of ("Nonbasic
+        # lands are Mountains"), and such a land has lost every ability its
+        # text gave it — the one that made it a source of a board-wide static
+        # among them. So the sources are asked again here, of the same one
+        # predicate, before any of them is judged against a permanent: The
+        # Tabernacle at Pendrell Vale under Blood Moon grants nothing.
+        #
+        # Only the statics judged below. One with a layer-4 part was already
+        # placed by the pass above, and whether *that* exists is a question
+        # the pass would have to answer inside layer 4 (Blood Moon beside a
+        # land that says "each land is a Swamp" — CR 613.8a's dependency on an
+        # effect's existence); no land in the pool prints one, and
+        # ``type_statics.py`` does not probe for it.
+        sources = [
+            (perm, static) for perm, static in sources
+            if changes_types(static) or not lost_abilities_to_type_change(perm)
+        ]
         for found in type_statics:
             # An attached animating Aura: whether it reached its host is the
             # answer every later layer reads (``auras.animating_auras``), so a

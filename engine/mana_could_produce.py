@@ -219,9 +219,11 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
     **A land whose type an effect has set is not derived, whatever it prints**
     (CR 305.7): it has lost the ability that read a board and gained the basic
     one, which ``effective_produced_mana`` already answers — a Reflecting Pool
-    under Blood Moon could produce {R}, and reads nobody.
+    under Blood Moon could produce {R}, and reads nobody. Nothing here asks
+    for that: both readers below take the land's *effective* card, which is
+    the land with its own text struck (``Permanent.effective_card``). They
+    each asked the predicate themselves while that accessor did not.
     """
-    from .land_types import lost_abilities_to_type_change
     from .subject_filters import subject_matches
 
     lands: list[tuple[int, object]] = []
@@ -232,10 +234,7 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
             if not perm.has_type("land"):
                 continue
             lands.append((seat, perm))
-            productions = (
-                () if lost_abilities_to_type_change(perm)
-                else derived_productions(perm.effective_card)
-            )
+            productions = derived_productions(perm.effective_card)
             if productions:
                 derived[perm.permanent_id] = (seat, perm, productions)
                 # What the land says outright, beside what it derives: a land
@@ -245,10 +244,7 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
                 # is Scryfall's list of everything the clause could ever name.
                 answer[perm.permanent_id] = _stated_symbols(perm.effective_card)
                 continue
-            amongs = (
-                () if lost_abilities_to_type_change(perm)
-                else _color_choice_amongs(perm.effective_card)
-            )
+            amongs = _color_choice_amongs(perm.effective_card)
             if amongs:
                 # Meteor Crater's shape: what it could produce is a colour of a
                 # permanent its controller has *now*, and with none it could

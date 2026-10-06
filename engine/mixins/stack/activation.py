@@ -720,12 +720,15 @@ class AbilityActivationMixin:
         # card would be half-implemented: a Jayemdae Tome under Titania's Song
         # would lose nothing it visibly had and keep drawing cards.
         #
-        # CR 305.7, for the same reason and at the same place: a land whose
-        # subtype an effect *set* to basic land types loses the abilities its
-        # rules text generated. Layer 6 drops the keywords; an activated ability
-        # is read off the compiled program, so it has to be refused here or the
-        # rule is half-implemented — a Mishra's Factory under Blood Moon read as
-        # a Mountain and still animated itself.
+        # CR 305.7 at the same place, for the reason a player is owed: a land
+        # whose subtype an effect *set* to basic land types loses the abilities
+        # its rules text generated, and one with nothing left is refused here
+        # by name ("…lost its abilities when its land type was set") rather
+        # than by an index that names nothing. The rule itself is not enforced
+        # here any more — the program compiled below is the land's *effective*
+        # card, with its own text struck (``Permanent.effective_card``) — and
+        # that is what lets an ability another effect **granted** the land
+        # through, which this refusal used to take with the rest.
         #
         # It does not touch tapping for mana: that path is `tap_land_for_mana`,
         # which reads `effective_produced_mana` and already gives the land the
@@ -735,7 +738,7 @@ class AbilityActivationMixin:
         # every *list* of a permanent's abilities asks (``usable_abilities_of``),
         # so what is offered and what is refused here cannot differ. They were
         # two inline checks, and each list asked a different one or neither.
-        details = self.lost_abilities_refusal(permanent)
+        details = self.lost_abilities_refusal(permanent, ability_index)
         if details is not None:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
