@@ -1160,15 +1160,25 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     only = scope_only(oid)
     effects = []
     # "This creature is the chosen color." (Alloy Golem.) The permanent's own
-    # static, so its effect has the permanent's own timestamp (CR 613.7a): the
-    # moment it entered. A lace or a Sway of Illusion aimed at the Golem is
-    # necessarily later and wins; a Darkest Hour that was already on the
-    # battlefield when the Golem arrived is *earlier*, and the Golem is the
-    # colour it chose. That second half is what the constant this replaced
-    # could not say — it put the choice before every other effect, which is
-    # CR 613.3's rule for a characteristic-defining ability, and this is not
-    # one: the colour it names exists only on the battlefield (CR 614.1c), and
-    # CR 604.3 has a CDA function in every zone.
+    # static about its own colour, and **applied as a characteristic-defining
+    # ability**: before every other layer-5 effect, whatever their timestamps
+    # (CR 613.3). A lace or a Sway of Illusion aimed at the Golem wins, and so
+    # does a Darkest Hour - whether it arrived after the Golem or was already
+    # there.
+    #
+    # That is CR 604.3a read by its criteria, each of which the sentence meets:
+    # it defines the object's colours, it is printed on the card it affects, it
+    # affects nothing else, the object does not grant it to itself, and it sets
+    # the value unconditionally. It is also what the engine did before this
+    # collector learned timestamps, through a constant that sorted the choice
+    # first. **The other reading is arguable and was argued**: CR 604.3 says a
+    # CDA "functions in all zones", and this colour exists only once a choice
+    # has been made as the permanent enters (CR 614.1c) - by which the effect
+    # would carry the permanent's own timestamp (CR 613.7a) and a Golem entering
+    # under an *older* Darkest Hour would be the colour it chose. No ruling on
+    # the card decides between them, so the behaviour that shipped stands, on
+    # the rule's own list; the stamp is still passed, and the one-word change
+    # is `from_cda`. ROADMAP carries it as a ruling to settle.
     #
     # Not contributed once its abilities are gone (CR 613.1f is layer 6, but a
     # removal that has already happened is the same predicate layer 6 itself
@@ -1176,7 +1186,10 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     own = own_chosen_color(perm)
     if own is not None and not removes_all_abilities(perm):
         effects.append(
-            set_colors(only, [own], timestamp=perm.timestamp, label="chosen colour")
+            set_colors(
+                only, [own], timestamp=perm.timestamp, from_cda=True,
+                label="chosen colour",
+            )
         )
     # What a spell or an ability did to this permanent — an indefinite lace
     # ("Target permanent becomes red", CR 105), a turn-long one ("One or more

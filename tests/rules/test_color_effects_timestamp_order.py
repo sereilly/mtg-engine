@@ -48,12 +48,16 @@ test holds to the pool rather than assumes: no colour-setting static's scope
 asks about colour, and a resolved recolour's set of objects is fixed as it
 resolves (CR 611.2c), so no layer-5 effect can change what another applies to.
 
-**Not a characteristic-defining ability.** Alloy Golem's "is the chosen color"
-is ordered by its object's timestamp, not ahead of everything under CR 613.3:
-the colour it names exists only on the battlefield (CR 614.1c makes the choice
-as the permanent enters), and a CDA is information "that would normally be
-found elsewhere on that object" and functions in every zone (CR 604.3). So an
-Alloy Golem that enters under an older Darkest Hour is the colour it chose.
+**One effect here is not ordered by its timestamp at all.** Alloy Golem's "is
+the chosen color" is applied as a characteristic-defining ability - ahead of
+every other layer-5 effect (CR 613.3) - because it meets each of CR 604.3a's
+five criteria and that is what shipped. So an Alloy Golem that enters under an
+*older* Darkest Hour is black, like one a Darkest Hour arrives after; the test
+below asks the engine for that in the one arrangement where the two readings
+differ (a static that was there first). The other reading - the colour exists
+only on the battlefield, CR 604.3 has a CDA function in every zone, so the
+effect takes the permanent's timestamp - is recorded in `layer_bridge` beside
+the one word that would switch it.
 """
 
 from __future__ import annotations
@@ -407,7 +411,7 @@ def _w2g4_pairs():
 _W2G4_PAIRS, _W2G4_LEFT_OUT = _w2g4_pairs()
 
 
-@pytest.mark.cr("613.7", "613.7a", "613.7b", "613.7d", "613.7e", "105.3")
+@pytest.mark.cr("613.7", "613.7a", "613.7b", "613.7d", "613.7e", "105.3", "613.3", "604.3a")
 @pytest.mark.parametrize(
     "first, second, subject_kind", _W2G4_PAIRS,
     ids=[f"{a}>{b}@{s}" for a, b, s in _W2G4_PAIRS],
@@ -436,10 +440,20 @@ def test_w2g4_the_later_of_two_colour_effects_decides(
     now = case.apply(second, second_colour)
     assert was != now
 
-    assert _w2g4_colours(case.game, case.subject) == now, (
-        f"{first} then {second}: CR 613.7 makes the {subject_kind} {now} "
-        f"(the later effect), not {was}"
-    )
+    if second == "own_chosen":
+        # The one arrangement a timestamp does not decide: the permanent's own
+        # "is the chosen color" is applied as a characteristic-defining ability
+        # (CR 604.3a), so it goes first and the static that was already there
+        # still has the last word (CR 613.3) - until that static ends, below.
+        assert _w2g4_colours(case.game, case.subject) == was, (
+            f"{first} then {second}: the {subject_kind}'s own chosen colour is "
+            f"a CDA and applies first (CR 613.3), so it is {was}, not {now}"
+        )
+    else:
+        assert _w2g4_colours(case.game, case.subject) == now, (
+            f"{first} then {second}: CR 613.7 makes the {subject_kind} {now} "
+            f"(the later effect), not {was}"
+        )
 
     if first == "own_chosen":
         printed = was

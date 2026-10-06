@@ -511,9 +511,14 @@ def set_colors(
     colors: Iterable[str],
     *,
     timestamp: int,
+    from_cda: bool = False,
     label: str = "",
 ) -> ContinuousEffect:
-    """Layer 5: colour-changing ("becomes red", the laces)."""
+    """Layer 5: colour-changing ("becomes red", the laces).
+
+    *from_cda* marks a characteristic-defining ability's effect, which CR 613.3
+    applies before every other effect in the layer whatever their timestamps.
+    """
     colors = tuple(colors)
 
     def modify(char: Characteristics) -> None:
@@ -521,7 +526,7 @@ def set_colors(
 
     return ContinuousEffect(
         layer=LAYER_COLOR, modify=modify, applies_to=target,
-        timestamp=timestamp, label=label,
+        timestamp=timestamp, from_cda=from_cda, label=label,
     )
 
 
