@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2707 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2722 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **103.5** Each player draws a number of cards equal to their starting hand size, which is normally seven. (... *(23 tests, subrules c)*
 - [ ] **103.6** Some cards allow a player to take actions with them from their opening hand. Once the mulligan pr...
 - [ ] **103.7** In a Planechase game, the starting player moves the top card of their planar deck off that planar...
-- [x] **103.8** The starting player takes their first turn. *(2 tests, subrules ac)*
+- [x] **103.8** The starting player takes their first turn. *(3 tests, subrules ac)*
 
 ### 104. Ending the Game
 
@@ -247,7 +247,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **113.4** Some activated abilities and some triggered abilities are mana abilities. Mana abilities follow s...
 - [ ] **113.5** Some activated abilities are loyalty abilities. Loyalty abilities follow special rules: A player ...
 - [x] **113.6** Abilities of an instant or sorcery spell usually function only while that object is on the stack.... *(17 tests, subrules bgjkm)*
-- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(9 tests, subrules a)*
+- [x] **113.7** The source of an ability is the object that generated it. The source of an activated ability on t... *(10 tests, subrules a)*
 - [ ] **113.8** The controller of an activated ability on the stack is the player who activated it. The controlle...
 - [ ] **113.9** Activated and triggered abilities on the stack aren’t spells, and therefore can’t be countered by...
 - [ ] **113.10** Effects can add or remove abilities of objects. An effect that adds an ability will state that th...
@@ -278,14 +278,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 116. Special Actions
 
 - [x] **116.1** Special actions are actions a player may take when they have priority that don’t use the stack. T... *(6 tests)*
-- [x] **116.2** There are twelve special actions: *(5 tests, subrules cde)*
+- [x] **116.2** There are twelve special actions: *(6 tests, subrules acde)*
 - [x] **116.3** If a player takes a special action, that player receives priority afterward. *(3 tests)*
 
 ### 117. Timing and Priority
 
 - [x] **117.1** Unless a spell or ability is instructing a player to take an action, which player can take action... *(3 tests, subrules a)*
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
-- [x] **117.3** Which player has priority is determined by the following rules: *(21 tests, subrules abcd)*
+- [x] **117.3** Which player has priority is determined by the following rules: *(22 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
 - [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
@@ -338,7 +338,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(6 tests)*
 - [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(4 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
-- [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(4 tests)*
+- [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(5 tests)*
 - [x] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr... *(1 tests)*
 - [x] **121.6** Some effects replace card draws. *(1 tests)*
 - [ ] **121.7** Some replacement effects and prevention effects result in one or more card draws. In such a case,...
@@ -591,8 +591,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 504. Draw Step
 
-- [x] **504.1** First, the active player draws a card. This turn-based action doesn’t use the stack. *(7 tests)*
-- [x] **504.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests)*
+- [x] **504.1** First, the active player draws a card. This turn-based action doesn’t use the stack. *(8 tests)*
+- [x] **504.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(5 tests)*
 
 ### 505. Main Phase
 
@@ -686,10 +686,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(68 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(20 tests)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(80 tests, subrules bcd)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(22 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
-- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(11 tests, subrules ac)*
+- [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(13 tests, subrules ac)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
 - [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(117 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(119 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -833,7 +833,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(24 tests, subrules abde)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(26 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
@@ -916,9 +916,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **704.1** State-based actions are game actions that happen automatically whenever certain conditions (liste... *(1 tests)*
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
-- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(6 tests)*
+- [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(7 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(94 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(97 tests, subrules abcdefghijkmnpqrsy)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*
