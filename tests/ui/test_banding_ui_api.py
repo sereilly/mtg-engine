@@ -181,13 +181,12 @@ def test_defender_assigns_banding_damage_and_combat_resolves():
     # The prompt clears once the assignment is recorded.
     assert _state(sid, 1)["banding_assignment"] is None
 
-    # The active player resolves; the engine honors the defender's split.
-    game.priority_player_index = 0
-    resolve = client.post(
-        f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "assign_combat_damage", "attacker_damage": {}},
-    )
-    assert resolve.status_code == 200, resolve.text
+    # The defender's split was the last announcement owed, so the damage is
+    # dealt by it and the engine honors it. (This used to force priority to
+    # the active player and post an `assign_combat_damage` for them — an
+    # action their client cannot send, since an attacker the defender assigns
+    # is in no dialog of theirs. Two people at this board were stranded.)
+    assert game.combat_damage_resolved
 
     names = [p.card.name for p in game.players[1].battlefield]
     assert "Wolf" not in names   # absorbed all 3 damage

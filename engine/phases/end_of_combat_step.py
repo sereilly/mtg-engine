@@ -7,7 +7,9 @@ Cockatrice/Thicket Basilisk delayed destruction) while "attacked or blocked this
 combat" is still known, then clears until-end-of-combat effects and combat state.
 """
 
-from ..combat_assignment import BLOCKED_WITHOUT_BLOCKERS
+from ..combat_assignment import (BLOCKED_WITHOUT_BLOCKERS,
+                                 DEFENDER_ANNOUNCED_THIS_STEP,
+                                 DEFENDER_ASSIGNS_AS_UNBLOCKED)
 from ..attack_tapping import clear_attack_tap_exemptions
 from ..delayed_triggers import (expire_combat_delayed_triggers,
                                 fire_delayed_triggers)
@@ -72,6 +74,15 @@ class EndOfCombatStepMixin:
             # phase, and a creature blocked in the first one is a fresh attacker
             # in the second.
             permanent.metadata.pop(BLOCKED_WITHOUT_BLOCKERS, None)
+            # What the defending player said about this attacker's combat
+            # damage (CR 702.22j): that it goes past its blockers "as though
+            # it weren't blocked", and that they have answered for the step.
+            # Both are about this combat. Left on the creature, the first
+            # would send its damage past a blocker in a later combat on the
+            # strength of an answer given about this one, and the second
+            # would stop the defender being asked there at all.
+            permanent.metadata.pop(DEFENDER_ASSIGNS_AS_UNBLOCKED, None)
+            permanent.metadata.pop(DEFENDER_ANNOUNCED_THIS_STEP, None)
         # "…this combat" (Johan). The exemptions are scoped to the combat
         # phase, so they end where every other until-end-of-combat effect above
         # does rather than waiting for cleanup.

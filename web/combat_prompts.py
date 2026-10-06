@@ -13,6 +13,14 @@ the engine works out whether it is outstanding (it is what stops the damage
 step for a person and for nobody else), so this module only builds the info,
 and an AI seat's immediate answer is the default ``_ai_assign_combat_damage``
 below has always given it.
+
+**Who assigns, and who is still owed an answer, is the engine's to say.** The
+defending player's prompt used to be derived here from the wire payload — two
+blockers, one of them with banding — and the client derived it a third time
+from a keyword. Three readers of one rule is how a defender in front of a
+Thorn Elemental with a single Benalish Hero was never asked, and how two
+people (or one person and an AI's banding blocker) reached a combat damage
+step that nothing on either side could resolve.
 """
 
 from __future__ import annotations
@@ -52,35 +60,24 @@ def _ai_declare_attackers(session: Session) -> None:
 
 
 def _banding_blocked_attackers(game) -> list[int]:
-    """Attackers blocked by two or more creatures whose blocking set moves the
-    damage division to the defending player (CR 702.22j).
+    """Attackers whose combat damage the **defending** player assigns, has a
+    decision about and has not yet announced for this combat damage step
+    (CR 702.22j; Defensive Formation's printed substitution).
 
-    *Which* blocking sets those are is the engine's question, asked through the
-    same predicate the combat damage step consumes the answer with — a blocker
-    with banding, or a [quality] creature with "bands with other [quality]"
-    alongside another [quality] creature. Re-deriving it here from the wire
-    payload is how the prompt and the step come to disagree about who divides:
-    this file used to test one blocker for the word "banding", so a legendary
-    band's division was owed by the rules, never offered, and then resolved by
-    the active player's default.
+    The engine's list, ``Game.defender_assignments_owed`` — the same reading
+    the combat damage step consumes the answer with. This function used to
+    rebuild it from the wire payload and asked for two blockers, which is right
+    for a division and wrong for the other decision an attacker can carry: one
+    creature with banding in front of a Thorn Elemental leaves the defending
+    player choosing between that creature and themself ("If blocked by a
+    creature with banding, the defending player decides whether or not the
+    damage is assigned 'as though it weren't blocked'", 2018-04-27), and they
+    were not asked.
     """
-    combat = game.get_combat_state()
-    defender_index = combat.get("defending_player_index")
+    defender_index = game.combat_defending_player_index
     if not isinstance(defender_index, int) or not (0 <= defender_index < len(game.players)):
         return []
-    by_attacker: dict[int, list[int]] = {}
-    for pair in combat.get("blockers", []):
-        by_attacker.setdefault(int(pair["attacker_index"]), []).append(int(pair["blocker_index"]))
-    result = []
-    for attacker_idx, blockers in by_attacker.items():
-        if len(blockers) < 2:
-            continue
-        # CR 702.22j *or* CR 510.1a's printed substitution (Defensive
-        # Formation), through the one reader the damage step asks — a
-        # second question here would offer a division the step ignored.
-        if game._defender_assigns_attacker_damage(attacker_idx):
-            result.append(attacker_idx)
-    return sorted(result)
+    return game.defender_assignments_owed(defender_index)
 
 
 def _banding_assignment_pending(session: Session) -> bool:
@@ -93,12 +90,46 @@ def _banding_assignment_pending(session: Session) -> bool:
     defender_index = game.combat_defending_player_index
     if not isinstance(defender_index, int) or _seat_type(session, defender_index) != "human":
         return False
-    return any(a not in game.combat_banding_damage for a in _banding_blocked_attackers(game))
+    return bool(_banding_blocked_attackers(game))
+
+
+def _unblocked_recipient(game, attacker_idx: int) -> dict:
+    """Who is dealt the damage of an attacker assigning "as though it weren't
+    blocked" — CR 510.1b's answer: the player being attacked, or the
+    planeswalker the creature is attacking ("assigning its damage as though it
+    weren't blocked means the damage is assigned to the planeswalker, not to
+    the defending player", Outmaneuver ruling, 2008-04-01)."""
+    defending_index = game.combat_attackers.get(attacker_idx)
+    walker = game.permanent_by_id(game.combat_attacked_planeswalkers.get(attacker_idx))
+    if walker is not None:
+        return {
+            "kind": "planeswalker",
+            "id": walker.permanent_id,
+            "name": walker.card.name,
+        }
+    return {
+        "kind": "player",
+        "seat": defending_index,
+        "name": (
+            game.players[defending_index].name
+            if isinstance(defending_index, int)
+            and 0 <= defending_index < len(game.players)
+            else ""
+        ),
+    }
 
 
 def _build_banding_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
-    """State block shown to the defending player so they can split the damage of
-    each attacker blocked by one of their banding creatures (CR 702.22j)."""
+    """State block shown to the defending player for each attacker whose
+    combat damage they assign (CR 702.22j) and still owe an answer about: the
+    division among its blockers, and — for an attacker that "may … assign its
+    combat damage as though it weren't blocked" — the offer, which is theirs.
+
+    ``attacker_indices`` is the list as it has always been sent. ``attackers``
+    says what the dialog needs about each: its id (the offer is announced by
+    id), how much it assigns, the creatures blocking it, and ``offer`` — None
+    for an ordinary attacker, else who the damage would go to. An offered
+    attacker is listed with one blocker as readily as with several."""
     game = session.game
     if game.current_step != "combat_damage" or game.combat_damage_resolved:
         return None
@@ -107,10 +138,30 @@ def _build_banding_assignment_info(session: Session, viewer_seat: int | None) ->
         return None
     if viewer_seat is not None and viewer_seat != defender_index:
         return None
-    pending = [a for a in _banding_blocked_attackers(game) if a not in game.combat_banding_damage]
+    pending = _banding_blocked_attackers(game)
     if not pending:
         return None
-    return {"defender_seat": defender_index, "attacker_indices": pending}
+    attackers = []
+    for attacker_idx in pending:
+        attacker = game.permanent_at(game.active_player_index, attacker_idx)
+        if attacker is None:
+            continue
+        offered = game.unblocked_assignment_chooser(attacker_idx) == defender_index
+        attackers.append({
+            "attacker_index": attacker_idx,
+            "attacker_id": attacker.permanent_id,
+            "damage": combat_damage_assigned_by(attacker),
+            "blocker_indices": sorted(game._combat_blockers_for_attacker(attacker_idx)),
+            "offer": (
+                {"recipient": _unblocked_recipient(game, attacker_idx)}
+                if offered else None
+            ),
+        })
+    return {
+        "defender_seat": defender_index,
+        "attacker_indices": pending,
+        "attackers": attackers,
+    }
 
 
 def _band_blocker_assignments(game) -> list[dict]:
@@ -260,10 +311,7 @@ def _build_unblocked_assignment_info(session: Session, viewer_seat: int | None) 
     function, either — while the list is non-empty the engine itself is
     waiting, and ``Game._needs_manual_damage_assignment`` says so.
 
-    The recipient is CR 510.1b's: the player being attacked, or the
-    planeswalker the creature is attacking — "assigning its damage as though it
-    weren't blocked means the damage is assigned to the planeswalker, not to
-    the defending player" (Outmaneuver ruling, 2008-04-01).
+    The recipient is CR 510.1b's (``_unblocked_recipient``).
     """
     game = session.game
     if game.current_step != "combat_damage" or game.combat_damage_resolved:
@@ -272,34 +320,18 @@ def _build_unblocked_assignment_info(session: Session, viewer_seat: int | None) 
     if viewer_seat is not None and viewer_seat != active_index:
         return None
     attackers = []
-    for attacker_idx in game.unblocked_assignments_to_ask():
+    # The active seat's own offers. The engine's list also holds the ones a
+    # *defending* player is asked (CR 702.22j), and those are in that player's
+    # prompt — `_build_banding_assignment_info` — not this one.
+    for attacker_idx in game.unblocked_assignments_to_ask(active_index):
         attacker = game.permanent_at(active_index, attacker_idx)
         if attacker is None:
             continue
-        defending_index = game.combat_attackers.get(attacker_idx)
-        walker = game.permanent_by_id(game.combat_attacked_planeswalkers.get(attacker_idx))
-        if walker is not None:
-            recipient = {
-                "kind": "planeswalker",
-                "id": walker.permanent_id,
-                "name": walker.card.name,
-            }
-        else:
-            recipient = {
-                "kind": "player",
-                "seat": defending_index,
-                "name": (
-                    game.players[defending_index].name
-                    if isinstance(defending_index, int)
-                    and 0 <= defending_index < len(game.players)
-                    else ""
-                ),
-            }
         attackers.append({
             "attacker_index": attacker_idx,
             "attacker_id": attacker.permanent_id,
             "damage": combat_damage_assigned_by(attacker),
-            "recipient": recipient,
+            "recipient": _unblocked_recipient(game, attacker_idx),
         })
     if not attackers:
         return None
@@ -423,6 +455,53 @@ def _ai_resolve_raging_river(session: Session) -> None:
         and _seat_type(session, attacker_index) == "ai"
     ):
         game.combat_left_right_attacker_locked = True
+
+
+def _combat_damage_owed_by_a_person(session: Session) -> bool:
+    """Whether somebody at the table still owes an announcement before this
+    combat damage step can be dealt: a defending player's banding assignment
+    or multi-block division, or the active player's own dialog (their band's
+    blockers, a division of their own, an offer of their own)."""
+    game = session.game
+    if (
+        _banding_assignment_pending(session)
+        or _multiblock_split_pending(session)
+        or _band_blocker_assignment_pending(session)
+    ):
+        return True
+    return (
+        _seat_type(session, game.active_player_index) == "human"
+        and game._manual_assignment_has_declared_multiblock()
+    )
+
+
+def _deal_combat_damage_once_announced(session: Session) -> None:
+    """Deal this combat damage step if the announcement just made was the last
+    one anybody owed (CR 510.1 → CR 510.2: once the assignments are announced
+    the damage is dealt, with no priority in between).
+
+    Called after a **defending** player's announcement. An AI attacker was
+    always resumed from there; a human attacker was not, on the assumption that
+    their own dialog would resolve the step — and an attacker whose only
+    blocked creature is one the defending player assigns has no dialog. Two
+    people with one banding double-block between them sat at a combat damage
+    step that neither could move.
+
+    One pass, not both (CR 510.4): the second step is its own announcement,
+    and the engine's rail deals it when the players advance past the window
+    between the two (``Game.advance_combat_phase``).
+    """
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return
+    if game.resume_stack or game.waiting_prompt() is not None:
+        return  # a damage event is part-way through (CR 616.1e)
+    if _combat_damage_owed_by_a_person(session):
+        return
+    if _seat_type(session, game.active_player_index) == "ai":
+        _ai_assign_combat_damage(session)
+        return
+    game.resolve_combat_damage(game.active_player_index)
 
 
 def _ai_assign_combat_damage(session: Session) -> None:

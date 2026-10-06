@@ -8,11 +8,10 @@ from __future__ import annotations
 from fastapi import HTTPException
 from .action_registry import HUMAN_ONLY, action_handler
 from .combat_prompts import (
-    _ai_assign_combat_damage,
     _banding_assignment_pending,
+    _deal_combat_damage_once_announced,
     _multiblock_split_pending,
 )
-from .seats import _seat_type
 
 
 @action_handler("declare_attackers", human_only=HUMAN_ONLY)
@@ -136,26 +135,17 @@ def _action_assign_combat_damage(session, req, seat_type):
         if req.blocker_damage_split
         else None
     )
-    if attacker_damage is not None:
-        # The dialog announces only the attackers it *shows* — the ones with a
-        # decision in them. Every other blocked attacker has none (CR 510.1c:
-        # "If exactly one creature is blocking it, it assigns all its combat
-        # damage to that creature"), so it keeps the engine's default rather
-        # than the nothing an absent entry means to `resolve_combat_damage`.
-        #
-        # That nothing was live: with one attacker double-blocked and another
-        # single-blocked, confirming the dialog had the second deal no damage
-        # at all to its blocker. It mattered little while the dialog opened
-        # only for a multi-block; it opens for one blocked Thorn Elemental now,
-        # beside whatever else attacked.
-        #
-        # An attacker with "as though it weren't blocked" is not in the default
-        # (`_build_auto_damage_assignment` leaves it out, which is the offer
-        # taken), so filling in cannot answer that question for anybody.
-        attacker_damage = {
-            **session.game._build_auto_damage_assignment(),
-            **attacker_damage,
-        }
+    # The dialog announces only the attackers it *shows* — the ones with a
+    # decision in them. Every other blocked attacker has none (CR 510.1c: "If
+    # exactly one creature is blocking it, it assigns all its combat damage to
+    # that creature") and keeps the engine's default, which is the engine's own
+    # reading of an attacker an announcement does not name. This handler used
+    # to fill those in itself, because the engine read an absent entry as
+    # "assigns nothing" — and read a *present* one that added up to less than
+    # the creature's power the same way, so a three-power attacker blocked by
+    # two could be sent over the wire assigning one and none. Each attacker
+    # named here is now held to all of its combat damage, among the creatures
+    # blocking it (`Game._attacker_division_refusal`), and that is a 400.
     ok, details = session.game.resolve_combat_damage(
         req.seat,
         attacker_damage=attacker_damage,
@@ -172,23 +162,30 @@ def _action_assign_combat_damage(session, req, seat_type):
 
 @action_handler("assign_banding_damage", human_only=HUMAN_ONLY)
 def _action_assign_banding_damage(session, req, seat_type):
-    # CR 702.22j: the defending player pre-commits how attackers blocked by a
-    # creature with banding split their combat damage.
+    # CR 702.22j: the defending player announces how each attacker whose
+    # combat damage they assign — one blocked by a creature with banding, or
+    # any attacker under "rather than the attacking player, you assign…" —
+    # assigns it: a division among its blockers, or, for a creature that "may
+    # … assign its combat damage as though it weren't blocked", that offer
+    # taken, by the attacker's id (`as_though_unblocked_ids`, the field the
+    # active player's own announcement uses). The cards' ruling gives the
+    # defending player that choice; the wire had no way to say it.
     banding_raw = req.banding_damage or {}
     banding_damage = {
         int(attacker_idx): {int(blocker_idx): int(value) for blocker_idx, value in blockers.items()}
         for attacker_idx, blockers in banding_raw.items()
     }
-    ok, details = session.game.assign_banding_combat_damage(req.seat, banding_damage)
+    ok, details = session.game.assign_banding_combat_damage(
+        req.seat, banding_damage,
+        as_though_unblocked=req.as_though_unblocked_ids,
+    )
     if not ok:
         raise HTTPException(status_code=400, detail=details)
-    # The defender has pre-committed their CR 702.22j split. If the attacker is
-    # the AI, it was paused waiting for this — resolve its combat damage now.
-    if (
-        not _banding_assignment_pending(session)
-        and _seat_type(session, session.game.active_player_index) == "ai"
-    ):
-        _ai_assign_combat_damage(session)
+    # The defending player's announcement comes last (CR 510.1). If it was the
+    # last thing anybody owed, the damage is dealt (CR 510.2) — for an AI
+    # attacker, which was paused waiting for this, and for a human attacker
+    # with nothing of their own to announce, who was simply stranded.
+    _deal_combat_damage_once_announced(session)
 
 @action_handler("assign_multiblock_damage", human_only=HUMAN_ONLY)
 def _action_assign_multiblock_damage(session, req, seat_type):
@@ -203,14 +200,8 @@ def _action_assign_multiblock_damage(session, req, seat_type):
     ok, details = session.game.assign_multiblock_blocker_damage(req.seat, blocker_split)
     if not ok:
         raise HTTPException(status_code=400, detail=details)
-    # If the attacker is the AI, it was paused waiting for this division —
-    # resolve its combat damage now.
-    if (
-        not _multiblock_split_pending(session)
-        and not _banding_assignment_pending(session)
-        and _seat_type(session, session.game.active_player_index) == "ai"
-    ):
-        _ai_assign_combat_damage(session)
+    # As above: deal the step if this was the last announcement owed.
+    _deal_combat_damage_once_announced(session)
 
 @action_handler("assign_defender_piles")
 def _action_assign_defender_piles(session, req, seat_type):

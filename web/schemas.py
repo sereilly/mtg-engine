@@ -516,6 +516,12 @@ class GameActionRequest(BaseModel):
     # engine refuses an announcement that is some of each. By id, not by the
     # battlefield slot `attacker_damage` is keyed by: this channel is new, and
     # a slot is the address that moves.
+    #
+    # Also sent with `assign_banding_damage`, by a **defending** player, for
+    # an attacker whose combat damage they assign (CR 702.22j; "If blocked by
+    # a creature with banding, the defending player decides whether or not the
+    # damage is assigned 'as though it weren't blocked'", 2018-04-27). There
+    # the other answer is that attacker's entry in `banding_damage`.
     as_though_unblocked_ids: list[int] | None = None
     # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
     # members it blocks — maps blocker battlefield index to the chosen attacker index.

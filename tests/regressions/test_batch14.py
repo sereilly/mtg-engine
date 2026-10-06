@@ -699,12 +699,12 @@ class TestTwoHeadedGiantDamageDivision:
                   "blocker_damage_split": {"0": {"0": 2, "1": 2}}},
         )
         assert resp.status_code == 200, resp.text
-        game.priority_player_index = 0
-        resp = client.post(
-            f"/api/sessions/{sid}/action",
-            json={"seat": 0, "action": "assign_combat_damage"},
-        )
-        assert resp.status_code == 200, resp.text
+        # The defender's division was the last announcement anybody owed, so
+        # the damage is dealt by it (CR 510.1 -> 510.2). This test used to
+        # force priority back to the attacker and post an `assign_combat_damage`
+        # of their own here — an action their client has no dialog to send,
+        # both attackers being single-blocked — which is how two people at
+        # this board were left in a combat damage step neither could resolve.
         assert game.combat_damage_resolved
         assert not any(p.card.name == "Bear One" for p in game.players[0].battlefield)
         assert not any(p.card.name == "Bear Two" for p in game.players[0].battlefield)

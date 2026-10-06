@@ -344,7 +344,7 @@ POSITIONAL_BASELINE: dict[str, int] = {
     # them changed: "whenever this creature attacks and isn't blocked" fires
     # when blocks lock (CR 509.1h) rather than inside `resolve_combat_damage`,
     # so its `controller.battlefield[idx]` went with it.
-    "engine/phases/combat_damage_step.py": 16,
+    "engine/phases/combat_damage_step.py": 14,
     "engine/phases/combat_phase.py": 11,
     "engine/phases/declare_attackers_step.py": 4,
     "engine/phases/declare_blockers_step.py": 15,
