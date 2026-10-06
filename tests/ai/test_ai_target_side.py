@@ -259,7 +259,18 @@ def test_rupture_is_not_cast_with_nothing_to_sacrifice(set_pool):
     action = choose_cast_action(game, 0)
     assert action is None or action.card_name != "Rupture"
 
+    # Something to sacrifice **and something for the sacrifice to buy**: the
+    # three damage kills two opposing creatures. With only its own Fodder on
+    # the table the cast is a creature given up for three damage each way,
+    # which measures as the loss it is and is not proposed either.
     game = _duel(hand=[nem["Rupture"]], mine=[_mk_creature_card("Fodder", 3, 3)])
+    action = choose_cast_action(game, 0)
+    assert action is None or action.card_name != "Rupture"
+
+    game = _duel(
+        hand=[nem["Rupture"]], mine=[_mk_creature_card("Fodder", 3, 3)],
+        theirs=[_mk_creature_card("Foe", 3, 3), _mk_creature_card("Other Foe", 2, 3)],
+    )
     action = choose_cast_action(game, 0)
     assert action is not None and action.card_name == "Rupture"
 
@@ -376,9 +387,21 @@ def test_a_drain_is_aimed_at_the_opponent_not_the_caster(set_pool):
 
 def test_a_loss_that_pays_for_a_draw_keeps_the_draw_probes_answer(set_pool):
     """Peer into the Abyss: the target also *draws*, so the life loss is the
-    price of the cards and the draw probe still decides — the caster."""
-    game = Game(players=[PlayerState(name="AI", life=12), PlayerState(name="Opp")])
-    assert _choose_target_for_spell(set_pool("M21")["Peer into the Abyss"], 0, game) == 0
+    price of the cards and the caster takes both.
+
+    With a library to draw from. The probe this was written against answered
+    "the caster" for the word "draw" on any board; on the one this test had —
+    two empty libraries — the spell draws nothing and only halves a life
+    total, and the measured answer there is the opponent."""
+    forest = set_pool("M21")["Forest"]
+    game = Game(players=[
+        PlayerState(name="AI", life=12, library=[forest] * 20),
+        PlayerState(name="Opp", library=[forest] * 20),
+    ])
+    peer = set_pool("M21")["Peer into the Abyss"]
+    assert _choose_target_for_spell(peer, 0, game) == 0
+    barren = Game(players=[PlayerState(name="AI", life=12), PlayerState(name="Opp")])
+    assert _choose_target_for_spell(peer, 0, barren) == 1
 
 
 # --- W3G4: an own-seat ability is aimed by the step that targets ---------------

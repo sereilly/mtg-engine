@@ -1127,7 +1127,15 @@ def test_next_phase_ai_defender_casts_instant_after_declaring_blockers():
     payload = ai_block_and_cast.json()
     assert payload["current_step"] == "declare_blockers"
     assert payload["combat"]["blockers_locked"] is True
-    assert payload["players"][0]["life"] == 17
+    # The Bolt goes where it does most: the 3/3 attacker its 2/2 has blocked,
+    # which dies before it deals damage and leaves the blocker alive. It went
+    # to the attacking player's face (20 -> 17) while "any target" was aimed
+    # at a seat and nothing weighed the creature.
+    assert payload["players"][0]["life"] == 20
+    assert [p.card.name for p in session.game.players[0].battlefield] == []
+    assert [
+        p.card.name for p in session.game.players[1].battlefield if p.is_creature
+    ] == ["Blocker"]
 
 
 def test_mons_goblin_raiders_classifies_supported(all_cards):

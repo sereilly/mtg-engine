@@ -27,7 +27,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_policy import (SLOW_RETURN_PILE_SIZE, X_LIFE_RESERVE,
-                              _cast_candidate, tap_planned_lands)
+                              _cast_candidate, _pick_x_value, tap_planned_lands)
 from engine.ai_valuation import (_walk_program, exiled_search_pile_comes_back,
                                  exiled_search_pile_comes_back_one_at_a_time)
 from engine.card_loader import load_cards, manifest_set_paths
@@ -106,24 +106,32 @@ def test_w2g5_an_x_paid_in_life_keeps_a_reserve(pool):
         _w2g5_furnish(low, pool)
         low.players[0].life = X_LIFE_RESERVE
         assert _cast_candidate(low, 0, card, 0) is None, card.name
-    assert proposed >= 2
+    # One, where it was two. Hatred is the other, and on this board it is no
+    # longer proposed at any X: ten life for a +10/+0 that is gone by the end
+    # of the turn measures as a loss (`ai_policy._worth_proposing`), which the
+    # reserve never asked. Its X is held to the reserve in the test below.
+    assert proposed >= 1
 
 
 def test_w2g5_hatred_does_not_pay_the_casters_whole_life(pool):
     """The defect, played out. At twenty life the AI announced X = 20, paid it,
     and was at zero when its own spell resolved."""
-    game = _w2g5_table(pool, [pool["Hatred"]])
+    game = _w2g5_table(pool, [pool["Hatred"]], enforce=False)
     _w2g5_furnish(game, pool)
-    action = _cast_candidate(game, 0, pool["Hatred"], 0)
-    tap_planned_lands(game, 0, action)
+    # The X is the policy's (`_pick_x_value`); the cast is made here. It was
+    # the policy's too, until a cast was measured before it was proposed: a
+    # price in life for a pump that ends with the turn is a loss on any board
+    # the measure can see, so the seat holds the card.
+    assert _cast_candidate(game, 0, pool["Hatred"], 0) is None
+    x_value = _pick_x_value(game, game.players[0], pool["Hatred"], hand_index=0)
+    mine = next(p for p in game.controlled_by(0) if p.is_creature)
     result = game.cast_from_hand(
-        0, "Hatred", target_player_index=action.target_player_index,
-        target_permanent_index=action.target_permanent_index,
-        target_permanent_ids=action.target_permanent_ids, x_value=action.x_value,
+        0, "Hatred", target_player_index=0,
+        target_permanent_ids=[mine.permanent_id], x_value=x_value,
     )
     assert result.supported, result
     resolve_stack(game)
-    assert game.players[0].life == 20 - action.x_value >= X_LIFE_RESERVE
+    assert game.players[0].life == 20 - x_value >= X_LIFE_RESERVE
     assert not game.players[0].lost
 
 

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 from itertools import product
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 
 from .ai_valuation import (
+    Rehearsal,
+    deliberating,
+    permanent_worth,
+    rehearse,
+    rehearsing,
     OFFER_ALTERS,
     OFFER_KICKS,
     OFFER_RETURNS_SPELL,
@@ -25,11 +30,8 @@ from .ai_valuation import (
     ability_denies_its_target,
     ability_target_side,
     cards_drawn_by_controller,
-    cards_drawn_by_target,
     caster_sacrifice_steps,
     castable_commanders,
-    counters_a_spell,
-    destroyed_permanent_filter,
     divided_shape,
     foreign_activation_use,
     hand_entry_steps,
@@ -40,15 +42,14 @@ from .ai_valuation import (
     mana_ability_symbols,
     offer_trade,
     planned_mana_yield,
-    returns_creature_to_hand,
     role_target_sides,
     several_target_slot_sides,
     source_becomes_an_aura,
     source_toughness_change,
     spell_denies_its_own_target,
     spell_hand_pick_entry_filters,
+    spell_seat_side,
     spell_target_side,
-    spell_makes_its_target_lose_life,
     TollLoss,
     toll_branch_loss,
 )
@@ -62,7 +63,6 @@ from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
 from .classifier import classify_card
 from .faces import castable_faces, spell_named
 from .game import Game
-from .handlers._common import permanent_matches_filter
 from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
                            permanent_matches_enchant_noun)
 from .target_restrictions import forbidden_target
@@ -855,7 +855,264 @@ def _offer_announcements(
     ]
 
 
+#: What an instant or sorcery scores before anything it does is counted. The
+#: sum the old weights made of "a card" (1.5) and "a spell" (2.0).
+SPELL_BASE_SCORE = 3.5
+#: The most a measured swing moves a score either way: a cast that wins the
+#: game outranks everything, and by a number that still adds and compares.
+SWING_CAP = 60.0
+#: A cast measured to leave its caster this much worse off is not proposed:
+#: half a life. Not zero, so that a measure a hair under nothing (a point of
+#: power lent to an opposing blocker for a turn) does not hold a card for
+#: ever; and no lower, because the casts between here and a life and a half
+#: were all the same cast — a sweep or a shrink landing on the caster alone.
+HARM_FLOOR = -0.5
+#: How many distinct targets one cast is rehearsed at. A rehearsal is a cast,
+#: and a board of forty permanents is not forty questions worth asking.
+TARGETS_WEIGHED = 8
+
+
+#: The mana of each kind a rehearsed cast is lent to pay for itself: more
+#: than any spell in the pool can ask for at any X the planner sizes.
+_REHEARSAL_MANA = 40
+
+#: Set while a card is being weighed **in the abstract** — what is this one
+#: worth to hold — rather than as a cast to make now (`_score_tutor_choice`).
+#: The question is asked by a search part-way through its own resolution, a
+#: moment no cast can be rehearsed in, and it is not about that moment: the
+#: rehearsal runs on a copy that owes nothing (``ai_valuation.rehearse``'s
+#: ``detach="abstract"``).
+_IN_THE_ABSTRACT: ContextVar[bool] = ContextVar("ai_in_the_abstract", default=False)
+
+
+def _held_as(player, card: CardDefinition) -> "CardDefinition | None":
+    """The card in *player*'s hand that *card* is a spell of — itself, or the
+    split card it is one half of (CR 709.3) — or None when the hand holds no
+    such card."""
+    return next(
+        (
+            held for held in player.hand
+            for face in castable_faces(held)
+            if face is card or face == card
+        ),
+        None,
+    )
+
+
+def _announcement(
+    card: CardDefinition,
+    *,
+    target: int,
+    permanent_index: "int | list[int] | None" = None,
+    permanent_ids: "list[int] | None" = None,
+    x_value: int | None = None,
+) -> dict:
+    """What a cast of the candidate being built announces when it names
+    *target* (and the permanent given), in `cast_announcement`'s own shape —
+    so a rehearsal of a half-built candidate and of the finished `CastAction`
+    are one question asked once."""
+    offers = _OFFERS_ANNOUNCED.get()
+    return cast_announcement(CastAction(
+        card_name=card.name,
+        target_player_index=target,
+        x_value=x_value,
+        land_tap_indices=(),
+        score=0.0,
+        hand_index=0,
+        target_permanent_index=permanent_index,
+        target_permanent_ids=permanent_ids,
+        optional_cost_payments=(
+            dict(offers) if _announces_any_offer(card, offers) else None
+        ),
+        mode_index=_announced_mode(card),
+    ))
+
+
+def _rehearse_announcement(
+    game: Game, seat: int, card: CardDefinition, announcement: dict,
+    *, planned: "CastAction | None" = None,
+) -> Rehearsal | None:
+    """What casting *card* with *announcement* would do, carried out on a
+    scratch copy of the game (``ai_valuation.rehearse``) — or None when no
+    rehearsal can be run.
+
+    The cast is the executors' own: ``queue_from_hand`` with the keywords
+    `cast_announcement` produces, and the copy then resolves it. A card the
+    seat does not hold (a chooser asked about a spell in the abstract) is put
+    in the copy's hand first, and then its leaving is not a card the cast
+    cost.
+
+    **The mana is the executors' too, once there is a plan.** *planned* is
+    the finished `CastAction`: its lands are tapped on the copy for the
+    colours it planned (`tap_planned_lands`) and the cast pays out of them,
+    which is every executor's two lines — so what the caster has left to
+    spend while the spell resolves is what it will really have left. Chain
+    Stasis is the card that notices: its copies are paid for one after
+    another until the mana runs out, and one mana more is a creature left
+    tapped instead of untapped.
+
+    Before there is a plan — a target is weighed before any land is — the
+    spell's own mana is **lent**: the copy's caster is handed a pool to pay
+    out of and has it taken back the moment the spell is on the stack.
+    Either way mana stays enforced for everything the resolution then asks
+    anyone to pay.
+    """
+    if rehearsing():
+        return None
+    from_hand = announcement.get("from_zone", "hand") == "hand"
+    in_hand = _held_as(game.players[seat], card) if from_hand else None
+    held = not from_hand or in_hand is not None
+    # The name the card goes by in a hand and a graveyard, which for a half
+    # of a split card is the whole card's (CR 709.4).
+    zone_name = in_hand.name if in_hand is not None else card.name
+
+    def perform(table):
+        player = table.players[seat]
+        if not held:
+            table.put_card_into_hand(player, card)
+        if planned is not None:
+            tap_planned_lands(table, seat, planned)
+            return table.queue_from_hand(seat, card.name, **announcement)
+        floating = dict(player.mana_pool)
+        for symbol in _MANA_SYMBOLS:
+            player.mana_pool[symbol] = int(floating.get(symbol, 0) or 0) + _REHEARSAL_MANA
+        try:
+            return table.queue_from_hand(seat, card.name, **announcement)
+        finally:
+            player.mana_pool.clear()
+            player.mana_pool.update(floating)
+
+    def paid_for(table, _carried) -> None:
+        # The table the planned cast is compared with: the same lands
+        # tapped, and the mana they made let go — so a tapped land, and
+        # whatever tapping it set off, is on both sides and is not read as
+        # something the spell did.
+        pool = table.players[seat].mana_pool
+        floating = dict(pool)
+        tap_planned_lands(table, seat, planned)
+        pool.clear()
+        pool.update(floating)
+
+    taps = planned is not None and bool(planned.land_tap_indices)
+    return rehearse(
+        game, seat, perform, spell_name=zone_name,
+        leaves_hand=from_hand and held,
+        key=(
+            seat, card.name, held, planned is not None,
+            repr(sorted(announcement.items())),
+        ),
+        without=paid_for if taps else None,
+        without_key=(
+            ("paid", planned.land_tap_indices, planned.land_tap_colors)
+            if taps else None
+        ),
+        detach="abstract" if _IN_THE_ABSTRACT.get() else False,
+    )
+
+
+def _names_an_unweighed_seat(
+    game: Game, seat: int, card: CardDefinition
+) -> bool:
+    """Whether a cast nobody could rehearse would name a player out of
+    several with nothing having weighed which.
+
+    "Target player discards two cards" has no side to read off its program:
+    which player is `_choose_target_for_spell`'s rehearsal of each seat, and
+    with no rehearsal to be had (the table is part-way through a resolution;
+    the copy raised) every seat scores alike and the tie is the caster's.
+    Such a cast is held for a moment it can be measured in. A spell that
+    names an object, or nobody, is aimed by what its program says and is
+    proposed unmeasured, as it always was.
+    """
+    return len(_seats_the_cast_may_name(game, seat, card)) > 1
+
+
+def _worth_proposing(rehearsal: Rehearsal | None) -> bool:
+    """Whether a rehearsed cast is one to propose: the engine took it, it
+    changed something, and it did not leave its caster plainly worse off.
+
+    A cast nobody could rehearse (None) is proposed as it always was.
+    """
+    if rehearsal is None:
+        return True
+    return rehearsal.accepted and rehearsal.changed and rehearsal.swing >= HARM_FLOOR
+
+
+def choose_trigger_mode(game: Game, choice, stated: int) -> int:
+    """Which offered mode of a **modal triggered ability** a seat nobody asks
+    takes (CR 700.2b): the one measured to do most, or *stated* — the
+    registry's standing answer, the first mode that is not a price — when
+    nothing measures more than it or no rehearsal can be run.
+
+    The valuation the cast chooser weighs a spell's bullets with, asked of a
+    trigger's: each offered mode is answered on a scratch copy of the game
+    (``Game._resolve_mode_choice``, which records the mode and its default
+    target on the ability), the ability resolves there, and the swings are
+    compared (``ai_valuation.rehearse``). So Trufflesnout takes four life at
+    three life and the counter at twenty, and Elder Gargaroth draws when a
+    Beast is worth less to it than a card — where each took its first bullet
+    whatever the board.
+
+    The choice is made as the ability goes on the stack (CR 603.3c), which
+    for an entry trigger is while the permanent's own spell is still
+    resolving; the copy is cut loose from that (``detach``) and carries out
+    the ability alone. "Nothing done" is the ability taken off the stack,
+    which is what CR 700.2b does to one with no mode chosen.
+    """
+    item = choice.data.get("_trigger_item")
+    options = tuple(choice.data.get("_options") or ())
+    if item is None or len(options) < 2 or rehearsing():
+        return stated
+
+    def without(table, prompt) -> None:
+        ability = prompt.data.get("_trigger_item")
+        table.stack = [queued for queued in table.stack if queued is not ability]
+
+    class _Answered:
+        def __init__(self, supported: bool) -> None:
+            self.supported = supported
+            self.details = "" if supported else "the mode could not be chosen"
+
+    best, best_swing = stated, None
+    with deliberating():
+        order = [stated, *(index for index in range(len(options)) if index != stated)]
+        for index in order:
+            rehearsal = rehearse(
+                game, choice.player_index,
+                lambda table, prompt, index=index: _Answered(
+                    bool(table._resolve_mode_choice(prompt, index))
+                ),
+                leaves_hand=False, carried=choice, detach=True, without=without,
+            )
+            if rehearsal is None:
+                return stated
+            if not rehearsal.accepted:
+                continue
+            if best_swing is None or rehearsal.swing > best_swing + 1e-9:
+                best, best_swing = index, rehearsal.swing
+    return best
+
+
 def _cast_candidate(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+) -> CastAction | None:
+    """`_cast_candidate_in_each_mode` inside one deliberation: every mode,
+    offer and target of *card* this decision weighs is measured against one
+    reading of the table with nothing cast (``ai_valuation.deliberating``)."""
+    with deliberating():
+        return _cast_candidate_in_each_mode(
+            game, player_index, card, hand_index,
+            from_zone=from_zone, extra_generic=extra_generic,
+        )
+
+
+def _cast_candidate_in_each_mode(
     game: Game,
     player_index: int,
     card: CardDefinition,
@@ -1188,6 +1445,25 @@ def _cast_candidate_announcing(
         game, player_index, card, hand_index, from_zone, x_value, taken=offers
     ):
         return None
+    # Whether the mana is there at all, asked **before** any target is
+    # weighed. The plan below asks it again with the offers' mana on top and
+    # is what the cast is built from; this is the same question about the
+    # printed cost alone, which every announcement of the card has to pay, so
+    # a card it stops here is one the plan would have stopped anyway — and
+    # weighing a target is a rehearsal apiece (`_choose_single_object_target`).
+    if (
+        game.enforce_mana_costs
+        and card.primary_type != "land"
+        and _plan_land_taps(
+            game, player,
+            _cost_for(game, player, card, x_value, extra_generic=extra_generic),
+        ) is None
+        and (
+            _announces_any_offer(card, offers)
+            or not _alternative_cost_is_payable(game, player_index, card, hand_index)
+        )
+    ):
+        return None
     target = _choose_target_for_spell(card, player_index, game, x_value)
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
@@ -1241,7 +1517,9 @@ def _cast_candidate_announcing(
                     x_value = len(target_permanent_index)
                 # --- end W2G2 ---------------------------------------------------
             else:
-                single = _choose_single_object_target(game, player_index, card, target)
+                single = _choose_single_object_target(
+                    game, player_index, card, target, x_value=x_value,
+                )
                 if single == ():
                     # The side the effect wants holds no legal target, so the
                     # cast would resolve doing nothing — or doing it to the
@@ -1364,15 +1642,12 @@ def _cast_candidate_announcing(
         else:
             tap_indices, tap_colors = plan
 
-    score = _score_cast(game, player_index, card, target, x_value)
-    if from_zone == "command":
-        score += COMMAND_ZONE_CAST_BONUS
-    return CastAction(
+    action = CastAction(
         card_name=card.name,
         target_player_index=target,
         x_value=x_value,
         land_tap_indices=tap_indices,
-        score=score,
+        score=0.0,
         hand_index=hand_index,
         target_permanent_index=target_permanent_index,
         target_permanent_ids=target_permanent_ids,
@@ -1383,6 +1658,29 @@ def _cast_candidate_announcing(
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
     )
+    # **What the cast would do, asked of the engine** — for a spell, whose
+    # whole worth is its resolution. The finished announcement is carried out
+    # on a scratch copy of the game (`_rehearse_announcement`) and three
+    # things are read off it: whether the engine takes the cast at all,
+    # whether the resolution changes anything, and how far it moves this seat
+    # against the table. A cast that fails any of them is not proposed —
+    # which is every "legal and useless" cast this function used to make one
+    # gate at a time: a discard at an empty hand, a sweeper with nothing to
+    # sweep, a guard that cannot hold, a removal spell whose only target is
+    # the caster's own. The swing is the score.
+    rehearsal = None
+    if card.primary_type in SPELL_TYPES:
+        rehearsal = _rehearse_announcement(
+            game, player_index, card, cast_announcement(action), planned=action,
+        )
+        if not _worth_proposing(rehearsal):
+            return None
+        if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
+            return None
+    score = _score_cast(game, player_index, card, target, x_value, rehearsal)
+    if from_zone == "command":
+        score += COMMAND_ZONE_CAST_BONUS
+    return replace(action, score=score)
 
 
 def _printed_costs_are_payable(
@@ -2916,27 +3214,31 @@ def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastActi
     player = game.players[player_index]
 
     best: CastAction | None = None
-    for hand_index, card in hand_spells(player):
-        if card.primary_type != "instant":
-            continue
-        built: list[CastAction] = []
-        chosen: CastAction | None = None
-        for mode_index in _modes_weighed(game, player_index, card):
-            with considering_mode(card, mode_index):
-                candidate = _combat_instant_candidate(
-                    game, player_index, card, hand_index
-                )
-            if candidate is None:
+    # One deliberation for the whole hand: every instant weighed here answers
+    # the same stack and the same combat, so each is measured against one
+    # reading of how that goes with nothing cast.
+    with deliberating():
+        for hand_index, card in hand_spells(player):
+            if card.primary_type != "instant":
                 continue
-            built.append(candidate)
-            # Strictly better only: equal modes of one card keep printed order.
-            if chosen is None or candidate.score > chosen.score:
-                chosen = candidate
-        if len(built) > 1 and compile_card_oracle(card).modes_at_least:
-            # "Choose one or more —": every mode worth casting, in one cast.
-            chosen = _every_mode_worth_casting(built, chosen) or chosen
-        if chosen is not None and _is_better_cast(chosen, best):
-            best = chosen
+            built: list[CastAction] = []
+            chosen: CastAction | None = None
+            for mode_index in _modes_weighed(game, player_index, card):
+                with considering_mode(card, mode_index):
+                    candidate = _combat_instant_candidate(
+                        game, player_index, card, hand_index
+                    )
+                if candidate is None:
+                    continue
+                built.append(candidate)
+                # Strictly better only: equal modes of one card keep printed order.
+                if chosen is None or candidate.score > chosen.score:
+                    chosen = candidate
+            if len(built) > 1 and compile_card_oracle(card).modes_at_least:
+                # "Choose one or more —": every mode worth casting, in one cast.
+                chosen = _every_mode_worth_casting(built, chosen) or chosen
+            if chosen is not None and _is_better_cast(chosen, best):
+                best = chosen
 
     return best
 
@@ -2972,32 +3274,27 @@ def _combat_instant_candidate(
     # cast, and a spell that sacrifices what its caster lacks is not cast.
     target_permanent_index: int | None = None
     target_permanent_ids: list[int] | None = None
-    if divided is None:
-        single = _choose_single_object_target(game, player_index, card, target)
-        if single == ():
-            return None
-        if single is not None:
-            target, target_permanent_index, target_permanent_ids = single
-    if not _caster_can_make_its_sacrifices(game, player_index, card):
-        return None
     tap_indices: tuple[int, ...] = ()
     tap_colors: tuple[str, ...] = ()
 
+    # The mana before the target, for `_cast_candidate_announcing`'s reason:
+    # weighing a target is a rehearsal apiece, and a spell the lands cannot
+    # pay for has none worth weighing.
     if game.enforce_mana_costs:
         required = _cost_for(game, player, card, x_value)
         plan = _plan_land_taps(game, player, required)
         if plan is None:
             return None
         tap_indices, tap_colors = plan
-
-    score = _score_cast(game, player_index, card, target, x_value)
-    # During declare blockers, prefer combat-relevant instants.
-    if game.current_turn_phase == "combat" and game.current_step == "declare_blockers":
-        lowered = spell_text(card)
-        if "damage" in lowered or "destroy" in lowered or "prevent" in lowered or "tap" in lowered:
-            score += 2.0
-    score += _stack_response_bonus(game, player_index, card, target)
-    if score < 2.0:
+    if divided is None:
+        single = _choose_single_object_target(
+            game, player_index, card, target, x_value=x_value,
+        )
+        if single == ():
+            return None
+        if single is not None:
+            target, target_permanent_index, target_permanent_ids = single
+    if not _caster_can_make_its_sacrifices(game, player_index, card):
         return None
 
     candidate = CastAction(
@@ -3005,7 +3302,7 @@ def _combat_instant_candidate(
         target_player_index=target,
         x_value=x_value,
         land_tap_indices=tap_indices,
-        score=score,
+        score=0.0,
         hand_index=hand_index,
         target_permanent_index=target_permanent_index,
         target_permanent_ids=target_permanent_ids,
@@ -3014,8 +3311,32 @@ def _combat_instant_candidate(
         mode_index=_announced_mode(card),
         target_stack_index=stack_target,
     )
+    # What casting it **now** would do, measured against what happens with
+    # nothing cast: the spell on the stack resolving, the declared combat
+    # dealing its damage (`ai_valuation.rehearse`). That comparison is the
+    # whole of what the words "damage", "destroy", "prevent" and "tap" in a
+    # card's text used to stand for here — a counterspell is worth the spell
+    # it stops, a pump is worth the blocker it saves and the attacker that
+    # dies to it — and a response that changes nothing is not made.
+    rehearsal = _rehearse_announcement(
+        game, player_index, card, cast_announcement(candidate), planned=candidate,
+    )
+    if not _worth_proposing(rehearsal):
+        return None
+    if rehearsal is None and _names_an_unweighed_seat(game, player_index, card):
+        return None
+    if rehearsal is not None and rehearsal.lasting <= 0.0:
+        # Nothing it does outlasts the turn: a pump with no fight to decide,
+        # a shield with nothing coming, a tap of something already tapped.
+        # The seat's own main phase is where such a card is still worth a
+        # cast; a response is held for a moment it changes.
+        return None
+    score = _score_cast(game, player_index, card, target, x_value, rehearsal)
+    score += _stack_response_bonus(game, player_index)
+    if score < 2.0:
+        return None
 
-    return candidate
+    return replace(candidate, score=score)
 
 
 def choose_search_card(
@@ -3231,7 +3552,42 @@ def choose_scry_arrangement(
     return [index for index, _ in kept] + [index for index, _ in bottomed], len(bottomed)
 
 
+#: `_score_tutor_choice`'s answers for one position: ``{"at": stamp, (seat,
+#: card name): score}``. A search weighs every card it may find, a library is
+#: mostly repeats, and weighing a spell is a rehearsal — so each card is
+#: weighed once for as long as the position stands.
+_TUTOR_SCORES: dict = {}
+
+
 def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> float:
+    """What *card* is worth to *player_index* to have: the score casting it
+    would get, in the abstract (`_IN_THE_ABSTRACT`), with what the seat's
+    lands say about when.
+
+    For the choosers that pick a card rather than cast one — a search, a
+    scry, a library rearranged. A spell's worth is what a rehearsal of it
+    measures on this board; it was the cast scorer's probes on the card's
+    text, which went when the cast scorer stopped reading text.
+    """
+    stamp = (
+        id(game), len(game.log), game.turn,
+        tuple((seat.life, len(seat.hand), len(seat.battlefield)) for seat in game.players),
+    )
+    if _TUTOR_SCORES.get("at") != stamp:
+        _TUTOR_SCORES.clear()
+        _TUTOR_SCORES["at"] = stamp
+    key = (player_index, card.name)
+    if key not in _TUTOR_SCORES:
+        token = _IN_THE_ABSTRACT.set(True)
+        try:
+            with deliberating():
+                _TUTOR_SCORES[key] = _tutor_score(game, player_index, card)
+        finally:
+            _IN_THE_ABSTRACT.reset(token)
+    return _TUTOR_SCORES[key]
+
+
+def _tutor_score(game: Game, player_index: int, card: CardDefinition) -> float:
     player = game.players[player_index]
     opponent_index = choose_attack_target(game, player_index)
     opponent = game.players[opponent_index]
@@ -3276,42 +3632,22 @@ def _score_tutor_choice(game: Game, player_index: int, card: CardDefinition) -> 
     return score
 
 
-def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, target_index: int) -> float:
+def _stack_response_bonus(game: Game, caster_index: int) -> float:
+    """What answering the object on top of the stack adds to an instant's
+    score, beyond what the instant was measured to do.
+
+    One rule, and it is about whose object that is: a seat does not spend a
+    reaction on its own spell. Everything this used to add — six for a
+    counterspell that could name the top spell, more for the words "prevent",
+    "gain … life" and "destroy" in the card's text — was a guess at what the
+    response would be worth, and the candidate's score is now that worth,
+    measured (`_combat_instant_candidate`).
+    """
     if not game.stack:
         return 0.0
-
-    top = game.stack[-1]
-    if top.caster_index == caster_index:
-        # Avoid spending reaction cards while responding to our own stack item.
+    if game.stack[-1].caster_index == caster_index:
         return -0.5
-
-    lowered = spell_text(card)
-    bonus = 0.0
-
-    # Countering is only worth holding up against a spell this card may legally
-    # be aimed at, which is why the profile carries the colour restriction
-    # rather than the caller assuming there is none.
-    counter = counters_a_spell(card)
-    if counter is not None and counter.can_counter(top.card):
-        bonus += 6.0
-
-    if top.target_player_index == caster_index:
-        if "prevent" in lowered and "damage" in lowered:
-            bonus += 2.5
-        if "gain" in lowered and "life" in lowered:
-            bonus += 1.5
-
-    if _extract_damage(card) > 0 and target_index == choose_attack_target(game, caster_index):
-        bonus += 1.0
-
-    # Removal is worth a little in response. The probes here used to be
-    # ``"disenchant" in lowered or "unsummon" in lowered`` — a card's *name*
-    # looked for inside its own oracle text, which no card in the pool contains,
-    # so both were dead and only the generic "destroy" ever fired.
-    if "destroy" in lowered or destroyed_permanent_filter(card) is not None or returns_creature_to_hand(card):
-        bonus += 0.75
-
-    return bonus
+    return 0.0
 
 
 def _is_better_cast(candidate: CastAction, current: CastAction | None) -> bool:
@@ -4254,11 +4590,24 @@ _NOT_OBJECT_SPECS = frozenset({
 
 
 def _choose_single_object_target(
-    game: Game, caster_index: int, card: CardDefinition, preferred_seat: int
+    game: Game, caster_index: int, card: CardDefinition, preferred_seat: int,
+    *, x_value: int | None = None,
 ):
     """Name the one permanent a one-object-target spell is cast at:
     ``(seat, index, [permanent_id])``, ``()`` when the side the effect wants
     holds no legal target, or None when *card* is not such a spell.
+
+    **Which permanent is the one the cast does most at.** Every legal target
+    on the side the effect wants is a different cast, so each is rehearsed
+    (`_best_target`) and the largest swing named: the creature a -2/-2 kills
+    rather than the one it only shrinks, the dearest thing a destroy may
+    take, the body a pump does most on. This named the first legal permanent
+    in battlefield order — whichever the seat happened to play first.
+
+    A spell that may name **a player or a permanent** ("any target") is
+    weighed the same way against the seat it would otherwise be aimed at:
+    three damage is worth a creature it kills more often than it is worth
+    three life (`_better_than_the_seat`).
 
     The cast used to name a **seat** and leave the permanent to the handler's
     board scan — the headless convention, which W1G2 measured 156 of 182
@@ -4280,9 +4629,14 @@ def _choose_single_object_target(
     """
     program = compile_card_oracle(card)
     spec = _cast_spec(card, program)
+    # "Target spell **or permanent**" (the five Laces): on a battlefield the
+    # answer is a permanent like any other, and a cast that named only a seat
+    # left the handler to find one on it — the caster's own, which with
+    # nothing of the caster's there was a cast that did nothing.
+    spell_or_permanent = isinstance(spec, dict) and spec.get("kind") == "spell_or_permanent"
     if (
         not isinstance(spec, dict)
-        or spec.get("kind") in _NOT_OBJECT_SPECS
+        or (spec.get("kind") in _NOT_OBJECT_SPECS and not spell_or_permanent)
         or spec_roles(spec)
         or _targets_are_optional(_announced_steps(card, program))
         # A spell with **no target**, whose derived spec is the picker for its
@@ -4303,8 +4657,20 @@ def _choose_single_object_target(
         # instruction, so a list asked with none is mode 0's list.
         mode_index=_announced_mode(card),
     )
-    if not legal or any(entry.get("kind") != "permanent" for entry in legal):
+    if spell_or_permanent:
+        # The spells on offer are `_guarded_stack_target`'s and the engine's.
+        legal = [entry for entry in legal if entry.get("kind") == "permanent"]
+    if not legal:
         return None
+    # A seat among the answers: "any target", "target player or planeswalker".
+    names_a_seat = any(entry.get("kind") != "permanent" for entry in legal)
+    legal = [entry for entry in legal if entry.get("kind") == "permanent"]
+    if names_a_seat:
+        if not legal or card.primary_type not in SPELL_TYPES:
+            return None
+        return _better_than_the_seat(
+            game, caster_index, card, legal, preferred_seat, x_value
+        )
     if spell_denies_its_own_target(card):
         # "Return target permanent you control to its owner's hand"
         # (Scapegoat): a denial the printed words aim at the caster's own
@@ -4332,14 +4698,155 @@ def _choose_single_object_target(
         order = [preferred_seat] + [
             seat for seat in [caster_index, *others] if seat != preferred_seat
         ]
+    candidates = _target_candidates(game, legal, order)
+    if not candidates:
+        return ()
+    return _best_target(game, caster_index, card, candidates, x_value)
+
+
+def _target_candidates(game: Game, legal: list[dict], order: list[int]) -> list[tuple]:
+    """*legal* — one-object candidates off the engine's own list — as
+    ``(seat, index, [permanent_id])``, the seats in *order* and each seat's
+    permanents as the enumeration lists them."""
+    candidates: list[tuple] = []
     for seat in order:
         for entry in legal:
             if entry.get("seat") != seat:
                 continue
             permanent_id = game.permanent_id_of(game.permanent_at(seat, entry["index"]))
             if isinstance(permanent_id, int):
-                return seat, entry["index"], [permanent_id]
-    return ()
+                candidates.append((seat, entry["index"], [permanent_id]))
+    return candidates
+
+
+def _distinct_targets(game: Game, candidates: list[tuple]) -> list[tuple]:
+    """*candidates* with look-alikes dropped — two untapped Forests are one
+    question — and at most `TARGETS_WEIGHED` of them kept: the first in
+    order, then the dearest (``ai_valuation.permanent_worth``) and the
+    frailest, since the target a spell does most at is as often the one it
+    can just kill as the one worth most."""
+    seen: set = set()
+    distinct: list[tuple] = []
+    for candidate in candidates:
+        permanent = game.permanent_by_id(candidate[2][0])
+        if permanent is None:
+            continue
+        creature = bool(permanent.is_creature)
+        look = (
+            candidate[0], permanent.card.name, permanent.tapped,
+            creature and permanent.effective_power,
+            creature and permanent.effective_toughness,
+            permanent.damage_marked, permanent.attacking, permanent.blocked,
+            tuple(sorted(permanent.metadata)),
+        )
+        if look in seen:
+            continue
+        seen.add(look)
+        distinct.append((candidate, permanent, creature))
+    if len(distinct) <= TARGETS_WEIGHED:
+        return [candidate for candidate, _permanent, _creature in distinct]
+    kept: list[int] = [0]
+    by_worth = sorted(
+        range(len(distinct)),
+        key=lambda slot: (-permanent_worth(distinct[slot][1]), slot),
+    )
+    by_frailty = sorted(
+        (slot for slot in range(len(distinct)) if distinct[slot][2]),
+        key=lambda slot: (distinct[slot][1].effective_toughness, slot),
+    )
+    for dear, frail in zip(by_worth, by_frailty + by_worth):
+        for slot in (dear, frail):
+            if slot not in kept and len(kept) < TARGETS_WEIGHED:
+                kept.append(slot)
+    return [distinct[slot][0] for slot in sorted(kept)]
+
+
+def _best_target(
+    game: Game, caster_index: int, card: CardDefinition, candidates: list[tuple],
+    x_value: int | None,
+):
+    """The candidate whose cast does most (``ai_valuation.rehearse``), the
+    earlier one on a tie — or ``()`` when every one of them is a cast the
+    engine refuses or that changes nothing.
+
+    One candidate is not rehearsed here: there is nothing to choose, and the
+    cast built from it is rehearsed where it is scored. Neither is anything
+    when no rehearsal can be run; the first candidate is then the answer it
+    always was.
+    """
+    distinct = _distinct_targets(game, candidates)
+    if len(distinct) <= 1:
+        return distinct[0] if distinct else candidates[0]
+    best = None
+    best_swing = None
+    rehearsed = False
+    for seat, index, ids in distinct:
+        # "Destroy target artifact with mana value X": the target fixes X.
+        implied = (
+            game._x_implied_by_target(card, seat, index, None)
+            if x_value is not None else None
+        )
+        rehearsal = _rehearse_announcement(
+            game, caster_index, card,
+            _announcement(
+                card, target=seat, permanent_index=index, permanent_ids=ids,
+                x_value=x_value if implied is None else implied,
+            ),
+        )
+        if rehearsal is None:
+            continue
+        rehearsed = True
+        if not rehearsal.accepted or not rehearsal.changed:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = (seat, index, ids), rehearsal.swing
+    if best is not None:
+        return best
+    return () if rehearsed else distinct[0]
+
+
+def _better_than_the_seat(
+    game: Game, caster_index: int, card: CardDefinition, legal: list[dict],
+    preferred_seat: int, x_value: int | None,
+):
+    """For a spell that may name a player **or** a permanent: the permanent
+    whose cast is measured to do more than naming the seat alone, or None to
+    keep the seat.
+
+    The permanents weighed are on the side the seat choice already says the
+    effect is for — an opponent's when the seat is one (damage), the
+    caster's own when it is the caster's (a shield).
+    """
+    hostile = preferred_seat != caster_index
+    seats = [
+        seat for seat in range(len(game.players))
+        if (seat != caster_index) == hostile
+    ]
+    order = [preferred_seat] + [seat for seat in seats if seat != preferred_seat]
+    candidates = _distinct_targets(game, _target_candidates(game, legal, order))
+    if not candidates:
+        return None
+    at_the_seat = _rehearse_announcement(
+        game, caster_index, card,
+        _announcement(card, target=preferred_seat, x_value=x_value),
+    )
+    if at_the_seat is None:
+        return None
+    best = None
+    best_swing = at_the_seat.swing if at_the_seat.accepted else None
+    for seat, index, ids in candidates:
+        rehearsal = _rehearse_announcement(
+            game, caster_index, card,
+            _announcement(
+                card, target=seat, permanent_index=index, permanent_ids=ids,
+                x_value=x_value,
+            ),
+        )
+        if rehearsal is None or not rehearsal.accepted or not rehearsal.changed:
+            continue
+        if best_swing is None or rehearsal.swing > best_swing:
+            best, best_swing = (seat, index, ids), rehearsal.swing
+    return best
 
 
 #: `if_then` conditions that are a property of **the permanent the spell
@@ -4353,7 +4860,28 @@ def _choose_single_object_target(
 #: creature die this turn) cannot be asked before the cast exists, and
 #: answering it early would withhold spells for a reason that is not true. A
 #: kind left off costs the old behaviour and nothing more.
-_TARGET_GUARDS = frozenset({"target_is_color", "target_shares_most_common_color"})
+_TARGET_GUARDS = frozenset({
+    "target_is_color", "target_shares_most_common_color",
+    # "Counter target spell **if it was kicked**" (Ertai's Trickery): CR
+    # 702.33d's fact about the *targeted* spell, which is on the stack to be
+    # asked. Not `was_kicked`, which is about this one.
+    "target_was_kicked",
+    # "Destroy target nonland permanent **if another permanent with the same
+    # name is on the battlefield**" (Winnow) — `_is_a_target_guard` admits the
+    # kind only in that spelling; "a card with the same name as that spell"
+    # (Bazaar of Wonders) is about a spell some trigger fired on.
+    "same_named_object",
+})
+
+
+def _is_a_target_guard(condition) -> bool:
+    """Whether *condition* is a `_TARGET_GUARDS` clause about the object the
+    spell targets."""
+    if not isinstance(condition, dict) or condition.get("kind") not in _TARGET_GUARDS:
+        return False
+    if condition.get("kind") == "same_named_object":
+        return condition.get("same_name_as") == "target"
+    return True
 
 
 def _reached_by_the_effect(
@@ -4422,8 +4950,7 @@ def _target_guards(card: CardDefinition, *, on_a_spell: bool) -> "tuple[list[dic
         for step in steps
         if step.kind == "if_then"
         and not (step.payload or {}).get("else")
-        and isinstance(condition := (step.payload or {}).get("condition"), dict)
-        and condition.get("kind") in _TARGET_GUARDS
+        and _is_a_target_guard(condition := (step.payload or {}).get("condition"))
         and (condition.get("target") == "spell") == on_a_spell
     ]
     return guards, bool(guards) and len(guards) == len(steps)
@@ -4704,12 +5231,11 @@ def _choose_target_for_spell(
     card: CardDefinition, caster_index: int, game: Game, x_value: int | None = None
 ) -> int:
     # Whose permanent the spell's object target should be, when the compiled
-    # program says (`ai_valuation.spell_target_side`). Asked before the score,
-    # because the score below is a handful of text probes and every spell
-    # outside them tied the two seats — and the tie goes to the caster, so
-    # "Target creature can't attack or block this turn" kept the AI's own
-    # creature home. The side is a claim about what the effect does to its
-    # target, never about which card printed it.
+    # program says (`ai_valuation.spell_target_side`). Asked first, and it is
+    # an answer in its own right: the side is a claim about what the effect
+    # does to its target, never about which card printed it, and it costs no
+    # rehearsal. "Target creature can't attack or block this turn" is aimed
+    # across the table because the kind hampers what it names.
     side = spell_target_side(card)
     if side == "you":
         return caster_index
@@ -4723,12 +5249,67 @@ def _choose_target_for_spell(
     # only for a cast that paid for it).
     if entry_trigger_seat_side(card, _OFFERS_ANNOUNCED.get()) == "opponent":
         return choose_attack_target(game, caster_index)
-    self_score = _score_spell_target(card, caster_index, caster_index, game, x_value)
-    opponent_index = choose_attack_target(game, caster_index)
-    opp_score = _score_spell_target(card, caster_index, opponent_index, game, x_value)
-    if self_score >= opp_score:
-        return caster_index
-    return opponent_index
+    # No side to read: a spell that names a **player** ("target player draws
+    # three cards", "…loses 4 life and you gain 4 life", "…discards a card").
+    # Each seat the announcement may name is weighed (`_score_spell_target`)
+    # and the best one taken. This was a set of
+    # probes on the card's text — "draw" for the caster, "damage" for an
+    # opponent — and a sentence outside them tied, which is how the caster
+    # came to discard to its own Mind Rot.
+    seats = _seats_the_cast_may_name(game, caster_index, card)
+    if len(seats) < 2:
+        return seats[0] if seats else caster_index
+    # Where the seats measure alike, the one the effect's family says
+    # (`ai_valuation.spell_seat_side`): the opponent's, for anything that is
+    # not a gift.
+    favoured = (
+        caster_index if spell_seat_side(card) == "you"
+        else choose_attack_target(game, caster_index)
+    )
+    best_seat, best_score = favoured, None
+    for seat in sorted(seats, key=lambda seat: (seat != favoured, seat)):
+        score = _score_spell_target(card, caster_index, seat, game, x_value)
+        if best_score is None or score > best_score:
+            best_seat, best_score = seat, score
+    return best_seat
+
+
+#: Cast specs whose announcement names a **seat**: a player, or a pile of
+#: cards that is one player's (a graveyard, a hand).
+_SEAT_NAMING_SPECS = frozenset({
+    "player", "player_or_planeswalker", "any", "opponent",
+    "graveyard_creature", "hand_card",
+})
+
+
+def _seats_the_cast_may_name(
+    game: Game, caster_index: int, card: CardDefinition
+) -> list[int]:
+    """The seats a cast of the candidate being built may name, off the
+    engine's own enumeration — empty for a card whose announcement names no
+    seat (a permanent, an untargeted spell, one aimed at an object).
+
+    For a spell only: a permanent's instruction list mirrors its *abilities*
+    (``ai_valuation.SPELL_TYPES``), and the seat a creature spell carries is
+    its entry trigger's, which `_choose_target_for_spell` reads before this.
+    """
+    if card.primary_type not in SPELL_TYPES:
+        return []
+    spec = _cast_spec(card, compile_card_oracle(card))
+    if not isinstance(spec, dict) or spec.get("kind") not in _SEAT_NAMING_SPECS:
+        return []
+    if spec_roles(spec):
+        return []
+    legal = game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
+    )
+    seats = {
+        int(entry["seat"]) for entry in legal
+        if entry.get("kind") != "permanent" and isinstance(entry.get("seat"), int)
+    }
+    return sorted(seats)
 
 
 def _score_spell_target(
@@ -4738,107 +5319,49 @@ def _score_spell_target(
     game: Game,
     x_value: int | None = None,
 ) -> float:
+    """What casting *card* at seat *target_index* is worth to its caster: the
+    swing a rehearsal of that cast measures (``ai_valuation.rehearse``), in
+    the standing's own units.
+
+    A seat-only announcement — the engine picks the object for a spell that
+    names one, as it does for any cast that names none. A cast the engine
+    refuses there scores far below any it accepts, and one that changes
+    nothing scores nothing.
+
+    This was eight probes on the card's text and three on its program: the
+    word "draw" was worth five, "gain" and "life" a share of the life lost,
+    "target opponent" three, a destroy two plus one and a half per permanent
+    the seat happened to control. A sentence outside them scored zero for
+    both seats.
+    """
+    if card.primary_type not in SPELL_TYPES:
+        # A permanent: the seat is its own controller's unless an entry
+        # trigger says otherwise, which the caller has already read.
+        return 1.0 if target_index == caster_index else 0.0
+    rehearsal = _rehearse_announcement(
+        game, caster_index, card,
+        _announcement(card, target=target_index, x_value=x_value),
+    )
+    if rehearsal is None:
+        return 0.0
+    if not rehearsal.accepted:
+        return -SWING_CAP
+    return max(-SWING_CAP, min(SWING_CAP, rehearsal.swing))
+
+
+def _score_cast(
+    game: Game, caster_index: int, card: CardDefinition, target_index: int,
+    x_value: int | None, rehearsal: Rehearsal | None = None,
+) -> float:
+    """What a cast is worth against the other casts the seat could make.
+
+    **A spell is worth what it does**: `SPELL_BASE_SCORE` and the swing its
+    rehearsal measured (*rehearsal*; a spell nobody could rehearse scores the
+    base alone). **A permanent is worth what it is**: its type and, for a
+    creature, its printed body — weights, and tuning like every other number
+    in this module.
+    """
     caster = game.players[caster_index]
-    target = game.players[target_index]
-    # The words the cast will resolve as: one bullet of a modal spell
-    # (`ai_valuation.spell_text`), the whole text of any other. Every probe
-    # below read the whole card, so Dromar's Charm scored as a life-gain spell
-    # while its -2/-2 was the mode in hand.
-    text = spell_text(card)
-
-    score = 0.0
-    if "draw" in text:
-        if target_index == caster_index:
-            # Drawing more cards than the library holds is a loss by CR 704.5b on
-            # the next draw; redirect to the opponent instead. How many cards the
-            # spell draws is read off the compiled instruction, so "Target player
-            # draws X cards" is covered at the X the caster picked and not only
-            # the one card printed "three".
-            drawn = cards_drawn_by_target(card, x_value)
-            if drawn is not None and len(caster.library) <= drawn:
-                score -= 100.0
-            else:
-                score += 5.0
-        else:
-            score += 0.5
-    if "gain" in text and "life" in text:
-        if target_index == caster_index:
-            # Scale score with how much life has been lost from the 20-life starting total.
-            # At full life (20+) the gain is worthless; pressure grows as life drops.
-            life_lost = max(0, 20 - caster.life)
-            score += life_lost * 0.15
-        else:
-            score -= 2.0
-
-    # "Target player **loses** 4 life and you gain 4 life" (Soul Feast): the
-    # loss is the spell's point and it lands on the target, which the "gain …
-    # life" probe above cannot see — read off the program, weighted like damage.
-    # Not where the target also draws (Peer into the Abyss): there the loss is
-    # the price of the cards, and the draw probe above already weighs it.
-    if spell_makes_its_target_lose_life(card) and "draw" not in text:
-        score += -6.0 if target_index == caster_index else 4.0
-
-    damage = _extract_damage(card)
-    if damage == 0:
-        # X-damage spells (Disintegrate, Fireball, …) parse to amount 'x', so the
-        # literal extractor reads 0. Estimate the damage from the most X the caster
-        # can pay; without this the spell registers as dealing no damage and the
-        # tie-break below points it at the caster's own face.
-        damage = _estimate_x_damage(game, caster, card)
-    if damage > 0 and not _spell_damage_names_only_an_object(card):
-        if target_index != caster_index:
-            score += 4.0
-            if target.life <= damage:
-                score += 10.0
-            score += (20 - target.life) * 0.05
-        else:
-            score -= 6.0
-
-    # Interaction aimed at a player's board, valued by what that board offers.
-    # Both used to be one card name each; the two templates they stood for are
-    # printed on nine cards in this pool alone, and the seven that were not
-    # named aimed themselves at the AI's own permanents.
-    if returns_creature_to_hand(card):
-        if target_index == caster_index:
-            return -50.0
-        creatures = [perm for perm in game.controlled_by(target) if perm.is_creature]
-        return 2.0 + max((perm.effective_power for perm in creatures), default=0)
-
-    destroy_filter = destroyed_permanent_filter(card)
-    if destroy_filter is not None:
-        if target_index == caster_index:
-            return -50.0
-        # The engine's own matcher, so the AI counts exactly the permanents it
-        # would be allowed to choose. An unfiltered "destroy target permanent"
-        # carries an empty filter and matches them all.
-        destroyable = [
-            perm for perm in game.controlled_by(target)
-            if permanent_matches_filter(perm, destroy_filter)
-        ]
-        return 2.0 + len(destroyable) * 1.5
-
-    if "target opponent" in text:
-        score += 3.0 if target_index != caster_index else -10.0
-    if "target player" in text and "draw" not in text and damage == 0 and "gain" not in text:
-        score += 0.5 if target_index != caster_index else 0.0
-
-    if card.primary_type == "creature" and target_index == caster_index:
-        score += 1.0
-
-    # 2-player-specific nudge: don't bother if the (only) other player already
-    # lost. Not generalized for 3+ players — no single well-defined "other".
-    if len(game.players) == 2:
-        other = game.players[1 - target_index]
-        if other.life <= 0:
-            score -= 1.0
-
-    return score
-
-
-def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_index: int, x_value: int | None) -> float:
-    caster = game.players[caster_index]
-    opponent_index = choose_attack_target(game, caster_index)
-    opponent = game.players[opponent_index]
 
     if card.primary_type == "land":
         untapped_lands = sum(
@@ -4848,44 +5371,26 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
         )
         return 1.0 if untapped_lands < 4 else 0.2
 
-    score = 1.5
-    if card.primary_type in {"instant", "sorcery"}:
-        score += 2.0
-    if card.primary_type == "creature":
-        score += 1.2
-        score += _creature_stat(card, "power") * 0.7
-        score += _creature_stat(card, "toughness") * 0.4
-    if card.primary_type in {"artifact", "enchantment"}:
-        score += 0.8
-
-    score += _score_spell_target(card, caster_index, target_index, game, x_value)
-
-    if x_value is not None:
-        score += min(4.0, x_value * 0.6)
-
-    # Card advantage: the cards this spell draws, less the one spent casting it.
-    # The weight is tuning; which cards it applies to is not, and it used to be
-    # a flat +8.0 for one name — worth exactly 4.0 per net card at the three
-    # that name draws, and nothing at all to every other draw spell.
-    drawn = cards_drawn_by_target(card, x_value)
-    if drawn is not None:
-        score += 4.0 * (drawn - 1)
-        # Never self-target a draw that outruns the library: CR 704.5b on the
-        # next draw step.
-        if target_index == caster_index and len(caster.library) <= drawn:
-            return -100.0
-
-    # Burn that closes the game outranks everything. The threshold used to read
-    # ``card.name == "Lightning Bolt" and opponent.life <= 3`` — which is that
-    # card's damage spelled out, so any other lethal burn spell got nothing.
-    damage = _extract_damage(card) or _estimate_x_damage(game, caster, card)
-    if (
-        damage > 0
-        and target_index == opponent_index
-        and opponent.life <= damage
-        and not _spell_damage_names_only_an_object(card)
-    ):
-        score += 12.0
+    if card.primary_type in SPELL_TYPES:
+        score = SPELL_BASE_SCORE
+        if rehearsal is not None and rehearsal.accepted:
+            score += max(-SWING_CAP, min(SWING_CAP, rehearsal.swing))
+        elif rehearsal is None:
+            # Nobody has measured it: a card being weighed where it lies (a
+            # search's pick, the top of a library) rather than as a cast.
+            score += _score_spell_target(card, caster_index, target_index, game, x_value)
+    else:
+        score = 1.5
+        if card.primary_type == "creature":
+            score += 1.2
+            score += _creature_stat(card, "power") * 0.7
+            score += _creature_stat(card, "toughness") * 0.4
+            if target_index == caster_index:
+                score += 1.0
+        if card.primary_type in {"artifact", "enchantment"}:
+            score += 0.8
+        if x_value is not None:
+            score += min(4.0, x_value * 0.6)
 
     # A mana source is worth playing early when there is something to spend the
     # mana on, and worth nothing at all when mana costs are not enforced. True
@@ -5395,49 +5900,6 @@ def _choose_target_for_instruction(instruction: OracleInstruction, caster_index:
     # proactive effect: target an opponent (MVP heuristic, see
     # choose_attack_target — lowest life among living opponents).
     return choose_attack_target(game, caster_index)
-
-
-def _estimate_x_damage(game: Game, caster: PlayerState, card: CardDefinition) -> int:
-    """Estimate the damage an X-damage spell would deal, based on the most X the
-    caster can currently pay for. Returns 0 for spells that don't deal X damage."""
-    program = compile_card_oracle(card)
-    deals_x_damage = any(
-        instruction.kind == "deal_damage"
-        and str(instruction.payload.get("amount")).lower() == "x"
-        for instruction in _announced_steps(card, program)
-    )
-    if not deals_x_damage:
-        return 0
-    return _max_affordable_x(game, caster, card)
-
-
-def _spell_damage_names_only_an_object(card: CardDefinition) -> bool:
-    """Whether the damage `_extract_damage` reads off a **spell** is dealt to
-    an object the spell targets and to nothing else — "deals 1 damage to
-    target creature", against "…to any target" and "…to target player".
-
-    The burn weights in `_score_spell_target` and `_score_cast` price damage
-    *to a player*: four for the reach, ten and twelve more when it is lethal.
-    Which spells they reach is a claim about the pool, and they reached every
-    spell printing a damage step — so "Soul Sear deals 5 damage to target
-    creature" scored as game-winning burn the moment its controller's opponent
-    was at five life. It surfaced with the mode chooser, where it was no longer
-    one card against another but one bullet against the next: Chaos Charm's
-    "deals 1 damage to target creature" outscored "destroy target Wall" at a
-    Wall, and Parch's creature-only four tied its face-reaching two for
-    lethal.
-
-    Read off the step itself (the mode being weighed, for a modal spell), so
-    an Aura whose damage goes to its host's controller and a permanent whose
-    mirrored ability pings are answered as they were.
-    """
-    if card.primary_type not in SPELL_TYPES:
-        return False
-    for instruction in _announced_steps(card, compile_card_oracle(card)):
-        if instruction.kind == "deal_damage":
-            targets = (instruction.payload or {}).get("targets")
-            return isinstance(targets, dict) and targets.get("kind") == "object"
-    return False
 
 
 def _extract_damage(card: CardDefinition) -> int:
