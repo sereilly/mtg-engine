@@ -498,6 +498,11 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     client cannot tell them apart by which fields happen to be filled in. A
     player carries a seat and no id; a permanent carries both, because the id is
     the identity and the seat is where to draw the highlight.
+
+    …or a **card in a graveyard** (Gravedigger, Karmic Guide), the third
+    shape: whose pile, which slot of it, and the card's name — a graveyard is
+    a public zone and its cards have no id, so the pile and the slot are the
+    whole address, exactly as the cast picker's ``graveyard`` entries give it.
     """
     choice = choices[0]
     payload = {
@@ -505,6 +510,13 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "candidates": [
             {
+                "kind": "graveyard",
+                "seat": target.get("seat"),
+                "graveyard_index": target.get("graveyard_index"),
+                "name": target.get("name"),
+            }
+            if target.get("kind") == "graveyard"
+            else {
                 "kind": target.get("kind", "permanent"),
                 "seat": target.get("seat"),
                 "index": target.get("permanent_index"),

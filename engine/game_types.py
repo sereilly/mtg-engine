@@ -341,6 +341,20 @@ class StackItem:
     # a trigger — a trigger's target is stamped at its fire site, which is the
     # bug ROADMAP's CR 608.2b entry declines the rule over.
     activated: bool = False
+    # CR 603.3d: this **triggered** ability's target was chosen for it as it
+    # was put on the stack, out of the picker's own list — by the seat that was
+    # asked, by the default a seat nobody asks takes, or by its permanent
+    # spell's cast where that announcement was one the trigger could have made
+    # (``cast_announcement_fault``). The triggered twin of ``activated`` above,
+    # and positive for the same reason: a trigger's target fields are also
+    # where a fire site threads an object *the event* named, and a slot nobody
+    # chose must not be read as a target that can later become illegal.
+    #
+    # Set by ``_resolve_trigger_target`` and by ``_stack_push`` for a standing
+    # cast announcement, and read by
+    # ``legality.vanished_graveyard_target_refusal`` — the one clause of
+    # CR 608.2b a trigger is held to so far.
+    target_chosen: bool = False
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

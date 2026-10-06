@@ -236,6 +236,19 @@ def _action_trigger_target_confirm(session, req, seat_type):
         ):
             raise HTTPException(status_code=400, detail="invalid target selection")
         return
+    # A **card in a graveyard** (Gravedigger): the pile and the slot, the two
+    # things the prompt listed it by. Ahead of the seat-alone branch below,
+    # which would otherwise read the pile's seat as a targeted player.
+    if req.graveyard_index is not None:
+        if req.target_seat is None:
+            raise HTTPException(
+                status_code=400, detail="target_seat names whose graveyard",
+            )
+        if not session.game.confirm_trigger_target(
+            req.seat, seat=req.target_seat, graveyard_index=req.graveyard_index,
+        ):
+            raise HTTPException(status_code=400, detail="invalid graveyard target")
+        return
     if req.target_permanent_id is None and req.target_seat is None:
         raise HTTPException(
             status_code=400,

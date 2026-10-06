@@ -232,7 +232,13 @@ def _enter(card, road) -> tuple[Game, list, Permanent | None] | None:
 
 
 def _chooses_a_target(game, trigger) -> bool:
-    return bool(game._entry_trigger_chooses_a_target(trigger.instruction))
+    # With its printed line: whether a **graveyard card** is a target is asked
+    # of the words as well as of the spec (Gravedigger's is, Harvest Wurm's is
+    # not), so the gate needs both to say that Anarchist beside a graveyard
+    # with no sorcery in it was removed for CR 603.3d's reason.
+    return bool(game._entry_trigger_chooses_a_target(
+        trigger.instruction, trigger.source_line
+    ))
 
 
 def test_w2g6_no_entry_trigger_is_carried_out_inside_the_entry():

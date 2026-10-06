@@ -609,12 +609,12 @@ def test_the_census_sees_a_change_offered_from_a_wider_list(pool, by_name, monke
 #: ratchet in both directions: a new entry is a new card with the gap, and an
 #: entry that starts announcing has to come off the list.
 _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
-    # a graveyard card, found at resolution
-    "Necromancy#0", "Sylvan Hierophant#0", "Gravedigger#0", "Treasure Hunter#0",
-    "Scrivener#0", "Anarchist#0", "Cartographer#0", "Monk Idealist#0",
-    "Diabolic Servitude#0", "Iridescent Drake#0", "Body Snatcher#1",
-    "Junk Diver#0", "Strongarm Thug#0", "Shipwreck Dowser#0",
-    "Reya Dawnbringer#0", "Crypt Angel#0", "Phyrexian Delver#0",
+    # Seventeen names stood here under "a graveyard card, found at resolution"
+    # (Gravedigger, Necromancy, Junk Diver, Reya Dawnbringer, …): the pin of a
+    # defect, and it is gone. A target card in a graveyard is chosen as the
+    # trigger goes on the stack now (CR 115.1d / CR 603.3d), by the seat that
+    # is asked or by the default — tests/engine/
+    # test_graveyard_trigger_target_census.py holds every one of them.
     # narrowed by a seat only the firing event knows
     "Heart of Bogardan#1", "Oath of Lieges#0", "Oath of Scholars#0",
     "Oath of Ghouls#0", "Oath of Mages#0", "Oath of Druids#0",

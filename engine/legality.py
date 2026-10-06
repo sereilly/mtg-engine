@@ -4230,8 +4230,9 @@ class LegalityMixin:
         )
 
     def vanished_graveyard_target_refusal(self, item) -> str | None:
-        """CR 608.2b for **an activated ability whose every target was a card
-        in a graveyard that is no longer there**, and for nothing else.
+        """CR 608.2b for **an ability whose every target was a card in a
+        graveyard that is no longer there** — an activated ability, or a
+        triggered one that chose its target — and for nothing else.
 
         "A target that's no longer in the zone it was in when it was targeted
         is illegal. … If all its targets … are now illegal, the spell or
@@ -4251,10 +4252,17 @@ class LegalityMixin:
 
         Three bounds, each the rule or the data model rather than caution:
 
-        * an **activated** ability (``StackItem.activated``). A triggered
-          ability's target is stamped at its fire site, where an index can be
-          a slot nobody chose; that is ROADMAP's first decline under this rule
-          and it is not lifted here;
+        * an **activated** ability (``StackItem.activated``), or a triggered
+          one whose target was **chosen for it as it went on the stack**
+          (``StackItem.target_chosen``, CR 603.3d). A trigger's target fields
+          are also where a fire site threads a slot the *event* named, and a
+          slot nobody chose is not a target that can become illegal — that is
+          ROADMAP's first decline under this rule, and it stands for every
+          trigger without the mark. The mark is what a graveyard-card trigger
+          gets now that it chooses (Gravedigger, Karmic Guide): exile the card
+          it named in response and it returned the creature card beside it —
+          all fourteen targeted graveyard entry triggers did, on a table with
+          a second card of the kind to take;
         * every target the object chose is a graveyard card — read through
           ``stack_targets.chosen_targets``, the one reader of what an object
           announced. An object that also chose a permanent or a player
@@ -4268,7 +4276,9 @@ class LegalityMixin:
         A bare activation recorded no stamp and is untouched: its handler's
         pick is the standing convention, not a target that went away.
         """
-        if not getattr(item, "activated", False):
+        if not (
+            getattr(item, "activated", False) or getattr(item, "target_chosen", False)
+        ):
             return None
         if resolves_with_illegal_targets(item.card, item.ability_text):
             return None

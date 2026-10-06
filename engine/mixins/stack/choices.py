@@ -8241,6 +8241,7 @@ class PendingChoicesMixin:
     def confirm_trigger_target(
         self, player_index: int, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
+        graveyard_index: int | None = None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -8252,11 +8253,16 @@ class PendingChoicesMixin:
 
         *permanent_ids* is the answer for an ability that prints **several**
         targets ("up to two target creatures"): every object named at once,
-        because CR 601.2c makes them one announcement.
+        because CR 601.2c makes them one announcement. An empty list names
+        nobody, which an "up to" allows.
+
+        *graveyard_index* with *seat* is a **card in a graveyard**: which pile
+        and which slot of it, as the prompt listed them. A graveyard card has
+        no id to be named by.
         """
         return self.resolve_pending_choice(
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
-            permanent_ids=permanent_ids,
+            permanent_ids=permanent_ids, graveyard_index=graveyard_index,
         )
 
     def _resolve_trigger_targets(self, choice: PendingChoice, permanent_ids) -> bool:
@@ -8317,6 +8323,7 @@ class PendingChoicesMixin:
         item.target_permanent_id = named
         item.target_permanent_index = None
         item.target_player_index = self.announced_target_seat(named)
+        item.target_chosen = True
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets "
             + ", ".join(permanent.card.name for permanent in permanents)
@@ -8324,9 +8331,57 @@ class PendingChoicesMixin:
         self._announce_answered_targets(item, choice, queued)
         return True
 
+    def _resolve_trigger_graveyard_target(
+        self, choice: PendingChoice, seat, graveyard_index: int,
+    ) -> bool:
+        """Record a chosen **card in a graveyard** on the stack object
+        (CR 603.3d, CR 115.2).
+
+        The answer names a pile and a slot, and is checked against the list
+        that was offered — by the stamp each offer carries, not by the slot
+        number, so a pile that renumbered between the offer and the answer
+        cannot turn the answer into a different card.
+
+        Written in the shape a cast writes the same announcement
+        (``_stack_push_object``): the stamp is the identity, the slot beside it
+        is where the stamp sits now, and ``target_player_index`` is the pile —
+        which is what every graveyard handler reads, and what
+        ``_run_stack_item_resolution`` re-locates the slot from as the ability
+        resolves.
+        """
+        item = choice.data.get("_trigger_item")
+        if item is None:
+            return False
+        offered = any(
+            target.get("kind") == "graveyard"
+            and target.get("seat") == seat
+            and target.get("graveyard_index") == graveyard_index
+            for target in choice.data.get("targets") or ()
+        )
+        stamp = (choice.data.get("_graveyard_stamps") or {}).get((seat, graveyard_index))
+        if not offered or stamp is None:
+            return False
+        slot = self.graveyard_index_of(stamp)
+        if slot is None:
+            return False
+        queued = self._choice_is_queued(choice)
+        self.discard_pending_choice(choice)
+        item.target_graveyard_card = stamp
+        item.target_permanent_index = slot
+        item.target_player_index = stamp.seat
+        item.target_permanent_id = None
+        item.target_chosen = True
+        self.log.append(
+            f"{choice.data.get('card_name', 'Ability')}: targets {stamp.card.name} "
+            f"in {self.players[stamp.seat].name}'s graveyard"
+        )
+        self._announce_answered_targets(item, choice, queued)
+        return True
+
     def _resolve_trigger_target(
         self, choice: PendingChoice, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
+        graveyard_index: int | None = None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -8348,6 +8403,8 @@ class PendingChoicesMixin:
             return False
         if permanent_ids is not None:
             return self._resolve_trigger_targets(choice, permanent_ids)
+        if graveyard_index is not None:
+            return self._resolve_trigger_graveyard_target(choice, seat, graveyard_index)
         targets = choice.data.get("targets") or ()
         card_name = choice.data.get("card_name", "Ability")
         if permanent_id is None:
@@ -8363,6 +8420,7 @@ class PendingChoicesMixin:
             item.target_player_index = seat
             item.target_permanent_index = None
             item.target_permanent_id = None
+            item.target_chosen = True
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
             self._announce_answered_targets(item, choice, queued)
             return True
@@ -8384,6 +8442,7 @@ class PendingChoicesMixin:
         item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
+        item.target_chosen = True
         self.log.append(f"{card_name}: targets {perm.card.name}")
         self._announce_answered_targets(item, choice, queued)
         return True
@@ -8469,6 +8528,26 @@ class PendingChoicesMixin:
             for target in targets:
                 if target.get("kind") == "player" and target.get("seat") == standing:
                     return self._resolve_trigger_target(choice, seat=standing)
+            # **A card in a graveyard**: the one the resolution took before
+            # anybody was asked, for the player half's reason above — choosing
+            # the target here is then a change to what a *player* is asked and
+            # to nothing a seat nobody asks does. That pick was the first card
+            # the phrase admits in the pile the handler read, and the pile was
+            # the ability's "target player": the standing opposing seat, where
+            # the phrase reaches any graveyard (Necromancy, Iridescent Drake),
+            # and otherwise the only pile on offer ("from **your** graveyard").
+            # So: the first offer in the standing seat's pile, else the first
+            # offer at all, which for a pile the standing seat has nothing in
+            # is a card where the old scan found none.
+            cards = [target for target in targets if target.get("kind") == "graveyard"]
+            if cards:
+                pick = next(
+                    (target for target in cards if target.get("seat") == standing),
+                    cards[0],
+                )
+                return self._resolve_trigger_target(
+                    choice, seat=pick["seat"], graveyard_index=pick["graveyard_index"],
+                )
             # **The other half of the combat pair**, when the event froze one
             # and it is on offer. "Whenever this creature becomes blocked, you
             # may have it deal damage equal to its power to **target
@@ -10303,6 +10382,7 @@ register_choice(
     "trigger_target",
     resolve=lambda game, choice, r: game._resolve_trigger_target(
         choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
+        r.get("graveyard_index"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

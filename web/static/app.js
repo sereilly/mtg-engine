@@ -3708,7 +3708,10 @@ function getPromptBoardTargeting(state = currentState) {
     const playerSeats = [];
     for (const c of triggerTargetInfo.candidates || []) {
       if (c.kind === "player") playerSeats.push(Number(c.seat));
-      else byKey.set(`${c.seat}-${c.index}`, c.id);
+      // A card in a graveyard (Gravedigger) is not on the board: it is a
+      // button in the prompt panel (applyTriggerTargetPrompt), never a key
+      // here — its slot is a graveyard slot and would highlight a permanent.
+      else if (c.kind !== "graveyard") byKey.set(`${c.seat}-${c.index}`, c.id);
     }
     return promptTargeting({
       permanentKeys: [...byKey.keys()],
@@ -6639,6 +6642,75 @@ function applyPermanentChoicePrompt(info) {
     okBtn.textContent = "Choose none";
     okBtn.onclick = () =>
       submitPromptAction({ seat, action: "permanent_choice_confirm" });
+  } else {
+    okBtn.classList.add("hidden");
+  }
+}
+
+// A triggered ability choosing its target as it goes on the stack (CR 603.3d).
+// Three kinds of candidate arrive in one list and are answered three ways:
+//   * a permanent or a player glows on the board (getPromptBoardTargeting);
+//   * a card in a graveyard (Gravedigger, Karmic Guide) is a button here — it
+//     is in no zone the board draws, so the panel is where it can be clicked,
+//     and it is answered by pile and slot because a graveyard card has no id;
+//   * and "up to one target" (Barrin, Tolarian Archmage) may name nobody,
+//     which is the one answer that is neither — a button, offered only when
+//     the server says the ability is an "up to" (`up_to`).
+// renderActivationPrompt had no branch for this prompt: it was answered on
+// the board alone, which works only while every candidate is on the board.
+function applyTriggerTargetPrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  const candidates = info.candidates || [];
+  const cards = candidates.filter((c) => c.kind === "graveyard");
+  const onBoard = candidates.length - cards.length;
+  q("promptTitle").textContent = "Choose a target";
+  q("promptBody").textContent =
+    `${info.card_name || "The ability"}: its triggered ability ` +
+    (info.up_to ? "may name a target." : "needs a target.");
+  const lines = [];
+  if (onBoard > 0) {
+    lines.push("<div>Action: click a highlighted permanent or player.</div>");
+  }
+  if (cards.length) {
+    const buttons = cards
+      .map((c, i) => {
+        const whose = Number(c.seat) === seat ? "your graveyard" : "opponent's graveyard";
+        return (
+          `<button type="button" class="prompt-choice-btn" data-trigger-graveyard="${i}">` +
+          `${escapeHtml(c.name || "a card")} (${whose})</button>`
+        );
+      })
+      .join("");
+    lines.push(`<div class="prompt-choice-column">${buttons}</div>`);
+  }
+  q("promptSteps").innerHTML = lines.join("");
+  q("promptSteps").querySelectorAll("[data-trigger-graveyard]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const c = cards[Number(btn.dataset.triggerGraveyard)];
+      submitPromptAction({
+        seat,
+        action: "trigger_target_confirm",
+        target_seat: Number(c.seat),
+        graveyard_index: Number(c.graveyard_index),
+      });
+    });
+  });
+  const okBtn = q("promptOkBtn");
+  if (info.up_to) {
+    okBtn.classList.remove("hidden");
+    // Enabled explicitly, for applyPermanentChoicePrompt's reason: the shared
+    // button comes in disabled, and this is the branch answered by clicking it.
+    okBtn.disabled = false;
+    okBtn.textContent = "Name no target";
+    // An explicit empty list — "nobody" is an answer, and a request that
+    // named nothing at all is a malformed one the server refuses.
+    okBtn.onclick = () =>
+      submitPromptAction({ seat, action: "trigger_target_confirm", target_permanent_ids: [] });
   } else {
     okBtn.classList.add("hidden");
   }
@@ -10349,6 +10421,14 @@ function renderActivationPrompt() {
   const permanentChoicePrompt = getPermanentChoiceInfo();
   if (permanentChoicePrompt) {
     applyPermanentChoicePrompt(permanentChoicePrompt);
+    return;
+  }
+
+  // In getPromptBoardTargeting's order: after the permanent choice, before
+  // the reflexive target.
+  const triggerTargetPrompt = getTriggerTargetInfo();
+  if (triggerTargetPrompt) {
+    applyTriggerTargetPrompt(triggerTargetPrompt);
     return;
   }
 

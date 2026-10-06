@@ -2724,6 +2724,16 @@ class GameHelpersMixin:
             item.target_permanent_index = None
             item.target_permanent_id = None
             announced_at_cast = False
+        elif announced_at_cast:
+            # The announcement stands. Where a list held it to that — the
+            # trigger had a choice of its own and this was one it could have
+            # made — it is the trigger's chosen target (CR 603.3d), and says
+            # so for the resolution that asks whether a chosen target is still
+            # there (``StackItem.target_chosen``). Where no list did, it is
+            # what the cast handed over and nothing more is claimed for it.
+            item.target_chosen = (
+                self._trigger_target_candidates(item, announced=True) is not None
+            )
         self._stack_push_object(item, announce=not announced_at_cast)
         # "Up to one target …" activated with nothing named: the announcement
         # is complete and names nobody (CR 601.2c). After the stamping, which
