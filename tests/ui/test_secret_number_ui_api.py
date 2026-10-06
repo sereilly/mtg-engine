@@ -199,3 +199,33 @@ def test_w2g1_an_ai_seat_commits_unseen_and_the_human_is_still_asked(set_pool):
     )
     # 16 | 19 -> the fewest -> lose 10 -> 9.
     assert [player.life for player in game.players] == [16, 9]
+
+
+def test_w2g1_the_human_is_asked_when_the_other_seat_cast_it(set_pool):
+    """Whoever cast it, every player hides. With the AI seat's Goblin Game
+    resolving on its own turn, the human is sent the prompt, the AI's number
+    is already in and unseen, the AI may not be stepped past the question, and
+    the human's answer finishes the spell and hands the turn back."""
+    session_id, game = _session(set_pool, mode="human_vs_ai")
+    session = store.get(session_id)
+    game.players[0].hand[:] = []
+    game.players[1].hand[:] = [set_pool("PLS")["Goblin Game"]]
+    session.current_turn = 1
+    game.active_player_index = 1
+    game.interactive_seats = {0}
+    game.start_priority_window(1)
+    assert game.cast_from_hand(1, "Goblin Game").supported
+
+    state = _state(session_id, 0)
+    assert state["secret_number"]["player_seat"] == 0
+    assert not any("revealed" in line for line in state["log"])
+    assert game.stack and game.waiting_prompt().player_index == 0
+    blocked = _act(session_id, 0, action="pass_priority")
+    assert blocked.status_code == 400 and "hidden number" in blocked.json()["detail"]
+
+    assert _act(session_id, 0, action="secret_number_confirm", number=6).status_code == 200
+    assert not game.pending_choices_of("secret_number")
+    assert not any(item.card.name == "Goblin Game" for item in game.stack)
+    # The AI named the floor: 19 -> the fewest -> lose 10 -> 9. The human: 14.
+    assert [player.life for player in game.players] == [14, 9]
+    assert _state(session_id, 0)["secret_number"] is None
