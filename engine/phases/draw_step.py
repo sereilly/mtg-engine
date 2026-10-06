@@ -167,6 +167,24 @@ class DrawStepMixin:
             ))
         self._enqueue_triggered_batch(events)
 
+    def may_skip_draw_for_protection(self, player_index: int) -> bool:
+        """Whether *player_index* controls a permanent whose draw-step hook
+        offers the skip that buys protection (``card_hooks.DRAW_STEP_MODIFIERS``
+        — Island Sanctuary's "you may skip that draw").
+
+        The one reader of that registry entry, for the two places that ask:
+        :meth:`resolve_draw_step`, which performs the skip, and the web layer,
+        which has to put the question to a human seat *before* the step
+        resolves. The web kept its own answer — a comparison against the card's
+        name — which is a second copy of the registry in a package the engine's
+        name guard does not walk.
+        """
+        return any(
+            (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
+            and modifier.optional_skip_grants_protection
+            for perm in self.controlled_by(player_index)
+        )
+
     def resolve_draw_step(
         self,
         player_index: int,
@@ -270,11 +288,7 @@ class DrawStepMixin:
 
         # Island Sanctuary: sanctuary_choice=None means auto-skip (AI); True=skip (human chose);
         # False=draw normally (human chose to draw instead of gaining protection)
-        has_sanctuary = any(
-            (modifier := DRAW_STEP_MODIFIERS.get(perm.card.name)) is not None
-            and modifier.optional_skip_grants_protection
-            for perm in self.controlled_by(player)
-        )
+        has_sanctuary = self.may_skip_draw_for_protection(player_index)
         if has_sanctuary and sanctuary_choice is not False:
             player.island_sanctuary_protected = True
             self.log.append(f"{player.name} skipped draw (Island Sanctuary active)")

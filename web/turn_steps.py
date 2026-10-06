@@ -66,9 +66,13 @@ def _consume_draw_step_life_loss(session: Session) -> dict[str, bool] | None:
 
 
 def _has_island_sanctuary(game, player_index: int) -> bool:
-    return any(
-        p.card.name == "Island Sanctuary" for p in game.controlled_by(player_index)
-    )
+    """Whether this seat is owed the "skip your draw for protection" question.
+
+    Asked of the engine's own reader of its draw-step hook rather than answered
+    here by the card's name: the engine decides whether the skip exists, and a
+    second answer in this package is one the two could come to disagree about.
+    """
+    return game.may_skip_draw_for_protection(player_index)
 
 
 def _upkeep_pay_pending(session: Session) -> list[dict]:
