@@ -46,6 +46,7 @@ from engine.activation_prohibitions import (ACTIVATION_PROHIBITIONS,
                                             activation_prohibition)
 from engine.auras import attach_aura
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.spell_prohibitions import (forbid_nonmana_activations_this_turn,
@@ -255,7 +256,7 @@ _SUBJECTS = (
 
 def _prohibiting_permanents():
     return sorted(
-        card.name for card in _POOL.values()
+        card.name for card in compilation_units(_POOL.values())
         if _PROHIBITION_SHAPED.search(card.oracle_text or "")
         and not {"instant", "sorcery"} & set(card.type_line.lower().split())
         and compile_card_oracle(card).supported
@@ -335,7 +336,8 @@ def _cycler():
     from engine.targeting import usable_activated_abilities
 
     return next(
-        card.name for card in sorted(_POOL.values(), key=lambda card: card.name)
+        card.name
+        for card in sorted(compilation_units(_POOL.values()), key=lambda card: card.name)
         if "cycling {2}" in (card.oracle_text or "").lower()
         and usable_activated_abilities(compile_card_oracle(card), zone=HAND)
     )

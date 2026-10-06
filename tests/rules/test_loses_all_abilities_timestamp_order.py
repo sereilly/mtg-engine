@@ -43,6 +43,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.auras import auras_attached_to
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units, whole_card
 from engine.global_statics import global_statics_applying_to
 from engine.keywords import (ability_effects, derived_ability_lines,
                              derived_grants, granted_ability_lines)
@@ -79,7 +80,12 @@ _GRANT_WORDS = re.compile(r"\b(has|have|gains?)\b", re.I)
 
 @pytest.fixture(scope="module")
 def _by_name():
-    return {card.name: card for card in load_catalog()}
+    """Every card by name — and each half of a split card by its own, which is
+    the name it is cast by (CR 709.3a) and the text that compiles."""
+    catalog = load_catalog()
+    named = {card.name: card for card in catalog}
+    named.update({unit.name: unit for unit in compilation_units(catalog)})
+    return named
 
 
 def _new_game(by_name):
@@ -147,7 +153,8 @@ def _records(permanent):
 
 
 def _cast(game, by_name, name, target=None) -> bool:
-    card = by_name[name]
+    # The whole card is what a hand holds; a half is cast out of it by name.
+    card = whole_card(by_name[name])
     game.players[0].hand.append(card)
     kwargs = {}
     if target is not None:
@@ -211,7 +218,7 @@ def _granters(by_name, names=None):
         return [by_name[name] for name in names]
     found = sorted(
         (
-            card for card in by_name.values()
+            card for card in compilation_units(by_name.values())
             if _GRANT_WORDS.search(card.oracle_text or "")
             and card.name not in REMOVERS
             and compile_card_oracle(card).supported

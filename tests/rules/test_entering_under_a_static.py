@@ -46,6 +46,7 @@ import pytest
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
 from engine.enter_tapped_statics import ENTER_TAPPED_STATIC_KIND
+from engine.faces import compilation_units
 from engine.land_animation import LAND_ANIMATION_KIND
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -131,7 +132,7 @@ def _enters_with_something(by_name, remover, wanted):
     out."""
     examined = 0
     as_printed = []
-    for card in sorted(by_name.values(), key=lambda card: card.name):
+    for card in sorted(compilation_units(by_name.values()), key=lambda card: card.name):
         if not wanted(card) or "enter" not in (card.oracle_text or "").lower():
             continue
         if not compile_card_oracle(card).supported:
@@ -236,7 +237,7 @@ def _makers(by_name):
     """Every pool card that makes other permanents creatures (CR 613.1d)."""
     found = ["Titania's Song", "Opalescence"]
     found.extend(sorted(
-        card.name for card in by_name.values()
+        card.name for card in compilation_units(by_name.values())
         if any(
             instr.kind == LAND_ANIMATION_KIND
             for instr in compile_card_oracle(card).instructions
@@ -248,7 +249,7 @@ def _makers(by_name):
 def _tappers(by_name):
     """Every pool card saying how somebody else's permanents enter tapped."""
     return sorted(
-        card.name for card in by_name.values()
+        card.name for card in compilation_units(by_name.values())
         if any(
             instr.kind == ENTER_TAPPED_STATIC_KIND
             for instr in compile_card_oracle(card).instructions
