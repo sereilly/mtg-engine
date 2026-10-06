@@ -58,7 +58,8 @@ from .continuous import (
     set_pt,
     switch_pt,
 )
-from .keywords import ability_effects, derived_grants, derived_removals
+from .keywords import (abilities_lost_at, ability_effects, derived_grant_stamps,
+                       derived_removals)
 from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
 from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
@@ -469,8 +470,14 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # 7b — Animate Artifact sets P/T to the artifact's mana value. A mana value
     # of 0 really does mean 0/0: a Mox animated this way dies to CR 704.5f, and
     # clamping it to 1/1 (as the card-rebuilding version did) kept it alive.
+    #
+    # The mana value of the **permanent** (CR 202.3), which for a copy is the
+    # copied object's: the mana cost is a copiable value (CR 707.2), so a Copy
+    # Artifact of a Rod of Ruin is 4 and a token copy of one is 4, where the
+    # copier's own printed cost says 2 and the token's says nothing at all.
+    # All three readers below asked the printed card.
     for aura in animating_auras(perm):
-        mana_value = int(perm.card.cmc)
+        mana_value = int(perm.effective_card.cmc)
         effects.append(
             set_pt(
                 only,
@@ -500,7 +507,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # die to CR 704.5f.
     for gained in gained_types(perm):
         if gained.get("pt_from_mana_value"):
-            value = int(perm.card.cmc)
+            value = int(perm.effective_card.cmc)
             effects.append(set_pt(
                 only, value, value,
                 timestamp=_DERIVED_TIMESTAMP,
@@ -509,7 +516,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
 
     for static in global_statics_applying_to(perm):
         if static.pt_from_mana_value:
-            value = int(perm.card.cmc)
+            value = int(perm.effective_card.cmc)
             effects.append(
                 set_pt(only, value, value, timestamp=_DERIVED_TIMESTAMP, label=static.name)
             )
@@ -616,8 +623,11 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
         animation = perm.metadata.get(_key) or {}
         granted = animation.get("keywords") or ()
         if granted:
+            # Stamped when the animation resolved (CR 613.7b) — a record
+            # written by hand carries none and sorts first, as it always did.
             effects.append(grant_abilities(
-                only, granted, timestamp=0, label=f"animated ({_key})"
+                only, granted, timestamp=int(animation.get("granted_at", 0)),
+                label=f"animated ({_key})",
             ))
 
     for walk in _LANDWALKS:
@@ -630,10 +640,14 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
     # have mountainwalk"). Derived every recompute, so the grant ends when the
     # lord leaves without anything having to find and undo it — and not
     # restricted to landwalk, which is all the flag channel above could carry.
-    granted = derived_grants(perm)
-    if granted:
+    #
+    # Each with its **source's** timestamp (CR 613.7a). They shared one stamp
+    # of 0, which is no order at all against an effect that has one: a lord
+    # that arrived after a Humility and one that was there before it gave the
+    # same answer.
+    for word, stamp in derived_grant_stamps(perm).items():
         effects.append(
-            grant_abilities(only, list(granted), timestamp=0, label="lord grant")
+            grant_abilities(only, [word], timestamp=stamp, label="lord grant")
         )
 
     # Landwalks the permanent's own text names off its controller's lands —
@@ -709,16 +723,13 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
             )
         )
 
-    # Board-wide statics (Titania's Song). Derived from the source permanent
-    # recorded on this one, so the removal ends when the source leaves.
-    for static in global_statics_applying_to(perm):
-        if static.removes_abilities:
-            effects.append(
-                remove_abilities(
-                    only, sorted(_printed_abilities(perm.effective_card)),
-                    timestamp=0, label=static.name,
-                )
-            )
+    # Nothing here for "loses all abilities" (Humility, Titania's Song,
+    # Humble) as an *effect*, and there used to be: a removal of the printed
+    # keywords at timestamp 0. The seed this layer starts from is
+    # ``effective_card``, which has already struck the printed text and every
+    # line granted before the loss — so what is left to do here is the same
+    # thing for the **words**: drop every grant and removal the loss is newer
+    # than, below, once they are all gathered with their stamps.
 
     # Nothing here for CR 305.7's losing half, and there used to be: a layer-6
     # removal of the land's printed keywords, stamped with the type change's
@@ -739,6 +750,17 @@ def collect_ability_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]
         build = grant_abilities if entry["grant"] else remove_abilities
         effects.append(build(only, [keyword], timestamp=stamp, label=keyword))
 
+    # CR 613.1f over CR 613.7: an effect that takes **all** abilities takes
+    # every word granted before it applied and none granted after. The loss
+    # was a removal of the *printed* keywords stamped 0, so it reached no
+    # grant at all — Jump and then Humble left the creature flying, and so did
+    # an Aura attached before a Humility arrived. (It also named the keywords
+    # of the already-struck effective card, which are exactly the ones a
+    # *later* line grant put back: Rapid Fire after Humility gave the rampage
+    # trigger and not the word.)
+    lost_at = abilities_lost_at(perm)
+    if lost_at is not None:
+        effects = [effect for effect in effects if effect.timestamp > lost_at]
     return effects
 
 

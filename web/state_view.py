@@ -46,6 +46,7 @@ from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
 from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
+from engine.activation_prohibitions import activation_prohibition
 from engine.board_payment import board_can_pay
 from engine.cast_prohibitions import cast_prohibition
 from engine.cast_timing import casts_at_instant_speed
@@ -420,6 +421,10 @@ def _card_castable_now(
         # colour, so Craw Wurm over three Tropical Islands glowed.
         if not board_can_pay(
             game, player_index, cost, purpose=PaymentPurpose(CAST, card=card),
+            # "Castable" is castable with what the seat could tap — its
+            # untapped lands and every other mana ability a tap alone pays
+            # for (CR 601.2g): a Sol Ring, a Llanowar Elves.
+            nonland_sources=True,
         ):
             # CR 118.9: an alternative cost is paid *rather than* the mana cost,
             # so a seat with no mana at all can still cast Force of Will off a
@@ -563,8 +568,17 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
                 payable = window is not None and board_can_pay(
                     game, player_index, dict(required),
                     purpose=PaymentPurpose(ACTIVATE, source=card),
+                    nonland_sources=True,
                 )
+            # CR 602.5: what forbids the activation outright, in the engine's
+            # own words (``engine/activation_prohibitions.py``) — a City of
+            # Solitude on an opponent's turn, a Hand to Hand during combat.
+            # The button was offered and the click was a 400.
+            prohibited = activation_prohibition(game, player_index, card, ability)
+            if prohibited is not None:
+                payable = False
             entries.append({
+                "prohibited": prohibited.details if prohibited is not None else None,
                 "hand_index": hand_index,
                 "ability_index": ability_index,
                 "name": card.name,

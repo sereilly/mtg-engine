@@ -20,7 +20,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
     count_from_payload,
 )
 from .registry import effect_handler
-from ..keywords import grant_keyword, remove_keyword
+from ..keywords import grant_keyword, grant_protection_flag, remove_keyword
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER, BASE_PT_SET_PERMANENTS,
                             COUNTERS_PLACED_THIS_WAY)
 
@@ -2232,7 +2232,7 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
         # whose permanent has left, which is the honest failure rather than a
         # guessed colour.
         for word in _recorded_permanents_color_words(game, context):
-            permanent.metadata[f"protection_from_{word}"] = True
+            grant_protection_flag(permanent, word)
         return
     if keyword in CHOSEN_COLOR_PROTECTIONS:
         # Three printed phrasings and **one channel**: whichever seat was asked
@@ -2258,7 +2258,7 @@ def _grant_one_keyword(game, permanent, keyword: str, context, lifetime=None) ->
     else:
         word = keyword[len("protection from "):].strip()
     if word:
-        permanent.metadata[f"protection_from_{word}"] = True
+        grant_protection_flag(permanent, word)
 
 
 _COLOR_SYMBOL_TO_WORD = {

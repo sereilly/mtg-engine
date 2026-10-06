@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from ..color_changes import change_color, change_spell_color
 from ..continuous import next_timestamp
+from ..keywords import grant_protection_flag
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
 from ..land_types import MIRE_COUNTER, change_land_type
@@ -1085,6 +1086,13 @@ def _animation_record(payload: dict) -> dict:
         "card_types": list(payload.get("card_types") or ()),
         "timestamp": next_timestamp(),
     }
+    if record["keywords"]:
+        # Layer 6's half of the sentence has a place in that layer's order
+        # (CR 613.7b): "…a 3/3 Sphinx creature **with flying**" resolved under
+        # a Humility keeps the flying, and loses it to one that arrives later.
+        # Its own key, so the layer-4 reader's ``timestamp`` below still means
+        # what it meant.
+        record["granted_at"] = next_timestamp()
     if payload.get("replaces_types"):
         record["replaces_types"] = True
     return record
@@ -1136,7 +1144,7 @@ def _grant_animation_protection(
     symbols = set(getattr(cast_card, "colors", None) or ())
     for word, symbol in _COLOR_WORD_TO_SYMBOL.items():
         if symbol in symbols:
-            perm.metadata[f"protection_from_{word}"] = True
+            grant_protection_flag(perm, word)
 
 
 def _grant_animation_abilities(

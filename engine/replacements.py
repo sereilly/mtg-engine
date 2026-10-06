@@ -2394,8 +2394,13 @@ def _entry_exile_requirement(game, payload: dict) -> dict | None:
     from .enter_effects import entry_exile_requirement
 
     permanent = payload["permanent"]
+    # The **effective** card, like the two tolls beside it: the permanent as
+    # it would exist on the battlefield (CR 614.12). Under a Humility the
+    # creature has no such sentence, and it enters rather than being put into
+    # a graveyard for a cost it was never asked to pay. This read the printed
+    # card, which no effect can change.
     return entry_exile_requirement(
-        permanent.card, permanent.metadata.get("cast_x_value")
+        permanent.effective_card, permanent.metadata.get("cast_x_value")
     )
 
 

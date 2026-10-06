@@ -61,6 +61,21 @@ DERIVED_REMOVALS = "derived_ability_removals"
 # there would append one copy of its sentence per recompute forever.
 DERIVED_ABILITY_LINES = "derived_ability_lines"
 
+#: When each derived grant above began to apply: the **source's** timestamp
+#: (CR 613.7a), keyed by the word or the sentence. Beside the two lists rather
+#: than inside them, because every reader of those wants the words and one
+#: reader wants the order — :func:`abilities_lost_at`'s, which has to tell a
+#: lord that was there before a Humility from one that arrived after it.
+#: Cleared and rebuilt with the lists they describe.
+DERIVED_GRANT_STAMPS = "derived_ability_grant_stamps"
+DERIVED_LINE_STAMPS = "derived_ability_line_stamps"
+
+#: When a **protection** granted on the metadata channel
+#: (``protection_from_<word>``) began to apply, keyed by the word — the same
+#: stamp for the same reader. The flag itself stays a flag: the cleanup sweep
+#: and ``_protection_qualities`` read the key's presence.
+PROTECTION_GRANT_STAMPS = "protection_grant_stamps"
+
 # Key under which granted **printed ability lines** live — the third channel in
 # this file, and the one for an ability layer 6's word-set cannot carry.
 #
@@ -461,11 +476,13 @@ def clear_derived_grants(perm: Permanent) -> None:
     away after its source had gone.
     """
     perm.metadata.pop(DERIVED_GRANTS, None)
+    perm.metadata.pop(DERIVED_GRANT_STAMPS, None)
     perm.metadata.pop(DERIVED_REMOVALS, None)
     # …and the sentence half of the same layer, cleared in the same breath. A
     # line left behind by a clear that only knew about the words would keep a
     # dead lord's ability on the board with nothing to point at.
     perm.metadata.pop(DERIVED_ABILITY_LINES, None)
+    perm.metadata.pop(DERIVED_LINE_STAMPS, None)
 
 
 #: The durations a granted ability line can be given, each naming the sweep that
@@ -506,15 +523,29 @@ def grant_ability_line(
 
     clear_once_only_tally(perm, line)
     lines = perm.metadata.setdefault(GRANTED_ABILITY_LINES, [])
-    entry: dict = {"line": line, "duration": duration}
+    # Stamped (CR 613.7b) for the one reader that orders a grant against
+    # something: "loses all abilities" takes the abilities a permanent has when
+    # it applies, so a line granted before it goes and one granted after stays
+    # (:func:`abilities_lost_at`).
+    entry: dict = {"line": line, "duration": duration, "timestamp": next_timestamp()}
     if seat is not None:
         entry["seat"] = seat
     lines.append(entry)
 
 
-def granted_ability_lines(perm: Permanent) -> tuple[str, ...]:
-    """The printed ability lines *perm* has been granted, oldest first."""
-    return tuple(entry["line"] for entry in perm.metadata.get(GRANTED_ABILITY_LINES) or ())
+def granted_ability_lines(
+    perm: Permanent, *, after: int | None = None
+) -> tuple[str, ...]:
+    """The printed ability lines *perm* has been granted, oldest first.
+
+    *after* keeps only the grants stamped later than it — what is left of them
+    once an effect has taken every ability the permanent had at that moment
+    (:func:`abilities_lost_at`).
+    """
+    return tuple(
+        entry["line"] for entry in perm.metadata.get(GRANTED_ABILITY_LINES) or ()
+        if after is None or int(entry.get("timestamp", 0)) > after
+    )
 
 
 def clear_granted_ability_lines(
@@ -540,17 +571,34 @@ def clear_granted_ability_lines(
         perm.metadata.pop(GRANTED_ABILITY_LINES, None)
 
 
-def add_derived_grant(perm: Permanent, keyword: str) -> None:
-    """Layer 6: *perm* has *keyword* for as long as the source keeps granting it."""
+def add_derived_grant(perm: Permanent, keyword: str, *, timestamp: int = 0) -> None:
+    """Layer 6: *perm* has *keyword* for as long as the source keeps granting it.
+
+    *timestamp* is the **source's** (CR 613.7a: a static ability's effect has
+    the timestamp of the object it is on) — the lord's, the Aura's, the land
+    animator's. Kept beside the word rather than in its place, and the newest
+    stamp wins where two sources grant one word: the word is granted once, and
+    what the stamp answers is whether *any* grant of it is newer than an
+    effect that took every ability away (:func:`abilities_lost_at`).
+    """
     granted = perm.metadata.setdefault(DERIVED_GRANTS, [])
     lowered = keyword.lower()
     if lowered not in granted:
         granted.append(lowered)
+    stamps = perm.metadata.setdefault(DERIVED_GRANT_STAMPS, {})
+    stamps[lowered] = max(int(timestamp), stamps.get(lowered, 0))
 
 
 def derived_grants(perm: Permanent) -> tuple[str, ...]:
     """The abilities *perm* currently has from a board-wide source."""
     return tuple(perm.metadata.get(DERIVED_GRANTS) or ())
+
+
+def derived_grant_stamps(perm: Permanent) -> dict[str, int]:
+    """Each derived grant of :func:`derived_grants` with its newest source's
+    timestamp (0 where the writer named none)."""
+    stamps = perm.metadata.get(DERIVED_GRANT_STAMPS) or {}
+    return {word: int(stamps.get(word, 0)) for word in derived_grants(perm)}
 
 
 def add_derived_removal(perm: Permanent, keyword: str) -> None:
@@ -567,7 +615,9 @@ def derived_removals(perm: Permanent) -> tuple[str, ...]:
     return tuple(perm.metadata.get(DERIVED_REMOVALS) or ())
 
 
-def add_derived_ability_line(perm: Permanent, line: str) -> None:
+def add_derived_ability_line(
+    perm: Permanent, line: str, *, timestamp: int = 0
+) -> None:
     """Layer 6: *perm* says *line* for as long as the source keeps granting it.
 
     Deduplicated on the sentence, because CR 611.3a makes two lords printing the
@@ -578,11 +628,25 @@ def add_derived_ability_line(perm: Permanent, line: str) -> None:
     lines = perm.metadata.setdefault(DERIVED_ABILITY_LINES, [])
     if line not in lines:
         lines.append(line)
+    # *timestamp* is the source's (CR 613.7a), the newest where two sources
+    # grant one sentence — :func:`add_derived_grant`'s rule, for its reason.
+    stamps = perm.metadata.setdefault(DERIVED_LINE_STAMPS, {})
+    stamps[line] = max(int(timestamp), stamps.get(line, 0))
 
 
-def derived_ability_lines(perm: Permanent) -> tuple[str, ...]:
-    """The printed ability lines a board-wide source currently gives *perm*."""
-    return tuple(perm.metadata.get(DERIVED_ABILITY_LINES) or ())
+def derived_ability_lines(
+    perm: Permanent, *, after: int | None = None
+) -> tuple[str, ...]:
+    """The printed ability lines a board-wide source currently gives *perm*.
+
+    *after* keeps only the ones a source newer than it grants
+    (:func:`granted_ability_lines`' parameter, and the same question).
+    """
+    lines = tuple(perm.metadata.get(DERIVED_ABILITY_LINES) or ())
+    if after is None:
+        return lines
+    stamps = perm.metadata.get(DERIVED_LINE_STAMPS) or {}
+    return tuple(line for line in lines if int(stamps.get(line, 0)) > after)
 
 
 def remove_ability_line(
@@ -707,7 +771,9 @@ def remove_all_abilities(
     """
     _check_duration(duration, seat, GRANTED_ABILITY_DURATIONS)
     entries = perm.metadata.setdefault(ALL_ABILITIES_REMOVED, [])
-    entry: dict = {"duration": duration}
+    # Stamped (CR 613.7b): what the effect takes is what the permanent has
+    # *now*, and an ability granted after this moment is not among it.
+    entry: dict = {"duration": duration, "timestamp": next_timestamp()}
     if seat is not None:
         entry["seat"] = seat
     entries.append(entry)
@@ -716,6 +782,69 @@ def remove_all_abilities(
 def all_abilities_removed(perm: Permanent) -> bool:
     """Whether an effect has taken every one of *perm*'s abilities away."""
     return bool(perm.metadata.get(ALL_ABILITIES_REMOVED))
+
+
+def abilities_lost_at(perm: Permanent) -> int | None:
+    """The timestamp of the newest effect taking **every** ability from
+    *perm* (CR 613.1f), or None when nothing is.
+
+    "Loses all abilities" is a layer-6 effect like any grant, and layer 6 is
+    applied in timestamp order (CR 613.7): what it takes is every ability the
+    permanent has *when it applies* — the printed ones, and the ones an
+    earlier effect granted — and an ability a **later** effect grants is
+    applied after it and stays. So one number answers every reader: a grant
+    stamped at or before it is gone, one stamped after it is kept, and the
+    newest loss is the only one that matters, because it takes whatever the
+    older ones left.
+
+    Two channels, as :func:`all_abilities_removed` and
+    ``global_statics.removes_all_abilities`` are two: a board-wide static
+    (Humility, Titania's Song) has its source's timestamp (CR 613.7a — and
+    keeps it while the Song's effect outlives the Song), a resolved spell or
+    ability (Humble, Soul Sculptor) the moment it resolved (CR 613.7b).
+
+    It was no number at all. Every reader asked "is anything taking them?" and
+    then kept every granted ability whatever its age — Jump, then Humble, and
+    the creature still flew — while the activation door asked the same
+    question and refused every ability, the ones granted afterwards too.
+
+    Not CR 305.7's loss, which is no layer-6 effect and keeps a granted
+    ability of any age (``land_types.lost_abilities_to_type_change``).
+    """
+    from .global_statics import global_static_sources
+
+    newest: int | None = None
+    for entry in perm.metadata.get(ALL_ABILITIES_REMOVED) or ():
+        stamp = int(entry.get("timestamp", 0))
+        newest = stamp if newest is None else max(newest, stamp)
+    sources = perm.metadata.get("global_static_sources")
+    if sources:
+        for source, static in global_static_sources(sources):
+            if static.removes_abilities:
+                stamp = int(source.timestamp)
+                newest = stamp if newest is None else max(newest, stamp)
+    return newest
+
+
+def grant_protection_flag(perm: Permanent, word: str) -> None:
+    """Layer 6: *perm* has protection from *word* on the metadata channel
+    (``mixins/permanent_state._protection_qualities``), stamped.
+
+    The flag is what every reader of the channel reads and what the cleanup
+    sweep clears; the stamp beside it (:data:`PROTECTION_GRANT_STAMPS`) is for
+    :func:`abilities_lost_at`'s one question. Three handlers wrote the flag
+    themselves, so a protection granted before a Humble outlived it.
+    """
+    perm.metadata[f"protection_from_{word}"] = True
+    perm.metadata.setdefault(PROTECTION_GRANT_STAMPS, {})[word] = next_timestamp()
+
+
+def protection_flag_granted_after(perm: Permanent, word: str, after: int) -> bool:
+    """Whether the metadata-channel protection from *word* was granted later
+    than *after*. A flag with no stamp was written by hand (a fixture) and is
+    read as older than everything, like every other unstamped channel."""
+    stamps = perm.metadata.get(PROTECTION_GRANT_STAMPS) or {}
+    return int(stamps.get(word, 0)) > after
 
 
 def clear_all_abilities_removals(
@@ -819,5 +948,8 @@ __all__ = [
     "grant_ability_line",
     "keyword_ability_name",
     "expand_ability_removal",
+    "abilities_lost_at", "derived_grant_stamps", "grant_protection_flag",
+    "protection_flag_granted_after",
+    "DERIVED_GRANT_STAMPS", "DERIVED_LINE_STAMPS", "PROTECTION_GRANT_STAMPS",
     "granted_ability_lines", "grant_keyword", "remove_keyword",
 ]

@@ -55,6 +55,7 @@ from .ai_valuation import (
     toll_branch_loss,
 )
 from .activation_permissions import activation_permission_denial
+from .activation_prohibitions import activation_prohibition
 from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
@@ -2074,6 +2075,16 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             game, player_index, permanent, ability.source_line or ""
         ):
             continue
+        # CR 602.5 as **one question** (``engine/activation_prohibitions.py``):
+        # the table the activation path refuses with. The two checks around
+        # this one are three of its ten rows; the other seven this chooser
+        # never asked — City of Solitude's "…activate abilities only during
+        # their own turns", Hand to Hand's "during combat", an Abeyance, an
+        # Interdict, Faith's Fetters, Volrath's Curse, Katabatic Winds — so it
+        # proposed the ability and the engine refused it, the seat's only
+        # activation of the turn, every turn.
+        if activation_prohibition(game, player_index, permanent, ability) is not None:
+            continue
         # CR 602.5: the printed timing ("Activate only during your upkeep",
         # Svyelunite Priest; "…only during combat", Arcum's Sleigh) and a
         # board-wide ban ("Activated abilities of artifacts can't be
@@ -2428,12 +2439,17 @@ def _choose_activation_role_targets(
     # its own flying from one of its creatures to another. *side* stays the
     # answer for a role the derivation gives none (the three seat-role
     # chains it was written for).
+    #
+    # The permanent as it **is** (``effective_card``), which is the card the
+    # picker three lines up compiled: read off the printed one, a Clone of a
+    # Splicer was offered the Splicer's two roles and given a side for neither.
     source = game.permanent_at(player_index, permanent_index)
+    said = source.effective_card if source is not None else None
     ability = (
-        next(iter(usable_activated_abilities(compile_card_oracle(source.card))), None)
-        if source is not None else None
+        next(iter(usable_activated_abilities(compile_card_oracle(said))), None)
+        if said is not None else None
     )
-    sides = ability_role_target_sides(source.card, ability) if ability is not None else ()
+    sides = ability_role_target_sides(said, ability) if ability is not None else ()
 
     def ref_of(pick: dict) -> "dict | None":
         if pick.get("kind") == "player":

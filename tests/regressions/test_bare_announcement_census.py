@@ -206,7 +206,15 @@ def _past_the_id_floor() -> None:
 def _state(game, labelled) -> tuple:
     """Everything an announcement can change about the table. A permanent id
     inside a record is spelled as that permanent's label and a timestamp is
-    dropped, so two tables built alike compare equal."""
+    dropped, so two tables built alike compare equal.
+
+    A timestamp is dropped **wherever it is kept**: a key ending in
+    ``timestamp``, and the three ``…_stamps`` records ``engine/keywords.py``
+    keeps of when a grant began to apply (``{'red': 29}`` beside
+    ``{'red': 58}`` is one grant on two tables whose clocks differ, and was
+    this census's only finding the day those records and it first met).
+    Which grant is *there* is still compared - by the flag the stamp is
+    beside, and by what the permanent then is."""
     names = {str(perm.permanent_id): key for key, perm in labelled.items()}
 
     def spell(text: str) -> str:
@@ -229,7 +237,7 @@ def _state(game, labelled) -> tuple:
             tuple(sorted(
                 (key, spell(repr(value))[:160]) for key, value in perm.metadata.items()
                 if key != "tapped_to_pay_for_ability_ids"
-                and not key.endswith("timestamp")
+                and not key.endswith(("timestamp", "_stamps"))
             )),
         )
 
