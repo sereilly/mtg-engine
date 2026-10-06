@@ -200,6 +200,10 @@ def test_the_ai_can_declare_at_one_seat_of_three_under_a_per_defender_cap(set_po
     # On both defenders, so whichever the AI picks is capped.
     for seat in seats[1:]:
         seat.battlefield.append(Permanent(card=set_pool("ULG")["Crawlspace"]))
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
+    for seat in seats:
+        seat.library = [_mk_creature_card("Filler", 1, 1) for _ in range(5)]
     game = Game(players=seats)
     game.enforce_mana_costs = False
     game.start_turn(0)

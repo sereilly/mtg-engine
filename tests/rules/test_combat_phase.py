@@ -1236,6 +1236,10 @@ def _forests(count: int) -> list[Permanent]:
 
 def _r508_5_declare(game, **kwargs):
     game.enforce_mana_costs = False
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
+    for player in game.players:
+        player.library = [_mk_creature("Filler", 1, 1) for _ in range(5)]
     game.start_turn(0)
     game._close_current_priority_step()
     game.advance_combat_phase()
