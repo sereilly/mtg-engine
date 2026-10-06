@@ -114,7 +114,7 @@ def _target_is_up_to(payload) -> bool:
     Walked for :func:`_target_filter_controller`'s reason: the ``targets``
     description sits under a ``sequence``'s steps or a ``may``'s body as often
     as at the top. CR 601.2c lets such an announcement name **zero** targets,
-    so "no legal target" is a choice that can be made rather than CR 603.3c's
+    so "no legal target" is a choice that can be made rather than CR 603.3d's
     "no legal choices can be made" — Gilded Drake's "exchange control of this
     creature and up to one target creature an opponent controls" against an
     empty board still resolves, and its "if you don't or can't make an
@@ -578,7 +578,7 @@ class StackResolutionMixin:
         * the fire site already bound one (``target_permanent_id`` for an
           object, ``target_player_index`` for a seat) — the event made
           the choice and CR 603.3d has none left to make;
-        * no legal target exists — CR 603.3c removes the ability from the
+        * no legal target exists — CR 603.3d removes the ability from the
           stack rather than resolving it into a no-op, which is the same rule
           :meth:`_choose_trigger_mode` applies to a mode that cannot be chosen.
 
@@ -820,7 +820,7 @@ class StackResolutionMixin:
         self, item: StackItem, spec: dict, chooser_index: int, candidates: list,
     ) -> None:
         """Ask *chooser_index* for *item*'s target out of *candidates*, or take
-        the ability off the stack when there is none to ask about (CR 603.3c).
+        the ability off the stack when there is none to ask about (CR 603.3d).
 
         The prompt half of :meth:`_choose_trigger_targets`.
         """
@@ -861,7 +861,7 @@ class StackResolutionMixin:
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
                 f"{item.card.name}'s triggered ability was removed from the stack: "
-                "it has no legal target (603.3c)"
+                "it has no legal target (603.3d)"
             )
             return
         # "…each of **up to two** other target creatures you control" (Basri's

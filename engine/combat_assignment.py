@@ -32,7 +32,7 @@ from __future__ import annotations
 ASSIGNS_NO_COMBAT_DAMAGE = "assigns_no_combat_damage_until_eot"
 
 #: "X target blocked creatures assign their combat damage this turn **as
-#: though they weren't blocked**." (Outmaneuver.) CR 510.1a's assignment to
+#: though they weren't blocked**." (Outmaneuver.) CR 510.1c's assignment to
 #: the blocking creatures replaced, for a turn, by CR 510.1b's assignment to
 #: the player being attacked.
 #:
@@ -96,7 +96,7 @@ BLOCKED_WITHOUT_BLOCKERS = "blocked_without_blockers_this_combat"
 #: creature attacking you.** You can divide that creature's combat damage as
 #: you choose among any of the creatures blocking it." (Defensive Formation.)
 #:
-#: CR 510.1a names the attacking player as the one who divides a blocked
+#: CR 510.1c names the attacking player as the one who divides a blocked
 #: creature's damage among its blockers; this substitutes the defending player,
 #: which is the same substitution CR 702.22j makes for a creature blocked by a
 #: band. So it is answered at the *same* seam and by the same reader — a second
@@ -124,7 +124,7 @@ _DEFENDER_ASSIGNS = (
 
 
 def defender_assigns_line(line: str) -> bool:
-    """Whether *line* substitutes CR 510.1a's assigner for the defending player.
+    """Whether *line* substitutes CR 510.1c's assigner for the defending player.
 
     One reader, three callers, the arrangement ``cast_restrictions``' board bans
     have: ``engine/grammar/registries.py`` asks it so the printed line is
@@ -166,7 +166,7 @@ def defender_assigns_all_damage(game, defender_index: int) -> bool:
 
 def may_assign_as_unblocked(permanent) -> bool:
     """Whether *permanent*'s controller may send its combat damage past its
-    blockers (CR 510.1b instead of CR 510.1a).
+    blockers (CR 510.1b instead of CR 510.1c).
 
     **Two channels, one question.** Garruk, Savage Herald's −7 grants the
     ability for a turn and writes :data:`MAY_ASSIGN_AS_UNBLOCKED`; Lone Wolf
