@@ -461,6 +461,10 @@ def test_a_blast_names_the_spell_it_would_counter(catalog_by_name):
 #: the payment plan (`tap_planned_lands`).
 _NOT_ANNOUNCED = {
     "card_name", "hand_index", "score", "land_tap_indices", "land_tap_colors",
+    # Whose pile `hand_index` counts into, for a card an effect lends from
+    # another seat's zone: `ai_policy.cast_zone_of` reads it to find the card,
+    # and the cast path takes no seat (it finds the covered card, CR 601.3).
+    "zone_owner_index",
 }
 
 
@@ -506,6 +510,10 @@ def test_the_executors_all_make_the_whole_announcement():
             ]
             if spelled == {"target_player_index"} and not splatted:
                 continue  # a land drop: a special action, no announcement
+            # (The simulator's own land drop is no longer that shape: a land
+            # may be played from a zone an effect opened — "You may play lands
+            # … from your graveyard" — so it forwards the action's zone like
+            # every cast, and is the sixth site counted below.)
             found += 1
             assert not spelled, (relative, node.lineno, sorted(spelled))
             assert len(splatted) == 1 and isinstance(splatted[0], ast.Call), (
@@ -514,7 +522,7 @@ def test_the_executors_all_make_the_whole_announcement():
             assert getattr(splatted[0].func, "id", None) == "cast_announcement", (
                 relative, node.lineno,
             )
-    assert found == 5, f"expected the five AI cast sites, found {found}"
+    assert found == 6, f"expected the six AI cast sites, found {found}"
 
 
 def test_the_simulator_casts_the_chosen_mode_and_counts_it(catalog_by_name):

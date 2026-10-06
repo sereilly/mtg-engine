@@ -1529,8 +1529,8 @@ def planned_mana_yield(instruction: OracleInstruction | None) -> ManaYield | Non
     """What a payment plan may count one activation of a mana ability as, or
     None when the payload alone cannot say.
 
-    The non-land half of the question `ai_policy._land_mana_amount` /
-    `_land_mixed_run` / `_land_mana_is_unplannable` answer for a land, asked of
+    The non-land half of the question `board_payment.land_tap_yields` answers
+    for a land (`ai_policy._land_tap_options`), asked of
     the compiled ability rather than of the tap seam's summary, because a
     non-land permanent has no summary path: "{T}: Add {C}{C}" (Sol Ring),
     "{T}: Add {B} or {R}" (the Cameos), "{T}: Add one mana of any color" (Birds
@@ -1766,6 +1766,10 @@ _SLOT_ROLE_SIDES: dict[str, tuple[str | None, ...]] = {
     # permanent**" (Legerdemain). One is given and one is taken; two of the
     # caster's own is an exchange of nothing.
     "exchange_control_of_targets": ("you", "opponent"),
+    # "Target creature with the chosen ability **loses it** and another target
+    # creature **gains it**" (Phyrexian Splicer). Slot 0 is robbed, slot 1 is
+    # given what it had.
+    "move_chosen_keyword_between_targets": ("opponent", "you"),
 }
 
 #: Steps that act on a recorded group (``permanents_from``) and whose category
@@ -2001,6 +2005,36 @@ def role_target_sides(
         card, program, optional_cost_payments or {}, mode_index=mode_index,
     )
     slot_sides = several_target_slot_sides(program, run)
+    return _sides_of_roles(roles, run, slot_sides)
+
+
+def ability_role_target_sides(card: CardDefinition, ability) -> tuple[str | None, ...]:
+    """:func:`role_target_sides` for an **activated ability**'s roles — one
+    entry per role of ``targeting.derive_activation_spec(ability)``.
+
+    The same derivation over the other place a roles announcement comes from
+    (CR 602.2b sends an ability's targets through CR 601.2c): the roles are
+    the ability's own and the run is its one instruction. The activation
+    chooser took a single side for the whole chain, so "target creature with
+    the chosen ability loses it and **another target creature** gains it"
+    (Phyrexian Splicer) named two of the activator's own creatures.
+    """
+    from .targeting import derive_activation_spec, spec_roles
+
+    roles = spec_roles(derive_activation_spec(ability))
+    if not roles or ability.instruction is None:
+        return ()
+    run = (ability.instruction,)
+    return _sides_of_roles(
+        roles, run, several_target_slot_sides(compile_card_oracle(card), run)
+    )
+
+
+def _sides_of_roles(roles, run, slot_sides) -> tuple[str | None, ...]:
+    """The side each of *roles* is picked from, read off the steps of *run*
+    that spend it — the body :func:`role_target_sides` and
+    :func:`ability_role_target_sides` share."""
+    from .targeting import payload_own_role, role_dependency, role_is_seat
 
     spenders: list[OracleInstruction] = []
 

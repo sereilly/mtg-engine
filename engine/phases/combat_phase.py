@@ -509,10 +509,20 @@ class CombatPhaseMixin:
 
         # Auto-resolve and skip combat_damage when no manual assignment is needed.
         if combat_steps[next_idx] == "combat_damage" and not self._needs_manual_damage_assignment():
-            auto = self._build_auto_damage_assignment()
+            # The default for a seat nobody asks, "as though it weren't
+            # blocked" included: one function for the three places a default
+            # is supplied (here, `ai_combat.run_ai_combat_phase` and the web
+            # layer's `_ai_assign_combat_damage`), so they cannot answer the
+            # offer differently.
+            from ..ai_combat import choose_combat_damage_assignment
+
+            auto, past_blockers = choose_combat_damage_assignment(self)
 
             def deal_the_damage() -> None:
-                self.resolve_all_combat_damage(self.active_player_index, attacker_damage=auto)
+                self.resolve_all_combat_damage(
+                    self.active_player_index, attacker_damage=auto,
+                    as_though_unblocked=past_blockers,
+                )
 
             def leave_the_damage_step() -> None:
                 if not allow_damage_skip:

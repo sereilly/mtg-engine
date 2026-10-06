@@ -17,7 +17,7 @@ below has always given it.
 
 from __future__ import annotations
 
-from engine.ai_combat import declare_ai_attackers
+from engine.ai_combat import choose_combat_damage_assignment, declare_ai_attackers
 from engine.ai_policy import choose_attack_target, legal_attackers
 from engine.combat_assignment import combat_damage_assigned_by
 
@@ -439,8 +439,14 @@ def _ai_assign_combat_damage(session: Session) -> None:
         return
     if _multiblock_split_pending(session):
         return
-    auto = game._build_auto_damage_assignment()
+    # The division, and which "as though it weren't blocked" offers are taken
+    # — the one chooser the simulator's driver and the engine's own
+    # auto-resolve ask (`engine.ai_combat.choose_combat_damage_assignment`).
+    auto, past_blockers = choose_combat_damage_assignment(game)
     # Both strike passes (CR 510.4). One call rather than two, so a first-strike
     # pass that stops to ask a human defender something (CR 616.1e) records the
     # second pass behind it instead of having it re-run the first.
-    game.resolve_all_combat_damage(game.active_player_index, attacker_damage=auto)
+    game.resolve_all_combat_damage(
+        game.active_player_index, attacker_damage=auto,
+        as_though_unblocked=past_blockers,
+    )

@@ -398,8 +398,15 @@ class CombatDamageStepMixin:
                 return True
         return False
 
-    def _build_auto_damage_assignment(self) -> dict[int, dict[int, int]]:
+    def _build_auto_damage_assignment(self, declining=()) -> dict[int, dict[int, int]]:
         """Build a sensible default damage assignment for every blocked attacker.
+
+        *declining* is the battlefield slots of attackers whose "as though it
+        weren't blocked" offer the caller turns down: each is given the
+        division among its blockers any other blocked creature gets, which is
+        the other printed answer (CR 510.1c). Empty is every offer taken, as
+        it always was — `ai_combat.choose_combat_damage_assignment` is the
+        caller that weighs the two.
 
         Single-blocked attackers assign their full power to that blocker (only
         lethal for tramplers, so the remainder can trample through). Multi-blocked
@@ -450,7 +457,10 @@ class CombatDamageStepMixin:
             # attacker its ordinary division like any other blocked creature.
             # It asked the creature alone until then, and a Thorn Elemental
             # blocked by a Benalish Hero went past it on the attacker's say-so.
-            if self.unblocked_assignment_chooser(attacker_idx) == self.active_player_index:
+            if (
+                attacker_idx not in declining
+                and self.unblocked_assignment_chooser(attacker_idx) == self.active_player_index
+            ):
                 continue
             has_trample = self._has_keyword(attacker, "trample")
             has_deathtouch = self._has_keyword(attacker, "deathtouch")
