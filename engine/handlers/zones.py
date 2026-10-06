@@ -4627,7 +4627,14 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
     who = str(payload.get("who", "you"))
     by_seat = dict(context.results.get(EXILED_BY_SEAT) or {})
     if who == "each_player":
-        seats = list(range(len(game.players)))
+        # APNAP order (CR 101.4), and so the order the cards are stamped in as
+        # they enter together (CR 613.7m: the active player's objects have the
+        # earlier timestamps). This walked ``range(len(game.players))``, which
+        # is that order only while seat 0 is the active player — a Living
+        # Death cast by seat 1 stamped seat 0's creatures first. A seat that
+        # has left returns nothing (CR 800.4a), as its two siblings below
+        # already answer.
+        seats = game.apnap_seats()
     else:
         seats = [game.players.index(context.caster)]
     described = dict(payload.get("filter") or {})
@@ -6645,9 +6652,12 @@ def put_revealed_top_cards_onto_battlefield(game: Game, instruction: OracleInstr
     if not by_seat:
         game.log.append(f"{context.card.name}: no revealed card to put onto the battlefield")
         return True, "resolved"
-    for seat, card in sorted(by_seat.items()):
-        if not (0 <= seat < len(game.players)):
-            continue
+    # In APNAP order (CR 101.4, CR 613.7m): the cards enter together, and the
+    # active player's is stamped first. It was seat order, which a Game
+    # Preserve on seat 1 — whose upkeep is the only time this triggers — got
+    # backwards every time.
+    for seat in game.apnap_seats(by_seat, include_lost=True):
+        card = by_seat[seat]
         owner = game.players[seat]
         for index, held in enumerate(owner.library):
             if held is card:

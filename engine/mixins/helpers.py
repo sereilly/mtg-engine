@@ -1600,6 +1600,44 @@ class GameHelpersMixin:
             return seat
         return next(i for i, player in enumerate(self.players) if player is seat)
 
+    def apnap_seats(self, seats=None, *, include_lost: bool = False) -> list[int]:
+        """The seats in **APNAP order** (CR 101.4): the active player, then
+        each other player in turn order.
+
+        The order players make simultaneous choices in — and the order objects
+        that would receive a timestamp simultaneously are stamped in:
+
+            613.7m  If two or more objects would receive a timestamp
+                    simultaneously, such as by entering a zone simultaneously
+                    … their relative timestamps are determined in APNAP order.
+                    Objects controlled by the active player … have an earlier
+                    relative timestamp in the order of that player's choice,
+                    followed by each other player in turn order.
+
+        ``Permanent.timestamp`` is taken as a permanent enters
+        (``_put_permanent_onto_battlefield``), so a handler that puts several
+        players' cards onto the battlefield "at once" stamps them in the order
+        its loop walks the seats. Walking this list is what makes that order
+        the rule's. Two of the pool's six such handlers walked ``range(len(
+        players))`` instead (Living Death, Game Preserve), which is APNAP only
+        while seat 0 is the active player.
+
+        *seats* narrows the answer to those seats, still in APNAP order. A
+        seat that has left the game is left out unless *include_lost*
+        (CR 800.4a: a player who has left has no battlefield to put a card
+        onto). Within one seat the order is "that player's choice", which a
+        caller walking a pile in its own order has defaulted, not asked.
+        """
+        count = len(self.players)
+        start = self.active_player_index if self.active_player_index is not None else 0
+        wanted = None if seats is None else {int(seat) for seat in seats}
+        return [
+            seat
+            for seat in ((start + offset) % count for offset in range(count))
+            if (wanted is None or seat in wanted)
+            and (include_lost or not self.players[seat].lost)
+        ]
+
     def controlled_by(self, seat) -> "Iterator[Permanent]":
         """Every permanent *seat* controls. Takes a seat index or a
         :class:`PlayerState`, because both spellings are already in use and the

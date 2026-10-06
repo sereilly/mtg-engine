@@ -1267,3 +1267,601 @@ def test_j6_type_effects_meet_in_the_order_the_rules_give(
 ):
     want, got = _J6_CASES[name](_W2G4Board(catalog_by_name, set_pool))
     assert got == want, name
+
+
+# ---------------------------------------------------------------------------
+# Objects that enter together are stamped in APNAP order (CR 613.7m)
+# ---------------------------------------------------------------------------
+#
+# "If two or more objects would receive a timestamp simultaneously, such as by
+# entering a zone simultaneously … their relative timestamps are determined in
+# APNAP order. Objects controlled by the active player … have an earlier
+# relative timestamp in the order of that player's choice, followed by each
+# other player in turn order."
+#
+# A permanent is stamped as it enters, so a handler that puts several players'
+# cards onto the battlefield at once stamps them in the order its loop walks
+# the seats. Six cards in the pool do that. Four walked the seats in APNAP
+# order already; Living Death and Game Preserve walked ``range(len(players))``,
+# which is APNAP only while seat 0 is the active player.
+
+_J6_CREATURES = ("Grizzly Bears", "Hill Giant", "Savannah Lions", "Scryb Sprites")
+
+
+def _j6_table(catalog_by_name, seats, active):
+    game = Game(players=[
+        PlayerState(name=f"P{seat}", life=20) for seat in range(seats)
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = active
+    return game  # _j6_table
+
+
+def _j6_drain(game):
+    """Resolve everything, each seat answering what it is asked by default."""
+    for _ in range(60):
+        if game.stack:
+            game.resolve_top_of_stack()
+        for choice in list(game.pending_choices):
+            game.auto_resolve_pending_choices(choice.player_index, kinds=[choice.kind])
+        if not game.stack and not game.pending_choices:
+            return
+    raise AssertionError([c.kind for c in game.pending_choices])  # _j6_drain
+
+
+def _j6_cast_mass_entry(game, card, seat):
+    game.players[seat].hand.append(card)
+    cast = game.queue_from_hand(seat, card.name)
+    assert cast.supported, cast.details
+    _j6_drain(game)  # _j6_cast_mass_entry
+
+
+def _j6_graveyards_of_creatures(game, card):
+    for seat, player in enumerate(game.players):
+        player.graveyard += [card(_J6_CREATURES[(seat + k) % 4]) for k in range(2)]
+
+
+def _j6_twilights_call(game, card, seat):
+    _j6_graveyards_of_creatures(game, card)
+    _j6_cast_mass_entry(game, card("Twilight's Call"), seat)
+
+
+def _j6_living_death(game, card, seat):
+    _j6_graveyards_of_creatures(game, card)
+    _j6_cast_mass_entry(game, card("Living Death"), seat)
+
+
+def _j6_planar_birth(game, card, seat):
+    for player in game.players:
+        player.graveyard += [card("Forest"), card("Island")]
+    _j6_cast_mass_entry(game, card("Planar Birth"), seat)
+
+
+def _j6_stronghold_gambit(game, card, seat):
+    for player in game.players:
+        player.hand.append(card("Grizzly Bears"))
+    _j6_cast_mass_entry(game, card("Stronghold Gambit"), seat)
+
+
+def _j6_game_preserve(game, card, seat):
+    for player in game.players:
+        player.library += [card("Grizzly Bears")] + [card("Forest")] * 6
+    game._put_permanent_onto_battlefield(seat, Permanent(card=card("Game Preserve")), None)
+    game._j6_already = {id(perm) for perm in game.all_permanents()}
+    game.start_turn(seat)
+    _j6_drain(game)
+
+
+#: Each pool card that puts **several players'** cards onto the battlefield at
+#: once, by the instruction kind that does it, and how one is made here.
+_J6_ENTER_TOGETHER = {
+    "Twilight's Call": ("return_all_cards_from_graveyard", _j6_twilights_call),
+    "Planar Birth": ("return_all_cards_from_graveyard", _j6_planar_birth),
+    "Living Death": ("put_exiled_this_way", _j6_living_death),
+    "Stronghold Gambit": ("put_chosen_hand_cards_onto_battlefield", _j6_stronghold_gambit),
+    "Game Preserve": ("put_revealed_top_cards_onto_battlefield", _j6_game_preserve),
+}
+
+_J6_SEATINGS = [(seats, active) for seats in (2, 3) for active in range(seats)]
+
+
+@pytest.mark.cr("613.7m", "101.4", "613.7d")
+@pytest.mark.parametrize("name", sorted(_J6_ENTER_TOGETHER))
+@pytest.mark.parametrize(
+    "seats, active", _J6_SEATINGS, ids=[f"{s}p-active{a}" for s, a in _J6_SEATINGS],
+)
+def test_j6_cards_entering_together_are_stamped_in_apnap_order(
+    catalog_by_name, set_pool, name, seats, active,
+):
+    """The active player's permanents carry the earlier timestamps, then each
+    other player's in turn order — whichever seat the active player is on."""
+    card = lambda wanted: (  # noqa: E731
+        catalog_by_name[wanted] if wanted in catalog_by_name
+        else set_pool("PLS")[wanted]
+    )
+    game = _j6_table(catalog_by_name, seats, active)
+    already = {id(perm) for perm in game.all_permanents()}
+    _J6_ENTER_TOGETHER[name][1](game, card, active)
+    already |= getattr(game, "_j6_already", set())
+
+    entered = sorted(
+        (perm.timestamp, seat)
+        for seat, perm in game.permanents_with_controller()
+        if id(perm) not in already
+    )
+    by_stamp = [seat for _stamp, seat in entered]
+    # The floor: every seat put something onto the battlefield.
+    assert set(by_stamp) == set(range(seats)), (name, by_stamp)
+    assert game.active_player_index == active
+    turn_order = [(seat - active) % seats for seat in by_stamp]
+    assert turn_order == sorted(turn_order), (
+        f"{name}, active player on seat {active}: entered in seat order "
+        f"{by_stamp}, and CR 613.7m stamps the active player's first"
+    )
+
+
+def _j6_looped_entry_handlers():
+    """Every handler in ``engine/handlers/`` that puts a permanent onto the
+    battlefield from inside a loop — the functions that *can* stamp several
+    objects for one event."""
+    import ast
+
+    from tests.source_index import REPO_ROOT, source_tree
+
+    found = set()
+    for path in sorted((REPO_ROOT / "engine" / "handlers").glob("*.py")):
+        tree = source_tree(path)
+        parents = {
+            child: node for node in ast.walk(tree)
+            for child in ast.iter_child_nodes(node)
+        }
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "_put_permanent_onto_battlefield"
+            ):
+                continue
+            looped, cursor = False, node
+            while cursor in parents:
+                cursor = parents[cursor]
+                if isinstance(cursor, (ast.For, ast.While)):
+                    looped = True
+                if isinstance(cursor, ast.FunctionDef):
+                    if looped:
+                        found.add(cursor.name)
+                    break
+    return found  # _j6_looped_entry_handlers
+
+
+#: The looped entry handlers, each with whose cards one event can put down:
+#: "several" is a row of the census above, "one" a single seat's cards — where
+#: the order is that player's own choice (see the Replenish test below).
+_J6_LOOPED_ENTRY_HANDLERS = {
+    "return_all_cards_from_graveyard": "several",       # Twilight's Call, Planar Birth
+    "put_exiled_this_way": "several",                   # Living Death
+    "put_chosen_hand_cards_onto_battlefield": "several",  # Stronghold Gambit
+    "put_revealed_top_cards_onto_battlefield": "several",  # Game Preserve
+    "create_token": "one",              # one seat's tokens per instruction
+    "reanimate_graveyard_position": "one",              # Bone Dancer
+    "reanimate_announced_cards": "one",                 # Victimize
+    "put_cards_from_hand_onto_battlefield": "one",      # Manabond, Ugin's −10
+    "reanimate_bound_card": "one",                      # one bound card per event
+    "_place_sorted_reveal": "one",
+    "put_revealed_card_onto_battlefield": "one",        # Call of the Wild
+    "put_exiled_cards_into_zone": "one",                # Liberate and its kin
+}
+
+
+@pytest.mark.cr("613.7m")
+def test_j6_every_handler_that_can_enter_several_permanents_is_accounted_for():
+    """The floor on the other axis. A handler that puts permanents onto the
+    battlefield in a loop is one that stamps several objects for one event; a
+    new one has to say whose cards it moves, and if they are several players',
+    walk ``Game.apnap_seats`` and be driven above."""
+    assert _j6_looped_entry_handlers() == set(_J6_LOOPED_ENTRY_HANDLERS), sorted(
+        _j6_looped_entry_handlers() ^ set(_J6_LOOPED_ENTRY_HANDLERS)
+    )
+    several = {
+        name for name, whose in _J6_LOOPED_ENTRY_HANDLERS.items() if whose == "several"
+    }
+    assert several == {kind for kind, _make in _J6_ENTER_TOGETHER.values()}
+
+
+def _j6_ordered_static_sources():
+    """Every pool permanent card that is the source of a static whose place in
+    a timestamp order is observable — layer 4 or layer 5 — by primary type."""
+    from engine import auras, global_statics
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.land_animation import LAND_ANIMATION_KIND
+    from engine.land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
+    from engine.oracle import compiled_units
+
+    pool = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            pool.setdefault(card.name, card)
+    board_kinds = {STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND, LAND_ANIMATION_KIND}
+    found = {}
+    for card, program in compiled_units(pool.values()):
+        if card.primary_type in ("instant", "sorcery"):
+            continue
+        text = card.oracle_text or ""
+        static = global_statics.global_static_for(text)
+        ordered = any(step.kind in board_kinds for step in program.instructions) or (
+            static is not None and (
+                global_statics.changes_types(static)
+                or static.sets_colors is not None
+                or static.sets_chosen_color
+            )
+        )
+        attached = bool(
+            auras.aura_animates_artifact(text)
+            or auras.aura_color_grants(text)
+            or (auras.aura_land_animation(text) or {}).get("colors")
+            or auras.aura_type_grants(text)
+            or auras.aura_card_type_grants(text)
+        )
+        if ordered or attached:
+            found.setdefault(card.primary_type, set()).add(card.name)
+    return len(pool), found  # _j6_ordered_static_sources
+
+
+@pytest.mark.cr("613.7m", "613.7a")
+def test_j6_no_card_that_enters_beside_another_players_carries_an_ordered_static():
+    """Why the order above is right and, today, unobservable through a static.
+    Every card the pool's cross-player mass entries move is a creature card or
+    a basic land card, and no creature or land card is the source of a layer-4
+    or layer-5 static — they are enchantments and two artifacts. (The one
+    creature here, Transmogrifying Licid, grants its type as an Aura and only
+    once it has made itself one.) A Magus of the Moon in the pool is what
+    changes that, and it fails here first."""
+    pool_size, found = _j6_ordered_static_sources()
+    assert found.get("creature") == {"Transmogrifying Licid"}
+    assert "land" not in found
+    assert found["artifact"] == {"Kormus Bell", "Thran Lens"}
+    assert len(found["enchantment"]) >= 22, sorted(found["enchantment"])
+    assert pool_size >= 4700, pool_size
+
+
+@pytest.mark.cr("613.7m", "101.4")
+@pytest.mark.parametrize("caster", [0, 1])
+def test_j6_show_and_tell_stamps_the_active_players_card_first(
+    catalog_by_name, set_pool, caster,
+):
+    """The one cross-player entry that *can* carry two ordered statics: "Each
+    player may put an artifact, creature, enchantment, or land card from their
+    hand onto the battlefield." The offers are made in APNAP order and each
+    card enters as its offer is taken, so the active player's is the earlier —
+    the other player's Darkest Hour is the later effect and the Bears are
+    black, on whichever seat the caster sits."""
+    card = catalog_by_name.__getitem__
+    game = _j6_table(catalog_by_name, 2, caster)
+    bears = Permanent(card=card("Grizzly Bears"))
+    game._put_permanent_onto_battlefield(caster, bears, None)
+    game.players[caster].hand += [card("Thran Lens")]
+    game.players[1 - caster].hand += [card("Darkest Hour")]
+    _j6_cast_mass_entry(game, card("Show and Tell"), caster)
+
+    lens = next(p for p in game.controlled_by(caster) if p.card.name == "Thran Lens")
+    hour = next(p for p in game.controlled_by(1 - caster) if p.card.name == "Darkest Hour")
+    assert lens.timestamp < hour.timestamp
+    assert sorted(game._effective_colors(bears)) == ["B"]
+
+
+@pytest.mark.cr("613.7m")
+@pytest.mark.parametrize("first, second, colour", [
+    ("Darkest Hour", "Celestial Dawn", ["W"]),
+    ("Celestial Dawn", "Darkest Hour", ["B"]),
+])
+def test_j6_replenish_orders_one_players_enchantments_as_the_graveyard_has_them(
+    catalog_by_name, set_pool, first, second, colour,
+):
+    """The half of CR 613.7m that is **not** done: "in the order of that
+    player's choice". Replenish returns one player's enchantments together,
+    and two of them can each set a colour — so the order is observable, and it
+    is the player's to choose. The engine enters them in graveyard order and
+    asks nobody: a legal order, picked for the player.
+
+    Pinned so the day the choice is asked this fails and is rewritten. What
+    asking takes: a prompt kind on ``pending_choices`` that orders a set of
+    entering permanents (a renderer in ``web/prompts.py`` and its client
+    half), armed by ``return_all_cards_from_graveyard`` and
+    ``put_cards_from_hand_onto_battlefield`` when two or more of one seat's
+    cards enter and — to keep it from asking about every pair of Bears — at
+    least two of them are sources of an ordered static
+    (``_j6_ordered_static_sources`` is that question); and the entries made
+    in the answered order."""
+    card = catalog_by_name.__getitem__
+    game = _j6_table(catalog_by_name, 2, 0)
+    bears = Permanent(card=card("Grizzly Bears"))
+    game._put_permanent_onto_battlefield(0, bears, None)
+    game.players[0].graveyard += [card(first), card(second)]
+    _j6_cast_mass_entry(game, card("Replenish"), 0)
+
+    stamps = {
+        perm.card.name: perm.timestamp for perm in game.controlled_by(0)
+        if perm.card.name in (first, second)
+    }
+    assert stamps[first] < stamps[second]
+    assert sorted(game._effective_colors(bears)) == colour
+
+
+@pytest.mark.cr("101.4", "613.7m")
+def test_j6_apnap_seats_starts_with_the_active_player_and_skips_who_has_left(
+    catalog_by_name,
+):
+    game = _j6_table(catalog_by_name, 4, 2)
+    assert game.apnap_seats() == [2, 3, 0, 1]
+    assert game.apnap_seats([0, 3]) == [3, 0]
+    game.players[3].lost = True
+    assert game.apnap_seats() == [2, 0, 1]
+    assert game.apnap_seats(include_lost=True) == [2, 3, 0, 1]
+    game.active_player_index = 0
+    assert game.apnap_seats() == [0, 1, 2]
+
+
+# ---------------------------------------------------------------------------
+# A static whose source loses its abilities (CR 613.1, CR 613.6, CR 613.8a)
+# ---------------------------------------------------------------------------
+#
+# Layer 4, then layer 5, then layer 6 — every time. So an ability that
+# generates a type or colour effect is still there when that effect is applied,
+# whatever layer 6 then does to it, and CR 613.6 carries the rest of the same
+# effect through the later layers "even if the ability generating the effect
+# is removed during this process". A static whose *whole* effect is layer 6 or
+# later is the opposite case: applying the removal ends it (CR 613.8a, a
+# dependency on the effect's existence), so the removal applies first.
+#
+# The engine read the land-type statics, Melting and the land animators off
+# ``Permanent.effective_card`` — the finished text, layer 6's removals struck
+# out — so all twelve vanished with their source's abilities; and it read the
+# global statics off the printed text, so the four that are all layer 6 went
+# on applying from a source that no longer had them.
+
+
+def _j6_stripped(b, name, witness_name, **answers):
+    """*witness_name*, then the static *name*, then its source stripped of
+    every ability: an enchantment by Opalescence (a creature now) and
+    Humility, an artifact by Titania's Song. Returns the game, the source, the
+    witness and what the witness read as before the strip."""
+    game = b.game
+    witness = b.enter(witness_name)
+    alone = (_w2g4_types(witness), sorted(game._effective_colors(witness)))
+    source = Permanent(card=b.card(name))
+    game._put_permanent_onto_battlefield(0, source, None)
+    for choice in list(game.pending_choices):
+        assert game.confirm_enter_choice(choice.player_index, **answers), name
+    game._recompute_continuous_effects()
+    under = (_w2g4_types(witness), sorted(game._effective_colors(witness)))
+    if "artifact" in _w2g4_types(source)[0]:
+        b.enter("Titania's Song")
+    else:
+        b.enter("Opalescence")
+        b.enter("Humility")
+    assert (source.effective_card.oracle_text or "") == "", "the source is stripped"
+    return game, source, witness, alone, under  # _j6_stripped
+
+
+#: Every pool static with a layer-4 or layer-5 part, and a permanent it moves.
+_J6_TYPE_AND_COLOUR_STATICS = {
+    # read off the source's text by ``_board_type_statics``
+    "Blood Moon": ("Tundra", {}),
+    "Conversion": ("Mountain", {}),
+    "Blanket of Night": ("Forest", {}),
+    "Glaciers": ("Mountain", {}),
+    "Illusionary Terrain": ("Forest", {"land_types": ["forest", "island"]}),
+    "Melting": ("Snow-Covered Forest", {}),
+    "Living Lands": ("Forest", {}),
+    "Living Plane": ("Forest", {}),
+    "Natural Emergence": ("Forest", {}),
+    "Nature's Revolt": ("Forest", {}),
+    "Celestial Dawn": ("Tundra", {}),
+    "Kormus Bell": ("Swamp", {}),
+    # a ``global_statics`` row
+    "Conspiracy": ("Grizzly Bears", {"creature_type": "elf"}),
+    "Dralnu's Crusade": ("Goblin Raider", {}),
+    "Darkest Hour": ("Grizzly Bears", {}),
+    "Shifting Sky": ("Grizzly Bears", {"mana_color": "U"}),
+    "Thran Lens": ("Grizzly Bears", {}),
+}
+
+#: The twelve that vanished with their source's abilities on the tree before.
+_J6_VANISHED = (
+    "Blood Moon", "Conversion", "Blanket of Night", "Glaciers",
+    "Illusionary Terrain", "Melting", "Living Lands", "Living Plane",
+    "Natural Emergence", "Nature's Revolt", "Celestial Dawn", "Kormus Bell",
+)
+
+
+@pytest.mark.cr("613.1d", "613.1e", "613.1f", "613.6")
+@pytest.mark.parametrize("name", sorted(_J6_TYPE_AND_COLOUR_STATICS))
+def test_j6_a_type_or_colour_static_outlives_its_sources_abilities(
+    catalog_by_name, set_pool, name,
+):
+    """The static's source is a creature with no abilities, and the permanent
+    it reached is exactly what it was: layers 4 and 5 were applied before
+    layer 6 took the ability away."""
+    witness_name, answers = _J6_TYPE_AND_COLOUR_STATICS[name]
+    b = _W2G4Board(catalog_by_name, set_pool)
+    _game, _source, witness, alone, under = _j6_stripped(
+        b, name, witness_name, **answers
+    )
+    assert under != alone, f"{name} does something to a {witness_name}"
+    after = (_w2g4_types(witness), sorted(b.game._effective_colors(witness)))
+    assert after == under, f"{name} lost its abilities and its effect with them"
+
+
+@pytest.mark.cr("613.6")
+def test_j6_the_stripped_source_census_covers_every_type_static_the_pass_gathers():
+    """The floor: every pool card that compiles one of the three instruction
+    kinds ``_board_type_statics`` reads off a source's text is a row above."""
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.land_animation import LAND_ANIMATION_KIND
+    from engine.land_types import STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND
+    from engine.oracle import compiled_units
+
+    pool = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            pool.setdefault(card.name, card)
+    kinds = {STATIC_LAND_TYPE_KIND, STATIC_SUPERTYPE_REMOVAL_KIND, LAND_ANIMATION_KIND}
+    gathered = {
+        card.name for card, program in compiled_units(pool.values())
+        if any(step.kind in kinds for step in program.instructions)
+    }
+    assert gathered == set(_J6_VANISHED), sorted(gathered ^ set(_J6_VANISHED))
+    assert set(_J6_VANISHED) <= set(_J6_TYPE_AND_COLOUR_STATICS)
+    assert len(pool) >= 4700, len(pool)
+
+
+@pytest.mark.cr("613.6", "613.4b")
+def test_j6_kormus_bell_under_titanias_song_still_wakes_the_swamps(
+    catalog_by_name, set_pool,
+):
+    """All three layers of one effect, in the cards' words: "All Swamps are
+    1/1 black creatures that are still lands." Titania's Song takes the Bell's
+    abilities (and makes it a 4/4); the Swamp is still a creature (layer 4),
+    still black (layer 5) and still 1/1 (layer 7b)."""
+    b = _W2G4Board(catalog_by_name, set_pool)
+    game, bell, swamp, _alone, _under = _j6_stripped(b, "Kormus Bell", "Swamp")
+    assert bell.is_creature and (bell.effective_power, bell.effective_toughness) == (4, 4)
+    assert swamp.is_creature
+    assert sorted(game._effective_colors(swamp)) == ["B"]
+    assert (swamp.effective_power, swamp.effective_toughness) == (1, 1)
+
+
+@pytest.mark.cr("613.1e", "613.1f")
+def test_j6_alloy_golem_under_humility_is_still_the_colour_it_chose(
+    catalog_by_name, set_pool,
+):
+    """"This creature is the chosen color." A layer-5 effect of an ability
+    layer 6 removes afterwards — the Golem is a 1/1 with no abilities, and
+    red. It read as colourless: the colour stood down "once its abilities are
+    gone", and at layer 5 they are not."""
+    b = _W2G4Board(catalog_by_name, set_pool)
+    golem = Permanent(card=b.card("Alloy Golem"))
+    b.game._put_permanent_onto_battlefield(0, golem, None)
+    assert b.game.confirm_enter_choice(0, mana_color="R")
+    b.game._recompute_continuous_effects()
+    assert sorted(b.game._effective_colors(golem)) == ["R"]
+
+    for order in ("after", "before"):
+        humility = b.enter("Humility")
+        assert (golem.effective_card.oracle_text or "") == ""
+        assert (golem.effective_power, golem.effective_toughness) == (1, 1)
+        assert sorted(b.game._effective_colors(golem)) == ["R"], order
+        b.game.remove_from_battlefield(humility)
+        b.game._recompute_continuous_effects()
+
+
+#: The pool's global statics whose whole effect is layer 6: an ability granted
+#: to a class of permanents, read off the witness's own text.
+_J6_LAYER_6_STATICS = {
+    "Energy Flux": ("Sol Ring", "sacrifice this artifact unless you pay"),
+    "Aura Flux": ("Castle", "sacrifice this enchantment unless you pay"),
+    "Breath of Dreams": ("Grizzly Bears", "cumulative upkeep {1}"),
+    "High Ground": ("Grizzly Bears", "can block an additional creature"),
+}
+
+
+@pytest.mark.cr("613.1f", "613.8a", "613.8b")
+@pytest.mark.parametrize("name", sorted(_J6_LAYER_6_STATICS))
+def test_j6_a_static_that_is_all_layer_6_ends_with_its_sources_abilities(
+    catalog_by_name, set_pool, name,
+):
+    """The other direction. Opalescence makes *name* a creature and Humility
+    takes its abilities: the granting effect and the removal are both layer 6,
+    and applying the removal would end the grant's existence (CR 613.8a), so
+    the removal applies first and nothing is granted — whichever is older."""
+    witness_name, granted = _J6_LAYER_6_STATICS[name]
+
+    def has_it(perm):
+        return granted in (perm.effective_card.oracle_text or "").lower()
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    witness = b.enter(witness_name)
+    source = b.enter(name)
+    assert has_it(witness)
+    b.enter("Opalescence")
+    humility = b.enter("Humility")
+    assert (source.effective_card.oracle_text or "") == ""
+    assert not has_it(witness), f"{name} has no abilities and went on granting one"
+
+    # …and it grants again the moment it has its abilities back.
+    b.game.remove_from_battlefield(humility)
+    b.game._recompute_continuous_effects()
+    assert has_it(witness)
+
+
+@pytest.mark.cr("613.6", "613.4b", "613.1f")
+def test_j6_humility_still_applies_after_stripping_itself(catalog_by_name, set_pool):
+    """The remover is not asked whether it still has its ability. Humility
+    under Opalescence is a creature that has lost all abilities — its own
+    among them — and every creature is still a 1/1 without any."""
+    b = _W2G4Board(catalog_by_name, set_pool)
+    sprites = b.enter("Scryb Sprites")
+    assert sprites.has_keyword("flying")
+    b.enter("Opalescence")
+    humility = b.enter("Humility")
+    assert humility.is_creature and (humility.effective_card.oracle_text or "") == ""
+    assert not sprites.has_keyword("flying")
+    assert (sprites.effective_power, sprites.effective_toughness) == (1, 1)
+
+
+@pytest.mark.cr("613.6", "613.1f")
+def test_j6_an_animators_keyword_goes_to_the_lands_the_layer_4_pass_reached(
+    catalog_by_name, set_pool,
+):
+    """"Lands you control are 2/2 creatures **with first strike**." (Natural
+    Emergence.) The creature type is layer 4 and the keyword layer 6, and
+    CR 613.6 applies the later part "to the same set of objects" the first
+    part reached — decided by the board-wide pass and read off the record it
+    leaves, not asked again of the finished layer.
+
+    Your Forest has first strike and the opponent's does not, and the record
+    names the animator on the one and is absent from the other.
+
+    **The two readings cannot be told apart by any pair of cards**, and that
+    is a result rather than a gap. The finished layer differs from the set the
+    pass found only if something changes the land's types *after* the
+    animator applied — and anything that would change which lands it reaches
+    is an effect it depends on (CR 613.8a), so the pass applies that first.
+    The last step here is that, on a board built by hand (no pool card sets a
+    land's card types without also taking its abilities): a card-type set
+    stamped *later* than the animator makes the Forest an enchantment and
+    nothing else, the animator waits behind it, and the Forest is neither a
+    creature nor a first striker — by the record and by the layer alike. Only
+    a dependency loop (CR 613.8b) could part them, and no keyword-carrying
+    animator in the pool is in one."""
+    from engine.continuous import next_timestamp
+    from engine.land_animation import LAND_ANIMATIONS_REACHING
+    from engine.layer_bridge import SET_CARD_TYPES
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    game = b.game
+    mine = b.enter("Forest")
+    theirs = Permanent(card=b.card("Forest"))
+    game._put_permanent_onto_battlefield(1, theirs, None)
+    emergence = b.enter("Natural Emergence")
+
+    assert mine.is_creature and mine.has_keyword("first strike")
+    assert not theirs.is_creature and not theirs.has_keyword("first strike")
+    assert [source for source, _a in mine.metadata[LAND_ANIMATIONS_REACHING]] == [emergence]
+    assert LAND_ANIMATIONS_REACHING not in theirs.metadata
+
+    mine.metadata[SET_CARD_TYPES] = {
+        "card_types": ["enchantment"], "timestamp": next_timestamp(), "source": "test",
+    }
+    game._recompute_continuous_effects()
+    assert _w2g4_types(mine)[0] == ["enchantment"]
+    assert not mine.has_keyword("first strike")
+    assert LAND_ANIMATIONS_REACHING not in mine.metadata
+
+    del mine.metadata[SET_CARD_TYPES]
+    game._recompute_continuous_effects()
+    assert mine.is_creature and mine.has_keyword("first strike")
+    game.remove_from_battlefield(emergence)
+    game._recompute_continuous_effects()
+    assert not mine.has_keyword("first strike")
+    assert LAND_ANIMATIONS_REACHING not in mine.metadata

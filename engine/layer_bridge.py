@@ -1328,11 +1328,16 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # written, and `from_cda=True` on the call below is the whole of the other
     # reading.
     #
-    # Not contributed once its abilities are gone (CR 613.1f is layer 6, but a
-    # removal that has already happened is the same predicate layer 6 itself
-    # asks).
-    own = own_chosen_color(perm)
-    if own is not None and not removes_all_abilities(perm):
+    # **Contributed whether or not its abilities are gone.** This asked
+    # ``removes_all_abilities`` and stood down under Humility, on the argument
+    # that "a removal that has already happened is the same predicate layer 6
+    # itself asks". Nothing has already happened: CR 613.1 applies the layers
+    # in order each time, layer 5 before layer 6, so the ability that makes
+    # the Golem its colour is still there when its colour is decided — the
+    # same reading that keeps a stripped Blood Moon making Mountains
+    # (``Permanent.card_before_layer_6``).
+    own = own_chosen_color(perm, perm.card_before_layer_6)
+    if own is not None:
         effects.append(
             set_colors(
                 only, [own], timestamp=perm.timestamp, label="chosen colour",
