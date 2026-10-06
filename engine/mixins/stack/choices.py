@@ -7975,7 +7975,7 @@ class PendingChoicesMixin:
 
     def confirm_trigger_target(
         self, player_index: int, permanent_id: int | None = None,
-        seat: int | None = None,
+        seat: int | None = None, permanent_ids: list[int] | None = None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -7984,14 +7984,64 @@ class PendingChoicesMixin:
         (``_select_trigger_mode_target`` one method down reads exactly these two
         keys). One of the two, never both: an answer carrying an id is about a
         permanent whatever seat it sits on.
+
+        *permanent_ids* is the answer for an ability that prints **several**
+        targets ("up to two target creatures"): every object named at once,
+        because CR 601.2c makes them one announcement.
         """
         return self.resolve_pending_choice(
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
+            permanent_ids=permanent_ids,
         )
+
+    def _resolve_trigger_targets(self, choice: PendingChoice, permanent_ids) -> bool:
+        """Record **several** chosen targets on the stack object (CR 601.2c).
+
+        The answer for a prompt armed with ``max_targets`` — "each of up to two
+        other target creatures you control" (Basri's Acolyte). Checked the way
+        the one-target answer is, against the list that was offered: each id
+        once (CR 115.3: the same object is not chosen twice for one instance
+        of "target"), no more of them than the ability prints, and at least
+        one — an "up to" that names nobody is the stack object as it stands,
+        and needs no answer to be so.
+
+        Written in the shape a *cast* writes the same announcement
+        (``target_permanent_id`` a list, the seat settled only where every
+        named object shares one), so every handler that already reads a
+        several-target spell reads this.
+        """
+        item = choice.data.get("_trigger_item")
+        if item is None:
+            return False
+        ceiling = int(choice.data.get("max_targets") or 1)
+        named = list(permanent_ids or ())
+        offered = {
+            target.get("permanent_id")
+            for target in choice.data.get("targets") or ()
+            if target.get("kind", "permanent") == "permanent"
+        }
+        if not named or len(named) > ceiling or len(set(named)) != len(named):
+            return False
+        if any(permanent_id not in offered for permanent_id in named):
+            return False
+        permanents = [self.permanent_by_id(permanent_id) for permanent_id in named]
+        if any(permanent is None for permanent in permanents):
+            return False
+        queued = self._choice_is_queued(choice)
+        self.discard_pending_choice(choice)
+        item.target_permanent_id = named
+        item.target_permanent_index = None
+        item.target_player_index = self.announced_target_seat(named)
+        self.log.append(
+            f"{choice.data.get('card_name', 'Ability')}: targets "
+            + ", ".join(permanent.card.name for permanent in permanents)
+        )
+        self._announce_answered_targets(item, choice, queued)
+        return True
 
     def _resolve_trigger_target(
         self, choice: PendingChoice, permanent_id: int | None = None,
-        seat: int | None = None,
+        seat: int | None = None, permanent_ids: list[int] | None = None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -8011,6 +8061,8 @@ class PendingChoicesMixin:
         item = choice.data.get("_trigger_item")
         if item is None:
             return False
+        if permanent_ids is not None:
+            return self._resolve_trigger_targets(choice, permanent_ids)
         targets = choice.data.get("targets") or ()
         card_name = choice.data.get("card_name", "Ability")
         if permanent_id is None:
@@ -8154,6 +8206,21 @@ class PendingChoicesMixin:
                         choice, permanent_id=target["permanent_id"]
                     )
             wanted = self._default_trigger_target_side(item, choice.player_index)
+            # "Up to two": as many as the ability prints, on the side the
+            # effect wants. A seat nobody asks takes what the card offers it —
+            # one counter where the card prints two is a card playing as half
+            # of itself. Where the effect names no side the single first
+            # candidate below is unchanged: with nothing to say whose creatures
+            # an effect wants, "as many as possible" is not a policy.
+            ceiling = int(choice.data.get("max_targets") or 1)
+            if ceiling > 1:
+                several = [
+                    target["permanent_id"] for target in targets
+                    if target.get("kind") == "permanent"
+                    and target.get("seat") in wanted
+                ][:ceiling]
+                if several:
+                    return self._resolve_trigger_targets(choice, several)
             for target in targets:
                 if target.get("kind") == "permanent" and target.get("seat") in wanted:
                     return self._resolve_trigger_target(
@@ -9917,7 +9984,7 @@ register_choice(
 register_choice(
     "trigger_target",
     resolve=lambda game, choice, r: game._resolve_trigger_target(
-        choice, r.get("permanent_id"), r.get("seat"),
+        choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

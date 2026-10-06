@@ -734,11 +734,26 @@ class StackResolutionMixin:
                 "it has no legal target (603.3c)"
             )
             return
+        # "…each of **up to two** other target creatures you control" (Basri's
+        # Acolyte); "you may tap **up to two** target creatures" (Cho-Arrim
+        # Bruiser). CR 601.2c chooses *every* target the ability prints, and
+        # the count is the printed one — it rode the spec to here and stopped,
+        # so the prompt asked for one target and the second was never anybody's
+        # to name. Absent for every ability that prints one, which is what
+        # keeps the prompt those raise byte-identical.
+        several = {}
+        printed = spec.get("max_targets")
+        if isinstance(printed, int) and printed > 1:
+            several["max_targets"] = min(
+                printed,
+                sum(1 for entry in offered if entry["kind"] == "permanent"),
+            )
         self.arm_pending_choice(
             "trigger_target", chooser_index,
             card_name=item.card.name,
             targets=offered,
             _trigger_item=item,
+            **several,
         )
 
     def _trigger_chooser_seat(self, item: StackItem, chooser: str) -> int | None:
