@@ -32,7 +32,8 @@ from ..shields import (
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
 from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm)
 from ..oracle_types import single_chosen_id
-from ._common import (divided_target_permanent, names_a_target_list,
+from ._common import (default_announced_permanent, divided_target_permanent,
+                      names_a_target_list,
                       recorded_permanent_ids, attached_host, bound_permanent,
                       resolve_amount, resolve_target_permanent,
                       resolve_target_permanents)
@@ -93,6 +94,8 @@ def apply_prevention_shield(
     context: OracleExecutionContext | None = None,
     source_filter: dict | None = None,
     counter: str = "",
+    permanent: "Permanent | None" = None,
+    object_only: bool = False,
 ) -> str:
     """Grant `amount` prevention shields to a chosen creature, or otherwise to the
     target player. Records `source_name` (the granting card) so the UI can show
@@ -106,8 +109,13 @@ def apply_prevention_shield(
     activation API accepts — shielded the creature's *controller* instead (Defender
     en-Vec, Samite Healer), and an index held across a resolution addressed
     whichever creature slid into the slot when one ahead of it left.
+
+    *object_only* is a printed target that is an object and never a player
+    ("target creature"): with no creature to shield, nobody is shielded.
+    *permanent* is the caller's own answer for an announcement that named none
+    (``handlers/_common.default_announced_permanent``), used only when nothing
+    was announced.
     """
-    permanent = None
     chosen_id = (
         single_chosen_id(context.target_permanent_id)
         if context is not None else None
@@ -126,6 +134,11 @@ def apply_prevention_shield(
         and 0 <= target_permanent_index < len(target.battlefield)
     ):
         permanent = target.battlefield[target_permanent_index]
+    if object_only and (permanent is None or not permanent.is_creature):
+        # "Target creature" names no player, so there is nobody to fall back
+        # to: an announced slot that is not a creature shields nothing.
+        game.log.append(f"{source_name}: no creature was named to shield")
+        return ""
     if permanent is not None and permanent.is_creature:
         _record_shield(
             context,
@@ -463,6 +476,31 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # Salve's prevention mode, Samite Healer, …): the target may be a creature,
     # in which case the shield protects that creature rather than its controller.
     amount = _sized_for_recipient(game, context, instruction, target, amount)
+    # "…that would be dealt to **target creature** this turn" (Oasis, Samite
+    # Pilgrim, Kei Takahashi). The printed target is an *object*, and a player
+    # is not one: the fall-through below — "no creature, so the player" — is
+    # "any target"'s answer and was this sentence's too, so an announcement
+    # that named nobody armed a **player** (the opponent, by the default seat)
+    # with a shield the card cannot give one. Measured over the pool: 8 of the
+    # 10 activated shields printing the phrase, and a bare ``activate`` over
+    # the wire did the same.
+    #
+    # So an object description never reaches a player. Announced bare — the
+    # headless convention — it takes the first creature the picker would have
+    # offered, the controller's own before an opponent's (a shield is a
+    # benefit), and with no legal creature it shields nobody.
+    described = instruction.payload.get("targets")
+    object_only = isinstance(described, dict) and described.get("kind") == "object"
+    unannounced = None
+    if (
+        object_only
+        and single_chosen_id(context.target_permanent_id) is None
+        and not isinstance(context.target_permanent_index, int)
+    ):
+        unannounced = default_announced_permanent(game, instruction, context)
+        if unannounced is None:
+            game.log.append(f"{source_name}: no creature was named to shield")
+            return True, "resolved"
     apply_prevention_shield(
         game, target, context.target_permanent_index, amount, source_name,
         context=context, source_filter=source_filter,
@@ -471,6 +509,8 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # "that creature" has nothing to point at when the shield goes round a
         # player.
         counter=str(instruction.payload.get("rider_counter") or ""),
+        permanent=unannounced,
+        object_only=object_only,
     )
     return True, "resolved"
 

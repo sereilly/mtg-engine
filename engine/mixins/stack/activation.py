@@ -400,6 +400,7 @@ class AbilityActivationMixin:
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
         source_controller_index: int | None = None,
+        seat_announced: bool | None = None,
     ) -> SimulationResult:
         queued = self.queue_permanent_ability(
             controller_index,
@@ -424,6 +425,7 @@ class AbilityActivationMixin:
             source_permanent_index=source_permanent_index,
             source_stack_index=source_stack_index,
             source_controller_index=source_controller_index,
+            seat_announced=seat_announced,
         )
         if not queued.supported:
             return queued
@@ -668,6 +670,16 @@ class AbilityActivationMixin:
         source_permanent_index: int | None = None,
         source_stack_index: int | None = None,
         source_controller_index: int | None = None,
+        # **Whether the caller is a seat that has to announce** (CR 601.2c,
+        # through CR 602.2b). None is every headless caller — a test, a
+        # scripted duel, the AI simulator — for whom a target left unnamed is
+        # the handler's pick. A bool is the wire: a person at a client, who is
+        # asked for every target the ability owes and cannot send the
+        # activation without one, so an owed target left unnamed is refused
+        # rather than defaulted. The value is whether a *seat* was sent, which
+        # only the route knows — it fills in an opposing seat for every
+        # activation, and the engine cannot tell that default from a choice.
+        seat_announced: bool | None = None,
         # Where CR 601.2b's announced choice records how to take itself back.
         # Supplied by ``queue_permanent_ability``, this function's only caller
         # and the one place a refused activation is reversed (CR 733.1).
@@ -950,6 +962,75 @@ class AbilityActivationMixin:
         if target_refusal is not None:
             self.log.append(target_refusal)
             return SimulationResult(permanent.card.name, False, "unsupported", target_refusal)
+        if seat_announced is not None:
+            # The wire's half of the same rule: a client names every target an
+            # ability owes, so one left unnamed is not an activation a browser
+            # can send — and the handler's pick behind it is a target nobody
+            # chose. Above the default below for that reason: "exactly one
+            # legal target" is still a target the player has to click.
+            unannounced = self.unannounced_activation_target(
+                controller_index, permanent, ability,
+                seat_announced=seat_announced,
+                target_permanent_index=target_permanent_index,
+                target_permanent_ids=target_permanent_ids,
+                target_stack_item=target_stack_item,
+                target_role_refs=target_role_refs,
+                divided_targets=divided_targets,
+                x_value=int(x_value or 0),
+            )
+            if unannounced is not None:
+                self.log.append(unannounced)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", unannounced
+                )
+
+        # **An activation that named no target, where exactly one is legal,
+        # names that one** (``legality.sole_legal_activation_target``). The
+        # headless convention leaves an unnamed target to the handler's pick,
+        # and a pick is a scan written for the common board: Tahngarth, Talruum
+        # Hero alone on the battlefield is its own only legal target, and it
+        # tapped and paid {1}{R} to do nothing. With one legal announcement
+        # there is nothing for a default to choose between, so it is made here,
+        # where CR 601.2c makes it — before the costs, from the picker's list.
+        #
+        # A seat the caller sent with no object beside it names no object
+        # (it is the battlefield an index would have counted into), so it does
+        # not stand in the way; a seat named for a **player** target does, and
+        # is kept.
+        if (
+            target_permanent_ids is None
+            and target_permanent_index is None
+            and target_stack_item is None
+            and not target_role_refs
+            and not divided_targets
+        ):
+            sole = self.sole_legal_activation_target(
+                controller_index, permanent, ability, x_value=int(x_value or 0),
+            )
+            if sole is not None and sole.get("kind") == "player":
+                if target_player_index is None:
+                    target_player_index = sole["seat"]
+                    target_idx = announced_target_idx = sole["seat"]
+                    target_player = self.players[target_idx]
+            elif sole is not None and sole.get("kind") == "permanent":
+                target_player_index = sole["seat"]
+                target_idx = announced_target_idx = sole["seat"]
+                target_player = self.players[target_idx]
+                target_permanent_index = sole["index"]
+                named = self.permanent_at(target_player, sole["index"])
+                target_permanent_ids = (
+                    [named.permanent_id] if named is not None else None
+                )
+            elif sole is not None and sole.get("kind") == "graveyard":
+                target_player_index = sole["seat"]
+                target_idx = announced_target_idx = sole["seat"]
+                target_player = self.players[target_idx]
+                target_permanent_index = sole["index"]
+            elif sole is not None and sole.get("kind") == "stack":
+                depth = len(self.stack)
+                position = depth - 1 - sole["stack_index"]
+                if 0 <= position < depth:
+                    target_stack_item = self.stack[position]
 
         # CR 601.2d's announced division, resolved to ids **here** — which is
         # where CR 601.2c/601.2d put it, before a single cost is paid at

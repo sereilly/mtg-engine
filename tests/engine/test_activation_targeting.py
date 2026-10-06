@@ -627,28 +627,30 @@ _OBJECT_KINDS = {
 
 
 def _mandatory_object_target_abilities(cards):
-    """Every supported ability whose instruction takes a *mandatory* object
-    target (not "up to", not a cost payment or "of your choice" source)."""
-    from engine.legality import _ability_target_quantifiers, _QUANTIFIERLESS_TARGET_KINDS
+    """Every supported ability that **owes** an object target (not "up to",
+    not a cost payment or "of your choice" source).
+
+    Asked of ``legality.activation_target_obligation``, the gate's own one
+    question. This population used to be re-derived here from the gate's
+    mandatory-target walk plus its list of quantifierless kinds — the same two
+    lists the gate read, so an ability the walk missed was missing from the
+    ratchet that existed to catch it (about fifty were: a bounce, a base-P/T
+    set, "you may tap or untap target creature", a land-type change).
+    ``tests/regressions/test_activation_announcement_gate.py`` holds the same
+    board to a control read off the printed line instead."""
+    from engine.legality import activation_target_obligation
 
     for card in cards:
         for index, ability in enumerate(_abilities(card)):
             spec = derive_activation_spec(ability)
             if spec is None or spec.get("kind") not in _OBJECT_KINDS:
                 continue
-            if any(spec.get(k) for k in ("sacrifice_cost", "discard_cost", "also_stack", "requires_source")):
-                continue
-            instruction = ability.instruction
-            quantifiers = _ability_target_quantifiers(instruction)
-            mandatory = "target" in quantifiers or (
-                instruction is not None and instruction.kind in _QUANTIFIERLESS_TARGET_KINDS
-            )
-            if mandatory:
+            if activation_target_obligation(ability, x_value=0) is not None:
                 yield card, index, ability
 
 
 def test_the_no_target_sweep_covers_the_pool(supported_cards):
-    assert len(list(_mandatory_object_target_abilities(supported_cards))) > 15
+    assert len(list(_mandatory_object_target_abilities(supported_cards))) > 500
 
 
 def test_no_mandatory_target_ability_can_be_activated_with_nothing_to_target(supported_cards):

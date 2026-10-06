@@ -60,15 +60,17 @@ _VICTIMS = _SPELL_VICTIMS + _ABILITY_VICTIMS
 #: two-way ratchet: a name here that is refused, or a name not here that is
 #: accepted, both fail.
 #:
-#: Goblin Artisans — "Flip a coin. If you win the flip, draw a card. If you lose
-#: the flip, counter target artifact spell you control …". The target sits in a
-#: conditional branch, which ``legality._announced_target_slots`` deliberately
-#: does not walk, and ``test_goblin_artisans_draws_on_a_won_flip`` holds the
-#: bare activation. CR 601.2c reads the other way (a target is announced
-#: whether or not the sentence it is in turns out to apply); recorded here
-#: rather than changed, because the same walk decides it for every conditional
-#: target in the pool and that is a pool-wide decision.
-_NAMES_NOTHING = {"Goblin Artisans"}
+#: **Empty, and it held Goblin Artisans** — "Flip a coin. If you win the flip,
+#: draw a card. If you lose the flip, counter target artifact spell you control
+#: …". The target sits in a conditional branch, which the gate's old
+#: mandatory-target walk deliberately did not enter; this entry recorded that
+#: CR 601.2c reads the other way and that changing it was "a pool-wide
+#: decision". It was made when the gate stopped walking and started asking the
+#: picker's own slot (``legality.activation_target_obligation``, the question
+#: the cast side already asked of both arms of a condition): a target is
+#: conditional on a cost or a mode and on nothing else, so the Artisans cannot
+#: be activated without an artifact spell of their controller's to name.
+_NAMES_NOTHING: set[str] = set()
 
 
 @pytest.fixture(scope="module")
@@ -224,10 +226,24 @@ def test_no_ability_can_name_a_stack_object_its_picker_does_not_offer(_catalog):
 
 
 def test_the_named_sweep_finds_the_defect_on_a_tree_that_has_it(_catalog, monkeypatch):
-    """Backwards. ``_STACK_TARGET_KINDS`` is what sends a named stack object to
-    the comparison when the mandatory-target walk found nothing; without it
-    Goblin Artisans is activatable at an opponent's Lightning Bolt again."""
-    monkeypatch.setattr(legality, "_STACK_TARGET_KINDS", frozenset())
+    """Backwards. The gate used to return before comparing a named object
+    whenever its mandatory-target walk found no bare ``target`` quantifier —
+    and the Artisans' counter sits in a branch that walk did not enter. With
+    that opening restored Goblin Artisans is activatable at an opponent's
+    Lightning Bolt again.
+
+    (It was restored by emptying ``_STACK_TARGET_KINDS``, the exception W2G3
+    cut into that early return for a named stack object. The early return is
+    gone — a named target is compared for every ability — so the backwards
+    half puts it back whole.)"""
+    real = Game.activation_target_refusal
+
+    def gate_as_it_was(self, controller_index, source, ability, **named):
+        if "target" not in legality._ability_target_quantifiers(ability.instruction):
+            return None
+        return real(self, controller_index, source, ability, **named)
+
+    monkeypatch.setattr(Game, "activation_target_refusal", gate_as_it_was)
     _examined, accepted_unoffered, _refused = _named_sweep(_catalog)
 
     assert ("Goblin Artisans", "Lightning Bolt") in accepted_unoffered
@@ -271,10 +287,11 @@ def test_the_handler_sweep_finds_a_picker_that_reads_one_type(_catalog, monkeypa
     assert ("Brown Ouphe", "Triskelion ability -> player") in findings
 
 
-def test_only_a_conditional_target_may_be_activated_with_nothing_to_name(_catalog):
+def test_no_stack_target_may_be_activated_with_nothing_to_name(_catalog):
     """CR 602.2b: an ability with a mandatory target is unactivatable while the
-    stack holds nothing its phrase admits. The one exception is recorded in
-    ``_NAMES_NOTHING`` with its reason."""
+    stack holds nothing its phrase admits — a target in a conditional sentence
+    included (CR 601.2c). ``_NAMES_NOTHING`` is where an exception would be
+    recorded with its reason; it held one and holds none."""
     by_name = {card.name: card for card in _catalog}
     examined = 0
     accepted: set[str] = set()

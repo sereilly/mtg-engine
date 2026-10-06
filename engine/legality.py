@@ -60,6 +60,7 @@ from .targeting import (
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
     _nested_steps,
+    activation_target_slot,
     announced_mode_instructions,
     cast_target_slot,
     derive_activation_spec,
@@ -355,6 +356,12 @@ def _activation_spec(abilities) -> tuple[dict, object | None]:
 #: their answer may be an object instead, and a slot narrowed against a seat
 #: nobody chose is a restriction with nothing behind it.
 _SEAT_ANSWER_SPEC_KINDS = frozenset({"player", "player_or_planeswalker"})
+
+#: Spec kinds whose announced target **may be** a player, and so the kinds for
+#: which a seat named with nothing else is the target itself rather than the
+#: battlefield a permanent target sits on. Wider than the set above by "any
+#: target", whose answer may be a seat or an object.
+_SEAT_TARGET_SPEC_KINDS = frozenset({"player", "any", "player_or_planeswalker"})
 
 
 def _with_dependent_seat_slots(spec: dict, ability) -> dict:
@@ -829,6 +836,97 @@ def cast_may_name_no_target(
     if slot is None:
         return False
     return _slot_may_name_nobody(slot[1], x_value) is True
+
+
+#: Spec kinds :func:`activation_target_obligation` does not answer for:
+#: ``none`` / ``modal`` / ``hand_card`` choose no target, and a **divided**
+#: announcement is CR 601.2d's (``divided_damage.division_refusal``, asked in
+#: ``_activate_onto_stack`` beside the target gate).
+_UNOBLIGED_ACTIVATION_KINDS = frozenset({"none", "modal", "hand_card", "divided"})
+
+#: Spec flags that make an activation's picker **a choice and not a target**
+#: (CR 115.1): "a source of your choice" (CR 609.7a) and an ``optional`` one.
+#: ``also_stack`` is the same answer by another flag: only a chosen source is
+#: offered spells on the stack beside permanents (the colour Circles carry it
+#: and no ``source_of_choice``). Narrower than :data:`_UNTARGETED_SPEC_FLAGS`
+#: by one flag on purpose — ``requires_source`` says a source is chosen *as
+#: well*, and the spec it rides is a real target's (Jade Monolith's "target
+#: creature").
+_CHOSEN_NOT_TARGETED_FLAGS = ("source_of_choice", "also_stack", "optional")
+
+
+def activation_target_obligation(ability, *, x_value: int | None = None) -> dict | None:
+    """The spec of the target an activated ability **must** announce as it is
+    activated (CR 602.2b, through CR 601.2c), or None when it may be activated
+    naming none.
+
+    :func:`cast_target_obligation`'s twin, and the **one** definition of "this
+    ability owes a target": read by the activation gate
+    (:meth:`LegalityMixin.activation_target_refusal`), by the wire
+    (:meth:`LegalityMixin.unannounced_activation_target`, which is what stops
+    ``web/actions.py`` accepting an activation no browser can send) and through
+    the gate by the AI's two activation choosers.
+
+    The answer is the picker's own slot — :func:`targeting.
+    activation_target_slot`, the instruction ``derive_activation_spec``
+    describes — and that slot's printed quantifier:
+
+    * "target", a printed count, "any target" — one must be named, so one
+      must exist;
+    * **no quantifier at all** (a kind whose noun phrase is lowered into the
+      payload, or into nothing, rather than into a ``targets`` description) —
+      owed where the ability's own line prints the word
+      (``stack_targets.names_a_target``, the reader that decides what a stack
+      object's targets *were*, so "owes a target" and "chose a target" are one
+      opinion). A picker the line never calls a target is a choice: "an
+      unblocked creature **of your choice**" (Forcefield), "an artifact source
+      of your choice" (Circle of Protection: Artifacts);
+    * "up to N target", "any number of target" — zero is a legal announcement;
+    * "**X** target lands" (Candelabra of Tawnos) — obliged only once the
+      activation has announced an X of one or more (CR 601.2b precedes 601.2c).
+
+    **"No quantifier at all" is the half this replaced a walk for.** The gate
+    used to ask ``_ability_target_quantifiers``: every ``targets`` description
+    in the unconditional steps, plus a hand-kept list of kinds whose noun
+    phrase is lowered somewhere else. A lowering that wrote neither was an
+    ability the gate thought owed nothing — about fifty of them (a bounce, a
+    base-P/T set, "you may tap or untap target creature", a land-type change,
+    "target opponent gains control of this artifact") could be activated with
+    nothing to aim at, and paid for, or aimed at an opponent's Island. The
+    picker is the evidence instead, so the next lowering cannot forget: an
+    ability that derives one owes what it asks for unless its slot, its spec's
+    flags or its own printed line says otherwise.
+
+    **A target in a conditional sentence is owed too.** "Flip a coin. If you
+    win the flip, draw a card. If you lose the flip, counter **target**
+    artifact spell you control" (Goblin Artisans); "If this creature is
+    tapped, exile **target** creature card from a graveyard" (Eater of the
+    Dead). CR 601.2c: a spell or ability "may require some targets only if an
+    alternative or additional cost … or a particular mode was chosen for it" —
+    a condition asked at resolution is neither, so the target is announced as
+    the ability is activated and the ability cannot be activated without one.
+    The walk skipped ``then``/``else`` on purpose and recorded it as a
+    pool-wide decision still to be made; the cast side had made it already
+    (:func:`cast_target_obligation` reads both arms), and one ability, one
+    question is what makes it here.
+    """
+    spec, _ = _activation_spec([ability])
+    if spec.get("kind") in _UNOBLIGED_ACTIVATION_KINDS:
+        return None
+    if spec_is_a_cost(spec) or any(spec.get(flag) for flag in _CHOSEN_NOT_TARGETED_FLAGS):
+        return None
+    slot = activation_target_slot(ability)
+    if slot is None:
+        return None
+    unnamed = _slot_may_name_nobody(slot[1], x_value)
+    if unnamed is True:
+        return None
+    if unnamed is None:
+        from .stack_targets import names_a_target
+
+        if not names_a_target(getattr(ability, "source_line", None)):
+            return None
+    return spec
 
 
 def _role_object_key(obj) -> tuple:
@@ -2278,20 +2376,24 @@ class LegalityMixin:
             return announced
         spec, _ = _activation_spec([ability])
         kind = spec.get("kind")
-        if kind in ("none", "modal", "hand_card"):
+        if kind in _UNOBLIGED_ACTIVATION_KINDS:
             return None
-        # A cost payment (Sacrifice) and a chosen *source* (Jade Monolith,
-        # Circle of Protection) are not targets — CR 601.2b/601.2c — so an empty
-        # board does not make them unactivatable. Their own paths validate them.
+        # A cost payment (Sacrifice) and a chosen *source* (Circle of
+        # Protection) are not targets — CR 601.2b/601.2c — so an empty board
+        # does not make them unactivatable. Their own paths validate them.
         #
         # Every cost flag, through the one reader of them (PCY W3G5): this was a
         # list of four, and a cost flag it does not name is asked a target's
         # question — Benthic Explorers' untap the day it had a picker, and an
         # exile cost already.
-        if (
-            spec_is_a_cost(spec)
-            or spec.get("also_stack") or spec.get("requires_source")
-        ):
+        #
+        # ``requires_source`` used to return here as well, and it is not the
+        # same answer: it says a source is chosen *beside* a target ("the next
+        # time a source of your choice would deal damage to **target
+        # creature**", Jade Monolith, Charm Peddler), so the spec it rides is a
+        # real target's and the creature was never checked at all. The source
+        # half has its own list (``source_targets``) and is not asked here.
+        if spec_is_a_cost(spec) or spec.get("also_stack"):
             return None
         instruction = getattr(ability, "instruction", None)
         if kind == ROLES_TARGET_KIND:
@@ -2369,26 +2471,41 @@ class LegalityMixin:
             )
             if repeated is not None:
                 return repeated
-        quantifiers = _ability_target_quantifiers(instruction)
-        mandatory = "target" in quantifiers
-        if not mandatory and not (
-            kind in _STACK_TARGET_KINDS and target_stack_item is not None
-        ):
-            # No mandatory target to enforce — an all-"up to" target may choose
-            # none, and a kind with no target quantifier resolves its own choice
-            # (a shield's "of your choice", an attacker the handler picks). Only
-            # a *named* target still has to be legal, which the per-kind pickers
-            # and the resolution already check for these.
-            #
-            # **Except on the stack, where nothing checked it.** A named stack
-            # object falls through to the comparison below whether or not the
-            # walk above found the word: Goblin Artisans' "counter target
-            # artifact spell you control" sits in a conditional branch the walk
-            # deliberately does not enter, so its activation could name an
-            # opponent's Lightning Bolt — the picker never offered it and
-            # nothing between the picker and the handler asked. The spell
-            # side's gate is `cast_stack_target_refusal`; this is the same
-            # question of an ability, through the same enumeration.
+        # **One question, asked of every ability: does it owe a target, and was
+        # one named?** (:func:`activation_target_obligation`.) This used to be
+        # "does the mandatory-target walk find the word" — and where it did
+        # not, the gate returned here without looking at what was named. A
+        # named target has to be legal whether or not one is owed: "up to one
+        # target creature" may name nobody and may not name an Island.
+        obligation = activation_target_obligation(ability, x_value=x_value)
+        named_ids = [
+            pid for pid in (target_permanent_ids or ()) if pid is not None
+        ]
+        named_indices = [
+            idx for idx in (
+                target_permanent_index
+                if isinstance(target_permanent_index, list)
+                else [target_permanent_index]
+            )
+            if idx is not None
+        ]
+        named_object = bool(
+            named_ids or named_indices or target_stack_item is not None
+        )
+        # A seat is this ability's *target* only where its spec says a player
+        # may be one. Everywhere else ``target_player_index`` is the seat a
+        # targeted **permanent** sits on (the index branch below reads it
+        # exactly that way), and comparing it against the legal players would
+        # refuse a legal announcement.
+        names_a_seat = (
+            target_player_index is not None
+            and kind in _SEAT_TARGET_SPEC_KINDS
+            and not named_object
+        )
+        if obligation is None and not named_object and not names_a_seat:
+            # Nothing owed and nothing named: an all-"up to" announcement that
+            # chose none, an "X target" at X = 0, a chosen source the handler
+            # defaults.
             return None
         ability_instruction = targeting_instruction(instruction)
         valid = self._enumerate_targets(
@@ -2397,53 +2514,60 @@ class LegalityMixin:
             source_permanent=source,
             ability_source=source,
         )
-        # A player/"any" ability always has a legal target (a player is always
-        # there), so those never refuse for want of one — the whole set of
-        # legal permanents, graveyard cards and stack spells is what an empty
-        # board can leave empty.
         legal_perm = {
-            (t["seat"], t["index"]) for t in valid
-            if t.get("kind") in ("permanent", "graveyard")
+            (t["seat"], t["index"]) for t in valid if t.get("kind") == "permanent"
+        }
+        legal_grave = {
+            (t["seat"], t["index"]) for t in valid if t.get("kind") == "graveyard"
         }
         legal_stack = [t for t in valid if t.get("kind") == "stack"]
         refused = f"no valid target for {card.name}"
 
-        # **A named player has to be one of the legal ones.** The comment above
-        # is about whether an ability that targets a player can be activated at
-        # all — it always can, because a player is always there — and that was
-        # read as though it settled the other half of CR 601.2c too. It does
-        # not: "target **opponent**" strikes the activator's own seat out
-        # (CR 102.2/102.3), ``_enumerate_targets`` already leaves it out of the
-        # offered list, and nothing compared the seat the caller named against
-        # that list. The picker never offered it; a script, the AI and a test
-        # could all name it, and the ability resolved.
-        #
-        # Only for a spec whose *whole* target is a player: everywhere else
-        # ``target_player_index`` is the seat carrying a targeted **permanent**
-        # (the branch below reads it exactly that way), and comparing it here
-        # would refuse a legal announcement.
-        if kind in ("player", "player_or_planeswalker") and target_player_index is not None:
+        # **A named player has to be one of the legal ones.** "Target
+        # **opponent**" strikes the activator's own seat out (CR 102.2/102.3)
+        # and a player with shroud cannot be chosen at all (CR 702.18a);
+        # ``_enumerate_targets`` already leaves both out of the offered list,
+        # and nothing compared the seat the caller named against that list.
+        # The picker never offered it; a script, the AI and a test could all
+        # name it, and the ability resolved.
+        if names_a_seat:
             legal_seats = {
                 entry["seat"] for entry in valid if entry.get("kind") == "player"
             }
             if target_player_index not in legal_seats:
                 return refused
+            return None
 
-        # A named target must be legal. The web layer sends ids; a test or the
-        # AI may send an index on a seat.
-        if target_permanent_ids:
-            chosen = [pid for pid in target_permanent_ids if pid is not None]
-            if chosen:
-                for pid in chosen:
-                    perm = self.permanent_by_id(pid)
-                    if perm is None:
-                        return refused
-                    seat = self.controller_index_of(perm)
-                    idx = self.battlefield_index_of(perm)
-                    if (seat, idx) not in legal_perm:
+        if kind == GRAVEYARD_TARGET_KIND:
+            # A card in a graveyard is named by **slot**, in the pile the seat
+            # beside it names — or in either pile when no seat was given. Never
+            # by the id ``_activate_onto_stack`` stamps off the *battlefield*
+            # slot of the same number: that is a permanent the ability never
+            # targeted, and comparing its seat against a list of graveyard
+            # slots answered about a different zone.
+            if named_indices:
+                seats = (
+                    [target_player_index] if target_player_index is not None
+                    else list(range(len(self.players)))
+                )
+                for idx in named_indices:
+                    if not any((seat, idx) in legal_grave for seat in seats):
                         return refused
                 return None
-        if target_permanent_index is not None:
+        elif named_ids:
+            # A named target must be legal. The web layer sends ids; a test or
+            # the AI may send an index on a seat, which ``_activate_onto_stack``
+            # has already turned into the id of the permanent it named.
+            for pid in named_ids:
+                perm = self.permanent_by_id(pid)
+                if perm is None:
+                    return refused
+                seat = self.controller_index_of(perm)
+                idx = self.battlefield_index_of(perm)
+                if (seat, idx) not in legal_perm:
+                    return refused
+            return None
+        elif named_indices:
             # A bare index carries no seat, so it is legal if it names a legal
             # target on the seat the caller gave — or, when none was given, on
             # either battlefield (Xenic Poltergeist may animate your own
@@ -2452,13 +2576,8 @@ class LegalityMixin:
                 [target_player_index] if target_player_index is not None
                 else list(range(len(self.players)))
             )
-            indices = (
-                target_permanent_index
-                if isinstance(target_permanent_index, list)
-                else [target_permanent_index]
-            )
-            for idx in indices:
-                if idx is not None and not any((seat, idx) in legal_perm for seat in seats):
+            for idx in named_indices:
+                if not any((seat, idx) in legal_perm for seat in seats):
                     return refused
             return None
         if target_stack_item is not None:
@@ -2475,15 +2594,110 @@ class LegalityMixin:
                 return refused
             return None
 
-        # Nothing was named, and the target is mandatory: the ability is
-        # activatable only if some legal target exists (CR 602.2b). This is the
-        # census case — an empty board for a "destroy target creature" / "deals
-        # N damage to target creature" ability, which used to pay the cost and
-        # no-op (or, with an opponent creature present but none chosen, hit the
-        # face).
+        # Nothing was named, and a target is owed: the ability is activatable
+        # only if some legal target exists (CR 602.2b). This is the census case
+        # — an empty board for a "destroy target creature" / "deals N damage to
+        # target creature" ability, which used to pay the cost and no-op (or,
+        # with an opponent creature present but none chosen, hit the face).
+        #
+        # With a legal target on the table the bare activation is accepted and
+        # resolves on the handler's pick: the engine-wide headless convention,
+        # which the test corpus and every scripted duel rely on. It is not what
+        # a browser may send — :meth:`unannounced_activation_target` is what
+        # the wire asks.
         if not valid:
             return refused
         return None
+
+    def unannounced_activation_target(
+        self, controller_index: int, source_permanent, ability, *,
+        seat_announced: bool,
+        target_permanent_index=None, target_permanent_ids=None,
+        target_stack_item=None, target_role_refs=None, divided_targets=None,
+        x_value=None,
+    ) -> str | None:
+        """Why an activation that **named no target** may not be accepted from
+        a seat that has to name one, or None.
+
+        CR 602.2b sends an activation through CR 601.2c, which is an
+        announcement: "the player announces their choice of an appropriate
+        object or player for each target". The engine's own API accepts an
+        activation that names none while a legal one exists and lets the
+        handler pick — the headless convention, for a scripted duel, the AI
+        simulator and the test corpus. A **person** is not that caller: the
+        browser runs a picker for every ability whose spec asks for one and
+        cannot send the activation without an answer, so a bare ``activate``
+        over the wire is a request no client makes and the handler's pick is a
+        target nobody chose (Samite Pilgrim's shield went to the *opponent*).
+
+        One predicate rather than a test in the route: it is
+        :func:`activation_target_obligation` — the gate's own "does this owe a
+        target?" — so the wire and the engine cannot come to disagree about
+        which abilities are meant. *seat_announced* is the caller's, because
+        only the caller knows whether a seat was sent or defaulted (the route
+        fills in an opposing seat for every activation); a seat alone is an
+        announcement only for an ability whose target may be a player.
+        """
+        spec = activation_target_obligation(ability, x_value=x_value)
+        if spec is None:
+            return None
+        indices = (
+            target_permanent_index
+            if isinstance(target_permanent_index, list)
+            else [target_permanent_index]
+        )
+        if (
+            any(pid is not None for pid in (target_permanent_ids or ()))
+            or any(idx is not None for idx in indices)
+            or target_stack_item is not None
+            or target_role_refs
+            or divided_targets
+        ):
+            return None
+        if seat_announced and spec.get("kind") in _SEAT_TARGET_SPEC_KINDS:
+            return None
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        return f"{card.name}: this ability needs a target (CR 602.2b)"
+
+    def sole_legal_activation_target(
+        self, controller_index: int, source_permanent, ability, *, x_value=None,
+    ) -> dict | None:
+        """The one target an activation that named none **can only mean**: the
+        picker's single entry, when the ability owes a target and exactly one
+        legal one exists. None otherwise.
+
+        The headless convention lets an activation name nothing and resolve on
+        its handler's pick, and a handler's pick is a scan written for the
+        common board — the opposing battlefield first, a creature by default.
+        Where the only legal target is somewhere that scan does not look, the
+        ability was activated, paid for, and did nothing: Tahngarth, Talruum
+        Hero ("deals damage equal to its power to target creature") alone on
+        the battlefield is its own only legal target, and tapped itself for no
+        effect. With one legal target there is no choice for a default to get
+        wrong — CR 601.2c's announcement has exactly one legal form — so the
+        engine makes it, from the same list the gate and the picker read.
+
+        Deliberately not a default for a board with **several** legal targets:
+        which of them a seat that named none "meant" is each handler's standing
+        answer, and the test corpus and the scripted duels are written against
+        those answers. That is the larger question ROADMAP records.
+        """
+        spec = activation_target_obligation(ability, x_value=x_value)
+        if spec is None or spec.get("kind") == ROLES_TARGET_KIND:
+            return None
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        source = source_permanent if hasattr(
+            source_permanent, "permanent_id"
+        ) else None
+        valid = self._enumerate_targets(
+            controller_index, card, dict(spec), for_cast=False,
+            ability_instruction=targeting_instruction(
+                getattr(ability, "instruction", None)
+            ),
+            source_permanent=source,
+            ability_source=source,
+        )
+        return valid[0] if len(valid) == 1 else None
 
     def _announced_choice_refusal(
         self, controller_index: int, card, instruction, source

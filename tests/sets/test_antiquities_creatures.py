@@ -525,14 +525,40 @@ def _flip(win: bool):
 
 
 def test_goblin_artisans_draws_on_a_won_flip(set_pool):
+    # "…If you lose the flip, counter **target** artifact spell you control":
+    # the target is announced as the ability is activated whichever way the
+    # coin lands (CR 601.2c — a target is conditional on a cost or a mode, not
+    # on a flip), so there is an Ornithopter of the activator's own on the
+    # stack to name. This test activated with the stack empty, which the gate
+    # used to allow; `test_goblin_artisans_needs_a_spell_to_name` below holds
+    # the refusal.
+    game, p1, pool = _artisans_board(set_pool)
+    game.queue_from_hand(0, "Ornithopter")
+    before = len(p1.hand)
+
+    with _flip(True):
+        game.queue_permanent_ability(
+            0, "Goblin Artisans", permanent_index=0, target_stack_index=0
+        )
+        game._settle()
+
+    assert len(p1.hand) == before + 1, game.log
+
+
+def test_goblin_artisans_needs_a_spell_to_name(set_pool):
+    """With no artifact spell of its controller's on the stack the ability has
+    no legal target, so it cannot be activated and the Artisans stay untapped
+    (CR 602.2b)."""
     game, p1, pool = _artisans_board(set_pool)
     before = len(p1.hand)
 
     with _flip(True):
-        game.queue_permanent_ability(0, "Goblin Artisans", permanent_index=0)
-        game._settle()
+        refused = game.queue_permanent_ability(0, "Goblin Artisans", permanent_index=0)
 
-    assert len(p1.hand) == before + 1, game.log
+    assert not refused.supported
+    assert refused.details == "no valid target for Goblin Artisans"
+    assert len(p1.hand) == before and game.stack == []
+    assert not list(game.controlled_by(0))[0].tapped
 
 
 def test_a_lost_flip_counters_your_own_artifact_spell(set_pool):

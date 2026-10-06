@@ -3083,6 +3083,58 @@ def described_target_predicate(
     return admits  # described_target_predicate
 
 
+def default_announced_permanent(
+    game: Game, instruction, context: OracleExecutionContext, *, prefer: str = "you",
+) -> Permanent | None:
+    """The permanent a resolution falls to when its announcement **named
+    none**: the first one the picker would have offered — the controller's own
+    before anybody else's for *prefer* ``"you"`` (a benefit), an opponent's
+    first otherwise. None when the picker offers no permanent.
+
+    The headless convention lets a spell or ability be announced bare and
+    leaves the choice to its handler, and most handlers answer with
+    :func:`pick_target_permanent`'s scan: a seat's battlefield, a predicate.
+    That scan knows what the sentence *names* and nothing about what may be
+    *targeted* — protection, shroud, "other than this creature", an attacker
+    only — so a default built on it can land on a permanent CR 601.2c would
+    never have let anybody announce. This asks the announcement's own list
+    instead (``Game._enumerate_targets`` over the spec the instruction
+    derives), which is the list the activation gate and the browser's picker
+    read: a default that is by construction a legal target.
+
+    For a handler whose own fallback has no permanent to give — a prevention
+    shield's was the *player* — rather than a replacement for every scan in
+    the engine; those are each handler's standing answer for a board with
+    several legal targets, and the test corpus is written against them.
+    """
+    from ..legality import targeting_instruction
+    from ..targeting import derive_instruction_spec
+
+    caster = context.caster
+    if caster not in game.players:
+        return None
+    spec = derive_instruction_spec([instruction])
+    if not spec or spec.get("kind") in ("none", "modal", "hand_card", "player"):
+        return None
+    seat = game.players.index(caster)
+    source = context.source_permanent
+    offered = [
+        entry for entry in game._enumerate_targets(
+            seat, context.card, dict(spec), for_cast=False,
+            ability_instruction=targeting_instruction(instruction),
+            source_permanent=source, ability_source=source,
+        )
+        if entry.get("kind") == "permanent"
+    ]
+    own_first = prefer == "you"
+    offered.sort(key=lambda entry: (entry["seat"] == seat) != own_first)
+    for entry in offered:
+        chosen = game.permanent_at(game.players[entry["seat"]], entry["index"])
+        if chosen is not None:
+            return chosen
+    return None
+
+
 def resolve_target_permanents(
     game: Game,
     context: OracleExecutionContext,

@@ -499,6 +499,14 @@ def _action_activate(session, req, seat_type):
             source_permanent_index=req.source_permanent_index,
             source_stack_index=engine_source_stack_index,
             source_controller_index=source_controller_seat,
+            # CR 601.2c through CR 602.2b: a client announces every target an
+            # ability owes — the browser runs a picker for each and cannot send
+            # the activation without an answer — so the engine is told this
+            # caller is one, and whether the seat above was sent or is this
+            # route's default. A bare ``activate`` for "Prevent the next X
+            # damage that would be dealt to target creature" (Samite Pilgrim)
+            # returned 200 and shielded the opponent.
+            seat_announced=req.target_seat is not None,
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
