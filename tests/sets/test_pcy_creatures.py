@@ -1580,3 +1580,143 @@ def test_w3g2_jeweled_spirit_asks_no_colour_for_the_artifact_half(set_pool):
 
     assert game.pending_choice_of("color_choice", 0) is None
     assert game._protection_qualities(spirit) == {("card_type", "artifact")}
+
+
+# --- R3 J8: Death Charmer charges the damaged creature's controller ---
+#
+# "Whenever this creature deals combat damage to a creature, that creature's
+# controller loses 2 life unless they pay {2}." An unverified lead from the
+# last round: the toll is offered to ``damaged_player`` and the life loss names
+# ``damaged_permanent_controller``, two words for what the sentence makes one
+# player. **Driven, and right.** ``damage_events._announce`` freezes both keys
+# from one read of the damaged permanent's controller when the recipient is a
+# permanent, so they cannot name different seats — attacking or blocking, at
+# two seats or three, and after lethal damage has put the creature in a
+# graveyard (CR 603.10). Nothing in the engine changed; these pin it.
+
+import pytest as _r3j8_pytest  # noqa: E402
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import CardDefinition as _R3J8Card  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_charmer_fight(set_pool, *, charmer_attacks, toughness, seats=2, lands=2):
+    """Death Charmer (seat 0) and one other creature fight; the other creature
+    belongs to the last seat. Stops with the Charmer's trigger asking."""
+    lea = set_pool("LEA")
+    other_card = _R3J8Card(
+        name="Sparring Partner", mana_cost="", cmc=0.0,
+        type_line="Creature — Test", oracle_text="", colors=(), color_identity=(),
+        keywords=(), produced_mana=(),
+        raw={"name": "Sparring Partner", "type_line": "Creature — Test",
+             "power": "1", "toughness": str(toughness)},
+    )
+    charmer = _R3J8Permanent(card=set_pool("PCY")["Death Charmer"])
+    other = _R3J8Permanent(card=other_card)
+    players = [
+        _R3J8PlayerState(name=f"P{seat + 1}", library=[lea["Swamp"]] * 4)
+        for seat in range(seats)
+    ]
+    game = _R3J8Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(range(seats))
+    theirs = seats - 1
+    for seat, perm in ((0, charmer), (theirs, other)):
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+    for seat in range(seats):
+        for _ in range(lands):
+            game._put_permanent_onto_battlefield(
+                seat, _R3J8Permanent(card=lea["Swamp"]), None
+            )
+    attacker, defender = (0, theirs) if charmer_attacks else (theirs, 0)
+    game.start_turn(attacker)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    declared = game.declare_attackers(attacker, [0], defending_player_index=defender)
+    assert declared[0], declared
+    game.advance_combat_phase()
+    assert game.declare_blockers(defender, {0: 0})[0]
+    for _ in range(6):
+        if game.stack or game.pending_choices:
+            break
+        game.advance_combat_phase()
+    return game, other
+
+
+def _r3j8_swamps_tapped(game, seat):
+    return sum(
+        1 for perm in game.controlled_by(seat)
+        if perm.card.name == "Swamp" and perm.tapped
+    )
+
+
+@_r3j8_pytest.mark.parametrize("charmer_attacks", [True, False])
+@_r3j8_pytest.mark.parametrize("pays", [True, False])
+def test_r3j8_death_charmer_asks_and_charges_the_same_player(set_pool, charmer_attacks, pays):
+    """Attacking into a blocker and blocking an attacker: the creature it
+    damages is the other player's either way, that player is the one asked for
+    {2}, and that player is the one who loses 2 life for keeping it."""
+    game, _other = _r3j8_charmer_fight(
+        set_pool, charmer_attacks=charmer_attacks, toughness=5,
+    )
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("optional_pay", 1)
+    ]
+    assert game.confirm_optional_pay(1, accept=pays)
+    _r3j8_resolve_stack(game)
+
+    assert [p.life for p in game.players] == [20, 20 if pays else 18], game.log
+    assert _r3j8_swamps_tapped(game, 1) == (2 if pays else 0)
+    assert _r3j8_swamps_tapped(game, 0) == 0, "its own controller pays nothing"
+
+
+def test_r3j8_death_charmer_still_charges_for_a_creature_it_killed(set_pool):
+    """Lethal damage: by the time the trigger resolves the creature is a card
+    in a graveyard with no controller to read (CR 400.7). The seat was frozen
+    with the event, so the toll still has somebody to go to."""
+    game, other = _r3j8_charmer_fight(set_pool, charmer_attacks=True, toughness=1)
+
+    assert not game.is_on_battlefield(other)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("optional_pay", 1)
+    ]
+    assert game.confirm_optional_pay(1, accept=False)
+    _r3j8_resolve_stack(game)
+
+    assert [p.life for p in game.players] == [20, 18], game.log
+
+
+def test_r3j8_death_charmer_at_three_seats_asks_the_attackers_controller(set_pool):
+    """Three seats, and the Charmer **blocks**: the defending player of this
+    combat is its own controller, a bystander sits between them with lands
+    untapped, and the player asked — and charged — is the one whose creature
+    took the damage."""
+    game, _other = _r3j8_charmer_fight(
+        set_pool, charmer_attacks=False, toughness=5, seats=3,
+    )
+
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("optional_pay", 2)
+    ]
+    assert game.confirm_optional_pay(2, accept=False)
+    _r3j8_resolve_stack(game)
+
+    assert [p.life for p in game.players] == [20, 20, 18], game.log
+
+
+def test_r3j8_death_charmer_charges_a_player_who_cannot_pay(set_pool):
+    """No untapped land, so no offer is made (an unpayable cost is not a
+    choice) and the life is simply lost."""
+    game, _other = _r3j8_charmer_fight(
+        set_pool, charmer_attacks=True, toughness=5, lands=0,
+    )
+    _r3j8_resolve_stack(game)
+
+    assert [c.kind for c in game.pending_choices] == []
+    assert [p.life for p in game.players] == [20, 18], game.log
+# end of the R3 J8 block
