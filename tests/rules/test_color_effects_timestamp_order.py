@@ -48,16 +48,17 @@ test holds to the pool rather than assumes: no colour-setting static's scope
 asks about colour, and a resolved recolour's set of objects is fixed as it
 resolves (CR 611.2c), so no layer-5 effect can change what another applies to.
 
-**One effect here is not ordered by its timestamp at all.** Alloy Golem's "is
-the chosen color" is applied as a characteristic-defining ability - ahead of
-every other layer-5 effect (CR 613.3) - because it meets each of CR 604.3a's
-five criteria and that is what shipped. So an Alloy Golem that enters under an
-*older* Darkest Hour is black, like one a Darkest Hour arrives after; the test
-below asks the engine for that in the one arrangement where the two readings
-differ (a static that was there first). The other reading - the colour exists
-only on the battlefield, CR 604.3 has a CDA function in every zone, so the
-effect takes the permanent's timestamp - is recorded in `layer_bridge` beside
-the one word that would switch it.
+**Every effect here is ordered by its timestamp, the permanent's own
+included.** Alloy Golem's "is the chosen color" shipped as a
+characteristic-defining ability - ahead of every other layer-5 effect
+(CR 613.3) - and this census carried the one arrangement where that differs
+(a static that was already there) as an exception. It is ordered by the
+permanent's timestamp now (CR 613.7a): a CDA "functions in all zones"
+(CR 604.3) and does not set its value "only if certain conditions are met"
+(CR 604.3a), and a colour chosen as the permanent enters does neither. So an
+Alloy Golem that enters under an *older* Darkest Hour is the colour it chose,
+and one a Darkest Hour arrives after is black. `layer_bridge` has the
+reasoning beside the call.
 """
 
 from __future__ import annotations
@@ -411,7 +412,7 @@ def _w2g4_pairs():
 _W2G4_PAIRS, _W2G4_LEFT_OUT = _w2g4_pairs()
 
 
-@pytest.mark.cr("613.7", "613.7a", "613.7b", "613.7d", "613.7e", "105.3", "613.3", "604.3a")
+@pytest.mark.cr("613.7", "613.7a", "613.7b", "613.7d", "613.7e", "105.3", "604.3a")
 @pytest.mark.parametrize(
     "first, second, subject_kind", _W2G4_PAIRS,
     ids=[f"{a}>{b}@{s}" for a, b, s in _W2G4_PAIRS],
@@ -440,20 +441,15 @@ def test_w2g4_the_later_of_two_colour_effects_decides(
     now = case.apply(second, second_colour)
     assert was != now
 
-    if second == "own_chosen":
-        # The one arrangement a timestamp does not decide: the permanent's own
-        # "is the chosen color" is applied as a characteristic-defining ability
-        # (CR 604.3a), so it goes first and the static that was already there
-        # still has the last word (CR 613.3) - until that static ends, below.
-        assert _w2g4_colours(case.game, case.subject) == was, (
-            f"{first} then {second}: the {subject_kind}'s own chosen colour is "
-            f"a CDA and applies first (CR 613.3), so it is {was}, not {now}"
-        )
-    else:
-        assert _w2g4_colours(case.game, case.subject) == now, (
-            f"{first} then {second}: CR 613.7 makes the {subject_kind} {now} "
-            f"(the later effect), not {was}"
-        )
+    # No arrangement is an exception. The permanent's own "is the chosen
+    # color" arriving second - under a static that was already there - is the
+    # one that used to be: it was applied as a characteristic-defining ability,
+    # first whatever the stamps. It is not one (CR 604.3a), so its stamp is the
+    # permanent's (CR 613.7a) and the later effect decides here too.
+    assert _w2g4_colours(case.game, case.subject) == now, (
+        f"{first} then {second}: CR 613.7 makes the {subject_kind} {now} "
+        f"(the later effect), not {was}"
+    )
 
     if first == "own_chosen":
         printed = was
@@ -778,3 +774,60 @@ def test_w2g4_no_colour_effect_in_the_pool_can_depend_on_another():
     assert aura_cards == {"Grave Servitude", "Living Terrain", "Sinister Strength"}
     assert set(animators) == {"Kormus Bell"}
     assert len(pool) >= 4700, len(pool)
+
+
+# --- the ruling, by name ----------------------------------------------------
+#
+# The census above holds it as two of its rows; these say it in the cards'
+# words, because it is the one place in this file where the engine's answer
+# was a decision between two readings of the rules rather than a defect.
+
+
+def _settled_table(catalog_by_name, set_pool):
+    game = Game(players=[
+        PlayerState(name="A", library=[catalog_by_name["Forest"]] * 5),
+        PlayerState(name="B", library=[catalog_by_name["Forest"]] * 5),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    return game  # _settled_table
+
+
+def _settled_enter(game, card, colour=None):
+    permanent = Permanent(card=card)
+    game._put_permanent_onto_battlefield(0, permanent, None)
+    if colour is not None:
+        assert game.confirm_enter_choice(0, mana_color=colour)
+    game._recompute_continuous_effects()
+    return permanent  # _settled_enter
+
+
+@pytest.mark.cr("613.7a", "604.3a", "607.2d")
+def test_alloy_golem_entering_under_an_older_darkest_hour_is_the_colour_it_chose(
+    catalog_by_name, set_pool,
+):
+    """Darkest Hour ("All creatures are black.") was there first, so its effect
+    is the earlier one; the Golem's own "is the chosen color" has the Golem's
+    timestamp (CR 613.7a) and applies after it. Not a characteristic-defining
+    ability: the colour exists only where a choice was made (CR 607.2d), and a
+    CDA sets its value unconditionally and in every zone (CR 604.3, 604.3a)."""
+    game = _settled_table(catalog_by_name, set_pool)
+    _settled_enter(game, catalog_by_name["Darkest Hour"])
+    golem = _settled_enter(game, set_pool("INV")["Alloy Golem"], colour="R")
+
+    assert _w2g4_colours(game, golem) == ["R"]
+
+
+@pytest.mark.cr("613.7a", "613.7")
+def test_a_darkest_hour_arriving_after_alloy_golem_makes_it_black(
+    catalog_by_name, set_pool,
+):
+    game = _settled_table(catalog_by_name, set_pool)
+    golem = _settled_enter(game, set_pool("INV")["Alloy Golem"], colour="R")
+    assert _w2g4_colours(game, golem) == ["R"]
+    hour = _settled_enter(game, catalog_by_name["Darkest Hour"])
+
+    assert _w2g4_colours(game, golem) == ["B"]
+    game.remove_from_battlefield(hour)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, golem) == ["R"], "and its own colour again when the Hour leaves"

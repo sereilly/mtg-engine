@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2732 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2734 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -701,7 +701,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **604.1** Static abilities do something all the time rather than being activated or triggered. They are wri... *(2 tests)*
 - [x] **604.2** Static abilities create continuous effects, some of which are prevention effects or replacement e... *(2 tests)*
-- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(17 tests, subrules a)*
+- [x] **604.3** Some static abilities are characteristic-defining abilities. A characteristic-defining ability co... *(18 tests, subrules a)*
 - [ ] **604.4** Many Auras, Equipment, and Fortifications have static abilities that modify the object they’re at...
 - [ ] **604.5** Some static abilities apply while a spell is on the stack. These are often abilities that refer t...
 - [ ] **604.6** Some static abilities apply while a card is in any zone that you could cast or play it from (usua...
@@ -727,7 +727,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 607. Linked Abilities
 
 - [x] **607.1** An object may have two abilities printed on it such that one of them causes actions to be taken o... *(2 tests)*
-- [x] **607.2** There are different kinds of linked abilities. *(2 tests, subrules ac)*
+- [x] **607.2** There are different kinds of linked abilities. *(3 tests, subrules acd)*
 - [ ] **607.3** If, within a pair of linked abilities, one ability refers to a single object as “the exiled card,...
 - [ ] **607.4** An ability may be part of more than one pair of linked abilities.
 - [ ] **607.5** If an object acquires a pair of linked abilities as part of the same effect, the abilities will b...
@@ -779,11 +779,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(116 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(17 tests, subrules ac)*
-- [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(3 tests)*
+- [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(76 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(1 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(51 tests, subrules abde)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(54 tests, subrules abde)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(11 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
