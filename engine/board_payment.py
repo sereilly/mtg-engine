@@ -269,6 +269,24 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
             if not item.units:
                 continue
             yields.append(TapYield(item.units + _aura_units(land), item.one_color))
+    # …and the mana ability of a basic land type the land **gained** (Blanket
+    # of Night: "…a Swamp in addition to its other land types"), which is no
+    # compiled ability at all (CR 305.6). The summary path above already
+    # carries it; a land with a compiled tap-alone ability of its own did not,
+    # and the seam makes the gained symbol when it is asked for one the land
+    # does not print.
+    if game.land_mana_tap_refusal(land) is None:
+        free, _priced = game._land_mana_abilities(land)
+        printed = set(land.effective_card.produced_mana or ())
+        if free is not None:
+            for symbol in game._gained_type_mana(land):
+                if symbol in printed:
+                    continue
+                item = _under_a_swap(
+                    game, land, TapYield((frozenset({str(symbol).upper()}),))
+                )
+                if item.units:
+                    yields.append(TapYield(item.units + _aura_units(land)))
     return yields
 
 

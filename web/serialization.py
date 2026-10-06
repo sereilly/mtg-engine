@@ -24,7 +24,7 @@ from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
 from engine.mana_payment import taps_for_payment
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
-from engine.keywords import derived_ability_lines
+from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
 from engine.targeting import derive_cast_spec, usable_activated_abilities
@@ -275,6 +275,13 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
         narrowed = game.narrowed_land_mana_colors(perm)
         if narrowed is not None:
             return narrowed
+        # …and a land a tap makes only a *gained* type's mana from (a
+        # depletion land under Blanket of Night) is offered as that: its
+        # summary also lists what its own, priced, ability makes, and a
+        # picker built from it asks for a colour the tap will not produce.
+        gained_only = game._tap_alone_makes_only_gained_mana(perm)
+        if gained_only:
+            return gained_only
         payable = tuple(game._land_payment_colors(perm))
         if len(payable) > 1 and set(payable) != set(own):
             return payable
@@ -485,7 +492,11 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # `_recalculate_lord_buffs` writes; the literal that stood here was the
         # third copy of one card's quoted text, so a lord granting anything else
         # showed the player nothing.
-        "granted_abilities": list(derived_ability_lines(perm)),
+        # …the ones it still has: a lord older than a "loses all abilities"
+        # effect on this permanent grants it nothing (CR 613.7).
+        "granted_abilities": list(
+            derived_ability_lines(perm, after=abilities_lost_at(perm))
+        ),
         # Why this permanent has **no** activated ability to offer although
         # its text prints some — "loses all abilities", or a land whose type
         # was set (CR 305.7) — or None. The client builds its ability menu

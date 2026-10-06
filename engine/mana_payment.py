@@ -662,7 +662,11 @@ def taps_for_payment(land) -> bool:
     if free is not None:
         return True
     if priced:
-        return False
+        # …unless a land type it *gained* gives it a second mana ability the
+        # tap does pay for (CR 305.7's last sentence, CR 305.6): a depletion
+        # land under Blanket of Night taps for {B} at the seam, and this
+        # answered for the whole land by the ability it prints.
+        return bool(TurnManagementMixin._gained_type_mana(land))
     return bool(land.effective_produced_mana or land.basic_land_types)
 
 

@@ -4733,6 +4733,13 @@ class PendingChoicesMixin:
         narrowed = self.narrowed_land_mana_colors(land)
         if narrowed is not None:
             return narrowed
+        # A land whose own mana ability costs more than the tap and which a
+        # gained land type gave a free one (a depletion land under Blanket of
+        # Night): the tap makes the gained type's symbol and nothing else,
+        # whatever the summary lists.
+        gained_only = self._tap_alone_makes_only_gained_mana(land)
+        if gained_only:
+            return gained_only
         own = tuple(land.effective_produced_mana or ())
         # "Lands you control have "{T}: Add two mana of any one color.""
         # (Overlaid Terrain.) A *granted* mana ability, which the printed

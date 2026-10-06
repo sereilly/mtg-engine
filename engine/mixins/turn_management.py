@@ -639,6 +639,27 @@ class TurnManagementMixin:
             if land_type in added
         )
 
+    @staticmethod
+    def _tap_alone_makes_only_gained_mana(land) -> tuple[str, ...]:
+        """The symbols a **tap alone** makes from *land* where its own mana
+        ability costs more than the tap and a gained land type's does not —
+        or empty, for every other land.
+
+        A Hickory Woodlot under Blanket of Night has two mana abilities: the
+        one it prints ("{T}, Remove a depletion counter: Add {G}{G}"), which
+        this seam does not run, and the gained Swamp's "{T}: Add {B}"
+        (CR 305.6), which it does. So what the land can be *tapped for* is
+        {B} and only {B} — per symbol, not per land — and every reader that
+        counts the land as mana has to hear that: the planner's list
+        (``mana_payment.taps_for_payment``) left it out altogether, and the
+        planner's hook, the castable highlight and the wire's colour list
+        each offered the {G} its summary names for a tap that makes {B}.
+        """
+        free, priced = TurnManagementMixin._land_mana_abilities(land)
+        if free is None and priced:
+            return TurnManagementMixin._gained_type_mana(land)
+        return ()
+
     def tap_land_for_mana(
         self,
         player_index: int,
