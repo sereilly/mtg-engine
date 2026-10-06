@@ -1332,6 +1332,110 @@ def mana_ability_symbols(instruction: OracleInstruction | None) -> frozenset[str
     return frozenset(found)
 
 
+@dataclass(frozen=True)
+class ManaYield:
+    """What one activation of a mana ability puts in its controller's pool,
+    where the ability's own payload says so — the terms a payment plan counts
+    in. See :func:`planned_mana_yield`."""
+
+    #: Every symbol the activation may be asked for, the one it makes unasked
+    #: first. Empty when the board or the source decides (``board_narrowed``,
+    #: ``from_chosen_color``) and the caller has to ask the game.
+    symbols: tuple[str, ...] = ()
+    #: How many mana of the asked symbol one activation makes.
+    amount: int = 1
+    #: A fixed run of two or more *different* symbols ("{U}{R}"), as
+    #: ``((symbol, count), …)`` — made whole whichever symbol is asked for.
+    run: tuple[tuple[str, int], ...] = ()
+    #: "…of any color **that a land an opponent controls could produce**":
+    #: which colours is the battlefield's answer
+    #: (``mana_could_produce.ability_colors_on_offer``).
+    board_narrowed: bool = False
+    #: "Add one mana of **the chosen color**": the colour the source recorded
+    #: as it entered.
+    from_chosen_color: bool = False
+
+
+#: The payload keys of an add-mana step this module can turn into a
+#: :class:`ManaYield`. An **allow-list**, because the direction that matters is
+#: the one where a key is added later: a step carrying anything else — a
+#: restriction on what the mana may pay for (``spend_only``, CR 106.6), an
+#: amount the board decides (``per_each``), a record another activation wrote
+#: (``from_noted``), a split the seat chooses (``combination``) — is mana a
+#: plan cannot count, and counting it anyway is a cast refused for
+#: insufficient mana.
+_PLANNABLE_MANA_KEYS = frozenset({
+    "pips", "pips_choice", "any_color", "any_color_count", "any_color_from",
+    "could_produce_lands", "from_chosen_color", "oracle_text",
+})
+
+
+def planned_mana_yield(instruction: OracleInstruction | None) -> ManaYield | None:
+    """What a payment plan may count one activation of a mana ability as, or
+    None when the payload alone cannot say.
+
+    The non-land half of the question `ai_policy._land_mana_amount` /
+    `_land_mixed_run` / `_land_mana_is_unplannable` answer for a land, asked of
+    the compiled ability rather than of the tap seam's summary, because a
+    non-land permanent has no summary path: "{T}: Add {C}{C}" (Sol Ring),
+    "{T}: Add {B} or {R}" (the Cameos), "{T}: Add one mana of any color" (Birds
+    of Paradise) and the board-narrowed "…that a land an opponent controls
+    could produce" (Fellwar Stone) are the four shapes it reads.
+
+    One rider is admitted beside the add-mana step: a fixed amount of damage to
+    the ability's own controller ("This creature deals 1 damage to you", Elves
+    of Deep Shadow) — the painlands' rider, which the land planner has always
+    counted through. Any other second step ("Reveal any number of artifact
+    cards in your hand", Metalworker) is a decision or an amount this cannot
+    state.
+    """
+    if instruction is None:
+        return None
+    steps = _effect_steps(instruction)
+    adders = [step for step in steps if step.kind == "add_mana_from_text"]
+    if len(adders) != 1:
+        return None
+    for step in steps:
+        if step is adders[0]:
+            continue
+        payload = step.payload or {}
+        amount = payload.get("amount")
+        if not (
+            step.kind == "deal_damage"
+            and payload.get("recipient") == "caster"
+            and isinstance(amount, int) and not isinstance(amount, bool)
+        ):
+            return None
+    payload = adders[0].payload or {}
+    if not payload or set(payload) - _PLANNABLE_MANA_KEYS:
+        return None
+    if payload.get("from_chosen_color"):
+        return ManaYield(from_chosen_color=True)
+    pips = tuple((str(symbol), int(count)) for symbol, count in payload.get("pips") or ())
+    if pips:
+        if len({symbol for symbol, _count in pips}) >= 2:
+            return ManaYield(symbols=tuple(symbol for symbol, _count in pips), run=pips)
+        return ManaYield(
+            symbols=(pips[0][0],), amount=max(1, sum(count for _symbol, count in pips))
+        )
+    choice = tuple((str(symbol), int(count)) for symbol, count in payload.get("pips_choice") or ())
+    if choice:
+        return ManaYield(
+            symbols=tuple(symbol for symbol, _count in choice),
+            # One number for whichever alternative is asked for; where the
+            # printed counts differ, the smallest is what every answer makes.
+            amount=max(1, min(count for _symbol, count in choice)),
+        )
+    if payload.get("any_color"):
+        count = payload.get("any_color_count", 1)
+        if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+            return None
+        if payload.get("any_color_from"):
+            return ManaYield(amount=count, board_narrowed=True)
+        return ManaYield(symbols=("W", "U", "B", "R", "G"), amount=count)
+    return None
+
+
 def mana_ability_amount(card: CardDefinition) -> int | None:
     """Mana one activation of *card*'s mana ability adds, or None if it has none.
 
@@ -1837,6 +1941,116 @@ def exiled_search_pile_comes_back(card: CardDefinition) -> bool:
     return False
 
 
+def pick_is_tested_for_a_shared_color(card: CardDefinition, result_key: str) -> bool:
+    """Whether a later step of *card* asks if its target **shares a color with**
+    the permanent a ``choose_permanent`` recorded under *result_key*.
+
+    "Choose a permanent you control. Prevent all combat damage target creature
+    would deal this turn **if it shares a color with that permanent**." (Guard
+    Dogs.) The pick is the whole of whether the ability does anything, and a
+    seat nobody asks took the first candidate in board order — a land, which
+    is colourless and shares a colour with nothing (CR 105.2c), so the ability
+    resolved and prevented no damage in every simulated game.
+
+    Read off the compiled condition (``target_shares_color_with_chosen`` and
+    the record it names), so any card printing the relation is answered and no
+    card is named.
+    """
+
+    def walk(instructions) -> bool:
+        for instruction in instructions:
+            payload = getattr(instruction, "payload", None) or {}
+            condition = payload.get("condition")
+            if (
+                isinstance(condition, dict)
+                and condition.get("kind") == "target_shares_color_with_chosen"
+                and condition.get("permanent_from") == result_key
+            ):
+                return True
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    program = compile_card_oracle(card)
+    return (
+        walk(program.instructions)
+        or walk(a.instruction for a in program.activated_abilities if a.instruction is not None)
+        or walk(t.instruction for t in program.triggered_abilities if t.instruction is not None)
+    )
+
+
+#: The pile readers that hand back **one card** per use.
+_ONE_CARD_PILE_READERS = frozenset({
+    "put_exiled_pile_top_into_hand",
+    "put_exiled_with_source",
+})
+
+
+def exiled_search_pile_comes_back_one_at_a_time(card: CardDefinition) -> bool:
+    """Whether the only thing on *card* that reads its exile-search's pile back
+    is an **activated ability with a cost** that returns one card per use.
+
+    "{4}, {T}: Choose a card at random that was exiled with Skyship
+    Weatherlight. Put that card into its owner's hand." The pile comes back,
+    so :func:`exiled_search_pile_comes_back` says yes and the headless default
+    took everything "any number" admits — every artifact and creature in the
+    seat's library, to be bought back one a turn at four mana each, at random.
+    The cards a game will not last long enough to return are spent exactly as
+    Mana Severance's are.
+
+    Derived from where the reader sits in the compiled program, never from the
+    card: a pile returned whole (Foresight's delayed draw, Chandra's "you may
+    cast them this turn") has a reader outside any activated ability and
+    answers False, and a search with a printed ceiling (Mangara's Tome's five)
+    is bounded by its own card whatever this says.
+    """
+    program = compile_card_oracle(card)
+    priced: list[OracleInstruction] = []
+    for ability in program.activated_abilities:
+        if ability.instruction is None:
+            continue
+        cost = ability.cost
+        free = not (
+            getattr(cost, "requires_tap", False)
+            or any((getattr(cost, "mana", None) or {}).values())
+        )
+        for step in (ability.instruction, *_effect_steps(ability.instruction)):
+            if step.kind in _ONE_CARD_PILE_READERS:
+                if free or int((step.payload or {}).get("count", 1) or 1) != 1:
+                    return False
+                priced.append(step)
+    if not priced:
+        return False
+
+    def reads_elsewhere(instructions) -> bool:
+        for instruction in instructions:
+            if instruction.kind in _EXILED_PILE_READERS:
+                return True
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = (instruction.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)) and reads_elsewhere(nested):
+                    return True
+        return False
+
+    # A program mirrors each activated ability into ``instructions``, so the
+    # spell-side list is read with those mirrors taken out.
+    mirrored = {id(step) for step in priced}
+    own = [
+        instruction for instruction in program.instructions
+        if id(instruction) not in mirrored
+        and not any(instruction is ability.instruction for ability in program.activated_abilities)
+        and instruction.kind not in _ONE_CARD_PILE_READERS
+    ]
+    if reads_elsewhere(own):
+        return False
+    return not reads_elsewhere(
+        trigger.instruction for trigger in program.triggered_abilities
+        if trigger.instruction is not None
+    )
+
+
 # --- What an activated ability does to the permanent it is printed on --------
 #
 # CR 602.1b lets an ability's own text say who may activate it ("Any player may
@@ -2285,6 +2499,7 @@ __all__ = [
     "SPELL_TYPES",
     "CounterProfile",
     "DividedShape",
+    "ManaYield",
     "TollLoss",
     "ability_target_side",
     "cards_drawn_by_controller",
@@ -2299,12 +2514,15 @@ __all__ = [
     "is_mana_ability",
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
+    "exiled_search_pile_comes_back_one_at_a_time",
     "foreign_activation_use",
     "hand_entry_steps",
     "harms_its_own_source",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offered_action_is_a_payment",
+    "pick_is_tested_for_a_shared_color",
+    "planned_mana_yield",
     "returns_creature_to_hand",
     "role_target_sides",
     "several_target_slot_sides",

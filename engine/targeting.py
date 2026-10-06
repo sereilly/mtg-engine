@@ -3315,6 +3315,31 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
 _SIZED_DIVISIONS = frozenset({CHOSEN}) | CARD_DIVIDED
 
 
+def _sized_division(described: dict | None, instruction) -> dict | None:
+    """*described* with the quantity its division divides, where it describes
+    one (``_SIZED_DIVISIONS``) — otherwise unchanged.
+
+    **How much there is to divide**, so the picker can ask for a division that
+    totals it (CR 601.2d). Read off the payload here rather than copied into
+    the `targets` description at lowering: the amount is the instruction's own
+    field, and a second copy beside the target description is a second thing
+    to keep in step. ``amount`` for damage and a prevention shield, ``count``
+    for a distributed counter placement — CR 601.2d covers them with one
+    sentence, and each instruction family spells its quantity with the word
+    its own handler reads. A variable ("x") is no total yet: the picker learns
+    it once the caster announces X, or the card defines one.
+    """
+    if described is None or described.get("division") not in _SIZED_DIVISIONS:
+        return described
+    amount = instruction.payload.get("amount", instruction.payload.get("count", 0))
+    if isinstance(amount, int) and not isinstance(amount, bool):
+        described["division_total"] = amount
+    described["division_x_bonus"] = int(
+        instruction.payload.get("amount_bonus", 0) or 0
+    )
+    return described
+
+
 def _from_instruction(instruction) -> dict | None:
     """The spec one instruction describes, or None when it describes none."""
     # A kind with several specs settles its own case first, because it is the
@@ -3323,29 +3348,19 @@ def _from_instruction(instruction) -> dict | None:
     # generic targets reading would drop the colour.
     from_payload = _KIND_TO_SPEC_FROM_PAYLOAD.get(instruction.kind)
     if from_payload is not None:
-        return from_payload(instruction.payload)
+        # …and a division it describes is sized like any other. "Prevent the
+        # next 5 damage … to any number of targets, **divided as you choose**"
+        # (Remedy) is a kind with a spec reader of its own, so it returned from
+        # here before the sizing below ran: the spec said "divided, as you
+        # choose" and not how much. Both of its readers then had nothing to
+        # divide — the browser fell back to asking for an X the card does not
+        # print, and `ai_policy._divided_announcement_total` read 0, which is
+        # "no lawful announcement", so no AI seat ever cast Remedy or Pollen
+        # Remedy.
+        return _sized_division(from_payload(instruction.payload), instruction)
     described = _from_targets_payload(instruction.payload.get("targets"))
     if described is not None:
-        if described.get("division") in _SIZED_DIVISIONS:
-            # **How much there is to divide**, so the picker can ask for a
-            # division that totals it (CR 601.2d). Read off the payload here
-            # rather than copied into the `targets` description at lowering: the
-            # amount is the instruction's own field, and a second copy beside
-            # the target description is a second thing to keep in step.
-            # ``amount`` for damage and ``count`` for a distributed counter
-            # placement — CR 601.2d covers both with one sentence, and each
-            # instruction family spells its quantity with the word its own
-            # handler reads. A variable ("x") is no total yet: the picker learns
-            # it once the caster announces X, or the card defines one.
-            amount = instruction.payload.get(
-                "amount", instruction.payload.get("count", 0)
-            )
-            if isinstance(amount, int):
-                described["division_total"] = amount
-            described["division_x_bonus"] = int(
-                instruction.payload.get("amount_bonus", 0) or 0
-            )
-        return described
+        return _sized_division(described, instruction)
     # **A ``type_filter`` is only a picker for a kind that picks.** The key
     # names the class an instruction is *about*, and what that class is for
     # depends entirely on the kind holding it: "destroy target permanent"

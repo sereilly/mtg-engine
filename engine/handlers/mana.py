@@ -821,10 +821,25 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         # ``choices["new_color"]`` and a cast carries it on the announcement;
         # for a triggered ability nothing does, and `or "G"` is what made that
         # silence look like an answer. `_produce_one_color` asks instead.
-        named = game._normalize_mana_color(
+        #
+        # **And {C} is an answer to "any type", never to "any color".** A seat
+        # asked for the mana a Reflecting Pool makes beside a Mishra's Factory
+        # names {C} — the only type that board offers (CR 106.1b) — and the
+        # colour normalizer *raises* on it: tapping that Pool for the {C} its
+        # own colour picker offered ended the game with a ValueError. So the
+        # type the seat named is read apart from the colour it named: the two
+        # "any type" branches below take the first, and a colour clause handed
+        # a {C} has been named no colour at all (CR 105.1), which is the
+        # default's case and takes the default.
+        asked = (
             instruction.payload.get("color")
             or (context.choices or {}).get("new_color")
-        ) or None
+        )
+        named_type = (
+            "C" if str(asked or "").strip().upper() == "C"
+            else game._normalize_mana_color(asked) or None
+        )
+        named = None if named_type == "C" else named_type
         symbol = named or "G"
         # "…of any color **that a land an opponent controls could produce**"
         # (Fellwar Stone). The choice is narrowed to that set, re-checked here
@@ -862,6 +877,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             if not available:
                 game.log.append(f"{card.name}: {printed} produces no mana")
                 return True, "resolved"
+            symbol = named_type or symbol
             if symbol not in available:
                 # CR 608.2d: the player chooses among the types the land could
                 # make, and a choice outside that set is not one of them —
@@ -870,7 +886,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             return _produce_one_color(
                 game, context, instruction,
                 amount=amount, symbol=symbol,
-                named=named if named in available else None,
+                named=named_type if named_type in available else None,
                 available=available,
                 note=f" ({land.card.name} could make it)",
             )
@@ -897,6 +913,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
                     " could produce any mana"
                 )
                 return True, "resolved"
+            symbol = named_type or symbol
             if symbol not in available:
                 # CR 608.2d again: the choice is among the types the board
                 # offers, re-checked here rather than trusted from the picker.
@@ -904,7 +921,7 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
             return _produce_one_color(
                 game, context, instruction,
                 amount=amount, symbol=symbol,
-                named=named if named in available else None,
+                named=named_type if named_type in available else None,
                 available=available,
             )
         narrowed_to = instruction.payload.get("any_color_from")

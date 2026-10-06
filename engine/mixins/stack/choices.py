@@ -2112,6 +2112,16 @@ class PendingChoicesMixin:
         maximum = choice.data.get("maximum")
         if maximum is not None:
             picks = picks[: int(maximum)]
+        elif choice.data.get("comes_back_slowly"):
+            # "Any number", and the pile is bought back one card at a time
+            # (Skyship Weatherlight): everything is not the default that
+            # leaves no value on the table, it is the one that leaves most of
+            # the library in exile. How many, and which, is a weight
+            # (`ai_policy.slow_pile_picks`); that it is asked at all is this
+            # registry's decision, made where the candidates are known.
+            from ...ai_policy import slow_pile_picks
+
+            picks = slow_pile_picks(self, choice.player_index, picks)
         if not self._resolve_search_exile(choice, picks):
             self._resolve_search_exile(choice, [])
 
@@ -4865,6 +4875,39 @@ class PendingChoicesMixin:
         prefers = (choice.data.get("_payload") or {}).get("default_prefers")
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
+        # …and the one ordering a *later sentence* asks for: "Prevent all combat
+        # damage target creature would deal this turn **if it shares a color
+        # with that permanent**" (Guard Dogs). The pick decides whether the
+        # ability does anything, and board order's first answer is a land. So
+        # a candidate that shares a colour with the effect's target goes first
+        # — the relation the condition itself will ask, through the reader it
+        # asks it with (CR 105.2, layer 5 on both sides). Which cards print
+        # such a test is `ai_valuation.pick_is_tested_for_a_shared_color`, off
+        # the compiled program; stable, so board order still breaks every tie.
+        context = choice.data.get("_context")
+        if live and getattr(context, "card", None) is not None:
+            from ...ai_valuation import pick_is_tested_for_a_shared_color
+
+            if pick_is_tested_for_a_shared_color(
+                context.card, str(choice.data.get("result_key") or "")
+            ):
+                from ...handlers._common import resolve_target_permanent
+                from ...object_colors import share_a_color
+
+                target = resolve_target_permanent(
+                    self, context,
+                    predicate=lambda perm: True,
+                    fallback_players=(),
+                    fallback_on_invalid_choice=False,
+                )
+                if target is not None:
+                    wanted = self._effective_colors(target)
+                    live = sorted(
+                        live,
+                        key=lambda perm: not share_a_color(
+                            wanted, self._effective_colors(perm)
+                        ),
+                    )
         if not live or not self._resolve_permanent_choice(
             choice, live[0].permanent_id
         ):

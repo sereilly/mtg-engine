@@ -7506,7 +7506,8 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
     steps behind this one wait for the answer — the Opt lesson, applied here
     by registration rather than by hoping.
     """
-    from ..ai_valuation import exiled_search_pile_comes_back
+    from ..ai_valuation import (exiled_search_pile_comes_back,
+                                exiled_search_pile_comes_back_one_at_a_time)
 
     caster = context.caster
     caster_index = game.players.index(caster)
@@ -7534,6 +7535,15 @@ def search_and_exile_matching(game: Game, instruction: OracleInstruction, contex
         comes_back=(
             exiled_search_pile_comes_back(context.card)
             if context.card is not None else True
+        ),
+        # …and whether it comes back **a card at a time, at a price** (Skyship
+        # Weatherlight's "{4}, {T}: … put that card into its owner's hand"),
+        # which is the difference between "take everything" and "take what a
+        # game is long enough to buy back". The same derivation, the same
+        # carrier, the same reason.
+        comes_back_slowly=bool(
+            context.card is not None
+            and exiled_search_pile_comes_back_one_at_a_time(context.card)
         ),
         _context=context,
     )
