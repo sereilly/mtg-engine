@@ -7,8 +7,8 @@ from typing import Sequence
 import random
 
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (choose_activation_action, choose_cast_action,
-                        choose_foreign_activation_action,
+from .ai_policy import (cast_announcement, choose_activation_action,
+                        choose_cast_action, choose_foreign_activation_action,
                         choose_hand_activation_action, choose_land_drop,
                         spell_being_cast, tap_planned_lands)
 from .card_loader import load_cards
@@ -128,6 +128,13 @@ class SimulationReport:
     #: the class, found by counting the queue at the end of four games with
     #: Time Walk pinned: five resolved, five still queued.
     extra_turns_taken: int = 0
+    #: Modal spells cast ("Choose one —", CR 700.2), by the index of the mode
+    #: each cast named. **Every key was 0 before the AI had a mode chooser**:
+    #: the policy named no mode, the engine resolved the first bullet, and a
+    #: run over a set of Charms read exactly as clean as it does now — the
+    #: card was cast, it resolved, nothing was refused. A report whose only
+    #: key is 0 over a pool that prints modal spells is that coming back.
+    modal_casts: Counter[int] = field(default_factory=Counter)
     #: How many step changes that count was taken over. A zero above means
     #: something only beside a number here: an instrument that looked at
     #: nothing reports nothing owed.
@@ -807,33 +814,30 @@ def _play_one_cast(
     # Aura reaches `cast_from_hand` with no index and is refused ("Evil
     # Presence requires a target", CR 601.2c/115.1b), and the AI had already
     # picked a legal land for it.
+    #
+    # Through `ai_policy.cast_announcement`, the one function that turns a
+    # `CastAction` into a cast: the seat, the object, the X, the alternative
+    # cost (CR 118.9), the division (CR 601.2d), the optional costs and the
+    # mode (CR 601.2b). Each of those was once a keyword spelled here and
+    # missing from another executor.
     result = game.cast_from_hand(
-        active,
-        card_to_cast.name,
-        target_player_index=cast_action.target_player_index,
-        target_permanent_index=cast_action.target_permanent_index,
-        target_permanent_ids=cast_action.target_permanent_ids,
-        x_value=cast_action.x_value,
-        from_zone=cast_action.from_zone,
-        # CR 118.9. Forwarded like every other announcement on the action:
-        # dropped here, the cast would fall back to a mana cost the policy has
-        # already established this seat cannot pay, and be refused.
-        alternative_cost=cast_action.alternative_cost,
-        # CR 601.2d, forwarded for exactly that reason: the division is part of
-        # the announcement, and a cast that drops it is refused now that the
-        # gate asks for one.
-        divided_targets=cast_action.divided_targets,
-        # CR 601.2b's optional costs (a kicker), forwarded for the same reason:
-        # the plan above tapped the lands for them, and a cast that drops the
-        # announcement pays the printed cost and leaves the rest in the pool.
-        optional_cost_payments=cast_action.optional_cost_payments,
+        active, card_to_cast.name, **cast_announcement(cast_action),
     )
     _resolve_pending_choices(game)
     after = _snap(game)
     report.interaction_count += 1
-    report.log_lines.append(
-        f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} -> {result.details}"
+    # Which mode, for a modal spell — after the outcome, so the line still
+    # reads "cast <name> -> <outcome>" for everything that greps it.
+    modes_named = _modes_named(card_to_cast, cast_action)
+    named = "".join(
+        f" [mode {index}: {label}]" for index, label in modes_named
     )
+    report.log_lines.append(
+        f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} "
+        f"-> {result.details}{named}"
+    )
+    if result.supported:
+        report.modal_casts.update(index for index, _label in modes_named)
     if not result.supported:
         # Two different things wore one message. `supported` on a cast result
         # means "the cast went through", so a spell declined for want of a
@@ -859,6 +863,31 @@ def _play_one_cast(
     if expectation_error:
         report.issues.append(InteractionIssue(game_index, turn, expectation_error))
     return True
+
+
+def _modes_named(card: CardDefinition, cast_action) -> list[tuple[int, str]]:
+    """``(mode index, printed bullet)`` for each mode a cast of *card*
+    resolves, or ``[]`` for a spell whose caster chooses no mode.
+
+    A modal spell cast naming none is mode 0 — that is what the engine resolves
+    it as (`targeting.announced_mode_instructions`), and it is what every
+    simulated cast was before the policy had a mode to name.
+    """
+    program = compile_card_oracle(card)
+    if (
+        card.primary_type not in ("instant", "sorcery")
+        or not program.modes
+        or program.mode_chooser is not None
+    ):
+        return []
+    if cast_action.mode_choices:
+        indices = sorted(int(choice["index"]) for choice in cast_action.mode_choices)
+    else:
+        indices = [cast_action.mode_index or 0]
+    return [
+        (index, program.modes[index].label)
+        for index in indices if 0 <= index < len(program.modes)
+    ]
 
 
 def _play_casts(

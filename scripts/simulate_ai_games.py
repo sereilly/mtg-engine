@@ -81,6 +81,18 @@ def main() -> int:
     if report.extra_turns_taken:
         print(f"Extra turns taken: {report.extra_turns_taken}")
 
+    # CR 700.2: modal spells cast, and how many named a mode other than the
+    # first. Until the policy had a mode to name, every one was the first
+    # bullet — and the run read exactly as clean as it does now, so the split
+    # is printed whenever a modal spell was cast at all.
+    if report.modal_casts:
+        total = sum(report.modal_casts.values())
+        later = total - report.modal_casts.get(0, 0)
+        print(
+            f"Modal spells cast: {total} mode(s) named, "
+            f"{later} other than the first bullet"
+        )
+
     # CR 602.1b: abilities activated on a permanent another seat controls
     # ("Any player may activate this ability"). Only a pool printing one can
     # move it, so it is shown when it did.
