@@ -8,9 +8,13 @@ Mana used to be here. It is `ast/mana.py` now, mirroring `lowering/mana.py`,
 which split off for the same reason: what a permanent *produces* turned out to
 be a family of its own rather than a corner of this one.
 
-Shuffling is in the first line and was never here, beyond the three-line
-`Shuffle` nothing builds: the five nodes the productions do build sat in
-`ast/board.py` and are `ast/shuffles.py` since Planeshift's Phase 0.
+Shuffling is in the first line and was never here: the five nodes the
+productions build sat in `ast/board.py` and are `ast/shuffles.py` since
+Planeshift's Phase 0. A three-line `Shuffle(player)` did sit here, in
+`ast.Effect` and in `__all__`, built by nothing — the up-front inventory's
+guess at a node `ShuffleLibrary` turned out to be. It is gone, and
+`tests/engine/test_ast_effect_union.py` now fails on a union member no
+production constructs.
 """
 
 from __future__ import annotations
@@ -183,11 +187,6 @@ class Scry:
     is why it is a decision rather than a transfer.
     """
     count: Amount = field(default_factory=lambda: Fixed(1))
-
-
-@dataclass(frozen=True)
-class Shuffle:
-    player: PlayerRef
 
 
 @dataclass(frozen=True)

@@ -3011,3 +3011,47 @@ def test_the_lowering_and_the_handler_agree_which_actors_name_a_set_of_seats():
     from engine.handlers.control_flow import _EACH_ACTORS
 
     assert _SEAT_SET_ACTORS == _EACH_ACTORS
+
+
+def test_the_two_lodgers_board_named_have_gone_home():
+    """`lowering/board.py` named two lodgers in its own docstring "so the next
+    cut can find them": the three library-bottom lowerings, which answer
+    `zones`' question, and `_lower_delayed_self_action`, which is `delayed`'s
+    opening sentence. They stayed for want of room and moved at R3 J8.
+
+    A module split in miniature, so it is held the way a split is: each
+    function lives in exactly one module, that module is the family its own
+    docstring says it belongs to, and the flat re-export still answers by name
+    — no caller's address changed.
+    """
+    import engine.grammar.lowering as flat
+    from engine.grammar.lowering import board, delayed, zones
+
+    homes = {
+        "_lower_put_on_library_bottom": zones,
+        "_lower_permanent_on_library_bottom": zones,
+        "_lower_put_graveyard_top_on_library_bottom": zones,
+        "_lower_delayed_self_action": delayed,
+    }
+    for name, home in homes.items():
+        function = getattr(home, name)
+        assert function.__module__ == home.__name__, (name, function.__module__)
+        assert not hasattr(board, name), f"{name} is still reachable off board"
+    for name in homes:
+        if name == "_lower_permanent_on_library_bottom":
+            continue  # private to `zones`: reached only through the one above
+        assert getattr(flat, name) is getattr(homes[name], name)
+
+    # What is left in `board` is what its title says: sacrifice and
+    # regeneration, and the keep whose complement is a sacrifice.
+    left = [
+        node.name for node in source_tree(
+            pathlib.Path(board.__file__)
+        ).body
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("_lower_")
+    ]
+    assert left, "the scan found no lowering in board.py at all"
+    for name in left:
+        assert any(
+            word in name for word in ("sacrifice", "regenerate", "rebalance")
+        ), f"{name} is not a sacrifice or a regeneration"

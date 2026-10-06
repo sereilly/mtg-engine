@@ -849,3 +849,91 @@ def test_the_pump_counts_lands(set_pool):
     game._settle()
 
     assert (radha.effective_power, radha.effective_toughness) == (3 + 3, 3 + 3)
+
+
+# --- R3 J8: Barrin's end-step draw, for a return no bounce spell made ---
+#
+# "At the beginning of your end step, if a permanent was put into your hand
+# from the battlefield this turn, draw a card." The per-turn ledger behind that
+# condition was bumped by hand at two call sites — the bounce helper and the
+# single targeted bounce — so Barrin drew for an Unsummon and for nothing
+# else. It is written in the hand seam now, where the move is announced.
+#
+# The census of every way in is `tests/engine/test_returned_to_hand_ledger.py`.
+
+import pytest as _r3j8_pytest  # noqa: E402
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_barrin_table(set_pool):
+    m21 = set_pool("M21")
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(name="P1", library=[m21["Island"]] * 3),
+        _R3J8PlayerState(name="P2", library=[m21["Island"]] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set()
+    barrin = _R3J8Permanent(card=m21["Barrin, Tolarian Archmage"])
+    game.players[0].battlefield.append(barrin)
+    game._sync_control()
+    return game
+
+
+def _r3j8_on_board(game, seat, card):
+    perm = _R3J8Permanent(card=card)
+    perm.metadata["summoning_sickness_turn"] = -99
+    game._put_permanent_onto_battlefield(seat, perm, None)
+    return perm
+
+
+def _r3j8_end_step_draws(game) -> int:
+    held = len(game.players[0].hand)
+    game.resolve_end_step(0)
+    _r3j8_resolve_stack(game)
+    return len(game.players[0].hand) - held
+
+
+def test_r3j8_barrin_draws_for_a_creature_returned_as_its_own_cost(set_pool):
+    """"{0}: Return this creature to its owner's hand." (Blinking Spirit.) A
+    permanent put into Barrin's controller's hand from the battlefield, by an
+    activated ability rather than by a bounce spell — uncounted, before."""
+    game = _r3j8_barrin_table(set_pool)
+    _r3j8_on_board(game, 0, set_pool("ICE")["Blinking Spirit"])
+
+    assert game.activate_permanent_ability(0, "Blinking Spirit").supported
+    _r3j8_resolve_stack(game)
+    assert [c.name for c in game.players[0].hand] == ["Blinking Spirit"]
+
+    assert _r3j8_end_step_draws(game) == 1, game.log
+
+
+def test_r3j8_barrin_draws_for_a_land_storm_cauldron_sent_home(set_pool):
+    """Storm Cauldron: "Whenever a land is tapped for mana, return it to its
+    owner's hand." A land put into Barrin's controller's hand by a trigger."""
+    game = _r3j8_barrin_table(set_pool)
+    _r3j8_on_board(game, 1, set_pool("ALL")["Storm Cauldron"])
+    island = _r3j8_on_board(game, 0, set_pool("M21")["Island"])
+
+    assert game.tap_land_for_mana(0, "Island", "U", permanent_id=island.permanent_id)
+    _r3j8_resolve_stack(game)
+    game.clear_mana_pools()
+    assert [c.name for c in game.players[0].hand] == ["Island"]
+
+    assert _r3j8_end_step_draws(game) == 1, game.log
+
+
+def test_r3j8_barrin_stays_quiet_for_a_permanent_put_into_another_hand(set_pool):
+    """"Into **your** hand": the other player's Spirit going home is the other
+    player's history, and Barrin's controller draws nothing for it."""
+    game = _r3j8_barrin_table(set_pool)
+    _r3j8_on_board(game, 1, set_pool("ICE")["Blinking Spirit"])
+
+    assert game.activate_permanent_ability(1, "Blinking Spirit").supported
+    _r3j8_resolve_stack(game)
+    assert game.permanents_to_hand_this_turn == {1: 1}
+
+    assert _r3j8_end_step_draws(game) == 0, game.log
+# end of the R3 J8 block

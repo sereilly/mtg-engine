@@ -1216,3 +1216,69 @@ def test_phyrexian_portal_finishes_itself_for_headless_seats(set_pool):
     assert len(game.players[0].exile) == 5, "the even split, smaller half exiled"
     assert len(game.players[0].library) == 6
     assert not game.waiting_prompt()
+
+
+# --- R3 J8: Lodestone Bauble's "that player" is the graveyard's owner ---
+#
+# "…from **a player's** graveyard on top of their library … **That player**
+# draws a card at the beginning of the next turn's upkeep." The W2G4 test above
+# aims the Bauble at the opponent's graveyard, which is the one board where
+# "the graveyard's owner" and "the controller's first opponent" are the same
+# seat — and the second is what the delayed ability resolved against. Aimed at
+# its controller's own graveyard, the lands went on top of the right library
+# and the *opponent* drew.
+#
+# The pool-wide census is `tests/engine/test_delayed_announced_subjects.py`.
+
+import pytest as _r3j8_pytest  # noqa: E402
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import CardDefinition as _R3J8Card  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_plain(name, type_line="Artifact"):
+    return _R3J8Card(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line},
+    )
+
+
+@_r3j8_pytest.mark.parametrize("graveyard_seat", [0, 1])
+def test_r3j8_lodestone_bauble_draws_for_the_graveyards_owner(set_pool, graveyard_seat):
+    """Both seats, and the controller's own is the one that was wrong."""
+    players = [
+        _R3J8PlayerState(
+            name=f"P{seat + 1}",
+            library=[_r3j8_plain(f"Deck {seat}")] * 3,
+            graveyard=[_r3j8_plain(f"Basic {seat}", "Basic Land — Mountain")],
+        )
+        for seat in (0, 1)
+    ]
+    game = _R3J8Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._put_permanent_onto_battlefield(
+        0, _R3J8Permanent(card=set_pool("ALL")["Lodestone Bauble"]), None
+    )
+
+    assert game.activate_permanent_ability(
+        0, "Lodestone Bauble", target_player_index=graveyard_seat,
+        target_permanent_index=[0],
+    ).supported
+    _r3j8_resolve_stack(game)
+    game._settle()
+    owner = game.players[graveyard_seat]
+    assert owner.library[0].name == f"Basic {graveyard_seat}"
+    assert [t.bound_player_index for t in game.delayed_triggers] == [graveyard_seat]
+
+    # "The next turn's upkeep" — the other player's, so the draw is not simply
+    # whoever's upkeep it happens to be.
+    game.resolve_upkeep(1 - graveyard_seat)
+    _r3j8_resolve_stack(game)
+
+    assert [c.name for c in owner.hand] == [f"Basic {graveyard_seat}"], game.log
+    assert game.players[1 - graveyard_seat].hand == []
+# end of the R3 J8 block

@@ -369,6 +369,26 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             # answers it, and the handler layer does not import from the
             # grammar's lowering package.
             recorded = (context.results or {}).get("exiled_spell_controller")
+        elif binds_player == "event_subject_player":
+            # "Whenever a player casts a spell, they may pay {1}. If the player
+            # does, **they** draw a card at the beginning of the next end
+            # step." (Horn of Plenty.) The seat the *creating trigger's* event
+            # froze (CR 603.10), which is the one record that says who cast:
+            # the resolution's own player is whoever the fire site defaulted
+            # to, so the Horn's controller paid and an opponent drew.
+            recorded = (context.trigger_context or {}).get("event_subject_player")
+        elif binds_player == "resolution_player":
+            # "**Target player** draws a card at the beginning of the next
+            # turn's upkeep." (Sapphire Charm.) "**That player** draws a card
+            # …" (Lodestone Bauble.) The player this resolution holds — the one
+            # the spell or ability announced (CR 601.2c/602.2b), frozen now
+            # because the firing resolution a turn later holds a default
+            # instead. Read by identity: ``list.index`` compares by value.
+            recorded = next(
+                (seat for seat, seated in enumerate(game.players)
+                 if seated is context.target),
+                None,
+            )
         else:
             recorded = (context.results or {}).get("chosen_player")
         if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
@@ -383,6 +403,7 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         source_name=context.card.name,
         card=context.card,
         bound_permanent_id=bound_id,
+        bound_as_target=bool(payload.get("bound_as_target")),
         watched_permanent_id=watched_id,
         # CR 603.7d's source, frozen now: an activated ability's own permanent
         # is what "this creature" means when the delay finally fires.
@@ -3584,10 +3605,19 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     wrong direction to guess in, which is the reason that handler gives and the
     reason this one repeats it.
 
-    Every seat's pool is read before any of them answers, and it does not need
-    to be: one player's sacrifices cannot change another's board, so re-reading
-    per seat would give the same answer. What it *would* add is a question about
-    what an intervening trigger did, which the card does not ask.
+    **Nothing moves until the last seat has answered.** Cataclysm's ruling
+    (2004-10-04): "After both players make choices, all the sacrifices are done
+    simultaneously." The prompts share one batch (``Game.new_keep_batch``) and
+    its last answer performs all of them as one event.
+
+    This paragraph used to say "one player's sacrifices cannot change another's
+    board, so re-reading per seat would give the same answer", and each prompt
+    sacrificed as it was answered on the strength of it. Both halves were
+    wrong. A seat that gives up the Aura it stole a creature with has changed
+    which creatures the other seat chooses among, and a seat that gives up
+    Kormus Bell has changed whether the other's Swamps are creatures at all;
+    and a permanent that watches things leave (Dingus Egg) is one event's
+    witness, not one seat's.
     """
     payload = instruction.payload
     who = payload.get("who")
@@ -3614,14 +3644,20 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     # "…Return those lands to their owners' hands." (Planar Overlay.) Which
     # half of the choice moves, carried through to the prompt whose resolver
     # performs it; absent is this handler's own name, the chosen kept and the
-    # rest sacrificed. The same per-seat arming either way, and for the reason
-    # the docstring gives: one seat's lands leaving cannot change what another
-    # seat controls.
+    # rest sacrificed. The same per-seat arming either way, and the same batch:
+    # "Return those lands to their owners' hands" is one sentence about every
+    # player's choice, read once they have all made it.
     fate = payload.get("fate")
+    batch = game.new_keep_batch()
     for seat in seats:
         game.arm_keep_permanents(
             seat, pool=pool, slots=slots, reason=card_name, fate=fate,
+            batch=batch,
         )
+    # Only now can a batch be complete: a seat nobody asks may have answered as
+    # it was armed, with seats still to come behind it.
+    batch["armed"] = True
+    game.finish_keep_batch(batch)
     return True, "resolved"
 
 

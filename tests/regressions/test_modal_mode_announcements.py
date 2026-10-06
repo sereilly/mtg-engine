@@ -483,7 +483,11 @@ def test_w2g2_the_census_examines_what_it_claims_to():
     assert len(modes) >= 88, len(modes)
     assert len(object_modes) >= 47, len(object_modes)
     assert len(roles_modes) >= 3, len(roles_modes)
-    assert len(untargeted) >= 13, len(untargeted)
+    # 12, not 13 (R3 J8): the thirteenth was Sapphire Charm's "**Target player**
+    # draws a card at the beginning of the next turn's upkeep", counted here as
+    # a mode that targets nothing — which was the defect. The player is
+    # announced as the Charm is cast now (CR 115.1a/601.2c).
+    assert len(untargeted) >= 12, len(untargeted)
     for sighting in ("Rith's Charm", "Crosis's Charm", "Treva's Charm", "Hull Breach"):
         assert sighting in _MODAL
 

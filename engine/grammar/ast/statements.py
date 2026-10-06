@@ -209,7 +209,6 @@ from .cards import (
     TransmuteBySacrifice,
     RepeatedGraveyardPick,
     NameThenConsult,
-    Shuffle,
 )
 from .exile import (
     ExileCostSacrifices,
@@ -374,7 +373,7 @@ Effect = Union[
     EachPlayerClaimsExiledCard, RandomGraveyardCardFate,
     DiscardRevealedMatchingUnlessPayLife,
     DiscardRevealedUnlessPayLife,
-    Shuffle, ExtraTurn, ExtraLandPlays, CantPlayLands,
+    ExtraTurn, ExtraLandPlays, CantPlayLands,
     CantCastSpellTypes, CantActivateNonManaAbilities, EndTheTurn, ChooseNumber, SecretlyChooseNumbers, ChooseColor, ChooseCreatureType, ChooseCardType, ChooseCardName, ChooseOpponent, ChoosePlayerWhoCast, CountObjects, FlipCoin, WinGame, LoseGame, DrawGame, BecomeColor, BecomeCopy, BecomeCreature,
     SacrificeUnlessPay, DestroyUnlessPay, DestroyEachUnlessPaid, DamageUnlessPay, Fight, LookAtHand, LookAtLibraryTop,
     CantBe, AttackAsThough, CombatRestriction, BlockCountGrant,

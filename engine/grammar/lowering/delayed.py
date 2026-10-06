@@ -23,6 +23,9 @@ evidence this repo has produced that a family boundary was already there rather
 than invented at the cap, and it is why the merge kept the code unchanged and
 merely recorded the coincidence.
 
+``_lower_delayed_self_action`` — the first sentence quoted above, word for
+word — lodged in ``lowering/board.py`` until R3 J8 for want of room here.
+
 ``effects/`` and ``ast/`` have no ``delayed`` for ``loops``' reason: the guard
 fired on the lowerings, and ``CreateDelayedTrigger`` and ``ChooseTarget`` are
 nodes that sit perfectly well beside the other statement and stack ones.
@@ -33,7 +36,9 @@ import dataclasses
 from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
 from .. import ast
 from ..errors import LoweringError
+from ._delays import bind_announced_subjects, end_step_action_on_made_permanent
 from ._events import (_EVENT_SUBJECT_PLAYERS, _RECORDED_PERMANENTS,
+                      _PERMANENTS_MADE_BY_THIS_EFFECT,
                       CHOSEN_PLAYER, CREATED_TOKEN, CREATED_TOKENS,
                       binds_block_pair,
                       damage_trigger_names_damaged_end)
@@ -271,6 +276,14 @@ _BOUND_TO_THE_DELAYS_OBJECT = frozenset({
 })
 
 
+#: The payload keys under which a delayed entry is about (or watches) an
+#: **object**. An entry carrying none names a step and nothing else.
+_OBJECT_BINDINGS = (
+    "binds_target", "binds_recorded", "binds_event_subject", "binds_block_pair",
+    "binds_attached_host", "watches",
+)
+
+
 #: Which resolution record names the seat a :data:`EVENTS_SEATED_BY_BOUND_PLAYER`
 #: event fires on. The value is what ``handlers/board_misc.create_delayed_trigger``
 #: routes its ``binds_player`` read on, and every event in that set must have a
@@ -360,10 +373,12 @@ def _lower_create_delayed_trigger(
     # Gated on a producer, and **without refusing** when there is none — which
     # is the one place this differs from every other back-reference here. "That
     # player" has other producers: Lodestone Bauble's is the graveyard owner its
-    # own target named, read off the resolution rather than out of the
-    # scratchpad. So the absence of a chosen player does not mean the words name
-    # nobody; it means they name somebody else, and the entry keeps the reading
-    # it already had.
+    # own target named, held by the resolution rather than in the scratchpad.
+    # So the absence of a chosen player does not mean the words name nobody; it
+    # means they name somebody else, and ``bind_announced_subjects`` at the
+    # foot of this function freezes *that* seat. (It used to say "the entry
+    # keeps the reading it already had", and the reading it had was the firing
+    # resolution's default seat: the Bauble's draw went to an opponent.)
     #
     # …and gated first on the *event*, because an event that freezes a player of
     # its own already answers "that player" — "whenever a player taps a Mountain
@@ -569,6 +584,23 @@ def _lower_create_delayed_trigger(
             raise LoweringError(
                 "this delay's opener names no target it can bind", node=node
             )
+    # What the *creating* spell or ability announced, where this sentence names
+    # it again (Sapphire Charm's "target player", Lodestone Bauble's "that
+    # player", Horn of Plenty's "they", Barreling Attack's "it"). Last, so it
+    # reads the bindings every branch above settled — an entry about an
+    # *object* takes its players from that object ("that creature's
+    # controller", Basalt Golem), so only one naming a step alone is asked.
+    about_a_step = not any(payload.get(key) for key in _OBJECT_BINDINGS)
+    bind_announced_subjects(
+        payload,
+        step_delay=node.once and about_a_step,
+        says_that_player=(
+            about_a_step
+            and node.event not in _EVENT_SUBJECT_PLAYERS
+            and _names_a_chosen_player(node.effect)
+        ),
+        creator_froze_a_player=creating_event in _EVENT_SUBJECT_PLAYERS,
+    )
     subject = _delayed_filter_payload(node.subject, node)
     if subject:
         payload["subject_filter"] = subject
@@ -576,6 +608,41 @@ def _lower_create_delayed_trigger(
     if agent:
         payload["agent_filter"] = agent
     return (OracleInstruction("create_delayed_trigger", "", payload),)
+
+
+def _lower_delayed_self_action(
+    node: ast.DelayedSelfAction, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """Rocket Launcher / Rakalite. The action is payload, the delay is the kind
+    — because what a reader downstream must not get wrong is *when*."""
+    made = produced & (_PERMANENTS_MADE_BY_THIS_EFFECT | {CREATED_TOKEN})
+    if node.subject == "bound" and made:
+        # "Create a 3/1 … token with haste. **Sacrifice it** at the beginning
+        # of the next end step." (Balduvian Dead; Hornet Cannon, Tidal Wave.)
+        # The pronoun names what the step in front *made* — never the target or
+        # the source the handler below falls back to. See the builder.
+        if len(made) != 1:
+            raise LoweringError(
+                "several earlier steps made permanents; which one \"it\" "
+                "names is ambiguous", node=node,
+            )
+        return (end_step_action_on_made_permanent(node.action, next(iter(made))),)
+    return (
+        OracleInstruction(
+            # Keyed `self_action`, not `action`: a payload key called
+            # "action" is read as *nested instructions* by the composition
+            # readers (test_front_end_safety's flattener among them), and a
+            # bare word sitting where a list of steps is expected is a crash
+            # rather than a wrong answer — but only because something looked.
+            "arm_self_action_at_next_end_step", "",
+            # The referent rides beside the action for the same reason the
+            # action does: one sentence, one kind, and what differs is data.
+            # Absent for "this artifact", so every payload written before Glyph
+            # of Destruction is byte-identical.
+            {"self_action": node.action}
+            | ({"subject": node.subject} if node.subject != "source" else {}),
+        ),
+    )
 
 
 def _delay_is_about_a_created_token(effect, produced: frozenset[str]) -> bool:

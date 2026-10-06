@@ -600,3 +600,86 @@ def test_w1g5_the_lairs_and_the_crater_in_simulated_games(set_pool):
         why for why in report.refused_casts
         if "Rith's Grove" in why or "Meteor Crater" in why
     ], dict(report.refused_casts)
+
+
+# --- R3 J8: Forsaken City untaps only for a card actually exiled ---
+#
+# "At the beginning of your upkeep, you may exile a card from your hand. **If
+# you do**, untap this land." Two answers stand between the offer and the
+# exile — take it, then pick the card — and the W1G5 test above drives the two
+# honest pairings: yes-and-a-card, and no. The third was a free untap: yes,
+# and then **no card** (or a hand with no card in it at all). The pick's
+# registered default was that third answer, which is why the AI's pricing of
+# this trade refuses it outright rather than weighing it.
+#
+# The pool-wide census is `tests/engine/test_if_you_do_follows_the_doing.py`.
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_city_at_upkeep(set_pool, *, hand, interactive=(0,)):
+    """A tapped Forsaken City with its upkeep trigger resolving."""
+    lea = set_pool("LEA")
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(
+            name="P1", hand=[lea[name] for name in hand],
+            library=[lea["Swamp"]] * 4,
+        ),
+        _R3J8PlayerState(name="P2", library=[lea["Swamp"]] * 4),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    city = _R3J8Permanent(card=set_pool("PLS")["Forsaken City"])
+    game._put_permanent_onto_battlefield(0, city, None)
+    city.tapped = True
+    game.resolve_upkeep(0)
+    if game.stack and not game.pending_choices:
+        game.resolve_top_of_stack(pause_for_choices=True)
+    return game, city
+
+
+def test_r3j8_forsaken_city_stays_tapped_when_the_pick_is_declined(set_pool):
+    """Yes, then no card. The hand is intact, nothing is in exile, and the
+    land is still tapped — it used to untap."""
+    game, city = _r3j8_city_at_upkeep(set_pool, hand=["Grizzly Bears"])
+
+    assert game.confirm_optional_pay(0, accept=True)
+    assert game.pending_choice_of("exile_from_hand_choice", 0) is not None
+    assert game.confirm_exile_from_hand_choice(0, None)
+    _r3j8_resolve_stack(game)
+
+    assert city.tapped
+    assert [c.name for c in game.players[0].hand] == ["Grizzly Bears"]
+    assert game.players[0].exile == []
+    assert not game.stack and not game.pending_choices
+
+
+def test_r3j8_forsaken_city_makes_no_offer_over_an_empty_hand(set_pool):
+    """With no card to exile there is nothing to offer, and nothing untaps."""
+    game, city = _r3j8_city_at_upkeep(set_pool, hand=[])
+    _r3j8_resolve_stack(game)
+
+    assert [c.kind for c in game.pending_choices] == []
+    assert city.tapped
+    assert "Forsaken City untapped" not in " ".join(game.log)
+
+
+def test_r3j8_forsaken_city_taken_by_a_seat_nobody_asks_costs_it_a_card(set_pool):
+    """The offer taken, and the pick left to its registered default: the
+    cheapest card in hand goes to exile and the land untaps. That default was
+    "no card", which made the trade free for any seat that took it."""
+    game, city = _r3j8_city_at_upkeep(
+        set_pool, hand=["Shivan Dragon", "Grizzly Bears", "Hill Giant"],
+    )
+
+    assert game.confirm_optional_pay(0, accept=True)
+    game.interactive_seats = set()
+    game.auto_resolve_pending_choices()
+    _r3j8_resolve_stack(game)
+
+    assert [c.name for c in game.players[0].exile] == ["Grizzly Bears"]
+    assert sorted(c.name for c in game.players[0].hand) == ["Hill Giant", "Shivan Dragon"]
+    assert not city.tapped
+# end of the R3 J8 block

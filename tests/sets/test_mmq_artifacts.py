@@ -1204,3 +1204,90 @@ def test_w4g1_a_role_that_left_before_resolution_is_skipped(set_pool):
 
     assert _w4g1_names_on(game.players[0]) == ["Crooked Scales", "My Bear"]
     assert "Crooked Scales: nothing to destroy" not in game.log
+
+
+# --- R3 J8: Horn of Plenty's "they" is the player who cast and paid ---
+#
+# "Whenever a player casts a spell, they may pay {1}. If the player does,
+# **they** draw a card at the beginning of the next end step." Supported on
+# arrival and never driven: the offer went to the right seat and the delayed
+# draw went to the Horn's controller's opponent, whoever had cast and paid — so
+# the Horn's own controller bought a card for the other player.
+#
+# The seat is the one the creating *trigger's* event froze (CR 603.10), bound
+# into the delayed entry as it is created (CR 603.7c). The pool-wide census is
+# `tests/engine/test_delayed_announced_subjects.py`.
+
+import pytest as _r3j8_pytest  # noqa: E402
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.delayed_triggers import fire_delayed_triggers as _r3j8_fire  # noqa: E402
+from engine.models import CardDefinition as _R3J8Card  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_plain(name):
+    return _R3J8Card(
+        name=name, mana_cost="", cmc=0.0, type_line="Artifact", oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": "Artifact"},
+    )
+
+
+def _r3j8_horn(set_pool, *, horn_seat, caster):
+    players = [
+        _R3J8PlayerState(name=f"P{seat + 1}", library=[_r3j8_plain(f"Deck {seat}")] * 3)
+        for seat in (0, 1)
+    ]
+    players[caster].hand.append(_r3j8_plain("Trinket"))
+    game = _R3J8Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    game._put_permanent_onto_battlefield(
+        horn_seat, _R3J8Permanent(card=set_pool("MMQ")["Horn of Plenty"]), None
+    )
+    for player in players:
+        player.mana_pool["C"] = 1
+    assert game.queue_from_hand(caster, "Trinket").supported
+    return game
+
+
+@_r3j8_pytest.mark.parametrize(
+    "horn_seat, caster", [(0, 0), (0, 1), (1, 0), (1, 1)]
+)
+def test_r3j8_horn_of_plenty_draws_for_whoever_cast_and_paid(set_pool, horn_seat, caster):
+    """All four pairings. Only "an opponent of the Horn's controller casts" used
+    to come out right, and by accident."""
+    game = _r3j8_horn(set_pool, horn_seat=horn_seat, caster=caster)
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("optional_pay", caster)
+    ]
+    assert game.confirm_optional_pay(caster, accept=True)
+    _r3j8_resolve_stack(game)
+    assert game.players[caster].mana_pool["C"] == 0, "the {1} was paid"
+    assert [len(p.hand) for p in game.players] == [0, 0], "not until the end step"
+    assert [t.bound_player_index for t in game.delayed_triggers] == [caster]
+
+    assert _r3j8_fire(game, "next_end_step") == 1
+    assert [c.kind for c in game.pending_choices] == []
+    _r3j8_resolve_stack(game)
+
+    assert [len(p.hand) for p in game.players] == [
+        1 if seat == caster else 0 for seat in (0, 1)
+    ], game.log
+
+
+def test_r3j8_horn_of_plenty_declined_arms_nothing(set_pool):
+    """"**If the player does**": a seat that keeps its {1} draws nothing."""
+    game = _r3j8_horn(set_pool, horn_seat=0, caster=1)
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _r3j8_resolve_stack(game)
+
+    assert game.delayed_triggers == []
+    assert game.players[1].mana_pool["C"] == 1
+# end of the R3 J8 block

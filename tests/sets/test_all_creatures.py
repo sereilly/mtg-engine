@@ -1793,7 +1793,13 @@ def test_a_chosen_player_binding_needs_a_choose_step(set_pool):
         if step.kind == "create_delayed_trigger"
     ]
     assert delayed, "the Bauble arms a delayed draw"
-    assert "binds_player" not in delayed[0].payload
+    # Not the *chosen-player* record (``True``), which is what this gate is
+    # about — and not nothing either, which is what this line asserted until
+    # R3 J8. An entry that bound no player resolved against the firing
+    # resolution's default seat, so a Bauble aimed at its controller's own
+    # graveyard drew for the opponent. The seat its own target named is frozen
+    # as the ability is created (tests/engine/test_delayed_announced_subjects.py).
+    assert delayed[0].payload.get("binds_player") == "resolution_player"
 
 
 # --- W3G3: Balduvian Horde and the offer nobody could afford ---

@@ -977,10 +977,28 @@ class GameHelpersMixin:
         *seat* is the hand's — the owner's (CR 400.3) — frozen as the seat the
         event is about, because "that player" has nothing else to mean by the
         time the ability resolves.
+
+        **And it is counted here**, for the same reason it is announced here.
+        "If a permanent was put into your hand from the battlefield this turn"
+        (Barrin, Tolarian Archmage) reads ``permanents_to_hand_this_turn``,
+        which two of this seam's callers bumped by hand and the rest did not:
+        a bounce spell counted, and a land returned by Storm Cauldron, an
+        artifact swept up by Hurkyl's Recall, a creature returned as a cost, a
+        Firestorm Phoenix that would have died and a Rakalite at the end step
+        did not. One writer, where every one of them already meets.
+
+        A **token** counts, which the hand-written bumps had the other way
+        round: "If a token is returned to your hand, it's put there before it
+        ceases to exist" (Barrin's ruling, 2020-06-23) — the move happened,
+        which is why this is reached for one at all.
         """
         if permanent is None:
             return
         from ..events import emit
+
+        self.permanents_to_hand_this_turn[seat] = (
+            self.permanents_to_hand_this_turn.get(seat, 0) + 1
+        )
 
         emit(
             self, "permanent_returned_to_hand",
@@ -2531,6 +2549,43 @@ class GameHelpersMixin:
         # trigger looks back at a game state that already happened).
         emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
         return permanent
+
+    def sacrifice_permanents(self, permanents) -> list[Permanent]:
+        """Sacrifice several permanents **at once** — CR 701.21a for a set
+        that leaves in one event ("…then sacrifices the rest", Cataclysm).
+
+        Not a loop over :meth:`sacrifice_permanent`, for the reason
+        :meth:`_destroy_swept_permanents` is not a loop over a destroy: an
+        ability that triggers on a permanent leaving looks back in time
+        (CR 603.10a), so a watcher going in the same event still sees the
+        others go. One at a time, a Dingus Egg sacrificed ahead of the lands
+        beside it saw none of them — and none of the other player's, whose
+        sacrifices are the same event by the card's own ruling.
+
+        So it has that sweep's shape: every permanent reaches its graveyard
+        **while all of them are still listed**, then they come off their
+        battlefields together, then each sacrifice is announced. Sacrificing is
+        not destroying (701.21a), so nothing regenerates and nothing is
+        indestructible here. A permanent nobody controls any more is skipped,
+        and one named twice is sacrificed once.
+
+        Returns those sacrificed, in the order they were named.
+        """
+        doomed: list[tuple[Permanent, int]] = []
+        for permanent in permanents:
+            seat = self.controller_index_of(permanent)
+            if seat is None or any(permanent is listed for listed, _ in doomed):
+                continue
+            doomed.append((permanent, seat))
+        for permanent, seat in doomed:
+            # Before the graveyard move, which is what announces the death —
+            # see :meth:`sacrifice_permanent`.
+            permanent.metadata["was_sacrificed"] = True
+            self._permanent_to_graveyard(self.players[seat], permanent)
+        self.remove_all_from_battlefield([permanent for permanent, _ in doomed])
+        for permanent, seat in doomed:
+            emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
+        return [permanent for permanent, _ in doomed]
 
     # ------------------------------------------------------------------
     # Combat's slots, kept honest across a removal

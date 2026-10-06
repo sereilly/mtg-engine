@@ -13,12 +13,47 @@ from fastapi import HTTPException
 
 from engine.faces import spell_named
 from engine.models import Permanent, PlayerState
+from engine.oracle import compile_card_oracle
+from engine.targeting import cast_helps_the_player_it_names
 
 
-def _default_target(card_name: str, caster_index: int) -> int:
-    if card_name in {"Ancestral Recall", "Healing Salve", "Stream of Life"}:
+def _default_target(game, caster_index: int, card_name: str, req) -> int:
+    """The seat a cast that named none is aimed at: the caster's own where the
+    spell **gives** something to the player it names, the opposing one
+    otherwise.
+
+    This was a set of three card names — Ancestral Recall, Healing Salve,
+    Stream of Life — which is dispatch on a name in a package the engine's
+    name guard does not walk. What the three have in common is in their
+    compiled programs ("target player draws", "target player gains life", a
+    damage shield), so that is what is asked
+    (``targeting.cast_helps_the_player_it_names``), and Inspiration, Stroke of
+    Genius and every other printing of those sentences stop defaulting to the
+    opponent.
+
+    The card is found where the request says it is being cast from; a card
+    this cannot find keeps the opposing default, which is what the engine's
+    own ``_spell_default_seat`` answers.
+    """
+    zone = getattr(req, "from_zone", None) or "hand"
+    player = game.players[caster_index]
+    pile = getattr(player, zone, None)
+    if zone == "library":
+        pile = (pile or [])[:1]
+    card = next(
+        (
+            spell for spell in (
+                spell_named(held, card_name) for held in (pile or ())
+            ) if spell is not None
+        ),
+        None,
+    )
+    if card is not None and cast_helps_the_player_it_names(
+        card, compile_card_oracle(card),
+        mode_index=getattr(req, "mode_index", None),
+    ):
         return caster_index
-    return 1 - caster_index
+    return game._spell_default_seat(caster_index)
 
 def _mode_target_index(game, mode):
     """The battlefield slot one chosen mode named, preferring its stable id.
@@ -89,7 +124,10 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         if req.target_permanent_indices is not None
         else (req.permanent_index if req.permanent_index is not None else req.target_permanent_index)
     )
-    target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
+    target = (
+        req.target_seat if req.target_seat is not None
+        else _default_target(game, seat, card_name, req)
+    )
     # A roles announcement whose slots are not all permanents (Donate's "target
     # player gains control of target permanent you control"). One entry per
     # role, in role order, translated **here** into the two channels a cast

@@ -16,6 +16,7 @@ import re
 from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.color_changes import spell_color_override
+from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
@@ -665,12 +666,23 @@ def _apply_generic_tax_to_cost(cost_text: str, tax: int) -> str:
     return "".join("{" + t + "}" for t in tokens)
 
 
-def _gloom_white_tax(card, game: Game | None) -> int:
-    """The extra generic mana Gloom adds to a white spell's cost (0 otherwise)."""
-    if game is None or "W" not in card.colors:
+def _cast_tax(card, game: Game | None, caster_index: int | None) -> int:
+    """The extra generic mana a cast of *card* by *caster_index* is charged
+    (CR 601.2f) — the engine's own answer, ``cost_modifiers.spell_cost_tax``.
+
+    This was ``_gloom_white_tax``: three more for a white spell while a
+    permanent **named Gloom** was on the battlefield. A name in a comparison,
+    so every other printing of the sentence — "Red spells cost {2} more to
+    cast" (Chill), a Gloom copied by a Clone — showed the printed cost in the
+    hand and charged the taxed one at the cast. The engine has had one reader
+    for the whole template since the tax became text-keyed; this asks it.
+
+    Nothing for a land, which is played and not cast (CR 305.1), and nothing
+    where the caller cannot say who would be casting.
+    """
+    if game is None or caster_index is None or card.primary_type == "land":
         return 0
-    has_gloom = any(perm.card.name == "Gloom" for perm in game.all_permanents())
-    return 3 if has_gloom else 0
+    return int(spell_cost_tax(game, caster_index, card)[0])
 
 
 def _serialize_card(
@@ -690,7 +702,7 @@ def _serialize_card(
     # that string added it to whichever half printed a generic symbol —
     # Stand // Deliver read `{W}{5}{U}` under Gloom, the white half's tax on
     # the blue half's cost. Each face below is taxed as the spell it is.
-    tax = 0 if face_cards(card) else _gloom_white_tax(card, game)
+    tax = 0 if face_cards(card) else _cast_tax(card, game, caster_index)
     effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
     serialized = _card_preview(card)
     serialized.update({

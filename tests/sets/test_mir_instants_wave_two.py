@@ -532,3 +532,153 @@ def test_pcy_w1g5_dazzling_beauty_cannot_be_cast_at_a_blocked_attacker(set_pool)
     assert not refused.supported
     assert [c.name for c in me.hand] == ["Dazzling Beauty"]
 # end of the PCY W1G5 block
+
+
+# --- R3 J8: what a delayed ability is about was announced at the cast ---
+#
+# Sapphire Charm's first mode — "**Target player** draws a card at the
+# beginning of the next turn's upkeep" — and Barreling Attack's "When that
+# creature becomes blocked this turn, **it** gets +1/+1 …". Two spells, one
+# failure: the delayed ability each creates (CR 603.7) re-announced a target as
+# it fired instead of being about the one the spell had named at its cast
+# (CR 115.1a, CR 601.2c). A non-interactive seat answers that with its first
+# opponent, or its first creature.
+#
+# The pool-wide census and the invented cards are in
+# `tests/engine/test_delayed_announced_subjects.py`.
+
+import pytest as _r3j8_pytest  # noqa: E402
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import CardDefinition as _R3J8Card  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_card(name, type_line="Artifact", **raw):
+    return _R3J8Card(
+        name=name, mana_cost="", cmc=0.0, type_line=type_line, oracle_text="",
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": type_line, **raw},
+    )
+
+
+def _r3j8_charm_game(set_pool, *, caster, interactive=()):
+    players = [
+        _R3J8PlayerState(name="P1", library=[_r3j8_card("Mine")] * 5),
+        _R3J8PlayerState(name="P2", library=[_r3j8_card("Theirs")] * 5),
+    ]
+    players[caster].hand.append(set_pool("MIR")["Sapphire Charm"])
+    game = _R3J8Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game
+
+
+@_r3j8_pytest.mark.parametrize(
+    "caster, named", [(0, 0), (0, 1), (1, 0), (1, 1)]
+)
+def test_r3j8_sapphire_charm_draws_for_the_player_named_at_cast(set_pool, caster, named):
+    """All four pairings, because three of them could pass by accident: the
+    delayed ability used to pick the caster's opponent whoever was named, so
+    only "the caster names themselves" tells the readings apart for one seat."""
+    game = _r3j8_charm_game(set_pool, caster=caster)
+
+    assert game.cast_from_hand(
+        caster, "Sapphire Charm", target_player_index=named, mode_index=0
+    ).supported
+    _r3j8_resolve_stack(game)
+    assert [len(p.hand) for p in game.players] == [0, 0], "not until the upkeep"
+    assert [t.bound_player_index for t in game.delayed_triggers] == [named]
+
+    # "The next turn's upkeep" is whichever comes next — the *other* player's
+    # here, so the draw is not simply "whoever's upkeep it is".
+    game.resolve_upkeep(1 - named)
+    _r3j8_resolve_stack(game)
+
+    assert [len(p.hand) for p in game.players] == [
+        1 if seat == named else 0 for seat in (0, 1)
+    ], game.log
+    assert game.delayed_triggers == []
+
+
+def test_r3j8_sapphire_charm_is_asked_for_its_player_at_the_cast_not_the_upkeep(set_pool):
+    """The picker moved with the target: mode 0 offers both seats as the Charm
+    is cast, and an interactive caster is asked nothing at the upkeep — it used
+    to be handed a `trigger_target` prompt there, a turn after CR 601.2c says
+    the choice was made."""
+    game = _r3j8_charm_game(set_pool, caster=0, interactive={0, 1})
+    charm = set_pool("MIR")["Sapphire Charm"]
+
+    spec = game.cast_target_spec(0, charm, mode_index=0)
+    assert spec["kind"] == "player" and spec["requires_target"]
+    assert [t["seat"] for t in spec["valid_targets"]] == [0, 1]
+
+    assert game.cast_from_hand(
+        0, "Sapphire Charm", target_player_index=0, mode_index=0
+    ).supported
+    _r3j8_resolve_stack(game)
+    game.resolve_upkeep(1)
+
+    assert [c.kind for c in game.pending_choices] == []
+    _r3j8_resolve_stack(game)
+    assert [len(p.hand) for p in game.players] == [1, 0], game.log
+
+
+def _r3j8_creature(name, power, toughness):
+    return _r3j8_card(
+        name, "Creature — Test", power=str(power), toughness=str(toughness)
+    )
+
+
+@_r3j8_pytest.mark.parametrize("interactive", [(), (0, 1)])
+@_r3j8_pytest.mark.parametrize("slot", [0, 1])
+def test_r3j8_barreling_attack_pumps_the_creature_it_was_cast_on(set_pool, slot, interactive):
+    """Two attackers, both double-blocked or not at all, and the spell cast on
+    one of them. The shipped test has a single creature on the caster's side,
+    which is the board on which "the first creature" and "that creature" are
+    the same permanent: with the Ogre in the second slot it got nothing, and an
+    interactive caster was asked to choose a target for the delayed ability."""
+    attackers = [
+        _R3J8Permanent(card=_r3j8_creature("Scout", 2, 2)),
+        _R3J8Permanent(card=_r3j8_creature("Ogre", 3, 3)),
+    ]
+    walls = [_R3J8Permanent(card=_r3j8_creature(f"Wall {i}", 0, 4)) for i in range(2)]
+    for perm in (*attackers, *walls):
+        perm.metadata["summoning_sickness_turn"] = -99
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(
+            name="P1", battlefield=attackers,
+            hand=[set_pool("MIR")["Barreling Attack"]],
+        ),
+        _R3J8PlayerState(name="P2", battlefield=walls),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._close_current_priority_step()
+    chosen = attackers[slot]
+
+    assert game.cast_from_hand(
+        0, "Barreling Attack", target_permanent_ids=[chosen.permanent_id]
+    ).supported
+    _r3j8_resolve_stack(game)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: slot, 1: slot})[0]
+
+    assert [c.kind for c in game.pending_choices] == [], "nothing left to choose"
+    _r3j8_resolve_stack(game)
+
+    other = attackers[1 - slot]
+    printed = (int(chosen.card.raw["power"]), int(chosen.card.raw["toughness"]))
+    assert (chosen.effective_power, chosen.effective_toughness) == (
+        printed[0] + 2, printed[1] + 2
+    ), game.log
+    assert (other.effective_power, other.effective_toughness) == (
+        int(other.card.raw["power"]), int(other.card.raw["toughness"])
+    )
+    assert game._has_keyword(chosen, "trample") and not game._has_keyword(other, "trample")
+# end of the R3 J8 block

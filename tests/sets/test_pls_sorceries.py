@@ -854,8 +854,13 @@ def test_w1g4_planar_overlay_asks_the_player_and_checks_the_answer(set_pool):
         ("keep_permanents", 0, "return_chosen_to_hand")
     ]
     assert game.stack and game.waiting_prompt() is not None
-    # The seat that is not interactive has already chosen and returned.
-    assert [c.name for c in game.players[1].hand] == ["Mountain"]
+    # The seat that is not interactive has already chosen — and **nothing has
+    # returned yet**. This asserted the opposite (its Mountain already in hand
+    # with the other seat still choosing), which was the defect R3 J8 fixed:
+    # "Return those lands to their owners' hands" is one sentence read after
+    # every player has chosen, not once per answer.
+    assert game.players[1].hand == []
+    assert _w1g4_land_names(game, 1) == ["Mountain"]
 
     assert not game.confirm_keep_permanents(0, [plains_a, plains_b, tropical, forest])
     assert not game.confirm_keep_permanents(0, [plains_a])
@@ -871,6 +876,7 @@ def test_w1g4_planar_overlay_asks_the_player_and_checks_the_answer(set_pool):
     assert sorted(c.name for c in game.players[0].hand) == [
         "Forest", "Plains", "Swamp", "Tropical Island",
     ]
+    assert [c.name for c in game.players[1].hand] == ["Mountain"]
 
 
 def test_w1g4_planar_overlay_returns_a_land_to_its_owners_hand(set_pool):

@@ -5675,31 +5675,41 @@ class PendingChoicesMixin:
         return True
 
     def _default_exile_from_hand_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: **decline**.
+        """The stated policy: **a card** — the cheapest one to give up.
 
-        The opposite of the put-onto-the-battlefield pick beside it, and for the
-        same kind of reason stated the other way round. That offer trades a card
-        in hand for a permanent on the battlefield, which is more board; this
-        one trades a card in hand for a card in exile plus a charge counter, and
-        the permission to cast it is only worth anything to a seat that then
-        spends the noted mana on it. A headless seat that took the offer would
-        bury a card every time the artifact was activated.
+        This said "decline" for the offered printing, on the reasoning that a
+        headless seat taking Ice Cauldron's offer would bury a card every time
+        the artifact was activated. But the pick is not where that decision is
+        made. "You may exile a card from your hand" is an ``optional_pay`` in
+        front of this prompt, and *that* is the offer a seat nobody asks
+        declines or takes (``_default_optional_pay``, and the trade it weighs);
+        this prompt exists only once the offer has been taken. A seat that
+        took it and then answered "no card" had said yes and no to one
+        question — which is how Forsaken City's "If you do, untap this land"
+        came to be an untap nobody could pay for honestly, and why the AI's
+        pricing of that trade had to refuse it outright.
 
-        **A mandatory exile has no decline to take**, so the policy there is the
-        one ``_default_discard`` states: the lowest-index eligible card. Which
-        cards are eligible at all is the printed phrase's business and is read
-        off the same list the interactive seat is offered, never a second copy.
+        So: the eligible card with the **lowest mana value**, the lowest hand
+        slot among equals. One number printed on every card and nothing a
+        valuation would have to explain; a seat that should keep its lands
+        wants a weight in ``engine/ai_valuation.py`` rather than a branch here.
+
+        **A mandatory exile** keeps the policy ``_default_discard`` states —
+        the lowest-index eligible card — for the reason it always had: Mind
+        Swords and Parallax Nexus take whatever is in front. Which cards are
+        eligible at all is the printed phrase's business and is read off the
+        same list the interactive seat is offered, never a second copy.
         """
-        if not (choice.data.get("_payload") or {}).get("optional", True):
-            live = self.live_exile_from_hand_choices(choice)
-            if live and self._resolve_exile_from_hand_choice(choice, live[0]):
-                return
-            # Nothing eligible: the offer was never made rather than declined,
-            # which is the rule ``exile_chosen_card_from_hand`` states, and the
-            # prompt has to come off the queue or the resolution never finishes.
-            self.discard_pending_choice(choice)
+        live = self.live_exile_from_hand_choices(choice)
+        if live and (choice.data.get("_payload") or {}).get("optional", True):
+            hand = self.players[choice.player_index].hand
+            live = sorted(live, key=lambda slot: (hand[slot].cmc, slot))
+        if live and self._resolve_exile_from_hand_choice(choice, live[0]):
             return
-        self._resolve_exile_from_hand_choice(choice, None)
+        # Nothing eligible: the offer was never made rather than declined,
+        # which is the rule ``exile_chosen_card_from_hand`` states, and the
+        # prompt has to come off the queue or the resolution never finishes.
+        self.discard_pending_choice(choice)
 
     # -- The two face-down piles (Phyrexian Portal) --------------------------
 
@@ -7401,7 +7411,7 @@ class PendingChoicesMixin:
 
     def arm_keep_permanents(
         self, player_index: int, *, pool: dict, slots: list, reason: str,
-        fate: str | None = None,
+        fate: str | None = None, batch: dict | None = None,
     ) -> None:
         """Ask *player_index* which of their permanents to keep, then take the
         rest (Cataclysm, Limited Resources).
@@ -7417,6 +7427,10 @@ class PendingChoicesMixin:
         ``RETURN_CHOSEN_TO_HAND`` (Planar Overlay) the chosen are what moves,
         so a seat none of whose permanents fills any slot has nothing to choose
         and nothing to return, and is not asked either.
+
+        *batch* is one resolution's set of these prompts — "**each player**
+        chooses …" — see :meth:`new_keep_batch`. With one, an answer is *held*
+        and nothing moves until the last of them is in.
         """
         candidates = self.keep_choice_candidates(player_index, pool)
         if not candidates:
@@ -7426,6 +7440,8 @@ class PendingChoicesMixin:
             for s in (slots or ())
         ]
         extra: dict = {}
+        if batch is not None:
+            extra["_batch"] = batch
         if fate is not None:
             if fate not in KEEP_FATES:
                 raise ValueError(f"no keep prompt performs {fate!r}")
@@ -7495,19 +7511,102 @@ class PendingChoicesMixin:
         # be chosen, for which slots, and that no slot goes unanswered — so
         # the two fates share one validation and cannot disagree about whether
         # a dual land may stand for one type or for two.
-        if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
-            self._return_the_chosen(choice, kept)
-        else:
-            self._sacrifice_the_rest(choice, live, kept)
+        batch = choice.data.get("_batch")
         self.discard_pending_choice(choice)
+        if batch is None:
+            self._apply_keeps([(choice, kept)])
+            return True
+        # "**Each player** chooses …, then sacrifices the rest." The answer is
+        # held: nothing moves until the last seat's is in — see
+        # :meth:`new_keep_batch`. The choice itself is public the moment it is
+        # made (the next player chooses knowing it), so it is said now.
+        batch["answers"].append((choice, kept))
+        self.log.append(
+            f"{self.players[choice.player_index].name} chose "
+            + (", ".join(perm.card.name for perm in kept) if kept else "nothing")
+            + f" ({choice.data.get('reason', 'Effect')})"
+        )
+        self.finish_keep_batch(batch)
         return True
+
+    @staticmethod
+    def new_keep_batch() -> dict:
+        """One resolution's set of ``keep_permanents`` prompts, for a sentence
+        that asks **each player** (Cataclysm, Global Ruin, Planar Overlay).
+
+        Cataclysm's ruling (2004-10-04): "The current player makes their
+        choices before the other player. After both players make choices, **all
+        the sacrifices are done simultaneously**." Each prompt used to perform
+        its own seat's half as it was answered, so the first seat's permanents
+        were gone while the second was still choosing — and that is visible:
+        an Aura or an anthem the first seat gave up had already stopped
+        applying to what the second chose among, and a permanent watching
+        things leave (Dingus Egg) saw only its own controller's.
+
+        So the answers are collected here and applied by
+        :meth:`finish_keep_batch` after the last one — ``engine/piles.py``'s
+        rule, "nothing moves until the last answer", for the same reason.
+        """
+        return {"answers": [], "armed": False, "applied": False}
+
+    def finish_keep_batch(self, batch: dict) -> None:
+        """Apply every held answer of *batch*, once none of its prompts is
+        still owed. Safe to call at any time: it does nothing until the handler
+        has armed every seat (a non-interactive seat answers *as* it is armed,
+        with seats still to come) and nothing twice.
+
+        Whether a prompt is still owed is read off the queue rather than
+        counted, so a prompt that left the queue unanswered — its default
+        refused, its seat gone — cannot strand the answers that were given.
+        """
+        if not batch.get("armed") or batch.get("applied"):
+            return
+        if any(
+            owed.kind == "keep_permanents" and owed.data.get("_batch") is batch
+            for owed in self.pending_choices
+        ):
+            return
+        batch["applied"] = True
+        self._apply_keeps(batch["answers"])
+
+    def _apply_keeps(self, answers: list) -> None:
+        """Perform every ``(choice, kept)`` answer **together**.
+
+        Every seat's half is worked out before any permanent moves — the rule
+        ``_resolve_balance`` states beside this one, across seats as well as
+        within one: a sacrifice can trigger something, and end something, that
+        changes what another permanent is. Then every sacrifice is one event
+        (:meth:`sacrifice_permanents`), then the returns, then the log lines in
+        the order the seats answered.
+        """
+        plans: list[tuple[PendingChoice, list, list | None]] = []
+        doomed: list = []
+        for choice, kept in answers:
+            if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
+                plans.append((choice, kept, None))
+                continue
+            live = self.keep_choice_candidates(
+                choice.player_index, choice.data.get("pool") or {}
+            )
+            rest = [
+                perm for perm in live
+                if not any(perm is keeper for keeper in kept)
+            ]
+            plans.append((choice, kept, rest))
+            doomed.extend(rest)
+        self.sacrifice_permanents(doomed)
+        for choice, kept, rest in plans:
+            if rest is None:
+                self._return_the_chosen(choice, kept)
+            else:
+                self._log_the_rest_sacrificed(choice, kept, rest)
 
     def _return_the_chosen(self, choice: PendingChoice, chosen: list) -> None:
         """What was chosen goes to its owner's hand; the rest stays.
 
         "Each player chooses a land they control of each basic land type.
         Return those lands to their owners' hands." (Planar Overlay.) The
-        mirror of :meth:`_sacrifice_the_rest` one line down: the same
+        mirror of the sacrifice half of :meth:`_apply_keeps`: the same
         partition, with the other half moving. Through
         ``return_permanent_to_owners_hand`` — the one spelling of that move —
         so each land goes to its **owner's** hand (CR 400.3) whoever chose it,
@@ -7529,22 +7628,16 @@ class PendingChoicesMixin:
             + f" to {where} ({reason})"
         )
 
-    def _sacrifice_the_rest(self, choice: PendingChoice, live: list, kept: list) -> None:
-        """Everything in the pool that was not kept, given up together.
+    def _log_the_rest_sacrificed(
+        self, choice: PendingChoice, kept: list, doomed: list
+    ) -> None:
+        """One seat's line of a keep: what it kept and how much it gave up.
 
-        Every permanent is resolved before any of them leaves, which is
-        ``_resolve_balance``'s rule beside this one and for its reason: a
-        sacrifice can trigger something that moves another permanent, and a list
-        gathered afterwards would be a second read of a board that had changed.
+        The sacrifices themselves are :meth:`_apply_keeps`' — every seat's in
+        one event — so this only says what happened.
         """
         player = self.players[choice.player_index]
         reason = choice.data.get("reason", "Effect")
-        doomed = [
-            perm for perm in live
-            if not any(perm is keeper for keeper in kept)
-        ]
-        for perm in doomed:
-            self.sacrifice_permanent(perm)
         self.log.append(
             f"{player.name} kept "
             + (", ".join(perm.card.name for perm in kept) if kept else "nothing")
@@ -7582,6 +7675,10 @@ class PendingChoicesMixin:
         ]
         if not self._resolve_keep_permanents(choice, chosen):
             self.discard_pending_choice(choice)
+            # A default that could not be given is still the last answer
+            # some batch was waiting on.
+            if choice.data.get("_batch") is not None:
+                self.finish_keep_batch(choice.data["_batch"])
 
     # -- Balance -------------------------------------------------------------
 
@@ -8122,8 +8219,26 @@ class PendingChoicesMixin:
 
         Returns whether anything ran, so the legacy life/draw/damage fields stay
         the fallback for entries that predate instruction branches.
+
+        **"If you do" is asked of the doing, where taking the offer is not
+        it.** An accept branch whose action is a pick out of a hidden zone
+        carries ``_then_if`` — the record that pick writes when it happens —
+        and the steps from ``_then_from`` on wait behind it: "You may exile a
+        card from your hand. If you do, untap this land" (Forsaken City)
+        untapped for a seat that accepted and then exiled nothing. Applied
+        here, as the branch runs, rather than baked into the branch: the pick
+        suspends the resolution, so the condition has to be an instruction in
+        the sequence for it to be asked after the answer.
         """
-        return self._run_optional_steps(entry, entry.get(key) or ())
+        steps = tuple(entry.get(key) or ())
+        gate = entry.get("_then_if") if key == "_on_accept" else None
+        if gate is not None:
+            start = int(entry.get("_then_from", 0))
+            if steps[start:]:
+                steps = steps[:start] + (OracleInstruction("if_then", "", {
+                    "condition": dict(gate), "then": steps[start:], "else": (),
+                }),)
+        return self._run_optional_steps(entry, steps)
 
     def _run_optional_steps(self, entry: dict, steps) -> bool:
         """Run *steps* against the entry's frozen resolution context.

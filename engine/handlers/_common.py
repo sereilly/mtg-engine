@@ -29,14 +29,15 @@ def return_permanent_to_owners_hand(game, permanent, fallback_owner=None):
     place, because five callers perform it and each of them used to spell it
     out: the single bounce, the several-targets bounce, the sweep, the chosen
     bounce and the untap-step replacement. Three spellings of one move is three
-    chances for one of them to forget the ledger.
+    chances for one of them to forget something.
 
-    ``permanents_to_hand_this_turn`` is only bumped when the card actually
-    arrived. ``put_card_into_hand`` answers False for a token ceasing to exist
-    (CR 111.7), for a commander diverted to the command zone (CR 903.9b) and for
-    a CR 614 replacement sending the card somewhere else — and "a permanent was
-    put into your hand from the battlefield this turn" (Barrin) is false in
-    every one of them.
+    The per-turn ledger Barrin reads (``permanents_to_hand_this_turn``) is
+    **not** one of the things this does. It was, bumped here by hand — which
+    is how every return that did not come through this helper went uncounted.
+    ``put_card_into_hand`` writes it, at the same line that announces the
+    move, so a permanent diverted to the command zone (CR 903.9b) or sent
+    elsewhere by a CR 614 replacement is not counted and a token, which is
+    put into the hand before it ceases to exist, is.
 
     *fallback_owner* is the seat used when CR 108.3's owner cannot be derived,
     which for a permanent on the battlefield is nothing that happens — it is
@@ -49,13 +50,7 @@ def return_permanent_to_owners_hand(game, permanent, fallback_owner=None):
     owner = game.players[owner_idx] if owner_idx is not None else fallback_owner
     if owner is None:
         owner = game.players[0]
-    arrived = game.put_card_into_hand(
-        owner, permanent.card, from_battlefield=permanent
-    )
-    if arrived and owner_idx is not None:
-        game.permanents_to_hand_this_turn[owner_idx] = (
-            game.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
-        )
+    game.put_card_into_hand(owner, permanent.card, from_battlefield=permanent)
     game.remove_from_battlefield(permanent)
     return owner
 
