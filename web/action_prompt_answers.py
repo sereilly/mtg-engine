@@ -1228,8 +1228,13 @@ def _action_enter_choice_confirm(session, req, seat_type):
             raise HTTPException(
                 status_code=400, detail="creature_type is required"
             )
+        # "…choose a color **and** a creature type." (Volrath's Laboratory.)
+        # One prompt with two answers, so the color travels with the type —
+        # the engine reads it only where the prompt asked for one. Sent alone,
+        # the type was recorded and the color the player picked was dropped.
         if not session.game.confirm_enter_choice(
-            req.seat, creature_type=req.creature_type
+            req.seat, creature_type=req.creature_type,
+            mana_color=req.mana_color if pending.get("needs_color") else None,
         ):
             raise HTTPException(status_code=400, detail="invalid enter choice")
         return

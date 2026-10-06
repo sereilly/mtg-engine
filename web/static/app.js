@@ -2689,12 +2689,38 @@ function getColorChoiceInfo(state = currentState) {
   return info;
 }
 
-// Black Vise / Jihad: the "as this enters, choose an opponent [and a color]" prompt.
+// Whether an "as this enters, choose …" prompt names an opponent — the one
+// part of it answered on the board (by clicking a player's pill) rather than in
+// the panel.
+function enterChoiceNamesASeat(info) {
+  return !!info && Array.isArray(info.opponents) && info.opponents.length > 0;
+}
+
+// The "as this enters, choose …" prompt, in every shape the server arms it in:
+// an opponent (Black Vise), a color and an opponent (Jihad), a color alone (the
+// Wards, Psychic Allergy), a card name (Runed Halo, Meddling Mage, each seat of
+// Null Chamber), an opponent and a card name (Booby Trap), a creature type
+// (Conspiracy), a color and a creature type (Volrath's Laboratory), a land type
+// (Shimmer) and two basic land types (Illusionary Terrain).
+//
+// This returned null for every shape that names no opponent, so the panel went
+// on saying "Main Phase" while the server refused every other action until the
+// choice was made — a human who resolved a Ward or a Runed Halo could neither
+// see the question nor do anything else.
 function getEnterChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.enter_choice;
-  if (!info || !Array.isArray(info.opponents) || info.opponents.length === 0) {
+  const asks =
+    !!info &&
+    (enterChoiceNamesASeat(info) ||
+      info.needs_color ||
+      info.needs_card_name ||
+      info.needs_creature_type ||
+      info.needs_land_type ||
+      info.needs_land_types);
+  if (!asks) {
     enterChoiceSelectedColor = null;
+    enterChoiceDraft = null;
     return null;
   }
   return info;
@@ -3507,11 +3533,9 @@ function getPromptBoardTargeting(state = currentState) {
     return promptTargeting({
       playerSeats: (enterChoiceInfo.opponents || []).map((opp) => Number(opp.seat)),
       onPlayer: (targetSeat) => {
-        const payload = { seat, action: "enter_choice_confirm", target_seat: targetSeat };
-        if (enterChoiceInfo.needs_color) {
-          payload.mana_color = enterChoiceSelectedColor || enterChoiceInfo.default_color || "W";
-        }
+        const payload = enterChoicePayload(enterChoiceInfo, targetSeat);
         enterChoiceSelectedColor = null;
+        enterChoiceDraft = null;
         submitPromptAction(payload);
       },
       invalidHint: "Choose one of the highlighted opponents.",
@@ -6201,10 +6225,79 @@ function applyCastChoicePrompt(info) {
   });
 }
 
-// Black Vise / Jihad: "As this enters, choose an opponent [and a color]."
-// Selected color for the current enter-choice prompt (Jihad); reset whenever
-// the prompt is (re)rendered without a prior selection.
+// "As this enters, choose …" — every shape (see getEnterChoiceInfo).
+// Selected color for the current enter-choice prompt; reset whenever the
+// prompt is (re)rendered without a prior selection.
 let enterChoiceSelectedColor = null;
+// What the open prompt's other fields hold (a name, a type, a pair of types),
+// keyed to the prompt they belong to. Kept outside the DOM because the panel is
+// redrawn on every poll, and a field rebuilt from the default each time is a
+// field nobody can type in.
+let enterChoiceDraft = null;
+
+const ENTER_CHOICE_LAND_LETTERS = { plains: "W", island: "U", swamp: "B", mountain: "R", forest: "G" };
+
+function enterChoiceDraftFor(info) {
+  const key = JSON.stringify([
+    info.card_name, info.needs_card_name, info.needs_creature_type,
+    info.needs_land_type, info.needs_land_types, info.needs_color,
+  ]);
+  if (!enterChoiceDraft || enterChoiceDraft.key !== key) {
+    const pair = Array.isArray(info.default_land_types) ? info.default_land_types : [];
+    enterChoiceDraft = {
+      key,
+      cardName: info.default_chosen_card_name || "",
+      creatureType: info.default_creature_type || (info.creature_types || [])[0] || "",
+      landType: info.default_land_type || (info.chosen_land_types || [])[0] || "",
+      landTypeFirst: pair[0] || (info.land_types || [])[0] || "",
+      landTypeSecond: pair[1] || (info.land_types || [])[1] || "",
+    };
+  }
+  return enterChoiceDraft;
+}
+
+// The action that answers *info*, in the fields the route reads for its shape
+// (web/action_prompt_answers.py). `targetSeat` is the opponent a pill click
+// named; a shape that names none sends the chooser's own seat, which the route
+// asks for and the engine does not read.
+function enterChoicePayload(info, targetSeat = null) {
+  const draft = enterChoiceDraftFor(info);
+  const payload = { seat, action: "enter_choice_confirm" };
+  const color = enterChoiceSelectedColor || info.default_color || (info.colors || [])[0] || "W";
+  if (info.needs_land_types) {
+    // An ordered pair, each basic land type addressed by its color letter.
+    payload.old_color = ENTER_CHOICE_LAND_LETTERS[draft.landTypeFirst];
+    payload.mana_color = ENTER_CHOICE_LAND_LETTERS[draft.landTypeSecond];
+    return payload;
+  }
+  if (info.needs_land_type) {
+    payload.chosen_land_type = draft.landType;
+    return payload;
+  }
+  if (info.needs_creature_type) {
+    payload.creature_type = draft.creatureType;
+    if (info.needs_color) payload.mana_color = color;
+    return payload;
+  }
+  if (info.needs_card_name) payload.card_name = draft.cardName;
+  if (info.needs_color) payload.mana_color = color;
+  payload.target_seat = Number.isInteger(targetSeat) ? targetSeat : seat;
+  return payload;
+}
+
+function enterChoiceSelectHtml(field, options, selected) {
+  return (
+    `<select class="prompt-choice-select" data-enter-field="${escapeHtml(field)}">` +
+    (options || [])
+      .map(
+        (option) =>
+          `<option value="${escapeHtml(option)}"${option === selected ? " selected" : ""}>` +
+          `${escapeHtml(option)}</option>`
+      )
+      .join("") +
+    `</select>`
+  );
+}
 
 function applyEnterChoicePrompt(info) {
   const panel = q("activationPanel");
@@ -6225,29 +6318,95 @@ function applyEnterChoicePrompt(info) {
 
   const cardName = info.card_name || "Permanent";
   const needsColor = !!info.needs_color;
+  const needsSeat = enterChoiceNamesASeat(info);
   if (needsColor && !enterChoiceSelectedColor) {
-    enterChoiceSelectedColor = info.default_color || "W";
+    enterChoiceSelectedColor = info.default_color || (info.colors || [])[0] || "W";
   }
-  title.textContent = needsColor ? "Choose a color and an opponent" : "Choose an opponent";
-  body.textContent = `${cardName}: as it enters, choose ${needsColor ? "a color and " : ""}an opponent.`;
+  const draft = enterChoiceDraftFor(info);
+
+  // What is being chosen, in words: "a color and an opponent".
+  const asked = [];
+  if (needsColor) asked.push("a color");
+  if (info.needs_creature_type) asked.push("a creature type");
+  if (info.needs_land_type) asked.push("a land type");
+  if (info.needs_land_types) asked.push("two basic land types");
+  if (needsSeat) asked.push("an opponent");
+  if (info.needs_card_name) asked.push("a card name");
+  const phrase =
+    asked.length > 1
+      ? `${asked.slice(0, -1).join(", ")} and ${asked[asked.length - 1]}`
+      : asked[0] || "";
+  title.textContent = `Choose ${phrase}`;
+  body.textContent = `${cardName}: as it enters, choose ${phrase}.`;
+
+  // The fields are built once per prompt and left alone after that: this
+  // function runs on every poll, and replacing an <input> a player is typing
+  // in takes the focus and the text with it.
+  if (steps.dataset.enterChoiceKey === draft.key && steps.querySelector("[data-enter-choice-form]")) {
+    return;
+  }
 
   const colorNames = { W: "White", U: "Blue", B: "Black", R: "Red", G: "Green" };
-  const colorRow = needsColor
-    ? `<div class="prompt-choice-row">` +
-      (info.colors || [])
-        .map(
-          (c) =>
-            `<button type="button" class="prompt-choice-btn${c === enterChoiceSelectedColor ? " selected" : ""}" data-enter-color="${escapeHtml(c)}">` +
-            `${escapeHtml(colorNames[c] || c)}</button>`
-        )
-        .join("") +
-      `</div>`
-    : "";
-  // The opponent is chosen by clicking their (highlighted) name/life pill; only
-  // the color, which has no board representation, keeps its buttons.
-  steps.innerHTML =
-    `${colorRow}<div>Action: click a highlighted opponent's name or life pill` +
-    `${needsColor ? " (after picking a color above)" : ""}.</div>`;
+  const rows = [];
+  if (needsColor) {
+    rows.push(
+      `<div class="prompt-choice-row">` +
+        (info.colors || [])
+          .map(
+            (c) =>
+              `<button type="button" class="prompt-choice-btn${c === enterChoiceSelectedColor ? " selected" : ""}" data-enter-color="${escapeHtml(c)}">` +
+              `${escapeHtml(colorNames[c] || c)}</button>`
+          )
+          .join("") +
+        `</div>`
+    );
+  }
+  if (info.needs_card_name) {
+    // Any name may be named (CR 201.4); the list is what the chooser can see.
+    rows.push(
+      `<div class="prompt-choice-row"><input type="text" class="prompt-choice-input" ` +
+        `data-enter-field="cardName" list="enterChoiceCardNames" autocomplete="off" ` +
+        `placeholder="Card name" value="${escapeHtml(draft.cardName)}" />` +
+        `<datalist id="enterChoiceCardNames">` +
+        (info.card_names || []).map((name) => `<option value="${escapeHtml(name)}"></option>`).join("") +
+        `</datalist></div>`
+    );
+  }
+  if (info.needs_creature_type) {
+    rows.push(
+      `<div class="prompt-choice-row">` +
+        enterChoiceSelectHtml("creatureType", info.creature_types, draft.creatureType) +
+        `</div>`
+    );
+  }
+  if (info.needs_land_type) {
+    rows.push(
+      `<div class="prompt-choice-row">` +
+        enterChoiceSelectHtml("landType", info.chosen_land_types, draft.landType) +
+        `</div>`
+    );
+  }
+  if (info.needs_land_types) {
+    rows.push(
+      `<div class="prompt-choice-row">` +
+        enterChoiceSelectHtml("landTypeFirst", info.land_types, draft.landTypeFirst) +
+        `<span>becomes</span>` +
+        enterChoiceSelectHtml("landTypeSecond", info.land_types, draft.landTypeSecond) +
+        `</div>`
+    );
+  }
+  // The opponent is chosen by clicking their (highlighted) name/life pill, and
+  // that click sends everything above with it; a prompt naming nobody has a
+  // button of its own.
+  rows.push(
+    needsSeat
+      ? `<div>Action: click a highlighted opponent's name or life pill` +
+          `${rows.length ? " (after choosing above)" : ""}.</div>`
+      : `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" ` +
+          `data-enter-confirm="1">Confirm</button></div>`
+  );
+  steps.innerHTML = `<div data-enter-choice-form="1">${rows.join("")}</div>`;
+  steps.dataset.enterChoiceKey = draft.key;
 
   steps.querySelectorAll("[data-enter-color]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -6257,6 +6416,23 @@ function applyEnterChoicePrompt(info) {
       });
     });
   });
+  steps.querySelectorAll("[data-enter-field]").forEach((field) => {
+    const remember = () => {
+      if (enterChoiceDraft) enterChoiceDraft[field.dataset.enterField] = field.value;
+    };
+    field.addEventListener("input", remember);
+    field.addEventListener("change", remember);
+  });
+  const confirmBtn = steps.querySelector("[data-enter-confirm]");
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", () => {
+      const payload = enterChoicePayload(info);
+      enterChoiceSelectedColor = null;
+      enterChoiceDraft = null;
+      delete steps.dataset.enterChoiceKey;
+      submitPromptAction(payload);
+    });
+  }
 }
 
 function applyLoyaltyRecipientPrompt(info) {
