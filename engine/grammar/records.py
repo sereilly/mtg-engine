@@ -792,6 +792,13 @@ def parse_for_each_revealed_this_way(
     this way" on a damage clause therefore reaches this reader with an empty
     filter, which is the same number the row would have given if it had one.
 
+    "Target opponent reveals their hand. You draw a card **for each Mountain and
+    red card in it**." (Baleful Stare.) The same set by its other name: "it" is
+    the hand the sentence in front just revealed, and nothing has moved between
+    the two. Read only behind a phrase that says **card** — "for each creature
+    in it" is not a sentence about a hand — and the lowering's producer gate is
+    what refuses the pronoun where no step revealed one.
+
     Returning None leaves the cursor where it was.
     """
     mark = stream.mark()
@@ -802,10 +809,12 @@ def parse_for_each_revealed_this_way(
     except GrammarError:
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("revealed", "this", "way"):
-        stream.reset(mark)
-        return None
-    return ast.CountOfRevealsThisWay(filt)
+    if stream.accept_phrase("revealed", "this", "way") or (
+        filt.is_card and stream.accept_phrase("in", "it")
+    ):
+        return ast.CountOfRevealsThisWay(filt)
+    stream.reset(mark)
+    return None
 
 
 def parse_for_each_milled_this_way(

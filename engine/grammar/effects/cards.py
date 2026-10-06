@@ -17,7 +17,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
-from ..records import accept_as_many_as, parse_for_each_sacrificed_this_way
+from ..records import (accept_as_many_as, parse_for_each_revealed_this_way,
+                       parse_for_each_sacrificed_this_way)
 
 from ..amounts import accept_counters_on_source
 from ..errors import GrammarError
@@ -110,6 +111,14 @@ def _parse_draw_multiplier(stream: TokenStream) -> "ast.Amount | None":
     sacrificed = parse_for_each_sacrificed_this_way(stream, parse_object_filter)
     if sacrificed is not None:
         return sacrificed
+    # "Target opponent reveals their hand. You draw a card **for each Mountain
+    # and red card in it**." (Baleful Stare.) The same clause one record over —
+    # the cards a hand reveal in front of this sentence showed — through the
+    # reader the damage sentence already asks (Blood Oath), and first for the
+    # reason above: the plain reading would count a battlefield.
+    revealed = parse_for_each_revealed_this_way(stream, parse_object_filter)
+    if revealed is not None:
+        return revealed
     mark = stream.mark()
     if not stream.accept_phrase("for", "each"):
         stream.reset(mark)

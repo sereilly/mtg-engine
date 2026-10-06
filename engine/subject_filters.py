@@ -583,7 +583,15 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # the cost was never read, and the card reported ``supported`` on its other
      # line and was cast **without discarding anything**. Testable off the
      # printed mana cost for exactly the reason the singular is (CR 202.2).
-     "any_colors"}
+     "any_colors",
+     # "You draw a card for each **Mountain and red** card in it." (Baleful
+     # Stare; Portal printed the cycle, one land type and one colour apiece.)
+     # The union across two axes the noun parser has produced for a permanent
+     # since Nature's Wrath ("an Island or blue permanent"), asked here of a
+     # card: a subtype and a card type are printed on the type line and a
+     # colour on the mana cost, so every alternative is testable off the face
+     # for the reason its single-axis key above is.
+     "any_classes"}
 )
 
 

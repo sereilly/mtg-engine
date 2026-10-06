@@ -21,7 +21,8 @@ from ._amounts import (count_filter_on_targeted_seat, count_spec,
 # sized by one asks the same question a damage sized by one does, and two
 # copies of the list is how one of them comes to emit a characteristic the
 # evaluator cannot answer.
-from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
+from ._counted_damage import (_READABLE_COST_SACRIFICE_CHARACTERISTICS,
+                              revealed_cards_count_spec)
 from ._common import (
     dropped_narrowings,
     _amount_payload,
@@ -280,6 +281,15 @@ def _lower_draw(
             X_FROM_COUNT: {
                 "recorded_cards": "sacrificed_cards", "filter": described,
             },
+        }
+    elif isinstance(node.count, ast.CountOfRevealsThisWay):
+        # "Target opponent reveals their hand. You draw a card **for each
+        # Mountain and red card in it**." (Baleful Stare.) The count Blood
+        # Oath's damage spends, spent by a draw: one spec builder, so the
+        # producer gate and the card-only gate are the same two for both.
+        payload: dict[str, object] = {
+            "amount": "x",
+            X_FROM_COUNT: revealed_cards_count_spec(node.count, produced, node),
         }
     elif isinstance(node.count, ast.SacrificedForCost):
         # "Sacrifice a creature: Draw cards equal to **the sacrificed
