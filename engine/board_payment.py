@@ -40,14 +40,39 @@ choice is one unit with alternatives; "N mana of any **one** color" is N units
 that share their colour, which the matching cannot express, so the colour is
 enumerated around it.
 
-**Lands only, by decision.** A mana ability of a creature or an artifact (a
-Llanowar Elves, a Mox) is not counted, nor is a land's mana ability that costs
-more than the tap (a storage land's counters, a filter land's mana). Those are
-activations the player makes — after which the mana is in the pool and is
-counted — and no automatic payment in this app taps them: the client's
-auto-tap plans from tap-seam lands alone, the AI's planner likewise, and
-``mana_payment.untapped_mana_lands`` states the same limit. A glow that needed
-one would light a card the click then cannot pay for.
+**What a seat could tap.** Lands through the tap seam, always. With
+``nonland_sources=True`` — which the castable highlight passes — also every
+other permanent's mana ability whose whole cost is {T} and which the
+activation path would accept now (a Sol Ring, a Mox, a Llanowar Elves that is
+not summoning sick, none of them under a Null Rod or a Cursed Totem):
+:func:`source_tap_yields`.
+
+That was "lands only, by decision", and the decision is reversed here on
+purpose. Its reason was that no automatic payment taps a non-land source, so
+"a glow that needed one would light a card the click then cannot pay for".
+Two things have changed under it. The AI *has* tapped these sources since
+Planeshift (``ai_policy._nonland_mana_source``), so an AI seat cast spells the
+same board showed a human as uncastable. And the question the highlight
+answers is CR 601.2g's — "the player then has a chance to activate mana
+abilities" — which is about what the player is *able* to do, not about which
+of it this app does for them: the client's own auto-tap is the proof that the
+glow already meant "castable with what you could tap" rather than "castable
+from the pool". A card that is dark over a Sol Ring that pays for it is the
+display saying something false; a card that glows and whose auto-tap button
+is disabled (the client plans lands alone) says something true and asks for
+one click on the Ring. The default stays lands-only so that a caller planning
+an *automatic* payment gets the sources an automatic payment taps.
+
+Still not counted, in either mode: a mana ability that costs more than the tap
+— a storage land's counters, a filter land's mana, a Black Lotus's sacrifice.
+Each is a payment in its own right, which the matching below has no way to
+charge.
+
+**And what a tap sets off.** "Whenever a player taps a land for mana, that
+player adds one additional mana of any type that land produced" (Mana Flare)
+is a triggered mana ability (CR 605.1b): it resolves inside the tap, and the
+mana it adds is mana that tap makes. Read off ``Game.land_tap_mana_adders`` —
+the seam's own walk of them, performed by nothing.
 
 Held to the seam by ``tests/engine/test_castable_highlight_asks_the_planner.py``:
 every land in the pool, alone and in a pair, with the truth found by tapping
@@ -84,11 +109,16 @@ class TapYield:
 
     ``units`` is one entry per mana, each the symbols that mana may be.
     ``one_color`` says the units are **the same** symbol, chosen once ("add
-    three mana of any one color") rather than each chosen freely.
+    three mana of any one color") rather than each chosen freely. ``extra`` is
+    mana the same tap adds that is no part of that one choice — an Aura's
+    "adds an additional {G}", a Gauntlet of Might's {R} — which the shared
+    colour must not be narrowed by: two mana of any one colour and a Wild
+    Growth's {G} is {U}{U}{G} as readily as {G}{G}{G}.
     """
 
     units: "tuple[frozenset[str], ...]"
     one_color: bool = False
+    extra: "tuple[frozenset[str], ...]" = ()
 
 
 def _seam_abilities(game: "Game", land: "Permanent") -> list:
@@ -122,13 +152,16 @@ def _summary_yield(game: "Game", land: "Permanent") -> TapYield | None:
     return TapYield((frozenset(str(s).upper() for s in symbols),))
 
 
-def _instruction_yields(game: "Game", land: "Permanent", instruction, purpose) -> list[TapYield]:
+def _instruction_yields(
+    game: "Game", land: "Permanent", instruction, purpose, *, summary: bool = True
+) -> list[TapYield]:
     """What running *instruction* — one tap-alone mana ability — adds.
 
     Read off the add-mana step's payload, the shapes ``handlers/mana`` carries
     out. A shape this does not read exactly falls back to **one** mana of what
     the engine says the land offers, which is the amount every reader assumed
-    before any of them counted.
+    before any of them counted — unless *summary* is off (a non-land source,
+    which has no tap seam and so no summary path), where it counts nothing.
     """
     from .handlers._common import count_from_payload
     from .handlers.control_flow import evaluate_condition
@@ -156,7 +189,7 @@ def _instruction_yields(game: "Game", land: "Permanent", instruction, purpose) -
     if len(steps) != 1:
         # More than one producing step (or none this reads): one mana, of what
         # the land offers.
-        fallback = _summary_yield(game, land)
+        fallback = _summary_yield(game, land) if summary else None
         return [fallback] if fallback is not None else []
     payload = steps[0].payload or {}
     spend_only = payload.get("spend_only")
@@ -209,7 +242,12 @@ def _instruction_yields(game: "Game", land: "Permanent", instruction, purpose) -
         if not symbols or any_count <= 0:
             return []
         return [TapYield((symbols,) * any_count, one_color=any_count > 1)]
-    fallback = _summary_yield(game, land)
+    if payload.get("from_chosen_color"):
+        # "{T}: Add one mana of the chosen color." (the Diamonds' cousins that
+        # choose as they enter): the colour is on the permanent.
+        chosen = (land.metadata or {}).get("chosen_color")
+        return [TapYield((frozenset({str(chosen)}),))] if chosen in PIP_SYMBOLS else []
+    fallback = _summary_yield(game, land) if summary else None
     return [fallback] if fallback is not None else []
 
 
@@ -251,6 +289,100 @@ def _aura_units(land: "Permanent") -> "tuple[frozenset[str], ...]":
     )
 
 
+def _with_triggered_mana(
+    game: "Game", land: "Permanent", found: TapYield, purpose
+) -> TapYield:
+    """*found* with what the tap's triggered mana abilities add to it —
+    "an additional {R}" (Gauntlet of Might), "one additional mana of any type
+    that land produced" (Mana Flare).
+
+    The second is mana of the **same** symbol as what the land made, so it
+    joins the yield as more units of the one shared choice: a Tropical Island
+    under a Mana Flare is {G}{G} or {U}{U}, never {G}{U}.
+    """
+    from .restricted_mana import restriction_admits
+
+    seat = game.controller_index_of(land)
+    if seat is None:
+        return found
+    extra: list[frozenset[str]] = []
+    same = 0
+    for instruction in game.land_tap_mana_adders(seat, land):
+        payload = instruction.payload or {}
+        spend_only = payload.get("spend_only")
+        if spend_only and not restriction_admits(str(spend_only), purpose):
+            # "Spend this mana only to pay cumulative upkeep costs" (Snowfall).
+            continue
+        pips = tuple(payload.get("pips") or ())
+        alt = payload.get("alt_supertype")
+        if alt and land.has_supertype(str(alt)):
+            pips = tuple(payload.get("alt_pips") or ())
+        extra.extend(
+            frozenset({str(symbol)}) for symbol, count in pips for _ in range(int(count))
+        )
+        same += int(payload.get("of_type_produced", 0) or 0)
+    if not extra and not same:
+        return found
+    units = found.units
+    one_color = found.one_color
+    if same:
+        produced = frozenset.intersection(*units) or units[0]
+        if len(units) == 1 or found.one_color:
+            # One choice of symbol, shared by the land's own mana and the
+            # extra: more units of the same.
+            units = units + (produced,) * same
+            one_color = len(units) > 1 and len(produced) > 1
+            if one_color:
+                units = (produced,) * len(units)
+        else:
+            units = units + (produced,) * same
+    return TapYield(units, one_color, found.extra + tuple(extra))
+
+
+def source_tap_yields(
+    game: "Game", permanent: "Permanent", purpose=None
+) -> list[TapYield]:
+    """Every way one activation of a **non-land** permanent's mana ability can
+    come out, toward a payment for *purpose* — a Sol Ring's {C}{C}, a Llanowar
+    Elves' {G}, a Birds of Paradise's one mana of any colour. Empty for a land
+    (:func:`land_tap_yields` is the seam's) and for a source the activation
+    path would refuse now.
+
+    **Only an ability whose whole cost is {T}** — ``is_tap_alone_mana_
+    ability``, the tap seam's own predicate and the one the AI's plan asks.
+    And only one the door will open: the permanent's own list
+    (``Game.usable_abilities_of``: nothing under Titania's Song), untapped,
+    not summoning sick where it is a creature (CR 602.5a), and not prohibited
+    (``activation_prohibitions.activation_prohibition`` — a Null Rod, a Cursed
+    Totem, an Interdict, a City of Solitude on another player's turn).
+
+    A shape this cannot read exactly counts for nothing, where a land falls
+    back to one mana of its summary: a land's summary is the seam's own
+    fallback, and a non-land source has no seam.
+    """
+    from .activation_prohibitions import activation_prohibition
+    from .mixins.turn_management import is_tap_alone_mana_ability
+
+    if permanent.tapped or permanent.has_type("land"):
+        return []
+    seat = game.controller_index_of(permanent)
+    if seat is None or game._is_summoning_sick(permanent):
+        return []
+    yields: list[TapYield] = []
+    for ability in game.usable_abilities_of(permanent):
+        if not is_tap_alone_mana_ability(ability):
+            continue
+        if activation_prohibition(game, seat, permanent, ability) is not None:
+            continue
+        yields.extend(
+            item for item in _instruction_yields(
+                game, permanent, ability.instruction, purpose, summary=False
+            )
+            if item.units
+        )
+    return yields
+
+
 def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYield]:
     """Every way one tap of *land* through the tap seam can come out, toward a
     payment for *purpose*. Empty when the seam makes no mana from it now: a
@@ -268,7 +400,10 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
             item = _under_a_swap(game, land, item)
             if not item.units:
                 continue
-            yields.append(TapYield(item.units + _aura_units(land), item.one_color))
+            item = _with_triggered_mana(game, land, item, purpose)
+            yields.append(
+                TapYield(item.units, item.one_color, item.extra + _aura_units(land))
+            )
     # …and the mana ability of a basic land type the land **gained** (Blanket
     # of Night: "…a Swamp in addition to its other land types"), which is no
     # compiled ability at all (CR 305.6). The summary path above already
@@ -286,26 +421,43 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
                     game, land, TapYield((frozenset({str(symbol).upper()}),))
                 )
                 if item.units:
-                    yields.append(TapYield(item.units + _aura_units(land)))
+                    item = _with_triggered_mana(game, land, item, purpose)
+                    yields.append(TapYield(
+                        item.units, item.one_color, item.extra + _aura_units(land)
+                    ))
     return yields
 
 
-def _expanded(yields: list[TapYield]) -> "list[tuple[frozenset[str], ...]]":
+def _expanded(
+    yields: list[TapYield], wanted: "frozenset[str] | None" = None,
+    *, free: bool = False,
+) -> "list[tuple[frozenset[str], ...]]":
     """*yields* as plain unit tuples the matching can take.
 
     Alternatives that are each **one** mana fold into one unit with the union
     of their symbols — tapping for {C} or for {W}/{U} is one mana of one of
-    three symbols. A shared colour is written out once per colour it could be.
+    three symbols. A shared colour is written out once per colour it could be
+    — **per colour the cost asks for**, when *wanted* says which those are:
+    "two mana of any one color" toward {2}{G} is {G}{G} or two mana that pay
+    only the generic part, and the other four colours are that second answer
+    four more times. Written out five ways each, six such lands were 15,625
+    assignments and past the cap below.
+
+    *free* drops the sharing altogether (each unit chosen on its own), which
+    can only over-offer: the reading for a board past the cap even so.
     """
     plain: list[tuple[frozenset[str], ...]] = []
     for item in yields:
-        if item.one_color:
+        if item.one_color and not free:
             shared = set.intersection(*(set(unit) for unit in item.units))
+            named = sorted(shared if wanted is None else shared & wanted)
+            other = sorted(shared - set(named))
             plain.extend(
-                tuple(frozenset({symbol}) for _ in item.units) for symbol in sorted(shared)
+                tuple(frozenset({symbol}) for _ in item.units) + item.extra
+                for symbol in named + other[:1]
             )
         else:
-            plain.append(item.units)
+            plain.append(item.units + item.extra)
     singles = [units[0] for units in plain if len(units) == 1]
     rest = [units for units in plain if len(units) != 1]
     if singles:
@@ -343,11 +495,19 @@ def _pays(player, symbols: frozenset[str], *, as_any_type: bool = False,
     return frozenset(pays)
 
 
-def board_can_pay(game: "Game", seat: int, required: dict, *, purpose=None) -> bool:
+def board_can_pay(
+    game: "Game", seat: int, required: dict, *, purpose=None,
+    nonland_sources: bool = False,
+) -> bool:
     """Whether *seat* could pay *required* from its pool plus what tapping its
     untapped lands would add — for a payment of *purpose*
     (``restricted_mana.PaymentPurpose``), which decides what restricted mana
     and which CR 609.4 grants count.
+
+    *nonland_sources* also counts what activating every other permanent's
+    tap-alone mana ability would add (:func:`source_tap_yields`): the question
+    a **player** is asked, who may activate them (CR 601.2g), where the
+    default is the question an automatic payment asks, which taps lands.
 
     Pure: nothing is tapped, spent, logged or prompted for.
     """
@@ -361,20 +521,40 @@ def board_can_pay(game: "Game", seat: int, required: dict, *, purpose=None) -> b
     for symbol, amount in held.items():
         floating.extend([frozenset({str(symbol)})] * max(0, int(amount)))
 
-    choices: list[list[tuple[frozenset[str], ...]]] = []
-    for land in game.controlled_by(seat):
-        if land.tapped or not land.has_type("land"):
+    # Which symbols the cost names: a shared colour is worth telling apart
+    # only where it is one of these.
+    wanted = frozenset(
+        str(symbol) for symbol, amount in required.items()
+        if symbol != "generic" and int(amount or 0) > 0
+    )
+    found: list[list[TapYield]] = []
+    for permanent in game.controlled_by(seat):
+        if permanent.tapped:
             continue
-        options = _expanded(land_tap_yields(game, land, purpose))
-        if options:
-            choices.append(options)
+        if permanent.has_type("land"):
+            yields = land_tap_yields(game, permanent, purpose)
+        elif nonland_sources:
+            yields = source_tap_yields(game, permanent, purpose)
+        else:
+            continue
+        if yields:
+            found.append(yields)
 
-    combinations = 1
-    for options in choices:
-        combinations *= len(options)
+    def assignments(free: bool):
+        expanded = [_expanded(yields, wanted, free=free) for yields in found]
+        expanded = [options for options in expanded if options]
+        total = 1
+        for options in expanded:
+            total *= len(options)
+        return expanded, total
+
+    choices, combinations = assignments(free=False)
     if combinations > _MAX_COLOR_ASSIGNMENTS:
-        # More shared-colour lands than are worth enumerating: read each as
-        # its most generous option. Over-offers; never refuses a real payment.
+        # More shared-colour sources than are worth enumerating even so: each
+        # unit read as free to differ. Over-offers; never refuses a real
+        # payment. (This read each land as its *first* longest option — all
+        # white — which refused every payment that wanted another colour.)
+        choices, _combinations = assignments(free=True)
         choices = [[max(options, key=len)] for options in choices]
 
     # CR 609.4's one-spell grants (North Star), tried only where the ordinary
@@ -399,4 +579,4 @@ def board_can_pay(game: "Game", seat: int, required: dict, *, purpose=None) -> b
     return False
 
 
-__all__ = ["TapYield", "board_can_pay", "land_tap_yields"]
+__all__ = ["TapYield", "board_can_pay", "land_tap_yields", "source_tap_yields"]

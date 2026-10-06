@@ -11,13 +11,11 @@ from __future__ import annotations
 
 import random
 
-from ...activation_permissions import (activation_permission_denial,
-                                        card_widens_activation)
+from ...activation_prohibitions import activation_prohibition
+from ...activation_permissions import card_widens_activation
 from ...restricted_mana import ACTIVATE, PaymentPurpose
 from ...activation_restrictions import (
-    activation_denial,
     activations_allowed_each_turn,
-    global_activation_ban,
     at_activation_limit,
     printed_activation_caps,
     mark_activated_this_turn,
@@ -25,7 +23,7 @@ from ...activation_restrictions import (
     prints_once_only_restriction,
     reads_activation_tally,
 )
-from ...auras import attached_ability_cost_reduction, aura_restriction_active
+from ...auras import attached_ability_cost_reduction
 from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
                                ability_self_reduction_amount,
                                 sacrifice_taxes)
@@ -35,7 +33,6 @@ from ...divided_damage import (DIVIDED_TARGETS, EVENLY, divided_description,
 from ...cost_x_definitions import cost_x_is_defined, cost_x_value
 from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
-from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
 from ...targeting import (derive_activation_spec, spec_is_a_cost,
                           usable_activated_abilities)
@@ -1260,70 +1257,23 @@ class AbilityActivationMixin:
         # rebinds the name for the whole function, it silently broke Faith's
         # Fetters two hundred lines below. Two names for one question, which is
         # the hazard SET_PLAYBOOK.md names and the suite caught.
-        from ...spell_prohibitions import (nonmana_activations_forbidden,
-                                            permanent_activations_forbidden)
-
-        # "**That permanent's** activated abilities can't be activated this
-        # turn." (Interdict, CR 602.5c.) Asked beside the seat-wide ban below
-        # and before it, because it is the narrower question and the two are
-        # independent: a player free to activate abilities may still control a
-        # permanent whose abilities are shut off. **No mana-ability exception**
-        # — Interdict prints none, where Abeyance prints one, and a card's
-        # exception is not a rule to be shared.
-        if permanent_activations_forbidden(self, permanent):
-            details = (
-                f"{permanent.card.name}'s activated abilities can't be "
-                "activated this turn"
-            )
-            self.log.append(details)
+        # **One question, asked of one table** (``engine/activation_
+        # prohibitions.py``, CR 602.5). Everything the comment above describes
+        # — the board-wide bans, the turn-long records, the Aura clauses, the
+        # printed "Activate only …" and "…may activate this ability" on this
+        # line — was ten inline checks from here down, each logging its own
+        # sentence. They are the table's rows now, in the order they stood
+        # here and with the words they logged, because this door was the only
+        # reader that asked all ten: the AI's chooser asked four, the wire
+        # none, and an ability activated from a hand or a graveyard — which
+        # never comes down this road — asked nothing at all.
+        prohibited = activation_prohibition(
+            self, controller_index, permanent, ability
+        )
+        if prohibited is not None:
+            self.log.append(prohibited.details)
             return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        if nonmana_activations_forbidden(
-            self, controller_index
-        ) and not is_mana_ability(ability):
-            details = (
-                f"{permanent.card.name}'s ability can't be activated: "
-                f"{self.players[controller_index].name} can't activate "
-                "abilities that aren't mana abilities this turn"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        # "Players can cast spells and activate abilities only during their
-        # own turns." (City of Solitude.) The activation half of the one
-        # sentence `mixins/stack/casting.py` reads for its casting half —
-        # asked through the same reader, so a card that stops a Counterspell
-        # cannot come to let an Icy Manipulator through.
-        wrong_turn = global_play_timing(self, controller_index)
-        if wrong_turn is not None:
-            details = (
-                f"{permanent.card.name}'s abilities can't be activated on "
-                f"another player's turn ({wrong_turn})"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
-            )
-
-        # "During combat, players can't cast instant spells or **activate
-        # abilities that aren't mana abilities**." (Hand to Hand.) The
-        # activation half of the sentence the cast path reads for its casting
-        # half. The exception is printed, so it is asked: `is_mana_ability` is
-        # the same reader the turn-scoped prohibition three gates up uses, so
-        # what counts as a mana ability cannot mean two things in one file.
-        combat_ban = combat_play_ban(self)
-        if combat_ban is not None and not is_mana_ability(ability):
-            details = (
-                f"{permanent.card.name}'s ability can't be activated during "
-                f"combat ({combat_ban[0]})"
-            )
-            self.log.append(details)
-            return SimulationResult(
-                permanent.card.name, False, "unsupported", details
+                permanent.card.name, False, "unsupported", prohibited.details
             )
 
         # "…players and permanents can't be the targets of spells or activated
@@ -1351,100 +1301,6 @@ class AbilityActivationMixin:
                 details = (
                     f"{permanent.card.name} has no legal target: nothing can be "
                     f"targeted ({source_name})"
-                )
-                self.log.append(details)
-                return SimulationResult(
-                    permanent.card.name, False, "unsupported", details
-                )
-
-        banned_by = global_activation_ban(self, permanent)
-        if banned_by is not None:
-            details = (
-                f"{permanent.card.name}'s activated abilities can't be "
-                f"activated ({banned_by})"
-            )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        denial = activation_denial(self, controller_index, permanent, ability.source_line or "")
-        if denial is not None:
-            details = f"{permanent.card.name}: {denial}"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # Every printed "…may activate this ability" permission on *this* line
-        # (engine/activation_permissions.py, CR 602.1a). Asked per ability for
-        # the reason the restriction above is: a permanent with two abilities
-        # prints the clause on one of them, and the card-wide reachability test
-        # further up deliberately cannot tell them apart. This is also the
-        # direction the old substring pair never had — "Only your opponents may
-        # activate this ability" (Clergy of the Holy Nimbus) *denies* the
-        # controller, and a permission that only ever widened would have left
-        # the ability working for the one player the card forbids.
-        permission = activation_permission_denial(
-            self, controller_index, permanent, ability.source_line or ""
-        )
-        if permission is not None:
-            self.log.append(permission)
-            return SimulationResult(permanent.card.name, False, "unsupported", permission)
-
-        # "…and its activated abilities can't be activated unless they're mana
-        # abilities." (Faith's Fetters.) CR 605.1a decides which abilities the
-        # exception leaves open, asked through the one predicate rather than
-        # re-read here — a second reading would shut off an ability the rules
-        # leave open, which for a land is the difference between a shut-down
-        # permanent and a player locked out of casting anything.
-        if aura_restriction_active(permanent, "activated_abilities_shut_off") and not is_mana_ability(ability):
-            details = (
-                f"{permanent.card.name}'s activated abilities can't be activated"
-            )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "…and its activated abilities can't be activated." (Volrath's Curse.)
-        # The same clause with CR 605.1a's exception **not** printed, which is
-        # what the second name means: every activated ability, mana abilities
-        # included. Read as the row above it the Curse would leave a Birds of
-        # Paradise tapping for mana — an ability the card shuts off, wrong in
-        # the player's favour and silent, which is why the two clauses are two
-        # names rather than one.
-        if aura_restriction_active(permanent, "all_activated_abilities_shut_off"):
-            details = (
-                f"{permanent.card.name}'s activated abilities can't be activated"
-            )
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
-        # "…and their activated abilities **with {T} in their costs** can't be
-        # activated." (Katabatic Winds.) The board-wide twin of the Aura clause
-        # above: a permanent describing a *set* of other permanents whose tap
-        # abilities are shut off, rather than an Aura naming the one it is
-        # attached to. Derived by `combat_restrictions.py` as the third clause
-        # of the one sentence it reads (see ``CombatRestriction.also_kinds``)
-        # and enforced here, where every activation already passes.
-        #
-        # The narrowing is on the **cost**, so it is `requires_tap` rather than
-        # `is_mana_ability`: a Birds of Paradise under Katabatic Winds may not
-        # tap for mana (its cost contains {T}), where Faith's Fetters leaves
-        # exactly that ability open. Reading one clause as the other is the
-        # difference between the two cards.
-        for source_seat, source_perm in self.permanents_with_controller():
-            for instr in compile_card_oracle(
-                source_perm.effective_card
-            ).instructions:
-                if instr.kind != "tap_abilities_cant_be_activated":
-                    continue
-                if not ability.cost.requires_tap:
-                    continue
-                if not subject_matches(
-                    self, permanent, dict(instr.payload.get("subject") or {}),
-                    observer=source_seat, source=source_perm,
-                ):
-                    continue
-                details = (
-                    f"{permanent.card.name}'s activated abilities with {{T}} in "
-                    f"their costs can't be activated "
-                    f"({source_perm.card.name})"
                 )
                 self.log.append(details)
                 return SimulationResult(
@@ -3648,6 +3504,21 @@ class AbilityActivationMixin:
             return SimulationResult(card.name, False, "unsupported", details)
         ability = from_hand[ability_index]
 
+        # CR 602.5, before anything is paid: the prohibitions that reach an
+        # ability whose source is a card in a hand — a turn-long record on the
+        # seat (Abeyance), "players can … activate abilities only during their
+        # own turns" (City of Solitude), "during combat, players can't …
+        # activate abilities that aren't mana abilities" (Hand to Hand). This
+        # door asked none of them: it is a parallel entry point, so nothing
+        # the permanent's road checks was ever on it, and a card was cycled on
+        # an opponent's turn under a City of Solitude.
+        prohibited = activation_prohibition(self, controller_index, card, ability)
+        if prohibited is not None:
+            self.log.append(prohibited.details)
+            return SimulationResult(
+                card.name, False, "unsupported", prohibited.details
+            )
+
         # CR 601.2f: the cost is computed as the ability is activated, and
         # that includes every increase and reduction on any battlefield —
         # "Activated abilities of creatures cost {1} more" (Gloom's family)
@@ -3843,13 +3714,19 @@ class AbilityActivationMixin:
         # from the one table the support gate reads. The *card* is the source:
         # there is no permanent, and "three or more creature cards are above
         # this card" is a question about the card's place in the pile.
-        denial = activation_denial(
-            self, controller_index, card, ability.source_line or ""
-        )
-        if denial is not None:
-            details = f"{card.name}: {denial}"
-            self.log.append(details)
-            return SimulationResult(card.name, False, "unsupported", details)
+        #
+        # …and every other CR 602.5 prohibition that reaches an ability whose
+        # source is a card rather than a permanent — the table's rows that
+        # bind one (``engine/activation_prohibitions.py``). This door asked
+        # the printed clause alone, so "players can … activate abilities only
+        # during their own turns" (City of Solitude) and Hand to Hand's
+        # "during combat" stopped nothing activated from a graveyard.
+        prohibited = activation_prohibition(self, controller_index, card, ability)
+        if prohibited is not None:
+            self.log.append(prohibited.details)
+            return SimulationResult(
+                card.name, False, "unsupported", prohibited.details
+            )
 
         # CR 602.2b sends an activation through CR 601.2c, so the target is
         # checked **before** any cost is paid and against the same

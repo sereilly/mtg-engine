@@ -795,7 +795,7 @@ class TurnManagementMixin:
         # clause narrowed is written into its own bucket (CR 106.6), and a
         # snapshot of the pool alone let it escape every swap — Mishra's
         # Workshop under Contamination made {C}{C}{C}, not one {B}.
-        pool_before = production_snapshot(player) if swapped_to else {}
+        pool_before = production_snapshot(player)
         # **The land's own compiled mana ability, when it has one.** This used
         # to add exactly one symbol chosen from `produced_mana`, which is right
         # for every land in the 1993-94 base sets and for the dual cycles — all
@@ -867,6 +867,23 @@ class TurnManagementMixin:
                 if symbols:
                     mana_symbol = symbols[0]
             player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
+
+        # **What the land produced is what came out of it**, for the one
+        # reader below that asks: "one mana of any type **that land
+        # produced**" (Mana Flare, Overabundance, Winter's Night). The seed
+        # above is the colour the seat *asked* for, which is the answer only
+        # where the land could make it: a Mishra's Factory asked for the
+        # default {G} made its {C}, and the Flare then added a {G} — a mana
+        # of any colour the tapper cared to name, from every land in the pool
+        # whose mana ability compiles to something colourless.
+        made = [
+            symbol
+            for key, bucket in production_snapshot(player).items()
+            for symbol, amount in bucket.items()
+            if int(amount or 0) > int((pool_before.get(key) or {}).get(symbol, 0) or 0)
+        ]
+        if made and mana_symbol not in made:
+            mana_symbol = made[0]
 
         if swapped_to:
             # Whatever the land already put in under the swapped symbol itself
@@ -969,55 +986,8 @@ class TurnManagementMixin:
         for _idx, perm, trig in iter_triggered_abilities(
             self, condition_kinds={"land_tapped_for_mana"}, first_match_only=False
         ):
-            # "Whenever a **Mountain** is tapped for mana" — the narrowing rides
-            # the condition's payload, so the land type is data rather than a
-            # per-card hook. has_type, so a land made a Mountain by a layer-4
-            # effect counts.
-            subtype = trig.condition.payload.get("tapped_land_subtype")
-            if subtype and not land.has_type(str(subtype)):
+            if not self._land_tap_trigger_fires(trig, perm, player_index, land):
                 continue
-            # "Whenever a player taps a **snow** land for mana" (Winter's
-            # Night). A supertype (CR 205.4a), not a type, so it is asked of
-            # `has_supertype` — the accessor the type test above would answer
-            # False for on every land, which is a trigger that never fires
-            # rather than one that fires too often. Layer 4 either way: a land
-            # an effect *made* snow counts and one that stopped being snow does
-            # not.
-            supertype = trig.condition.payload.get("tapped_land_supertype")
-            if supertype and not land.has_supertype(str(supertype)):
-                continue
-            # "Whenever **a land an opponent controls** is tapped for mana"
-            # (Mana Web). A whole noun phrase where the two rows above carry a
-            # single word, so it is tested through the one matcher every other
-            # narrowed subject in this engine goes through — and the seat it
-            # carries is relative to *this ability's* controller (CR 109.5),
-            # never to whoever tapped the land. Dropped, the trigger would fire
-            # on its own controller's lands too, which on Mana Web is a card
-            # that taps out the player who cast it.
-            # "Whenever **an opponent** taps a Mountain for mana" (Sanctimony).
-            # CR 109.5's seat, asked of whoever tapped the land against the seat
-            # that controls the *watching permanent* — read through the control
-            # seam, so a Sanctimony somebody has taken control of watches
-            # **their** opponents from the moment they take it (CR 613 layer 2).
-            #
-            # This is the narrowing the two rows above are not: they describe
-            # the *land*, and this describes the player who tapped it. Dropped,
-            # the enchantment would gain its controller life for their own
-            # Mountains — a trigger firing on a strictly larger set, which reads
-            # to every census in this repo as an implemented card.
-            if trig.condition.payload.get("tapped_by_opponent") is not None:
-                watcher = self.controller_index_of(perm)
-                if watcher is None or player_index == watcher:
-                    continue
-            described = trig.condition.payload.get("tapped_land_filter")
-            if described:
-                from ..subject_filters import subject_matches
-
-                if not subject_matches(
-                    self, land, described,
-                    observer=self.controller_index_of(perm), source=perm,
-                ):
-                    continue
             # "…that player adds one mana of any type that land produced.
             # **That land doesn't untap during its controller's next untap
             # step.**" (Winter's Night.) One trigger whose effect is two
@@ -1065,6 +1035,98 @@ class TurnManagementMixin:
             )
 
         return True
+
+    def _land_tap_trigger_fires(self, trig, perm, player_index: int, land) -> bool:
+        """Whether *perm*'s "whenever … is tapped for mana" ability *trig*
+        triggers for *player_index* tapping *land* — the printed narrowing,
+        which rides the condition's payload.
+
+        One predicate for the tap seam, which resolves the trigger, and for
+        ``land_tap_mana_adders``, which says beforehand what the mana ones
+        will add: a preview with a reading of its own would count a
+        Gauntlet of Might's {R} over a Forest.
+        """
+        # "Whenever a **Mountain** is tapped for mana" — the narrowing rides
+        # the condition's payload, so the land type is data rather than a
+        # per-card hook. has_type, so a land made a Mountain by a layer-4
+        # effect counts.
+        subtype = trig.condition.payload.get("tapped_land_subtype")
+        if subtype and not land.has_type(str(subtype)):
+            return False
+        # "Whenever a player taps a **snow** land for mana" (Winter's
+        # Night). A supertype (CR 205.4a), not a type, so it is asked of
+        # `has_supertype` — the accessor the type test above would answer
+        # False for on every land, which is a trigger that never fires
+        # rather than one that fires too often. Layer 4 either way: a land
+        # an effect *made* snow counts and one that stopped being snow does
+        # not.
+        supertype = trig.condition.payload.get("tapped_land_supertype")
+        if supertype and not land.has_supertype(str(supertype)):
+            return False
+        # "Whenever **a land an opponent controls** is tapped for mana"
+        # (Mana Web). A whole noun phrase where the two rows above carry a
+        # single word, so it is tested through the one matcher every other
+        # narrowed subject in this engine goes through — and the seat it
+        # carries is relative to *this ability's* controller (CR 109.5),
+        # never to whoever tapped the land. Dropped, the trigger would fire
+        # on its own controller's lands too, which on Mana Web is a card
+        # that taps out the player who cast it.
+        # "Whenever **an opponent** taps a Mountain for mana" (Sanctimony).
+        # CR 109.5's seat, asked of whoever tapped the land against the seat
+        # that controls the *watching permanent* — read through the control
+        # seam, so a Sanctimony somebody has taken control of watches
+        # **their** opponents from the moment they take it (CR 613 layer 2).
+        #
+        # This is the narrowing the two rows above are not: they describe
+        # the *land*, and this describes the player who tapped it. Dropped,
+        # the enchantment would gain its controller life for their own
+        # Mountains — a trigger firing on a strictly larger set, which reads
+        # to every census in this repo as an implemented card.
+        if trig.condition.payload.get("tapped_by_opponent") is not None:
+            watcher = self.controller_index_of(perm)
+            if watcher is None or player_index == watcher:
+                return False
+        described = trig.condition.payload.get("tapped_land_filter")
+        if described:
+            from ..subject_filters import subject_matches
+
+            if not subject_matches(
+                self, land, described,
+                observer=self.controller_index_of(perm), source=perm,
+            ):
+                return False
+        return True
+
+    def land_tap_mana_adders(self, player_index: int, land) -> list:
+        """The ``add_mana_for_tapped_land`` instructions that will resolve
+        when *player_index* taps *land* for mana — Mana Flare's "one
+        additional mana of any type that land produced", Gauntlet of
+        Might's "an additional {R}", a Chaos Moon's turn-long one.
+
+        Triggered mana abilities (CR 605.1b), so they resolve inside the
+        tap (CR 605.4a) and what they add is mana the tap makes. The seam
+        below performs them; this is the same walk with nothing performed,
+        for the reader that has to know before anything is tapped
+        (``engine/board_payment.py``).
+        """
+        found = []
+        for _idx, perm, trig in iter_triggered_abilities(
+            self, condition_kinds={"land_tapped_for_mana"}, first_match_only=False
+        ):
+            if not self._land_tap_trigger_fires(trig, perm, player_index, land):
+                continue
+            found.extend(
+                step for step in _tap_trigger_steps(trig.instruction)
+                if step.kind == "add_mana_for_tapped_land"
+            )
+        found.extend(
+            entry.instruction
+            for entry in matching_delayed_triggers(
+                self, "land_tapped_for_mana", subject=land
+            )
+            if entry.instruction.kind == "add_mana_for_tapped_land"
+        )
+        return found
 
     def _resolve_tapped_land_trigger_step(
         self, instruction, player_index: int, player, land, mana_symbol, perm

@@ -53,6 +53,7 @@ from .ai_valuation import (
     toll_branch_loss,
 )
 from .activation_permissions import activation_permission_denial
+from .activation_prohibitions import activation_prohibition
 from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
@@ -1619,6 +1620,16 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if activation_permission_denial(
             game, player_index, permanent, ability.source_line or ""
         ):
+            continue
+        # CR 602.5 as **one question** (``engine/activation_prohibitions.py``):
+        # the table the activation path refuses with. The two checks around
+        # this one are four of its ten rows; the other six this chooser never
+        # asked — City of Solitude's "…activate abilities only during their
+        # own turns", Hand to Hand's "during combat", an Abeyance, an
+        # Interdict, Faith's Fetters, Katabatic Winds — so it proposed the
+        # ability and the engine refused it, the seat's only activation of
+        # the turn, every turn.
+        if activation_prohibition(game, player_index, permanent, ability) is not None:
             continue
         # CR 602.5: the printed timing ("Activate only during your upkeep",
         # Svyelunite Priest; "…only during combat", Arcum's Sleigh) and a

@@ -24,6 +24,7 @@ from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
 from engine.mana_payment import taps_for_payment
 from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
+from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
@@ -1137,6 +1138,23 @@ def _serialize_player(
                 perm_dict["ability_target_specs"] = [
                     game.activation_target_spec(seat, idx, ability_index=k)
                     for k in range(len(usable))
+                ]
+            # CR 602.5: why each usable ability may not be activated **now**,
+            # in the engine's own words, or None — indexed like the
+            # ``ability_index`` the activate action takes. One predicate
+            # (``engine/activation_prohibitions.py``), the one the activation
+            # path refuses with, so a menu built from this greys out exactly
+            # what a click would be refused for: a City of Solitude on an
+            # opponent's turn, a Null Rod, an Interdict. Absent when nothing
+            # is prohibited, which is nearly every permanent on every poll.
+            prohibitions = [
+                activation_prohibition(game, seat, perm, ability)
+                for ability in usable
+            ]
+            if any(found is not None for found in prohibitions):
+                perm_dict["ability_prohibitions"] = [
+                    found.details if found is not None else None
+                    for found in prohibitions
                 ]
 
     def _crowned(entries: list, cards) -> list:
