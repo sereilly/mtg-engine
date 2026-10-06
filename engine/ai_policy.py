@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from contextvars import ContextVar
-from itertools import product
-from dataclasses import dataclass
+from itertools import combinations, product
+from dataclasses import dataclass, replace as _replace
 import re
 
 from .ai_valuation import (
@@ -23,6 +24,7 @@ from .ai_valuation import (
     entry_trigger_target_side,
     entry_triggers_bought,
     ability_denies_its_target,
+    ability_role_target_sides,
     ability_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
@@ -63,6 +65,8 @@ from .classifier import classify_card
 from .faces import castable_faces, spell_named
 from .game import Game
 from .handlers._common import permanent_matches_filter
+from .mana_payment import (COLOR_SYMBOLS, PIP_SYMBOLS, _match_colored,
+                           may_pay_pip, plan_payment)
 from .mixins.stack import (aura_enchant_noun, enchant_noun_seat,
                            permanent_matches_enchant_noun)
 from .target_restrictions import forbidden_target
@@ -108,6 +112,14 @@ class CastAction:
     # unchanged, so an ordinary duel — where nothing but "hand" is ever
     # proposed — is untouched.
     from_zone: str = "hand"
+    # Whose copy of ``from_zone`` the card is in, when an effect opened a zone
+    # that is not the caster's own: "you may cast that card" over a card in an
+    # **opponent's** exile (Planeswalker's Mischief, Psychic Theft, Grinning
+    # Totem — CR 400.3 puts an exiled card in its owner's exile). None is the
+    # caster's own pile, which is every hand and command-zone cast and most
+    # permitted ones. `cast_zone_of` reads it; the cast path needs no seat (it
+    # finds the covered card itself, CR 601.3).
+    zone_owner_index: int | None = None
     # CR 118.9: pay the spell's printed alternative cost rather than its mana
     # cost. False on every candidate this policy builds from a payable mana
     # cost, which is all of them but one shape — see `_alternative_cost_cast`.
@@ -299,9 +311,10 @@ def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
     return None
 
 
-def tap_planned_lands(game: Game, seat: int, action) -> None:
+def tap_planned_lands(game: Game, seat: int, action):
     """Tap the mana sources *action*'s plan names into *seat*'s pool, each for
-    the colour the plan counted on and through the mana ability that makes it.
+    the colour the plan counted on and through the mana ability that makes it
+    — and return *action* **as it reads once that is done**.
 
     **The AI's payment**, shared by every executor — the simulator's and the
     web app's AI seat — so the two pay the same way: the policy plans the taps
@@ -311,26 +324,35 @@ def tap_planned_lands(game: Game, seat: int, action) -> None:
     cannot shift a later slot onto a different permanent.
 
     A **land** goes through the engine's tap seam. A **non-land** source the
-    plan counted (`_nonland_mana_source`: Sol Ring, a Mox, Llanowar Elves) has
-    no seam — CR 605.1a makes its "{T}: Add …" an activated ability like any
-    other — so it is activated, which for a mana ability resolves inline
-    (CR 605.3b) and leaves the mana in the pool exactly as a land's tap does.
+    plan counted (`_nonland_mana_source`: Sol Ring, a Mox, Llanowar Elves, and
+    Black Lotus) has no seam — CR 605.1a makes its "{T}: Add …" an activated
+    ability like any other — so it is activated, which for a mana ability
+    resolves inline (CR 605.3b) and leaves the mana in the pool exactly as a
+    land's tap does.
+
+    **The returned action is the one to announce.** A `CastAction` and an
+    `ActivationAction` name their targets — and an activation its own source —
+    by battlefield **slot**, and a source that pays by leaving ("{T}, Sacrifice
+    this artifact: Add three mana of any one color") renumbers every slot
+    behind it (CR 400.7: what is in slot 4 afterwards is a different object).
+    That is why no such source was ever planned: a Giant Growth announced at
+    slot 3 and paid for with the Lotus in slot 1 would have landed on whatever
+    slid into slot 3. So every slot the action names is bound to its permanent
+    before the first tap and read back afterwards (`_bind_action_slots`,
+    `_rebound_action`); an executor announces what this returns, never the
+    action it handed in. When nothing moved the same object comes back.
     """
+    bound = _bind_action_slots(game, seat, action)
+    before = _battlefield_order(game)
     planned = [game.permanent_at(seat, index) for index in action.land_tap_indices]
     for position, land in enumerate(planned):
         permanent_id = game.permanent_id_of(land)
         if permanent_id is None:
             continue
         color = planned_tap_color(action, position)
-        source = _nonland_mana_source(game, seat, land)
+        source = _nonland_mana_source(game, seat, land, may_sacrifice=True)
         if source is not None:
-            slot = next(
-                (
-                    index for index, permanent in enumerate(game.controlled_by(seat))
-                    if permanent is land
-                ),
-                None,
-            )
+            slot = game.battlefield_index_of(land)
             if slot is None:
                 continue
             game.activate_permanent_ability(
@@ -349,6 +371,100 @@ def tap_planned_lands(game: Game, seat: int, action) -> None:
             permanent_id=permanent_id,
             ability_index=planned_tap_ability(game, land, color),
         )
+    if _battlefield_order(game) == before:
+        return action
+    return _rebound_action(game, action, bound)
+
+
+def _battlefield_order(game: Game) -> list[list[int]]:
+    """Which object is in which slot, per seat — by identity, so a look-alike
+    that slid into a vacated slot reads as the change it is."""
+    return [
+        [id(permanent) for permanent in game.controlled_by(seat)]
+        for seat in range(len(game.players))
+    ]
+
+
+def _bind_action_slots(game: Game, seat: int, action) -> dict:
+    """Every battlefield slot *action* names, as the permanent that is in it
+    now — the half of `tap_planned_lands`' re-binding taken before a payment.
+
+    One reader for the three places an action keeps a slot: a cast's or an
+    activation's ``target_permanent_index`` (one slot or several, counted into
+    ``target_player_index``'s battlefield), a divided announcement's
+    ``(seat, slot[, share])`` entries, a several-mode cast's per-mode slot —
+    and an activation's own ``permanent_index``, counted into
+    ``source_controller_index``'s battlefield when it names one. A field the
+    action does not have is simply not bound, so the three action shapes need
+    no arm each.
+    """
+    bound: dict = {}
+    target_seat = getattr(action, "target_player_index", None)
+    slots = getattr(action, "target_permanent_index", None)
+    if isinstance(slots, int):
+        bound["target"] = game.permanent_at(target_seat, slots)
+    elif slots:
+        bound["targets"] = [game.permanent_at(target_seat, slot) for slot in slots]
+    divided = getattr(action, "divided_targets", None)
+    if divided:
+        bound["divided"] = [
+            game.permanent_at(entry[0], entry[1]) if entry[1] is not None else None
+            for entry in divided
+        ]
+    modes = getattr(action, "mode_choices", None)
+    if modes:
+        bound["modes"] = [
+            game.permanent_at(
+                choice.get("target_player_index"), choice.get("target_permanent_index")
+            )
+            if choice.get("target_permanent_index") is not None else None
+            for choice in modes
+        ]
+    if getattr(action, "permanent_index", None) is not None:
+        source_seat = getattr(action, "source_controller_index", None)
+        bound["source"] = game.permanent_at(
+            seat if source_seat is None else source_seat, action.permanent_index
+        )
+    return bound
+
+
+def _rebound_action(game: Game, action, bound: dict):
+    """*action* with every slot `_bind_action_slots` took read back off the
+    battlefield as it stands now.
+
+    A permanent that has left has no slot: a single target reads None (the
+    announcement names no object and the engine's own gate answers), and it is
+    dropped from a list. The plan never spends a permanent the action names
+    (`choose_cast_action`), so that is the engine's answer to a board something
+    else moved rather than a path this policy takes.
+    """
+    changes: dict = {}
+    if "target" in bound:
+        changes["target_permanent_index"] = game.battlefield_index_of(bound["target"])
+    if "targets" in bound:
+        changes["target_permanent_index"] = [
+            slot for slot in (
+                game.battlefield_index_of(permanent) for permanent in bound["targets"]
+            )
+            if slot is not None
+        ]
+    if "divided" in bound:
+        changes["divided_targets"] = [
+            entry if permanent is None
+            else (entry[0], game.battlefield_index_of(permanent), *entry[2:])
+            for entry, permanent in zip(action.divided_targets, bound["divided"])
+        ]
+    if "modes" in bound:
+        changes["mode_choices"] = [
+            choice if permanent is None
+            else {**choice, "target_permanent_index": game.battlefield_index_of(permanent)}
+            for choice, permanent in zip(action.mode_choices, bound["modes"])
+        ]
+    if "source" in bound:
+        slot = game.battlefield_index_of(bound["source"])
+        if slot is not None:
+            changes["permanent_index"] = slot
+    return _replace(action, **changes) if changes else action
 
 
 @dataclass(frozen=True)
@@ -364,10 +480,30 @@ class _NonlandManaSource:
     amount: int
     #: A fixed run of different symbols, or None (`_land_mixed_run`'s shape).
     run: "dict[str, int] | None" = None
+    #: Whether the activation **sacrifices the source** ("{T}, Sacrifice this
+    #: artifact: Add three mana of any one color"). Mana a plan may count only
+    #: under `_may_sacrifice_for` — see `_nonland_mana_source`.
+    sacrifices: bool = False
+
+
+def _sacrifices_only_itself(cost) -> bool:
+    """Whether *cost* is "Sacrifice this permanent", with or without {T}, and
+    **nothing else** — no mana, no card, no counter, no life, no other
+    permanent.
+
+    Compared against a default cost rather than by listing what must be empty,
+    for `turn_management._is_free_beyond_tapping`'s reason: a list would start
+    ignoring any cost component added later, and ignoring one here is the AI
+    paying a price it never weighed.
+    """
+    empty = type(cost)(mana={symbol: 0 for symbol in cost.mana})
+    return bool(cost.sacrifice_self) and _replace(cost, requires_tap=False) == _replace(
+        empty, sacrifice_self=True
+    )
 
 
 def _nonland_mana_source(
-    game: Game, seat: int, permanent: "Permanent | None"
+    game: Game, seat: int, permanent: "Permanent | None", *, may_sacrifice: bool = False,
 ) -> "_NonlandManaSource | None":
     """The mana ability of a **non-land** permanent *seat* controls that its
     payment plan may count right now, or None.
@@ -381,14 +517,33 @@ def _nonland_mana_source(
     seeded Alpha games nineteen such permanents entered the battlefield and
     none made a mana.
 
-    **Only an ability whose whole cost is {T}** (`is_tap_alone_mana_ability`,
-    the tap seam's own predicate — which also excludes a printed "Activate
-    only …" and an ability that asks another player something). A mana ability
-    with a further cost is not free mana: "{1}, {T}: Add one mana of any
-    color" (Mana Cylix) spends one to make one, "{T}, Sacrifice this artifact"
-    (Black Lotus) and "Sacrifice this creature" (Morgue Toad) spend the
-    permanent, and a plan that counted those would sacrifice a creature to
-    cast a one-drop. They stay out until a policy prices them.
+    **An ability whose whole cost is {T}** (`is_tap_alone_mana_ability`, the
+    tap seam's own predicate — which also excludes a printed "Activate only …"
+    and an ability that asks another player something) is the free mana, and
+    the only kind this answers with unless asked for more.
+
+    ***may_sacrifice* asks for the other kind the plan can price: a source
+    that pays by sacrificing itself** — "{T}, Sacrifice this artifact: Add
+    three mana of any one color" (Black Lotus, Lotus Petal), "Sacrifice this
+    creature: Add {B}" (Blood Pet, Basal Thrull, Tinder Wall, Morgue Toad).
+    Returned with ``sacrifices`` set, and never for a permanent that also has a
+    free mana ability: Eye of Ramos' "Sacrifice this artifact: Add {U}" beside
+    its "{T}: Add {U}" would trade a mana every turn for one mana now. Whether
+    a plan may *count* one is `_may_sacrifice_for`'s question, not this
+    function's — this says what the ability is. An untapped permanent is asked
+    for only where the ability taps ({T} in the cost is CR 302.6's as well),
+    so a tapped or summoning-sick Blood Pet is still a mana.
+
+    Everything else stays out, and that is the stated limit of what the AI
+    will give up for mana: **never another permanent** ("Sacrifice a
+    creature", Ashnod's Altar, Phyrexian Altar; "Sacrifice a land", Squandered
+    Resources), **never a card** (Bog Witch, Skirge Familiar, Lion's Eye
+    Diamond's whole hand, Cadaverous Bloom), **never a counter or life** (the
+    Mana Batteries, Iceberg, Phyrexian Lens) — each is a choice of *which* or
+    *how many* that this plan has no valuation for — and never a source that
+    costs mana to make mana ("{1}, {T}: Add one mana of any color", Mana
+    Cylix; "{1}, Sacrifice this creature: Add {U}{B}{R}", the Attendants),
+    which is a payment inside a payment the tap order would have to stage.
 
     **And only one the activation path will accept**, the non-land twin of
     `land_mana_tap_refusal`: untapped; not a summoning-sick creature (CR 302.6
@@ -404,24 +559,46 @@ def _nonland_mana_source(
     offers on this board (none is no source at all), and the colour a source
     chose as it entered.
     """
+    from .activation_restrictions import prints_activation_restriction
     from .mana_could_produce import ability_colors_on_offer
+    from .mana_payment import carries_an_offer
     from .mixins.turn_management import is_tap_alone_mana_ability
     from .spell_prohibitions import permanent_activations_forbidden
 
-    if permanent is None or permanent.tapped:
+    if permanent is None:
         return None
-    if game.land_mana_tap_refusal(permanent) != "not_an_untapped_land":
+    if permanent.has_type("land") or (
+        not permanent.tapped
+        and game.land_mana_tap_refusal(permanent) != "not_an_untapped_land"
+    ):
         # A land (the seam's own reading of which permanents are its) — the
         # land half of the plan answers for it, whatever it answers.
-        return None
-    if game._is_summoning_sick(permanent):
         return None
     # The permanent's own list: a Sol Ring under Titania's Song has lost its
     # mana ability, and planning its mana planned a cast the pool cannot pay.
     usable = game.usable_abilities_of(permanent)
+    taps_alone = any(is_tap_alone_mana_ability(ability) for ability in usable)
+    if not taps_alone and not may_sacrifice:
+        return None
+    ready = not permanent.tapped and not game._is_summoning_sick(permanent)
     for index, ability in enumerate(usable):
-        if not is_tap_alone_mana_ability(ability):
-            continue
+        if taps_alone:
+            if not ready:
+                return None
+            if not is_tap_alone_mana_ability(ability):
+                continue
+        else:
+            # A source that pays by leaving. Asked only of a permanent with no
+            # free mana ability, and held to the two things the tap seam's
+            # predicate holds a free one to.
+            if ability.instruction is None or not _sacrifices_only_itself(ability.cost):
+                continue
+            if ability.cost.requires_tap and not ready:
+                continue
+            if prints_activation_restriction(
+                ability.source_line or ""
+            ) or carries_an_offer(ability.instruction):
+                continue
         produced = planned_mana_yield(ability.instruction)
         if produced is None:
             continue
@@ -447,8 +624,67 @@ def _nonland_mana_source(
             symbols=symbols,
             amount=produced.amount,
             run=dict(produced.run) if produced.run else None,
+            sacrifices=not taps_alone,
         )
     return None
+
+
+@dataclass(frozen=True)
+class _PaymentContext:
+    """What the payment plan being drawn up is **for**, where its caller knows.
+
+    A context variable rather than a parameter, for `_OFFERS_ANNOUNCED`'s
+    reason: `_plan_land_taps` is reached through the cast candidates'
+    builders, which take a card and a board and know nothing of where the card
+    is or what its cast will be charged. Set around the one call that builds a
+    candidate (`choose_cast_action`); None is every other plan — an ability's
+    cost, a toll, an instant in combat — and reads exactly as plans always
+    did.
+    """
+
+    #: The spell being cast. What a "spend this mana only to cast …" land's
+    #: mana may pay for (CR 106.6), and what a permanent given up for mana is
+    #: weighed against (`_may_sacrifice_for`).
+    spell: "CardDefinition | None" = None
+    #: CR 118.9: an effect lets this spell be cast "without paying its mana
+    #: cost". There is nothing to plan, and an {X} in the cost is 0
+    #: (CR 107.3b).
+    free: bool = False
+
+
+_PAYING_FOR: ContextVar["_PaymentContext | None"] = ContextVar(
+    "ai_paying_for", default=None
+)
+
+
+@contextmanager
+def _paying_for(spell: "CardDefinition | None", *, free: bool = False):
+    """Run a block in which every plan drawn up is the payment for *spell*."""
+    token = _PAYING_FOR.set(_PaymentContext(spell=spell, free=free))
+    try:
+        yield
+    finally:
+        _PAYING_FOR.reset(token)
+
+
+def _may_sacrifice_for(spell: "CardDefinition | None", permanent: Permanent) -> bool:
+    """Whether a plan paying for *spell* may count mana *permanent* makes by
+    being sacrificed.
+
+    **What the AI will give up for mana, stated once.** Only to cast a spell —
+    never to activate an ability, pay a toll or keep a permanent, where the
+    plan is told of no spell and this answers no. And only for a spell **worth
+    more than the permanent, measured in mana value** (CR 202.3): Black Lotus
+    and Lotus Petal (0) for anything that costs; Blood Pet and Tinder Wall (1)
+    for a two-drop or better; Basal Thrull (2) for a three-drop; never a
+    creature for a spell no bigger than itself. Which *kinds* of source are
+    asked at all is `_nonland_mana_source`'s half (itself, and nothing with a
+    free mana ability); that they are reached for last, and as few as pay, is
+    `_plan_land_taps`'.
+    """
+    if spell is None or spell.primary_type == "land":
+        return False
+    return float(permanent.effective_card.cmc or 0) < float(spell.cmc or 0)
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -507,8 +743,19 @@ def spell_being_cast(zone, action: "CastAction") -> CardDefinition:
 
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     best: CastAction | None = None
-    for hand_index, card in hand_spells(game.players[player_index]):
-        candidate = _cast_candidate(game, player_index, card, hand_index)
+    player = game.players[player_index]
+    for hand_index, card in hand_spells(player):
+        # The plan is told what it pays for (`_paying_for`): the spell, which
+        # is what a permanent given up for mana is weighed against and what
+        # restricted mana may be spent on — and whether an effect has made the
+        # cast free (CR 118.9; Aluren's "without paying their mana costs"),
+        # in which case there is nothing to plan. Unaffordable-but-free was a
+        # card held all game, and affordable-and-free was lands tapped for a
+        # cast that then spent none of it.
+        candidate = _priced_candidate(
+            game, player_index, card, hand_index,
+            free=_cast_is_free(game, player_index, player.hand[hand_index], card),
+        )
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
@@ -519,14 +766,200 @@ def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
     # arrives as extra generic in the cost, the same way the cast path charges
     # it, so affordability is judged against what will actually be paid.
     for zone_index, card, tax in castable_commanders(game, player_index):
-        candidate = _cast_candidate(
+        candidate = _priced_candidate(
             game, player_index, card, zone_index,
             from_zone="command", extra_generic=tax,
         )
         if candidate is not None and _is_better_cast(candidate, best):
             best = candidate
 
+    # CR 601.3: what an **effect** lets this seat cast from outside its hand —
+    # a graveyard under Yawgmoth's Agenda, the card a Planeswalker's Mischief
+    # exiled, the top of a library under Temporal Aperture. The engine has
+    # offered these to a human seat since each card shipped
+    # (`cast_permissions.playable_from_zones`, the browser's zone badge) and
+    # this chooser walked the hand and the command zone alone, so an AI seat
+    # paid for the permission and never used it: 87 Planeswalker's Mischief
+    # activations in a seeded run bought no cast at all.
+    for play in permitted_plays(game, player_index):
+        if _life_price_is_too_dear(player, play):
+            continue
+        # The prohibitions that turn on where a spell is cast from, asked for
+        # the zone it is in (`_cast_candidate`'s own gate asks about a hand).
+        if cast_prohibition(
+            game, player_index, play.spell, from_zone=play.zone
+        ) is not None:
+            continue
+        candidate = _priced_candidate(
+            game, player_index, play.spell, play.index,
+            from_zone=play.zone, free=play.free,
+        )
+        if candidate is None:
+            continue
+        candidate = _replace(
+            candidate,
+            zone_owner_index=play.owner_seat,
+            # A card played from outside the hand spends none of the hand: the
+            # net card a command-zone cast is, at the same weight.
+            score=candidate.score + COMMAND_ZONE_CAST_BONUS,
+        )
+        if _is_better_cast(candidate, best):
+            best = candidate
+
     return best
+
+
+@dataclass(frozen=True)
+class PermittedPlay:
+    """One spell or land an effect lets a seat cast or play from outside its
+    hand right now (CR 601.3) — see `permitted_plays`."""
+
+    #: "graveyard", "exile" or "library" — the cast path's ``from_zone``.
+    zone: str
+    #: Whose copy of that zone the card is in. The caster's own on every grant
+    #: but the ones that lend another player's card (Grinning Totem, Psychic
+    #: Theft, Planeswalker's Mischief: CR 400.3 leaves it in its owner's exile).
+    owner_seat: int
+    #: The card's position in that pile.
+    index: int
+    #: What is cast or played: the card, or one half of a split card.
+    spell: CardDefinition
+    #: CR 118.9: the permission waives the mana cost.
+    free: bool
+
+
+def permitted_plays(game: Game, player_index: int) -> "list[PermittedPlay]":
+    """Every spell and land an effect lets *player_index* cast or play from a
+    graveyard, an exile zone or the top of its library right now.
+
+    The engine's own list (`cast_permissions.playable_from_zones`, what the
+    browser badges for a human seat), asked again per face so a split card is
+    the spells it can be cast as (CR 709.3) and each one carries whether *its*
+    permission is free. The command zone is not here: CR 903.8 is a rule, and
+    `ai_valuation.castable_commanders` prices its tax.
+    """
+    from .cast_permissions import permission_for, playable_from_zones
+
+    found: list[PermittedPlay] = []
+    for entry in playable_from_zones(game, player_index):
+        zone = entry["zone"]
+        if zone == "command":
+            continue
+        owner_seat = entry.get("owner_seat", player_index)
+        held = getattr(game.players[owner_seat], zone)[entry["index"]]
+        for spell in castable_faces(held):
+            permission = permission_for(
+                game, player_index, held, zone,
+                as_land=held.primary_type == "land", spell=spell,
+            )
+            if permission is None or permission.zone_seat != owner_seat:
+                continue
+            found.append(PermittedPlay(
+                zone=zone, owner_seat=owner_seat, index=entry["index"],
+                spell=spell, free=bool(permission.free),
+            ))
+    return found
+
+
+def _priced_candidate(
+    game: Game, seat: int, spell: CardDefinition, zone_index: int, *,
+    from_zone: str = "hand", extra_generic: int = 0, free: bool = False,
+) -> "CastAction | None":
+    """`_cast_candidate` with the plan told what it pays for (`_paying_for`),
+    or None where the payment would spend a permanent the cast names.
+
+    A free cast that takes an **optional additional** cost — a kicker — is
+    priced again as an ordinary one: CR 118.9d keeps additional costs in force
+    over a waived mana cost, and a plan that tapped nothing would announce a
+    kicker with no mana behind it.
+    """
+    with _paying_for(spell, free=free):
+        candidate = _cast_candidate(
+            game, seat, spell, zone_index, from_zone=from_zone, extra_generic=extra_generic,
+        )
+    if free and candidate is not None and candidate.optional_cost_payments:
+        with _paying_for(spell):
+            candidate = _cast_candidate(
+                game, seat, spell, zone_index,
+                from_zone=from_zone, extra_generic=extra_generic,
+            )
+    if candidate is None or _plan_spends_what_it_names(game, seat, candidate):
+        return None
+    return candidate
+
+
+def cast_zone_of(game: Game, seat: int, action: "CastAction") -> list:
+    """The pile ``action.hand_index`` counts into: *seat*'s hand, its command
+    zone (CR 903.8), or the graveyard, exile or library a permission opened —
+    which may be **another player's** (``zone_owner_index``).
+
+    One reader for every executor, for `cast_announcement`'s reason: each
+    spelled "the command zone, else the hand" for itself, and a third zone was
+    one more place per executor to forget.
+    """
+    if action.from_zone == "hand":
+        return game.players[seat].hand
+    if action.from_zone == "command":
+        return game.players[seat].command_zone
+    owner = seat if action.zone_owner_index is None else action.zone_owner_index
+    return getattr(game.players[owner], action.from_zone)
+
+
+def _cast_is_free(game: Game, seat: int, held: CardDefinition, spell: CardDefinition) -> bool:
+    """Whether a cast of *spell* from *seat*'s **hand** will be charged no mana
+    — the waiver the cast path itself takes (`casting._cast_onto_stack`): an
+    effect letting the seat cast it "without paying its mana cost" (Aluren;
+    Chandra, Flame's Catalyst's −8), unless the cost has an {X}, which that
+    path prefers to pay for (CR 107.3b locks a waived X to 0)."""
+    from .cast_permissions import permission_for
+
+    if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
+        return False
+    waiver = permission_for(game, seat, held, "hand", spell=spell)
+    return waiver is not None and bool(waiver.free)
+
+
+def _life_price_is_too_dear(player: PlayerState, play: PermittedPlay) -> bool:
+    """Whether the price of casting from that zone is life the seat keeps back
+    ("…from your graveyard by paying 3 life and discarding a card", Demonic
+    Embrace) — the reserve every other life price in this policy keeps."""
+    life = sum(
+        int(cost.pay_life or 0)
+        for cost in additional_costs(play.spell)
+        if cost.from_zone == play.zone
+    )
+    return bool(life) and player.life - life < BUYBACK_LIFE_RESERVE
+
+
+def _plan_spends_what_it_names(game: Game, seat: int, candidate: "CastAction") -> bool:
+    """Whether *candidate*'s payment sacrifices a permanent the cast itself
+    names as a target.
+
+    The plan is drawn up after the targets are chosen and is not told them,
+    so this is asked of the finished candidate: a Giant Growth aimed at the
+    seat's own Blood Pet and paid for by sacrificing that Blood Pet is a spell
+    cast at nothing. Not proposed, rather than proposed and fizzled.
+    """
+    spent = [
+        permanent for permanent in (
+            game.permanent_at(seat, slot) for slot in candidate.land_tap_indices
+        )
+        if permanent is not None and (
+            (source := _nonland_mana_source(game, seat, permanent, may_sacrifice=True))
+            is not None and source.sacrifices
+        )
+    ]
+    if not spent:
+        return False
+    bound = _bind_action_slots(game, seat, candidate)
+    named = [bound.get("target"), *bound.get("targets", ()), *bound.get("divided", ()),
+             *bound.get("modes", ())]
+    named += [
+        game.permanent_by_id(permanent_id)
+        for permanent_id in (candidate.target_permanent_ids or ())
+        if isinstance(permanent_id, int)
+    ]
+    return any(permanent is other for permanent in spent for other in named if other is not None)
 
 
 def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
@@ -573,6 +1006,25 @@ def choose_land_drop(game: Game, player_index: int) -> CastAction | None:
         value = _land_drop_value(game, player_index, card)
         if best_value is None or value > best_value:
             best, best_value = candidate, value
+    # CR 305.1 through CR 601.3's twin for a land: "You may **play lands** and
+    # cast spells from your graveyard" (Yawgmoth's Agenda, Yawgmoth's Will),
+    # "you may play that card" over an exiled land (Elkin Bottle, Three
+    # Wishes). The same pass, so the land drop it spends is the one this turn
+    # has; a land in hand wins a tie, having been asked first.
+    for play in permitted_plays(game, player_index):
+        if play.spell.primary_type != "land":
+            continue
+        if entry_sacrifice_is_unavoidable(game, player_index, play.spell):
+            continue
+        candidate = _cast_candidate(
+            game, player_index, play.spell, play.index, from_zone=play.zone,
+        )
+        if candidate is None:
+            continue
+        value = _land_drop_value(game, player_index, play.spell)
+        if best_value is None or value > best_value:
+            best = _replace(candidate, zone_owner_index=play.owner_seat)
+            best_value = value
     return best
 
 
@@ -1906,34 +2358,61 @@ def _choose_activation_role_targets(
     options = game.activation_target_spec(
         player_index, permanent_index, ability_index=0,
     ).get("valid_targets") or []
-    refs: list[dict] = []
-    while options:
-        if side in ("you", "opponent") and any(
-            option.get("kind") == "permanent" for option in options
-        ):
-            options = [
-                option for option in options
-                if option.get("kind") != "permanent"
-                or (option.get("seat") == player_index) == (side == "you")
-            ]
-            if not options:
-                return None
-        pick = options[0]
+    # **One side per role, not one for the chain** — the derivation the cast
+    # side asks (`ai_valuation.role_target_sides`), over this ability's own
+    # roles. "Target creature with the chosen ability loses it and **another
+    # target creature** gains it" (Phyrexian Splicer) is two roles on two
+    # boards, and a single side — or none, the first option at each level —
+    # named two of the activator's own creatures: the seat paid {2} to move
+    # its own flying from one of its creatures to another. *side* stays the
+    # answer for a role the derivation gives none (the three seat-role
+    # chains it was written for).
+    source = game.permanent_at(player_index, permanent_index)
+    ability = (
+        next(iter(usable_activated_abilities(compile_card_oracle(source.card))), None)
+        if source is not None else None
+    )
+    sides = ability_role_target_sides(source.card, ability) if ability is not None else ()
+
+    def ref_of(pick: dict) -> "dict | None":
         if pick.get("kind") == "player":
-            refs.append({"seat": pick.get("seat")})
-        elif pick.get("kind") == "graveyard":
-            refs.append({
+            return {"seat": pick.get("seat")}
+        if pick.get("kind") == "graveyard":
+            return {
                 "graveyard_seat": pick.get("seat"),
                 "graveyard_index": pick.get("index"),
-            })
-        else:
-            permanent = game.permanent_at(pick.get("seat"), pick.get("index"))
-            permanent_id = game.permanent_id_of(permanent)
-            if not isinstance(permanent_id, int):
-                return None
-            refs.append({"permanent_id": permanent_id})
-        options = pick.get("next") or []
-    return refs or None
+            }
+        permanent_id = game.permanent_id_of(
+            game.permanent_at(pick.get("seat"), pick.get("index"))
+        )
+        return {"permanent_id": permanent_id} if isinstance(permanent_id, int) else None
+
+    def chain(level: list[dict], position: int) -> "list[dict] | None":
+        """The first chain from *level* on whose every role is on the board
+        its step wants. Backtracks, because a side makes a first pick able to
+        strand a later role the unfiltered walk had an answer for."""
+        wanted = (sides[position] if position < len(sides) else None) or side
+        if wanted in ("you", "opponent") and any(
+            option.get("kind") == "permanent" for option in level
+        ):
+            level = [
+                option for option in level
+                if option.get("kind") != "permanent"
+                or (option.get("seat") == player_index) == (wanted == "you")
+            ]
+        for pick in level:
+            ref = ref_of(pick)
+            if ref is None:
+                continue
+            rest = pick.get("next") or []
+            if not rest:
+                return [ref]
+            tail = chain(rest, position + 1)
+            if tail is not None:
+                return [ref, *tail]
+        return None
+
+    return chain(options, 0) if options else None
 
 
 # --- Abilities on a permanent another seat controls ---------------------------
@@ -5576,158 +6055,422 @@ def _max_affordable_x(
     # counted each land as one fixed symbol, so a dual or a swapped land could
     # only ever pay for the first colour it listed, and the X it sized was the
     # X a board of single-colour lands would afford.
+    context = _PAYING_FOR.get()
+    if context is not None and context.free:
+        # CR 107.3b: a spell cast without paying its mana cost has X = 0.
+        return 0
+    # One reading of the board for all sixteen sizes: what the sources make
+    # does not depend on the X being priced.
+    planner = _PaymentPlanner(game, player)
     for x_value in range(15, -1, -1):
         required = _cost_for(game, player, card, x_value, extra_generic=extra_generic)
-        if _plan_land_taps(game, player, required) is not None:
+        if planner.plan(required) is not None:
             return x_value
     return 0
+
+
+@dataclass(frozen=True)
+class _TapOption:
+    """One way one tap of a mana source can come out, as the plan counts it.
+
+    ``units`` is one entry per mana, each the symbols that mana may be — the
+    shape `board_payment.TapYield` has and `mana_payment.plan_payment` matches
+    over. ``ask`` is the colour an executor asks the source for to get this
+    outcome, where the outcome fixes one ("three mana of any one color", as
+    {R}); None where the pip the plan assigns decides (`_asked_color`).
+    """
+
+    units: "tuple[frozenset[str], ...]"
+    ask: "str | None" = None
+
+
+@dataclass(frozen=True)
+class _ManaSource:
+    """One permanent a payment plan may tap, with every way its tap comes out."""
+
+    #: Its battlefield slot — what a plan names it by.
+    slot: int
+    options: "tuple[_TapOption, ...]"
+    #: Reached for in this order: 0 a land, 1 a non-land source that only
+    #: taps, 2 a source that is sacrificed.
+    rank: int
+    #: The symbol it makes unasked — what a generic pip is paid with.
+    default: str
+
+
+#: The most ways of tapping the sources that are tried one by one. Past it
+#: each source is read as its largest outcome alone (`board_payment` keeps the
+#: same bound for the same reason).
+_MAX_TAP_COMBINATIONS = 3125
+
+#: The most sacrificed sources one plan may count.
+_MAX_SACRIFICED_FOR_MANA = 3
+
+#: A mark every unit carries so the matching counts it toward a generic cost
+#: (`mana_payment.plan_payment` spends on generic only a source that makes
+#: something). No pip is spelled this way.
+_ANY_PIP = "*"
+
+
+def _unit_pays(player: PlayerState, symbols, reading: str | None = None) -> frozenset[str]:
+    """The pips one mana that may be any of *symbols* can pay for *player*.
+
+    CR 609.4's spending permissions, asked per unit the way
+    `board_payment.board_can_pay` asks them of the same matching: Chromatic
+    Orrery's "as though it were mana of any color" (every unit pays a coloured
+    pip, and {C} still wants colourless), a CR 106.6 permission
+    (`mana_payment.may_pay_pip` — Celestial Dawn), Sunglasses of Urza's
+    white-as-red. *reading* is a one-spell grant being tried (North Star):
+    "any_type" or "any_color".
+    """
+    if reading == "any_type":
+        return frozenset(PIP_SYMBOLS) | {"C", _ANY_PIP}
+    pays: set[str] = {_ANY_PIP}
+    if "C" in symbols:
+        pays.add("C")
+    if reading == "any_color" or player.spends_mana_as_any_color:
+        return frozenset(pays | set(PIP_SYMBOLS))
+    if player.mana_spending_is_general:
+        permissions = player.mana_spending_permissions
+        pays.update(
+            pip for pip in PIP_SYMBOLS
+            if any(may_pay_pip(permissions, symbol, pip) for symbol in symbols)
+        )
+        return frozenset(pays)
+    pays.update(symbol for symbol in symbols if symbol in PIP_SYMBOLS)
+    if player.can_spend_white_as_red and "W" in symbols:
+        pays.add("R")
+    return frozenset(pays)
+
+
+def _land_tap_options(game: Game, land: Permanent, purpose) -> "tuple[_TapOption, ...]":
+    """Every way one tap of *land* comes out, read off
+    `board_payment.land_tap_yields` — **the reading the castable highlight
+    takes**, so the card that glows and the card the AI casts are judged on
+    one account of what a land makes.
+
+    This planner kept its own (`_land_symbols`, `_land_mana_amount`,
+    `_land_mixed_run`), and the two had come apart: Ancient Tomb's "{T}: Add
+    {C}{C}. This land deals 2 damage to you." is a two-step effect whose pips
+    the amount reader did not open, so the AI counted one mana where the
+    highlight counted two (8 of 14,626 land-and-cost pairs), and a land whose
+    amount the board decides — Gaea's Cradle — was left out of every plan.
+
+    The outcomes that are **one** mana fold into a single unit offering every
+    symbol any of them makes (a painland's {C} and its two colours), which is
+    the choice the executor makes with the colour it asks for; a shared colour
+    ("two mana of any one color") is one option per colour.
+    """
+    from .board_payment import land_tap_yields
+
+    singles: set[str] = set()
+    options: list[_TapOption] = []
+    for found in land_tap_yields(game, land, purpose):
+        units = tuple(found.units)
+        if found.one_color and len(units) > 1:
+            shared = set.intersection(*(set(unit) for unit in units))
+            options.extend(
+                _TapOption(tuple(frozenset({symbol}) for _ in units), ask=symbol)
+                for symbol in _MANA_SYMBOLS if symbol in shared
+            )
+        elif len(units) == 1:
+            singles |= set(units[0])
+        elif units:
+            options.append(_TapOption(units))
+    if singles:
+        options.insert(0, _TapOption((frozenset(singles),)))
+    return tuple(dict.fromkeys(options))
+
+
+def _nonland_tap_options(source: _NonlandManaSource) -> "tuple[_TapOption, ...]":
+    """`_land_tap_options` for a non-land source: a fixed run of symbols, one
+    mana of a choice of symbols, or several of one chosen symbol."""
+    if source.run:
+        return (_TapOption(tuple(
+            frozenset({symbol}) for symbol, count in source.run.items() for _ in range(count)
+        )),)
+    if source.amount <= 1:
+        return (_TapOption((frozenset(source.symbols),)),)
+    return tuple(
+        _TapOption(tuple(frozenset({symbol}) for _ in range(source.amount)), ask=symbol)
+        for symbol in source.symbols
+    )
+
+
+class _PaymentPlanner:
+    """`_plan_land_taps` with the board read once.
+
+    What the sources make does not depend on the cost being asked about, and
+    a caller sizing an X asks sixteen costs of one board (`_max_affordable_x`).
+    """
+
+    def __init__(self, game: Game, player: PlayerState, *, paying_for: "Permanent | None" = None):
+        from .restricted_mana import ACTIVATE, CAST, PaymentPurpose, spendable_restricted_mana
+
+        self.game = game
+        self.player = player
+        context = _PAYING_FOR.get()
+        self.free = context is not None and context.free
+        self.spell = context.spell if context is not None else None
+        # What the payment is for decides what restricted mana counts toward
+        # it (CR 106.6) — Mishra's Workshop's {C}{C}{C} for an artifact spell
+        # and for nothing else. With no purpose none of it counts, which is
+        # what this planner assumed of all of it.
+        if self.spell is not None:
+            purpose = PaymentPurpose(CAST, card=self.spell)
+        elif paying_for is not None:
+            purpose = PaymentPurpose(ACTIVATE, source=paying_for)
+        else:
+            purpose = None
+        self.purpose = purpose
+        held = {symbol: int(player.mana_pool.get(symbol, 0) or 0) for symbol in _MANA_SYMBOLS}
+        for symbol, amount in spendable_restricted_mana(player, purpose).items():
+            held[symbol] = held.get(symbol, 0) + int(amount)
+        #: Mana already floating, one unit each. Spent first: it is there.
+        self.floating = [
+            frozenset({symbol})
+            for symbol in _MANA_SYMBOLS for _ in range(max(0, held.get(symbol, 0)))
+        ]
+        self.seat = next(
+            (i for i, seated in enumerate(game.players) if seated is player), None
+        )
+        self.sources: list[_ManaSource] = []
+        #: Sources that pay by being sacrificed, in board order — counted only
+        #: when everything above cannot pay (`plan`).
+        self.sacrificed: list[_ManaSource] = []
+        if self.free or self.seat is None:
+            return
+        # Only a land the tap seam will make mana from, and only what it will
+        # make (`land_tap_yields` asks `land_mana_tap_refusal`, the seam's own
+        # gate): an untapped land is not a mana. A storage land with no
+        # counter, a Bazaar of Baghdad or a summoning-sick land creature
+        # counted as one here, the executor's tap of it made nothing, and the
+        # cast it was planned for was refused "insufficient mana" — the same
+        # spell every turn, once the simulator enforced costs (5ED: Sand
+        # Silos, 14 refusals a run).
+        #
+        # **Rhystic Cave is the land that must never be here**: "Activate only
+        # as an instant" means its mana needs priority (CR 304.5), which
+        # nobody has while a cost is being paid, and any player may deny it.
+        # The seam's gate reads `_land_mana_abilities`, whose answer for the
+        # Cave is "cannot be run inside a payment" — the same reading
+        # `mana_payment.taps_for_payment` gives the optional-pay planner.
+        #
+        # Then the non-land sources (`_nonland_mana_source`: the Moxen, Sol
+        # Ring, Llanowar Elves), ranked after every land because a land is the
+        # source that costs nothing to tap: a Mana Vault stays tapped, an
+        # Elves of Deep Shadow deals its controller a damage, and a creature
+        # tapped for mana does not attack.
+        #
+        # Never the permanent whose own ability is being paid for
+        # (*paying_for*): its {T} may be that ability's cost, and one tap
+        # cannot pay both.
+        for slot, permanent in enumerate(game.controlled_by(player)):
+            if permanent is paying_for:
+                continue
+            if permanent.has_type("land"):
+                if permanent.tapped:
+                    continue
+                options = _land_tap_options(game, permanent, purpose)
+                if options:
+                    self.sources.append(_ManaSource(
+                        slot, options, 0, _land_symbols(game, permanent)[0],
+                    ))
+                continue
+            source = _nonland_mana_source(game, self.seat, permanent, may_sacrifice=True)
+            if source is None:
+                continue
+            entry = _ManaSource(
+                slot, _nonland_tap_options(source), 2 if source.sacrifices else 1,
+                source.symbols[0],
+            )
+            if not source.sacrifices:
+                self.sources.append(entry)
+            elif _may_sacrifice_for(self.spell, permanent):
+                self.sacrificed.append(entry)
+        # The order the matching reaches for them in: lands before non-lands,
+        # and within each the source with the fewest colours to offer first —
+        # a Forest pays the {G} and the Taiga beside it is still there for
+        # either colour the next spell wants. Board order breaks ties, so a
+        # board of basics is planned as it always was.
+        self.sources.sort(key=lambda source: (source.rank, self._breadth(source), source.slot))
+
+    def _breadth(self, source: _ManaSource) -> int:
+        offered = frozenset().union(*(unit for option in source.options for unit in option.units))
+        return len(_unit_pays(self.player, offered) & set(PIP_SYMBOLS))
+
+    def _readings(self) -> "list[str | None]":
+        """CR 609.4's one-spell grants (North Star), tried only where the
+        ordinary reading cannot pay — the order the payment spends them in."""
+        from .restricted_mana import CAST
+
+        readings: "list[str | None]" = [None]
+        if self.purpose is not None and self.purpose.kind == CAST:
+            for grant in self.player.spend_mana_as_though_grants:
+                if int(grant.get("spells", 0)) > 0:
+                    readings.append("any_type" if grant.get("any_type") else "any_color")
+                    break
+        return readings
+
+    def plan(self, required: dict[str, int]) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+        """``(slots, colours)`` in tap order, or None — see `_plan_land_taps`."""
+        if self.free:
+            return (), ()
+        found = self._plan_with(self.sources, required)
+        if found is not None or not self.sacrificed:
+            return found
+        # **A permanent given up for mana is the last thing reached for**, and
+        # as few of them as pay: every plan the lands and the tap-only sources
+        # can make has been tried and refused before the first is counted.
+        extras = self.sacrificed[:_MAX_SACRIFICED_FOR_MANA]
+        for count in range(1, len(extras) + 1):
+            for chosen in combinations(extras, count):
+                found = self._plan_with([*self.sources, *chosen], required)
+                if found is not None:
+                    return found
+        return None
+
+    def _plan_with(self, sources, required):
+        owed = sum(max(0, int(required.get(key, 0) or 0)) for key in (*_MANA_SYMBOLS, "generic"))
+        most = len(self.floating) + sum(
+            max(len(option.units) for option in source.options) for source in sources
+        )
+        if most < owed:
+            return None
+        choices = [source.options for source in sources]
+        ways = 1
+        for options in choices:
+            ways *= len(options)
+        if ways > _MAX_TAP_COMBINATIONS:
+            choices = [(max(options, key=lambda option: len(option.units)),) for options in choices]
+        for reading in self._readings():
+            for picked in product(*choices):
+                found = self._match(sources, picked, required, reading)
+                if found is not None:
+                    return found
+        return None
+
+    def _match(self, sources, picked, required, reading):
+        """The exact matching (`mana_payment.plan_payment`, the one the
+        optional-pay planner and the castable highlight ask) over the floating
+        mana and every unit *picked* would add; then which sources it used and
+        the colour to ask each for."""
+        units: list[frozenset[str]] = list(self.floating)
+        owner: "list[int | None]" = [None] * len(units)
+        for position, option in enumerate(picked):
+            for unit in option.units:
+                units.append(unit)
+                owner.append(position)
+        pays = [_unit_pays(self.player, unit, reading) for unit in units]
+        payment = plan_payment({}, range(len(units)), required, produces=pays.__getitem__)
+        if payment is None:
+            return None
+        used = sorted(payment.tapped)
+        # Which pip each used unit pays. `plan_payment` says which units and
+        # not which pip, and the colour to ask a land for is the pip: the
+        # matching again, over the units it chose.
+        pips = [
+            symbol for symbol in COLOR_SYMBOLS
+            for _ in range(max(0, int(required.get(symbol, 0) or 0)))
+        ]
+        assigned = _match_colored(pips, [(index, pays[index]) for index in used]) if pips else {}
+        if assigned is None:
+            return None
+        tapped: dict[int, list] = {}
+        for index in used:
+            if owner[index] is not None:
+                tapped.setdefault(owner[index], [])
+        if not tapped:
+            return (), ()
+        for position in tapped:
+            first = owner.index(position)
+            tapped[position] = [
+                assigned.get(first + offset) for offset in range(len(picked[position].units))
+            ]
+        # Tap order: the sources paying a coloured pip first, in pip order,
+        # then the ones paying generic — the order this plan has always been
+        # reported in.
+        def pip_rank(position: int) -> int:
+            ranks = [COLOR_SYMBOLS.index(pip) for pip in tapped[position] if pip is not None]
+            return min(ranks) if ranks else len(COLOR_SYMBOLS)
+
+        order = sorted(tapped, key=lambda position: (pip_rank(position), position))
+        return (
+            tuple(sources[position].slot for position in order),
+            tuple(
+                _asked_color(self.player, sources[position], picked[position], tapped[position], reading)
+                for position in order
+            ),
+        )
+
+
+def _asked_color(
+    player: PlayerState, source: _ManaSource, option: _TapOption, unit_pips, reading,
+) -> str:
+    """The colour an executor asks *source* for, to get *option* with the mana
+    the matching assigned (*unit_pips*, one entry per unit; None is a unit
+    spent on generic or not spent).
+
+    The option's own colour where it fixes one. Otherwise the first unit that
+    offers a choice decides: the symbol **it** can be that pays the pip it was
+    given — under Sunglasses of Urza a Plains pays {R} and is still asked for
+    {W} — and for a unit spent on generic, what the source makes unasked (a
+    painland's painless {C}).
+    """
+    if option.ask is not None:
+        return option.ask
+    for unit, pip in zip(option.units, unit_pips):
+        if len(unit) <= 1:
+            continue
+        if pip is not None:
+            for symbol in _MANA_SYMBOLS:
+                if symbol in unit and pip in _unit_pays(player, frozenset({symbol}), reading):
+                    return symbol
+        if source.default in unit:
+            return source.default
+        return next(symbol for symbol in _MANA_SYMBOLS if symbol in unit)
+    return next(iter(option.units[0]))
 
 
 def _plan_land_taps(
     game: Game, player: PlayerState, required: dict[str, int],
     *, paying_for: "Permanent | None" = None,
 ) -> tuple[tuple[int, ...], tuple[str, ...]] | None:
-    """Which untapped lands to tap for *required*, and **which colour to ask
-    each one for**: ``(slots, colours)`` in tap order, or None when the board
-    cannot pay.
+    """Which untapped mana sources to tap for *required*, and **which colour
+    to ask each one for**: ``(slots, colours)`` in tap order, or None when the
+    board cannot pay.
 
-    What a land can make is the engine's answer, ``Game._land_payment_colors``
-    — the hook the optional-pay planner and the client's colour prompt read —
-    and not the printed summary's first symbol, which is what this read. That
-    one symbol was wrong three ways, measured at NEM: under a seat-wide swap
-    (Deep Water, Harvest Mage) a Forest makes {U} or a colour of the tapper's
-    choice, so the plan tapped it for a {G} it would not make; a land carrying
-    a granted ability (Overlaid Terrain's "{T}: Add two mana of any one
-    color") was still the colour it was printed; and a dual land could only
-    ever pay its first colour.
+    **An exact matching, and the engine's own** — `mana_payment.plan_payment`,
+    the augmenting-path assignment of pips to sources the optional-pay planner
+    was written around and the castable highlight asks
+    (`board_payment.board_can_pay`). This was a greedy pass: each coloured pip
+    took the first land that could make it and never gave it back, so a
+    Reflecting Pool spent on the {B} left a Swamp and a Forest unable to find
+    the second {G} of a {B}{G}{G} spell they could pay between them — a card
+    held and never cast, where the highlight over the same board glowed. One
+    matching now answers "can this be paid" for the engine, the highlight and
+    this policy, over one reading of what a land's tap makes
+    (`_land_tap_options`).
+
+    What a land can make is the engine's answer, not the printed summary's
+    first symbol, which is what this once read. That one symbol was wrong
+    three ways, measured at NEM: under a seat-wide swap (Deep Water, Harvest
+    Mage) a Forest makes {U} or a colour of the tapper's choice; a land
+    carrying a granted ability (Overlaid Terrain's "{T}: Add two mana of any
+    one color") was still the colour it was printed; and a dual land could
+    only ever pay its first colour.
 
     The colour travels with the plan because the tap seam asks for one
     (``tap_land_for_mana``'s ``chosen_color``) and the executors sent the
-    default "G" for every land — so a Taiga the plan counted as {R} made {G},
-    and a land under Harvest Mage made green whatever the plan needed.
+    default "G" for every land — so a Taiga the plan counted as {R} made {G}.
 
-    The greedy order is the one this function always had, so a board of
-    single-colour lands is planned exactly as before: a pip is matched first
-    by lands whose **first** colour it is, in battlefield order, and only then
-    by a land that lists it further along; the generic remainder takes each
-    land at its first colour. **How much** a tap makes is
-    :func:`_land_mana_amount` — two for a land under Overlaid Terrain, which
-    this counted as one and so planned a two-land board as unable to cast
-    anything costing three.
+    Sources are reached for in a fixed order (`_PaymentPlanner`): floating
+    mana, lands, non-land sources that only tap, and — only for a spell, only
+    where those cannot pay and only under `_may_sacrifice_for` — a source that
+    is sacrificed. Under `_paying_for(..., free=True)` there is nothing to
+    plan.
     """
-    pool = {symbol: player.mana_pool.get(symbol, 0) for symbol in _MANA_SYMBOLS}
-    # Only a land the tap seam will make mana from (`land_mana_tap_refusal`,
-    # the seam's own gate): an untapped land is not a mana. A storage land with
-    # no counter, a Bazaar of Baghdad or a summoning-sick land creature counted
-    # as one here, the executor's tap of it made nothing, and the cast it was
-    # planned for was refused "insufficient mana" — the same spell every turn,
-    # once the simulator enforced costs (5ED: Sand Silos, 14 refusals a run).
-    #
-    # **Rhystic Cave is the land that must never be here**: "Activate only as
-    # an instant" means its mana needs priority (CR 304.5), which nobody has
-    # while a cost is being paid, and any player may deny it. The seam's gate
-    # reads `_land_mana_abilities`, whose answer for the Cave is "cannot be
-    # run inside a payment" — the same reading `mana_payment.taps_for_payment`
-    # gives the optional-pay planner, so the two planners agree about it.
-    #
-    # Nor one whose mana is **restricted** ("Spend this mana only to cast
-    # artifact spells", Mishra's Workshop): it goes into its own bucket
-    # (CR 106.6), this planner is not told what the mana is for, and counted
-    # as a generic mana it paid for a Priest of Yawgmoth the bucket cannot.
-    # Nor one whose output the rest of the board decides (Gaea's Cradle with
-    # no creature makes nothing) — `_land_mana_is_unplannable`.
-    untapped_lands = [
-        (index, _land_symbols(game, permanent), _land_mana_amount(game, permanent))
-        for index, permanent in enumerate(game.controlled_by(player))
-        if game.land_mana_tap_refusal(permanent) is None
-        and not _land_mana_is_unplannable(game, permanent)
-    ]
-    # **And the non-land sources, after every land** (`_nonland_mana_source`:
-    # the Moxen, Sol Ring, Llanowar Elves). After, because the greedy below
-    # takes its matches in this list's order and a land is the source that
-    # costs nothing to tap: a Mana Vault stays tapped, an Elves of Deep Shadow
-    # deals its controller a damage, and a creature tapped for mana does not
-    # attack. So a board whose lands pay is planned exactly as it always was,
-    # and the rest is what a seat reaches for when they do not.
-    #
-    # Never the permanent whose own ability is being paid for (*paying_for*):
-    # its {T} may be that ability's cost, and one tap cannot pay both.
-    seat = next((i for i, seated in enumerate(game.players) if seated is player), None)
-    nonland_runs: dict[int, dict[str, int]] = {}
-    if seat is not None:
-        for index, permanent in enumerate(game.controlled_by(player)):
-            if permanent is paying_for:
-                continue
-            source = _nonland_mana_source(game, seat, permanent)
-            if source is None:
-                continue
-            untapped_lands.append((index, source.symbols, source.amount))
-            if source.run is not None:
-                nonland_runs[index] = source.run
-    # **What a tap of a mixed land really makes.** "{T}: Add {C}{U}." (Coral
-    # Atoll and the rest of the Karoo cycle, Soldevi Excavations, Balduvian
-    # Trading Post) is two mana of two *different* symbols, and `take` below
-    # credited `amount` of whichever one symbol the pip loop asked for — so an
-    # Atoll read as {U}{U}, a {U}{U} spell was planned on it alone, the tap
-    # made {C}{U} and the cast was refused. Seven lands in the pool, measured;
-    # every other land's run is one symbol and is credited as it always was.
-    mixed_runs = {
-        index: run
-        for index, permanent in enumerate(game.controlled_by(player))
-        if (run := _land_mixed_run(game, permanent)) is not None
-    }
-    mixed_runs.update(nonland_runs)
-
-    if _can_pay_cost(pool, required, player):
-        return (), ()
-
-    chosen: list[int] = []
-    colors: list[str] = []
-    remaining = list(untapped_lands)
-
-    def take(position: int, symbol: str) -> None:
-        land_index, _symbols, amount = remaining.pop(position)
-        chosen.append(land_index)
-        colors.append(symbol)
-        run = mixed_runs.get(land_index)
-        if run is not None:
-            for made, count in run.items():
-                pool[made] = pool.get(made, 0) + count
-            return
-        pool[symbol] = pool.get(symbol, 0) + amount
-
-    for symbol in _MANA_SYMBOLS:
-        while required.get(symbol, 0) - pool.get(symbol, 0) > 0:
-            match_idx = next(
-                (idx for idx, (_, makes, _n) in enumerate(remaining) if makes[0] == symbol),
-                None,
-            )
-            if match_idx is None:
-                match_idx = next(
-                    (idx for idx, (_, makes, _n) in enumerate(remaining) if symbol in makes),
-                    None,
-                )
-            if match_idx is None:
-                break
-            take(match_idx, symbol)
-
-    while remaining and not _can_pay_cost(pool, required, player):
-        best_idx = 0
-        best_benefit = -1
-        for idx, (_, makes, _n) in enumerate(remaining):
-            produced = makes[0]
-            benefit = 2 if pool.get(produced, 0) < required.get(produced, 0) else 1
-            if produced == "C" and required.get("generic", 0) == 0:
-                benefit = 0
-            if benefit > best_benefit:
-                best_benefit = benefit
-                best_idx = idx
-        take(best_idx, remaining[best_idx][1][0])
-
-    if not _can_pay_cost(pool, required, player):
-        return None
-
-    return tuple(chosen), tuple(colors)
+    return _PaymentPlanner(game, player, paying_for=paying_for).plan(required)
 
 
 def _can_pay_cost(
@@ -5802,8 +6545,12 @@ def _can_pay_cost(
 def _land_mixed_run(game: Game, permanent: Permanent) -> "dict[str, int] | None":
     """The fixed run one tap of *permanent* makes when it is **two or more
     different symbols** ("{C}{U}", Coral Atoll), as ``{symbol: count}`` — or
-    None for every other land, whose tap is a number of one symbol and is
-    counted by `_land_mana_amount`.
+    None for every other land, whose tap is a number of one symbol.
+
+    Not read by `_plan_land_taps` any more, which counts a land through
+    `board_payment.land_tap_yields`; kept as the statement of what a mixed
+    land's tap makes that `tests/ai/test_ai_land_mana_plans.py` holds the tap
+    seam to.
 
     Read off the free ability the tap seam will run and only where nothing
     else decides the output: a seat-wide swap replaces the type (and perhaps
@@ -5823,37 +6570,6 @@ def _land_mixed_run(game: Game, permanent: Permanent) -> "dict[str, int] | None"
     return run if len(run) >= 2 else None
 
 
-def _land_mana_amount(game: Game, permanent: Permanent) -> int:
-    """How many mana one tap of *permanent* makes, as the planner counts it.
-
-    The free mana ability the tap seam will run (``_land_mana_abilities``):
-    its pip run ("{C}{C}", Ancient Tomb) or its any-colour count ("two mana of
-    any one color", the ability Overlaid Terrain grants). One wherever that
-    cannot be read off the payload — a basic, a choice between pips, an amount
-    behind a condition — and one under a swap that replaces the amount ("…one
-    mana of a color of your choice instead of any other type **and amount**",
-    Harvest Mage). Restricted mana ("Spend this mana only to cast artifact
-    spells") counts one as well: the planner cannot tell which costs it may
-    pay, and one is what it always assumed.
-    """
-    from . import land_mana_swaps
-
-    swapped = land_mana_swaps.swapped_production(game, permanent)
-    if swapped is not None and swapped.replaces_amount:
-        return 1
-    free, _priced = game._land_mana_abilities(permanent)
-    payload = (getattr(free, "payload", None) or {}) if free is not None else {}
-    if not payload or payload.get("spend_only"):
-        return 1
-    pips = payload.get("pips")
-    if pips:
-        return max(1, sum(int(count) for _symbol, count in pips))
-    any_count = payload.get("any_color_count")
-    if isinstance(any_count, int) and not isinstance(any_count, bool):
-        return max(1, any_count)
-    return 1
-
-
 #: Payload keys on a land's add-mana step that make **how much** one tap
 #: produces a fact about the rest of the board rather than about the land:
 #: "{G} for each creature you control" (Gaea's Cradle), "{C} for each storage
@@ -5870,12 +6586,18 @@ _BOARD_DEPENDENT_MANA_KEYS = ("per_each", "per_each_counter_on_source")
 
 
 def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:
-    """Whether the mana *land*'s default tap makes is one this planner cannot
-    count: **restricted** ("Spend this mana only …", CR 106.6 — the
-    ``spend_only`` the add-mana handler files it under, read where
-    `_land_mana_amount` reads it), or **board-dependent**
-    (`_BOARD_DEPENDENT_MANA_KEYS`). Left out of the plan rather than guessed
-    at: a guess counted as mana is a cast refused for insufficient mana."""
+    """Whether the mana *land*'s default tap makes is **restricted** ("Spend
+    this mana only …", CR 106.6 — the ``spend_only`` the add-mana handler
+    files it under) or **board-dependent** (`_BOARD_DEPENDENT_MANA_KEYS`).
+
+    This was the planner's exclusion list: such a land was left out of every
+    plan rather than guessed at. `_plan_land_taps` no longer asks it — it
+    counts a land through `board_payment.land_tap_yields`, which reads a
+    restriction against what the payment is for and a board-counted amount
+    off the board — so a Gaea's Cradle beside three creatures is three mana
+    and Mishra's Workshop pays for an artifact spell. Kept because three test
+    files read it as the description of which lands those are.
+    """
     free, _priced = game._land_mana_abilities(land)
     if free is None:
         return False

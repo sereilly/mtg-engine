@@ -33,6 +33,7 @@ call. Those are genuinely different loops over the same engine seam
 
 from dataclasses import dataclass, field
 
+from .combat_assignment import combat_damage_assigned_by
 from .ai_policy import (
     choose_attack_target,
     choose_attackers,
@@ -84,6 +85,138 @@ class CombatOutcome:
     #: **every** seat's blocks, so this is the one worth an issue rather than a
     #: count.
     silent_blocks: list[tuple[str, str]] = field(default_factory=list)
+
+
+#: The log line for an offer turned down, after the creature's name. The
+#: offer *taken* is the engine's own line (`combat_assignment.AS_THOUGH_UNBLOCKED_LOG`).
+KEEPS_DAMAGE_ON_BLOCKERS_LOG = "keeps its combat damage on the creatures blocking it"
+
+
+def choose_combat_damage_assignment(game) -> tuple[dict, list[int]]:
+    """How the active player's attackers assign combat damage when nobody is
+    asked: ``(attacker_damage, as_though_unblocked)`` for
+    ``Game.resolve_all_combat_damage``.
+
+    The division among blockers is the engine's default
+    (`_build_auto_damage_assignment`). What this adds is the answer to **"You
+    may have this creature assign its combat damage as though it weren't
+    blocked"** (Lone Wolf, Thorn Elemental, Rhox, Pride of Lions; Garruk,
+    Savage Herald's −7), which every default took, always — so a 7/7 walked
+    past the 2/2 in front of it for seven of a healthy opponent's twenty life
+    and the 2/2 lived to block again. Declined (`_offer_is_better_declined`)
+    where the creature in front of it would die and the player would not, or
+    where the damage would not reach the player at all; taken otherwise, and
+    then **named** by id, so the announcement says which answer it is rather
+    than leaving it to an absence.
+
+    One function for the three places a default is supplied — the simulator's
+    driver below, the web layer's AI seat (`_ai_assign_combat_damage`) and
+    the engine's own auto-resolve (`advance_combat_phase`) — so an offer
+    cannot be answered three ways.
+    """
+    active = game.active_player_index
+    offered = [
+        slot for slot in sorted(game.combat_attackers)
+        if game.unblocked_assignment_chooser(slot) == active
+        and game._attacker_all_blockers(slot)
+        and combat_damage_assigned_by(game.permanent_at(active, slot)) > 0
+    ]
+    if not offered:
+        return game._build_auto_damage_assignment(), []
+    # Every offered attacker as it would divide among its blockers, to weigh.
+    divided = game._build_auto_damage_assignment(declining=offered)
+    declined = [
+        slot for slot in offered
+        if _offer_is_better_declined(game, slot, divided.get(slot) or {})
+    ]
+    for slot in declined:
+        game.log.append(
+            f"{game.permanent_at(active, slot).card.name} {KEEPS_DAMAGE_ON_BLOCKERS_LOG}"
+        )
+    return (
+        game._build_auto_damage_assignment(declining=declined),
+        [
+            game.permanent_at(active, slot).permanent_id
+            for slot in offered if slot not in declined
+        ],
+    )
+
+
+def _would_be_prevented(game, source, recipient, amount: int) -> bool:
+    """Whether a prevention or redirection effect applies to *amount* combat
+    damage from *source* to *recipient* (CR 615, CR 614.9) — a Circle of
+    Protection's shield, protection from the attacker's colour, a Fog.
+
+    Asked of the damage event's own contention set (`damage_candidates`),
+    whose ``applies`` predicates are pure by the registry's contract — nothing
+    is spent by asking. "Applies" is not "prevents all of it": a one-point
+    shield answers yes. The chooser reads that as damage that may not arrive,
+    which is the cautious reading of it.
+    """
+    from .damage_events import damage_candidates, damage_source_seat
+
+    event = {"recipient": recipient, "amount": amount, "source": source, "combat": True}
+    event["source_seat"] = damage_source_seat(game, source)
+    return any(
+        candidate.prevents_or_redirects and candidate.applies(game, dict(event))
+        for candidate in damage_candidates(recipient, event)
+    )
+
+
+def _offer_is_better_declined(game, attacker_slot: int, division: dict) -> bool:
+    """Whether a blocked attacker with the offer should assign its combat
+    damage to the creatures blocking it (*division*, the default one) rather
+    than as though it weren't blocked.
+
+    * **Taken when it ends the game**: the damage reaches the defending
+      player and, with what the unblocked attackers beside it deal, is at
+      least that player's life.
+    * **Declined when it kills** — some blocker is assigned lethal damage
+      that would reach it — because a creature removed is worth more than
+      damage that does not finish anybody.
+    * **Declined when the damage would not reach the player** and would reach
+      a blocker: damage a Circle of Protection eats does nothing, and damage
+      marked on a blocker is at least something for the next attacker.
+    * Taken otherwise — the stated default, and the only answer an attack on
+      a **planeswalker** gets: what its loyalty is worth against a creature
+      is a valuation this does not have.
+    """
+    active = game.active_player_index
+    attacker = game.permanent_at(active, attacker_slot)
+    if attacker is None or game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
+        return False
+    defending = game.combat_attackers[attacker_slot]
+    if not 0 <= defending < len(game.players):
+        return False
+    defender = game.players[defending]
+    damage = combat_damage_assigned_by(attacker)
+    reaches_player = not _would_be_prevented(game, attacker, defender, damage)
+    if reaches_player:
+        beside = sum(
+            combat_damage_assigned_by(other)
+            for slot, seat in game.combat_attackers.items()
+            if slot != attacker_slot and seat == defending
+            and game.combat_attacked_planeswalkers.get(slot) is None
+            and (other := game.permanent_at(active, slot)) is not None
+            and not other.blocked and not game._attacker_all_blockers(slot)
+        )
+        if damage + beside >= defender.life:
+            return False
+    deathtouch = game._has_keyword(attacker, "deathtouch")
+    reaches_a_blocker = False
+    for blocker_slot, assigned in division.items():
+        blocker = game.permanent_at(defending, blocker_slot)
+        if blocker is None or assigned <= 0:
+            continue
+        if _would_be_prevented(game, attacker, blocker, assigned):
+            continue
+        reaches_a_blocker = True
+        lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+        if deathtouch and lethal > 0:
+            lethal = 1
+        if assigned >= lethal:
+            return True
+    return reaches_a_blocker and not reaches_player
 
 
 def declare_ai_attackers(
@@ -270,9 +403,11 @@ def run_ai_combat_phase(game, seat: int, *, outcome: CombatOutcome | None = None
             # damage, the *default* division is the engine's own — the same one
             # the web layer's auto-resolve path uses, so an AI-vs-AI game and an
             # unattended human game split damage the same way.
+            attacker_damage, past_blockers = choose_combat_damage_assignment(game)
             game.resolve_all_combat_damage(
                 game.active_player_index,
-                attacker_damage=game._build_auto_damage_assignment(),
+                attacker_damage=attacker_damage,
+                as_though_unblocked=past_blockers,
             )
             outcome.manual_damage_splits += 1
             continue

@@ -385,7 +385,10 @@ def test_an_ai_attacker_keeps_the_default_and_the_human_defender_is_not_asked():
     session = store.get(sid)
     game = session.game
     beast = Permanent(card=_beast())
-    wall = Permanent(card=_mk_creature_card("Wall", 1, 4))
+    # A wall the beast cannot kill: in front of one it could, the AI's default
+    # is to kill it (`ai_combat.choose_combat_damage_assignment`), and this
+    # test is about the offer *taken* without a human being asked.
+    wall = Permanent(card=_mk_creature_card("Wall", 1, 9))
     game.players[1].battlefield = [beast]
     game.players[0].battlefield = [wall]
     game.players[0].hand = []

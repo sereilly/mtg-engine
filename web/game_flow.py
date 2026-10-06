@@ -17,6 +17,7 @@ from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_policy import (
     cast_announcement,
+    cast_zone_of,
     choose_activation_action,
     choose_foreign_activation_action,
     choose_hand_activation_action,
@@ -134,20 +135,20 @@ def _ai_step(session: Session) -> bool:
     )
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
-        # `hand_index` indexes the zone `from_zone` names — the command zone
-        # for a commander cast (CR 903.8), the hand for everything else.
-        cast_zone = (
-            game.players[seat].command_zone
-            if cast_action.from_zone == "command"
-            else game.players[seat].hand
-        )
+        # `hand_index` indexes the zone `from_zone` names — the hand, the
+        # command zone for a commander cast (CR 903.8), or a graveyard, exile
+        # zone or library an effect opened (CR 601.3), which may be another
+        # seat's. One reader, shared with the simulator.
+        cast_zone = cast_zone_of(game, seat, cast_action)
         # The spell the policy chose, which for a split card is one half of
         # the zone's card (CR 709.3) — see `ai_policy.spell_being_cast`.
         card_to_cast = spell_being_cast(cast_zone, cast_action)
         # The payment, through the executor the AI simulator shares
         # (`engine.ai_policy.tap_planned_lands`): each planned land tapped for
         # the colour the plan counted on, by the mana ability that makes it.
-        tap_planned_lands(game, seat, cast_action)
+        # What comes back is the action as it reads once paid for: a source
+        # sacrificed for mana renumbers the slots the announcement names.
+        cast_action = tap_planned_lands(game, seat, cast_action)
 
         # The announcement, whole, through the one function that turns a
         # `CastAction` into a cast (`engine.ai_policy.cast_announcement`): the
@@ -180,7 +181,7 @@ def _ai_step(session: Session) -> bool:
 
     activation_action = choose_activation_action(game, seat)
     if activation_action is not None:
-        tap_planned_lands(game, seat, activation_action)
+        activation_action = tap_planned_lands(game, seat, activation_action)
         game.activate_permanent_ability(
             seat,
             activation_action.permanent_name,
@@ -197,7 +198,7 @@ def _ai_step(session: Session) -> bool:
     # against are the ones the cast and the battlefield activation left alone.
     hand_activation = choose_hand_activation_action(game, seat)
     if hand_activation is not None:
-        tap_planned_lands(game, seat, hand_activation)
+        hand_activation = tap_planned_lands(game, seat, hand_activation)
         game.activate_from_hand(
             seat,
             hand_activation.card_name,
@@ -214,7 +215,7 @@ def _ai_step(session: Session) -> bool:
     # activator's.
     foreign_activation = choose_foreign_activation_action(game, seat)
     if foreign_activation is not None:
-        tap_planned_lands(game, seat, foreign_activation)
+        foreign_activation = tap_planned_lands(game, seat, foreign_activation)
         game.activate_permanent_ability(
             seat,
             foreign_activation.permanent_name,
@@ -237,7 +238,7 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
         card_to_cast = spell_being_cast(game.players[seat].hand, instant_action)
-        tap_planned_lands(game, seat, instant_action)
+        instant_action = tap_planned_lands(game, seat, instant_action)
         # The whole announcement (`cast_announcement`, as in `_ai_step`): the
         # chosen permanent — a spell whose handler has no board scan (Sivvi's
         # Valor) resolved doing nothing while only the seat was forwarded —
@@ -486,7 +487,9 @@ def _advance_phase(session: Session) -> None:
                         card_to_cast = spell_being_cast(
                             game.players[defender_index].hand, instant_action
                         )
-                        tap_planned_lands(game, defender_index, instant_action)
+                        instant_action = tap_planned_lands(
+                            game, defender_index, instant_action
+                        )
                         game.cast_from_hand(
                             defender_index, card_to_cast.name,
                             **cast_announcement(instant_action),

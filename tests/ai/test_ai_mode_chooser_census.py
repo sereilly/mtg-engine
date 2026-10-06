@@ -562,10 +562,21 @@ def run(card, index, built, *, forced: bool) -> dict:
     chooser = choose_cast_action if window is None else choose_combat_instant_cast_action
 
     def fresh():
-        return board(
+        game, placed = board(
             card, built["placements"], window=window, grave=built["grave"],
             stack=built["stack"],
         )
+        # "Untap target permanent" (Emerald Charm's first bullet) has to find
+        # something tapped, or it resolves changing nothing. It used to read
+        # as a change anyway: the old tap planner read every permanent's mana
+        # swaps before looking at the pool, which wrote an empty
+        # `_land_mana_swaps` record onto the seat — and `signature` saw the new
+        # key. The planner no longer touches a board it has no need of, so the
+        # bait is tapped and the untap is the change.
+        if compile_card_oracle(card).modes[index].instruction.kind == "untap_target_permanent":
+            for permanent in placed.values():
+                permanent.tapped = True
+        return game, placed
 
     def only_this_mode(self, caster_index, asked, **kwargs):
         offered = real(self, caster_index, asked, **kwargs)

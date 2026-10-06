@@ -7,9 +7,10 @@ from typing import Sequence
 import random
 
 from .ai_combat import run_ai_combat_phase
-from .ai_policy import (cast_announcement, choose_activation_action,
+from .ai_policy import (cast_announcement, cast_zone_of, choose_activation_action,
                         choose_cast_action, choose_foreign_activation_action,
                         choose_hand_activation_action, choose_land_drop,
+                        permitted_plays,
                         spell_being_cast, tap_planned_lands)
 from .card_loader import load_cards
 from .faces import whole_card
@@ -701,7 +702,8 @@ def _execute_foreign_activation(
     which is what ``activate_permanent_ability`` counts ``permanent_index``
     into when it is given that seat.
     """
-    tap_planned_lands(game, active, action)
+    # The action as it reads once it is paid for — see `tap_planned_lands`.
+    action = tap_planned_lands(game, active, action)
     result = game.activate_permanent_ability(
         active,
         action.permanent_name,
@@ -762,10 +764,10 @@ def _play_land_drops(
         action = choose_land_drop(game, active)
         if action is None:
             return
-        land = game.players[active].hand[action.hand_index]
-        result = game.cast_from_hand(
-            active, land.name, target_player_index=action.target_player_index,
-        )
+        # The pile the policy found it in: the hand, or a zone an effect
+        # opened to land plays ("You may play lands … from your graveyard").
+        land = cast_zone_of(game, active, action)[action.hand_index]
+        result = game.cast_from_hand(active, land.name, **cast_announcement(action))
         _resolve_pending_choices(game)
         report.log_lines.append(
             f"G{game_index} T{turn} {seat_name} play {land.name} -> {result.details}"
@@ -789,15 +791,10 @@ def _play_one_cast(
     cast_action = choose_cast_action(game, active)
     if cast_action is None:
         return False
-    # `hand_index` indexes the zone `from_zone` names. The simulator's games
-    # are ordinary duels, so today this is always the hand — but the executor
-    # reads the field rather than assuming it, or a commander game run through
-    # here would cast the wrong card.
-    cast_zone = (
-        active_player.command_zone
-        if cast_action.from_zone == "command"
-        else active_player.hand
-    )
+    # `hand_index` indexes the zone `from_zone` names — the hand, the command
+    # zone, or a graveyard, exile zone or library an effect opened (CR 601.3),
+    # which may be another seat's. `ai_policy.cast_zone_of` is the one reader.
+    cast_zone = cast_zone_of(game, active, cast_action)
     # The spell, not the zone's card: a split card is cast as the half the
     # policy scored (CR 709.3), and every line below — the cast, the log, the
     # support check, the effect audit — is about that half.
@@ -805,8 +802,10 @@ def _play_one_cast(
 
     # The payment: the planned lands tapped into the pool, each for the colour
     # the plan counted on (`ai_policy.tap_planned_lands`, the web AI seat's
-    # executor too); the cast below spends it.
-    tap_planned_lands(game, active, cast_action)
+    # executor too); the cast below spends it. What comes back is the action
+    # **as it reads now**: a source that pays by being sacrificed renumbers
+    # the battlefield under every slot the announcement names.
+    cast_action = tap_planned_lands(game, active, cast_action)
 
     before = _snap(game)
     # Forward the *whole* choice. Dropping the permanent target was invisible
@@ -832,6 +831,10 @@ def _play_one_cast(
     named = "".join(
         f" [mode {index}: {label}]" for index, label in modes_named
     )
+    if cast_action.from_zone != "hand":
+        # Where it was cast from, when that is not the hand — the same place
+        # in the line as the mode, for the same reason.
+        named += f" [from {cast_action.from_zone}]"
     report.log_lines.append(
         f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} "
         f"-> {result.details}{named}"
@@ -926,7 +929,7 @@ def _play_activations(
     active_player = game.players[active]
     activation_action = None if game.is_game_over() else choose_activation_action(game, active)
     if activation_action is not None:
-        tap_planned_lands(game, active, activation_action)
+        activation_action = tap_planned_lands(game, active, activation_action)
         result = game.activate_permanent_ability(
             active,
             activation_action.permanent_name,
@@ -955,7 +958,7 @@ def _play_activations(
         else choose_hand_activation_action(game, active)
     )
     if hand_activation is not None:
-        tap_planned_lands(game, active, hand_activation)
+        hand_activation = tap_planned_lands(game, active, hand_activation)
         result = game.activate_from_hand(
             active,
             hand_activation.card_name,
@@ -1280,6 +1283,19 @@ def run_ai_simulation(
             _play_land_drops(game, active, report, game_index, turn)
             _play_casts(game, active, report, game_index, turn)
             _play_activations(game, active, report, game_index, turn)
+            # **And what an activation just bought the right to cast.** "{3}{U}:
+            # … exile it. You may cast it without paying its mana cost for as
+            # long as it remains exiled. … At the beginning of the next end
+            # step, if you haven't cast it, return it" (Planeswalker's
+            # Mischief), "Until end of turn, you may play that card" (Aerial
+            # Caravan, Temporal Aperture): the permission is granted after the
+            # cast pass above has run and is gone before the next turn's, so
+            # with one pass a seat paid for it every turn and used it never.
+            # Only when such a play exists, so a turn that bought none is the
+            # turn it always was.
+            if not game.is_game_over() and permitted_plays(game, active):
+                _play_land_drops(game, active, report, game_index, turn)
+                _play_casts(game, active, report, game_index, turn)
 
             # CR 506-511, the half of a turn this loop did not have. It went
             # main phase -> cast -> activate -> next seat, so no simulated

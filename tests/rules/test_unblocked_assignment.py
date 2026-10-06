@@ -145,8 +145,15 @@ def test_several_blockers_stop_it_for_the_same_question():
 def test_a_seat_nobody_sits_in_keeps_the_default_and_is_not_stopped():
     """The stated default for a non-interactive seat: the offer **taken**, as
     it has been since Garruk's grant was first read. An AI or headless combat
-    must not stop at a prompt nobody will answer."""
-    game, (beast,), (wall,), _ = _combat(_offered(), [_wall()], interactive=())
+    must not stop at a prompt nobody will answer.
+
+    The wall is one the beast cannot kill, because the default is a valuation
+    now rather than a constant (`ai_combat.choose_combat_damage_assignment`):
+    in front of a blocker that would die, a seat nobody asks keeps the damage
+    on it — `tests/ai/test_ai_unblocked_offer.py`."""
+    game, (beast,), (wall,), _ = _combat(
+        _offered(), [_wall(toughness=9)], interactive=(),
+    )
 
     assert game.combat_damage_resolved, "a headless single block must resolve"
     assert game.unblocked_assignments_to_ask() == []
@@ -159,8 +166,11 @@ def test_a_seat_nobody_sits_in_keeps_the_default_and_is_not_stopped():
 def test_only_the_seat_that_owns_the_choice_being_interactive_stops_it():
     """A human *defender* facing an AI's Thorn Elemental is not the one who
     chooses (CR 510.1: the active player announces), so nothing waits on them
-    and the attacker's default stands."""
-    game, _a, (wall,), _ = _combat(_offered(), [_wall()], interactive=(1,))
+    and the attacker's default stands — past a wall it could not have
+    killed (see the test above)."""
+    game, _a, (wall,), _ = _combat(
+        _offered(), [_wall(toughness=9)], interactive=(1,),
+    )
 
     assert game.combat_damage_resolved
     assert game.players[1].life == 15 and wall.damage_marked == 0

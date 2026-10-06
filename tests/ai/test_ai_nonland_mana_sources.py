@@ -243,16 +243,31 @@ def test_w2g5_a_source_under_an_activation_ban_is_not_counted(pool):
 
 def test_w2g5_a_sacrifice_or_a_priced_mana_ability_is_never_planned(pool):
     """Black Lotus, a creature that sacrifices itself for mana and a filter
-    that spends one to make one: none is counted, so no plan sacrifices a
-    permanent to cast a one-drop."""
+    that spends one to make one: none is free mana, and no plan sacrifices a
+    **creature** to cast a one-drop.
+
+    This pinned "no plan ever sacrifices anything", which was the floor
+    Planeshift left and the defect the round after it was sent to close: a
+    Black Lotus is for exactly this. What stands of it is the policy
+    (`ai_policy._may_sacrifice_for`): the Lotus (mana value 0) goes for the
+    Elves, and Morgue Toad and Tinder Wall — worth no less than the spell —
+    and the Cylix, which spends mana to make it, stay where they are."""
     game = _w2g5_table(
         pool, mine=("Black Lotus", "Morgue Toad", "Mana Cylix", "Tinder Wall"),
         hand=("Llanowar Elves",),
     )
     for permanent in game.controlled_by(0):
         assert _nonland_mana_source(game, 0, permanent) is None, permanent.card.name
-    assert choose_cast_action(game, 0) is None
+    action = choose_cast_action(game, 0)
+    assert action is not None and [
+        game.permanent_at(0, slot).card.name for slot in action.land_tap_indices
+    ] == ["Black Lotus"]
     assert len(list(game.controlled_by(0))) == 4
+
+    game = _w2g5_table(
+        pool, mine=("Morgue Toad", "Mana Cylix", "Tinder Wall"), hand=("Llanowar Elves",),
+    )
+    assert choose_cast_action(game, 0) is None
 
 
 def test_w2g5_a_permanent_never_pays_for_its_own_ability_with_its_own_tap(pool):
