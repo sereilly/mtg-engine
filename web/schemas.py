@@ -508,6 +508,15 @@ class GameActionRequest(BaseModel):
     # a list when one creature blocks several attackers (Two-Headed Giant of Foriys).
     blocker_pairs: dict[int, int | list[int]] | None = None
     attacker_damage: dict[int, dict[int, int]] | None = None
+    # "You may have this creature assign its combat damage as though it weren't
+    # blocked." (Lone Wolf, Thorn Elemental, Rhox; Garruk, Savage Herald's
+    # grant.) The `id` of each attacker the active player announces is taking
+    # that offer, sent with an `assign_combat_damage` action. An entry for the
+    # same attacker in `attacker_damage` is the other printed answer; the
+    # engine refuses an announcement that is some of each. By id, not by the
+    # battlefield slot `attacker_damage` is keyed by: this channel is new, and
+    # a slot is the address that moves.
+    as_though_unblocked_ids: list[int] | None = None
     # Banding (CR 702.22k): how a shared blocker's damage is routed among the band
     # members it blocks — maps blocker battlefield index to the chosen attacker index.
     blocker_damage: dict[int, int] | None = None

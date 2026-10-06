@@ -93,6 +93,7 @@ from .combat_prompts import (
     _build_camouflage_info,
     _build_multiblock_assignment_info,
     _build_raging_river_info,
+    _build_unblocked_assignment_info,
 )
 from .game_flow import settle_before_observation
 
@@ -904,6 +905,10 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "banding_assignment": _build_banding_assignment_info(session, viewer_seat),
         "band_blocker_assignment": _build_band_blocker_assignment_info(session, viewer_seat),
         "multiblock_blocker_assignment": _build_multiblock_assignment_info(session, viewer_seat),
+        # "You may have this creature assign its combat damage as though it
+        # weren't blocked": the active player's attackers the damage dialog has
+        # to ask about, single-blocked ones included.
+        "unblocked_assignment": _build_unblocked_assignment_info(session, viewer_seat),
         "raging_river": _build_raging_river_info(session, viewer_seat),
         "camouflage": _build_camouflage_info(session, viewer_seat),
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,

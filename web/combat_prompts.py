@@ -6,12 +6,20 @@ player a choice the engine cannot make for them — banding's damage assignment
 (CR 510.1a), and the pile divisions Raging River and Camouflage impose. Each is
 the same triple: work out whether an assignment is outstanding, build the info
 the client renders, and let an AI seat answer it immediately.
+
+A fifth joined them: "You may have this creature assign its combat damage as
+though it weren't blocked." It is the same triple with one part already done —
+the engine works out whether it is outstanding (it is what stops the damage
+step for a person and for nobody else), so this module only builds the info,
+and an AI seat's immediate answer is the default ``_ai_assign_combat_damage``
+below has always given it.
 """
 
 from __future__ import annotations
 
 from engine.ai_combat import declare_ai_attackers
 from engine.ai_policy import choose_attack_target, legal_attackers
+from engine.combat_assignment import combat_damage_assigned_by
 
 from .session_store import Session
 
@@ -234,6 +242,68 @@ def _build_multiblock_assignment_info(session: Session, viewer_seat: int | None)
     if not blockers:
         return None
     return {"defender_seat": defender_index, "blockers": blockers}
+
+
+def _build_unblocked_assignment_info(session: Session, viewer_seat: int | None) -> dict | None:
+    """State block shown to the active player for each of their blocked
+    attackers that "may … assign its combat damage as though it weren't
+    blocked" (Lone Wolf, Thorn Elemental, Rhox; Garruk, Savage Herald's grant):
+    which attackers the damage dialog must ask about, how much each would send
+    past its blockers, and to whom.
+
+    **Which attackers is the engine's answer**, read through
+    ``unblocked_assignments_to_ask`` — the same list that stops the combat
+    damage step. Re-deriving it here is how a prompt and a step come to
+    disagree (see ``_banding_blocked_attackers``): the step would wait for an
+    answer the dialog never asked for, or the dialog would ask and the step
+    would already have resolved. So there is no "pending" twin of this
+    function, either — while the list is non-empty the engine itself is
+    waiting, and ``Game._needs_manual_damage_assignment`` says so.
+
+    The recipient is CR 510.1b's: the player being attacked, or the
+    planeswalker the creature is attacking — "assigning its damage as though it
+    weren't blocked means the damage is assigned to the planeswalker, not to
+    the defending player" (Outmaneuver ruling, 2008-04-01).
+    """
+    game = session.game
+    if game.current_step != "combat_damage" or game.combat_damage_resolved:
+        return None
+    active_index = game.active_player_index
+    if viewer_seat is not None and viewer_seat != active_index:
+        return None
+    attackers = []
+    for attacker_idx in game.unblocked_assignments_to_ask():
+        attacker = game.permanent_at(active_index, attacker_idx)
+        if attacker is None:
+            continue
+        defending_index = game.combat_attackers.get(attacker_idx)
+        walker = game.permanent_by_id(game.combat_attacked_planeswalkers.get(attacker_idx))
+        if walker is not None:
+            recipient = {
+                "kind": "planeswalker",
+                "id": walker.permanent_id,
+                "name": walker.card.name,
+            }
+        else:
+            recipient = {
+                "kind": "player",
+                "seat": defending_index,
+                "name": (
+                    game.players[defending_index].name
+                    if isinstance(defending_index, int)
+                    and 0 <= defending_index < len(game.players)
+                    else ""
+                ),
+            }
+        attackers.append({
+            "attacker_index": attacker_idx,
+            "attacker_id": attacker.permanent_id,
+            "damage": combat_damage_assigned_by(attacker),
+            "recipient": recipient,
+        })
+    if not attackers:
+        return None
+    return {"attacker_seat": active_index, "attackers": attackers}
 
 
 def _build_raging_river_info(session: Session, viewer_seat: int | None) -> dict | None:
