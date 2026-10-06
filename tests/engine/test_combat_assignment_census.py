@@ -48,7 +48,6 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.combat_assignment import (combat_damage_assigned_by,
                                       may_assign_as_unblocked)
 from engine.models import Permanent
-from engine.oracle import compile_card_oracle
 
 from tests.helpers import _mk_creature_card
 
@@ -77,15 +76,20 @@ ARRANGEMENTS = {
 
 @pytest.fixture(scope="module")
 def creatures():
-    """Every supported creature card in the shipped pool, one per name."""
+    """Every creature card in the shipped pool, one per name.
+
+    A question about a **card** — one permanent put onto a battlefield and
+    attacked with — so the pool is walked card by card and nothing here
+    compiles one (``tests/engine/test_face_blind_guards.py``). The shipped pool
+    is held at fully supported by its own guards, so there is no unsupported
+    creature to filter out; one that cannot simply be put onto a battlefield
+    is skipped where the sample is drawn."""
     by_name = {}
     for path in manifest_set_paths():
         for card in load_cards(path):
             if "creature" not in (card.type_line or "").lower():
                 continue
-            if card.name in by_name or not compile_card_oracle(card).supported:
-                continue
-            by_name[card.name] = card
+            by_name.setdefault(card.name, card)
     return by_name
 
 
