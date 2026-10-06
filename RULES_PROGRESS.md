@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2866 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2892 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -376,7 +376,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **202.1** A card’s mana cost is indicated by mana symbols near the top of the card. (See rule 107.4.) On mo... *(3 tests, subrules ab)*
 - [x] **202.2** An object is the color or colors of the mana symbols in its mana cost, regardless of the color of... *(2 tests)*
-- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(10 tests, subrules a)*
+- [x] **202.3** The mana value of an object is a number equal to the total amount of mana in its mana cost, regar... *(11 tests, subrules a)*
 - [x] **202.4** Any additional cost listed in an object’s rules text or imposed by an effect isn’t part of the ma... *(1 tests)*
 
 ### 205. Type Line
@@ -456,8 +456,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
-- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(6 tests)*
-- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(37 tests)*
+- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(11 tests)*
+- [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(41 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
 
@@ -777,13 +777,13 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 613. Interaction of Continuous Effects
 
-- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(130 tests, subrules abcdefg)*
+- [x] **613.1** The values of an object’s characteristics are determined by starting with the actual object. For ... *(141 tests, subrules abcdefg)*
 - [x] **613.2** Within layer 1, apply effects in a series of sublayers in the order described below. Within each ... *(19 tests, subrules ac)*
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(79 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(10 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(78 tests, subrules abdem)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(88 tests, subrules abdem)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(35 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
@@ -802,7 +802,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.9** Some effects replace damage dealt to one battle, creature, planeswalker, or player with the same ... *(15 tests)*
 - [x] **614.10** An effect that causes a player to skip an event, step, phase, or turn is a replacement effect. “S... *(6 tests, subrules a)*
 - [x] **614.11** Some effects replace card draws. These effects are applied even if no cards could be drawn becaus... *(4 tests)*
-- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(10 tests, subrules a)*
+- [x] **614.12** Some replacement effects modify how a permanent enters the battlefield. (See rules 614.1c–d.) Suc... *(22 tests, subrules a)*
 - [x] **614.13** An effect that modifies how a permanent enters the battlefield may cause other objects to change ... *(1 tests, subrules a)*
 - [ ] **614.14** An object may have one ability printed on it that generates a replacement effect which causes one...
 - [x] **614.15** Some replacement effects are not continuous effects. Rather, they are an effect of a resolving sp... *(3 tests)*
@@ -932,7 +932,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(34 tests, subrules abc)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(37 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(13 tests)*
