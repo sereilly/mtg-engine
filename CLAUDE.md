@@ -419,8 +419,18 @@ what a step owes before the next begins) instead of a copy of it — and each
 left an honesty count behind: `lands_played`, `steps_left_owing`,
 `extra_turns_taken`. What is still not there is named in ROADMAP: the AI
 casts only in its own main phases, so no counterspell and no combat trick is
-ever cast in a simulated game — and it announces **mode 0** of every modal
-spell, having no mode chooser.
+ever cast in a simulated game.
+
+**It chooses a mode now.** Every modal spell an AI seat cast was announced as
+its first bullet, in the simulator and in a web game alike, long after the
+engine, the picker and both legality gates had become per-mode — a Charm in
+an AI hand was a third of a card. `CastAction` carries the mode, every cast
+site goes through one function (`ai_policy.cast_announcement`; there were
+five sites and a second chooser for instants, and an AST test fails a site
+that spells a cast keyword itself), and the chooser loops over
+`Game.announceable_modes`. `SimulationReport.modal_casts` is the honesty
+count. *Which* bullet wins when several are castable is still the scorer's
+text probes, and ROADMAP pins the 25 modes that lose their own board.
 
 **Planeshift found an eighth, of a different kind: mana that was never
 tapped.** The tap planner planned *lands*, so in a simulated Alpha game the
@@ -429,6 +439,15 @@ none ever produced mana — 122 non-land permanents in the pool have a mana
 ability. A non-land source whose whole cost is {T} and whose output is readable
 off its payload is planned now, after every land (`ai_valuation.planned_mana_yield`);
 a costed or sacrifice source is still not, and ROADMAP says why.
+
+**And a ninth, of the first seven's kind.** `Game.activate_from_hand` is the
+*queue* form — the web's, which leaves the ability on the stack for the table
+to respond to — and the simulator's hand pass called it and moved on, where
+the battlefield pass beside it calls `activate_permanent_ability`, which
+settles what it queues. A cycling ability sat on the stack as the step ended,
+so all three Urza's sets exited 1 on `steps_left_owing` from the day that
+count existed, and no other set prints the keyword on enough cards for ten
+games to show it. The pass settles it with the engine's own loop.
 
 The honesty checks in the report exist because "no illegal interactions" over a
 game where nothing happened is a true statement about nothing.
@@ -842,6 +861,22 @@ adding entries, not editing dispatch**:
   than activated to hit the face (Silent Dart) or no-op. It replaced a per-kind
   if-chain that named four instruction kinds and left every other one
   unenforced.
+  **The gate asks one question of every ability** —
+  `legality.activation_target_obligation`, the picker's own slot and its
+  printed quantifier — and compares a *named* target with the picker's list
+  whether or not one was owed. It used to walk for a quantifier it
+  recognised, so 159 of 818 abilities accepted a target their picker does not
+  offer (93 print "any target": a Prodigal Sorcerer could be aimed at a Sol
+  Ring) and 21 that must target could be activated at nothing. A named *cost*
+  permanent is paid as named or the activation is refused
+  (`_named_cost_refusal`; the default used to be substituted in silence — CR
+  601.2h), an activated ability whose named graveyard card has left does not
+  go looking for another (`vanished_graveyard_target_refusal`, bounded by
+  `StackItem.activated`), and over the wire an activation that owes a target
+  and names none is a 400. One thing is deliberately still open, by
+  measurement: a bare activation **with a legal target available** resolves
+  on the handler's pick, the headless convention 43 tests stand on; ROADMAP
+  has the parts.
   **A spell has both ends of the same question.** `legality.cast_target_refusal`
   is CR 601.2c at announcement — the named target must be one
   `_enumerate_targets` offers, checked beside `_validate_cast_targets` (not
@@ -879,11 +914,19 @@ adding entries, not editing dispatch**:
   table, which sent the wrong picker for 33 of 47 object modes. The same round
   made a printed count a count (`legality.exact_target_count` — "two target
   creatures" naming one was accepted 19 times in 19) and refuses a division on
-  a spell that divides nothing. A cast naming no mode is judged as mode 0, and
-  the AI still announces only that. Both are instants and sorceries only, and the three shapes they
-  deliberately decline — a triggered ability's targets, a spell that can target
-  a player, an Aura or graveyard target — are in `ROADMAP.md` with the reason
-  each is a separate round.
+  a spell that divides nothing. A cast naming no mode is judged as mode 0.
+  **A named player is a target like any other.** Both gates read
+  `stack_targets.announcement_targets`: for a spell whose only target is a
+  player the seat is the target, for "any target" it is the target only when
+  no object is named, and each entry of a division is its own. The cast gate
+  had checked a named permanent and never a named player — 591 of 774 casts
+  accepted a seat the picker does not offer, a Lightning Bolt reached a
+  player behind an Ivory Mask — on a decline ROADMAP carried for a reason
+  (`target_player_index` is ambiguous) that `stack_targets` had answered two
+  sets earlier. Both are instants and sorceries only, and the shapes they
+  still decline — a triggered ability's targets, an Aura or an ambiguous
+  graveyard target, a roles spell's player at resolution — are in
+  `ROADMAP.md` with the reason each is a separate round.
 - `engine/stack_targets.py` — **which targets a stack object chose**, and how
   they may be changed (CR 115.7). `chosen_targets(item)` reads every
   announcement channel a `StackItem` carries against the object's derived
@@ -931,11 +974,35 @@ adding entries, not editing dispatch**:
   later "becomes black until end of turn" did nothing, 145 of 362 ordered
   cases — and eight handlers wrote the colour slots directly, which is the
   `become_tapped` problem; `tests/engine/test_color_write_seam.py` fails a
-  ninth. One effect is deliberately *not* ordered by its timestamp: a
-  permanent's own "is the chosen color" (Alloy Golem) is applied as a
-  characteristic-defining ability, on CR 604.3a's criteria — an arguable
-  reading, recorded in ROADMAP with the one word that would switch it. Layer 4
-  has the same shape and is half done; ROADMAP names the rest.
+  ninth. A permanent's own "is the chosen color" (Alloy Golem) is ordered
+  by the permanent's timestamp like everything else. It shipped as a
+  characteristic-defining ability and that was a ruling to settle: a CDA
+  "functions in all zones" (CR 604.3) and does not set its value "only if
+  certain conditions are met" (CR 604.3a), and a colour chosen as the
+  permanent enters does neither. The reasoning, and the one argument that is
+  the other reading, are beside the call in `layer_bridge`.
+  **Layer 4 is applied once for the whole board, with dependency**
+  (`engine/type_statics.py`, CR 613.8): a static whose scope is a type waits
+  while applying an effect not yet applied would change what it reaches, is
+  re-asked after every application, and does not wait on another member of a
+  dependency loop. One effect per step, so the walk ends in exactly as many
+  steps as there are effects. It replaced three refreshes that chained by
+  timestamp alone — Conversion then Blood Moon was a Mountain — and the
+  census that found three wrong meetings now holds 61, fifteen of which were
+  wrong. One-shot type changes are written through `engine/type_changes.py`
+  (`gain_types` / `lose_types`, the stamp inside the write), with a guard
+  that fails a sixth direct writer.
+  **CR 305.7 is one strike, in `effective_card`.** A land whose type an
+  effect *set* has no ability of its own for any reader — static, triggered,
+  activated or mana — and keeps what another effect granted it; "in addition
+  to its other types" is not a set. The Tabernacle at Pendrell Vale under
+  Blood Moon went on taxing every creature while six readers each asked the
+  predicate for themselves and a seventh read the printed text. It reaches a
+  land *entering* under the effect too (CR 614.12,
+  `Game.fold_land_type_statics_onto_entering`). `Game.lost_abilities_refusal`
+  is the door's answer and the payload's `abilities_lost` the client's — and
+  the client reads that field, `taps_for_mana` and `produced_mana`, never the
+  text, to decide that such a land is clicked for mana.
 - `engine/control.py` — CR 613 layer 2. A control change is a **contribution**
   (`change_control(permanent, seat, source=…)`) with a timestamp, not a move;
   ending one is `end_control_change(permanent, source=…)`, and whatever
@@ -1062,6 +1129,17 @@ adding entries, not editing dispatch**:
   soft-locked a human seat, invisibly to every engine instrument.
   `tests/ui/test_entry_choice_prompt_ui_api.py` enters every chooser under an
   interactive seat and requires the client's own code to read each question.
+- `engine/combat_assignment.py` and the combat damage step — **"You may have
+  this creature assign its combat damage as though it weren't blocked"**
+  (Lone Wolf, Thorn Elemental, Rhox, Pride of Lions; one granted form) is an
+  announcement with two answers, `resolve_combat_damage(as_though_unblocked=
+  [ids])` or an ordinary assignment, and anything between is refused — the
+  cards' ruling is all or nothing. A human seat is stopped for it with one
+  blocker and with several (`web/combat_prompts.py`, beside banding and
+  multi-block). It is **not** a `pending_choices` prompt: CR 510.1e checks an
+  assignment as one announcement, and a stored answer would have to be asked
+  again for each strike. Until this was driven in a browser a human had one
+  of the two answers, and which one depended on the number of blockers.
 - `engine/combat_restrictions.py` — text-keyed combat restrictions (CR 506):
   "can't attack unless defending player controls a <land type>", "attacks each
   combat if able", "can't be blocked by Walls". The land type is payload data,
@@ -1164,6 +1242,12 @@ adding entries, not editing dispatch**:
   announcement rides the stack object (`announced_at_cast`): an entry
   trigger's target is still *named as the permanent is cast*, a convention
   measured and deliberately kept — ROADMAP has what moving it would take.
+  **That name is held to what the trigger itself could choose** (CR 603.3d):
+  the cast picker offers the trigger's own list
+  (`LegalityMixin.entry_trigger_cast_targets`), and an announcement the
+  trigger could not have made is set aside at the push, where it chooses
+  again. Nothing asked before, so a Nekrataal cast at a White Knight
+  destroyed it — 16 cards, protection above all.
   Held by `tests/engine/test_entry_trigger_stack_census.py`, over three roads
   with floors.
   **So a source can now leave before its own entry trigger resolves, and a
@@ -1306,7 +1390,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (652 of the 4,781 catalog cards passing — 407
+manually validated in-game (654 of the 4,781 catalog cards passing — 409
 checked in-game and 245 auto-passed — with 53 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
@@ -1350,6 +1434,11 @@ the wire reporting a colour *before* it was chosen — the engine's provisional
 default, sent as a choice while the prompt was still on the screen.
 `enter_effects.chosen_as_entered` reports nothing for a permanent that is
 still entering.
+**Seventh Edition moved it 407 to 409** — Sleight of Hand and Baleful Stare,
+driven as a human seat — and the same session's one click on a land under a
+Blood Moon found that the round's activation-gate merge had made every such
+land unclickable for mana: a client change held by a text-level test, first
+clicked at Phase 5.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

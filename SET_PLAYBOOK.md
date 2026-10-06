@@ -251,6 +251,50 @@ procedures came out of it:
   cards can, and CR 702.26d says phasing is not leaving. One query over the
   pool is cheaper than the sentence.
 
+**The round between Planeshift and Seventh Edition ran eight agents in two
+rounds on defects, not cards, and four things about integrating them are
+procedures.**
+
+*Brief the second round from the first round's reports, on a chain link.* The
+first round's groups were told to measure and leave what had the whole pool
+for a blast radius. Four such findings came back with a census each, and three
+agents were launched on them the same hour - based on the integration link
+that held the first round's merge of the files they would touch, while that
+link's gate was still running. A defect measured by an agent that has just
+left the code is a brief that needs no research; a week later it is a ROADMAP
+entry somebody has to re-probe.
+
+*Run the meeting-point tests before a link's gate.* Two branches met on a line
+neither had conflicted on: one's new test asserted that a field on the wire
+still printed some text, the other emptied that field. A merge has no opinion
+about that. Before starting a link's twenty-minute gate, run the **new test
+files of every link beneath it** on the merged tree - a minute - and
+reconcile there, in the merge, with the reason in its message.
+
+*A client change is not done until it has been clicked.* A group changed what
+the browser offers for a permanent that has lost its abilities, held it with
+a text-level test and an API test, and wrote a comment saying what the click
+handler "then" does. It did not: every land under Blood Moon became
+unclickable for mana, and the suite, the gate and `check_all` were green. It
+was found at Phase 5 by clicking one. Two rules. **An agent that edits
+`web/static/` drives the change in a browser before it reports** - both
+directions, with the state API read after each click - and says in its
+report what was *not* driven. And **a comment that says what the code "then"
+does is a claim to drive**, exactly like "no card in the pool can do X".
+
+*Agents share one browser unless told otherwise.* `playwright-cli` with no
+session name is one browser for the whole machine, and `close-all` closes
+everybody's: the integrator's smoke test killed an agent's session mid-run.
+Brief each browser-driving agent **a port and a session name**
+(`playwright-cli -s=<group> …`), use one yourself, and never `close-all`.
+
+*A log line is an interface.* Correcting a rule number in one log message, in
+the last hour of the round, turned one test red at the closing gate and left
+three **negative** assertions (`not any("603.3c" in line …)`) green and
+blind. Before changing a string the engine logs, grep the tests for its
+smallest distinctive token, not for the whole line - and read every `not` you
+find as a guard that will pass for ever once the string moves.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -2295,6 +2339,23 @@ is green, the trackers carry its row, and the census is in hand.
    activate, an unclaimed line. The group measured it and said so. Drive the
    card before the instrument's finding becomes the brief's first sentence.
 
+   **For a reprint-shaped set, compute "new to this pool" yourself, at the
+   ingest, and give every such card to a group.** `set_progress.json` records
+   Seventh Edition with 0 new cards, as it did Sixth; it brought **seventeen**,
+   because that column counts against the whole release line and their earlier
+   printings were in Portal and Starter. Two queries over the card file answer
+   what the tracker cannot (`scratch/7ed/census_new.py` is the shape): the
+   oracle_ids no shipped set carries, and the reprints **whose only other
+   printing is later than the set** - which named the promotion's origin trap,
+   Mind Rot, on the day of the ingest. Fifteen of the seventeen arrived
+   supported and one group drove all fifteen: every one worked, and the
+   driving found three defects with the whole pool for a blast radius (a named
+   *player* unchecked at announcement, protection not asked of an entry
+   trigger's cast-announced target, a "you may" in combat with one reachable
+   answer) and a matcher key that had been silently ignored. A reprint set is
+   an ingest and a rehearsal rather than a set of rounds - and its handful of
+   new cards is the cheapest Rock Hydra pass the project gets.
+
 6. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -2942,6 +3003,14 @@ set, how many lines does it newly excuse? - and each excused exactly one. That
 is the test for a guard fix: an arm that excuses forty is a new hole. The
 second rehearsal, a wave later, turned red only the four ratchets.
 
+**Seventh Edition's rehearsal ran the day it was ingested**, in a throwaway
+worktree with two cards unsupported: six red tests, three ratchets and the
+three guards that name an unsupported card, and no guard keeping its own
+list. For a reprint-shaped set that is the whole of the promotion's risk
+read in twenty minutes, before any card is implemented - run it then. The
+wrong insert was rehearsed in the same worktree and again at the promotion,
+with the promotion's script: one reprint among 318 decided an origin.
+
 **A new layout makes guards blind, not red.** A split card's whole-card
 program is supported and has no instructions, so every guard and instrument
 whose population is "each card, compiled" walks past both halves and reports
@@ -3044,6 +3113,13 @@ review directly shrinks this phase.
    *is* the choice. Ask of a new wire field not only "is the answer there
    afterwards?" but "what is there before?" - and when a test's comment
    explains why a surprising value is fine, read it as a finding first.
+
+   **And drive what the round changed, not only what the set brought.** The
+   Seventh Edition promotion merged an activation-gate change with a client
+   half nobody had clicked. Putting one land under a Blood Moon and clicking
+   it - a check of the *round*, with no Seventh Edition card in it - found
+   that no such land could be tapped for mana. List the client-visible
+   changes merged since the last promotion and click each once.
 
    **For a reprint set this step is the only one that shows what promotion
    bought**, and
@@ -4218,3 +4294,22 @@ as a human seat, and read the payload while the prompt is open (three cards
 driven; 404 -> 407 checked in-game; one wire defect found and fixed). Nothing
 drained from Known gaps; what the set measured and left is one ROADMAP entry
 with its parts named.
+
+### 7ED — 2026-10-06
+
+*A reprint-shaped set with seventeen cards the pool had never compiled, and
+the round of fixes that ran beside it.* Ingested at 333 of 335 with a green
+suite; one group implemented two productions (Sleight of Hand, Baleful
+Stare) and drove the other fifteen; promoted at index 29 with no hook. In
+the same two days eight agents in two rounds closed what Planeshift had
+measured and left - the activation gate, the AI's mode chooser, layer 4 with
+dependency, CR 305.7 for a land's own abilities, a combat choice a human
+could not make - and what those rounds found on the way.
+
+*Edits in place:* Integration gains briefing a second round from the first
+round's reports on a chain link, meeting-point tests before a link's gate, a
+client change is not done until clicked, and a port and a browser session per
+agent. *Phase 1:* compute "new to this pool" at the ingest and give every
+such card to a group. *Phase 4:* rehearse a reprint-shaped set the day it is
+ingested. *Phase 5:* drive what the round changed, not only what the set
+brought. What stands is in ROADMAP, with parts.
