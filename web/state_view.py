@@ -46,15 +46,16 @@ from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
 from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
+from engine.board_payment import board_can_pay
 from engine.cast_prohibitions import cast_prohibition
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.faces import face_cards
-from engine.models import PlayerState
 from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
 from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
+from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
 from engine.cast_costs import additional_costs
@@ -146,65 +147,24 @@ def _seat_deck_display_name(session: Session, seat: int) -> str:
     return name or "Random Deck"
 
 
-def _can_afford_with_pool(pool: dict, cost: dict, player: PlayerState) -> bool:
-    """Check whether `pool` can pay `cost` without mutating either."""
-    # "You may spend mana as though it were mana of any color." (Chromatic
-    # Orrery.) Asked through the engine's own arithmetic rather than answered
-    # again here: this function is already a second reading of
-    # `_pay_mana_cost_directly`, and a second reading that knows about one of
-    # the two spending permissions greys out a card the engine would happily
-    # cast.
-    if player.spends_mana_as_any_color:
-        from engine.mana_payment import fungible_colors_headroom
-
-        return fungible_colors_headroom(pool, cost) is not None
-
-    temp = dict(pool)
-    for sym in ("W", "U", "B", "G", "C"):
-        if temp.get(sym, 0) < cost.get(sym, 0):
-            return False
-
-    available_red = temp.get("R", 0)
-    if player.can_spend_white_as_red:
-        available_red += temp.get("W", 0)
-    if available_red < cost.get("R", 0):
-        return False
-
-    temp["W"] -= cost.get("W", 0)
-    temp["U"] -= cost.get("U", 0)
-    temp["B"] -= cost.get("B", 0)
-    temp["G"] -= cost.get("G", 0)
-    temp["C"] -= cost.get("C", 0)
-
-    red_to_pay = cost.get("R", 0)
-    from_red = min(temp.get("R", 0), red_to_pay)
-    temp["R"] = temp.get("R", 0) - from_red
-    red_to_pay -= from_red
-    if red_to_pay > 0:
-        if not player.can_spend_white_as_red or temp.get("W", 0) < red_to_pay:
-            return False
-        temp["W"] -= red_to_pay
-
-    generic = cost.get("generic", 0)
-    if generic > 0:
-        available = sum(max(0, temp.get(s, 0)) for s in ("C", "W", "U", "B", "R", "G"))
-        if available < generic:
-            return False
-
-    return True
-
-
 @dataclass(frozen=True)
 class _CastingWindow:
-    """The seat-wide half of "what can I play right now": the mana this seat
-    could produce and the turn-structure facts a timing gate reads.
+    """The seat-wide half of "what can I play right now": the
+    turn-structure facts a timing gate reads.
 
     Built once per seat, because every card the seat might cast is tested
     against the same one — a card in hand and a commander in the command zone
     (CR 903.8) differ only in what their zone adds to the cost.
+
+    **No mana here.** This carried a ``potential_pool`` — the floating mana
+    plus one mana *per listed colour* of every untapped land — and "can it be
+    paid" was arithmetic over that sum, so a Tropical Island was a {G} and a
+    {U} at once. What a board can pay is not a sum: it is a matching of pips to
+    sources, and it is ``engine.board_payment.board_can_pay``'s to answer, per
+    card, because what a card may spend (restricted mana, a one-spell grant)
+    is a fact about the card.
     """
 
-    potential_pool: dict[str, int]
     may_play_land: bool
     current_turn: int
     is_main_phase: bool
@@ -216,7 +176,6 @@ def _casting_window(session: Session, player_index: int) -> _CastingWindow | Non
     begin a cast at all — a blocking prompt is open, or they do not have
     priority."""
     game = session.game
-    player = game.players[player_index]
 
     # Bail under blocking UI states where casting is not possible
     if session.pregame_phase is not None:
@@ -241,18 +200,7 @@ def _casting_window(session: Session, player_index: int) -> _CastingWindow | Non
     if not game.has_priority(player_index):
         return None
 
-    # Potential mana = current pool + what each untapped land could produce
-    potential_pool: dict[str, int] = dict(player.mana_pool)
-    for perm in game.controlled_by(player_index):
-        # ``has_type`` (CR 613 layer 4), not the printed line: what makes mana
-        # here is whatever is a land *now*.
-        if not perm.tapped and perm.has_type("land"):
-            for color in perm.effective_produced_mana:
-                sym = color.upper()
-                potential_pool[sym] = potential_pool.get(sym, 0) + 1
-
     return _CastingWindow(
-        potential_pool=potential_pool,
         may_play_land=game._may_play_another_land(player_index),
         current_turn=session.current_turn,
         is_main_phase=game.current_phase == "main",
@@ -290,7 +238,6 @@ def _card_castable_now(
     withholds the spell itself from the hand that pays it.
     """
     game = session.game
-    player = game.players[player_index]
 
     # CR 709.3a: "Only the chosen half is evaluated to see if it can be cast."
     # A split card is castable when either half is, and every gate below is
@@ -445,7 +392,14 @@ def _card_castable_now(
             ),
             reduction,
         )
-        if not _can_afford_with_pool(window.potential_pool, cost, player):
+        # CR 601.2h, through `engine.board_payment`: an exact matching of this
+        # cost's pips to the mana in the pool and the mana each untapped land's
+        # tap would add (`mana_payment.plan_payment`), with what a tap makes
+        # read off the tap seam. It was a sum of every land's every listed
+        # colour, so Craw Wurm over three Tropical Islands glowed.
+        if not board_can_pay(
+            game, player_index, cost, purpose=PaymentPurpose(CAST, card=card),
+        ):
             # CR 118.9: an alternative cost is paid *rather than* the mana cost,
             # so a seat with no mana at all can still cast Force of Will off a
             # blue card and a life. Asked only once the mana answer is no, and
@@ -585,8 +539,9 @@ def _compute_hand_abilities(session: Session, player_index: int) -> list[dict]:
             )[0]
             payable = True
             if game.enforce_mana_costs and any(required.values()):
-                payable = window is not None and _can_afford_with_pool(
-                    window.potential_pool, dict(required), player
+                payable = window is not None and board_can_pay(
+                    game, player_index, dict(required),
+                    purpose=PaymentPurpose(ACTIVATE, source=card),
                 )
             entries.append({
                 "hand_index": hand_index,
