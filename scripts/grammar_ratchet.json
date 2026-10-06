@@ -26,9 +26,9 @@
       "parsed_pct": 95.5
     },
     "<pool>": {
-      "executed_pct": 61.2,
+      "executed_pct": 61.4,
       "lowered_pct": 89.8,
-      "parsed_pct": 90.4
+      "parsed_pct": 90.5
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -114,6 +114,11 @@
       "executed_pct": 59.4,
       "lowered_pct": 89.4,
       "parsed_pct": 91.3
+    },
+    "PLS": {
+      "executed_pct": 67.8,
+      "lowered_pct": 90.6,
+      "parsed_pct": 91.0
     },
     "STH": {
       "executed_pct": 62.8,

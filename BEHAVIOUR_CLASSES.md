@@ -4,10 +4,10 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **4622**
-- Distinct behaviours: **4177**
-- Cards sharing a behaviour with another: **642** in **197** classes
-- Unverified cards covered by a verified peer: **175**
+- Cards in the catalog: **4764**
+- Distinct behaviours: **4317**
+- Cards sharing a behaviour with another: **646** in **199** classes
+- Unverified cards covered by a verified peer: **176**
 
 | Size | Cards |
 | --- | --- |
@@ -83,6 +83,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Ambush Party, Goblin Berserker |
 | 2 | Anaba Bodyguard, Tundra Wolves |
 | 2 | Ancient Kavu, Raging Spirit |
+| 2 | Ancient Spider, Longbow Archer |
 | 2 | Angelic Page, Serra Advocate |
 | 2 | Arenson's Aura, Teferi's Care |
 | 2 | Armor Sliver, Barbed Sliver |
@@ -104,6 +105,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Carapace, Thrull Retainer |
 | 2 | Cat Burglar, Vodalian Hypnotist |
 | 2 | Cateran Enforcer, Rathi Intimidator |
+| 2 | **Celestial Prism**, Mana Cylix |
 | 2 | Cemetery Gate, Wall of Light |
 | 2 | Charging Rhino, Stalking Tiger |
 | 2 | Civic Guildmage, Sunscape Apprentice |

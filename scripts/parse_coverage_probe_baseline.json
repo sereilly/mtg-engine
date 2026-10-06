@@ -72,6 +72,13 @@
   ]
  },
  {
+  "card": "Alpha Kavu",
+  "clause": "target kavu creature gets -1/+1 until end of turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Amber Prison",
   "clause": "tap target artifact, creature, or land. that permanent doesn't untap during its controller's untap step for as long as this artifact remains tapped",
   "ignored": [
@@ -305,6 +312,13 @@
   ]
  },
  {
+  "card": "Bog Down",
+  "clause": "target player discards two cards. if this spell was kicked, that player discards three cards instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Bog Glider",
   "clause": "search your library for a mercenary permanent card with mana value 2 or less, put it onto the battlefield, then shuffle",
   "ignored": [
@@ -444,6 +458,13 @@
   "clause": "search your library for a mercenary permanent card with mana value 5 or less, put it onto the battlefield, then shuffle",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Cavern Harpy",
+  "clause": "return a blue or black creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -695,6 +716,13 @@
   ]
  },
  {
+  "card": "Doomsday Specter",
+  "clause": "return a blue or black creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Downdraft",
   "clause": "it deals 2 damage to each creature with flying",
   "ignored": [
@@ -892,6 +920,13 @@
   ]
  },
  {
+  "card": "Escape Routes",
+  "clause": "return target white or black creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Eureka",
   "clause": "starting with you, each player may put a permanent card from their hand onto the battlefield. repeat this process until no one puts a card onto the battlefield",
   "ignored": [
@@ -964,6 +999,13 @@
   ]
  },
  {
+  "card": "Falling Timber",
+  "clause": "prevent all combat damage target creature would deal this turn. if this spell was kicked, prevent all combat damage another target creature would deal this turn",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "False Prophet",
   "clause": "exile all creatures",
   "ignored": [
@@ -1033,6 +1075,13 @@
   "clause": "destroy all plains",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Fleetfoot Panther",
+  "clause": "return a green or white creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -1445,8 +1494,29 @@
   ]
  },
  {
+  "card": "Honorable Scout",
+  "clause": "you gain 2 life for each black and/or red creature target opponent controls",
+  "ignored": [
+   "and/or"
+  ]
+ },
+ {
   "card": "Hoodwink",
   "clause": "return target artifact, enchantment, or land to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Horned Kavu",
+  "clause": "return a red or green creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
+  "card": "Hunting Drake",
+  "clause": "put target red or green creature on top of its owner's library",
   "ignored": [
    "or"
   ]
@@ -1779,6 +1849,13 @@
   ]
  },
  {
+  "card": "Lava Zombie",
+  "clause": "return a black or red creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Lead Golem",
   "clause": "it doesn't untap during its controller's next untap step",
   "ignored": [
@@ -1886,6 +1963,13 @@
   ]
  },
  {
+  "card": "Magma Burst",
+  "clause": "magma burst deals 3 damage to any target. if this spell was kicked, it deals 3 damage to another target",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Magnetic Web",
   "clause": "all creatures with magnet counters on them block that creature this turn if able",
   "ignored": [
@@ -1897,6 +1981,13 @@
   "clause": "all creatures get +1/+1 until end of turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Malicious Advice",
+  "clause": "tap x target artifacts, creatures, and/or lands. you lose x life",
+  "ignored": [
+   "and/or"
   ]
  },
  {
@@ -1940,6 +2031,20 @@
   "clause": "you may reveal your hand and put all land cards from it onto the battlefield. if you do, discard your hand",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "March of Souls",
+  "clause": "destroy all creatures. they can't be regenerated. for each creature destroyed this way, its controller creates a 1/1 white spirit creature token with flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Marsh Crocodile",
+  "clause": "return a blue or black creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -2100,6 +2205,13 @@
   ]
  },
  {
+  "card": "Natural Emergence",
+  "clause": "return a red or green enchantment you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Nature's Chosen",
   "clause": "untap target artifact, creature, or land",
   "ignored": [
@@ -2125,6 +2237,13 @@
   "clause": "needle storm deals 4 damage to each creature with flying",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Nemata, Grove Guardian",
+  "clause": "saproling creatures get +1/+1 until end of turn",
+  "ignored": [
+   "creatures"
   ]
  },
  {
@@ -2278,6 +2397,13 @@
   ]
  },
  {
+  "card": "Orim's Chant",
+  "clause": "target player can't cast spells this turn. if this spell was kicked, creatures can't attack this turn",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Orim's Touch",
   "clause": "prevent the next 2 damage that would be dealt to any target this turn. if this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead",
   "ignored": [
@@ -2397,6 +2523,20 @@
   ]
  },
  {
+  "card": "Planeswalker's Mischief",
+  "clause": "target opponent reveals a card at random from their hand. if it's an instant or sorcery card, exile it. you may cast it without paying its mana cost for as long as it remains exiled. at the beginning of the next end step, if you haven't cast it, return it to its owner's hand",
+  "ignored": [
+   "card,"
+  ]
+ },
+ {
+  "card": "Pollen Remedy",
+  "clause": "prevent the next 3 damage that would be dealt this turn to any number of targets, divided as you choose. if this spell was kicked, prevent the next 6 damage this way instead",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Pouncing Jaguar",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {g}",
   "ignored": [
@@ -2423,6 +2563,13 @@
   "clause": "tap all lands defending player controls",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Primal Growth",
+  "clause": "search your library for a basic land card, put that card onto the battlefield, then shuffle. if this spell was kicked, instead search your library for up to two basic land cards, put them onto the battlefield, then shuffle",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -2602,6 +2749,13 @@
   ]
  },
  {
+  "card": "Razing Snidd",
+  "clause": "return a black or red creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Reality Ripple",
   "clause": "target artifact, creature, or land phases out",
   "ignored": [
@@ -2764,6 +2918,13 @@
   ]
  },
  {
+  "card": "Root Greevil",
+  "clause": "destroy all enchantments of the color of your choice",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Rout",
   "clause": "destroy all creatures. they can't be regenerated",
   "ignored": [
@@ -2803,6 +2964,13 @@
   "clause": "target attacking creature gets +2/+0 until end of turn. when that creature leaves the battlefield this turn, sacrifice this artifact. if the creature deals damage to a creature this turn, the creature dealt damage can't be regenerated this turn. if a creature dealt damage by the targeted creature would die this turn, exile that creature instead",
   "ignored": [
    "targeted"
+  ]
+ },
+ {
+  "card": "Rushing River",
+  "clause": "return target nonland permanent to its owner's hand. if this spell was kicked, return another target nonland permanent to its owner's hand",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -2873,6 +3041,13 @@
   "clause": "savage twister deals x damage to each creature",
   "ignored": [
    "each"
+  ]
+ },
+ {
+  "card": "Sawtooth Loon",
+  "clause": "return a white or blue creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -3018,6 +3193,13 @@
   ]
  },
  {
+  "card": "Shivan Wurm",
+  "clause": "return a red or green creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Shoving Match",
   "clause": "until end of turn, all creatures gain \"{t}: tap target creature.\"",
   "ignored": [
@@ -3060,6 +3242,13 @@
   ]
  },
  {
+  "card": "Silver Drake",
+  "clause": "return a white or blue creature you control to its owner's hand",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Simian Grunts",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {2}{g}",
   "ignored": [
@@ -3085,6 +3274,20 @@
   "clause": "target white or black creature gains flying until end of turn",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Skyship Weatherlight",
+  "clause": "search your library for any number of artifact and/or creature cards, exile them, then shuffle",
+  "ignored": [
+   "and/or"
+  ]
+ },
+ {
+  "card": "Skyshroud Blessing",
+  "clause": "all lands gain shroud until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -3148,6 +3351,13 @@
   "clause": "target creature you control gets +x/+0 until end of turn, where x is the number of creature cards in your graveyard. sacrifice that creature at the beginning of the next end step",
   "ignored": [
    "cards"
+  ]
+ },
+ {
+  "card": "Sparkcaster",
+  "clause": "return a red or green creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -3249,6 +3459,13 @@
   "clause": "for each defending player, separate all creatures that player controls into two piles and that player chooses one. only creatures in the chosen piles can block this turn",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Steel Leaf Paladin",
+  "clause": "return a green or white creature you control to its owner's hand",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -3861,6 +4078,13 @@
  {
   "card": "Wash Out",
   "clause": "return all permanents of the color of your choice to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Waterspout Elemental",
+  "clause": "if it was kicked, return all other creatures to their owners' hands and you skip your next turn",
   "ignored": [
    "all"
   ]
