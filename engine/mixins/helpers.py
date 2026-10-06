@@ -2486,6 +2486,43 @@ class GameHelpersMixin:
         emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
         return permanent
 
+    def sacrifice_permanents(self, permanents) -> list[Permanent]:
+        """Sacrifice several permanents **at once** — CR 701.21a for a set
+        that leaves in one event ("…then sacrifices the rest", Cataclysm).
+
+        Not a loop over :meth:`sacrifice_permanent`, for the reason
+        :meth:`_destroy_swept_permanents` is not a loop over a destroy: an
+        ability that triggers on a permanent leaving looks back in time
+        (CR 603.10a), so a watcher going in the same event still sees the
+        others go. One at a time, a Dingus Egg sacrificed ahead of the lands
+        beside it saw none of them — and none of the other player's, whose
+        sacrifices are the same event by the card's own ruling.
+
+        So it has that sweep's shape: every permanent reaches its graveyard
+        **while all of them are still listed**, then they come off their
+        battlefields together, then each sacrifice is announced. Sacrificing is
+        not destroying (701.21a), so nothing regenerates and nothing is
+        indestructible here. A permanent nobody controls any more is skipped,
+        and one named twice is sacrificed once.
+
+        Returns those sacrificed, in the order they were named.
+        """
+        doomed: list[tuple[Permanent, int]] = []
+        for permanent in permanents:
+            seat = self.controller_index_of(permanent)
+            if seat is None or any(permanent is listed for listed, _ in doomed):
+                continue
+            doomed.append((permanent, seat))
+        for permanent, seat in doomed:
+            # Before the graveyard move, which is what announces the death —
+            # see :meth:`sacrifice_permanent`.
+            permanent.metadata["was_sacrificed"] = True
+            self._permanent_to_graveyard(self.players[seat], permanent)
+        self.remove_all_from_battlefield([permanent for permanent, _ in doomed])
+        for permanent, seat in doomed:
+            emit(self, "you_sacrifice_permanent", subject=permanent, seat=seat)
+        return [permanent for permanent, _ in doomed]
+
     # ------------------------------------------------------------------
     # Combat's slots, kept honest across a removal
     # ------------------------------------------------------------------

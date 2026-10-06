@@ -532,3 +532,151 @@ def test_a_keep_list_with_no_complement_behind_it_refuses_the_line():
         parse_line(
             "Each player chooses an artifact and a creature, then sacrifices the rest."
         )
+
+
+# --- R3 J8: Cataclysm's sacrifices are one event ---
+#
+# The card's ruling (2004-10-04, fetched from Scryfall): "The current player
+# makes their choices before the other player. After both players make
+# choices, **all the sacrifices are done simultaneously**." The keep prompt
+# sacrificed each seat's half as that seat answered. Three things that shows
+# up as, one test each: a board that had already moved with a player still
+# choosing; a permanent watching things leave (Dingus Egg) that saw only its
+# own controller's; and a stolen creature that had gone home in time to be one
+# of the things its owner had to choose between.
+#
+# The pool-wide census is `tests/engine/test_keep_batches_apply_together.py`.
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def _r3j8_cataclysm(set_pool, mine, theirs):
+    """Cataclysm resolving at a table of two interactive seats, both owing
+    their choice. Returns the game and each seat's permanents by name."""
+    lea = set_pool("LEA")
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(name="P1", hand=[set_pool("EXO")["Cataclysm"]]),
+        _R3J8PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    boards = []
+    for seat, names in ((0, mine), (1, theirs)):
+        placed = []
+        for name in names:
+            perm = _R3J8Permanent(card=lea[name])
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            placed.append(perm)
+        boards.append(placed)
+    return game, boards
+
+
+def _r3j8_cast(game):
+    assert game.queue_from_hand(0, "Cataclysm").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("keep_permanents", 0), ("keep_permanents", 1),
+    ]
+
+
+def _r3j8_names(game, seat):
+    return sorted(perm.card.name for perm in game.controlled_by(seat))
+
+
+def test_r3j8_cataclysm_moves_nothing_until_the_last_seat_has_chosen(set_pool):
+    """The first seat's answer is held: its permanents are all still there, the
+    spell is still on the stack and the other seat still owes its choice."""
+    game, (mine, theirs) = _r3j8_cataclysm(
+        set_pool,
+        mine=["Grizzly Bears", "Savannah Lions", "Forest"],
+        theirs=["Hill Giant", "Mountain", "Mountain"],
+    )
+    _r3j8_cast(game)
+
+    assert game.confirm_keep_permanents(
+        0, [mine[0].permanent_id, mine[2].permanent_id]
+    )
+    assert _r3j8_names(game, 0) == ["Forest", "Grizzly Bears", "Savannah Lions"]
+    assert game.players[0].graveyard == []
+    assert game.stack and [c.player_index for c in game.pending_choices] == [1]
+    # The choice is public as it is made; the sacrifice is not yet a fact.
+    assert "P1 chose Grizzly Bears, Forest (Cataclysm)" in game.log
+    assert not any("P1 kept" in line for line in game.log)
+
+    assert game.confirm_keep_permanents(
+        1, [theirs[0].permanent_id, theirs[1].permanent_id]
+    )
+    _r3j8_resolve_stack(game)
+
+    assert _r3j8_names(game, 0) == ["Forest", "Grizzly Bears"]
+    assert _r3j8_names(game, 1) == ["Hill Giant", "Mountain"]
+    assert [c.name for c in game.players[0].graveyard] == ["Savannah Lions", "Cataclysm"]
+
+
+def test_r3j8_a_dingus_egg_given_up_to_cataclysm_sees_every_land_go(set_pool):
+    """"Whenever a land is put into a graveyard from the battlefield, Dingus
+    Egg deals 2 damage to that land's controller." Its controller keeps the Mox
+    as their artifact, so the Egg is sacrificed — in the same event as one of
+    their own Forests and two of the other player's Mountains (CR 603.10a: it
+    looks back). One seat at a time the Egg was gone before the Mountains
+    were, and the other player took nothing."""
+    game, (mine, theirs) = _r3j8_cataclysm(
+        set_pool,
+        mine=["Dingus Egg", "Mox Pearl", "Forest", "Forest"],
+        theirs=["Mountain", "Mountain", "Mountain"],
+    )
+    _r3j8_cast(game)
+
+    assert game.confirm_keep_permanents(
+        0, [mine[1].permanent_id, mine[2].permanent_id]
+    )
+    assert game.confirm_keep_permanents(1, [theirs[0].permanent_id])
+    _r3j8_resolve_stack(game)
+
+    assert _r3j8_names(game, 0) == ["Forest", "Mox Pearl"]
+    assert _r3j8_names(game, 1) == ["Mountain"]
+    assert [p.life for p in game.players] == [18, 16], game.log
+
+
+def test_r3j8_a_creature_stolen_with_an_aura_is_not_its_owners_to_choose(set_pool):
+    """Control Magic on the other player's Hill Giant, and its controller
+    keeps Crusade as their enchantment — so the Aura is one of the things they
+    give up. The Giant goes home when the Aura does, which is *after* its
+    owner chose: the owner chose among their own permanents, kept their Bears,
+    and has both. One seat at a time the Aura was already gone, the Giant was
+    back in its owner's pool, and "a creature" made them give one of the two
+    up."""
+    game, (mine, theirs) = _r3j8_cataclysm(
+        set_pool,
+        mine=["Crusade", "Forest"],
+        theirs=["Hill Giant", "Grizzly Bears", "Mountain"],
+    )
+    crusade, forest = mine
+    giant, bears, mountain = theirs
+    # Cast, so the Aura is attached and steals the way the card does it.
+    game.players[0].hand.append(set_pool("LEA")["Control Magic"])
+    assert game.cast_from_hand(
+        0, "Control Magic", target_permanent_ids=[giant.permanent_id]
+    ).supported
+    _r3j8_resolve_stack(game)
+    assert _r3j8_names(game, 0) == ["Control Magic", "Crusade", "Forest", "Hill Giant"]
+    _r3j8_cast(game)
+
+    assert game.confirm_keep_permanents(
+        0, [crusade.permanent_id, giant.permanent_id, forest.permanent_id]
+    )
+    # Still stolen, so not among what its owner may name…
+    assert not game.confirm_keep_permanents(
+        1, [giant.permanent_id, mountain.permanent_id]
+    )
+    assert game.confirm_keep_permanents(
+        1, [bears.permanent_id, mountain.permanent_id]
+    )
+    _r3j8_resolve_stack(game)
+
+    # …and home once the Aura has been sacrificed.
+    assert _r3j8_names(game, 0) == ["Crusade", "Forest"]
+    assert _r3j8_names(game, 1) == ["Grizzly Bears", "Hill Giant", "Mountain"]
+# end of the R3 J8 block

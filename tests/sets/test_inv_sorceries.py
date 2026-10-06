@@ -1484,3 +1484,61 @@ def test_barrins_spite_with_one_target_gone_sacrifices_the_one_left(set_pool):
     assert [card.name for card in game.players[1].graveyard] == ["Hill Giant"]
     assert game.players[1].hand == []
     assert _w2g2_spite_names(game, 1) == ["Craw Wurm"]
+
+
+# --- R3 J8: Global Ruin's sacrifices are one event ---
+#
+# "Each player chooses from the lands they control a land of each basic land
+# type, then sacrifices the rest." The keep prompt Cataclysm arms, and the
+# ruling it carries: the sacrifices are simultaneous, after every player has
+# chosen. Each seat's lands used to go as that seat answered.
+#
+# The pool-wide census is `tests/engine/test_keep_batches_apply_together.py`.
+
+from engine import Game as _R3J8Game, PlayerState as _R3J8PlayerState  # noqa: E402
+from engine.models import Permanent as _R3J8Permanent  # noqa: E402
+from tests.helpers import resolve_stack as _r3j8_resolve_stack  # noqa: E402
+
+
+def test_r3j8_global_ruin_moves_no_land_until_the_last_seat_has_chosen(set_pool):
+    """Two interactive seats and a Dingus Egg, which makes the event visible:
+    after the first answer every land is still there and nobody has been dealt
+    damage; after the second, all three spare lands go together and the Egg
+    answers for each of them."""
+    lea = set_pool("LEA")
+    game = _R3J8Game(players=[
+        _R3J8PlayerState(name="P1", hand=[set_pool("INV")["Global Ruin"]]),
+        _R3J8PlayerState(name="P2"),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0, 1}
+    boards = []
+    for seat, names in (
+        (0, ["Plains", "Plains", "Forest", "Dingus Egg"]),
+        (1, ["Mountain", "Mountain", "Mountain"]),
+    ):
+        placed = []
+        for name in names:
+            perm = _R3J8Permanent(card=lea[name])
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            placed.append(perm)
+        boards.append(placed)
+    mine, theirs = boards
+
+    assert game.queue_from_hand(0, "Global Ruin").supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_keep_permanents(0, [mine[0].permanent_id, mine[2].permanent_id])
+
+    assert len(list(game.controlled_by(0))) == 4 and game.players[0].graveyard == []
+    assert [p.life for p in game.players] == [20, 20]
+    assert [c.player_index for c in game.pending_choices] == [1]
+
+    assert game.confirm_keep_permanents(1, [theirs[0].permanent_id])
+    _r3j8_resolve_stack(game)
+
+    assert sorted(p.card.name for p in game.controlled_by(0)) == [
+        "Dingus Egg", "Forest", "Plains",
+    ]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Mountain"]
+    assert [p.life for p in game.players] == [18, 16], game.log
+# end of the R3 J8 block

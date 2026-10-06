@@ -3576,10 +3576,19 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     wrong direction to guess in, which is the reason that handler gives and the
     reason this one repeats it.
 
-    Every seat's pool is read before any of them answers, and it does not need
-    to be: one player's sacrifices cannot change another's board, so re-reading
-    per seat would give the same answer. What it *would* add is a question about
-    what an intervening trigger did, which the card does not ask.
+    **Nothing moves until the last seat has answered.** Cataclysm's ruling
+    (2004-10-04): "After both players make choices, all the sacrifices are done
+    simultaneously." The prompts share one batch (``Game.new_keep_batch``) and
+    its last answer performs all of them as one event.
+
+    This paragraph used to say "one player's sacrifices cannot change another's
+    board, so re-reading per seat would give the same answer", and each prompt
+    sacrificed as it was answered on the strength of it. Both halves were
+    wrong. A seat that gives up the Aura it stole a creature with has changed
+    which creatures the other seat chooses among, and a seat that gives up
+    Kormus Bell has changed whether the other's Swamps are creatures at all;
+    and a permanent that watches things leave (Dingus Egg) is one event's
+    witness, not one seat's.
     """
     payload = instruction.payload
     who = payload.get("who")
@@ -3606,14 +3615,20 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     # "…Return those lands to their owners' hands." (Planar Overlay.) Which
     # half of the choice moves, carried through to the prompt whose resolver
     # performs it; absent is this handler's own name, the chosen kept and the
-    # rest sacrificed. The same per-seat arming either way, and for the reason
-    # the docstring gives: one seat's lands leaving cannot change what another
-    # seat controls.
+    # rest sacrificed. The same per-seat arming either way, and the same batch:
+    # "Return those lands to their owners' hands" is one sentence about every
+    # player's choice, read once they have all made it.
     fate = payload.get("fate")
+    batch = game.new_keep_batch()
     for seat in seats:
         game.arm_keep_permanents(
             seat, pool=pool, slots=slots, reason=card_name, fate=fate,
+            batch=batch,
         )
+    # Only now can a batch be complete: a seat nobody asks may have answered as
+    # it was armed, with seats still to come behind it.
+    batch["armed"] = True
+    game.finish_keep_batch(batch)
     return True, "resolved"
 
 
