@@ -505,3 +505,54 @@ def test_the_log_line_reaches_both_seats_over_the_wire():
     line = f"Slipping Beast assigns its combat damage {AS_THOUGH_UNBLOCKED_LOG}"
     for seat in (0, 1):
         assert line in _state(sid, seat)["log"], seat
+
+
+def test_a_second_combat_damage_step_asks_again_over_the_wire():
+    """CR 510.4: a double striker's two steps are two announcements. One
+    ``assign_combat_damage`` resolves one step, the state goes on offering the
+    question, and the second answer need not be the first."""
+    striker = _mk_creature_card("Slipping Beast", 3, 3, f"Double strike\n{OFFER}")
+    sid, game, (beast,), (wall,) = _to_combat_damage(
+        [striker], [_mk_creature_card("Wall", 0, 9)]
+    )
+    assert _waiting(sid)
+
+    first = _act(
+        sid, seat=0, action="assign_combat_damage",
+        attacker_damage={}, as_though_unblocked_ids=[beast.permanent_id],
+    )
+    assert first.status_code == 200, first.text
+    state = _state(sid, 0)
+    assert state["combat"]["first_strike_done"] is True
+    assert state["combat"]["damage_resolved"] is False
+    assert state["players"][1]["life"] == 17 and wall.damage_marked == 0
+    assert [e["attacker_id"] for e in state["unblocked_assignment"]["attackers"]] == [
+        beast.permanent_id
+    ]
+
+    second = _act(sid, seat=0, action="assign_combat_damage",
+                  attacker_damage={"0": {"0": 3}})
+    assert second.status_code == 200, second.text
+    state = second.json()
+    assert state["combat"]["damage_resolved"] is True
+    assert state["players"][1]["life"] == 17 and wall.damage_marked == 3
+
+
+def test_the_dialog_asks_afresh_in_the_second_step():
+    """The client's half of the test above: the first step's answer is not
+    left selected for the second, and the dialog — which auto-opens once per
+    step key and is closed by its own Confirm — is opened again from that
+    handler while an offer is still owed. (Driven in the running app against a
+    first-strike blocker: the dialog came back unanswered, Confirm disabled.)
+
+    The reopening has to come *after* the handler's ``finally``, which
+    re-enables Confirm: opened inside the ``try`` it would show an unanswered
+    question behind an enabled button."""
+    dialog = app_js_function_body("openDamageDialog")
+    sent = dialog.index("as_though_unblocked_ids: asThoughUnblockedIds")
+    cleared = dialog.index("combatDamageOfferDraft = {};", sent)
+    still_owed = dialog.index("getAttackerAssignGroups(currentState).some((g) => g.offer)", cleared)
+    put_back = dialog.index("confirmBtn.disabled = false;", still_owed)
+    reopened = dialog.index("openCombatDamageDialog(currentState);", put_back)
+    assert sent < cleared < still_owed < put_back < reopened
+    assert "if (askAgain) {" in dialog[put_back:reopened]

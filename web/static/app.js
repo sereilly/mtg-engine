@@ -17991,6 +17991,14 @@ function openDamageDialog(state = currentState, mode = "attacker") {
         }
         assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
       }
+      // One answer per combat damage step (CR 510.4): with first or double
+      // strike there is a second step, and an attacker with the offer is asked
+      // again — with nothing selected, not shown already answered the way the
+      // first step was. The dialog auto-opens once per step key and this
+      // handler closes it, so the second asking is opened from here, after the
+      // `finally` below has put the button back (the fresh dialog disables it
+      // itself until the question is answered).
+      let askAgain = false;
       try {
         confirmBtn.disabled = true;
         if (mode === "banding") {
@@ -18003,13 +18011,22 @@ function openDamageDialog(state = currentState, mode = "attacker") {
             attacker_damage: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
           });
+          combatDamageOfferDraft = {};
           updateActionHint("Combat damage resolved.");
+          askAgain =
+            isCombatStep(currentState, "combat_damage") &&
+            !getCombatState(currentState)?.damage_resolved &&
+            getAttackerAssignGroups(currentState).some((g) => g.offer);
         }
         closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
       } finally {
         confirmBtn.disabled = false;
+      }
+      if (askAgain) {
+        updateActionHint("First-strike combat damage resolved. Choose again for the second combat damage step.");
+        openCombatDamageDialog(currentState);
       }
     };
   }

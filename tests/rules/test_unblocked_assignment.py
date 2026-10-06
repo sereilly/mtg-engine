@@ -281,6 +281,61 @@ def test_as_though_unblocked_reaches_the_planeswalker_it_attacks():
     assert wall.damage_marked == 0
 
 
+@pytest.mark.cr("510.4", "510.1b", "510.1c")
+def test_each_combat_damage_step_takes_its_own_answer():
+    """CR 510.4: with first or double strike there are two combat damage
+    steps, and CR 510.1 is an announcement made in each. A double striker with
+    the offer may go past its blocker in the first and turn on it in the
+    second — which is why the answer rides the assignment it belongs to and is
+    not a mark stored on the creature from one step into the next."""
+    beast_card = _offered(3, 3, extra="Double strike")
+    game, (beast,), (wall,), _ = _combat(
+        beast_card, [_wall(power=0, toughness=9)], interactive=(0,)
+    )
+    assert _stopped(game)
+
+    ok, why = game.resolve_combat_damage(
+        0, attacker_damage={}, as_though_unblocked=[beast.permanent_id]
+    )
+    assert ok, why
+    assert game.combat_first_strike_done and not game.combat_damage_resolved
+    assert (game.players[1].life, wall.damage_marked) == (17, 0)
+    assert game.unblocked_assignments_to_ask() == [0], "asked again for the second step"
+
+    ok, why = game.resolve_combat_damage(0, attacker_damage={0: {0: 3}})
+    assert ok, why
+    assert game.combat_damage_resolved
+    assert (game.players[1].life, wall.damage_marked) == (17, 3)
+
+
+@pytest.mark.cr("510.4", "510.1b")
+def test_an_answer_given_in_a_step_the_creature_does_not_strike_in_is_harmless():
+    """The other shape of two steps: the offered attacker has no first strike
+    and its blocker does. The first step is the blocker's alone; the attacker
+    is still asked (the stop is for the whole step, as a multi-block's is),
+    what is said for it there assigns nothing, and the second step asks
+    again."""
+    striker = _mk_creature_card("First Striker", 1, 9, "First strike")
+    game, (beast,), (blocker,), _ = _combat(_offered(), [striker], interactive=(0,))
+    assert _stopped(game)
+
+    ok, why = game.resolve_combat_damage(
+        0, attacker_damage={}, as_though_unblocked=[beast.permanent_id]
+    )
+    assert ok, why
+    assert game.combat_first_strike_done and not game.combat_damage_resolved
+    assert game.players[1].life == 20, "the attacker has not struck yet"
+    assert beast.damage_marked == 1, "the first striker has"
+    assert game.unblocked_assignments_to_ask() == [0]
+
+    ok, why = game.resolve_combat_damage(
+        0, attacker_damage={}, as_though_unblocked=[beast.permanent_id]
+    )
+    assert ok, why
+    assert game.combat_damage_resolved
+    assert game.players[1].life == 15 and blocker.damage_marked == 0
+
+
 @pytest.mark.cr("510.1b", "510.1e")
 def test_the_log_says_when_damage_went_past_the_blockers_and_only_then():
     """A blocked creature's damage landing on a player is the one thing in
