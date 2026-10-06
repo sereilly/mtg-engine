@@ -35,6 +35,7 @@ from .ai_valuation import (
     mana_ability_amount,
     mana_ability_symbols,
     returns_creature_to_hand,
+    role_target_sides,
     several_target_slot_sides,
     source_becomes_an_aura,
     source_toughness_change,
@@ -3378,16 +3379,31 @@ def _choose_role_targets(
     """Pick one target per **role** for a spell naming several kinds of target.
 
     ``None`` when *card* names no roles at all — every other spell in the pool —
-    and ``()`` when it names them and no legal chain exists, which is a refusal
-    rather than an absence: CR 601.2c fills every role or the spell is not cast.
+    and ``()`` when it names them and no chain this seat would announce exists,
+    which is a refusal rather than an absence: CR 601.2c fills every role or
+    the spell is not cast.
 
     The chain comes from ``cast_target_spec``, the same walk the browser's
     picker is handed, so the AI and a human seat are offered exactly the same
-    choices. Taking the first option at each level is the whole policy, and it
-    is safe *because* of what that walk already did: a first choice leaving a
-    later role with nothing is not in the list. A card that ever wants a better
-    chain wants a valuation in ``engine/ai_valuation.py``, derived from its
-    compiled program, not a branch here.
+    choices — a first choice leaving a later role with nothing is not in the
+    list.
+
+    **Which of a role's legal answers is a valuation, per role**
+    (``ai_valuation.role_target_sides``). Taking the first option at each level
+    was the whole policy, and the first option is the first board in seat
+    order: Withdraw returned two of its caster's own creatures, Fumarole
+    destroyed its caster's creature and land, Lunge burned its caster's
+    creature — fifteen spells across both manifest roles, measured on a
+    mirrored board. Each role is now answered from the side the step that
+    spends it wants, and a role with no legal answer on that side is no chain
+    at all: the alternative is a denial aimed at the caster's own board or a
+    gift at an opponent's, the single-target chooser's rule
+    (`_choose_single_object_target`) and for its reason.
+
+    The walk backtracks, because a side makes a first pick able to strand a
+    later role the unfiltered walk had an answer for ("another target
+    creature" with the only other opposing creature already taken is still
+    answered by the *other* order).
     """
     if not spec_roles(_cast_spec(card, compile_card_oracle(card))):
         return None
@@ -3395,14 +3411,13 @@ def _choose_role_targets(
     # kicked Falling Timber names two creatures and an unkicked one names one,
     # and a chain walked off the other cast's spec is a list of the wrong
     # length — proposed, refused, and proposed again next turn.
+    offers = _OFFERS_ANNOUNCED.get()
     options = game.cast_target_spec(
-        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        caster_index, card, optional_cost_payments=offers,
     ).get("valid_targets") or []
-    picks: list[dict] = []
-    while options:
-        pick = _preferred_role_option(options, caster_index, card, game)
-        picks.append(pick)
-        options = pick.get("next") or []
+    picks = _role_chain(
+        options, role_target_sides(card, offers), 0, caster_index, card, game,
+    )
     if not picks:
         return ()
     # A **player** role's answer is the seat itself (Donate's "target player"),
@@ -3430,6 +3445,40 @@ def _choose_role_targets(
         None if pick.get("kind") == "player" else pick["index"] for pick in picks
     ]
     return seat, indices, ids
+
+
+def _role_chain(
+    options: list[dict], sides, level: int, caster_index: int,
+    card: CardDefinition, game: Game,
+) -> "list[dict] | None":
+    """One pick per role from *options* down, each on the side its role wants
+    (``sides[level]``) — or None when no such chain exists.
+
+    Depth-first over the engine's own tree, so every chain it can return is one
+    the cast gate accepts. A level offering seats is answered by
+    `_preferred_role_option` alone, as it always was; a level offering
+    permanents tries each on the wanted side in the enumeration's order.
+    """
+    if not options:
+        return []
+    want = sides[level] if level < len(sides) else None
+    if options[0].get("kind") == "player":
+        candidates = [_preferred_role_option(options, caster_index, card, game)]
+    elif want in ("you", "opponent"):
+        candidates = [
+            option for option in options
+            if option.get("kind") != "permanent"
+            or (option.get("seat") == caster_index) == (want == "you")
+        ]
+    else:
+        candidates = options
+    for pick in candidates:
+        rest = _role_chain(
+            pick.get("next") or [], sides, level + 1, caster_index, card, game,
+        )
+        if rest is not None:
+            return [pick, *rest]
+    return None
 
 
 def _choose_several_targets(
@@ -3470,7 +3519,11 @@ def _choose_several_targets(
         game.announced_cast_x(caster_index, card)
         if (spec or {}).get("x_targets") else None
     )
-    exact = False
+    # CR 601.2c: "two target lands" names two, and only "up to" may name fewer.
+    # Read off the description the cast gate sizes the announcement by, for
+    # every several-target spell — it was read only on the cost-sized branch
+    # below, so a Plow Under with one opposing land named that one.
+    exact = bool((spec or {}).get("exact_targets"))
     if announced is not None:
         if announced < 1:
             # CR 601.2c: naming nothing is a legal announcement for an "up to"
@@ -3524,10 +3577,20 @@ def _choose_several_targets(
     # from the card's name. A card whose slots all want the same thing — every
     # one printed before Rookie Mistake — takes the single-seat path below
     # unchanged, so this is byte-identical for Basri's Acolyte and Basri's Aegis.
-    sides = several_target_slot_sides(program)
+    sides = several_target_slot_sides(
+        program, instructions_as_announced(card, program, _OFFERS_ANNOUNCED.get() or {})
+    )
     if sides and len(set(sides)) > 1:
         picks: list[tuple[int, int]] = []
-        for index in range(maximum):
+        # Slots that name a side first, so a slot with no preference cannot
+        # take the one permanent a later slot needed (Deadshot's "another
+        # target creature" with a single opposing creature on the table).
+        slot_order = sorted(
+            range(maximum),
+            key=lambda index: (index >= len(sides) or sides[index] is None, index),
+        )
+        placed: dict[int, tuple[int, int]] = {}
+        for index in slot_order:
             want = sides[index] if index < len(sides) else None
             if want == "you":
                 order = [caster_index]
@@ -3540,12 +3603,23 @@ def _choose_several_targets(
                     (seat, slot)
                     for seat in order
                     for slot in by_seat.get(seat, [])
-                    if (seat, slot) not in picks
+                    if (seat, slot) not in placed.values()
                 ),
                 None,
             )
             if chosen is not None:
-                picks.append(chosen)
+                placed[index] = chosen
+        picks = [placed[index] for index in sorted(placed)]
+        if len(picks) < maximum and (
+            exact or sorted(placed) != list(range(len(placed)))
+        ):
+            # A slot whose side holds nothing legal. The slots of such a spell
+            # are different effects ("target creature gets +0/+2 and another
+            # target creature gets -2/-0"), so leaving one out from the middle
+            # shifts each later effect onto the wrong slot — not proposed. A
+            # trailing "up to one" left empty (Primal Might with no opposing
+            # creature) is still an announcement the card prints.
+            return ()
         if picks:
             ids = []
             for seat, slot in picks:
@@ -3573,10 +3647,16 @@ def _choose_several_targets(
                 # tries the next smaller one.
                 return ()
             return opponents[0], by_seat[opponents[0]][:maximum], None
-        if exact:
-            # Every slot wants an opponent's permanent and no opponent has
-            # one. The fallback below would aim them at the caster's own.
-            return ()
+        # Every slot wants an opponent's permanent and no opponent has one. The
+        # fallback below would aim them at the caster's own, which for an
+        # "up to" denial (Panic Attack, Tidal Surge) is a spell spent on
+        # hampering the seat that cast it.
+        return ()
+    if sides and set(sides) == {"you"} and caster_index not in by_seat:
+        # …and the gift the other way round: every slot wants the caster's own
+        # permanent and the caster has none, so the fallback below would put
+        # Basri's Aegis' counters on an opponent's creatures.
+        return ()
 
     # One seat's worth: the index list is positional on a single battlefield
     # (`target_player_index` names whose), so a cross-seat spread needs the ids
@@ -3791,7 +3871,24 @@ def _entry_gate_gives_back_more_than_it_brings(
     ]
     if not others:
         return True
-    return _given_back_loss(given_back_first(others, None)[0]) > float(card.cmc)
+    given = given_back_first(others, None)[0]
+    loss = _given_back_loss(given)
+    if loss != float(card.cmc):
+        return loss > float(card.cmc)
+    # An even swap, which is a cast only when it is not half of a loop: the
+    # permanent given back is itself a gate whose noun admits *card*, so
+    # recasting it gives *card* back, and the seat spends every turn's mana
+    # exchanging one for the other. Measured in six seeded Planeshift games
+    # with Sawtooth Loon and Doomsday Specter pinned (both four mana, each a
+    # blue creature the other's gate admits): Loon returned Specter, Specter
+    # returned Loon, Loon returned Specter — the "A returns B, B returns A" of
+    # the paragraph above, with nothing dearer on either side for the
+    # comparison to catch. An even swap for anything else develops the board a
+    # turn later and is left alone.
+    answering = entry_self_return_gate(given.effective_card)
+    return answering is not None and _card_matches_filter(
+        card, dict(answering.get("filter") or {}), game=game, owner=player
+    )
 
 
 def _given_back_loss(permanent: Permanent) -> float:

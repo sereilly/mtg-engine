@@ -371,6 +371,19 @@ def instruction_target_side(instruction: OracleInstruction) -> str | None:
     controller = (described or {}).get("controller")
     if controller in _PRINTED_SEATS:
         return _PRINTED_SEATS[controller]
+    return _effect_side(instruction)
+
+
+def _effect_side(instruction: OracleInstruction) -> str | None:
+    """:func:`instruction_target_side` without the printed noun phrase: what
+    the effect itself does to the object it is given — the sign of a P/T
+    change, then the kind/category reading.
+
+    Split out for the callers that hold a description the top-level ``filter``
+    does not speak for: one **slot** of a several-target instruction and one
+    **role** of a roles announcement each print their own controller, and the
+    shared ``filter`` beside them is the first slot's.
+    """
     if instruction.kind in _NO_SIDE_KINDS:
         return None
     sign = _pt_delta_sign(instruction)
@@ -403,13 +416,42 @@ def denies_its_target(instruction: OracleInstruction) -> bool:
 
 def _spell_object_target_steps(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     """Every step of *card*'s spell program that names an **object** target,
-    wrappers opened (``sequence``, ``if_then``, ``may``)."""
+    wrappers opened (``sequence``, ``if_then``, ``may``).
+
+    **A step of a roles announcement that spends an object role is one too.**
+    This read only ``targets.kind == "object"``, so a sentence whose targets
+    are announced together and spent a step at a time had no side: "Return
+    target nonland permanent to its owner's hand. If this spell was kicked,
+    return another target nonland permanent…" (Rushing River) is two
+    roles-stamped steps, and cast unkicked it is a one-target spell whose
+    target the score tie handed to the caster's own board. A step spending a
+    **seat** role ("…and 2 damage to target player or planeswalker", Lunge) is
+    left out: it says nothing about a permanent.
+    """
+    from .targeting import SEAT_ROLE_KINDS, payload_own_role
+
+    def spends_an_object_role(payload: dict, targets: dict) -> bool:
+        own = payload_own_role(payload)
+        return any(
+            isinstance(role, dict)
+            and role.get("kind") not in SEAT_ROLE_KINDS
+            and own in (None, role.get("role"))
+            for role in targets.get("roles") or ()
+        )
+
     found: list[OracleInstruction] = []
 
     def walk(instructions) -> None:
         for instruction in instructions:
-            targets = (instruction.payload or {}).get("targets")
-            if isinstance(targets, dict) and targets.get("kind") == "object":
+            payload = instruction.payload or {}
+            targets = payload.get("targets")
+            if isinstance(targets, dict) and (
+                targets.get("kind") == "object"
+                or (
+                    targets.get("kind") == "roles"
+                    and spends_an_object_role(payload, targets)
+                )
+            ):
                 found.append(instruction)
             for key in ("steps", "then", "else", "action", "otherwise"):
                 nested = (instruction.payload or {}).get(key)
@@ -1409,8 +1451,13 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
     )
 
 
-def _several_target_instruction(program):
-    """The one instruction in *program* whose description names several targets."""
+def _several_target_instruction(program, instructions=None):
+    """The one instruction in *program* whose description names several targets.
+
+    *instructions* is the program as one particular cast will run it
+    (``targeting.instructions_as_announced``), for a caller holding CR 601.2b's
+    answer; None reads the program's own steps.
+    """
 
     def walk(instructions):
         for instruction in instructions:
@@ -1433,64 +1480,126 @@ def _several_target_instruction(program):
                         return found
         return None
 
-    return walk(program.instructions)
+    return walk(program.instructions if instructions is None else instructions)
 
 
-# Which board a slot wants when the slot's own payload carries no number to read
-# the answer off. Keyed by *instruction kind* — a claim about what the effect
-# does, derived from the compiled program exactly as the P/T-delta branch below
-# is, and never about which card printed it. A kind absent here keeps "no
-# preference", which is the answer every card before this one gave.
-#
-# Tapping is the first entry: it is a denial, so every slot of a several-target
-# tap wants an opponent's permanent, and the caster's own board is the one place
-# the effect is never worth casting. Without this, `_choose_several_targets`'s
-# single-seat fallback taps the caster's own creatures — round 65's bug arriving
-# through a different effect family.
-_SLOT_DISPOSITION: dict[str, str] = {
-    "tap_target_permanent": "opponent",
-    # Destruction is the same claim one family over: a destroy is a denial, so
-    # every slot of a several-target destroy wants an opponent's permanent. A
-    # preference, exactly as the tap above is -- `_choose_several_targets` still
-    # falls back to a single seat's worth when no opponent holds a legal target,
-    # which for a destroy is the caster's own board and a weak play rather than
-    # an illegal one. What the entry buys is that the AI stops preferring its
-    # own permanents when the opponent has some.
-    #
-    # No shipped card reaches this: every several-target destroy in the pool is
-    # either a sweep (no targets) or announces its count off an X (which this
-    # chooser declines), so the entry arrived with Primitive Justice, whose
-    # count comes off a CR 601.2b payment and whose bare "target artifact" names
-    # no side at all.
-    "destroy_target_permanent": "opponent",
-    # And exile, which is the same denial one zone over. This entry is
-    # about two *shipped* cards rather than about the round that found
-    # it: Dust to Dust and Ashes to Ashes are the pool's only
-    # several-target exiles, both name a bare noun with no side in it,
-    # and both had the AI removing its own permanents. A card that
-    # exiles the caster's own ("exile two target creatures **you
-    # control**") never reaches this: the controller branch above
-    # answers first, off the printed noun phrase.
-    "exile_target_permanent": "opponent",
-    # And a return to hand, the denial one zone over again -- the kind
-    # ``_OPPONENT_KINDS`` has always listed for the one-target chooser. Two
-    # cards: Nightscape Battlemage's kicked "return **up to two** target
-    # nonblack creatures to their owners' hands", which is what found it, and
-    # the shipped Undo ("Return two target creatures to their owners' hands"),
-    # which had been bouncing two of its caster's own whenever the caster
-    # controlled two.
-    #
-    # The rest of this class is measured and left (PLS W1G2's report): Plow
-    # Under, Panic Attack, Jagged Lightning, Volcanic Salvo, Sick and Tired and
-    # Deadshot name the caster's own board for the same reason -- this table
-    # lags the one-target reading -- and closing it wholesale by falling back
-    # to ``instruction_target_side`` moves cards whose slots want *different*
-    # boards (Deadshot, Kor Chant), so it is a round of its own.
-    "bounce_target_creature": "opponent",
+#: What a several-target instruction does to **each** of its slots, for the
+#: kinds whose slots are not interchangeable and whose payload carries no
+#: number to read the difference off (``pump_targets_until_eot`` carries its
+#: ``slots``). One entry per slot, "you" / "opponent" / None for a slot the
+#: effect only *refers* to.
+#:
+#: Keyed by instruction kind — a claim about what the compiled effect does to
+#: the object in each position, never about which card printed it — and it is
+#: the reason the homogeneous fallback below could not simply be
+#: ``instruction_target_side`` for everything: the kind-level reading gives one
+#: side for the whole instruction, and these give two.
+_SLOT_ROLE_SIDES: dict[str, tuple[str | None, ...]] = {
+    # "It deals damage equal to its power to **another target creature**"
+    # (Deadshot). Slot 1 is the creature damaged; slot 0 only deals it, and
+    # whichever board supplies the dealer the damage lands the same.
+    "target_bites_target": (None, "opponent"),
+    # "All damage that would be dealt this turn to target creature you control
+    # … is dealt to **another target creature** instead" (Kor Chant). Slot 0 is
+    # spared, slot 1 takes what it was spared.
+    "redirect_chosen_source_damage_between_targets_until_eot": ("you", "opponent"),
+    # "Exchange control of target artifact or creature and **another target
+    # permanent**" (Legerdemain). One is given and one is taken; two of the
+    # caster's own is an exchange of nothing.
+    "exchange_control_of_targets": ("you", "opponent"),
 }
 
+#: Steps that act on a recorded group (``permanents_from``) and whose category
+#: is filed by where the object goes rather than by what that does to it: an
+#: exile and a return to hand are ``zones`` beside every other card movement.
+_RECORDED_DENIAL_KINDS = frozenset({
+    "exile_recorded_permanent",
+    "return_recorded_permanents_to_hand",
+})
 
-def several_target_slot_sides(program) -> tuple[str | None, ...]:
+
+def _recorded_group_side(program, chooser, instructions=None) -> str | None:
+    """Which board a "Choose two target creatures controlled by the same
+    player" announcement (``choose_target_permanents``) belongs on: the side of
+    the steps that go on to act on what it recorded, the denial winning.
+
+    The chooser itself does nothing to its targets — it records them — so no
+    reading of its own kind has an answer: "Their controller chooses and
+    sacrifices one of them. Return the other to its owner's hand." (Barrin's
+    Spite) is two denials on the group, and "Exile one of those creatures and
+    put two +1/+1 counters on the other" (Cannibalize) is a removal and a gift,
+    which is :func:`spell_target_side`'s rule over again: one hampering step
+    makes the target the opponent's.
+    """
+
+    def siblings(steps):
+        steps = tuple(steps or ())
+        for position, step in enumerate(steps):
+            if step is chooser:
+                return steps[position + 1:]
+            for key in ("steps", "then", "else", "action"):
+                nested = (step.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = siblings(nested)
+                    if found is not None:
+                        return found
+        return None
+
+    later = siblings(program.instructions if instructions is None else instructions)
+    sides: set[str] = set()
+    for step in later or ():
+        if not (step.payload or {}).get("permanents_from"):
+            continue
+        if step.kind in _RECORDED_DENIAL_KINDS:
+            sides.add("opponent")
+            continue
+        sign = _pt_delta_sign(step)
+        side = ("you" if sign > 0 else "opponent") if sign else activation_target_side(step)
+        if side is not None:
+            sides.add(side)
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
+def _bare_sibling_side(program, instruction, instructions=None) -> str | None:
+    """The side of the steps printed **before** a several-target instruction in
+    the same sentence run that name no target of their own — the legacy shape
+    for "the target", which is the announcement's first.
+
+    "**Tap target creature.** It deals damage equal to its power to another
+    target creature." (Deadshot.) The bite's own kind says nothing about the
+    creature that deals it; the tap in front of it does, and it is a denial.
+    """
+
+    def earlier(steps):
+        steps = tuple(steps or ())
+        for position, step in enumerate(steps):
+            if step is instruction:
+                return steps[:position]
+            for key in ("steps", "then", "else", "action"):
+                nested = (step.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)):
+                    found = earlier(nested)
+                    if found is not None:
+                        return found
+        return None
+
+    sides = {
+        _effect_side(step)
+        for step in earlier(program.instructions if instructions is None else instructions) or ()
+        if not isinstance((step.payload or {}).get("targets"), dict)
+    } - {None}
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
+def several_target_slot_sides(program, instructions=None) -> tuple[str | None, ...]:
     """Which board each slot of a several-target spell should be picked from.
 
     Derived, never named: the compiled program says which slots are restricted by
@@ -1500,39 +1609,62 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
     from "the one I shrink" — and a chooser reading neither puts both on the
     caster's own board.
 
-    Returns one entry per slot: "you", "opponent", or None for no preference. A
-    uniform answer means the existing single-seat policy is exactly right, and
-    `_choose_several_targets` keeps it.
+    Four readings, most specific first, each about **the step that spends the
+    slot**:
+
+    * the slot's own printed controller ("target creature **you control**");
+    * the slot's own numbers (``slots``, a per-slot P/T delta);
+    * a kind whose slots are not interchangeable (``_SLOT_ROLE_SIDES``), and a
+      "choose two target creatures" whose effect is the steps after it
+      (:func:`_recorded_group_side`);
+    * otherwise every slot gets the same effect, and what that effect does to
+      its target is exactly the question :func:`instruction_target_side`
+      answers for a one-target spell.
+
+    **The last one used to be a table of its own** (``_SLOT_DISPOSITION``: tap,
+    destroy, exile, return to hand, each added by the round that found the AI
+    aiming it at its own board), and a table that restates another one lags
+    it. Plow Under put two of its caster's lands on top of their library,
+    Panic Attack kept three of its own creatures from blocking, Jagged
+    Lightning and Volcanic Salvo burned the caster's creatures and Sick and
+    Tired shrank them — every one a kind the one-target reading had already
+    classified as a denial.
+
+    Returns one entry per slot: "you", "opponent", or None for no preference.
+    *instructions* is the program as one particular cast will run it
+    (``targeting.instructions_as_announced``); None reads the program's own.
     """
-    instruction = _several_target_instruction(program)
+    instruction = _several_target_instruction(program, instructions)
     if instruction is None:
         return ()
     targets = instruction.payload.get("targets") or {}
     count = targets.get("count")
     if isinstance(count, dict):
-        # An announcement sized by a CR 601.2b optional additional cost. This
-        # policy takes no such offer -- "may" is declined by default and nothing
-        # values one -- so the number of slots is the base count alone, which is
-        # the same reading `_choose_several_targets` makes when it asks how many
-        # targets to name.
+        # An announcement sized by a CR 601.2b optional additional cost: the
+        # base count, which is the floor of what any announcement names. Every
+        # slot of such an instruction gets one effect, so a caller that names
+        # more reads the last entry for the rest.
         count = cost_target_count(count, {}) or 0
     if not isinstance(count, int) or count < 1:
         return ()
     filters = targets.get("filters") or [targets.get("filter") or {}] * count
     slots = tuple(instruction.payload.get("slots") or ())
+    per_slot = _SLOT_ROLE_SIDES.get(instruction.kind)
+    if instruction.kind == "choose_target_permanents":
+        shared = _recorded_group_side(program, instruction, instructions)
+    elif per_slot is None and not slots and targets.get("kind") == "object":
+        # Only an object on a battlefield has a board to be picked from: a
+        # several-target *graveyard* return names cards, and whose pile they
+        # come from is the printed phrase's business.
+        shared = _effect_side(instruction)
+    else:
+        shared = None
     sides: list[str | None] = []
     for index in range(count):
         described = filters[index] if index < len(filters) else {}
         controller = described.get("controller")
-        if controller == "you":
-            sides.append("you")
-            continue
-        if controller in ("not_you", "opponent"):
-            sides.append("opponent")
-            continue
-        disposition = _SLOT_DISPOSITION.get(instruction.kind)
-        if disposition is not None:
-            sides.append(disposition)
+        if controller in _PRINTED_SEATS:
+            sides.append(_PRINTED_SEATS[controller])
             continue
         if index < len(slots):
             slot = slots[index]
@@ -1543,7 +1675,110 @@ def several_target_slot_sides(program) -> tuple[str | None, ...]:
             )
             sides.append("opponent" if delta < 0 else ("you" if delta > 0 else None))
             continue
-        sides.append(None)
+        if per_slot is not None:
+            sides.append(per_slot[index] if index < len(per_slot) else None)
+            continue
+        sides.append(shared)
+    if per_slot is not None and sides and sides[0] is None:
+        sides[0] = _bare_sibling_side(program, instruction, instructions)
+    return tuple(sides)
+
+
+def role_target_sides(
+    card: CardDefinition, optional_cost_payments: dict | None = None
+) -> tuple[str | None, ...]:
+    """Which board each **role** of a roles announcement should be picked from
+    — one entry per role of the cast's spec, in role order: "you", "opponent",
+    or None for no preference (and for a role whose object is a seat).
+
+    :func:`several_target_slot_sides` for the other shape a several-target
+    announcement comes in. A roles spell is announced together and *spent* a
+    step at a time ("Return target creature to its owner's hand. Then return
+    **another target creature** … unless its controller pays {1}", Withdraw),
+    and :func:`spell_target_side` reads only a step whose ``targets`` is an
+    object description — so a roles spell had no side at all, the chooser took
+    the first legal chain, and the first board in seat order is the caster's
+    own. Withdraw returned two of its caster's creatures; Rushing River and
+    Falling Timber inherit the template; Fumarole and Plague Spores destroyed
+    their caster's own creature and land; Lunge and Shower of Sparks burned
+    their caster's own creature.
+
+    Read off the step that spends each role — the one whose ``targets.role``
+    names it, or every roles step that names none of its own (one instruction
+    acting on every role: "Destroy target creature **and** target land") —
+    through the reading a one-target spell gets, the denial winning where two
+    steps spend one role. Three roles keep None:
+
+    * a **seat** (``role_is_seat``) — the cast's own seat choice answers it;
+    * a role the instruction only refers to (``subject_role`` names another);
+    * a role with a **dependency** ("that target Wall blocked this turn"): the
+      relation already decides which board it can be on.
+
+    A positional role (``slot_N``, a several-target instruction whose slots
+    print different restrictions) is that instruction's own slot.
+
+    *optional_cost_payments* is CR 601.2b's answer for the cast being built: a
+    kicked Rushing River announces two roles and an unkicked one none.
+    """
+    from .targeting import (derive_cast_spec, instructions_as_announced,
+                            payload_own_role, role_dependency, role_is_seat,
+                            spec_roles)
+
+    program = compile_card_oracle(card)
+    roles = spec_roles(
+        derive_cast_spec(card, program, optional_cost_payments=optional_cost_payments)
+    )
+    if not roles:
+        return ()
+    run = instructions_as_announced(card, program, optional_cost_payments or {})
+    slot_sides = several_target_slot_sides(program, run)
+
+    spenders: list[OracleInstruction] = []
+
+    def walk(instructions) -> None:
+        for instruction in instructions:
+            payload = instruction.payload or {}
+            targets = payload.get("targets")
+            if isinstance(targets, dict) and targets.get("kind") == "roles":
+                spenders.append(instruction)
+            for key in ("steps", "then", "else", "action", "otherwise"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)):
+                    walk(nested)
+
+    walk(run)
+    sides: list[str | None] = []
+    for position, role in enumerate(roles):
+        name = role.get("role")
+        if role_is_seat(role):
+            sides.append(None)
+            continue
+        if isinstance(name, str) and name == f"slot_{position}":
+            sides.append(slot_sides[position] if position < len(slot_sides) else None)
+            continue
+        found: set[str] = set()
+        for step in spenders:
+            payload = step.payload or {}
+            entry = next(
+                (
+                    described for described in payload["targets"].get("roles") or ()
+                    if isinstance(described, dict) and described.get("role") == name
+                ),
+                None,
+            )
+            if entry is None or role_dependency(entry)[0] is not None:
+                continue
+            acted_on = payload_own_role(payload) or payload.get("subject_role")
+            if acted_on is not None and acted_on != name:
+                continue
+            side = _PRINTED_SEATS.get(
+                (entry.get("filter") or {}).get("controller")
+            ) or _effect_side(step)
+            if side is not None:
+                found.add(side)
+        sides.append(
+            "opponent" if "opponent" in found else "you" if "you" in found else None
+        )
     return tuple(sides)
 
 
@@ -2071,6 +2306,7 @@ __all__ = [
     "instruction_target_side",
     "offered_action_is_a_payment",
     "returns_creature_to_hand",
+    "role_target_sides",
     "several_target_slot_sides",
     "source_toughness_change",
     "spell_denies_its_own_target",
