@@ -1104,6 +1104,10 @@ def test_802_4b_another_defenders_blockers_are_ignored_by_this_ones_cap():
         for i in range(2):
             seat.battlefield.append(Permanent(card=_mk_creature(f"{seat.name}-B{i}", 2, 2)))
     seats[1].battlefield.append(Permanent(card=pool["Caverns of Despair"]))
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
+    for seat in seats:
+        seat.library = [_mk_creature("Filler", 1, 1) for _ in range(5)]
     game = Game(players=seats)
     game.start_turn(0)
     game._close_current_priority_step()

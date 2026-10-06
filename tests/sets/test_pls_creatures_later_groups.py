@@ -2019,3 +2019,195 @@ def test_w1g7_meddling_mage_takes_the_named_card_off_the_ais_proposals(set_pool)
 
     assert not _can_cast_with_targets(duel, 1, bears)
     assert _can_cast_with_targets(duel, 1, wolves)
+
+
+# --- W2G6: entry triggers are stack objects ---
+#
+# Gating is Planeshift's headline mechanic, and what makes it a mechanic rather
+# than a drawback is the window: the gate is a triggered ability on the stack
+# (CR 603.3), so its controller — and the opponent — can act before it
+# resolves. These drive the real cards through priority, the way a table does.
+
+from engine import Game as _W2G6Game, PlayerState as _W2G6PlayerState
+from engine.models import Permanent as _W2G6Permanent
+
+
+def _w2g6_card(set_pool, name):
+    for code in ("PLS", "LEA", "INV"):
+        card = set_pool(code).get(name)
+        if card is not None:
+            return card
+    raise KeyError(name)  # _w2g6_card
+
+
+def _w2g6_gating_table(set_pool, hand, mine=(), theirs=(), their_hand=()):
+    """Two human seats in seat 0's main phase, mana charged and floating, seat
+    0 holding priority. Returns the game and the permanents put out for each
+    seat, in the order named."""
+    forest = set_pool("LEA")["Forest"]
+    game = _W2G6Game(players=[
+        _W2G6PlayerState(
+            "Gater", library=[forest] * 12,
+            hand=[_w2g6_card(set_pool, name) for name in hand],
+        ),
+        _W2G6PlayerState(
+            "Rival", library=[forest] * 12,
+            hand=[_w2g6_card(set_pool, name) for name in their_hand],
+        ),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = {0, 1}
+    game.active_player_index = 0
+    out = []
+    for seat, names in ((0, mine), (1, theirs)):
+        for symbol in "WUBRG":
+            game.players[seat].mana_pool[symbol] = 9
+        row = []
+        for name in names:
+            permanent = _W2G6Permanent(card=_w2g6_card(set_pool, name))
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            row.append(permanent)
+        out.append(row)
+    game.start_priority_window(0)
+    return game, out[0], out[1]  # _w2g6_gating_table
+
+
+def _w2g6_cast_it(game, seat, name, **announced):
+    result = game.queue_from_hand(seat, name, **announced)
+    assert result.supported, result
+    game.note_priority_action_taken(seat)  # _w2g6_cast_it
+
+
+def _w2g6_everyone_passes(game) -> str:
+    """Every player passes in succession (CR 117.4): the top object resolves."""
+    result = "passed"
+    for _ in range(len(game.players)):
+        result = game.pass_priority(game.priority_player_index)
+        if result != "passed":
+            break
+    return result  # _w2g6_everyone_passes
+
+
+def _w2g6_board(game, seat):
+    return [permanent.card.name for permanent in game.controlled_by(seat)]  # _w2g6_board
+
+
+def _w2g6_hand(game, seat):
+    return sorted(card.name for card in game.players[seat].hand)  # _w2g6_hand
+
+
+def test_w2g6_cavern_harpy_comes_home_in_response_to_its_own_gate(set_pool):
+    """"When this creature enters, return a blue or black creature you control
+    to its owner's hand. / Pay 1 life: Return this creature to its owner's
+    hand." The best-known play with the card: with the gate on the stack, pay
+    1 life. The Harpy is in hand, and the gate — which targets nothing —
+    resolves and still takes a blue or black creature back: the Knight."""
+    game, (knight,), _ = _w2g6_gating_table(
+        set_pool, ["Cavern Harpy"], mine=["Black Knight"],
+    )
+    _w2g6_cast_it(game, 0, "Cavern Harpy")
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+
+    # The Harpy is on the battlefield, its gate is an object on the stack,
+    # nothing has been returned and its controller has priority.
+    assert _w2g6_board(game, 0) == ["Black Knight", "Cavern Harpy"]
+    (gate,) = game.stack
+    assert gate.is_ability and gate.card.name == "Cavern Harpy"
+    assert game.pending_choices == [] and game.priority_player_index == 0
+
+    assert game.queue_permanent_ability(0, "Cavern Harpy").supported
+    game.note_priority_action_taken(0)
+    assert game.players[0].life == 19 and len(game.stack) == 2
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+    assert _w2g6_hand(game, 0) == ["Cavern Harpy"]
+    assert _w2g6_board(game, 0) == ["Black Knight"]
+    assert game.stack == [gate], "the gate did not leave with its source"
+
+    assert _w2g6_everyone_passes(game) == "awaiting_choice"
+    (asked,) = game.pending_choices
+    assert asked.kind == "permanent_set_choice" and asked.player_index == 0
+    assert game.live_permanent_set_choices(asked) == [knight]
+    assert game.confirm_permanent_set_choice(0, [knight.permanent_id])
+
+    assert _w2g6_hand(game, 0) == ["Black Knight", "Cavern Harpy"]
+    assert _w2g6_board(game, 0) == [] and game.stack == []
+    assert game.players[0].life == 19
+
+
+def test_w2g6_cavern_harpy_alone_bounced_in_response_returns_nothing(set_pool):
+    """The same play with no other blue or black creature: the gate resolves
+    with nothing it could return, and nobody is asked anything."""
+    game, _, _ = _w2g6_gating_table(set_pool, ["Cavern Harpy"])
+    _w2g6_cast_it(game, 0, "Cavern Harpy")
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+
+    assert game.queue_permanent_ability(0, "Cavern Harpy").supported
+    game.note_priority_action_taken(0)
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+
+    assert _w2g6_hand(game, 0) == ["Cavern Harpy"]
+    assert game.stack == [] and game.pending_choices == []
+    assert game.players[0].life == 19
+
+
+def test_w2g6_a_gater_killed_in_response_still_takes_a_creature_home(set_pool):
+    """The window is the opponent's too. Horned Kavu is answered with its gate
+    on the stack — and the gate, which exists independently of its source
+    (CR 113.7a), still returns a red or green creature: the Elves, now the
+    only one, for nothing."""
+    game, (elves,), _ = _w2g6_gating_table(
+        set_pool, ["Horned Kavu"], mine=["Llanowar Elves"], their_hand=["Terror"],
+    )
+    _w2g6_cast_it(game, 0, "Horned Kavu")
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+    kavu = next(p for p in game.controlled_by(0) if p.card.name == "Horned Kavu")
+
+    assert game.pass_priority(0) == "passed"
+    _w2g6_cast_it(game, 1, "Terror", target_permanent_ids=[kavu.permanent_id])
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+    assert _w2g6_board(game, 0) == ["Llanowar Elves"]
+    assert [card.name for card in game.players[0].graveyard] == ["Horned Kavu"]
+
+    assert _w2g6_everyone_passes(game) == "awaiting_choice"
+    (asked,) = game.pending_choices
+    assert game.live_permanent_set_choices(asked) == [elves]
+    assert game.confirm_permanent_set_choice(0, [elves.permanent_id])
+    assert _w2g6_hand(game, 0) == ["Llanowar Elves"] and _w2g6_board(game, 0) == []
+
+
+def test_w2g6_sawtooth_loons_gate_finishes_before_its_loot_is_asked(set_pool):
+    """Two entry triggers, two stack objects, one at a time. The gate is asked
+    and answered — the Lions go home, the Loon stays — and only when it has
+    left the stack does "draw two cards, then put two cards from your hand on
+    the bottom of your library" begin. Inline, the loot ran into the gate's
+    unanswered prompt and the bounce landed last."""
+    game, (lions,), _ = _w2g6_gating_table(
+        set_pool, ["Sawtooth Loon"], mine=["Savannah Lions"],
+    )
+    island, swamp = set_pool("LEA")["Island"], set_pool("LEA")["Swamp"]
+    game.players[0].library[:2] = [island, swamp]
+    _w2g6_cast_it(game, 0, "Sawtooth Loon")
+    assert _w2g6_everyone_passes(game) == "resolved_top"
+    assert len(game.stack) == 2 and game.pending_choices == []
+
+    assert _w2g6_everyone_passes(game) == "awaiting_choice"
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_set_choice", 0),
+    ]
+    assert game.players[0].hand == [], "nothing has been drawn"
+    assert game.confirm_permanent_set_choice(0, [lions.permanent_id])
+    assert _w2g6_hand(game, 0) == ["Savannah Lions"]
+    assert _w2g6_board(game, 0) == ["Sawtooth Loon"]
+    assert len(game.stack) == 1 and game.pending_choices == []
+
+    assert _w2g6_everyone_passes(game) == "awaiting_choice"
+    (owed,) = game.pending_choices
+    assert owed.kind == "hand_to_library" and owed.data["count"] == 2
+    held = [card.name for card in game.players[0].hand]
+    assert sorted(held) == ["Island", "Savannah Lions", "Swamp"]
+    assert game.confirm_hand_to_library(0, [held.index("Swamp"), held.index("Island")])
+
+    assert _w2g6_hand(game, 0) == ["Savannah Lions"]
+    assert [card.name for card in game.players[0].library[-2:]] == ["Swamp", "Island"]
+    assert game.stack == [] and game.pending_choices == []

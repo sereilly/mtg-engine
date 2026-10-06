@@ -500,7 +500,7 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     the identity and the seat is where to draw the highlight.
     """
     choice = choices[0]
-    return {
+    payload = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
         "candidates": [
@@ -514,6 +514,14 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
             for target in choice.data.get("targets") or ()
         ],
     }
+    # "Up to two target creatures" (Basri's Acolyte, Cho-Arrim Bruiser): how
+    # many the answer may name. Sent for ``modal_mode_targets``' reason — the
+    # client cannot derive a ceiling smaller than the candidate list — and
+    # absent for an ability that prints one target, so that prompt is the
+    # payload it always was.
+    if int(choice.data.get("max_targets") or 1) > 1:
+        payload["max_targets"] = int(choice.data["max_targets"])
+    return payload
 
 
 @prompt_renderer("reflexive_target")

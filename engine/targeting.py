@@ -4869,7 +4869,18 @@ def cast_picker_expected(card, program) -> bool:
 #: "target"/"any target". Read as evidence rather than as a spec: what is
 #: wanted is only "did the printed line say *target*?", because the spec itself
 #: comes from a kind table that fills in a default where the line said nothing.
-_ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target"})
+#:
+#: ``up_to`` is "**up to** N target …" — the same printed word with a ceiling
+#: in front of it (``resolution._target_is_up_to`` reads the same quantifier
+#: for CR 601.2c's "zero is a legal announcement"). It was missing, so "you
+#: may tap up to two target creatures" (Cho-Arrim Bruiser) answered False:
+#: its attack trigger kept the reference to itself that the declare-attackers
+#: fire site stamps, CR 603.3d's choice was skipped, and the Bruiser tapped
+#: the Bruiser. Measured over the pool before it was added: 45 instructions
+#: on 28 cards answer differently, and that card is the only one any reader
+#: of this predicate then treats differently — it is the one ``may`` whose
+#: action describes such a target, and the one combat trigger that prints one.
+_ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target", "up_to"})
 
 #: ...and the words a lowering writes when it keeps the announcement as a plain
 #: payload value instead: ``recipient``/``who``/``actor`` naming the seat this

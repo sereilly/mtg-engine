@@ -40,7 +40,7 @@ import pytest
 from engine.faces import compilation_units
 from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.modal_triggers import INLINE_TRIGGER_CONDITIONS
+from engine.modal_triggers import ENTRY_TRIGGER_CONDITIONS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
@@ -75,7 +75,7 @@ def _entry_trigger_cards() -> tuple:
         instructions = tuple(
             trig.instruction
             for trig in program.triggered_abilities
-            if trig.condition.kind in INLINE_TRIGGER_CONDITIONS
+            if trig.condition.kind in ENTRY_TRIGGER_CONDITIONS
             and trig.supported
             and trig.instruction is not None
         )

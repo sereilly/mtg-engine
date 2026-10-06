@@ -256,7 +256,8 @@ def test_w1g2_603_3d_two_kicked_triggers_each_choose_their_own_target():
     """Two triggered abilities are two objects on the stack, each choosing its
     own target as it is put there. A cast that named the first trigger's land
     does not hand it to the second: "destroy target artifact" asks for an
-    artifact, and nothing is destroyed until it is answered."""
+    artifact, and nothing is destroyed until it is answered — nor, both being
+    on the stack (CR 603.3), until each resolves, the first printed first."""
     game = _w1g2_game(
         _TWINBLADE, theirs=[_LAND, _RELIC], mine=[_RELIC], humans=(0,)
     )
@@ -268,7 +269,8 @@ def test_w1g2_603_3d_two_kicked_triggers_each_choose_their_own_target():
     ).supported
     assert game.resolve_top_of_stack()
 
-    assert not game.is_on_battlefield(land)
+    assert len(game.stack) == 2 and all(item.is_ability for item in game.stack)
+    assert game.is_on_battlefield(land), "its trigger is on the stack, unresolved"
     assert game.is_on_battlefield(their_relic) and game.is_on_battlefield(my_relic)
     (asked,) = game.pending_choices
     assert asked.kind == "trigger_target"
@@ -276,6 +278,11 @@ def test_w1g2_603_3d_two_kicked_triggers_each_choose_their_own_target():
         [their_relic.permanent_id, my_relic.permanent_id]
     )
     assert game.confirm_trigger_target(0, permanent_id=their_relic.permanent_id)
+
+    assert game.resolve_top_of_stack()
+    assert not game.is_on_battlefield(land)
+    assert game.is_on_battlefield(their_relic) and game.is_on_battlefield(my_relic)
+
     resolve_stack(game)
     assert not game.is_on_battlefield(their_relic)
     assert game.is_on_battlefield(my_relic)

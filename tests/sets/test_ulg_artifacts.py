@@ -59,6 +59,10 @@ def _g4_three_seat_combat(set_pool, *, crawlspaces_on: tuple[int, ...] = ()):
         if index in crawlspaces_on:
             board.append(Permanent(card=set_pool("ULG")["Crawlspace"]))
         seats.append(PlayerState(name=f"P{index + 1}", battlefield=board))
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
+    for seat in seats:
+        seat.library = [_g4_body("Filler") for _ in range(5)]
     game = Game(players=seats)
     game.start_turn(0)
     game._close_current_priority_step()

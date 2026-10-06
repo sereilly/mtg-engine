@@ -99,6 +99,10 @@ def test_bull_elephant_takes_exactly_two_forests(set_pool, catalog_by_name):
     game, alice, _ = _g1_rig()
     forests = [_g1_enters(game, 0, catalog_by_name["Forest"]) for _ in range(3)]
     _g1_enters(game, 0, set_pool("VIS")["Bull Elephant"])
+    assert game.pending_choices == [], "nothing is asked until the trigger resolves"
+    # CR 603.3: the entry trigger is an object on the stack; it resolves up
+    # to its first question.
+    assert game.resolve_top_of_stack(pause_for_choices=True)
 
     assert game.confirm_optional_pay(0, accept=True) is True
     assert game.confirm_permanent_set_choice(0, [forests[0].permanent_id]) is False
@@ -123,6 +127,9 @@ def test_bull_elephant_is_sacrificed_when_one_forest_is_all_there_is(
     game, alice, _ = _g1_rig()
     _g1_enters(game, 0, catalog_by_name["Forest"])
     _g1_enters(game, 0, set_pool("VIS")["Bull Elephant"])
+    # CR 603.3: on the stack first, then resolved.
+    assert _g1_names(alice.battlefield) == ["Forest", "Bull Elephant"]
+    resolve_stack(game)
 
     assert game.pending_choices == []
     assert _g1_names(alice.battlefield) == ["Forest"]
@@ -142,6 +149,9 @@ def test_ovinomancer_returns_three_basic_lands(set_pool, catalog_by_name):
     ]
     _g1_enters(game, 0, catalog_by_name["Bayou"])
     _g1_enters(game, 0, set_pool("VIS")["Ovinomancer"])
+    # CR 603.3: the entry trigger is an object on the stack; it resolves up
+    # to its first question.
+    assert game.resolve_top_of_stack(pause_for_choices=True)
 
     assert game.confirm_optional_pay(0, accept=True) is True
     assert game.confirm_permanent_set_choice(
@@ -171,15 +181,19 @@ def test_ovinomancer_gives_the_sheep_to_the_destroyed_creatures_controller(
     ovinomancer = _g1_enters(game, 0, set_pool("VIS")["Ovinomancer"])
     ovinomancer.metadata["summoning_sickness_turn"] = -99
     _g1_enters(game, 1, catalog_by_name["Grizzly Bears"])
-    game.confirm_optional_pay(0, accept=True)
-    game.confirm_permanent_set_choice(
+    # CR 603.3: the entry trigger is an object on the stack; it resolves up
+    # to its first question.
+    assert game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True) is True
+    assert game.confirm_permanent_set_choice(
         0,
         [
             permanent.permanent_id
             for permanent in alice.battlefield
             if permanent.card.primary_type == "land"
         ],
-    )
+    ) is True
+    assert game.stack == [], "the entry trigger has finished resolving"
 
     result = game.activate_permanent_ability(
         0, "Ovinomancer", target_player_index=1, target_permanent_index=0
@@ -240,6 +254,9 @@ def test_shrieking_drake_bounces_a_creature_its_controller_picks(
     game, alice, _ = _g1_rig()
     bear = _g1_enters(game, 0, catalog_by_name["Grizzly Bears"])
     drake = _g1_enters(game, 0, set_pool("VIS")["Shrieking Drake"])
+    # CR 603.3: the entry trigger is an object on the stack; it resolves up
+    # to its first question.
+    assert game.resolve_top_of_stack(pause_for_choices=True)
 
     assert game.confirm_permanent_set_choice(0, [bear.permanent_id]) is True
 
@@ -251,6 +268,9 @@ def test_shrieking_drake_can_only_pick_itself_on_an_empty_board(set_pool):
     to its own trigger - and the only one when nothing else is there."""
     game, alice, _ = _g1_rig()
     drake = _g1_enters(game, 0, set_pool("VIS")["Shrieking Drake"])
+    # CR 603.3: the entry trigger is an object on the stack; it resolves up
+    # to its first question.
+    assert game.resolve_top_of_stack(pause_for_choices=True)
 
     assert game.confirm_permanent_set_choice(0, [drake.permanent_id]) is True
 

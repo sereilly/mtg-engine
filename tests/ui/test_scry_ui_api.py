@@ -56,11 +56,26 @@ def _state(sid: str, seat: int = 0) -> dict:
 
 
 def _play_temple(sid: str):
+    """Play the Temple and let its entry trigger resolve to its prompt.
+
+    CR 603.3: "When this land enters, scry 1" is an object on the stack, so the
+    land is played, both players pass, and *then* the scry is asked.
+    """
     played = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "cast", "card_name": "Temple of Malady"},
     )
     assert played.status_code == 200, played.json()
+    state = _state(sid)
+    assert state["scry"] is None, "nothing is asked while the trigger waits"
+    assert [(entry["card"]["name"], entry["is_triggered"]) for entry in state["stack"]] == [
+        ("Temple of Malady", True)
+    ]
+    for seat in (0, 1):
+        passed = client.post(
+            f"/api/sessions/{sid}/action", json={"seat": seat, "action": "pass_priority"}
+        )
+        assert passed.status_code == 200, passed.json()
 
 
 def test_playing_the_temple_renders_a_scry_prompt_for_its_controller(set_pool):

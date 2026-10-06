@@ -2291,18 +2291,30 @@ def reanimate_creature(game: Game, instruction: OracleInstruction, context: Orac
                 _seat is not None
                 and enchant_card_refusal(game, card, _seat, _host) is None
             )
-    if any_graveyard and not _holds_a_reanimable_card(
-        source_player, idx, card_filter, card_type
+    if any_graveyard and (
+        idx is None
+        or not _holds_a_reanimable_card(source_player, idx, card_filter, card_type)
     ):
-        # **No card was named, and the seat that was named holds none.** The
-        # index fallback below searches the *caster's* graveyard, which is right
-        # for "from your graveyard" and blind for "from a graveyard": an AI seat
-        # announces the effect without picking a slot, so Hymn of Rebirth
-        # resolved and put nothing onto the battlefield whenever the only
-        # creature card was in someone else's pile. The order is the Aura
-        # printing's, which has searched this way all along
+        # **No card was named** — or the one that was is not one this effect
+        # may take. The index fallback below searches the *caster's* graveyard,
+        # which is right for "from your graveyard" and blind for "from a
+        # graveyard": an AI seat announces the effect without picking a slot, so
+        # Hymn of Rebirth resolved and put nothing onto the battlefield whenever
+        # the only creature card was in someone else's pile. The order is the
+        # Aura printing's, which has searched this way all along
         # (``mixins/oracle_instructions.py``): the named seat, then the caster,
         # then everyone else.
+        #
+        # Asked whenever no slot was named, and not only when the named seat
+        # holds nothing. It read the second way, and that left one case
+        # unsearched: a seat *other than the caster* named, holding a card. The
+        # seat passed the test, no slot was recorded, and the fallback below
+        # then looked in the caster's pile regardless — the wrong pile, or
+        # none. Nothing reached it while an entry trigger nobody announced for
+        # ran with its own controller as "the target player"; as a stack
+        # object it takes the default every other trigger takes, an opponent,
+        # and a Necromancy put onto the battlefield with the only creature card
+        # in that opponent's graveyard returned nothing.
         found = next(
             (
                 (player, slot)

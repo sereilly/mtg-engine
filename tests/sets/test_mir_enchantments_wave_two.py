@@ -1300,9 +1300,18 @@ def _w2g1_nosick(perm: Permanent) -> Permanent:
 
 
 def _w2g1_combat(*seats) -> Game:
-    """A game sitting in the declare-attackers step, one battlefield per seat."""
+    """A game sitting in the declare-attackers step, one battlefield per seat.
+
+    Each seat has a library. ``start_turn`` runs a draw step, and only a
+    two-player game skips the first one (CR 103.8a/103.8c) — so the three-seat
+    table drew from nothing, which CR 704.5b ends the game for before anybody
+    could attack. It passed for as long as the draw step ran no state-based
+    check."""
     game = Game(players=[
-        PlayerState(name=f"P{i + 1}", battlefield=list(board))
+        PlayerState(
+            name=f"P{i + 1}", battlefield=list(board),
+            library=[_w2g1_creature("Filler", 1, 1) for _ in range(5)],
+        )
         for i, board in enumerate(seats)
     ])
     game.enforce_mana_costs = False

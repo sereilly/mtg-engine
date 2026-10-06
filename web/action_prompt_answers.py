@@ -217,6 +217,17 @@ def _action_trigger_target_confirm(session, req, seat_type):
     # prompt offers, and exactly one of them per answer. An id wins where both
     # arrive, because an answer carrying one is about a permanent whatever seat
     # it happens to sit on.
+    # ...or several permanents at once, for an ability that prints several
+    # targets ("up to two target creatures"): CR 601.2c makes them one
+    # announcement, so they arrive as one list. The engine re-checks every id
+    # against the list it offered and the count against the printed one, so a
+    # client cannot widen the announcement by sending more.
+    if req.target_permanent_ids:
+        if not session.game.confirm_trigger_target(
+            req.seat, permanent_ids=list(req.target_permanent_ids)
+        ):
+            raise HTTPException(status_code=400, detail="invalid target selection")
+        return
     if req.target_permanent_id is None and req.target_seat is None:
         raise HTTPException(
             status_code=400,
