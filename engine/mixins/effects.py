@@ -1755,17 +1755,9 @@ class EffectsMixin:
             # the seat the old signature's ``target`` argument named anyway.
             else self.players[self.controller_index_of(chosen) or 0]
         )
-        # Only when it actually arrived: the seam answers False for a token, a
-        # commander diverted to the command zone and a CR 614 replacement that
-        # sent the card elsewhere, and none of those is a permanent put into a
-        # hand from the battlefield.
-        arrived = self.put_card_into_hand(
-            owner, chosen.card, from_battlefield=chosen
-        )
-        if arrived and owner_idx is not None:
-            self.permanents_to_hand_this_turn[owner_idx] = (
-                self.permanents_to_hand_this_turn.get(owner_idx, 0) + 1
-            )
+        # The per-turn "returned to hand" ledger is the seam's to keep, not
+        # this caller's: it is written where the move is announced.
+        self.put_card_into_hand(owner, chosen.card, from_battlefield=chosen)
         # Identity: ``remove`` would bounce a look-alike instead of the chosen one.
         self.remove_from_battlefield(chosen)
         return True

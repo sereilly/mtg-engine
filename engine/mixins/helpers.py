@@ -969,10 +969,28 @@ class GameHelpersMixin:
         *seat* is the hand's — the owner's (CR 400.3) — frozen as the seat the
         event is about, because "that player" has nothing else to mean by the
         time the ability resolves.
+
+        **And it is counted here**, for the same reason it is announced here.
+        "If a permanent was put into your hand from the battlefield this turn"
+        (Barrin, Tolarian Archmage) reads ``permanents_to_hand_this_turn``,
+        which two of this seam's callers bumped by hand and the rest did not:
+        a bounce spell counted, and a land returned by Storm Cauldron, an
+        artifact swept up by Hurkyl's Recall, a creature returned as a cost, a
+        Firestorm Phoenix that would have died and a Rakalite at the end step
+        did not. One writer, where every one of them already meets.
+
+        A **token** counts, which the hand-written bumps had the other way
+        round: "If a token is returned to your hand, it's put there before it
+        ceases to exist" (Barrin's ruling, 2020-06-23) — the move happened,
+        which is why this is reached for one at all.
         """
         if permanent is None:
             return
         from ..events import emit
+
+        self.permanents_to_hand_this_turn[seat] = (
+            self.permanents_to_hand_this_turn.get(seat, 0) + 1
+        )
 
         emit(
             self, "permanent_returned_to_hand",
