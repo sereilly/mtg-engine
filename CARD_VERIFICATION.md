@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **4781**
-- Passed: **652** (407 checked in-game, 245 auto-passed)
+- Passed: **654** (409 checked in-game, 245 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **53**
-- Untested: **4076**
+- Untested: **4074**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -296,7 +296,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Balduvian Shaman | ⬜ untested |  |
 | Balduvian Trading Post | ⬜ untested |  |
 | Balduvian War-Makers | ⬜ untested |  |
-| Baleful Stare | ⬜ untested |  |
+| Baleful Stare | ✅ pass |  |
 | Ball Lightning | ⬜ untested |  |
 | Ballista Squad | ⬜ untested |  |
 | Balloon Peddler | ⬜ untested |  |
@@ -3738,7 +3738,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sleeper's Guile | ⬜ untested |  |
 | Sleeper's Robe | ⬜ untested |  |
 | Sleeping Potion | ⬜ untested |  |
-| Sleight of Hand | ⬜ untested |  |
+| Sleight of Hand | ✅ pass |  |
 | Sleight of Mind | ✅ pass |  |
 | Slimy Kavu | ⬜ untested |  |
 | Slingshot Goblin | ⬜ untested |  |
