@@ -167,6 +167,90 @@ other groups had written in parallel over the raw pool — and each time the
 guard was right and the loops were converted. Read which it is before touching
 either side; the test is still "drive the card".
 
+**Planeshift ran fourteen groups through two waves and changed where the
+integrator's time goes.** Four things, each a procedure rather than a moral.
+
+*Gates may overlap in time; trees may not.* "Merge one branch at a time, full
+suite between merges" was costing a suite's length per branch with the
+integrator idle. The rule it protects is that **every cumulative tree is tested
+before main rests on it** - and nothing in that needs the suites to queue. So:
+stage each merge in its own integration worktree on top of the previous one,
+start that tree's full gate, and build the next link while it runs; main only
+ever fast-forwards to a tree whose **own** gate came back green. Five wave-1
+merges went through in about forty minutes of wall clock instead of three
+hours, eleven in all across the set, and no gate was red - which is a
+statement about the gates, and the last paragraph of this entry is about what
+they could not see. Three conditions make it honest. A merge commit claims
+only what was verified when it was made (the conflict resolutions,
+`oracle_diff`, the duplicate and missing-name scans) and says where the suite
+result will be recorded - a commit that closes the wave.
+The tracker regeneration is committed per link, so `check_all` at the end of a
+gate reads clean rather than "stale". And a red link stops the fast-forward
+there: fix it *in that link*, then rebuild or merge forward the links above
+it. Three or four gates at `-n 4` fit this machine with nothing else running.
+
+*When two groups are briefed to edit one function, rehearse the pair - and run
+their tests in the rehearsal.* W1G1 and W1G2 both rewrote the kicker reader and
+were told so. Trial-merged in a throwaway worktree before either was merged,
+git reported four files in conflict - and the defect that mattered was in a
+fifth with none: one branch renamed a local, the other added a line reading
+the old name. Eighteen tests failed in the rehearsal and nothing failed at the
+merge, because the resolution had been **written as a script** by then
+(assert the conflict regions are the ones you read, rewrite them, apply the
+semantic fix) and was replayed. A resolution you can replay is one you can
+test before it is the merge.
+
+*A union can also nest.* Two branches each added a CR 601.3 refusal to the same
+reader at the same spot, and both regions ended on a shared `return False`. A
+hunk-wise union puts the second `if` inside the first: an AND where the rule is
+an OR, syntactically valid and green on any test that needs only one of them.
+It is the `if`/`elif` hazard above with the arms stacked instead of chained;
+check what follows the closing marker before keeping both sides.
+
+*The per-set test cap is crossed by what you asked for.* Wave 1's groups wrote
+a test per driven card (Phase 1), so the creatures file crossed its cap three
+times at integration, on nobody's branch. A block carries its own imports, so
+the fix is mechanical and belongs in the merge step rather than after it:
+while the file is over the cap, move its **last** block whole to a second file
+(`test_<set>_creatures_later_groups.py`), assert every line survived, and let
+later groups append to whichever has room.
+
+*And a dead agent resumes.* One group died mid-task on an API authentication
+error with four commits and a three-line measurement uncommitted. The older
+advice - check its branch, finish the verification yourself - is the fallback.
+First look at the branch, the worktree's diff and the newest files in its
+scratch, then **send it a message saying exactly what state you see and what
+is left**: it resumed from its transcript, reverted the measurement, ran its
+suite and reported, forty minutes later, with everything the brief asked for.
+
+*A green chain says what the tests say, and the last link of this one put a
+regression on `main` with every gate green.* ROADMAP had recorded a set
+earlier, by card name, that when entry triggers moved to the stack one handler
+would need a check that its source was still on the battlefield (CR 610.3b).
+The group that moved them was not handed the sentence. Its census - 807
+scenarios, identical by both roads - was run with nobody responding, which is
+the one table on which a trigger's timing cannot matter. And the integrator
+read the entry while drafting this retrospective. All three cards the pool
+prints "until this leaves the battlefield" on were wrong: cards exiled for
+good, a creature phased out for ever, a prompt no seat could answer. It was
+fixed before the promotion, for the price of a second promotion gate. Three
+procedures came out of it:
+
+- **Grep ROADMAP for the mechanism before briefing the group that changes
+  it**, and paste what it says into the brief. A recorded precondition belongs
+  to whoever removes the thing it waits on.
+- **When a change makes something possible "in response" for the first time,
+  its census has to respond** - destroy the source between the trigger and its
+  resolution - and that census belongs in the suite, validated backwards
+  (`test_entry_trigger_source_leaves_census.py`: 511 entries; it names two of
+  the three cards on the unfixed handlers, and the third is a stuck prompt its
+  own test names).
+- **"No card in the pool can do X" is a census nobody ran.** The first draft
+  of the fix said, in a docstring, that nothing could *phase* one of these
+  sources out in response, and so treated a phased-out source as gone. Four
+  cards can, and CR 702.26d says phasing is not leaving. One query over the
+  pool is cheaper than the sentence.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -2051,6 +2135,25 @@ instruments current.
    second question cannot be answered, confirmed from the other side. The one
    owned module split cleanly in round, and the one that drifted to 978 during
    wave 1 was relieved by its next owner moving a single misplaced function.
+
+   **Planeshift pre-split the two modules that were shared and tight, and both
+   seams handed over were wrong - the third set running.** `lowering/board.py`'s
+   docstring said the toll productions were "all here"; they had left at Urza's
+   Saga, seven sets earlier. `ast/board.py`'s listed five subjects and none of
+   them grows; the cut was fifteen nodes the docstring did not list. A handed
+   seam is now reliably a lead and nothing more - which is an argument for
+   handing over the *measurements to make* (call graph, who imports what, blame
+   since the last split) instead of a seam.
+
+   **And a split owes a sixth scan: what reads the module by name.** A guard
+   that keeps a hand-written list of module names stops reading whatever a
+   split moves out, with nothing undefined, unused or duplicated. The
+   `ast.Effect` union guard listed eight of fourteen families that way - five
+   earlier splits had each shrunk it - and read its "dispatch" out of a file
+   the dispatch had left, so it was examining nine of 223 dispatched nodes.
+   Widened to the layering guard's own list and the live dispatch tables, it
+   named two nodes missing from the union on the day. Grep the tests for the
+   split module's bare name before running anything.
 4. Clear anything above in Known gaps marked for Phase 0.
 
 ## Phase 1 — Ingest and measure
@@ -2172,6 +2275,26 @@ is green, the trackers carry its row, and the census is in hand.
    group found it by doing what the brief told it to do with a card it
    distrusted. Write "compiles" when you mean compiles.
 
+   **So give the supported-on-arrival cards to somebody, by family.**
+   Planeshift's wave-1 card sheets each ended with a second list - the cards of
+   that group's family that arrived supported with every instrument quiet - and
+   the instruction to give each one a headless game after the group's own
+   cards: fix what is local, measure what is not. About eighty cards were
+   driven that way and it paid on the first day. Ertai's Trickery ("Counter
+   target spell if it was kicked") had never countered anything - it asked
+   whether *it* was kicked. Phelddagrif's "target opponent may draw a card"
+   drew for its controller. The AI returned the creature it had just cast on
+   112 of 127 gating triggers. None of those is visible to a census, and each
+   was found by the group that had just built the machinery beside it.
+
+   **And a hollow line names an ability nothing compiles, not a behaviour
+   nothing performs.** The ingest's headline was "the five Lairs cannot tap
+   for mana", read off `--hollow-lines`. They could: the tap seam fell back to
+   the card's `produced_mana` summary, which is the door the web, the AI and
+   every payment planner use. What was missing was the *ability* - nothing to
+   activate, an unclaimed line. The group measured it and said so. Drive the
+   card before the instrument's finding becomes the brief's first sentence.
+
 6. **Ask how many of the set's cards are new to the pool**, before planning any
    round. Every phase after this one is written for a set that brings cards,
    and a reprint set brings printings: 4ED's 378 entries were 368 unique cards
@@ -2267,7 +2390,15 @@ first.
 
 Ask each group for two things the census cannot give you: **what its brief
 got wrong**, and **which already-supported cards its group silently
-mis-plays**. A card is supported when *any* of its lines is, so a whole
+mis-plays**. And when a brief states a **ruling** - how a card is played, as
+opposed to what a rule says - give its source or do not state it. Invasion's
+brief and Planeshift's both said, from memory, that a dual land may be the
+chosen land for one basic land type only (Global Ruin, Planar Overlay). The
+cards' rulings say it may be chosen for each of its types. Rulings are not in
+`MagicCompRules.txt`; Scryfall serves them per card (`rulings_uri`), and the
+group that was handed the correction fetched them again rather than trust a
+brief twice - which is how a third, shipped card with the same ruling
+(Cataclysm) was found. A card is supported when *any* of its lines is, so a whole
 mechanic can be missing while every card printing it reports fine —
 M21's scry was absent from the engine entirely while seven cards carrying it
 compiled clean, and a shipped ability's cost was parsed by the grammar and
@@ -2322,6 +2453,30 @@ wire and in policy, where the compiled map cannot look. And a wave-1 group that
 merely *lists* what it measured and left is what made a wave-2 group's cold
 start possible: every one of the three pile briefs was a wave-1 report's
 "measured, not fixed" section with the parts already named.
+
+**Planeshift had one card left after its first wave and spent five groups on
+the pile.** What they fixed, each with a census written first and required to
+name the known defect on the tree before the fix: a modal spell held to the
+mode it announces (1,066 of 1,516 illegal named targets accepted; the browser
+was sent the wrong picker for 33 of 47 object modes, so most Charm modes could
+not be cast correctly at all), exact target counts and divisions; one
+cast-prohibition predicate for three readers and a castable highlight that
+asks the payment planner (3,543 land-and-cost pairs glowing unpayable); layer 5
+ordered by timestamp (145 of 362 ordered cases wrong); the AI's sides, its
+unused non-land mana and its take-everything defaults; and entry triggers as
+stack objects (268 of 278 resolved inline). `oracle_diff` read **0 on all five**
+and 1 on the card group.
+
+Two things about briefing such a wave. **A group told to measure before
+building, and that a measured decline is an honest outcome, is the group most
+likely to land the risky item** - the entry-trigger group's census (807
+scenarios identical both ways, 27 failing tests all of one mechanical kind) is
+what made a change to 229 shipped triggers a one-round job, where the brief
+had called it the riskiest in the wave. And **the pile's sections map onto
+groups only if they are written by subject as the reports arrive**, not by
+reporting group: five wave-1 reports each saw a piece of "what a cast may
+announce", and it became a brief when the pieces were put under one heading
+with every census path beside its number.
 
 **6ED took that rule to its limit: a wave of five groups and *no* cards at
 all.** The set arrived 335/335 supported with every instrument at zero, so
@@ -2773,6 +2928,20 @@ state of the work, the ratchets, and five findings that could be worked in
 parallel (one was the integrator's, one went to a wave-2 group by message);
 the real promotion then had only its own delta to read. It costs one suite.
 
+**Planeshift's first rehearsal ran with one card unsupported and a wave in
+flight, and sorted the way Urza's Legacy's did: the guard, the guard, and an
+inventory.** A static-line guard named a working card's line as implemented
+nowhere - the **fourth** time it has done that, each time because it keeps its
+own list of which derivation tables exist; it now also asks the grammar's
+`registry_for_line`, which a table has to join for its line to parse at all.
+An activation-targeting guard read "of the color of your choice" as a target.
+And three missing effect-label rows turned out to be a small wire defect: two
+entry triggers reaching the client without the `triggered_` prefix. Each new
+arm was **measured before it was trusted** - over the shipped pool plus the
+set, how many lines does it newly excuse? - and each excused exactly one. That
+is the test for a guard fix: an arm that excuses forty is a new hole. The
+second rehearsal, a wave later, turned red only the four ratchets.
+
 **A new layout makes guards blind, not red.** A split card's whole-card
 program is supported and has no instructions, so every guard and instrument
 whose population is "each card, compiled" walks past both halves and reports
@@ -2849,8 +3018,35 @@ review directly shrinks this phase.
    whose *entire* printed text is "Protection from artifacts", reached the client
    carrying **no badge at all** while the engine had the shield right at every
    seam it owns. Nothing greppable would have found it; driving one card of the
-   set's new mechanic and reading the payload did. **For a
-   reprint set this is the only step that shows what promotion bought**, and
+   set's new mechanic and reading the payload did.
+
+   **Planeshift found the fifth site, and it is not about what the wire carries
+   but about whether the client can answer it.** Verifying that an entry choice
+   reached the payload, a group drove Runed Halo in a browser and could not get
+   past its prompt: the client rendered an `enter_choice` only when it named an
+   opponent, so for a colour alone, a card name, a creature type or a land type
+   the panel read "Main Phase" while the server refused every action.
+   Twenty-eight shipped cards had soft-locked a human seat for as long as they
+   shipped, and three of the set's own would have at promotion. Every test of
+   those cards answers the prompt through the engine. **Drive one card per
+   prompt kind the set arms, in the browser, as a human seat** - and keep the
+   test that came out of it: enter every chooser in the pool under an
+   interactive seat and require the client's own code to read each question.
+
+   **And read the payload while the prompt is still open.** Doing exactly
+   that at the promotion - Voice of All's colour prompt on the screen - showed
+   the wave's new `entry_choices` field already saying "Chosen color: white",
+   to both seats. The entry state stamps a provisional default before it arms
+   the prompt, and a field derived from a record is derived from whatever the
+   engine has parked there. A UI test had pinned it as intended ("the default
+   is stamped as it enters and is already visible"), and every engine test of
+   the field entered its permanent at a seat nobody asks, where the default
+   *is* the choice. Ask of a new wire field not only "is the answer there
+   afterwards?" but "what is there before?" - and when a test's comment
+   explains why a surprising value is fine, read it as a finding first.
+
+   **For a reprint set this step is the only one that shows what promotion
+   bought**, and
    what it buys is the set as a deckbuilding constraint: the deck editor's set
    filter gains the code, and every card under it renders that set's own art.
    Check the filter's count against the census, not just that the option exists.
@@ -3996,3 +4192,29 @@ the set's machinery, sized by probing. *Phase 4:* rehearse early in a throwaway
 worktree; a new layout makes guards blind, not red. Briefs now tell an agent
 not to end its turn waiting on a background suite. Nothing drained from Known
 gaps; what the set left is one ROADMAP entry with its parts named.
+
+### PLS — 2026-10-05
+
+*Two waves and fourteen groups for 49 cards, on a set that brought no
+machinery: Invasion's block-mate, and the second half of what Invasion built.*
+Wave 1's eight groups took 94 to 142 with no hook and no decline but Goblin
+Game, cleared all twelve supported cards carrying an unimplemented sentence,
+and drove about eighty supported-on-arrival cards besides. Wave 2 spent one
+group on the last card and five on the pile, which was again the larger half
+(Phase 3 has the numbers). Zero hooks added.
+
+*Edits in place:* Integration gains the chain of integration worktrees (gates
+overlap, trees do not), rehearsing a briefed pair with its tests and a
+scripted resolution, the nested-`if` union, moving whole test blocks at the
+cap, resuming a dead agent, and the regression a green chain carried (a
+recorded precondition read one merge late; a census that responds).
+*Phase 0:* both handed seams wrong again, and a sixth split scan - what reads
+the module by name. *Phase 1:* the supported-on-arrival cards are assigned and
+driven; a hollow line is not a missing behaviour. *Phase 2:* a brief that
+states a ruling gives its source. *Phase 3:* the five-pile wave, and "measure
+first" as the brief for the risky item. *Phase 4:* a guard fix is measured by
+how many lines its new arm excuses. *Phase 5:* drive one card per prompt kind
+as a human seat, and read the payload while the prompt is open (three cards
+driven; 404 -> 407 checked in-game; one wire defect found and fixed). Nothing
+drained from Known gaps; what the set measured and left is one ROADMAP entry
+with its parts named.

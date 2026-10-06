@@ -1,8 +1,9 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **4,026** unique cards — twenty-six sets,
+Target: grow the card pool from **4,764** unique cards — thirty sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/ULG/6ED/UDS/MMQ/M21, all shipped and all supported — to the full release line:
+USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/M21, all shipped and all supported — to the
+full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
 **The reprint shape recurs and is worth planning for.** `set_progress.json`
@@ -212,7 +213,7 @@ one card prints this") reads as a work item long after it stopped being true.
 - **The verification backlog is accepted, by decision (2026-08-28).** Derived
   `equivalent` was the lever nobody had pulled, and it is exhausted:
   `behaviour_signature.py` distinguishes roughly one behaviour per card, so no
-  amount of pulling reaches the untested count (**2,495** today). An in-game
+  amount of pulling reaches the untested count (**4,066** today). An in-game
   pass is therefore **not a required validation step**: promotion gates on
   Phase 4, regressions are caught by the suite and `simulate_ai_games.py`, and
   `CARD_VERIFICATION.md` is read as a log of what a human happened to check.
@@ -333,10 +334,11 @@ one card prints this") reads as a work item long after it stopped being true.
   `LegalityMixin._described_cast_target_slots`, the very enumeration CR
   601.2c's half uses, so announcement and resolution are one predicate. Census
   over 280 single-target spells and 19 board changes: 130 resolutions acted on
-  an illegal target before, 0 after. **Modal spells are excluded** (the derived
-  spec is mode 0's; Active Volcano's bounce was being countered): including
-  them means a per-mode spec per `item.chosen_modes` and a `mode_index` through
-  `_enumerate_targets(for_cast=True)` — about 31 shipped cards. Telim'Tor's
+  an illegal target before, 0 after. **A modal spell is judged against the mode
+  it announced** (PLS wave 2): the spec is derived per chosen mode
+  (`targeting.announced_mode_instructions`, `mode_index=` on
+  `derive_cast_spec`) at announcement and at resolution alike, where it used to
+  be judged against mode 0's and then excluded for it. Telim'Tor's
   Edict ("you own or control") needs an observer in the enumerator's
   `subject_matches` call. The declines:
 
@@ -389,14 +391,44 @@ one card prints this") reads as a work item long after it stopped being true.
   W1G1). They keep printed order, so on its own upkeep Tangle Wire's tap
   resolves before its fade removal and taps one more permanent than its
   controller might choose. Pinned as the current behaviour in its test.
+  PLS W2G6 measured the parts while moving entry triggers to the stack, and
+  declined: there is no trigger-ordering prompt (`effect_order` is CR 616's
+  alone) — a new prompt kind in `mixins/stack/choices.py`, armed from
+  `_enqueue_triggered_batch` and the entry site, a renderer, and the client.
+  Entry triggers now resolve first-printed first, each alone, which ended
+  Sawtooth Loon's interleaved prompts and is still not a choice.
 
-- **Some triggers never reach the stack** (NEM W2G1, W2G2). An Aura's "when
-  this enters, tap enchanted creature" (Paralyze, Cocoon, Roots, Thirst)
-  resolves inside the Aura's own resolution with no stack object, so it cannot
-  be responded to (CR 603.3) — the standing approximation
-  `modal_triggers.INLINE_TRIGGER_CONDITIONS` records. When enters triggers
-  move to the stack, `exile_graveyard_until_leaves` (Idol of Endurance) needs an
-  `is_on_battlefield(source)` check or it exiles permanently (CR 610.3b).
+- **Entry triggers are stack objects; three Auras' are not** (PLS W2G6 — this
+  entry was NEM's "some triggers never reach the stack"). 268 of the pool's 278
+  entry triggers were carried out inside the entry on at least one road, for a
+  reason that turned out to be history rather than a decision; none is now
+  (`tests/engine/test_entry_trigger_stack_census.py`) and
+  `modal_triggers.INLINE_TRIGGER_CONDITIONS` is empty. What is left, with its
+  parts: Animate Dead, Dance of the Dead and Earthbind still perform their
+  entry sentence inline when cast (by text in `_apply_aura_effect`; pinned by
+  name in that census's `_PERFORMED_BY_THE_ATTACH`); a CR 603.2d extra instance
+  (Sanctum of All) would inherit the cast's announcement; the browser sends one
+  id per click for a several-target trigger (`web/static/app.js` wants the
+  multi-pick `renderModalModeTargetsModal` has); and **a permanent spell's
+  cast still names its entry trigger's target** (`targeting._cast_target_spec`'s
+  last branch), so an illegal one named at cast is not refused — moving the
+  naming to the push is 18 tests, a stack-side picker for a graveyard-card
+  target, and the AI's choosers moving to `_default_trigger_target`.
+
+  **This entry carried a warning, and it was read one merge late.** It said, by
+  name, that when entry triggers moved to the stack Idol of Endurance's exile
+  would need a check that its source was still there (CR 610.3b). The group
+  that moved them was not handed the sentence, and its census had nobody
+  responding. All three cards the pool prints "until this leaves the
+  battlefield" on were wrong the moment the source could be destroyed in
+  response — cards exiled for good, a creature phased out for ever, a prompt
+  nobody could answer — and were fixed before the promotion
+  (`linked_exile.until_leaves_has_ended`, which also knows that a *phased-out*
+  source has not left, CR 702.26d). The census that responds is
+  `tests/engine/test_entry_trigger_source_leaves_census.py`: 511 entries with
+  the source destroyed in response. **A recorded precondition is part of the
+  brief of whoever removes the thing it waits on** — grep this file for the
+  mechanism before briefing the group that changes it.
 
 - **Smaller ones NEM measured and left, each with its parts named in the wave's
   merge commits:** Glyph of Delusion grants its untap lock to the *Wall*
@@ -474,6 +506,129 @@ one card prints this") reads as a work item long after it stopped being true.
   creature cards leave (CR 601.2b lets them), and the top-down default is the
   floor until there is one. (FEM, WTH; re-verified 2026-09-07.)
 
+- **What Planeshift measured and left** (2026-10-05; parts as the groups named
+  them — `git log --grep "W1G"` / `--grep "W2G"` has each in the commit that
+  declined it). Wave 1's eight groups left a pile in eight sections; wave 2's
+  six groups took seven of them, and this is what stands:
+
+  * *What an activation may announce — the one section no group took.* The
+    Invasion bullet below ("about 40 activated abilities print a plain
+    'target'…") stands, and Planeshift saw it three more ways. A creature-only
+    prevention shield announced with no target **arms a player**
+    (`handlers/prevention.grant_prevention_shield`'s last branch falls back to
+    `context.target`): 8 of 10 abilities, on Oasis, Kei Takahashi, Wandering
+    Mage, Squee's Toy, Field Surgeon, Samite Sanctuary and Samite Pilgrim, and
+    a bare `activate` over the wire returns 200. Tahngarth, Talruum Hero
+    activated bare while it is its own only legal target pays and does
+    nothing. **An illegal named cost permanent is silently substituted** by the
+    default pick — Ertai, the Corrupted naming Sol Ring as its sacrifice
+    sacrificed Ertai (CR 602.2b/601.2h: a cost that cannot be paid as announced
+    is an illegal activation, not a different one). Beside them: when an
+    announced *graveyard* card is gone at resolution the return handler looks
+    for another eligible card instead of doing nothing (CR 608.2b; all 45
+    instructions of that kind, `handlers/zones.py`), and
+    `usable_activated_abilities` still lists a land's printed abilities after
+    its type was set (CR 305.7) — both doors refuse them, so it is a list that
+    lies rather than a mis-play.
+  * *The AI has no mode chooser*: every modal spell is cast as mode 0. Parts:
+    `CastAction.mode_index` and its two executors; a context variable read by
+    `_cast_spec`, `_no_legal_cast_target` and the three target choosers;
+    `ai_valuation._spell_instructions` / `spell_target_side` / `_score_cast`,
+    which read mode 0; a loop over `Game.announceable_modes` taking the best
+    score.
+  * *A mandatory one-target cast naming nothing, with a legal target present,
+    still resolves on the handler's pick* — 46 of 46 modes, the engine-wide
+    headless convention. Parts: count 1 treated as exact in
+    `legality.exact_target_count` for object kinds only;
+    `ai_policy._choose_single_object_target` returning None for "any target"
+    and optional specs; `pick_target_permanent`'s fall-through scans then go
+    dead; and the test corpus casts seat-only widely, which is the cost.
+    Beside it: the modal census has no legs for the 25 modes that are not a
+    single battlefield object; the modal picker's client code was not driven
+    in a browser; and Sapphire Charm's mode 0 ignores the player named at cast
+    (the delayed trigger picks at fire time, and a non-interactive default is
+    the opponent) — the lowering wants `targets` on the outer
+    `create_delayed_trigger` with a bound seat, a `_first_described_slot` row
+    for a one-shot delayed trigger, and the delayed handler reading that seat.
+  * *Layer 4, three rows* (layer 5 is ordered by timestamp now; these need the
+    refresh in `mixins/permanent_state.py` changed, not the collector).
+    Conversion then Blood Moon is the CR 613.8a entry above:
+    `_refresh_static_land_types` chains statics by timestamp only and needs a
+    "does applying F change whether E applies" probe. Dralnu's Crusade then
+    Conspiracy is right one refresh late — `_refresh_global_statics` judges a
+    type-scoped static against the previous pass's layer 4 and wants a bounded
+    fixed point. Melting then Arcum's Weathervane ends not-snow: the refresh
+    must record the source's stamp in `DERIVED_LOST_SUPERTYPES` (bare words
+    today), and `GAINED_TYPES` / `LOST_TYPES` have five direct append writers
+    and no stamp (`board_misc.py` ×4, `zones.py` ×1) — they want a write API
+    the way colour got `change_color`. Also unmodelled: APNAP order for
+    simultaneous timestamps (CR 613.7m); `land_types.static_source_timestamp`
+    is still the lazy stand-in for `Permanent.timestamp`; and 30 test lines in
+    16 files poke the colour slots directly, which now reads as "older than
+    everything".
+  * *CR 400.7a, a laced spell.* A Deathlaced creature spell is black on the
+    stack and its printed colour as a permanent (the five Laces, Ersatz
+    Gnomes' first ability, Blind Seer): the stack item's
+    `choices["color_override"]` needs a stamp and a duration, and resolution
+    has to carry it through `change_color(timestamp=)`.
+  * *A ruling to settle: Alloy Golem's "is the chosen color".* Shipped as
+    characteristic-defining (`from_cda=True`) on CR 604.3a's five criteria read
+    literally, so it applies first (CR 613.3) and a Golem entering under an
+    older Darkest Hour is black. The other reading — a colour chosen as the
+    permanent enters exists only on the battlefield, a CDA functions in every
+    zone (CR 604.3), so this is an ordinary layer-5 effect with the Golem's
+    timestamp — makes it its chosen colour. No card ruling settles it. One
+    flag decides; nothing else moves.
+  * *The AI, what was not reached.* Cards lent or permitted outside the hand
+    never reach it — 18 cards (15 `grant_cast_permission`, Aluren, Yawgmoth's
+    Agenda, Demonic Embrace; 87 Planeswalker's Mischief activations bought 0
+    free casts): `choose_cast_action` enumerating
+    `cast_permissions.playable_from_zones`, `CastAction` carrying the pile's
+    owner seat, a free permission skipping the mana plan, the executors picking
+    the zone, lands through the land-drop pass. Costed and sacrifice mana
+    sources (25 sacrifice, 13 mana-priced, 29 other) stay untapped: a sacrifice
+    during payment renumbers the battlefield under an announcement made by
+    index, so the executors must re-bind target indices from ids after payment
+    first. `_choose_activation_role_targets` takes one side, not one per role
+    (Phyrexian Splicer names own/own). The tap planner is greedy — Swamp,
+    Forest and Reflecting Pool cannot plan {B}{G}{G} with the Pool first — and
+    `ai_policy._land_mana_amount` disagrees with `board_payment.board_can_pay`
+    on 8 of 14,626 land-and-cost pairs, all Ancient Tomb; fold it onto the one
+    planner. Root Greevil's colour default counts every permanent; Goblin Game
+    has no valuation and is cast whenever it can be; Donate cast at the
+    caster's own seat and Kor Chant cast with no damage source resolve doing
+    nothing.
+  * *The castable highlight's residue.* `board_can_pay` counts lands only, so
+    a creature's or artifact's mana ability does not light a card the AI could
+    now pay for; and three classes still read wrong — Mana Flare-style
+    `land_tapped_for_mana` adders, lands producing more than five "N of any one
+    colour", and multi-step producers. City of Solitude's *activation* half is
+    unasked (the AI proposes activations on the opponent's turn), and headless
+    `cast_from_hand` enforces no sorcery or land timing.
+  * *Smaller, each one sentence.* Forsaken City's "if you do, untap" untaps
+    when the exile pick defaulted to no card (condition the `then` on the
+    exile; give the pick a lowest-value default). Cataclysm's other ruling —
+    "all the sacrifices are done simultaneously" — is not honoured: the keep
+    prompt sacrifices per seat as each answers, and the resolver would have to
+    defer to the last answer. Barrin's `permanents_to_hand_this_turn` ledger is
+    bumped by hand at two call sites while eight callers pass
+    `from_battlefield=` to `put_card_into_hand`, where the new
+    `permanent_returned_to_hand` announcement already sits. An unverified
+    lead: Death Charmer's toll is offered to `damaged_player` and its life
+    loss names `damaged_permanent_controller`. `ast.Shuffle` is in
+    `ast.Effect` and nothing builds it; `lowering/board.py` still lodges three
+    library-bottom lowerings and `_lower_delayed_self_action`.
+  * *The simulator exits 1 on all three Urza's sets* (seed 1337, 10 games):
+    "steps left owing" 3 on USG, 10 on ULG, 3 on UDS, every one a **cycling
+    ability activated from hand still on the stack as precombat main ends**
+    (Wild Dogs, Drifting Meadow, Blasted Landscape; Miscalculation, Unearth,
+    Iron Will; Rapid Decay, Fend Off). USG's three are identical at the commit
+    before this set; the other two were first run at this promotion. Not
+    diagnosed past that — start from `ai_simulator`'s `steps_left_owing`
+    recorder and what it sees on the stack. Beside it, ULG reports one
+    activation the engine declined: the AI proposes Phyrexian Reclamation's
+    2-life cost at 1 life.
+
 - **What Invasion measured and left** (2026-10-05; each part is named in the
   commit or report that declined it, which is what makes it a brief). Wave 1's
   eight groups left a pile; wave 2 spent four groups on it and left this:
@@ -503,14 +658,10 @@ one card prints this") reads as a work item long after it stopped being true.
     an activation naming an opponent's Island and pay for nothing (CR 602.2b).
     Parts: every such lowering writes a `targets` description, or the gate
     falls back to "the spec names an object kind".
-  * *Modal spells are still castable bare*: 19 of 45 targeted, non-player modes
-    across 31 modal spells. Parts: `cast_target_obligation` needs a mode index;
-    `_enumerate_targets(for_cast=True)` probes with no mode; the web derives
-    per-mode kinds separately (`web/serialization._mode_target_kind`) — unify
-    those first, or the engine refuses a cast the browser offers. Beside it:
-    no target *count* beyond a floor of one ("two target creatures" naming
-    fewer), and conditional-branch targets the announcement walk skips on
-    purpose (Goblin Artisans; `_NAMES_NOTHING`).
+  * *Conditional-branch targets are skipped by the announcement walk on
+    purpose* (Goblin Artisans; `_NAMES_NOTHING`). The rest of what stood here —
+    modal spells castable bare, no target count beyond a floor of one — was
+    fixed at Planeshift, and its residue is in that entry.
   * *CR 615.12 is half-implemented* for the three lock cards (Whippoorwill,
     Lava Burst, Urza's Rage): a "next time" shield should be used up while
     preventing nothing; the contenders are dropped and the shield stays armed.
@@ -539,8 +690,7 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Smaller, each with its parts in `git log --grep "INV W"`*: Mages' Contest
     and Illicit Auction — a non-interactive seat always passes, and life is
     lost by direct subtraction (no life-loss seam); Sulfuric Vapors' "plus 1"
-    against a multiplier has the cap's one-number problem; the optional-pay
-    default always accepts (a seat with Elfhame Sanctuary skips every draw);
+    against a multiplier has the cap's one-number problem;
     Magical Hack and Sleight of Mind derive a `permanent` spec though they
     print "spell or permanent"; `web/serialization._gloom_white_tax` reads a
     card name outside the engine guard's scope; and outside the 701 block
@@ -559,10 +709,7 @@ one card prints this") reads as a work item long after it stopped being true.
     predicate the AI side already asks (W3G4 merge).
   * *A copy with no recorded choice copies the first creature in seat
     order* — CR 707.5's "may" made for the player on a non-cast entry
-    (W3G3). Beside it: entry triggers are still inline when the cast
-    announced their target, and the `trigger_target` prompt names one
-    target, so Basri's Acolyte entered without a cast gets one counter where
-    its controller could have chosen two.
+    (W3G3).
   * *`ai_valuation` has no side for `phase_out_target_creature_until_source_leaves`
     (Oubliette) or `create_copy_token` (Dance of Many)*, so their unasked
     default target is still the first candidate (W3G3).
@@ -1006,13 +1153,26 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-05, with Invasion shipped, it
-answers **Planeshift** (PLS, 2001-02-05, 143 cards) — and then Seventh Edition,
-the next reprint-shaped set, whose sources are the pool's own. **Planeshift is
-Invasion's block-mate, so read its arrival number as inheritance**: kicker,
-split cards, domain and the colour relations are built, which is Urza's
-Legacy's 80.4% again. On 2026-10-04, with Prophecy shipped, it answered
-Invasion, which has since shipped.
+Run against `set_progress.json` on 2026-10-05, with Planeshift shipped, it
+answers **Seventh Edition** (7ED, 2001-04-11, 335 cards) — and then Apocalypse
+(APC, 2001-06-04, 143 cards, all new), the third of Invasion's block. (FBB, SUM
+and 4BB are earlier and unshipped; they are alternate printings of the Revised
+and Fourth Edition card lists, which this pool already carries, and every
+answer this section has recorded passed over them.) **Read 7ED the way 6ED
+turned out, not the way it is recorded.** `set_progress.json` gives it 0 new
+cards, and that column counts against the whole release line: 6ED was recorded
+with 0 and brought two, because their earlier printings were in Portal, which
+is not here. Seventh Edition can do the same for the same reason, so expect a
+reprint-shaped ingest that may carry a handful of cards nothing in the pool
+has compiled before — measure which at Phase 1, and treat each as a card
+rather than as furniture. Earlier the same day, with Invasion shipped, the rule
+answered Planeshift, whose 65.7% on arrival was *not* the inheritance this
+paragraph predicted (it guessed Urza's Legacy's 80.4% again): the block's
+machinery was built, and the second halves Planeshift printed — a kicker paid
+in something other than mana, two kickers on one card, the Planeswalker's
+reveal cycle — were not. **A block-mate inherits mechanics, not templates.**
+On 2026-10-04, with Prophecy shipped, it answered Invasion, which has since
+shipped.
 On 2026-10-02, with Nemesis shipped, it answered Prophecy, which has since
 shipped. On 2026-09-09, with 6ED shipped, the same rule answered Urza's
 Destiny, then Mercadian Masques, Nemesis and Prophecy, and the first three of
@@ -1126,6 +1286,7 @@ a wave is five parallel worktree groups integrated serially.
 | NEM | 143 | 66.4% | 1 wave + 1 closer |
 | PCY | 143 | 58.0% | 3 waves (the third on one card and four piles) |
 | INV | 335 | 66.0% | 2 waves + 1 closer (four of wave 2's seven groups on the pile) |
+| PLS | 143 | 65.7% | 2 waves (five of wave 2's six groups on the pile) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -1141,20 +1302,18 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-05, at Invasion's close): 4,622 unique cards over 29 sets, 6,785
-printings, 100% supported. Grammar parses 90.4% of lines, lowers 89.8% and
-executes 61.2% (`GRAMMAR_COVERAGE.md`; parsed fell 0.2pp and lowered 0.1pp on
-Invasion's *membership* — its own row is 87.9% parsed, a set read more by
-`cast_costs` and the text-keyed tables than the average — and no shipped set's
-row fell). **1.1%** of supported cards carry a name-keyed hook — 52 cards, 58
-entries in 6 registries (`HOOK_RELIANCE.md`) — and the projection that implies
-for the release line has fallen from 1,195 hand-written entries to **328**,
-across sixteen consecutive sets that added no hook and retired several. That
-is the measure moving the way the architecture needs it to. Parse coverage:
-4,620 of 4,622 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+2026-10-05, at Planeshift's close): 4,764 unique cards over 30 sets, 6,928
+printings, 100% supported. Grammar parses 90.5% of lines, lowers 89.8% and
+executes 61.4% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **1.1%** of
+supported cards carry a name-keyed hook — 52 cards, 58 entries in 6 registries
+(`HOOK_RELIANCE.md`) — and the projection that implies for the release line
+has fallen from 1,195 hand-written entries to **318**, across seventeen
+consecutive sets that added no hook and retired several. That is the measure
+moving the way the architecture needs it to. Parse coverage: 4,762 of 4,764
+supported cards fully claimed, 2 acknowledged, **0 unclaimed**
 (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker.
-`CARD_VERIFICATION.md` is a log, not a target: 642 passed (404 in-game, 238
-auto), 51 equivalent, 0 failed, 3,929 untested.
+`CARD_VERIFICATION.md` is a log, not a target: 646 passed (407 in-game, 239
+auto), 52 equivalent, 0 failed, 4,066 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,

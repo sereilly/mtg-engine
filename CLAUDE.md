@@ -1286,7 +1286,7 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (643 of the 4,764 catalog cards passing — 404
+manually validated in-game (646 of the 4,764 catalog cards passing — 407
 checked in-game and 239 auto-passed — with 52 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
@@ -1323,6 +1323,13 @@ not a required validation step, the tracker is read as a log and never as a
 coverage target, and what gates a promotion is Phase 4 — and this is what that
 decision looks like working rather than being abandoned: the number rises as a
 by-product of finding bugs, not as a quota.
+**Planeshift moved it the same way, 404 to 407**: Meddling Mage, Voice of All
+and Shifting Sky were driven in a browser as a human seat to check that an
+entry choice could be answered and reached the wire, and the driving found
+the wire reporting a colour *before* it was chosen — the engine's provisional
+default, sent as a choice while the prompt was still on the screen.
+`enter_effects.chosen_as_entered` reports nothing for a permanent that is
+still entering.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not
