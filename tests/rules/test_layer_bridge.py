@@ -22,6 +22,7 @@ from engine.copies import EXCEPT_COLOR, become_copy
 from engine.land_types import change_land_type
 from engine.layer_bridge import computed_pt
 from engine.models import CardDefinition, Permanent
+from engine.color_changes import change_color
 
 
 def _creature(power: str = "2", toughness: str = "2") -> CardDefinition:
@@ -305,7 +306,7 @@ def test_a_colour_override_replaces_the_printed_colour():
     perm = Permanent(card=card)
     assert perm.effective_colors == {"G"}
 
-    perm.metadata["color_override"] = "R"
+    change_color(perm, "R")
     assert perm.effective_colors == {"R"}
 
 

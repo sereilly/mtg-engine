@@ -27,6 +27,7 @@ from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import CardDefinition, Permanent
 from engine.pt import add_pt_modifier
 from tests.helpers import resolve_stack
+from engine.color_changes import change_color
 
 _POOL: dict = {}
 for _card in load_cards(manifest_set_paths(include_measured=True)):
@@ -66,7 +67,7 @@ def test_eradicate_whose_target_turned_black_exiles_no_bystander():
         0, "Eradicate", target_player_index=1, target_permanent_ids=[named.permanent_id],
     )
     assert queued.supported, queued
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert game.is_on_battlefield(named)

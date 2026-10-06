@@ -35,6 +35,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.models import Permanent
+from engine.color_changes import change_color
 
 
 def _r2_ripple_board(set_pool, victim_name: str):
@@ -1975,7 +1976,7 @@ def test_ether_well_reads_the_colour_off_layer_five(set_pool):
     card prints. A blue Merfolk that an effect has made red qualifies for the
     swap, and reading the printed line instead would never offer it."""
     game, creature = _w2g4_ether_well(set_pool, "Merfolk Raiders")
-    creature.metadata["color_override"] = ("R",)
+    change_color(creature, ("R",))
     game.queue_from_hand(0, "Ether Well", target_permanent_ids=[creature.permanent_id])
     game.resolve_stack()
 

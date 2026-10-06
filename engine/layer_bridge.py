@@ -63,9 +63,7 @@ from .landwalk import BOARD_NAMED_LANDWALKS, landwalk_requirement
 from .land_types import land_type_changes
 from .lord_buffs import QUALIFIER_FIELDS
 from .type_changes import (
-    GAINED_TYPES,
     LAND_ANIMATION_ORDER,
-    LOST_TYPES,
     derived_lost_supertypes,
     gained_types,
     lost_types,
@@ -97,8 +95,9 @@ COPIABLE_VALUE = 0
 QUALIFIED_BUFFS = "lord_buff_while"
 # ``GAINED_TYPES`` / ``LOST_TYPES`` — the types a resolved effect added to or
 # took from a permanent — are ``engine/type_changes.py``'s, the write API that
-# stamps them (CR 613.7b). Imported above so the name this module has always
-# exported still resolves; nothing here spells either key.
+# stamps them (CR 613.7b). This module re-exported the two names for three
+# tests that built a board by indexing with them; those go through
+# ``gain_types`` / ``lose_types`` now, and nothing here names either key.
 #: The card types an effect **set** a permanent to (CR 205.1a): "{0}: This
 #: permanent becomes an enchantment." (Opal Acrolith), "Target creature becomes
 #: an enchantment…" (Soul Sculptor). One slot rather than a list, exactly as an

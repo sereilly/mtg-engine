@@ -35,6 +35,7 @@ from engine import Game as _W1G6Game
 from engine import PlayerState as _W1G6PlayerState
 from engine.models import Permanent as _W1G6Permanent
 from engine.oracle import compile_card_oracle as _w1g6_compile
+from engine.color_changes import change_color
 
 
 def _w1g6_ench_table(set_pool, mine=(), theirs=()):
@@ -101,8 +102,8 @@ def test_w1g6_teferis_moat_reads_the_creatures_colour_as_it_is_now(set_pool):
     _w1g6_enter_naming(game, 1, "Teferi's Moat", mana_color="G")
     bears, giant = mine
 
-    bears.metadata["color_override"] = "U"
-    giant.metadata["color_override"] = "G"
+    change_color(bears, "U")
+    change_color(giant, "G")
     game._recompute_continuous_effects()
 
     assert [game.can_attack(perm, 1) for perm in (bears, giant)] == [True, False]
@@ -163,7 +164,7 @@ def test_w1g6_harsh_judgment_ignores_other_colours_abilities_and_other_recipient
     assert (game.players[0].life, game.players[1].life) == (22, 18)
 
     sorcerer = mine[0]
-    sorcerer.metadata["color_override"] = "R"
+    change_color(sorcerer, "R")
     game._recompute_continuous_effects()
     assert game.queue_permanent_ability(
         0, "Prodigal Sorcerer", ability_index=0, target_player_index=1,

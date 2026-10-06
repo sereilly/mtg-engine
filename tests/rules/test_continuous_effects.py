@@ -13,6 +13,7 @@ from engine.models import CardDefinition, Permanent
 from engine.keywords import grant_keyword, remove_keyword
 from engine.text_changes import change_land_word
 from dataclasses import replace
+from engine.color_changes import change_color
 
 
 # ---------------------------------------------------------------------------
@@ -632,9 +633,9 @@ def test_613_7_later_timestamp_wins_for_conflicting_effects_in_same_layer():
     perm = Permanent(card=creature)
 
     # T1: creature becomes red (layer 5)
-    perm.metadata["color_override"] = "R"
+    change_color(perm, "R")
     # T2: creature becomes blue (layer 5) - applied after T1
-    perm.metadata["color_override"] = "U"
+    change_color(perm, "U")
 
     # Later timestamp (T2 = blue) wins
     assert perm.metadata["color_override"] == "U"
@@ -699,7 +700,7 @@ def test_613_8_dependent_effects_applied_after_effects_they_depend_on():
     assert creature_perm.effective_power == 2
 
     # Simulate a color-change effect (layer 5): creature becomes white
-    creature_perm.metadata["color_override"] = "W"
+    change_color(creature_perm, "W")
 
     # Re-evaluate static buffs (613.3a / 613.8)
     game._recalculate_lord_buffs()
@@ -1094,14 +1095,12 @@ def test_613_1d_a_removed_subtype_leaves_the_other_types_alone():
     """"…as a **non-Aura** enchantment": one subtype off the printed line and
     nothing else. Read through layer 4 rather than off `card.type_line`, so the
     CR 704.5m sweep and every other reader get the same answer."""
-    from engine.layer_bridge import LOST_TYPES
+    from engine.type_changes import lose_types
 
     _game, aura = _r36_aura_board()
     assert aura.has_type("aura")
 
-    aura.metadata.setdefault(LOST_TYPES, []).append(
-        {"subtypes": ("aura",), "source": "test"}
-    )
+    lose_types(aura, subtypes=("aura",), source="test")
 
     assert not aura.has_type("aura")
     assert aura.has_type("enchantment")

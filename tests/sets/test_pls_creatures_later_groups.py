@@ -16,6 +16,7 @@ from engine import PlayerState as _W1G4PlayerState
 from engine.models import Permanent as _W1G4Permanent
 from engine.oracle import compile_card_oracle as _w1g4_compile
 from tests.helpers import resolve_stack as _w1g4_resolve
+from engine.color_changes import change_color
 
 _W1G4_FIVE = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 
@@ -1028,7 +1029,7 @@ def _w1g6_greevil_table(set_pool, interactive):
         mana=True, interactive=interactive,
     )
     oriflamme = theirs[2]
-    oriflamme.metadata["color_override_until_eot"] = "B"
+    change_color(oriflamme, "B", until_eot=True)
     game._recompute_continuous_effects()
     assert _w1g6_colors(game, oriflamme) == ["B"]
     return game, mine, theirs  # _w1g6_greevil_table
@@ -1166,7 +1167,7 @@ def test_w1g6_voice_of_all_reads_a_blockers_colour_through_the_layers(set_pool):
     game, voice, (vampire, roc) = _w1g6_cast_voice(
         set_pool, ["Sengir Vampire", "Roc of Kher Ridges"], "B",
     )
-    roc.metadata["color_override_until_eot"] = "B"
+    change_color(roc, "B", until_eot=True)
     game._recompute_continuous_effects()
     assert _w1g6_colors(game, roc) == ["B"]
     assert not _w1g6_block(game, voice, roc)[0]
@@ -1266,7 +1267,7 @@ def test_w1g6_samite_elder_reads_the_chosen_permanents_colours_as_it_resolves(se
 
     game, mine, _giant = _w1g6_elder_table(set_pool)
     elder, bears, _phelddagrif, _artifact, _forest = mine
-    bears.metadata["color_override_until_eot"] = "B"
+    change_color(bears, "B", until_eot=True)
     game._recompute_continuous_effects()
     _w1g6_elder_names(game, bears)
     assert game._protection_colors(elder) == {"B"} == game._protection_colors(bears)
@@ -1318,7 +1319,7 @@ def _w1g6_dogs_combat(set_pool, choose, *, recolor=None, interactive=(0,)):
     ).supported
     assert mine[0].tapped and game.players[0].mana_pool["W"] == 0
     if recolor is not None:
-        giant.metadata["color_override_until_eot"] = recolor
+        change_color(giant, recolor, until_eot=True)
         game._recompute_continuous_effects()
     game.resolve_top_of_stack()
     owed = [(c.kind, c.player_index) for c in game.pending_choices]
@@ -1387,7 +1388,7 @@ def test_w1g6_guard_dogs_resolves_whole_for_a_seat_nobody_asks(set_pool):
 def _w1g6_turn(game, perm, colour):
     """Turn *perm* *colour* for the turn through layer 5's turn-long channel —
     what Aurora Griffin's "becomes white until end of turn" writes."""
-    perm.metadata["color_override_until_eot"] = colour
+    change_color(perm, colour, until_eot=True)
     game._recompute_continuous_effects()
     return perm  # _w1g6_turn
 

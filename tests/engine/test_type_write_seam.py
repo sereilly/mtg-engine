@@ -55,14 +55,12 @@ _KEY_NAMES = (
 
 #: Who may *import* a key's name, and why. Held in both directions: one more
 #: is a new holder of the key to justify, one fewer a stale allowance.
-_NAME_IMPORTERS = {
-    "engine/layer_bridge.py": (
-        ("GAINED_TYPES", "LOST_TYPES"),
-        "re-exported under the names this module has always exported — three "
-        "tests another round wrote import them from here to build a board by "
-        "hand; nothing in the module indexes with either",
-    ),
-}
+#:
+#: Nobody, now. ``engine/layer_bridge.py`` re-exported ``GAINED_TYPES`` and
+#: ``LOST_TYPES`` for three tests that built a board by indexing a permanent's
+#: metadata with them — a record with no timestamp, "older than everything".
+#: Those tests call ``gain_types`` / ``lose_types``, and the re-export is gone.
+_NAME_IMPORTERS: dict[str, tuple] = {}
 
 #: module -> how many times it names each writer, and what the uses are. Both
 #: directions: a count that rose is a new type-writing effect (welcome — it is

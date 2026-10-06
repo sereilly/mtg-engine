@@ -26,6 +26,7 @@ from engine.models import Permanent, PlayerState
 from engine.named_counters import counters_on
 from engine.oracle import compile_card_oracle
 from tests.helpers import _nosick, resolve_stack
+from engine.color_changes import change_color
 
 # --- W2G2: mana-production replacements and land-type changes ---
 def _lands_board(set_pool, permanent_name=None, lands=("Forest", "Plains", "Island", "Mountain", "Swamp"), opponents=False):
@@ -2341,7 +2342,7 @@ def test_a_damage_sources_colour_is_read_through_the_layers(set_pool, catalog_by
 
     green = Permanent(card=set_pool("ICE")["Balduvian Bears"])
     assert source_colors(green) == ("G",)
-    green.metadata["color_override_until_eot"] = "R"
+    change_color(green, "R", until_eot=True)
     assert source_colors(green) == ("R",)
 # --- end W3G3 ---
 

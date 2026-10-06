@@ -33,6 +33,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
 from tests.helpers import resolve_stack
+from engine.color_changes import change_color
 
 _GATE = "every target is illegal (608.2b)"
 
@@ -176,7 +177,7 @@ def test_a_colour_excluded_by_the_description_counters_the_spell():
             continue
 
         def recolour(perm, colour=colour):
-            perm.metadata["color_override"] = (colour,)
+            change_color(perm, (colour,))
 
         examined += _sweep(family, recolour, floor=0)
     assert examined >= 10, examined

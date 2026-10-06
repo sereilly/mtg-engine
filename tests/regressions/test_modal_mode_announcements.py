@@ -51,6 +51,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import _first_described_slot, derive_cast_spec, spec_roles
 from tests.helpers import _mk_card, resolve_stack
+from engine.color_changes import change_color
 
 _GATE_608 = "every target is illegal (608.2b)"
 
@@ -273,7 +274,7 @@ def test_w2g2_a_mode_target_made_illegal_in_response_counters_the_spell():
 
     queued = game.queue_from_hand(0, charm.name, mode_index=1, target_permanent_ids=[named.permanent_id])
     assert queued.supported, queued.details
-    named.metadata["color_override"] = ("B",)
+    change_color(named, ("B",))
     resolve_stack(game)
 
     assert game.is_on_battlefield(named), game.log
