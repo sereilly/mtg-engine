@@ -46,7 +46,7 @@ from engine.hand_locks import locked_hand_indices
 from engine.cast_permissions import playable_from_zones
 from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
-from engine.cast_restrictions import chosen_name_ban
+from engine.cast_prohibitions import cast_prohibition
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
 from engine.faces import face_cards
@@ -58,7 +58,6 @@ from engine.oracle import compile_card_oracle
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
 from engine.cast_costs import additional_costs
-from engine.spell_prohibitions import casting_forbidden_this_turn
 from engine.targeting import (derive_cast_spec, spec_roles,
                               usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
@@ -310,21 +309,13 @@ def _card_castable_now(
     if not classification.supported:
         return False
 
-    # "Target player can't cast spells this turn." (Orim's Chant) / "Until end
-    # of turn, target player can't cast instant or sorcery spells." (Abeyance.)
-    # CR 601.3: a prohibited spell cannot begin to be cast, so it is not
-    # castable *now* — asked of the record the cast path itself refuses by, so
-    # a card that glows is one the click will not be refused for. The untyped
-    # sentence stops no land drop (CR 305.1), which that reader already knows.
-    if casting_forbidden_this_turn(game, player_index, card) is not None:
-        return False
-
-    # "Spells with the chosen name can't be cast." (Meddling Mage, Null
-    # Chamber.) CR 601.3: a card a permanent has named is not castable however
-    # well the timing, the targets and the mana line up, so the glow goes — the
-    # click would be refused by this same predicate on the cast path. Asked of
-    # the half for a split card (the recursion above), which is CR 709.3a.
-    if chosen_name_ban(game, card) is not None:
+    # CR 601.3: a prohibited spell cannot begin to be cast — and CR 305.1's
+    # twin for a land that may not be played — so it is not castable *now*
+    # however well the timing, the targets and the mana line up. The one
+    # predicate the cast path refuses with (`engine/cast_prohibitions.py`), so
+    # a card that glows is one the click will not be refused for. Asked of the
+    # half for a split card (the recursion above), which is CR 709.3a.
+    if cast_prohibition(game, player_index, card) is not None:
         return False
 
     # CR 702.8b: flash casts any time an instant could be cast, so both timing

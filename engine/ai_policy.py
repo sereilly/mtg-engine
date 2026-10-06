@@ -47,12 +47,8 @@ from .ai_valuation import (
 )
 from .activation_permissions import activation_permission_denial
 from .activation_restrictions import activation_denial, global_activation_ban
-from .auras import controller_cast_ban
 from .cast_costs import additional_costs, cast_announces_x
-from .cast_restrictions import (chosen_name_ban, global_cast_ban,
-                                last_cast_color_ban)
-from .spell_prohibitions import casting_forbidden_this_turn
-from .legality import targeting_ban_refusal
+from .cast_prohibitions import cast_prohibition
 from .cast_restrictions import check_cast_timing
 from .cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
@@ -2885,65 +2881,20 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
     to prevent one module over, and ``targeting.derive_cast_spec`` guards with
     the same gate for the UI's benefit.
     """
-    if game._set_lockout_banning_card(card) is not None:
-        # "Players can't cast Arabian Nights cards" (City in a Bottle). Not a
-        # targeting question, but the same failure: the cast path refuses and
-        # the AI offers the card again next turn. Asked for every card, not
-        # only a spell, because the lockout bans *playing* a land too.
-        return False
-
-    if controller_cast_ban(game, caster_index, card) is not None:
-        # "Enchanted creature's controller can't cast creature spells."
-        # (Brand of Ill Omen.) The same reason as the lockout above: the cast
-        # path refuses, nothing is spent, and a seat that re-proposes the card
-        # every turn does nothing for the rest of the game — which is exactly
-        # what `simulate_ai_games.py`'s `refused_casts` counts.
-        return False
-
-    if casting_forbidden_this_turn(game, caster_index, card) is not None:
-        # "Target player can't cast spells this turn." (Orim's Chant) / "Until
-        # end of turn, target player can't cast instant or sorcery spells."
-        # (Abeyance.) The one ban on this list that is a *record* rather than a
-        # board scan, and on it for the reason every other is: the cast path
-        # refuses, nothing is spent, and a seat that goes on proposing its hand
-        # into the ban is refused once per card per decision. A land is not
-        # stopped by the untyped sentence (CR 305.1), which the record's own
-        # reader already knows.
-        return False
-
-    if targeting_ban_refusal(game, card) is not None:
-        # "This turn and next turn, ... players and permanents can't be the
-        # targets of spells or activated abilities." (Peace Talks, CR 113.3c.)
-        # The fourth ban on this list and the newest, found by Phase 5's
-        # simulation rather than by a test: thirty refused casts across eight
-        # games, every one an Aura or a targeted spell offered while the ban
-        # stood. Asked through the same predicate the cast path refuses with,
-        # so the two cannot answer differently.
-        return False
-
-    if global_cast_ban(game, card) is not None:
-        # "Creature spells can't be cast." (Aether Storm.) The seatless
-        # spelling of the ban above, and on this list for the same reason: the
-        # cast path refuses it, so a seat left proposing creatures under an
-        # Aether Storm does nothing for the rest of the game.
-        return False
-
-    if last_cast_color_ban(game, caster_index, card) is not None:
-        # "Players can't cast spells that share a color with the spell most
-        # recently cast this turn." (Mana Maze.) The fifth ban on this list,
-        # and here for the reason every one above is: the cast path refuses,
-        # nothing is spent, and a seat that keeps proposing its second white
-        # spell of the turn does nothing with the rest of its mana.
-        return False
-
-    if chosen_name_ban(game, card) is not None:
-        # "Spells with the chosen name can't be cast." (Meddling Mage; Null
-        # Chamber's two-name sentence is the same reader.) The sixth ban on
-        # this list and here for the reason every one above is: the cast path
-        # refuses, nothing is spent, and a seat holding the named card would
-        # propose it every turn for as long as the Mage stood. Asked for every
-        # card and not only a spell, because Null Chamber's row stops a land
-        # being played too.
+    if cast_prohibition(game, caster_index, card) is not None:
+        # CR 601.3, through the predicate the cast path itself refuses with
+        # (`engine/cast_prohibitions.py`): a prohibited spell is refused before
+        # any cost, nothing is spent, and a seat that goes on proposing it does
+        # nothing for the rest of the game — which is exactly what
+        # `simulate_ai_games.py`'s `refused_casts` counts. Asked for every
+        # card and not only a spell, because some prohibitions stop a land
+        # being *played* too (City in a Bottle, Null Chamber, Cornered Market)
+        # and the predicate knows which it was handed.
+        #
+        # This was seven of the cast path's thirteen bans, each added here the
+        # day a simulation found a seat stuck behind it; the six it lacked
+        # (Steel Golem, Arcane Laboratory, Damping Engine, City of Solitude,
+        # Hand to Hand, Cornered Market) were six seats still stuck.
         return False
 
     if card.primary_type not in SPELL_TYPES:
