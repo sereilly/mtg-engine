@@ -58,6 +58,7 @@ from dataclasses import replace
 
 from . import ast
 from .amounts import parse_amount
+from .effects import _parse_loses
 from .errors import GrammarError
 from .nouns import parse_object_filter
 from .rebinding import rebind_pronoun_to_condition_target
@@ -159,6 +160,62 @@ def _attach_tied_life_draw(stream: TokenStream, steps: list[ast.Statement]) -> b
         otherwise=ast.DrawGame(),
     )
     steps[-1] = replace(last, then=split) if target is not last else split
+    return True
+
+
+def _attach_tied_for_fewest(stream: TokenStream, steps: list[ast.Statement]) -> bool:
+    """``The player who revealed the fewest items then loses half their life,
+    rounded up. If two or more players are tied for fewest, each loses half
+    their life, rounded up.`` (Goblin Game.)
+
+    The second sentence is the *other arm* of the first, for
+    :func:`_attach_tied_life_draw`'s reason one function up: "the player who
+    revealed the fewest" is a described seat and strict like every other one —
+    a tie names nobody — and this sentence says what a tie does. Here both
+    arms are the same loss, so the pair is one statement about a wider set:
+    **every** player whose number is the least, one of them or several. The
+    loss in front is rewritten in place to name that set, and no step is
+    added — two steps would halve a sole fewest player's life twice.
+
+    **Guarded on both halves.** The sentence in front must be a life loss by
+    that described seat, and what "each loses" here must be the amount that
+    sentence printed: a tie arm with a different size is a different card, and
+    folding it into the first would silently give the tied players the wrong
+    number. Refuses without consuming.
+    """
+    last = steps[-1] if steps else None
+    if not (
+        isinstance(last, ast.LoseLife)
+        and last.player.kind == "revealed_fewest"
+        and last.per_each is None
+        and last.who_could_not is None
+    ):
+        return False
+    mark = stream.mark()
+    if not stream.accept_phrase(
+        "if", "two", "or", "more", "players", "are", "tied", "for", "fewest",
+    ):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(",")
+    if not (stream.accept_word("each") and stream.at_word("loses", "lose")):
+        stream.reset(mark)
+        return False
+    # Through the one reader of "<player> loses …", handed the seat the
+    # sentence in front named — so the two arms are compared as the nodes they
+    # parse to, and "half their life, rounded up" cannot mean one thing there
+    # and another here.
+    try:
+        again = _parse_loses(stream, last.player)
+    except GrammarError:
+        again = None
+    if again != last or not (stream.exhausted or stream.at_punct(".", ";")):
+        stream.reset(mark)
+        return False
+    stream.accept_punct(".")
+    steps[-1] = replace(
+        last, player=replace(last.player, kind="each_revealed_fewest")
+    )
     return True
 
 

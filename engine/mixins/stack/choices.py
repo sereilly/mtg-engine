@@ -3507,6 +3507,84 @@ class PendingChoicesMixin:
             choice, choice.data.get("default_number", choice.data.get("minimum", 0))
         )
 
+    # -- "Each player secretly chooses a number" --------------------------------
+    #
+    # "Each player hides at least one item, then all players reveal them
+    # simultaneously." (Goblin Game.) One prompt per seat, all armed together,
+    # and the whole of what makes it its own kind is what it does **not** do:
+    # an answer is recorded and nothing else happens — no log line, no board
+    # change, nothing a state view carries — until the answer that completes
+    # the map, which reveals every number in one line.
+    #
+    # Not a mode of the three numbered prompts beside it, and that was looked
+    # at. ``draw_up_to`` and ``pay_any_amount`` are the multi-seat ones, and
+    # each *performs* its number as it is answered (the cards are drawn, the
+    # mana is spent), in the open — which is the one thing a secret choice
+    # must not do. ``number_choice`` only records, but it is one seat's public
+    # number: it holds nobody but its own seat (``blocks_every_seat`` is a
+    # property of a kind, and that kind's twenty cards want it False) and it
+    # stays queued for a seat the engine plays, where this must be answered as
+    # it is armed so that seat commits before any other answer exists.
+
+    def confirm_secret_number(self, player_index: int, number) -> bool:
+        """Answer "secretly choose a number" with *number* (Goblin Game)."""
+        return self.resolve_pending_choice(
+            "secret_number", player_index, number=number
+        )
+
+    def _resolve_secret_number(self, choice: PendingChoice, number) -> bool:
+        """Record this seat's number, and reveal them all if it was the last.
+
+        Below the printed floor is a **rejection**, not a clamp, for
+        ``_resolve_number_choice``'s reason: a silently repaired answer would
+        tell a seat it had hidden nothing and then take a life for it. There is
+        no ceiling — CR 107.1 gives a chosen number none and the card prints
+        none — so a number above the seat's own life total is legal, and
+        lethal.
+
+        The answer goes into the resolution's scratchpad under the key the
+        arming named and **nowhere else**. The log line is the reveal, written
+        by whichever answer finds every asked seat in the map; an earlier one
+        would tell the seats still choosing what they are choosing against.
+        """
+        if isinstance(number, bool):
+            return False
+        try:
+            value = int(number)
+        except (TypeError, ValueError):
+            return False
+        if value < int(choice.data.get("minimum", 0)):
+            return False
+        results = choice.data.get("_results")
+        key = choice.data.get("record")
+        named = results.setdefault(key, {}) if results is not None and key else {}
+        named[choice.player_index] = value
+        self.discard_pending_choice(choice)
+        asked = [int(seat) for seat in (choice.data.get("seats") or ())]
+        if all(seat in named for seat in asked):
+            self.log.append(
+                f"{choice.data.get('card_name', '')}: "
+                + ", ".join(
+                    f"{self.players[seat].name} revealed {named[seat]}"
+                    for seat in asked
+                )
+            )
+        return True
+
+    def _default_secret_number(self, choice: PendingChoice) -> bool:
+        """A seat nobody asks names the number ``ai_policy.choose_secret_number``
+        gives it — a policy over the life totals every player can see, which
+        is the whole of what this seat is entitled to know. It does not read
+        the map this answer goes into."""
+        from ...ai_policy import choose_secret_number
+
+        return self._resolve_secret_number(
+            choice,
+            choose_secret_number(
+                self, choice.player_index, int(choice.data.get("minimum", 0))
+            ),
+        )
+
     # -- "Each player may bid life for control of ..." -----------------------
 
     def begin_life_auction(
@@ -10154,6 +10232,29 @@ register_choice(
     # to stop until the number exists. Shapeshifter's two armings sit at the end
     # of what they are part of, so suspending costs them nothing.
     suspends=True,
+)
+
+register_choice(
+    "secret_number",
+    resolve=lambda game, choice, r: game._resolve_secret_number(choice, r.get("number")),
+    default=lambda game, choice: game._default_secret_number(choice),
+    action="secret_number_confirm",
+    prompt_key="secret_number",
+    blocked_detail="every player chooses a hidden number before anything else happens",
+    # Every seat is asked at once and the spell is mid-resolution: a seat that
+    # has answered may not act while another is still choosing (CR 608.2).
+    blocks_every_seat=True,
+    # Deliberately not ``spectator_visible``: a seatless viewer is shown no
+    # seat's prompt, and nothing about any answer, until the reveal is logged.
+    #
+    # "Each player loses life equal to **the number of items they revealed**"
+    # is a later step of the same resolution and reads every seat's answer, so
+    # none of it may run before the last one exists (CR 608.2, CR 117.3b).
+    suspends=True,
+    # A non-interactive seat never queues it: the resolution has to finish,
+    # and answering where the prompt is armed is what makes that seat commit
+    # before any other answer exists.
+    default_at_arm=True,
 )
 
 register_choice(

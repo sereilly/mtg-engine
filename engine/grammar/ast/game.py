@@ -335,6 +335,33 @@ class ChooseNumber:
 
 
 @dataclass(frozen=True)
+class SecretlyChooseNumbers:
+    """``Each player hides at least one item, then all players reveal them
+    simultaneously.`` (Goblin Game.)
+
+    A number per player, named **in secret and revealed together**: no seat
+    learns another's before it has committed its own. The card's own ruling
+    says what the items are — "write numbers on a piece of paper and reveal
+    the numbers" — so what the sentence produces is :class:`ChooseNumber`'s
+    value once per seat, and its own node for the two things that sentence
+    cannot say: *who* names one (a set of seats rather than the controller)
+    and that nothing about any answer exists for anybody else until the last
+    is in.
+
+    Like every choice beside it, it performs nothing: the sentences behind it
+    read the record back ("the number of items **they** revealed", "the player
+    who revealed **the fewest**"), and a card printing this one alone would
+    ask every seat a question and do nothing with the answers.
+
+    ``minimum`` is the printed floor — "at least **one**". There is no ceiling
+    field because CR 107.1 gives a chosen number none and the sentence prints
+    none.
+    """
+    player: PlayerRef
+    minimum: int = 0
+
+
+@dataclass(frozen=True)
 class ChooseCardName:
     """``Choose a card name.`` (Foreshadow.)
 

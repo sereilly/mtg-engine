@@ -80,6 +80,13 @@ from .effects import (
 
 
 
+#: The seats a sentence describes by what an earlier sentence of the same
+#: effect *recorded* about each player, rather than by a board or a choice.
+#: ``seats.parse_player_ref`` reads the phrase; this names the kinds for the
+#: one reader here that asks.
+RECORD_DESCRIBED_SEATS = frozenset({"revealed_fewest"})
+
+
 def parse_subject_verb(
     stream: TokenStream,
     carried_subject: ast.Recipient | None = None,
@@ -227,6 +234,22 @@ def parse_subject_verb(
         and stream.at_word("each")
     ):
         stream.advance()
+    # "The player who revealed the fewest items **then** loses half their
+    # life, rounded up." (Goblin Game.) The sequencing word printed after the
+    # subject instead of in front of the sentence, where the sentence loop
+    # already reads it ("Then each player …") and for that reader's reason: the
+    # steps of a line run in printed order, so the word says nothing the order
+    # did not.
+    #
+    # Only behind a seat a *record* describes. That is where the word earns its
+    # place — the seat does not exist until the sentence in front has been
+    # carried out — and it keeps "then" out of every other subject's sentence,
+    # where it opens the next clause ("…, then that player discards a card").
+    if (
+        isinstance(source_spec, ast.PlayerRef)
+        and source_spec.kind in RECORD_DESCRIBED_SEATS
+    ):
+        stream.accept_word("then")
     stream.last_subject = source_spec
     after_subject = stream.mark()
 
