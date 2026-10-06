@@ -1154,6 +1154,37 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("secret_number")
+def _secret_number(ctx: PromptContext, choices: list) -> dict:
+    """Goblin Game: the number this seat names in secret.
+
+    **Only what the seat already knows.** The payload is built from the
+    viewer's own choice — the printed floor and its own life total — and from
+    nothing else on the queue: ``visible_choices`` hands a renderer the
+    viewer's prompts alone, the kind is not ``spectator_visible``, and the
+    scratchpad the answers go into rides the choice under an engine-private key
+    this never reads. So a seat still choosing is sent the same thing whether
+    or not anybody else has answered, which is the card.
+
+    The buttons stop at the seat's own life total and the engine does **not**,
+    for ``_bid_life``'s reason one prompt up: the card prints no ceiling and
+    the number is a loss, so naming more than a life total is legal and
+    lethal. ``maximum`` stays None in the payload because the rule has none
+    (CR 107.1).
+    """
+    choice = choices[0]
+    low = int(choice.data.get("minimum", 0))
+    life = int(ctx.game.players[choice.player_index].life)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "minimum": low,
+        "maximum": None,
+        "life": life,
+        "options": list(range(low, max(low, life) + 1)),
+    }
+
+
 @prompt_renderer("bid_life")
 def _bid_life(ctx: PromptContext, choices: list) -> dict:
     """Illicit Auction: what the standing bid is and what this seat may say.

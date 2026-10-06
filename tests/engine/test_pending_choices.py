@@ -361,6 +361,15 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
         # sentence uses. Shapeshifter arms the same kind at the end of what it
         # is part of, where suspending costs nothing.
         "number_choice",
+        # "Each player hides at least one item, then all players reveal them
+        # simultaneously. Each player loses life equal to **the number of items
+        # they revealed**." (Goblin Game.) Every seat's answer sizes the
+        # sentence behind the choice and names who the one after that halves,
+        # so nothing may run until the last of them is given — and until then
+        # nothing about any of them may be observable at all. Only an
+        # interactive seat ever queues it; `default_at_arm` answers for
+        # everyone else where the prompt is armed.
+        "secret_number",
         # "In turn order, each player may top the high bid. ... The high bidder
         # loses life equal to the high bid and gains control of the creature."
         # (Illicit Auction): the answer decides who is asked next and, when the

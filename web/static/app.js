@@ -1179,7 +1179,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2630,6 +2630,18 @@ function getNumberChoiceInfo(state = currentState) {
   return info;
 }
 
+// Goblin Game: "each player hides at least one item" — a number every seat
+// names in secret. The server sends this seat its own prompt and nothing about
+// anybody else's answer; the reveal arrives as one log line when the last seat
+// has chosen.
+function getSecretNumberInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.secret_number;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 function getLandTypeChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.land_type_choice;
@@ -3906,7 +3918,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5607,6 +5619,53 @@ function applyNumberChoicePrompt(info) {
         seat,
         action: "number_choice_confirm",
         number: Number(btn.dataset.number),
+      });
+    });
+  });
+}
+
+// Goblin Game: "Each player hides at least one item, then all players reveal
+// them simultaneously." One button per number from the printed floor up to
+// this seat's own life total. The engine accepts more — the card prints no
+// ceiling, and naming more than a life total is legal and lethal — but a
+// client has no business proposing it.
+function applySecretNumberPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "";
+  title.textContent = "Choose a number in secret";
+  body.textContent =
+    `${cardName}: secretly choose a number of at least ${info.minimum}. ` +
+    `Nobody sees it until every player has chosen. You have ${info.life} life.`;
+  const buttons = info.options
+    .map(
+      (n) =>
+        `<button type="button" class="prompt-choice-btn" data-secret-number="${escapeHtml(String(n))}">` +
+        `${escapeHtml(String(n))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-secret-number]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "secret_number_confirm",
+        number: Number(btn.dataset.secretNumber),
       });
     });
   });
@@ -9902,6 +9961,12 @@ function renderActivationPrompt() {
   const numberChoiceInfo = getNumberChoiceInfo();
   if (numberChoiceInfo) {
     applyNumberChoicePrompt(numberChoiceInfo);
+    return;
+  }
+
+  const secretNumberInfo = getSecretNumberInfo();
+  if (secretNumberInfo) {
+    applySecretNumberPrompt(secretNumberInfo);
     return;
   }
 
