@@ -1170,12 +1170,24 @@ def test_w1g1_the_ai_casts_the_plain_spell_when_it_cannot_spare_the_kick(
 )
 def test_w1g1_the_ai_names_two_targets_for_the_spell_it_kicks(set_pool, name, land):
     """…and with nine it kicks, walking the *kicked* spec's chain of two
-    roles rather than the unkicked picker's flat list."""
+    roles rather than the unkicked picker's flat list.
+
+    Both roles on the **opponent's** board (PLS W2G5,
+    `ai_valuation.role_target_sides`): the chain used to be the first legal
+    one, which for Falling Timber against a single opposing creature was that
+    creature and the caster's own Grizzly Bears — a land sacrificed to prevent
+    the combat damage of the seat's own attacker. So the opponent is given the
+    second creature the kicked half needs."""
     game = _w1g1_ai_table(set_pool, name, land, lands=9)
+    _w1g1_put(game, 1, set_pool("LEA")["Grizzly Bears"])
     action = _w1g1_choose_cast_action(game, 0)
     assert action is not None and action.card_name == name
     assert action.optional_cost_payments == {_w1g1_key(set_pool, name): 1}
     assert len(set(action.target_permanent_ids)) == 2
+    assert {
+        game.controller_index_of(game.permanent_by_id(permanent_id))
+        for permanent_id in action.target_permanent_ids
+    } == {1}
 
 
 # -- Magma Burst -------------------------------------------------------------

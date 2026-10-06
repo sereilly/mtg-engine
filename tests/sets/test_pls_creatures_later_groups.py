@@ -1368,13 +1368,17 @@ def test_w1g6_guard_dogs_judges_the_target_on_the_colour_it_has_as_it_resolves(s
 
 
 def test_w1g6_guard_dogs_resolves_whole_for_a_seat_nobody_asks(set_pool):
-    """A headless seat takes the prompt's stated default — the first candidate
-    in board order, the white Dogs — with no prompt left owing, and the
-    condition is then asked of that pick like any other: white and red do not
-    meet, so the damage is dealt."""
+    """A headless seat takes the prompt's stated default with no prompt left
+    owing, and the condition is then asked of that pick like any other. The
+    default was the first candidate in board order — the white Dogs, which
+    share no colour with the red Giant, so the ability was paid for and
+    prevented nothing. It is the first candidate that shares a colour with the
+    target now (PLS W2G5, `ai_valuation.pick_is_tested_for_a_shared_color`):
+    the red Goblin Raiders, and the damage is prevented."""
     game, owed = _w1g6_dogs_combat(set_pool, None, interactive=())
     assert owed == [] and game.pending_choices == []
-    assert game.players[0].life == 17
+    assert "Guard Dogs: chose Mons's Goblin Raiders" in game.log
+    assert game.players[0].life == 20
 
 
 # -- arrival cards: supported on the day of the ingest, never run until now --
