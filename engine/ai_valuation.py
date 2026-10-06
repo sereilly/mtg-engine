@@ -41,6 +41,8 @@ stays with the other stated policies in ``_default_optional_pay``.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .models import CardDefinition
@@ -85,14 +87,104 @@ class CounterProfile:
         return self.color is None or self.color in (card.colors or ())
 
 
+#: The mode of a modal spell the policy is weighing right now (CR 601.2b,
+#: CR 700.2a), as ``(card, mode index)`` -- or None, which is every moment no
+#: modal spell is being weighed.
+#:
+#: **Why it is here and why it is a context variable.** "What does this spell
+#: do?" is asked of a *card* by two dozen functions in this module and by every
+#: cast chooser in ``ai_policy``, and for a "Choose one —" spell the answer is
+#: a different one per mode: Crosis's Charm is a bounce, a kill or a Shatter.
+#: Every one of those readers answered for **mode 0** -- the compiled program's
+#: ``instructions`` *are* mode 0's -- so an AI seat cast every modal spell as
+#: its first bullet, 34 of 88 modes, and held the card whenever that one bullet
+#: had nothing to point at. A parameter would have had to be threaded through
+#: every reader and remembered by every later one; this is one fact about one
+#: candidate, set around the single call that builds it
+#: (:func:`considering_mode`) and read at the two places a spell's steps come
+#: from: :func:`_spell_instructions` here and ``ai_policy._announced_mode``
+#: there. A reader that goes through either cannot forget the mode.
+#:
+#: Held **with the card**, so a question about some *other* card asked while
+#: this one is being weighed (the spell on top of the stack, the rest of the
+#: hand) is answered for that card as printed and never for "its mode 2".
+_MODE_CONSIDERED: ContextVar["tuple[CardDefinition, int] | None"] = ContextVar(
+    "ai_mode_considered", default=None
+)
+
+
+@contextmanager
+def considering_mode(card: CardDefinition, mode_index: "int | None"):
+    """Weigh *card* as cast in *mode_index* for the length of the block.
+
+    None is "no mode named" -- a spell that is not modal, or one whose mode an
+    opponent chooses (CR 700.2e) -- and reads exactly what every reader read
+    before modes were weighed at all.
+    """
+    token = _MODE_CONSIDERED.set(None if mode_index is None else (card, mode_index))
+    try:
+        yield
+    finally:
+        _MODE_CONSIDERED.reset(token)
+
+
+def mode_considered(card: CardDefinition) -> "int | None":
+    """The mode *card* is being weighed in (:func:`considering_mode`), or None."""
+    held = _MODE_CONSIDERED.get()
+    if held is None:
+        return None
+    considered, mode_index = held
+    return mode_index if considered is card or considered == card else None
+
+
+def caster_chooses_a_mode(card: CardDefinition) -> bool:
+    """Whether casting *card* means choosing one of its modes (CR 601.2b):
+    an instant or sorcery printing a "Choose one —" head its **caster**
+    answers. Not a spell whose mode an opponent picks (CR 700.2e: Fatal Lore,
+    Misfortune, Library of Lat-Nam) -- that cast names no mode, by rule.
+
+    The test ``web/state_view`` makes for the castable highlight, and the one
+    ``Game.announceable_modes`` makes before listing anything.
+    """
+    if card.primary_type not in SPELL_TYPES:
+        return False
+    program = compile_card_oracle(card)
+    return bool(program.modes) and program.mode_chooser is None
+
+
+def spell_text(card: CardDefinition) -> str:
+    """The lower-cased words *card* resolves as: the bullet being weighed for
+    a modal spell (:func:`considering_mode`), its whole text otherwise.
+
+    For the weights in ``ai_policy`` that are still text probes ("draw",
+    "gain … life", "target opponent"). Asked of the whole card, a Charm
+    printing "gains" in one bullet and "life" in another scored as a life-gain
+    spell in every mode.
+    """
+    mode_index = mode_considered(card)
+    if mode_index is not None:
+        modes = compile_card_oracle(card).modes
+        if 0 <= mode_index < len(modes):
+            return (modes[mode_index].label or "").lower()
+    return (card.oracle_text or "").lower()
+
+
 def _spell_instructions(card: CardDefinition) -> tuple[OracleInstruction, ...]:
     """The instructions resolving *card* **as a spell** carries out.
 
-    Empty for a permanent card; see ``SPELL_TYPES``.
+    Empty for a permanent card; see ``SPELL_TYPES``. For a modal spell being
+    weighed in one of its modes (:func:`considering_mode`), that mode's own --
+    through ``targeting.announced_mode_instructions``, the reader the cast
+    gates and the resolution share, so what the policy values is the steps
+    the announcement will run.
     """
+    from .targeting import announced_mode_instructions
+
     if card.primary_type not in SPELL_TYPES:
         return ()
-    return tuple(compile_card_oracle(card).instructions)
+    return tuple(
+        announced_mode_instructions(compile_card_oracle(card), mode_considered(card))
+    )
 
 
 def _first(card: CardDefinition, kind: str) -> OracleInstruction | None:
@@ -1892,12 +1984,22 @@ def role_target_sides(
                             spec_roles)
 
     program = compile_card_oracle(card)
+    # ...and CR 601.2b's other answer, the mode being weighed
+    # (:func:`considering_mode`): Hull Breach's third bullet is a roles
+    # announcement and its first two are not, and Reign of Chaos is two roles
+    # announcements over different pairs.
+    mode_index = mode_considered(card)
     roles = spec_roles(
-        derive_cast_spec(card, program, optional_cost_payments=optional_cost_payments)
+        derive_cast_spec(
+            card, program, optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
+        )
     )
     if not roles:
         return ()
-    run = instructions_as_announced(card, program, optional_cost_payments or {})
+    run = instructions_as_announced(
+        card, program, optional_cost_payments or {}, mode_index=mode_index,
+    )
     slot_sides = several_target_slot_sides(program, run)
 
     spenders: list[OracleInstruction] = []

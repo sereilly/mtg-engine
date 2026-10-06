@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from engine.ai_combat import declare_ai_blockers
 
 from engine.ai_policy import (
+    cast_announcement,
     choose_activation_action,
     choose_foreign_activation_action,
     choose_hand_activation_action,
@@ -148,24 +149,17 @@ def _ai_step(session: Session) -> bool:
         # the colour the plan counted on, by the mana ability that makes it.
         tap_planned_lands(game, seat, cast_action)
 
+        # The announcement, whole, through the one function that turns a
+        # `CastAction` into a cast (`engine.ai_policy.cast_announcement`): the
+        # seat and the object, X, the alternative cost (CR 118.9), the
+        # division (CR 601.2d), the optional costs and the **mode**
+        # (CR 601.2b). Each executor in this file spelled those out for itself
+        # and they had drifted — the two instant executors below forwarded
+        # neither an optional cost nor an alternative one — which is how a
+        # mode would have reached two of the four.
         if has_human_opponent:
             result = game.queue_from_hand(
-                seat,
-                card_to_cast.name,
-                target_player_index=cast_action.target_player_index,
-                target_permanent_index=cast_action.target_permanent_index,
-                target_permanent_ids=cast_action.target_permanent_ids,
-                x_value=cast_action.x_value,
-                from_zone=cast_action.from_zone,
-                # CR 118.9, forwarded whole: the policy only sets this when the
-                # mana cost cannot be paid, so dropping it here would turn every
-                # such cast into an "insufficient mana" refusal.
-                alternative_cost=cast_action.alternative_cost,
-                # CR 601.2d, forwarded for the same reason: the division is part
-                # of the announcement, and a cast that drops it is refused.
-                divided_targets=cast_action.divided_targets,
-                # CR 601.2b's optional costs (a kicker), forwarded likewise.
-                optional_cost_payments=cast_action.optional_cost_payments,
+                seat, card_to_cast.name, **cast_announcement(cast_action),
             )
             if result.supported:
                 game.note_priority_action_taken(seat)
@@ -180,22 +174,7 @@ def _ai_step(session: Session) -> bool:
                 return False  # paused — human has priority over the spell on the stack
         else:
             game.cast_from_hand(
-                seat,
-                card_to_cast.name,
-                target_player_index=cast_action.target_player_index,
-                target_permanent_index=cast_action.target_permanent_index,
-                target_permanent_ids=cast_action.target_permanent_ids,
-                x_value=cast_action.x_value,
-                from_zone=cast_action.from_zone,
-                # CR 118.9, forwarded whole: the policy only sets this when the
-                # mana cost cannot be paid, so dropping it here would turn every
-                # such cast into an "insufficient mana" refusal.
-                alternative_cost=cast_action.alternative_cost,
-                # CR 601.2d, forwarded for the same reason: the division is part
-                # of the announcement, and a cast that drops it is refused.
-                divided_targets=cast_action.divided_targets,
-                # CR 601.2b's optional costs (a kicker), forwarded likewise.
-                optional_cost_payments=cast_action.optional_cost_payments,
+                seat, card_to_cast.name, **cast_announcement(cast_action),
             )
             _auto_resolve_ai_pending(session)
 
@@ -259,21 +238,15 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
     if instant_action is not None:
         card_to_cast = spell_being_cast(game.players[seat].hand, instant_action)
         tap_planned_lands(game, seat, instant_action)
+        # The whole announcement (`cast_announcement`, as in `_ai_step`): the
+        # chosen permanent — a spell whose handler has no board scan (Sivvi's
+        # Valor) resolved doing nothing while only the seat was forwarded —
+        # the division (CR 601.2d; dropped, the cast is refused and the seat
+        # offers the same instant every combat) and the mode (CR 601.2b: this
+        # is the one window in which a mode that counters a spell can be
+        # announced at all).
         result = game.queue_from_hand(
-            seat,
-            card_to_cast.name,
-            target_player_index=instant_action.target_player_index,
-            # The chosen permanent, forwarded like the main-phase executor
-            # forwards it. This was the gap this comment used to name: the
-            # policy aimed a seat and the handler scanned it, so a spell whose
-            # handler has no scan (Sivvi's Valor) resolved doing nothing.
-            target_permanent_index=instant_action.target_permanent_index,
-            target_permanent_ids=instant_action.target_permanent_ids,
-            x_value=instant_action.x_value,
-            # CR 601.2d: a divided spell dropped here is not merely aimed badly
-            # — it is refused at announcement, so the seat would offer the same
-            # instant every combat and do nothing.
-            divided_targets=instant_action.divided_targets,
+            seat, card_to_cast.name, **cast_announcement(instant_action),
         )
         if result.supported:
             game.note_priority_action_taken(seat)
@@ -515,13 +488,8 @@ def _advance_phase(session: Session) -> None:
                         )
                         tap_planned_lands(game, defender_index, instant_action)
                         game.cast_from_hand(
-                            defender_index,
-                            card_to_cast.name,
-                            target_player_index=instant_action.target_player_index,
-                            target_permanent_index=instant_action.target_permanent_index,
-                            target_permanent_ids=instant_action.target_permanent_ids,
-                            x_value=instant_action.x_value,
-                            divided_targets=instant_action.divided_targets,
+                            defender_index, card_to_cast.name,
+                            **cast_announcement(instant_action),
                         )
                         return
                     # CR 509.2: declaring blockers opened a priority window for the

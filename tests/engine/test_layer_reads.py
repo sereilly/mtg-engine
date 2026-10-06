@@ -390,7 +390,7 @@ _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 #: they mean the card or the permanent. Lower an entry when you drain one; the
 #: only rule the guard enforces is that no entry may rise.
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
-    "ai_policy.py": 11,
+    "ai_policy.py": 8,
     "card_hooks.py": 1,
     "handlers/board_misc.py": 5,
     "handlers/destruction.py": 2,

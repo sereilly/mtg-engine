@@ -12,6 +12,10 @@ from .ai_valuation import (
     SPELL_TYPES,
     CastOffer,
     cast_offers,
+    caster_chooses_a_mode,
+    considering_mode,
+    mode_considered,
+    spell_text,
     activation_target_side,
     entry_sacrifice_is_unavoidable,
     entry_self_return_gate,
@@ -70,8 +74,8 @@ from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
-from .targeting import (bounce_subject_filter, cast_target_slot,
-                        derive_activation_spec,
+from .targeting import (announced_mode_instructions, bounce_subject_filter,
+                        cast_target_slot, derive_activation_spec,
                         derive_cast_spec, derive_instruction_spec,
                         instructions_as_announced, role_is_seat,
                         spec_is_a_cost, spec_roles,
@@ -130,6 +134,30 @@ class CastAction:
     # AI seat ever paid a buyback or a kicker: a kicked-only half of a card was
     # text the simulator could not reach. See `_cast_candidate`.
     optional_cost_payments: dict[str, int] | None = None
+    # CR 601.2b's other announcement: which mode of a "Choose one —" spell
+    # this cast names, in the engine's own spelling (`queue_from_hand`'s
+    # ``mode_index``, which becomes `StackItem.chosen_mode_index`). None for a
+    # spell with no mode to choose and for one whose mode an opponent chooses
+    # (CR 700.2e). The field did not exist, so every modal spell an AI seat
+    # cast was announced with no mode, which the engine resolves as the first
+    # bullet: 34 of the pool's 88 modes were reachable, and a Charm whose first
+    # bullet had nothing to point at was a card the seat held all game. See
+    # `_cast_candidate`.
+    mode_index: int | None = None
+    # ...and the same announcement for a "Choose one **or more** —" spell that
+    # takes several (Sublime Epiphany), in the shape `queue_from_hand`'s
+    # ``mode_choices`` takes them: one dict per chosen mode, each carrying its
+    # own seat and slot. None for every cast naming a single mode, which is
+    # every other one -- the engine reads one entry exactly as it reads
+    # ``mode_index``, so a single mode is never spelled this way.
+    mode_choices: list[dict] | None = None
+    # The spell on the stack this cast names (CR 601.2c), as the engine's own
+    # bottom-first index (`queue_from_hand`'s ``target_stack_index``). None is
+    # "name nothing", which is every cast this policy made before and still
+    # every cast whose effect is not guarded by a condition on that spell: the
+    # engine then answers with the spell on top. Set where which spell matters
+    # — "Counter target spell **if it's blue**" (`_guarded_stack_target`).
+    target_stack_index: int | None = None
 
 
 @dataclass(frozen=True)
@@ -189,6 +217,46 @@ class HandActivationAction:
     score: float
     # See `CastAction.land_tap_colors`.
     land_tap_colors: tuple[str, ...] = ()
+
+
+def cast_announcement(action: CastAction) -> dict:
+    """Everything *action* announces (CR 601.2b–d), as the keywords
+    ``Game.queue_from_hand`` / ``cast_from_hand`` take it by.
+
+    **The one place a `CastAction` becomes a cast.** There are five executors
+    — the simulator's main phase, and in ``web/game_flow`` the AI step's two
+    arms, the priority response and the declare-blockers instant — and each
+    spelled the forwarding out for itself, so a field added to the action was
+    five places to remember it. They had drifted: the two instant executors
+    forwarded neither an optional cost nor an alternative one. The mode is the
+    field that made five copies one function, because a mode dropped by an
+    executor is not refused — it is quietly cast as the first bullet, aimed at
+    the target chosen for another.
+
+    The card's name is not here: the spell is `spell_being_cast`'s, which
+    reads the zone.
+    """
+    return {
+        "target_player_index": action.target_player_index,
+        "target_permanent_index": action.target_permanent_index,
+        "target_permanent_ids": action.target_permanent_ids,
+        "x_value": action.x_value,
+        "from_zone": action.from_zone,
+        # CR 118.9. Dropped, the cast falls back to a mana cost the policy has
+        # already established this seat cannot pay, and is refused.
+        "alternative_cost": action.alternative_cost,
+        # CR 601.2d: the division is part of the announcement, and a cast that
+        # drops it is refused now that the gate asks for one.
+        "divided_targets": action.divided_targets,
+        # CR 601.2b's optional costs (a kicker): the plan tapped the lands for
+        # them, and a cast that drops the announcement pays the printed cost
+        # and leaves the rest in the pool.
+        "optional_cost_payments": action.optional_cost_payments,
+        # CR 601.2b's mode. See `CastAction.mode_index`.
+        "mode_index": action.mode_index,
+        "mode_choices": action.mode_choices,
+        "target_stack_index": action.target_stack_index,
+    }
 
 
 def planned_tap_color(action, position: int) -> str:
@@ -549,11 +617,39 @@ _OFFERS_ANNOUNCED: ContextVar["dict[str, int] | None"] = ContextVar(
 )
 
 
+def _announced_mode(card: CardDefinition) -> int | None:
+    """CR 601.2b's *mode* answer for the candidate being built: the mode
+    *card* is being weighed in, or None for a spell that names none.
+
+    The mode's twin of `_OFFERS_ANNOUNCED`, and it lives one module down
+    (`ai_valuation.considering_mode`) because the valuation readers there need
+    it too. **Every engine question a cast chooser asks about a spell takes
+    this beside the offers** — the spec, the picker's list, the
+    no-legal-target gate, the steps the announcement will run — and
+    `tests/ai/test_ai_mode_chooser.py` fails a call in this module that asks
+    one of them without it, so a chooser added later cannot read mode 0 by
+    leaving a keyword out.
+    """
+    return mode_considered(card)
+
+
+def _announced_steps(card: CardDefinition, program) -> tuple:
+    """The steps the candidate being built will resolve: the weighed mode's
+    for a modal spell (`_announced_mode`), *program*'s own otherwise.
+
+    For the choosers that walk instructions rather than ask for a spec.
+    ``program.instructions`` is mode 0's for a modal card, which is what each
+    of them read.
+    """
+    return announced_mode_instructions(program, _announced_mode(card))
+
+
 def _cast_spec(card: CardDefinition, program):
     """`derive_cast_spec` for the candidate being built (see
-    `_OFFERS_ANNOUNCED`)."""
+    `_OFFERS_ANNOUNCED` and `_announced_mode`)."""
     return derive_cast_spec(
-        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
     )
 
 
@@ -781,7 +877,127 @@ def _cast_candidate(
     twice names three artifacts). So an attempt that cannot be afforded, or
     whose paid-for half has nothing legal to point at, falls back to the next
     and finally to the plain spell rather than leaving the card in hand.
+
+    **And CR 601.2b's mode, one level out.** A "Choose one —" spell is as many
+    spells as it has bullets (CR 700.2a), so each mode the engine says has a
+    legal announcement right now (`Game.announceable_modes`, the list the mode
+    prompt offers a human) is built as a whole candidate of its own — its own
+    targets on the side *its* effect wants, its own score — and the best one is
+    the cast. Everything underneath reads the mode being weighed
+    (`_announced_mode`), so no gate, chooser or weight had to learn the word.
+    This loop did not exist: the cast named no mode, the engine resolved the
+    first bullet, and Crosis's Charm only ever bounced.
     """
+    best: CastAction | None = None
+    built: list[CastAction] = []
+    for mode_index in _modes_weighed(game, player_index, card):
+        with considering_mode(card, mode_index):
+            candidate = _cast_candidate_offering(
+                game, player_index, card, hand_index,
+                from_zone=from_zone, extra_generic=extra_generic,
+            )
+        if candidate is None:
+            continue
+        built.append(candidate)
+        # Strictly better only, so equal modes keep printed order — which is
+        # also what keeps a seed's run reproducible.
+        if best is None or candidate.score > best.score:
+            best = candidate
+    if len(built) > 1 and compile_card_oracle(card).modes_at_least:
+        return _every_mode_worth_casting(built, best) or best
+    return best
+
+
+#: What each further mode of a "choose one or more" spell adds to the score of
+#: the best one. Tuning: the modes share one cost, so every one after the first
+#: is an effect for no mana — worth having, and never worth more than a spell.
+EXTRA_MODE_SCORE = 1.0
+
+
+def _every_mode_worth_casting(
+    built: "list[CastAction]", best: CastAction
+) -> CastAction | None:
+    """One cast naming **every** mode in *built* — "Choose one **or more** —"
+    (Sublime Epiphany, CR 700.2d) — or None when they cannot share one
+    announcement.
+
+    Each entry of *built* is a mode this policy would cast on its own: it has a
+    legal announcement, a target on the side its effect wants and a payable
+    cost. The modes of one spell share one cost, so taking them all is every
+    one of those effects for the price of the best — which is the whole reason
+    the head is printed, and a seat that named one bullet paid six mana for a
+    cantrip. The announcement is `queue_from_hand`'s ``mode_choices``: each
+    mode beside its own seat and slot.
+
+    None, and the caller keeps the single best mode, when a mode's targets do
+    not fit that shape (it carries one seat and one battlefield slot — several
+    targets, a division or a cross-board list do not travel in it) or when the
+    modes were not priced alike.
+    """
+    choices: list[dict] = []
+    for candidate in built:
+        slot = candidate.target_permanent_index
+        if slot is not None and not isinstance(slot, int):
+            return None
+        if (
+            candidate.divided_targets
+            or candidate.optional_cost_payments
+            or candidate.alternative_cost != best.alternative_cost
+            or candidate.x_value != best.x_value
+            or candidate.land_tap_indices != best.land_tap_indices
+            or candidate.land_tap_colors != best.land_tap_colors
+        ):
+            return None
+        choices.append({
+            "index": candidate.mode_index,
+            "target_player_index": candidate.target_player_index,
+            "target_permanent_index": slot,
+            "target_stack_index": candidate.target_stack_index,
+        })
+    return CastAction(
+        card_name=best.card_name,
+        target_player_index=best.target_player_index,
+        x_value=best.x_value,
+        land_tap_indices=best.land_tap_indices,
+        score=best.score + EXTRA_MODE_SCORE * (len(choices) - 1),
+        hand_index=best.hand_index,
+        from_zone=best.from_zone,
+        alternative_cost=best.alternative_cost,
+        land_tap_colors=best.land_tap_colors,
+        mode_choices=choices,
+    )
+
+
+def _modes_weighed(
+    game: Game, player_index: int, card: CardDefinition
+) -> "tuple[int | None, ...]":
+    """The modes *card* is weighed in as a cast: ``(None,)`` for a spell with
+    no mode for its caster to choose — every card but the modal instants and
+    sorceries, and the three whose mode an opponent picks (CR 700.2e) — and
+    otherwise each mode with a legal announcement right now, in printed order.
+
+    The list is the engine's (`Game.announceable_modes`: the gates the cast
+    path runs, with nothing named), so a mode this policy weighs is one some
+    cast of it will not be refused for want of a target. Empty when no mode
+    can be announced, which is a card not proposed rather than one proposed
+    and refused.
+    """
+    if not caster_chooses_a_mode(card):
+        return (None,)
+    return tuple(game.announceable_modes(player_index, card))
+
+
+def _cast_candidate_offering(
+    game: Game,
+    player_index: int,
+    card: CardDefinition,
+    hand_index: int,
+    *,
+    from_zone: str = "hand",
+    extra_generic: int = 0,
+) -> CastAction | None:
+    """`_cast_candidate` for the mode being weighed: CR 601.2b's optional
+    costs, each answer tried as a whole candidate, most paid first."""
     announcements = _offer_announcements(game, player_index, card, hand_index, from_zone)
     if not announcements:
         return _cast_candidate_announcing(
@@ -814,14 +1030,20 @@ def _paid_for_half_names_nothing(
     that cannot happen.
     """
     program = compile_card_oracle(card)
-    taken = derive_cast_spec(card, program, optional_cost_payments=offers)
-    declined = derive_cast_spec(card, program, optional_cost_payments={})
+    mode_index = _announced_mode(card)
+    taken = derive_cast_spec(
+        card, program, optional_cost_payments=offers, mode_index=mode_index,
+    )
+    declined = derive_cast_spec(
+        card, program, optional_cost_payments={}, mode_index=mode_index,
+    )
     if taken is None or taken == declined:
         return False
     if taken.get("kind") in ("none", "modal") or spec_roles(taken):
         return False
     return not game._enumerate_targets(
         player_index, card, taken, for_cast=True, optional_cost_payments=offers,
+        mode_index=mode_index,
     )
 
 
@@ -1159,6 +1381,7 @@ def _cast_candidate_announcing(
         divided_targets=divided_targets,
         land_tap_colors=tap_colors,
         optional_cost_payments=dict(offers) if announces_offer else None,
+        mode_index=_announced_mode(card),
     )
 
 
@@ -2680,76 +2903,119 @@ def choose_combat_blockers(
 
 
 def choose_combat_instant_cast_action(game: Game, player_index: int) -> CastAction | None:
+    """The instant this seat casts **now** — in response to what is on the
+    stack, or in the declare-blockers step — or None.
+
+    The web AI's answer to priority (`web/game_flow`); the simulator has no
+    such window yet. **Every mode of a modal instant is weighed here as it is
+    in the main phase** (`_cast_candidate`): this is the one moment a mode
+    whose target is a spell on the stack can be announced at all, and with no
+    mode named Dromar's Charm never countered anything and Treva's Charm never
+    exiled an attacker.
+    """
     player = game.players[player_index]
 
     best: CastAction | None = None
     for hand_index, card in hand_spells(player):
         if card.primary_type != "instant":
             continue
-        if not _can_cast_with_targets(game, player_index, card):
-            continue
-
-        target = _choose_target_for_spell(card, player_index, game)
-        x_value = _pick_x_value(game, player, card)
-        if x_value == 0:
-            continue
-        # CR 601.2d, for the same reason `_cast_candidate` asks it: Pyrokinesis
-        # and Contagion are instants with an alternative cost, so this is the
-        # chooser that offers them during combat — and a divided spell proposed
-        # with no division is refused at announcement.
-        divided = choose_divided_targets(game, player_index, card, x_value)
-        if divided is not None and not divided:
-            continue
-        # The same "would the resolution do anything" questions the main-phase
-        # chooser asks (`_cast_candidate`), for the same reasons: a one-object
-        # spell names its permanent on the side the effect wants or is not
-        # cast, and a spell that sacrifices what its caster lacks is not cast.
-        target_permanent_index: int | None = None
-        target_permanent_ids: list[int] | None = None
-        if divided is None:
-            single = _choose_single_object_target(game, player_index, card, target)
-            if single == ():
+        built: list[CastAction] = []
+        chosen: CastAction | None = None
+        for mode_index in _modes_weighed(game, player_index, card):
+            with considering_mode(card, mode_index):
+                candidate = _combat_instant_candidate(
+                    game, player_index, card, hand_index
+                )
+            if candidate is None:
                 continue
-            if single is not None:
-                target, target_permanent_index, target_permanent_ids = single
-        if not _caster_can_make_its_sacrifices(game, player_index, card):
-            continue
-        tap_indices: tuple[int, ...] = ()
-        tap_colors: tuple[str, ...] = ()
-
-        if game.enforce_mana_costs:
-            required = _cost_for(game, player, card, x_value)
-            plan = _plan_land_taps(game, player, required)
-            if plan is None:
-                continue
-            tap_indices, tap_colors = plan
-
-        score = _score_cast(game, player_index, card, target, x_value)
-        # During declare blockers, prefer combat-relevant instants.
-        if game.current_turn_phase == "combat" and game.current_step == "declare_blockers":
-            lowered = card.oracle_text.lower()
-            if "damage" in lowered or "destroy" in lowered or "prevent" in lowered or "tap" in lowered:
-                score += 2.0
-        score += _stack_response_bonus(game, player_index, card, target)
-        if score < 2.0:
-            continue
-
-        candidate = CastAction(
-            card_name=card.name,
-            target_player_index=target,
-            x_value=x_value,
-            land_tap_indices=tap_indices,
-            score=score,
-            hand_index=hand_index,
-            target_permanent_index=target_permanent_index,
-            target_permanent_ids=target_permanent_ids,
-            divided_targets=list(divided) if divided else None,
-            land_tap_colors=tap_colors,
-        )
-        if _is_better_cast(candidate, best):
-            best = candidate
+            built.append(candidate)
+            # Strictly better only: equal modes of one card keep printed order.
+            if chosen is None or candidate.score > chosen.score:
+                chosen = candidate
+        if len(built) > 1 and compile_card_oracle(card).modes_at_least:
+            # "Choose one or more —": every mode worth casting, in one cast.
+            chosen = _every_mode_worth_casting(built, chosen) or chosen
+        if chosen is not None and _is_better_cast(chosen, best):
+            best = chosen
 
     return best
+
+
+def _combat_instant_candidate(
+    game: Game, player_index: int, card: CardDefinition, hand_index: int
+) -> CastAction | None:
+    """`choose_combat_instant_cast_action` for one instant, in the mode being
+    weighed (`_announced_mode`) — or None when it is not worth casting now."""
+    player = game.players[player_index]
+    if not _can_cast_with_targets(game, player_index, card):
+        return None
+    # "Counter target spell **if it's red**": which spell, or no cast at all
+    # when the guard holds for none of them (`_guarded_stack_target`).
+    stack_target = _guarded_stack_target(game, player_index, card)
+    if stack_target == ():
+        return None
+
+    target = _choose_target_for_spell(card, player_index, game)
+    x_value = _pick_x_value(game, player, card)
+    if x_value == 0:
+        return None
+    # CR 601.2d, for the same reason `_cast_candidate` asks it: Pyrokinesis
+    # and Contagion are instants with an alternative cost, so this is the
+    # chooser that offers them during combat — and a divided spell proposed
+    # with no division is refused at announcement.
+    divided = choose_divided_targets(game, player_index, card, x_value)
+    if divided is not None and not divided:
+        return None
+    # The same "would the resolution do anything" questions the main-phase
+    # chooser asks (`_cast_candidate`), for the same reasons: a one-object
+    # spell names its permanent on the side the effect wants or is not
+    # cast, and a spell that sacrifices what its caster lacks is not cast.
+    target_permanent_index: int | None = None
+    target_permanent_ids: list[int] | None = None
+    if divided is None:
+        single = _choose_single_object_target(game, player_index, card, target)
+        if single == ():
+            return None
+        if single is not None:
+            target, target_permanent_index, target_permanent_ids = single
+    if not _caster_can_make_its_sacrifices(game, player_index, card):
+        return None
+    tap_indices: tuple[int, ...] = ()
+    tap_colors: tuple[str, ...] = ()
+
+    if game.enforce_mana_costs:
+        required = _cost_for(game, player, card, x_value)
+        plan = _plan_land_taps(game, player, required)
+        if plan is None:
+            return None
+        tap_indices, tap_colors = plan
+
+    score = _score_cast(game, player_index, card, target, x_value)
+    # During declare blockers, prefer combat-relevant instants.
+    if game.current_turn_phase == "combat" and game.current_step == "declare_blockers":
+        lowered = spell_text(card)
+        if "damage" in lowered or "destroy" in lowered or "prevent" in lowered or "tap" in lowered:
+            score += 2.0
+    score += _stack_response_bonus(game, player_index, card, target)
+    if score < 2.0:
+        return None
+
+    candidate = CastAction(
+        card_name=card.name,
+        target_player_index=target,
+        x_value=x_value,
+        land_tap_indices=tap_indices,
+        score=score,
+        hand_index=hand_index,
+        target_permanent_index=target_permanent_index,
+        target_permanent_ids=target_permanent_ids,
+        divided_targets=list(divided) if divided else None,
+        land_tap_colors=tap_colors,
+        mode_index=_announced_mode(card),
+        target_stack_index=stack_target,
+    )
+
+    return candidate
 
 
 def choose_search_card(
@@ -3019,7 +3285,7 @@ def _stack_response_bonus(game: Game, caster_index: int, card: CardDefinition, t
         # Avoid spending reaction cards while responding to our own stack item.
         return -0.5
 
-    lowered = card.oracle_text.lower()
+    lowered = spell_text(card)
     bonus = 0.0
 
     # Countering is only worth holding up against a spell this card may legally
@@ -3151,10 +3417,12 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
         return False
 
     opponent = game.players[choose_attack_target(game, caster_index)]
-    caster = game.players[caster_index]
 
     program = compile_card_oracle(card)
-    for instruction in program.instructions:
+    # The steps of the mode being weighed (`_announced_steps`): these arms are
+    # keyed on the *first* kind they meet, and for a modal card that was
+    # always mode 0's.
+    for instruction in _announced_steps(card, program):
         kind = instruction.kind
 
         if kind == "bounce_target_creature":
@@ -3173,23 +3441,33 @@ def _can_cast_with_targets(game: Game, caster_index: int, card: CardDefinition) 
             type_filter = instruction.payload.get("type_filter")
             color_filter = instruction.payload.get("color_filter")
             if type_filter or color_filter:
-                text = card.oracle_text.lower()
-                if "target artifact or enchantment" in text:
-                    return any(
-                        perm.card.primary_type in {"artifact", "enchantment"}
-                        for perm in game.controlled_by(opponent)
-                    )
-                return any(
-                    (not type_filter or perm.card.primary_type == type_filter)
-                    and (not color_filter or color_filter in perm.effective_colors)
-                    for perm in game.controlled_by(opponent)
+                # "Is there something on the opponent's board this may
+                # destroy" — the engine's own list of what the announcement
+                # may name, filtered to that seat. It was a matcher of this
+                # arm's own over two payload keys, comparing the permanent's
+                # *printed, collapsed* type word to the filter: an artifact
+                # creature is "creature", so Shatter was never cast at one, and
+                # a filter naming several types ("Destroy target artifact or
+                # land", Pillage; Creeping Mold, Fissure, Eliminate) is a list,
+                # which equals no word at all — those spells were never cast.
+                return _a_legal_target_is_controlled_by(
+                    game, caster_index, card, choose_attack_target(game, caster_index)
                 )
 
         if kind in {"pump_target_creature_until_eot", "grant_regeneration_to_target_creature",
                     "grant_target_flying_until_eot", "berserk_pump"}:
-            return any(
-                perm.card.primary_type == "creature" for perm in game.controlled_by(caster)
+            # A gift wants one of the caster's own creatures to land on — and
+            # a pump is not always a gift. "Target creature gets -2/-2 until
+            # end of turn" is this same kind, so the arm asked a seat casting
+            # a kill spell whether it had a creature *of its own* to shrink,
+            # and held the card until it did. Which board is the effect's own
+            # reading (`spell_target_side`: the sign of the change), and what
+            # is on it is the engine's list.
+            wanted = (
+                choose_attack_target(game, caster_index)
+                if spell_target_side(card) == "opponent" else caster_index
             )
+            return _a_legal_target_is_controlled_by(game, caster_index, card, wanted)
 
     return True
 
@@ -3238,40 +3516,71 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # with one target named for it, which no list is ever legal for: the seat
     # held it until it could spare a land for the kicker.
     announced = _OFFERS_ANNOUNCED.get()
+    mode_index = _announced_mode(card)
     if game.no_legal_cast_target_refusal(
         caster_index, card, optional_cost_payments=announced,
+        mode_index=mode_index,
     ) is not None:
         return True
     # What follows is **preference and remainder**, and is deliberately wider
-    # than the rule: the two shapes the engine's predicate leaves to another
-    # gate (a target on the stack, a modal spell's mode), and the casts that
-    # are legal and buy nothing — "X target creatures" at an X of zero, "any
-    # number of target" at none, a *source of your choice* with no source in
-    # play. Declining those is this policy's business; refusing them is not
-    # the engine's.
+    # than the rule: the shape the engine's predicate leaves to another gate
+    # (a target on the stack), and the casts that are legal and buy nothing —
+    # "X target creatures" at an X of zero, "any number of target" at none, a
+    # *source of your choice* with no source in play. Declining those is this
+    # policy's business; refusing them is not the engine's.
     program = compile_card_oracle(card)
-    # A modal spell is asked about **mode 0**. This policy names no mode, so
-    # the spell is cast as mode 0 — and that is what the engine's gates judge
-    # a cast naming no mode as, and what `derive_cast_spec` returns when it is
-    # handed none. Blue Elemental Blast's mode 0 counters a red spell, so an AI
-    # holding one with an empty stack offered it every turn and was refused
-    # every turn. (Choosing among modes is `Game.announceable_modes`' list and
-    # a chooser this policy does not have yet.)
+    # **A modal spell is asked about the mode being weighed** (`_announced
+    # _mode`), and so is every question above and below. It was asked about
+    # mode 0, because this policy named no mode and that is what the engine
+    # resolves a cast naming none as: Blue Elemental Blast's first bullet
+    # counters a red spell, so with an empty stack the whole card was
+    # uncastable to an AI seat while its second bullet had a red permanent to
+    # destroy. A mode whose target is **on the stack** is not this function's
+    # (`_NOT_OBJECT_SPECS`): the modes weighed are the engine's own list of
+    # the announceable ones, and that list has asked the stack gate already.
     spec = _cast_spec(card, program)
     if spec is None or spec.get("kind") in ("none", "modal") or spec_roles(spec):
         # No spec, no target; roles are `_choose_role_targets`' question and it
         # already declines an unfillable chain.
         return False
-    if _targets_are_optional(program):
+    if _targets_are_optional(_announced_steps(card, program)):
         # "Up to one target" is castable with none (CR 601.2c).
         return False
     return not game._enumerate_targets(
         caster_index, card, spec, for_cast=True, optional_cost_payments=announced,
+        mode_index=mode_index,
     )
 
 
-def _targets_are_optional(program) -> bool:
-    """True when every ``targets`` quantifier the program carries is an "up to"."""
+def _a_legal_target_is_controlled_by(
+    game: Game, caster_index: int, card: CardDefinition, seat: int
+) -> bool:
+    """Whether the candidate being built could name a permanent *seat*
+    controls: the engine's own enumeration for the announcement (the list a
+    human's picker is built from), read for one battlefield.
+
+    For a preference arm that wants its target on a particular board. True
+    when the announcement names roles instead — `_choose_role_targets` picks a
+    side per role and declines an unfillable chain — or nothing a picker lists.
+    """
+    spec = _cast_spec(card, compile_card_oracle(card))
+    if not isinstance(spec, dict) or spec_roles(spec):
+        return True
+    legal = game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
+    )
+    return any(
+        entry.get("kind") == "permanent" and entry.get("seat") == seat
+        for entry in legal
+    )
+
+
+def _targets_are_optional(instructions) -> bool:
+    """True when every ``targets`` quantifier *instructions* carry is an
+    "up to". The caller hands the steps of the candidate being built
+    (`_announced_steps`), so a modal spell is asked about the mode weighed."""
     quantifiers: list[str] = []
 
     def walk(instruction) -> None:
@@ -3284,7 +3593,7 @@ def _targets_are_optional(program) -> bool:
         for step in payload.get("steps") or ():
             walk(step)
 
-    for instruction in program.instructions:
+    for instruction in instructions:
         walk(instruction)
     return bool(quantifiers) and all(q == "up_to" for q in quantifiers)
 
@@ -3428,12 +3737,19 @@ def choose_divided_targets(
     # — both keep it under a `was_kicked` arm — so both were proposed with one
     # bare target and refused.
     offers = _OFFERS_ANNOUNCED.get()
+    # ...and its mode (`_announced_mode`): a division printed in one bullet is
+    # a division only of a cast that chose it, and the game's spec for a modal
+    # card asked with no mode is "modal" — no division to read at all.
+    mode_index = _announced_mode(card)
     shape = divided_shape(
-        program, instructions_as_announced(card, program, offers or {})
+        program,
+        instructions_as_announced(card, program, offers or {}, mode_index=mode_index),
     )
     if shape is None:
         return None
-    spec = game.cast_target_spec(caster_index, card, optional_cost_payments=offers)
+    spec = game.cast_target_spec(
+        caster_index, card, optional_cost_payments=offers, mode_index=mode_index,
+    )
     if spec.get("kind") != "divided":
         # A modal or otherwise re-derived spec that does not describe the
         # division. Nothing to announce, and the cast gate reads the same spec.
@@ -3602,8 +3918,12 @@ def _choose_role_targets(
     # and a chain walked off the other cast's spec is a list of the wrong
     # length — proposed, refused, and proposed again next turn.
     offers = _OFFERS_ANNOUNCED.get()
+    # ...and under the mode being weighed (`_announced_mode`): asked with no
+    # mode the game answers "modal" and walks no chain, which is why Reign of
+    # Chaos — two bullets, both of them roles — was never cast by an AI seat.
     options = game.cast_target_spec(
         caster_index, card, optional_cost_payments=offers,
+        mode_index=_announced_mode(card),
     ).get("valid_targets") or []
     picks = _role_chain(
         options, role_target_sides(card, offers), 0, caster_index, card, game,
@@ -3644,7 +3964,8 @@ def _names_x_targets(card: CardDefinition) -> bool:
     answered by ``Game.announced_cast_x``)."""
     program = compile_card_oracle(card)
     slot = cast_target_slot(
-        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
     )
     if slot is None or not slot[0].get("x_targets"):
         return False
@@ -3722,7 +4043,7 @@ def _choose_several_targets(
     # day it is ingested. A spell whose X the *caster* announces (Shattered
     # Crypt's {X} cost) has no answer here and keeps the behaviour it had.
     announced = (
-        game.announced_cast_x(caster_index, card)
+        game.announced_cast_x(caster_index, card, mode_index=_announced_mode(card))
         if (spec or {}).get("x_targets") else None
     )
     # "Exile **two** target artifacts" (Dust to Dust): a printed count is the
@@ -3776,7 +4097,8 @@ def _choose_several_targets(
     # maximum of two and a candidate list of none, and fell through to the
     # one-target chooser.
     legal = game.cast_target_spec(
-        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
     ).get("valid_targets") or []
     by_seat: dict[int, list[int]] = {}
     # A graveyard card is not a permanent and has no `permanent_id`; its slots
@@ -3827,7 +4149,11 @@ def _choose_several_targets(
     # one printed before Rookie Mistake — takes the single-seat path below
     # unchanged, so this is byte-identical for Basri's Acolyte and Basri's Aegis.
     sides = several_target_slot_sides(
-        program, instructions_as_announced(card, program, _OFFERS_ANNOUNCED.get() or {})
+        program,
+        instructions_as_announced(
+            card, program, _OFFERS_ANNOUNCED.get() or {},
+            mode_index=_announced_mode(card),
+        ),
     )
     if sides and len(set(sides)) > 1:
         picks: list[tuple[int, int]] = []
@@ -3958,7 +4284,7 @@ def _choose_single_object_target(
         not isinstance(spec, dict)
         or spec.get("kind") in _NOT_OBJECT_SPECS
         or spec_roles(spec)
-        or _targets_are_optional(program)
+        or _targets_are_optional(_announced_steps(card, program))
         # A spell with **no target**, whose derived spec is the picker for its
         # printed cost ("…, sacrifice a creature. Draw two cards."). A payment
         # is not a target (CR 601.2b vs 601.2c): naming the creature here put
@@ -3973,6 +4299,9 @@ def _choose_single_object_target(
         # The announcement *spec* was derived under (CR 702.33g), so the
         # per-candidate probe judges each permanent against that same spec.
         optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        # ...and the mode (CR 601.2b): the probe reads the chosen mode's own
+        # instruction, so a list asked with none is mode 0's list.
+        mode_index=_announced_mode(card),
     )
     if not legal or any(entry.get("kind") != "permanent" for entry in legal):
         return None
@@ -3983,6 +4312,13 @@ def _choose_single_object_target(
         return ()
     if spec.get("source_of_choice"):
         return _choose_damage_source(game, caster_index, legal)
+    # "Destroy target permanent **if it's blue**" (Pyroblast): every permanent
+    # is a legal target and only a blue one is destroyed. Named from the ones
+    # the effect would reach, and not cast when it would reach none and do
+    # nothing else (`_reached_by_the_effect`).
+    legal = _reached_by_the_effect(game, caster_index, card, legal)
+    if not legal:
+        return ()
     # A permanent's entry trigger, whose target this engine names as the
     # permanent is cast: `spell_target_side` has nothing to read for it.
     side = spell_target_side(card) or entry_trigger_target_side(card)
@@ -4004,6 +4340,143 @@ def _choose_single_object_target(
             if isinstance(permanent_id, int):
                 return seat, entry["index"], [permanent_id]
     return ()
+
+
+#: `if_then` conditions that are a property of **the permanent the spell
+#: targets** — the clause is on the effect, not on the target phrase, so the
+#: engine's picker rightly offers every permanent (CR 608.2b reads the printed
+#: target phrase, and Pyroblast's says no colour) and a target that fails it
+#: is one the spell does nothing to.
+#:
+#: Named, where "evaluate whatever condition is there" would be shorter,
+#: because a condition about something *else* (was this spell kicked, did a
+#: creature die this turn) cannot be asked before the cast exists, and
+#: answering it early would withhold spells for a reason that is not true. A
+#: kind left off costs the old behaviour and nothing more.
+_TARGET_GUARDS = frozenset({"target_is_color", "target_shares_most_common_color"})
+
+
+def _reached_by_the_effect(
+    game: Game, caster_index: int, card: CardDefinition, legal: list[dict]
+) -> list[dict]:
+    """The entries of *legal* — one-object candidates, off the engine's own
+    list — that the candidate being built would actually **do something to**.
+
+    All of them, for every spell whose effect is not guarded by a condition on
+    its target (`_TARGET_GUARDS`). For one that is: the permanents the guard
+    holds for, asked of the engine's own evaluator
+    (`control_flow.evaluate_condition`) with that permanent as the target — so
+    the policy and the resolution cannot disagree about what "if it's blue"
+    means, layers and all. When the guard holds for none of them the answer
+    is empty only if the guarded step is the whole spell; where the spell
+    does something else as well ("…Draw a card at the beginning of the next
+    turn's upkeep", Soul Rend) the candidates stand, because the cast is not
+    nothing.
+
+    This surfaced with the mode chooser and was true before it: an AI seat
+    holding Hydroblast or Pyroblast in its main phase now weighs "Destroy
+    target permanent if it's red", and across ten seeded Ice Age games it
+    cast that at ten permanents of the wrong colour — a legal cast and a card
+    spent on nothing. Soul Rend and Barrin's Unmaking, which print no mode,
+    were aimed the same way all along.
+    """
+    from .game_types import OracleExecutionContext
+    from .handlers.control_flow import evaluate_condition
+
+    guards, whole_spell = _target_guards(card, on_a_spell=False)
+    if not guards:
+        return legal
+
+    def reached(entry: dict) -> bool:
+        permanent = game.permanent_at(entry["seat"], entry["index"])
+        if permanent is None:
+            return False
+        context = OracleExecutionContext(
+            caster=game.players[caster_index],
+            target=game.players[entry["seat"]],
+            card=card,
+            target_permanent_index=entry["index"],
+            target_permanent_id=game.permanent_id_of(permanent),
+        )
+        return any(evaluate_condition(game, context, guard) for guard in guards)
+
+    kept = [entry for entry in legal if reached(entry)]
+    if kept or whole_spell:
+        return kept
+    return legal
+
+
+def _target_guards(card: CardDefinition, *, on_a_spell: bool) -> "tuple[list[dict], bool]":
+    """``(conditions, whole_spell)``: the `_TARGET_GUARDS` conditions that
+    guard the candidate being built's steps, for a target on the stack
+    (*on_a_spell*) or on the battlefield — and whether those guarded steps
+    are **everything** the spell does, so that a target every guard fails for
+    is a cast that does nothing at all.
+
+    A guard with an ``else`` arm is not one: the spell does something either
+    way, and which is better is a valuation this does not make.
+    """
+    steps = _announced_steps(card, compile_card_oracle(card))
+    guards = [
+        condition
+        for step in steps
+        if step.kind == "if_then"
+        and not (step.payload or {}).get("else")
+        and isinstance(condition := (step.payload or {}).get("condition"), dict)
+        and condition.get("kind") in _TARGET_GUARDS
+        and (condition.get("target") == "spell") == on_a_spell
+    ]
+    return guards, bool(guards) and len(guards) == len(steps)
+
+
+def _guarded_stack_target(game: Game, caster_index: int, card: CardDefinition):
+    """The spell on the stack a cast whose effect is guarded by a condition
+    on **that spell** should name — its engine (bottom-first) stack index;
+    ``()`` when the guard holds for no spell the cast may name and the guarded
+    step is the whole spell; None for every other cast, which names nothing
+    and is answered by the engine as it always was.
+
+    `_reached_by_the_effect` for the other zone a target can be in. "Counter
+    target spell **if it's blue**" (Pyroblast, Hydroblast, Burnout) may be
+    announced at any spell, and the web AI's priority response announced it at
+    whatever was on top: a Pyroblast spent on a green creature spell, on the
+    tree before the mode chooser and after it. The topmost spell the guard
+    holds for, off the engine's own list of what the announcement may name.
+    """
+    from .game_types import OracleExecutionContext
+    from .handlers.control_flow import evaluate_condition
+
+    guards, whole_spell = _target_guards(card, on_a_spell=True)
+    if not guards:
+        return None
+    spec = _cast_spec(card, compile_card_oracle(card))
+    if not isinstance(spec, dict) or spec.get("kind") != "stack":
+        return None
+    depth = len(game.stack)
+    reached: list[int] = []
+    for entry in game._enumerate_targets(
+        caster_index, card, spec, for_cast=True,
+        optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card),
+    ):
+        top_first = entry.get("stack_index")
+        if entry.get("kind") != "stack" or not isinstance(top_first, int):
+            continue
+        index = depth - 1 - top_first
+        if not 0 <= index < depth:
+            continue
+        item = game.stack[index]
+        context = OracleExecutionContext(
+            caster=game.players[caster_index],
+            target=game.players[item.caster_index],
+            card=card,
+            stack_target=item,
+        )
+        if any(evaluate_condition(game, context, guard) for guard in guards):
+            reached.append(index)
+    if reached:
+        return max(reached)
+    return () if whole_spell else None
 
 
 def _choose_damage_source(game: Game, caster_index: int, legal: list[dict]):
@@ -4267,7 +4740,11 @@ def _score_spell_target(
 ) -> float:
     caster = game.players[caster_index]
     target = game.players[target_index]
-    text = card.oracle_text.lower()
+    # The words the cast will resolve as: one bullet of a modal spell
+    # (`ai_valuation.spell_text`), the whole text of any other. Every probe
+    # below read the whole card, so Dromar's Charm scored as a life-gain spell
+    # while its -2/-2 was the mode in hand.
+    text = spell_text(card)
 
     score = 0.0
     if "draw" in text:
@@ -4308,7 +4785,7 @@ def _score_spell_target(
         # can pay; without this the spell registers as dealing no damage and the
         # tie-break below points it at the caster's own face.
         damage = _estimate_x_damage(game, caster, card)
-    if damage > 0:
+    if damage > 0 and not _spell_damage_names_only_an_object(card):
         if target_index != caster_index:
             score += 4.0
             if target.life <= damage:
@@ -4402,7 +4879,12 @@ def _score_cast(game: Game, caster_index: int, card: CardDefinition, target_inde
     # ``card.name == "Lightning Bolt" and opponent.life <= 3`` — which is that
     # card's damage spelled out, so any other lethal burn spell got nothing.
     damage = _extract_damage(card) or _estimate_x_damage(game, caster, card)
-    if damage > 0 and target_index == opponent_index and opponent.life <= damage:
+    if (
+        damage > 0
+        and target_index == opponent_index
+        and opponent.life <= damage
+        and not _spell_damage_names_only_an_object(card)
+    ):
         score += 12.0
 
     # A mana source is worth playing early when there is something to spend the
@@ -4922,21 +5404,50 @@ def _estimate_x_damage(game: Game, caster: PlayerState, card: CardDefinition) ->
     deals_x_damage = any(
         instruction.kind == "deal_damage"
         and str(instruction.payload.get("amount")).lower() == "x"
-        for instruction in program.instructions
+        for instruction in _announced_steps(card, program)
     )
     if not deals_x_damage:
         return 0
     return _max_affordable_x(game, caster, card)
 
 
+def _spell_damage_names_only_an_object(card: CardDefinition) -> bool:
+    """Whether the damage `_extract_damage` reads off a **spell** is dealt to
+    an object the spell targets and to nothing else — "deals 1 damage to
+    target creature", against "…to any target" and "…to target player".
+
+    The burn weights in `_score_spell_target` and `_score_cast` price damage
+    *to a player*: four for the reach, ten and twelve more when it is lethal.
+    Which spells they reach is a claim about the pool, and they reached every
+    spell printing a damage step — so "Soul Sear deals 5 damage to target
+    creature" scored as game-winning burn the moment its controller's opponent
+    was at five life. It surfaced with the mode chooser, where it was no longer
+    one card against another but one bullet against the next: Chaos Charm's
+    "deals 1 damage to target creature" outscored "destroy target Wall" at a
+    Wall, and Parch's creature-only four tied its face-reaching two for
+    lethal.
+
+    Read off the step itself (the mode being weighed, for a modal spell), so
+    an Aura whose damage goes to its host's controller and a permanent whose
+    mirrored ability pings are answered as they were.
+    """
+    if card.primary_type not in SPELL_TYPES:
+        return False
+    for instruction in _announced_steps(card, compile_card_oracle(card)):
+        if instruction.kind == "deal_damage":
+            targets = (instruction.payload or {}).get("targets")
+            return isinstance(targets, dict) and targets.get("kind") == "object"
+    return False
+
+
 def _extract_damage(card: CardDefinition) -> int:
     program = compile_card_oracle(card)
-    for instruction in program.instructions:
+    for instruction in _announced_steps(card, program):
         if instruction.kind == "deal_damage":
             amount = instruction.payload.get("amount")
             if isinstance(amount, int):
                 return amount
-    match = re.search(r"deals? (\d+) damage", card.oracle_text.lower())
+    match = re.search(r"deals? (\d+) damage", spell_text(card))
     if match:
         return int(match.group(1))
     return 0

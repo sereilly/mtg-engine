@@ -2797,7 +2797,8 @@ def announced_mode_instructions(program, mode_index: "int | None") -> tuple:
     ``Game._select_executable_instruction`` runs
     ``program.modes[mode_index].instruction`` when the caster named a real mode
     and falls back to ``program.instructions`` — which for a modal card *is*
-    mode 0's instruction — when it named none (the AI, a headless caller). So a
+    mode 0's instruction — when it named none (a headless caller; an AI seat
+    names its mode since ``ai_policy.CastAction.mode_index``). So a
     spec, an obligation or a legality question derived through this function
     is about the very steps that will resolve, whichever mode was named.
 
