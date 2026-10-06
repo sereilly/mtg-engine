@@ -2377,7 +2377,7 @@ def test_wrath_of_marit_lage_enters_without_asking_for_a_creature(set_pool):
     assert [p.card.name for p in game.players[0].battlefield] == [
         "Wrath of Marit Lage"
     ]
-    assert not any("603.3c" in line for line in game.log), game.log
+    assert not any("603.3c" in line or "603.3d" in line for line in game.log), game.log
 
 
 def test_wrath_of_marit_lage_taps_the_red_creatures_it_never_chose(set_pool):

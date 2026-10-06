@@ -1708,7 +1708,7 @@ def test_arena_is_castable_on_a_board_with_no_legendary_creature(set_pool):
     assert [p.card.name for p in game.players[0].battlefield] == [
         "Arena of the Ancients"
     ]
-    assert not any("603.3c" in line for line in game.log), game.log
+    assert not any("603.3c" in line or "603.3d" in line for line in game.log), game.log
 
 
 def test_arena_taps_the_class_it_names_without_being_asked_for_one(set_pool):

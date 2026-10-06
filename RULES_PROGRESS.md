@@ -686,7 +686,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(90 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(89 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(22 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*

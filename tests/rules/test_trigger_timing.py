@@ -691,8 +691,8 @@ def test_603_3d_a_seat_nobody_is_asked_lands_where_it_landed_before():
         assert item.target_player_index == game._default_opposing_seat(0)
 
 
-@_w4g3_pytest.mark.cr("603.3c", "603.3d")
-def test_603_3c_a_trigger_with_no_legal_seat_leaves_the_stack():
+@_w4g3_pytest.mark.cr("603.3d")
+def test_603_3d_a_trigger_with_no_legal_seat_leaves_the_stack():
     """"…deals X damage to **target opponent previously dealt damage by it**"
     (Diseased Vermin).
 
@@ -708,7 +708,7 @@ def test_603_3c_a_trigger_with_no_legal_seat_leaves_the_stack():
 
     assert game.stack == []
     assert game.pending_choices == []
-    assert any("603.3c" in line for line in game.log), game.log
+    assert any("603.3d" in line for line in game.log), game.log
     assert [player.life for player in game.players] == [20, 20, 20]
 
 

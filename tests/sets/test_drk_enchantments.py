@@ -1009,6 +1009,6 @@ def test_season_of_the_witchs_trigger_is_not_struck_off_for_want_of_a_target(
     while game.stack:
         game.resolve_top_of_stack()
 
-    assert not any("603.3c" in line for line in game.log), game.log
+    assert not any("603.3c" in line or "603.3d" in line for line in game.log), game.log
     assert game.pending_choices == []
 # --- end FixC ---
