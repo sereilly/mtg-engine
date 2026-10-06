@@ -325,9 +325,10 @@ def _action_permanent_set_choice_confirm(session, req, seat_type):
 def _action_keep_permanents_confirm(session, req, seat_type):
     # Cataclysm / Limited Resources: the permanents this seat *keeps*, by stable
     # id. The engine re-checks them against the same pool rule the prompt was
-    # rendered from and against how many the board allows, so a client cannot
-    # keep fewer than the card offers (which would sacrifice permanents it said
-    # were safe) or more.
+    # rendered from: each answers a slot of its own, and no printed slot the
+    # seat can answer is left out — so a client cannot keep more than the card
+    # offers, or skip a choice it makes the seat take. Fewer is legal where one
+    # permanent answers several slots (the cards' rulings), and only there.
     pending = next(
         (c for c in session.game.pending_choices_of("keep_permanents")),
         None,
@@ -1269,6 +1270,26 @@ def _action_number_choice_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="number is required")
     if not session.game.confirm_number_choice(req.seat, req.number):
         raise HTTPException(status_code=400, detail="no number choice is pending for you")
+
+@action_handler("secret_number_confirm")
+def _action_secret_number_confirm(session, req, seat_type):
+    # Goblin Game: "each player hides at least one item" — this seat's number,
+    # on the same ``number`` field every other numbered prompt uses. The engine
+    # refuses one below the printed floor and holds the prompt; it records the
+    # answer and says nothing, to this seat or any other, until every seat
+    # asked has answered. Two messages, because "nothing is owed by you" and
+    # "that number is not allowed" are different mistakes: the gate lets this
+    # action through for every seat while any seat still owes the prompt.
+    if session.game.pending_choice_of("secret_number", req.seat) is None:
+        raise HTTPException(
+            status_code=400, detail="no hidden number is pending for you"
+        )
+    if req.number is None:
+        raise HTTPException(status_code=400, detail="number is required")
+    if not session.game.confirm_secret_number(req.seat, req.number):
+        raise HTTPException(
+            status_code=400, detail="that number is below the least you may choose"
+        )
 
 @action_handler("bid_life_confirm")
 def _action_bid_life_confirm(session, req, seat_type):

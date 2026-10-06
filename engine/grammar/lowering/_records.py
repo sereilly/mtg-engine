@@ -74,7 +74,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
-                             SEARCHED_PERMANENTS, TAPPED_THIS_WAY,
+                             SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
+                             TAPPED_THIS_WAY,
                              TAPPED_THIS_WAY_OBJECTS, X_FROM_COUNT,
                              X_FROM_COUNT_PER_RECIPIENT)
 from ._deaths import (_EVENT_SUBJECT_POWER_RECORD,
@@ -672,6 +673,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # that only sometimes wrote its record would be a gate that only sometimes
     # protected the reader behind it.
     "choose_number": CHOSEN_NUMBER_THIS_WAY,
+    # "Each player hides at least one item, then all players reveal them
+    # simultaneously. Each player loses life equal to **the number of items
+    # they revealed**." (Goblin Game.) One number per seat, written when the
+    # last seat has answered — see ``oracle_types.SECRET_NUMBERS_BY_SEAT``.
+    "secretly_choose_numbers": SECRET_NUMBERS_BY_SEAT,
     "choose_color": CHOSEN_COLOR_THIS_WAY,
     # "Reveal any number of blue cards in your hand." (Brine Seer and the
     # eleven cards printed with it.) **Two** records, and the count is the

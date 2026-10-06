@@ -1259,6 +1259,26 @@ CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
 #: numbers and each reader would take whichever its author remembered.
 CHOSEN_NUMBER_THIS_WAY = "chosen_number_this_way"
 
+#: ``{seat: number}`` for a number **every player names at once, in secret**:
+#: "Each player hides at least one item, then all players reveal them
+#: simultaneously. Each player loses life equal to **the number of items they
+#: revealed**. The player who revealed **the fewest** items then loses half
+#: their life, rounded up." (Goblin Game.)
+#:
+#: Per seat for ``MANA_PAID_BY_SEAT``'s reason — every player's answer is their
+#: own — and separate from ``CHOSEN_NUMBER_THIS_WAY`` beside it for a second
+#: one: that key is one seat's public number, logged as it is named, and this
+#: map is filled in with nothing said until its last entry exists. A seat the
+#: map does not mention has **not answered yet**, which is the opposite of what
+#: an absent entry means in the paid and drawn maps (zero); the prompt writes
+#: every seat it asked, so by the time any sentence reads the map there is no
+#: absent entry to interpret.
+#:
+#: Here because four ends spell it: the handler arms the prompt with it, the
+#: prompt's answer writes it, ``lowering/_records`` declares it and
+#: ``grammar/amounts`` reads it back.
+SECRET_NUMBERS_BY_SEAT = "secret_numbers_by_seat"
+
 #: What "**the chosen type**" / "**that type**" names when the ability that
 #: chose it is a *spell* (Turnabout). One card type, chosen by the controller of
 #: the resolving spell (CR 608.2d) in the sentence in front, and read back by

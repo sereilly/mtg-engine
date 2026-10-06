@@ -776,6 +776,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # the reason the coin flip has one: the number is a *value* a player picks,
     # and what reads it back is a different sentence with a category of its own.
     "choose_number": "chosen_numbers",
+    # "Each player hides at least one item, then all players reveal them
+    # simultaneously." (Goblin Game.) The same value once per seat, named in
+    # secret. Same category, so GRAMMAR_CATEGORIES is unchanged.
+    "secretly_choose_numbers": "chosen_numbers",
     # "Choose a color." (Chromatic Armor.) Its own category rather than
     # sharing the number's: what is recorded and what reads it back are
     # different questions, and one switch must not be able to gate half of

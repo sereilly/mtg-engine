@@ -2695,6 +2695,48 @@ def choose_reorder_library_order(
     return [index for index, _ in scored]
 
 
+def choose_secret_number(game: Game, player_index: int, minimum: int = 1) -> int:
+    """The number a seat names in secret (Goblin Game): "Each player hides at
+    least one item … Each player loses life equal to the number of items they
+    revealed. The player who revealed the fewest items then loses half their
+    life, rounded up."
+
+    Every point named is a point of life, and the least pays half of what it
+    has left. So there are two lines and the policy picks between them from
+    the life totals, which are all a seat may know — **it never reads another
+    seat's number**, and is asked before any exists:
+
+    * **the quiet line** — name the floor. It costs the floor and, as the
+      fewest or tied for it, half the rest: ``(life - floor) // 2`` is left.
+    * **outbidding** — name the weakest rival's whole life total. That rival
+      can only match it by naming all the life it has, so it is either the
+      fewest or dead, and this seat keeps ``life - bid`` unhalved.
+
+    Outbidding is taken only when it leaves strictly more than the quiet line
+    does, which is the seat far enough ahead on life to afford it (roughly: the
+    weakest rival is at half this seat's life or less). That inequality is also
+    the ceiling: the answer is always below the seat's own life total wherever
+    any such answer is legal, the rule ``default_sacrifice_pick`` states for
+    every default here — one never picks the answer that loses the game.
+
+    Deterministic, and a function of public state alone.
+    """
+    floor = max(0, int(minimum))
+    life = int(game.players[player_index].life)
+    rivals = [
+        int(player.life)
+        for seat, player in enumerate(game.players)
+        if seat != player_index and not player.lost
+    ]
+    if not rivals:
+        return floor
+    bid = max(floor, min(rivals))
+    quiet = max(0, life - floor) // 2
+    if life - bid > quiet:
+        return bid
+    return floor
+
+
 def choose_scry_arrangement(
     game: Game, caster_index: int, top_count: int,
     library_index: int | None = None,

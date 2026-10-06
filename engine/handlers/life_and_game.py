@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._common import (bound_permanent, count_from_payload, evaluate_count,
-                      resolve_amount)
+from ._common import (bound_permanent, count_from_payload,
+                      per_recipient_amount, resolve_amount)
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
@@ -288,9 +288,18 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
     # so it cannot be `context.x_value` — that is resolved once at the dispatch
     # point, against one player, and applying that share to everybody is a
     # different card. The channel the damage sweeps already use for this.
+    #
+    # Through ``per_recipient_amount``, the channel's one reader: it carries
+    # four value shapes and this handler read one of them inline, so a loss
+    # sized from what each seat *recorded* — "life equal to the number of
+    # items they revealed" (Goblin Game) — was handed to a board counter that
+    # has no such key.
     per_seat = instruction.payload.get(X_FROM_COUNT_PER_RECIPIENT)
     for victim in victims:
-        loss = evaluate_count(game, victim, per_seat) if per_seat is not None else amount
+        loss = (
+            per_recipient_amount(game, context, per_seat, victim)
+            if per_seat is not None else amount
+        )
         if per_each is not None and per_each.get("record"):
             # "You lose 2 life **for each creature that died this way**."
             # (Reign of Terror.) One earlier step's result, read off the

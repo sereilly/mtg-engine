@@ -36,10 +36,12 @@ homes for one lowering family, asymmetric for the reason ``tokens``, ``zones``,
 fired on the lowering.
 """
 
+import dataclasses
+
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
-                             LAST_TARGET_OWNER,
-                             OracleInstruction, X_FROM_COUNT,
-                             X_FROM_COUNT_PER_RECIPIENT)
+                             LAST_TARGET_OWNER, MANA_PAID_BY_SEAT,
+                             OracleInstruction, SECRET_NUMBERS_BY_SEAT,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT)
 from .. import ast
 from ..errors import LoweringError
 from ._seats import _player_recipient
@@ -73,6 +75,22 @@ from ._events import (
 #: dropped-rider bug with an arithmetic face, so the fraction travels on the
 #: per-recipient channel for these and on the ordinary one for the rest.
 _PER_SEAT_LIFE_RECIPIENTS = frozenset({"each_player", "each_opponent"})
+
+#: The back-references that name **one number per seat** — a ``{seat: n}`` map
+#: an earlier step of the same effect wrote as each player answered it. "Each
+#: player loses life equal to the number of items **they** revealed" (Goblin
+#: Game) reads one; "the amount of mana **they** paid this way" is the same
+#: shape one prompt over. A loss sized from one travels on the per-recipient
+#: channel under ``seat_record`` — the key the token maker already reads the
+#: paid map by — because the flat ``amount_from`` channel asks the scratchpad
+#: for a single number and would be handed the whole map.
+_PER_SEAT_NUMBER_RECORDS = frozenset({SECRET_NUMBERS_BY_SEAT, MANA_PAID_BY_SEAT})
+
+#: The described seats a life loss may name that are answered by the secret
+#: numbers: the one player whose number is strictly the least, and — with the
+#: card's tie sentence folded in — every player whose number is the least.
+#: ``handlers/control_flow._offered_seats`` answers both.
+_REVEALED_FEWEST_SEATS = frozenset({"revealed_fewest", "each_revealed_fewest"})
 
 
 def _lower_gain_life(
@@ -192,6 +210,33 @@ def _lower_lose_life(
     # rather than as an amount. Resolved before the payload is built, because
     # an amount and a back-reference are alternatives — carrying both would let
     # a handler read whichever it happened to check first.
+    # "**The player who revealed the fewest items** then loses half their
+    # life, rounded up." (Goblin Game.) A seat — or, with the tie sentence, a
+    # set of them — that only the record an earlier step wrote can name, so it
+    # is a loop over that set with the loss inside it: ``for_each`` binds each
+    # seat as "that player" in turn, and the body is this same sentence said of
+    # that player. Lowered through this function rather than beside it, so
+    # every amount a loss can print is an amount this subject can lose.
+    #
+    # With no event: under a trigger "that player" would be re-read as the
+    # seat the firing was about, and the seat here is the loop's.
+    if node.player.kind in _REVEALED_FEWEST_SEATS:
+        if SECRET_NUMBERS_BY_SEAT not in produced:
+            raise LoweringError(
+                '"the player who revealed the fewest" with no step of this '
+                "effect that had the players reveal anything",
+                node=node,
+            )
+        inner = _lower_lose_life(
+            dataclasses.replace(node, player=ast.PlayerRef("that_player")),
+            None, produced, None,
+        )
+        return (
+            OracleInstruction(
+                "for_each", "",
+                {"iterator": {"players": node.player.kind}, "effect": inner},
+            ),
+        )
     # "…and loses **half their life**" (Peer into the Abyss): a number the
     # resolution computes, travelling on the same spec a counted amount does.
     halved = (
@@ -238,6 +283,32 @@ def _lower_lose_life(
             else X_FROM_COUNT
         )
         payload: dict[str, object] = {"amount": "x", key: halved}
+    elif (
+        isinstance(node.amount, ast.ThatMuch)
+        and node.amount.source in _PER_SEAT_NUMBER_RECORDS
+    ):
+        # "Each player loses life equal to **the number of items they
+        # revealed**." (Goblin Game.) One number per seat off a map an earlier
+        # step wrote — see ``_PER_SEAT_NUMBER_RECORDS``. Both refusals are ways
+        # the words could otherwise name nothing: with no producer the map does
+        # not exist, and under a subject that is one seat "they" has nothing to
+        # range over.
+        if node.amount.source not in produced:
+            raise LoweringError(
+                f"back-reference to {node.amount.source!r} with no producer "
+                "in this effect",
+                node=node,
+            )
+        if node.player.kind not in _PER_SEAT_LIFE_RECIPIENTS:
+            raise LoweringError(
+                "a recorded per-seat number needs a distributed subject to "
+                "be about",
+                node=node,
+            )
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT_PER_RECIPIENT: {"seat_record": node.amount.source},
+        }
     else:
         payload = (
             dict(_back_reference_payload(node.amount, produced, event))

@@ -95,6 +95,7 @@ ActionKind = Literal[
     "mana_color_choice_confirm",
     "land_type_confirm",
     "number_choice_confirm",
+    "secret_number_confirm",
     "bid_life_confirm",
     "bid_life_pass",
     "draw_up_to_confirm",

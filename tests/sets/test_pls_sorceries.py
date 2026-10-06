@@ -759,10 +759,16 @@ def test_w1g4_planar_overlay_names_no_target(set_pool):
 def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_pool):
     """"Each player chooses a land they control of each basic land type.
     Return those lands to their owners' hands." A headless table takes the
-    largest choice in board order: one Plains of two, the Forest, and the
-    Tropical Island as the Island. The spare Plains, a land with no basic type
-    and everything that is not a land stay where they are, and nothing is
-    sacrificed — this is Global Ruin's choice with the other half moving."""
+    *fewest* lands that answer every type it holds, in board order: one Plains
+    of two, and the Tropical Island as both the Forest and the Island — the
+    card's ruling (2004-10-04): "If you have a land which counts as multiple
+    land types, you can choose that land as each of those types." So the
+    Forest stays, with the spare Plains, a land with no basic type and
+    everything that is not a land, and nothing is sacrificed — this is Global
+    Ruin's choice with the other half moving.
+
+    (W2G1 rewrote this: it asserted the Forest went back too, on the wave-1
+    reading that a dual land is the chosen land for one type only.)"""
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay",
         mine=["Plains", "Plains", "Forest", "Tropical Island", "Grizzly Bears",
@@ -771,10 +777,12 @@ def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_poo
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert _w1g4_land_names(game, 0) == ["Grizzly Bears", "Mishra's Factory", "Plains"]
+    assert _w1g4_land_names(game, 0) == [
+        "Forest", "Grizzly Bears", "Mishra's Factory", "Plains",
+    ]
     assert _w1g4_land_names(game, 1) == ["Black Lotus", "Mountain"]
     assert sorted(c.name for c in game.players[0].hand) == [
-        "Forest", "Plains", "Tropical Island",
+        "Plains", "Tropical Island",
     ]
     assert sorted(c.name for c in game.players[1].hand) == ["Island", "Mountain"]
     assert [c.name for c in game.players[0].graveyard] == ["Planar Overlay"]
@@ -785,11 +793,17 @@ def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_poo
     )
 
 
-def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
-    """A Tropical Island is a Forest and an Island and is *the* land for one
-    of them — the constraint Global Ruin's keep has, on the same matching.
-    Alone it is the only land returned; beside a Forest it is the Island and
-    both go; five duals can each stand for a different type and all return."""
+def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_each_of_its_types(set_pool):
+    """A Tropical Island is a Forest and an Island and may be the chosen land
+    for **both** — the card's ruling (2004-10-04): "you can choose that land
+    as each of those types. For example, a dual land could be chosen as two of
+    your land types." Alone it is the only land returned; beside a Forest it
+    is the Forest and the Island and the Forest stays; and six lands holding
+    five types go back as three, the fewest that answer all five.
+
+    (W2G1 rewrote this: it asserted "one type only" — both lands returned in
+    the second case and five in the third — which made a seat return lands the
+    card lets it keep.)"""
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay", mine=["Tropical Island", "Mishra's Factory"],
     )
@@ -802,7 +816,8 @@ def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert not _w1g4_land_names(game, 0)
+    assert _w1g4_land_names(game, 0) == ["Forest"]
+    assert [c.name for c in game.players[0].hand] == ["Tropical Island"]
 
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay",
@@ -810,7 +825,12 @@ def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert _w1g4_land_names(game, 0) == ["Forest"], "six lands, five types"
+    # Tundra is the Plains and the Island, Badlands the Swamp and the Mountain,
+    # and the first Forest the Forest.
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Badlands", "Forest", "Tundra",
+    ], "six lands, five types, three lands"
+    assert _w1g4_land_names(game, 0) == ["Forest", "Taiga", "Tropical Island"]
 
 
 def test_w1g4_planar_overlay_asks_the_player_and_checks_the_answer(set_pool):
@@ -1303,3 +1323,470 @@ def test_w1g6_strafe_may_only_be_aimed_at_a_creature_that_is_not_red_right_now(s
         game.check_state_based_actions()
         assert red.damage_marked == 0
         assert nonred.damage_marked == 3 or not game.is_on_battlefield(nonred)
+
+
+# --- W2G1: Goblin Game ---
+#
+# "Each player hides at least one item, then all players reveal them
+# simultaneously. Each player loses life equal to the number of items they
+# revealed. The player who revealed the fewest items then loses half their
+# life, rounded up. If two or more players are tied for fewest, each loses half
+# their life, rounded up."
+#
+# And, below it, Planar Overlay's ruling: one land may be the chosen land for
+# more than one basic land type.
+import pytest as _w2g1_pytest
+
+from engine import Game as _W2G1Game
+from engine import PlayerState as _W2G1PlayerState
+from engine.models import Permanent as _W2G1Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.oracle_types import SECRET_NUMBERS_BY_SEAT as _W2G1_SECRET
+from engine.targeting import derive_cast_spec as _w2g1_cast_spec
+from tests.helpers import resolve_stack as _w2g1_resolve
+
+
+def _w2g1_goblin_table(set_pool, lives, interactive=()):
+    """Goblin Game in seat 0's hand at a table of ``len(lives)`` seats, each
+    at the life total named and each with a library to draw from."""
+    w2g1_game = _W2G1Game(players=[
+        _W2G1PlayerState(
+            name=f"W2G1-{'ABCD'[w2g1_seat]}",
+            hand=[set_pool("PLS")["Goblin Game"]] if w2g1_seat == 0 else [],
+        )
+        for w2g1_seat in range(len(lives))
+    ])
+    w2g1_game.enforce_mana_costs = False
+    w2g1_game.active_player_index = 0
+    w2g1_game.interactive_seats = set(interactive)
+    for w2g1_player, w2g1_life in zip(w2g1_game.players, lives):
+        w2g1_player.life = w2g1_life
+        w2g1_player.library = [set_pool("LEA")["Grizzly Bears"]] * 20
+    return w2g1_game  # _w2g1_goblin_table
+
+
+def _w2g1_play_goblin_game(set_pool, lives, numbers):
+    """Cast it with every seat interactive and answer *numbers* in seat
+    order; returns the game once the spell has finished."""
+    w2g1_game = _w2g1_goblin_table(set_pool, lives, interactive=range(len(lives)))
+    assert w2g1_game.cast_from_hand(0, "Goblin Game").supported
+    for w2g1_seat, w2g1_number in enumerate(numbers):
+        assert w2g1_game.confirm_secret_number(w2g1_seat, w2g1_number)
+    assert not w2g1_game.stack and not w2g1_game.pending_choices
+    return w2g1_game  # _w2g1_play_goblin_game
+
+
+def test_w2g1_goblin_game_names_no_target_and_compiles_to_three_steps(set_pool):
+    """Its choices are made as it resolves (CR 608.2d), so the cast announces
+    nothing; and the four printed sentences are three steps — the hiding, the
+    loss each seat's own number sizes, and one loss for every seat tied for
+    the fewest (the tie sentence is the other arm of the one before it)."""
+    card = set_pool("PLS")["Goblin Game"]
+    program = _w2g1_compile(card)
+    assert program.supported, program.reason
+    assert _w2g1_cast_spec(card, program) is None
+    steps = program.instructions[0].payload["steps"]
+    assert [step.kind for step in steps] == [
+        "secretly_choose_numbers", "target_loses_life", "for_each",
+    ]
+    assert steps[0].payload == {"who": "each_player", "minimum": 1}
+    assert steps[2].payload["iterator"] == {"players": "each_revealed_fewest"}
+
+
+def test_w2g1_goblin_game_each_loses_their_number_then_the_fewest_loses_half(set_pool):
+    """Seat A names 3 and seat B names 5. Each loses its own number; then A,
+    who revealed the fewest, loses half of what it has *left* — 17, rounded up
+    (CR 107.1a: the card says which way), so 9 — and B is not halved."""
+    game = _w2g1_play_goblin_game(set_pool, [20, 20], [3, 5])
+    assert [player.life for player in game.players] == [8, 15]
+    assert "Goblin Game: W2G1-A revealed 3, W2G1-B revealed 5" in game.log
+    assert "Goblin Game: W2G1-A lost 3 life (20 -> 17)" in game.log
+    assert "Goblin Game: W2G1-B lost 5 life (20 -> 15)" in game.log
+    assert "Goblin Game: W2G1-A revealed the fewest" in game.log
+    assert "Goblin Game: W2G1-A lost 9 life (17 -> 8)" in game.log
+    assert [c.name for c in game.players[0].graveyard] == ["Goblin Game"]
+
+
+def test_w2g1_goblin_game_a_tie_for_fewest_halves_every_tied_seat(set_pool):
+    """"If two or more players are tied for fewest, each loses half their
+    life, rounded up." Both name 2: 18 each, then 9 each. An even remainder
+    and an odd one round the way the card says."""
+    game = _w2g1_play_goblin_game(set_pool, [20, 20], [2, 2])
+    assert [player.life for player in game.players] == [9, 9]
+    assert "Goblin Game: W2G1-A, W2G1-B revealed the fewest" in game.log
+
+    game = _w2g1_play_goblin_game(set_pool, [20, 13], [1, 1])
+    # 19 -> lose 10 -> 9; 12 -> lose 6 -> 6.
+    assert [player.life for player in game.players] == [9, 6]
+
+
+@_w2g1_pytest.mark.parametrize("numbers, lives", [
+    # Three different numbers: only the least is halved. 20-1=19 -> 9.
+    ((1, 2, 3), [9, 18, 17]),
+    # A two-way tie for fewest with the third seat higher: both tied seats are
+    # halved (18 -> 9) and the third only pays its own number.
+    ((2, 5, 2), [9, 15, 9]),
+    # All tied: everybody is halved. 16 -> 8.
+    ((4, 4, 4), [8, 8, 8]),
+])
+def test_w2g1_goblin_game_at_three_seats(set_pool, numbers, lives):
+    game = _w2g1_play_goblin_game(set_pool, [20, 20, 20], numbers)
+    assert [player.life for player in game.players] == lives
+
+
+def test_w2g1_goblin_game_at_four_seats(set_pool):
+    """Four seats at different life totals, the least named twice: the two
+    tied seats are halved from what each has left and the others are not."""
+    game = _w2g1_play_goblin_game(set_pool, [20, 15, 9, 30], [6, 2, 2, 10])
+    # 14 | 13 -> lose 7 -> 6 | 7 -> lose 4 -> 3 | 20
+    assert [player.life for player in game.players] == [14, 6, 3, 20]
+    assert "Goblin Game: W2G1-B, W2G1-C revealed the fewest" in game.log
+
+
+def test_w2g1_goblin_game_a_seat_may_name_more_than_its_life_and_still_loses_it(set_pool):
+    """The number is a loss, not a payment, and the card prints no ceiling
+    (CR 107.1): naming 25 at 20 life is legal and loses 25. That seat is not
+    the fewest, so nothing is halved for it — and it has lost the game once
+    state-based actions are checked."""
+    game = _w2g1_play_goblin_game(set_pool, [20, 20], [25, 4])
+    assert [player.life for player in game.players] == [-5, 8]
+    assert game.players[0].lost and not game.players[1].lost
+
+
+def test_w2g1_goblin_game_a_seat_at_zero_is_still_the_fewest(set_pool):
+    """State-based actions are not checked until the spell has finished
+    resolving (CR 704.3), so a seat the first loss took to 0 is still a seat
+    for the second sentence: it revealed the fewest, and the other seat is not
+    halved in its place. Halving 0 loses nothing."""
+    game = _w2g1_play_goblin_game(set_pool, [2, 20], [2, 6])
+    assert [player.life for player in game.players] == [0, 14]
+    assert "Goblin Game: W2G1-A revealed the fewest" in game.log
+    assert "Goblin Game: W2G1-A lost 0 life (0 -> 0)" in game.log
+    assert game.players[0].lost and not game.players[1].lost
+
+
+def test_w2g1_goblin_game_halving_a_negative_life_total_halves_zero(set_pool):
+    """The card's ruling (2007-02-01): "If you attempt to halve a negative
+    life total, you halve 0. This means that the life total stays the same."
+    Seat A at 3 names 5 and seat B names 7: A is at -2 and revealed the
+    fewest, and stays at -2."""
+    game = _w2g1_play_goblin_game(set_pool, [3, 20], [5, 7])
+    assert [player.life for player in game.players] == [-2, 13]
+    assert "Goblin Game: W2G1-A lost 0 life (-2 -> -2)" in game.log
+
+
+def test_w2g1_goblin_game_refuses_a_number_below_one_and_keeps_asking(set_pool):
+    """"At least one item." Zero, a negative number and something that is
+    not a number are refused — the prompt stays owed, nothing is recorded and
+    nobody loses anything — and the spell waits on the stack for both seats
+    (CR 608.2)."""
+    game = _w2g1_goblin_table(set_pool, [20, 20], interactive=(0, 1))
+    assert game.cast_from_hand(0, "Goblin Game").supported
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("secret_number", 0), ("secret_number", 1),
+    ]
+    assert game.stack and game.waiting_prompt() is not None
+    for refused in (0, -3, None, "many", True):
+        assert not game.confirm_secret_number(0, refused), refused
+    assert [c.player_index for c in game.pending_choices] == [0, 1]
+    assert [player.life for player in game.players] == [20, 20]
+
+    assert game.confirm_secret_number(1, 1)
+    assert game.stack, "one answer of two finishes nothing"
+    assert [player.life for player in game.players] == [20, 20]
+    assert game.confirm_secret_number(0, 1)
+    assert not game.stack
+    assert [player.life for player in game.players] == [9, 9]
+
+
+def test_w2g1_goblin_game_keeps_every_answer_secret_until_the_last(set_pool):
+    """Secrecy is the card. After seats A and C have committed and before
+    seat B has answered: no log line carries a number, the prompt B still owes
+    holds nothing about either answer (its public data is what a client could
+    be sent), and nothing has happened to anybody. The reveal is one line,
+    written by the last answer."""
+    from engine.pending_choices import public_data
+
+    game = _w2g1_goblin_table(set_pool, [20, 20, 20], interactive=(0, 1, 2))
+    assert game.cast_from_hand(0, "Goblin Game").supported
+    before = list(game.log)
+    assert game.confirm_secret_number(0, 17)
+    assert game.confirm_secret_number(2, 16)
+    assert game.log == before, "an answer says nothing until the last one"
+    owed = game.pending_choices
+    assert [c.player_index for c in owed] == [1]
+    assert "17" not in repr(public_data(owed[0]))
+    assert "16" not in repr(public_data(owed[0]))
+    assert [player.life for player in game.players] == [20, 20, 20]
+
+    assert game.confirm_secret_number(1, 15)
+    reveals = [line for line in game.log if "revealed 17" in line]
+    assert reveals == [
+        "Goblin Game: W2G1-A revealed 17, W2G1-B revealed 15, W2G1-C revealed 16"
+    ]
+
+
+def test_w2g1_goblin_game_a_seat_the_engine_plays_commits_before_anyone_answers(set_pool):
+    """A non-interactive seat is answered where its prompt is armed, by a
+    policy over the public life totals — so its number exists before the
+    human's does and cannot depend on it. Whatever seat A then names, seat B's
+    entry is the one it had."""
+    committed = []
+    for humans_number in (1, 19):
+        game = _w2g1_goblin_table(set_pool, [20, 20], interactive=(0,))
+        assert game.cast_from_hand(0, "Goblin Game").supported
+        assert [c.player_index for c in game.pending_choices] == [0]
+        hidden = game.pending_choices[0].data["_results"][_W2G1_SECRET]
+        assert list(hidden) == [1], "seat B has answered and seat A has not"
+        committed.append(hidden[1])
+        assert not any("revealed" in line for line in game.log)
+        assert game.confirm_secret_number(0, humans_number)
+        assert any(
+            line.endswith(f"W2G1-B revealed {committed[-1]}") for line in game.log
+        )
+    assert committed[0] == committed[1] == 1
+
+
+def test_w2g1_goblin_game_headless_takes_the_policys_numbers(set_pool):
+    """With nobody to ask, every seat takes its default at once and the
+    spell resolves in one go. Level life totals name 1 each — and are both
+    halved; a seat far ahead names the weaker seat's whole life total, pays
+    it, and is not."""
+    game = _w2g1_goblin_table(set_pool, [20, 20])
+    assert game.cast_from_hand(0, "Goblin Game").supported
+    _w2g1_resolve(game)
+    assert [player.life for player in game.players] == [9, 9]
+    assert "Goblin Game: W2G1-A revealed 1, W2G1-B revealed 1" in game.log
+
+    game = _w2g1_goblin_table(set_pool, [30, 5])
+    assert game.cast_from_hand(0, "Goblin Game").supported
+    _w2g1_resolve(game)
+    assert "Goblin Game: W2G1-A revealed 5, W2G1-B revealed 1" in game.log
+    assert [player.life for player in game.players] == [25, 2]
+
+
+def test_w2g1_the_secret_number_sentences_are_parts_not_one_card():
+    """What a second card could print. A different floor is payload; the
+    fewest sentence without its tie sentence is the strict seat every
+    superlative here is; and each back-reference refuses without the hiding
+    sentence in front of it rather than reading a record nothing wrote."""
+    from engine.grammar import compile_line
+
+    hide = "Each player hides at least {} items, then all players reveal them simultaneously."
+    lose = "Each player loses life equal to the number of items they revealed."
+    fewest = "The player who revealed the fewest items then loses half their life, rounded up."
+    tie = "If two or more players are tied for fewest, each loses half their life, rounded up."
+
+    two = compile_line(f"{hide.format('two')} {lose}")
+    assert two.usable
+    assert two.instructions[0].payload == {"who": "each_player", "minimum": 2}
+
+    strict = compile_line(f"{hide.format('two')} {lose} {fewest}")
+    assert strict.usable
+    assert strict.instructions[-1].payload["iterator"] == {"players": "revealed_fewest"}
+
+    for line in (
+        lose, fewest, f"{fewest} {tie}",
+        # The reveal has to be simultaneous, and by the seats that hid.
+        "Each player hides at least one item, then all players reveal them.",
+        "Each opponent hides at least one item, then all players reveal them simultaneously.",
+        # A tie arm that prints a different loss is not this card's.
+        f"{hide.format('one')} {lose} {fewest} "
+        "If two or more players are tied for fewest, each loses half their life, rounded down.",
+        # One seat has no "they" to range over.
+        f"{hide.format('one')} You lose life equal to the number of items they revealed.",
+    ):
+        assert not compile_line(line).usable, line
+
+
+def test_w2g1_the_strict_fewest_names_nobody_on_a_tie(set_pool):
+    """The sentence without its tie arm, on an invented card cast through the
+    real engine: with one seat strictly least it is halved; tied, nobody is —
+    which is what makes the printed tie sentence a second arm and not a
+    restatement. The floor is the invented card's own, and is enforced."""
+    import dataclasses
+
+    invented = dataclasses.replace(
+        set_pool("PLS")["Goblin Game"],
+        name="W2G1 Invented Wager",
+        oracle_text=(
+            "Each player hides at least two items, then all players reveal "
+            "them simultaneously. Each player loses life equal to the number "
+            "of items they revealed. The player who revealed the fewest items "
+            "then loses half their life, rounded up."
+        ),
+    )
+    assert _w2g1_compile(invented).supported
+    for numbers, lives in (((2, 3), [9, 17]), ((3, 3), [17, 17])):
+        game = _w2g1_goblin_table(set_pool, [20, 20], interactive=(0, 1))
+        game.players[0].hand[:] = [invented]
+        assert game.cast_from_hand(0, invented.name).supported
+        assert not game.confirm_secret_number(0, 1), "at least two"
+        for w2g1_seat, w2g1_number in enumerate(numbers):
+            assert game.confirm_secret_number(w2g1_seat, w2g1_number)
+        assert not game.stack
+        assert [player.life for player in game.players] == lives
+
+
+# -- Planar Overlay: one land for several basic land types ---------------------
+
+
+def _w2g1_overlay_table(set_pool, mine, interactive=(0,)):
+    """Planar Overlay in seat 0's hand over seat 0's lands, in board order."""
+    w2g1_game = _W2G1Game(players=[
+        _W2G1PlayerState(name="W2G1-A", hand=[set_pool("PLS")["Planar Overlay"]]),
+        _W2G1PlayerState(name="W2G1-B"),
+    ])
+    w2g1_game.enforce_mana_costs = False
+    w2g1_game.active_player_index = 0
+    w2g1_game.interactive_seats = set(interactive)
+    for w2g1_player in w2g1_game.players:
+        w2g1_player.library = [set_pool("LEA")["Grizzly Bears"]] * 20
+    w2g1_board = []
+    for w2g1_name in mine:
+        w2g1_perm = _W2G1Permanent(card=set_pool("LEA")[w2g1_name])
+        w2g1_game._put_permanent_onto_battlefield(0, w2g1_perm, None)
+        w2g1_board.append(w2g1_perm)
+    return w2g1_game, w2g1_board  # _w2g1_overlay_table
+
+
+def _w2g1_lands(game):
+    return sorted(
+        w2g1_perm.card.name for w2g1_perm in game.controlled_by(0)
+    )  # _w2g1_lands
+
+
+def test_w2g1_planar_overlay_returns_one_dual_land_for_both_its_types(set_pool):
+    """The card's ruling (2004-10-04): "If you have a land which counts as
+    multiple land types, you can choose that land as each of those types. For
+    example, a dual land could be chosen as two of your land types." Holding a
+    Tropical Island, a Forest and an Island, a player may name the Tropical
+    Island alone — it is the Forest and the Island — and keep the other two.
+    This is the answer the prompt used to refuse."""
+    game, (tropical, _forest, _island) = _w2g1_overlay_table(
+        set_pool, ["Tropical Island", "Forest", "Island"],
+    )
+    assert game.cast_from_hand(0, "Planar Overlay").supported
+    assert [c.kind for c in game.pending_choices] == ["keep_permanents"]
+    assert game.confirm_keep_permanents(0, [tropical.permanent_id])
+    _w2g1_resolve(game)
+    assert _w2g1_lands(game) == ["Forest", "Island"]
+    assert [c.name for c in game.players[0].hand] == ["Tropical Island"]
+    assert (
+        "W2G1-A returned Tropical Island to its owner's hand (Planar Overlay)"
+        in game.log
+    )
+
+
+@_w2g1_pytest.mark.parametrize("returned, kept", [
+    (("Forest", "Island"), ["Tropical Island"]),
+    (("Tropical Island", "Forest"), ["Island"]),
+    (("Tropical Island", "Island"), ["Forest"]),
+])
+def test_w2g1_planar_overlay_still_takes_a_land_per_type(set_pool, returned, kept):
+    """"As each of those types" is a may: every two-land answer — the
+    Tropical Island for one type and a basic for the other, or neither —
+    is still legal."""
+    game, board = _w2g1_overlay_table(
+        set_pool, ["Tropical Island", "Forest", "Island"],
+    )
+    by_name = {w2g1_perm.card.name: w2g1_perm.permanent_id for w2g1_perm in board}
+    assert game.cast_from_hand(0, "Planar Overlay").supported
+    assert game.confirm_keep_permanents(0, [by_name[name] for name in returned])
+    _w2g1_resolve(game)
+    assert _w2g1_lands(game) == kept
+
+
+def test_w2g1_planar_overlay_refuses_an_answer_that_skips_a_type(set_pool):
+    """A land must be chosen for every basic land type the seat holds: the
+    Forest alone leaves the Island unchosen, the Island alone the Forest, and
+    nothing at all leaves both. Three lands is one too many for two types.
+    A refusal moves nothing."""
+    game, (tropical, forest, island) = _w2g1_overlay_table(
+        set_pool, ["Tropical Island", "Forest", "Island"],
+    )
+    assert game.cast_from_hand(0, "Planar Overlay").supported
+    for answer in (
+        [], [forest.permanent_id], [island.permanent_id],
+        [tropical.permanent_id, forest.permanent_id, island.permanent_id],
+    ):
+        assert not game.confirm_keep_permanents(0, answer), answer
+    assert [c.kind for c in game.pending_choices] == ["keep_permanents"]
+    assert _w2g1_lands(game) == ["Forest", "Island", "Tropical Island"]
+
+
+def test_w2g1_planar_overlay_headless_returns_the_fewest_lands(set_pool):
+    """A seat nobody asks returns as few lands as answer every type it holds
+    — its best play, since what is chosen is what leaves. The Tropical Island
+    goes back alone, whatever order the three sit in."""
+    for mine in (
+        ["Tropical Island", "Forest", "Island"],
+        ["Forest", "Island", "Tropical Island"],
+    ):
+        game, _board = _w2g1_overlay_table(set_pool, mine, interactive=())
+        assert game.cast_from_hand(0, "Planar Overlay").supported
+        _w2g1_resolve(game)
+        assert _w2g1_lands(game) == ["Forest", "Island"], mine
+        assert [c.name for c in game.players[0].hand] == ["Tropical Island"]
+
+
+def test_w2g1_planar_overlay_tells_the_client_one_land_is_enough(set_pool):
+    """Through the real state and action endpoints: the range is 1 to 2, the
+    Tropical Island is offered as both its types, and the one-land answer is a
+    200 where an answer that skips the Island is a 400."""
+    from fastapi.testclient import TestClient
+
+    from web.app import app, store
+
+    client = TestClient(app)
+    response = client.post("/api/sessions", json={
+        "mode": "human_vs_ai", "host_name": "W2G1", "host_colors": 2,
+        "guest_colors": 2, "seed": 2102,
+        "host_deck_cards": [{"name": "Forest", "count": 40}],
+        "guest_deck_cards": [{"name": "Forest", "count": 40}],
+    })
+    assert response.status_code == 200, response.text
+    session_id = response.json()["session_id"]
+    session = store.get(session_id)
+    game = session.game
+    session.pregame_phase = None
+    session.current_turn = 0
+    game.active_player_index = 0
+    game.enforce_mana_costs = False
+    game.players[0].hand[:] = [set_pool("PLS")["Planar Overlay"]]
+    board = []
+    for name in ("Tropical Island", "Forest", "Island"):
+        perm = _W2G1Permanent(card=set_pool("LEA")[name])
+        game._put_permanent_onto_battlefield(0, perm, None)
+        board.append(perm)
+    tropical, forest, _island = (perm.permanent_id for perm in board)
+    game.start_priority_window(0)
+
+    def act(**body):
+        return client.post(
+            f"/api/sessions/{session_id}/action", json={"seat": 0, **body}
+        )
+
+    def prompt():
+        return client.get(
+            f"/api/sessions/{session_id}/state", params={"seat": 0}
+        ).json().get("keep_permanents")
+
+    assert act(action="cast", card_name="Planar Overlay").status_code == 200
+    assert act(action="pass_priority").status_code == 200
+    offered = prompt()
+    assert offered["fate"] == "return_chosen_to_hand"
+    assert (offered["keep_fewest"], offered["keep_count"]) == (1, 2)
+    fills = {entry["name"]: entry["fills"] for entry in offered["candidates"]}
+    types = [slot["type"] for slot in offered["slots"]]
+    assert [types[index] for index in fills["Tropical Island"]] == ["Island", "Forest"]
+
+    assert act(
+        action="keep_permanents_confirm", target_permanent_ids=[forest],
+    ).status_code == 400
+    assert len(list(game.controlled_by(0))) == 3
+    assert act(
+        action="keep_permanents_confirm", target_permanent_ids=[tropical],
+    ).status_code == 200
+    assert prompt() is None
+    assert _w2g1_lands(game) == ["Forest", "Island"]

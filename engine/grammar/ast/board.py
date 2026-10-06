@@ -826,10 +826,11 @@ class KeepChosenSacrificeRest:
     ``slots`` is the printed list of keeps in printed order. Cataclysm's four
     one-each slots and Limited Resources' single five-slot are the same node
     with different payload — the difference between the two cards is data, not
-    a second kind — and one permanent can fill at most one slot, which is what
-    makes an artifact creature a choice rather than two free keeps (CR 608.2d:
-    a player can't choose an option that's illegal, and a permanent already
-    chosen is not available again).
+    a second kind. Each *chosen* permanent answers a slot of its own, which is
+    what makes two artifact creatures two keeps; and one permanent **may**
+    answer several printed slots (Cataclysm's ruling: "you can choose that same
+    permanent for more than one of the choices if you want to"), so an answer
+    is a range and not a number. The prompt's resolver holds both halves.
 
     ``fate`` is which half of the partition the sentence moves, and where.
     The default is the node's name — the chosen stay and the rest are
@@ -840,7 +841,7 @@ class KeepChosenSacrificeRest:
     leaves the rest where it is. A field rather than a second node because
     everything a player is asked is identical — who chooses, from what, into
     which slots — and two nodes would be two prompts free to disagree about
-    whether a dual land fills one slot or two.
+    whether a dual land may stand for one type or for two (both rulings: two).
     """
     chooser: PlayerRef
     pool: ObjectFilter

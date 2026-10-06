@@ -397,6 +397,7 @@ from .repeats import (_lower_repeat_for_types,
                       _lower_repeat_process_while)
 from .game import (
     _lower_count_objects,
+    _lower_secretly_choose_numbers,
     _lower_ante,
     _lower_extra_turn,
     _lower_extra_phases,
@@ -713,6 +714,7 @@ __all__ = [
     "_lower_gain_life",
     "_title",
     "_lower_count_objects",
+    "_lower_secretly_choose_numbers",
     "_lower_create_emblem",
     "_lower_create_copy_token",
     "_lower_create_token",

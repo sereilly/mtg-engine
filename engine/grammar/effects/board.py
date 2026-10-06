@@ -514,9 +514,9 @@ def _accept_keep_slots(stream: TokenStream) -> "tuple[ast.KeepSlot, ...] | None"
 
     "…a land **of each basic land type**" (Global Ruin) is five keeps printed
     as one: a Plains, an Island, a Swamp, a Mountain and a Forest, each a slot
-    of its own for exactly the reason Cataclysm's four are. One permanent fills
-    at most one slot, which is what makes a Tropical Island a choice between
-    being the Forest and being the Island rather than both keeps at once.
+    of its own for exactly the reason Cataclysm's four are. Separate slots are
+    what let a Tropical Island be named as the Forest, as the Island, or — the
+    card's ruling — as both, which a single counted slot could not express.
 
     Only a singular keep can be distributed: "two lands of each basic land
     type" is not a sentence any card prints, and the slot count it would mean
@@ -632,8 +632,8 @@ def parse_choose_each_then_return(
     production's node — same chooser, same pool, same one-slot-per-value list
     from the one reader of "of each basic land type"
     (``distinct.accept_one_of_each``) — with ``fate`` saying which half of the
-    partition moves and where. One prompt, one matching: a dual land is the
-    chosen land for one type or the other, exactly as it is one keep there.
+    partition moves and where. One prompt, one validation: a dual land may be
+    the chosen land for either type or for both, exactly as it may there.
 
     A paragraph in ``paragraphs``' sense — two printed sentences that are one
     effect — and read whole for that module's reason: "those lands" names a

@@ -1154,6 +1154,37 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("secret_number")
+def _secret_number(ctx: PromptContext, choices: list) -> dict:
+    """Goblin Game: the number this seat names in secret.
+
+    **Only what the seat already knows.** The payload is built from the
+    viewer's own choice — the printed floor and its own life total — and from
+    nothing else on the queue: ``visible_choices`` hands a renderer the
+    viewer's prompts alone, the kind is not ``spectator_visible``, and the
+    scratchpad the answers go into rides the choice under an engine-private key
+    this never reads. So a seat still choosing is sent the same thing whether
+    or not anybody else has answered, which is the card.
+
+    The buttons stop at the seat's own life total and the engine does **not**,
+    for ``_bid_life``'s reason one prompt up: the card prints no ceiling and
+    the number is a loss, so naming more than a life total is legal and
+    lethal. ``maximum`` stays None in the payload because the rule has none
+    (CR 107.1).
+    """
+    choice = choices[0]
+    low = int(choice.data.get("minimum", 0))
+    life = int(ctx.game.players[choice.player_index].life)
+    return {
+        "player_seat": choice.player_index,
+        "card_name": choice.data.get("card_name", ""),
+        "minimum": low,
+        "maximum": None,
+        "life": life,
+        "options": list(range(low, max(low, life) + 1)),
+    }
+
+
 @prompt_renderer("bid_life")
 def _bid_life(ctx: PromptContext, choices: list) -> dict:
     """Illicit Auction: what the standing bid is and what this seat may say.
@@ -2270,12 +2301,21 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     pickers beside it do and for their reason: the answer is checked against
     that same rule, so the list offered and the list accepted cannot disagree.
 
-    ``keep_count`` is sent because the client cannot derive it. How many a seat
-    may keep is the size of a maximum matching between their permanents and the
-    printed slots (CR 609.3), which is a number only the engine can compute -
-    two artifact creatures fill an artifact slot and a creature slot at once,
-    where two plain artifacts fill one. ``slots`` rides along so the modal can
-    say what the keeps *are*; it is a label, and nothing is decided from it.
+    ``keep_count`` is sent because the client cannot derive it. The *most* a
+    seat may choose is the size of a maximum matching between their permanents
+    and the printed slots (CR 609.3), which is a number only the engine can
+    compute - two artifact creatures fill an artifact slot and a creature slot
+    at once, where two plain artifacts fill one. ``slots`` rides along so the
+    modal can say what the keeps *are*.
+
+    ``keep_fewest`` is the other end of the range, and is there because one
+    permanent may be chosen for several slots (the rulings of Cataclysm, Global
+    Ruin and Planar Overlay all say so): a Tropical Island alone answers Forest
+    and Island. Each slot carries ``need`` — how many of the seat's permanents
+    must be chosen for it, zero where the seat holds none — and each candidate
+    ``fills``, the slots it may stand for, so the modal can label a dual land
+    with both its types and hold the confirm button until every slot is
+    answered. The engine re-checks the answer either way.
 
     ``fate`` is sent only when the prompt carries one — Planar Overlay's
     "Return those lands to their owners' hands", where what the seat picks is
@@ -2297,17 +2337,21 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
             perm for perm in live
             if ctx.game._match_keeps([perm], slot_filters)
         ]
+    printed = list(choice.data.get("slots") or ())
+    needs = ctx.game.keep_slot_needs(live, printed)
     return {
         **extra,
         "player_seat": choice.player_index,
         "card_name": choice.data.get("reason", ""),
         "keep_count": len(ctx.game._match_keeps(live, slot_filters)),
+        "keep_fewest": len(ctx.game.fewest_keeps(live, printed)),
         "slots": [
             {
                 "count": int(slot.get("count", 0)),
                 "type": _keep_slot_noun(slot.get("filter") or {}),
+                "need": need,
             }
-            for slot in (choice.data.get("slots") or ())
+            for slot, (_described, need) in zip(printed, needs)
         ],
         "candidates": [
             {
@@ -2315,6 +2359,7 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
                 "name": perm.card.name,
+                "fills": ctx.game.keep_slots_answered_by(perm, printed),
             }
             for index, perm in enumerate(ctx.game.players[choice.player_index].battlefield)
             if any(perm is candidate for candidate in live)

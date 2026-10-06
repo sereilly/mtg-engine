@@ -9,7 +9,8 @@ place here and an unknown quantity word is an error, not a zero.
 from __future__ import annotations
 
 from ..granted_abilities import GRANTER_PHRASE_HEAD, GRANTER_PHRASE_TAIL
-from ..oracle_types import LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT
+from ..oracle_types import (LIFE_LOST_THIS_WAY, MANA_PAID_BY_SEAT,
+                            SECRET_NUMBERS_BY_SEAT)
 from . import ast
 from .errors import GrammarError
 from .lexer import GToken, NUMBER, PT, WORD
@@ -610,6 +611,21 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
     # parsed — one printed possessive with two readings, which is the fork
     # SET_PLAYBOOK records from Revised's round 8.
     had_article = bool(stream.accept_word("the"))
+
+    # "…loses life equal to **the number of items they revealed**." (Goblin
+    # Game.) The number that seat named in secret one sentence up — a
+    # back-reference per seat, like "the amount of mana they paid this way"
+    # below and read the way that one is: the lowering demands the producer,
+    # and the pronoun is the seat performing the sentence. In front of the
+    # counted-object reader, which takes "the number of" for a board count and
+    # fails the line on a noun that is not an object.
+    mark_items = stream.mark()
+    if stream.accept_phrase("number", "of", "items"):
+        stream.accept_word("they", "you", "that")
+        stream.accept_word("player")
+        if stream.accept_word("revealed"):
+            return ast.ThatMuch(SECRET_NUMBERS_BY_SEAT)
+    stream.reset(mark_items)
 
     if stream.accept_phrase("number", "of"):
         # "…equal to **the number of pain counters removed this way**"

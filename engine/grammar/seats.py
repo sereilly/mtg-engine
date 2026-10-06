@@ -217,6 +217,18 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
             "mana", "value",
         ):
             return ast.PlayerRef("revealed_greatest_mana_value")
+        # "**The player who revealed the fewest items** then loses half their
+        # life, rounded up." (Goblin Game.) The fourth described seat and the
+        # second answered by a record — the number each seat named in secret
+        # one sentence up. Strict like the three above it: a tie names nobody,
+        # and the card says what a tie does in its next sentence, which is read
+        # as this seat's other arm (``control_flow._attach_tied_for_fewest``).
+        #
+        # The whole phrase is required, "items" included: it is the noun the
+        # hiding sentence counted, and a shorter prefix would name a seat by a
+        # comparison nothing recorded.
+        if stream.accept_phrase("who", "revealed", "the", "fewest", "items"):
+            return ast.PlayerRef("revealed_fewest")
         most_mark = stream.mark()
         if stream.accept_phrase("who", "controls", "the", "most"):
             try:

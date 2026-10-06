@@ -48,6 +48,7 @@ from . import ast
 from .conditional_instead import _parse_conditional_instead_rider
 from .control_flow import (_attach_if_that_card_was_returned, _attach_if_you_cant,
                           _attach_if_you_do, _attach_otherwise, _attach_when_you_do,
+                          _attach_tied_for_fewest,
                           _attach_tied_life_draw, _parse_who_cant_rider)
 from .effects import (
     _parse_activation_restriction,
@@ -484,6 +485,13 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # reason: both open on "if two or more" and each refuses without
             # consuming whatever the other one reads.
             if _attach_tied_life_draw(stream, steps):
+                continue
+            # "If two or more players are tied for fewest, each loses half
+            # their life, rounded up." (Goblin Game.) The tie arm of the loss
+            # in front of it, beside the life-total one above for the order's
+            # reason: all three open on "if two or more" and each refuses
+            # without consuming whatever the others read.
+            if _attach_tied_for_fewest(stream, steps):
                 continue
             # "Otherwise, it gets +4/-X until end of turn." (Blood Lust.) The
             # second arm of the conditional sentence before it.

@@ -38,6 +38,7 @@ from ..oracle_types import (BIDDING_WINNER,
                             MILLED_THIS_WAY, DISCARDED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
+from ..oracle_types import SECRET_NUMBERS_BY_SEAT
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
@@ -388,6 +389,42 @@ def most_controlling_seat(game: Game, filters: dict) -> "int | None":
             if subject_matches(game, permanent, filters, observer=index)
         ),
     )
+
+
+def _revealed_fewest_seats(game: Game, context: OracleExecutionContext) -> list[int]:
+    """Every seat whose secret number is the least, in turn order. ("The
+    player who revealed the fewest items", Goblin Game.)
+
+    Read off the per-seat record the hiding step wrote earlier in this same
+    resolution (CR 608.2h). **Only a seat that revealed a number is in the
+    comparison** — the field is the players who were asked, which is
+    :func:`_revealed_mana_value_leader`'s rule one function down and for its
+    reason: a player who named nothing did not reveal the fewest of anything.
+
+    A seat still in the game is all that is asked of it. One at or below 0
+    life is in the game until state-based actions are next checked (CR 704.3),
+    which is not until this resolution is over — so a seat the first loss took
+    to zero is still a seat the second sentence can name.
+
+    Returns the whole set, because the card's two sentences need both
+    readings of it: one member is "the player who revealed the fewest", and
+    several are the players "tied for fewest".
+    """
+    recorded = context.results.get(SECRET_NUMBERS_BY_SEAT) or {}
+    named = {
+        seat: int(number)
+        for seat, number in recorded.items()
+        if isinstance(seat, int)
+        and 0 <= seat < len(game.players)
+        and not game.players[seat].lost
+    }
+    if not named:
+        return []
+    least = min(named.values())
+    return [
+        seat for seat in _offered_seats(game, "each_player", context)
+        if named.get(seat) == least
+    ]
 
 
 def _revealed_mana_value_leader(
@@ -2340,6 +2377,55 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     return True, "resolved"
 
 
+@effect_handler("secretly_choose_numbers")
+def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Each player hides at least one item, then all players reveal them
+    simultaneously." (Goblin Game.)
+
+    ``choose_number``'s value once per seat, with the one thing that handler
+    cannot give it: **no seat's answer exists for anybody else until every
+    seat has one.** One ``secret_number`` prompt per seat, armed together in
+    turn order (CR 101.4); the prompt's resolver writes
+    ``SECRET_NUMBERS_BY_SEAT`` and says nothing, and the answer that completes
+    the map is what logs the reveal — one line, every number at once. CR 101.4b
+    is the default this card's words set aside: ordinarily "a player knows the
+    choices made by the previous players when making their choice", and
+    "hides … reveal them simultaneously" is the sentence saying these are not
+    known.
+
+    Nothing is stamped before the prompts are armed, which is the opposite of
+    the discipline ``choose_number`` states and for a reason: a provisional
+    number is a number, and the sentences behind this one would lose life by
+    it if anything let them run early. A seat nobody asks is answered where
+    the prompt is armed (``default_at_arm``) by ``ai_policy.choose_secret_number``,
+    which reads life totals and never this map — so a seat the engine plays
+    commits before any other answer exists and cannot be told one.
+
+    The sentences behind this one wait for the last answer: the kind
+    suspends, so the losses run once and against the whole map (CR 608.2).
+    """
+    low = max(0, int(instruction.payload.get("minimum", 0)))
+    who = str(instruction.payload.get("who", "each_player"))
+    seats = _offered_seats(game, who, context)
+    card_name = context.card.name if context.card is not None else "Effect"
+    # A fresh map per resolution: a copy of the spell, or the same ability
+    # resolving twice, must not complete itself on the last one's answers.
+    context.results[SECRET_NUMBERS_BY_SEAT] = {}
+    if not seats:
+        return True, "resolved"
+    game.log.append(
+        f"{card_name}: each {'opponent' if who == 'each_opponent' else 'player'} "
+        f"secretly chooses a number of at least {low}"
+    )
+    for seat in seats:
+        game.arm_pending_choice(
+            "secret_number", seat,
+            card_name=card_name, minimum=low, seats=list(seats),
+            record=SECRET_NUMBERS_BY_SEAT, _results=context.results,
+        )
+    return True, "resolved"
+
+
 @effect_handler("choose_color")
 def choose_color(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Choose a color." (Chromatic Armor's activated ability.)
@@ -3490,6 +3576,28 @@ def _offered_seats(
             "the greatest mana value"
         )
         return [seat]
+    if actor in ("revealed_fewest", "each_revealed_fewest"):
+        # "**The player who revealed the fewest items** then loses half their
+        # life, rounded up. If two or more players are tied for fewest, each
+        # loses half their life, rounded up." (Goblin Game.) The described
+        # seat is strict, like every superlative here — a tie names nobody —
+        # and the card's tie sentence widens it to every seat holding the
+        # least, which the grammar folds into the second spelling.
+        holders = _revealed_fewest_seats(game, context)
+        card_name = context.card.name if context.card is not None else "Effect"
+        if actor == "revealed_fewest" and len(holders) != 1:
+            if holders:
+                game.log.append(
+                    f"{card_name}: no one player revealed the fewest"
+                )
+            return []
+        if holders:
+            game.log.append(
+                f"{card_name}: "
+                + ", ".join(game.players[seat].name for seat in holders)
+                + " revealed the fewest"
+            )
+        return holders
     if actor == "damaged_player":
         # "…unless they pay {2} before that step" (Sabertooth Cobra). The seat
         # the damage event froze (``defending_player_index``, stamped by

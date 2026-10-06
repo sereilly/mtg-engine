@@ -211,6 +211,56 @@ def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
     return chosen
 
 
+def parse_hides_items(
+    stream: TokenStream, chooser: "ast.PlayerRef"
+) -> "ast.SecretlyChooseNumbers | None":
+    """``<each player> hides at least one item, then all players reveal them
+    simultaneously.`` The subject has been read, so this starts at the verb.
+    (Goblin Game.)
+
+    One production for the comma-joined pair, because neither half is a
+    sentence about the game on its own: hiding with no reveal is a number
+    nobody ever reads, and "all players reveal them" names a set only the
+    first half makes. Together they are one event — a number per seat, secret
+    until every seat has one — so they are one node.
+
+    Every word is required. The floor must be a printed number ("at least
+    **one**"), the reveal must be **simultaneous** — the word is the whole of
+    the secrecy, and a sentence without it describes numbers named in turn,
+    each in sight of the last — and the revealing set must be the hiding one:
+    "all players" behind any subject but "each player" is two different sets
+    of seats and a record half of whose entries nobody made.
+
+    Refuses without consuming for anything that is not this shape.
+    """
+    mark = stream.mark()
+    if not (
+        chooser.kind == "each_player"
+        and stream.accept_word("hides", "hide")
+        and stream.accept_phrase("at", "least")
+    ):
+        stream.reset(mark)
+        return None
+    floor = parse_amount(stream)
+    if not (
+        isinstance(floor, ast.Fixed)
+        and floor.value >= 0
+        and stream.accept_word("item", "items")
+    ):
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    if not (
+        stream.accept_phrase(
+            "then", "all", "players", "reveal", "them", "simultaneously"
+        )
+        and (stream.exhausted or stream.at_punct(".", ";"))
+    ):
+        stream.reset(mark)
+        return None
+    return ast.SecretlyChooseNumbers(chooser, floor.value)  # parse_hides_items
+
+
 def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":
     """``Count the number of permanents.`` (Chaos Moon.)
 

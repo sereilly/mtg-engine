@@ -1179,7 +1179,7 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
 
@@ -2630,6 +2630,18 @@ function getNumberChoiceInfo(state = currentState) {
   return info;
 }
 
+// Goblin Game: "each player hides at least one item" — a number every seat
+// names in secret. The server sends this seat its own prompt and nothing about
+// anybody else's answer; the reveal arrives as one log line when the last seat
+// has chosen.
+function getSecretNumberInfo(state = currentState) {
+  if (!state || seat === null) return null;
+  const info = state.secret_number;
+  if (!info || info.player_seat !== seat) return null;
+  if (!Array.isArray(info.options) || info.options.length === 0) return null;
+  return info;
+}
+
 function getLandTypeChoiceInfo(state = currentState) {
   if (!state || seat === null) return null;
   const info = state.land_type_choice;
@@ -3906,7 +3918,7 @@ function isAnyPromptActive(state = currentState) {
 function shouldShowPriorityPrompt(state = currentState) {
   if (!state || seat === null) return false;
   if (state.priority_player !== seat) return false;
-  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
+  if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state)) return false;
 
   // Combat declaration prompts own the prompt panel while declarations are pending.
   if (combatPromptNeedsConfirmation(state)) return false;
@@ -5607,6 +5619,53 @@ function applyNumberChoicePrompt(info) {
         seat,
         action: "number_choice_confirm",
         number: Number(btn.dataset.number),
+      });
+    });
+  });
+}
+
+// Goblin Game: "Each player hides at least one item, then all players reveal
+// them simultaneously." One button per number from the printed floor up to
+// this seat's own life total. The engine accepts more — the card prints no
+// ceiling, and naming more than a life total is legal and lethal — but a
+// client has no business proposing it.
+function applySecretNumberPrompt(info) {
+  const panel = q("activationPanel");
+  const title = q("promptTitle");
+  const body = q("promptBody");
+  const steps = q("promptSteps");
+  const cancelBtn = q("promptCancelBtn");
+  const okBtn = q("promptOkBtn");
+  const customRow = q("promptCustomRow");
+  const customOkBtn = q("promptCustomOkBtn");
+
+  panel.classList.remove("hidden");
+  okBtn.classList.add("hidden");
+  customRow.classList.add("hidden");
+  cancelBtn.classList.add("hidden");
+  cancelBtn.disabled = true;
+  customOkBtn.disabled = true;
+
+  const cardName = info.card_name || "";
+  title.textContent = "Choose a number in secret";
+  body.textContent =
+    `${cardName}: secretly choose a number of at least ${info.minimum}. ` +
+    `Nobody sees it until every player has chosen. You have ${info.life} life.`;
+  const buttons = info.options
+    .map(
+      (n) =>
+        `<button type="button" class="prompt-choice-btn" data-secret-number="${escapeHtml(String(n))}">` +
+        `${escapeHtml(String(n))}</button>`
+    )
+    .join("");
+  steps.innerHTML = `<div class="prompt-choice-column">${buttons}</div>`;
+
+  steps.querySelectorAll("[data-secret-number]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await sendAction({
+        seat,
+        action: "secret_number_confirm",
+        number: Number(btn.dataset.secretNumber),
       });
     });
   });
@@ -8977,13 +9036,17 @@ function renderPermanentSetChoiceModal(info) {
 // rest." The seat picks what *survives*, over its own battlefield, and
 // everything else in the pool goes.
 //
-// The confirm button is disabled until exactly `keep_count` are selected, and
-// that number comes from the server rather than from counting the slots: how
-// many a seat may keep is a maximum matching between their permanents and the
-// printed slots (CR 609.3), so two artifact creatures fill both the artifact
-// and the creature slot where two plain artifacts fill one. The engine refuses
-// a short or unassignable answer either way — this only keeps the player from
-// sending one.
+// The confirm button is disabled until the selection is between `keep_fewest`
+// and `keep_count` and answers every printed slot, and both numbers come from
+// the server rather than from counting the slots. The most a seat may choose is
+// a maximum matching between their permanents and the printed slots (CR 609.3),
+// so two artifact creatures fill both the artifact and the creature slot where
+// two plain artifacts fill one. The fewest is smaller wherever one permanent
+// answers several slots — the cards' rulings let a dual land be chosen "for
+// either or for both" of its types — so each candidate carries `fills` (the
+// slots it may stand for, shown on its tile) and each slot `need`. The engine
+// refuses an unassignable answer or one that leaves a slot out either way —
+// this only keeps the player from sending one.
 let keepPermanentsSelected = new Set();
 
 function getKeepPermanentsInfo(state = currentState) {
@@ -9004,10 +9067,19 @@ function renderKeepPermanentsModal(info) {
   }
   modal.classList.remove("hidden");
   const keepCount = Number(info.keep_count || 0);
+  const keepFewest = Number(info.keep_fewest ?? keepCount);
   const subtitle = document.getElementById("keepPermanentsSubtitle");
-  const slots = (info.slots || [])
+  const slotList = info.slots || [];
+  const slots = slotList
     .map((slot) => `${slot.count} ${slot.type}${slot.count === 1 ? "" : "s"}`)
     .join(", ");
+  const fillsById = new Map(
+    (info.candidates || []).map((entry) => [entry.id, entry.fills || []])
+  );
+  const howMany = keepFewest < keepCount ? `${keepFewest} to ${keepCount}` : `${keepCount}`;
+  const shared = keepFewest < keepCount
+    ? " One permanent may be chosen for more than one of these."
+    : "";
   // Planar Overlay: "…chooses a land they control of each basic land type.
   // Return those lands to their owners' hands." The same choice with the other
   // half moving — what the seat picks is what *leaves* — so the server sends
@@ -9019,21 +9091,42 @@ function renderKeepPermanentsModal(info) {
   if (title) title.textContent = returning ? "Return Permanents" : "Keep Permanents";
   if (subtitle) {
     subtitle.textContent = returning
-      ? `${info.card_name}: return ${slots || "permanents"} — choose ${keepCount}. ` +
+      ? `${info.card_name}: return ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `They go to their owners' hands; everything else stays.`
-      : `${info.card_name}: keep ${slots || "permanents"} — choose ${keepCount}. ` +
+      : `${info.card_name}: keep ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `Everything else you control that it names is sacrificed.`;
   }
   const list = document.getElementById("keepPermanentsList");
   const confirmBtn = document.getElementById("keepPermanentsConfirmBtn");
+  // Every slot the seat can answer has enough of the selection standing for
+  // it. A payload with no `need` (an older server) asks nothing here and the
+  // size range alone gates the button, as it always did.
+  const everySlotAnswered = () =>
+    slotList.every((slot, slotIndex) => {
+      const need = Number(slot.need || 0);
+      if (!need) return true;
+      let standing = 0;
+      keepPermanentsSelected.forEach((id) => {
+        if ((fillsById.get(id) || []).includes(slotIndex)) standing += 1;
+      });
+      return standing >= need;
+    });
   const syncConfirm = () => {
-    if (confirmBtn) confirmBtn.disabled = keepPermanentsSelected.size !== keepCount;
+    const size = keepPermanentsSelected.size;
+    if (confirmBtn) {
+      confirmBtn.disabled = size < keepFewest || size > keepCount || !everySlotAnswered();
+    }
   };
   if (list) {
     list.innerHTML = (info.candidates || [])
       .map((entry) => {
         const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}</div></div>`;
+        // What this permanent may be chosen as — "Island / Forest" on a
+        // Tropical Island — shown only where the slots are told apart by more
+        // than one noun, so Limited Resources' tiles read as they did.
+        const fills = (entry.fills || []).map((slotIndex) => (slotList[slotIndex] || {}).type).filter(Boolean);
+        const standsFor = slotList.length > 1 && fills.length ? ` as ${fills.join(" / ")}` : "";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}${escapeHtml(standsFor)}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -9868,6 +9961,12 @@ function renderActivationPrompt() {
   const numberChoiceInfo = getNumberChoiceInfo();
   if (numberChoiceInfo) {
     applyNumberChoicePrompt(numberChoiceInfo);
+    return;
+  }
+
+  const secretNumberInfo = getSecretNumberInfo();
+  if (secretNumberInfo) {
+    applySecretNumberPrompt(secretNumberInfo);
     return;
   }
 

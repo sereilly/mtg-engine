@@ -58,6 +58,7 @@ from .effects import (
     _parse_extra_turn,
     _parse_mill,
     parse_choose_each_then_return,
+    parse_hides_items,
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
@@ -124,6 +125,15 @@ def parse_player_subject_verb(
             return tapped_out
     if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
         return _parse_draw(stream, source_spec)
+    # "**Each player hides at least one item, then all players reveal them
+    # simultaneously.**" (Goblin Game.) A number per seat, named in secret.
+    # Dispatched on the verb like every other player action; the production
+    # declines without consuming, so "hides" keeps the refusal it had under
+    # any other sentence.
+    if token.text in ("hides", "hide") and isinstance(source_spec, ast.PlayerRef):
+        hidden = parse_hides_items(stream, source_spec)
+        if hidden is not None:
+            return hidden
     if token.text in ("discards", "discard") and isinstance(source_spec, ast.PlayerRef):
         # "…**discards it unless they pay 1 life**." (Wand of Ith.) "It" is
         # the card the sentence in front of this one revealed, so nothing is

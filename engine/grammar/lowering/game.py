@@ -236,6 +236,42 @@ def _lower_damage_this_game_history(
     )
 
 
+def _lower_secretly_choose_numbers(
+    node: ast.SecretlyChooseNumbers,
+) -> tuple[OracleInstruction, ...]:
+    """"Each player hides at least one item, then all players reveal them
+    simultaneously." (Goblin Game.)
+
+    Nothing happens on any board: the step asks every seat for a number and
+    writes ``SECRET_NUMBERS_BY_SEAT`` once the last has answered, which
+    ``_records._PRODUCES`` declares and the sentences behind it read. The
+    shape ``choose_number`` has, once per seat — and its own kind rather than
+    a flag on that one, because what differs is not the question but the
+    *record*: that kind writes one seat's number where it is named, and this
+    writes a map nobody may read a part of.
+
+    Only a set of seats. The secrecy is between players, so a sentence asking
+    one seat to hide a number from nobody is ``choose_number`` and should be
+    printed as it.
+    """
+    if node.player.kind not in _SECRET_NUMBER_SEATS:
+        raise LoweringError(
+            f"no prompt asks {node.player.kind!r} for a number in secret",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "secretly_choose_numbers", "",
+            {"who": node.player.kind, "minimum": int(node.minimum)},
+        ),
+    )
+
+
+#: The seat sets a secret, simultaneous number may be asked of — the two
+#: ``handlers/control_flow._offered_seats`` enumerates as sets.
+_SECRET_NUMBER_SEATS = frozenset({"each_player", "each_opponent"})
+
+
 def _lower_count_objects(node: ast.CountObjects) -> tuple[OracleInstruction, ...]:
     """"Count the number of permanents." (Chaos Moon.)
 
