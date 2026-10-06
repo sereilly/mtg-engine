@@ -1253,10 +1253,12 @@ def test_attacking_you_is_two_questions_not_one(pool):
     """
     attacker = Permanent(card=pool["Grizzly Bears"])
     idle = Permanent(card=pool["Grizzly Bears"])
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
     game = Game(players=[
-        PlayerState(name="P1", battlefield=[attacker, idle]),
-        PlayerState(name="P2"),
-        PlayerState(name="P3"),
+        PlayerState(name="P1", battlefield=[attacker, idle], library=[pool["Forest"]] * 5),
+        PlayerState(name="P2", library=[pool["Forest"]] * 5),
+        PlayerState(name="P3", library=[pool["Forest"]] * 5),
     ])
     game.start_turn(0)
     game._close_current_priority_step()
@@ -1287,10 +1289,12 @@ def test_attacked_you_this_turn_outlives_the_combat_it_names(pool):
     """
     attacker = Permanent(card=pool["Grizzly Bears"])
     idle = Permanent(card=pool["Grizzly Bears"])
+    # Libraries: a three-seat table draws on its first turn (CR 103.8c), and
+    # a draw from nothing loses the game before combat (CR 704.5b).
     game = Game(players=[
-        PlayerState(name="P1", battlefield=[attacker, idle]),
-        PlayerState(name="P2"),
-        PlayerState(name="P3"),
+        PlayerState(name="P1", battlefield=[attacker, idle], library=[pool["Forest"]] * 5),
+        PlayerState(name="P2", library=[pool["Forest"]] * 5),
+        PlayerState(name="P3", library=[pool["Forest"]] * 5),
     ])
     game.start_turn(0)
     game._close_current_priority_step()
