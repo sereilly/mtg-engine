@@ -485,10 +485,12 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # 10 activated shields printing the phrase, and a bare ``activate`` over
     # the wire did the same.
     #
-    # So an object description never reaches a player. Announced bare — the
-    # headless convention — it takes the first creature the picker would have
-    # offered, the controller's own before an opponent's (a shield is a
-    # benefit), and with no legal creature it shields nobody.
+    # So an object description never reaches a player. A spell or an
+    # activated ability announced bare has had the picker's first creature
+    # named for it by now (`engine/bare_announcements.py`), so nothing reaches
+    # this unnamed that was owed; what does is a *trigger* nothing chose a
+    # target for, which takes the first creature the picker would have
+    # offered — and with no legal creature shields nobody.
     described = instruction.payload.get("targets")
     object_only = isinstance(described, dict) and described.get("kind") == "object"
     unannounced = None

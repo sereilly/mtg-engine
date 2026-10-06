@@ -438,6 +438,20 @@ class OracleExecutionContext:
     # a branch inside one role's scope can spend another role (Crooked Scales'
     # toll buys a repeat of the whole flip, opponent's creature included).
     announced_targets: tuple | None = None
+    # **This resolution's targets were chosen by a player's announcement** —
+    # a spell (CR 601.2c) or an activated ability (CR 602.2b), whose every
+    # owed target was named by its caller or defaulted from the picker's own
+    # list as it was announced (``engine/bare_announcements.py``). So what the
+    # object did not name, nothing names: the target resolver
+    # (``handlers/_common.pick_target_permanent``) answers with the announced
+    # permanent or with nobody, and never looks along a battlefield for
+    # another.
+    #
+    # False for a triggered ability, a delayed one, and every context a turn
+    # step or a hook builds by hand: a trigger's target is chosen at its fire
+    # site (CR 603.3d), which is its own seam and still leaves some of them
+    # unannounced (``_UNANNOUNCED_TRIGGER_TARGETS``).
+    announced: bool = False
 
 
 def chosen_damage_source(

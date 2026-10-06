@@ -26,6 +26,8 @@ from ...activation_restrictions import (
     reads_activation_tally,
 )
 from ...auras import attached_ability_cost_reduction, aura_restriction_active
+from ...bare_announcements import (announced_fields, default_activation_target,
+                                   names_an_object, seat_of_unseated_slot)
 from ...cost_modifiers import (ability_cost_reduction, ability_cost_tax,
                                ability_self_reduction_amount,
                                 sacrifice_taxes)
@@ -37,7 +39,7 @@ from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
-from ...targeting import (derive_activation_spec, spec_is_a_cost,
+from ...targeting import (GRAVEYARD_TARGET_KIND, derive_activation_spec, spec_is_a_cost,
                           usable_activated_abilities)
 from ...mana_payment import (answer_color_choices, is_mana_ability,
                              mana_cost_from_symbols)
@@ -673,10 +675,10 @@ class AbilityActivationMixin:
         # **Whether the caller is a seat that has to announce** (CR 601.2c,
         # through CR 602.2b). None is every headless caller — a test, a
         # scripted duel, the AI simulator — for whom a target left unnamed is
-        # the handler's pick. A bool is the wire: a person at a client, who is
-        # asked for every target the ability owes and cannot send the
-        # activation without one, so an owed target left unnamed is refused
-        # rather than defaulted. The value is whether a *seat* was sent, which
+        # the picker's first, named below. A bool is the wire: a person at a
+        # client, who is asked for every target the ability owes and cannot
+        # send the activation without one, so an owed target left unnamed is
+        # refused rather than defaulted. The value is whether a *seat* was sent, which
         # only the route knows — it fills in an opposing seat for every
         # activation, and the engine cannot tell that default from a choice.
         seat_announced: bool | None = None,
@@ -962,9 +964,9 @@ class AbilityActivationMixin:
         if seat_announced is not None:
             # The wire's half of the same rule: a client names every target an
             # ability owes, so one left unnamed is not an activation a browser
-            # can send — and the handler's pick behind it is a target nobody
-            # chose. Above the default below for that reason: "exactly one
-            # legal target" is still a target the player has to click.
+            # can send — and the default behind it is a target nobody chose.
+            # Above the default below for that reason: "exactly one legal
+            # target" is still a target the player has to click.
             unannounced = self.unannounced_activation_target(
                 controller_index, permanent, ability,
                 seat_announced=seat_announced,
@@ -981,53 +983,66 @@ class AbilityActivationMixin:
                     permanent.card.name, False, "unsupported", unannounced
                 )
 
-        # **An activation that named no target, where exactly one is legal,
-        # names that one** (``legality.sole_legal_activation_target``). The
-        # headless convention leaves an unnamed target to the handler's pick,
-        # and a pick is a scan written for the common board: Tahngarth, Talruum
-        # Hero alone on the battlefield is its own only legal target, and it
-        # tapped and paid {1}{R} to do nothing. With one legal announcement
-        # there is nothing for a default to choose between, so it is made here,
-        # where CR 601.2c makes it — before the costs, from the picker's list.
+        # **An activation that owes a target and named none names the first
+        # one its picker offers** (``engine/bare_announcements.py``), here,
+        # where CR 601.2c makes the announcement — before the costs, from the
+        # list the gate above just read. A headless caller's omission used to
+        # be answered at resolution, by whichever handler ran and whatever its
+        # own scan met first: Burning Palm Efreet took flying from a creature
+        # without it, Soul Sculptor and Angelic Shield reached a creature with
+        # protection from them, and the stack object carried no target for
+        # anything to respond to or for CR 608.2b to re-check. The default is
+        # an entry of the picker's list, so it is a target the gate would have
+        # accepted by name, and it is stamped below exactly as a named one is.
         #
-        # A seat the caller sent with no object beside it names no object
-        # (it is the battlefield an index would have counted into), so it does
-        # not stand in the way; a seat named for a **player** target does, and
-        # is kept.
+        # This replaced ``sole_legal_activation_target``, which made the same
+        # announcement only where exactly one target was legal (Tahngarth,
+        # Talruum Hero alone on the battlefield) and left every other board to
+        # the handlers.
+        #
+        # A seat the caller sent with no object beside it names no object (it
+        # is the battlefield an index would have counted into), so it does not
+        # stand in the way — it is where the default is looked for first. A
+        # seat named for a **player** target is a target, and is kept.
         if (
-            target_permanent_ids is None
-            and target_permanent_index is None
-            and target_stack_item is None
-            and not target_role_refs
-            and not divided_targets
+            target_player_index is None
+            and target_permanent_ids is None
+            and (derive_activation_spec(ability) or {}).get("kind")
+            != GRAVEYARD_TARGET_KIND
         ):
-            sole = self.sole_legal_activation_target(
-                controller_index, permanent, ability, x_value=int(x_value or 0),
+            # …and a slot named beside **no seat** that the opposing seat does
+            # not have is the activator's own (`seat_of_unseated_slot`): the
+            # reading the gate above just accepted it under, written onto the
+            # announcement so the object carries the permanent it names.
+            unseated = seat_of_unseated_slot(
+                self, controller_index, target_permanent_index, target_idx,
             )
-            if sole is not None and sole.get("kind") == "player":
-                if target_player_index is None:
-                    target_player_index = sole["seat"]
-                    target_idx = announced_target_idx = sole["seat"]
-                    target_player = self.players[target_idx]
-            elif sole is not None and sole.get("kind") == "permanent":
-                target_player_index = sole["seat"]
-                target_idx = announced_target_idx = sole["seat"]
+            if unseated is not None:
+                target_player_index = unseated
+                target_idx = announced_target_idx = unseated
+                target_player = self.players[unseated]
+                target_permanent_ids = [
+                    self.permanent_at(target_player, target_permanent_index).permanent_id
+                ]
+        if not names_an_object(
+            target_permanent_index, target_permanent_ids, target_stack_item,
+            target_role_refs, divided_targets,
+        ):
+            default = default_activation_target(
+                self, controller_index, permanent, ability,
+                named_seat=target_player_index, x_value=int(x_value or 0),
+            )
+            named = announced_fields(self, default) if default is not None else {}
+            if "target_player_index" in named:
+                target_player_index = named["target_player_index"]
+                target_idx = announced_target_idx = target_player_index
                 target_player = self.players[target_idx]
-                target_permanent_index = sole["index"]
-                named = self.permanent_at(target_player, sole["index"])
-                target_permanent_ids = (
-                    [named.permanent_id] if named is not None else None
-                )
-            elif sole is not None and sole.get("kind") == "graveyard":
-                target_player_index = sole["seat"]
-                target_idx = announced_target_idx = sole["seat"]
-                target_player = self.players[target_idx]
-                target_permanent_index = sole["index"]
-            elif sole is not None and sole.get("kind") == "stack":
-                depth = len(self.stack)
-                position = depth - 1 - sole["stack_index"]
-                if 0 <= position < depth:
-                    target_stack_item = self.stack[position]
+            if "target_permanent_index" in named:
+                target_permanent_index = named["target_permanent_index"]
+            if named.get("target_permanent_ids"):
+                target_permanent_ids = named["target_permanent_ids"]
+            if "target_stack_item" in named:
+                target_stack_item = named["target_stack_item"]
 
         # CR 601.2d's announced division, resolved to ids **here** — which is
         # where CR 601.2c/601.2d put it, before a single cost is paid at
@@ -3867,6 +3882,23 @@ class AbilityActivationMixin:
         if target_refusal is not None:
             self.log.append(target_refusal)
             return SimulationResult(card.name, False, "unsupported", target_refusal)
+        # …and an owed target left unnamed is the picker's first entry, named
+        # here as on the permanent path and for its reason
+        # (`engine/bare_announcements.py`): the object this builds is an
+        # announced one, and its resolver looks for nothing it was not given.
+        if not names_an_object(target_permanent_index, target_permanent_ids, None):
+            default = default_activation_target(
+                self, controller_index, card, ability,
+                named_seat=target_player_index,
+            )
+            named = announced_fields(self, default) if default is not None else {}
+            target_player_index = named.get("target_player_index", target_player_index)
+            target_permanent_index = named.get(
+                "target_permanent_index", target_permanent_index
+            )
+            target_permanent_ids = (
+                named.get("target_permanent_ids") or target_permanent_ids
+            )
 
         cost = ability.cost
         unchargeable = _graveyard_cost_refusal(cost)

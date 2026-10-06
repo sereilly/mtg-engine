@@ -1882,10 +1882,11 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
     One kind, six answers, and the payload settles which: the shield sits on
     the caster (Conservator), on the source permanent itself (Rock Hydra), on
     the permanent this Aura is attached to (Fylgja), on a *source of the named
-    colour* the controller chooses (the Circles of Protection), or on a target
-    the ability picks (Oasis, Samite Healer, Guardian Angel), or on whoever the
-    *source itself* would have damaged (Barbed Wire). Four of the six choose
-    nothing at all, which is why this returns None rather than a spec.
+    colour, type or description* the controller chooses (the Circles and Runes
+    of Protection), or on a target the ability picks (Oasis, Samite Healer,
+    Guardian Angel), or on whoever the *source itself* would have damaged
+    (Barbed Wire). Four of the six choose nothing at all, which is why this
+    returns None rather than a spec.
     """
     if payload.get("to_self") or payload.get("to_source"):
         return None
@@ -1933,7 +1934,53 @@ def _prevention_shield_spec(payload: dict) -> dict | None:
             # offer a green source for a shield that can never match one.
             spec["any_colors"] = list(colours)
         return spec
+    if payload.get("protection_kind") == "source_type":
+        # "The next time an **artifact source of your choice** would deal
+        # damage to you…" (Circle of Protection: Artifacts, Rune of
+        # Protection: Artifacts / Lands). The colour Circles' sentence keyed
+        # on a card type, and it fell past them to the line below: "any
+        # target", CR 115.4's creature-player-planeswalker union, for an
+        # ability that targets nothing. The browser asked "choose any target"
+        # and offered both players and every creature — a Grizzly Bears for a
+        # shield that answers only to artifacts — and the activation was a
+        # target owed in every reader that asks (a bare ``activate`` over the
+        # wire was the one thing that could not be sent).
+        #
+        # CR 609.7a: a source is *chosen*, so the flag is ``source_of_choice``
+        # — not a target for the gate, the stack object or "becomes the
+        # target" — and the kind is the printed type, so the picker offers
+        # exactly what the shield will answer to (CR 615.9), as the colour
+        # Circles' does. No ``also_stack``: that half is filtered by colour
+        # alone, and an artifact or land source is a permanent.
+        printed = str(payload.get("prevention_source_type") or "")
+        return {
+            "kind": printed if printed in _CHOSEN_SOURCE_TYPE_KINDS else "permanent",
+            "source_of_choice": True,
+        }
+    if payload.get("protection_kind") == "source_subject":
+        # "…a **creature of your choice with shadow**…" (Circle of Protection:
+        # Shadow). The same sentence keyed on a printed noun phrase: the
+        # phrase rides the spec's ``filter``, which the enumeration asks of
+        # every candidate through ``subject_matches`` — the reader the shield
+        # itself is matched by at damage time.
+        described = dict(payload.get("source_filter") or {})
+        head = str(described.get("type_filter") or "")
+        return {
+            "kind": head if head in _CHOSEN_SOURCE_TYPE_KINDS else "permanent",
+            "filter": described,
+            "source_of_choice": True,
+        }
     return _from_targets_payload(payload.get("targets")) or {"kind": "any"}
+
+
+#: The printed source types a "…source of your choice" picker can be narrowed
+#: to by its spec ``kind`` — the kinds ``legality._permanent_matches_target_kind``
+#: has an arm for. Any other printed type is offered as a permanent, which is
+#: wider than the card and never narrower: a shield is matched by its own
+#: predicate at damage time (CR 615.9), so an over-wide offer is a choice that
+#: prevents nothing, where an under-wide one would be a source the player may
+#: not choose.
+_CHOSEN_SOURCE_TYPE_KINDS = frozenset({"artifact", "creature", "land"})
 
 
 def _whole_prevention_shield_spec(payload: dict) -> dict | None:

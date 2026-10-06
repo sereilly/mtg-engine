@@ -792,8 +792,8 @@ def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> i
     (``_validate_cast_targets`` counts roles), a **cost-sized** list
     (``cast_target_refusal`` counts payments) and a **divided** one
     (``division_refusal``). And None for a count of one — the bare word
-    "target" — whose unnamed cast is this engine's standing headless default
-    (the handler picks), which is a different and far larger question.
+    "target" — whose unnamed announcement is not refused but answered: it
+    names the picker's first entry (``engine/bare_announcements.py``).
     """
     if not spec or spec_roles(spec) or spec.get("cost_targets"):
         return None
@@ -2586,16 +2586,32 @@ class LegalityMixin:
                     ability_source=source,
                 )
                 return None if legal else refused
-            # Nothing named: CR 602.2b's half of the question — could the whole
-            # announcement be made at all? An empty walk means no, and the cost
-            # is never paid.
+            # Nothing named. CR 602.2b's half of the question first — could
+            # the whole announcement be made at all? An empty walk means no,
+            # and the cost is never paid.
             walked = self._role_target_walk(
                 controller_index, card, spec, (), for_cast=False,
                 source_permanent=source,
                 ability_instruction=ability_instruction,
                 ability_source=source,
             )
-            return None if walked else refused
+            if not walked:
+                return refused
+            # …and where it could be, it has to be: CR 601.2c announces "an
+            # appropriate object or player for **each** target", so a roles
+            # announcement naming none of them is not one. The cast side has
+            # refused it since `_validate_cast_targets` counted roles
+            # ("requires N targets"); an activation was accepted, paid for,
+            # and resolved with every role unfilled — the strict role
+            # resolvers found nothing, and a seat role fell to the default
+            # seat whether or not the picker offered it. Refused rather than
+            # defaulted, for the reason a printed count is: which chain of
+            # several objects a seat that named none "meant" is not one answer
+            # drawn from one list. An announcement that owes nothing ("up to"
+            # roles) may still name nobody.
+            if activation_target_obligation(ability, x_value=x_value) is not None:
+                return f"{card.name} requires {len(spec_roles(spec))} targets"
+            return None
         # CR 601.2c's count, asked of an **activation** — the twin of the
         # ``max_targets`` gate ``_cast_refusal`` makes above every per-kind arm,
         # and it was missing here entirely. Above the "no mandatory target"
@@ -2661,6 +2677,33 @@ class LegalityMixin:
         named_object = bool(
             named_ids or named_indices or target_stack_item is not None
         )
+        # CR 601.2c's **count**, the other half of the ceiling above:
+        # "{T}: Untap **two** target lands" (Argothian Elder) names two, and
+        # "{X}, {T}: Untap **X** target lands" (Candelabra of Tawnos) names
+        # the X it announced — not one, and not none. The cast side has asked
+        # this since ``cast_target_count_refusal``; an activation was held to
+        # the ceiling alone, so "two target lands" naming one was accepted
+        # and untapped one, and "X target creatures" at X = 3 naming two paid
+        # for three. The same question of the same slot
+        # (:func:`exact_target_count`), so a printed "up to" and "any number
+        # of" stay the ceilings they are.
+        #
+        # A caller that announced no X (None — the AI's proposal filter, a
+        # picker's probe) is not counted against one: a number nobody said is
+        # not a number to hold their targets to. ``_activate_onto_stack``
+        # hands the gate the X it will resolve with, zero included.
+        slot = activation_target_slot(ability)
+        required = (
+            exact_target_count(spec, slot[1], x_value) if slot is not None else None
+        )
+        if required is not None:
+            named_count = len(named_ids) if named_ids else len(named_indices)
+            if named_count != required:
+                return (
+                    f"{card.name} needs {required} target"
+                    + ("s" if required != 1 else "")
+                    + f", not {named_count}"
+                )
         # A seat is this ability's *target* only where its spec says a player
         # may be one. Everywhere else ``target_player_index`` is the seat a
         # targeted **permanent** sits on (the index branch below reads it
@@ -2769,11 +2812,13 @@ class LegalityMixin:
         # target creature" ability, which used to pay the cost and no-op (or,
         # with an opponent creature present but none chosen, hit the face).
         #
-        # With a legal target on the table the bare activation is accepted and
-        # resolves on the handler's pick: the engine-wide headless convention,
-        # which the test corpus and every scripted duel rely on. It is not what
-        # a browser may send — :meth:`unannounced_activation_target` is what
-        # the wire asks.
+        # With a legal target on the table the bare activation is accepted,
+        # and ``_activate_onto_stack`` then makes the announcement for it:
+        # the first entry of this same list in standing order
+        # (``bare_announcements.default_activation_target``), stamped like a
+        # named target. That is the headless caller's default — a test, a
+        # scripted duel — and not what a browser may send:
+        # :meth:`unannounced_activation_target` is what the wire asks.
         if not valid:
             return refused
         return None
@@ -2791,13 +2836,14 @@ class LegalityMixin:
         CR 602.2b sends an activation through CR 601.2c, which is an
         announcement: "the player announces their choice of an appropriate
         object or player for each target". The engine's own API accepts an
-        activation that names none while a legal one exists and lets the
-        handler pick — the headless convention, for a scripted duel, the AI
-        simulator and the test corpus. A **person** is not that caller: the
-        browser runs a picker for every ability whose spec asks for one and
-        cannot send the activation without an answer, so a bare ``activate``
-        over the wire is a request no client makes and the handler's pick is a
-        target nobody chose (Samite Pilgrim's shield went to the *opponent*).
+        activation that names none while a legal one exists and names the
+        picker's first entry for it (``engine/bare_announcements.py``) — a
+        stated default, for a scripted duel and the test corpus. A **person**
+        is not that caller: the browser runs a picker for every ability whose
+        spec asks for one and cannot send the activation without an answer,
+        so a bare ``activate`` over the wire is a request no client makes and
+        the default behind it is a target nobody chose (Samite Pilgrim's
+        shield went to the *opponent*).
 
         One predicate rather than a test in the route: it is
         :func:`activation_target_obligation` — the gate's own "does this owe a
@@ -2827,46 +2873,6 @@ class LegalityMixin:
             return None
         card = getattr(source_permanent, "effective_card", source_permanent)
         return f"{card.name}: this ability needs a target (CR 602.2b)"
-
-    def sole_legal_activation_target(
-        self, controller_index: int, source_permanent, ability, *, x_value=None,
-    ) -> dict | None:
-        """The one target an activation that named none **can only mean**: the
-        picker's single entry, when the ability owes a target and exactly one
-        legal one exists. None otherwise.
-
-        The headless convention lets an activation name nothing and resolve on
-        its handler's pick, and a handler's pick is a scan written for the
-        common board — the opposing battlefield first, a creature by default.
-        Where the only legal target is somewhere that scan does not look, the
-        ability was activated, paid for, and did nothing: Tahngarth, Talruum
-        Hero ("deals damage equal to its power to target creature") alone on
-        the battlefield is its own only legal target, and tapped itself for no
-        effect. With one legal target there is no choice for a default to get
-        wrong — CR 601.2c's announcement has exactly one legal form — so the
-        engine makes it, from the same list the gate and the picker read.
-
-        Deliberately not a default for a board with **several** legal targets:
-        which of them a seat that named none "meant" is each handler's standing
-        answer, and the test corpus and the scripted duels are written against
-        those answers. That is the larger question ROADMAP records.
-        """
-        spec = activation_target_obligation(ability, x_value=x_value)
-        if spec is None or spec.get("kind") == ROLES_TARGET_KIND:
-            return None
-        card = getattr(source_permanent, "effective_card", source_permanent)
-        source = source_permanent if hasattr(
-            source_permanent, "permanent_id"
-        ) else None
-        valid = self._enumerate_targets(
-            controller_index, card, dict(spec), for_cast=False,
-            ability_instruction=targeting_instruction(
-                getattr(ability, "instruction", None)
-            ),
-            source_permanent=source,
-            ability_source=source,
-        )
-        return valid[0] if len(valid) == 1 else None
 
     def _announced_choice_refusal(
         self, controller_index: int, card, instruction, source
@@ -3307,9 +3313,10 @@ class LegalityMixin:
             # enumeration offers. Ids are not read here: a card in a graveyard
             # is not a permanent (CR 115.2) and has no ``permanent_id``.
             if not indices:
-                # CR 601.2c gates what was *named*; an untargeted cast resolves
-                # its own pick and the "does any legal target exist?" half
-                # stays the per-kind arms' question, as everywhere else here.
+                # CR 601.2c gates what was *named*. A cast that owed a card
+                # and named none has had the picker's first one named for it
+                # by now (``bare_announcements.default_cast_target``), so
+                # nothing named here is an announcement that owes nothing.
                 return None
             repeated = self._repeated_target_refusal(
                 card, spec, [], indices, target_player_index
@@ -3430,16 +3437,17 @@ class LegalityMixin:
           ``_validate_cast_targets``, which walks it role by role through the
           same enumeration.
 
-        **A cast that names nobody is held to the same list.** The engine's
-        headless convention lets a spell that owes a target name none and
-        resolve on the default seat (``_resolve_card``: the opposing one). That
-        default is a target like any other, so where it is one the picker does
-        not offer the cast is refused and says so — 101 of 119 bare casts
-        resolved on a player with shroud. Refused rather than re-aimed: the
-        only other legal player may be the caster, and choosing that for a
-        script is a decision about the card, not about the rule. An
-        announcement that may name nobody ("up to one target player") owes
-        nothing and is not asked.
+        **A cast that names nobody is held to the same list.** A spell that
+        owes a target and names none resolved on the default seat
+        (``_resolve_card``: the opposing one) whether or not the picker
+        offered it — 101 of 119 bare casts resolved on a player with shroud —
+        and this gate then refused such a cast. It is answered one step
+        earlier now: the cast path names the picker's first entry in standing
+        order for it (``bare_announcements.default_cast_target``), so the
+        seat that reaches this gate is one the list holds, and the refusal
+        below stands only for an announcement that path does not default (a
+        counted or several-role one). An announcement that may name nobody
+        ("up to one target player") owes nothing and is not asked.
         """
         refused = f"no valid target for {card.name}"
         offered: list | None = None
@@ -3521,11 +3529,12 @@ class LegalityMixin:
         to hold their targets to.
 
         A cast naming **nothing** is counted like any other. That is the
-        difference from a one-target spell, whose unnamed cast is the
-        engine's headless default: "two target creatures" naming none has no
-        default that is a legal announcement, and the several-target handlers
-        have no board scan to fall into — so it resolved doing nothing, with
-        its costs paid.
+        difference from a one-target spell, whose unnamed cast names the
+        picker's first entry (``engine/bare_announcements.py``): which two of
+        several creatures a caster who named none "meant" is not one answer
+        drawn from one list, so "two target creatures" naming none is refused
+        rather than defaulted — it used to resolve doing nothing, with its
+        costs paid.
         """
         if card.primary_type not in ("instant", "sorcery"):
             return None
@@ -4265,8 +4274,9 @@ class LegalityMixin:
           while any copy survives the target is legal — the ambiguity
           ``Game.graveyard_index_of`` documents and deliberately clamps.
 
-        A bare activation recorded no stamp and is untouched: its handler's
-        pick is the standing convention, not a target that went away.
+        An activation that owed a card and named none had the picker's first
+        one named for it as it was announced, so it carries a stamp like any
+        other and is judged like any other.
         """
         if not getattr(item, "activated", False):
             return None

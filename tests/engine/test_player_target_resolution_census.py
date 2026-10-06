@@ -59,6 +59,20 @@ def _undivided_rows():
     return [row for row in player_spell_rows() if row[2] != "divided"]
 
 
+def _face_state(game, seat: int) -> tuple:
+    """:func:`_seat_state` without what the seat *controls* or has had die:
+    the player, as distinct from their permanents. "Any target" behind an
+    Ivory Mask still reaches a creature on that battlefield (CR 702.18a
+    shrouds the player, not their board), and a bare cast is aimed at one now
+    — the picker's first entry — where it used to be refused outright. That
+    is a legal target changing, not the player being resolved on. Nor is the
+    mana that creature's controller spends on the spell's own toll ("unless
+    that permanent's controller pays {2}", Rhystic Lightning; Chain
+    Lightning's copy)."""
+    life, hand, library, _graveyard, exile, _mana, _permanents = _seat_state(game, seat)
+    return life, hand, library, exile
+
+
 def test_h1_a_cast_naming_nobody_never_resolves_on_a_seat_its_picker_does_not_offer():
     examined = 0
     resolved_on_the_mask: list[str] = []
@@ -75,10 +89,10 @@ def test_h1_a_cast_naming_nobody_never_resolves_on_a_seat_its_picker_does_not_of
             continue  # its unnamed default is not the opposing seat's face
         examined += 1
         game = table("opponent_shroud", card)
-        before = _seat_state(game, 1)
+        before = _face_state(game, 1)
         result = game.cast_from_hand(0, card.name, **keywords)
         game.auto_resolve_pending_choices()
-        if result.supported and _seat_state(game, 1) != before:
+        if result.supported and _face_state(game, 1) != before:
             resolved_on_the_mask.append(card.name if mode is None else f"{card.name} #{mode}")
 
     assert examined >= _MIN_EXAMINED, examined

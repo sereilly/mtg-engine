@@ -705,17 +705,26 @@ def test_115_6_spell_with_optional_target_is_targeted_when_target_chosen():
 
 
 def test_115_6_spell_with_optional_target_has_no_target_when_none_chosen():
-    """A spell that may have zero targets has no target when none are chosen (115.6)."""
+    """A spell that may have zero targets has no target when none are chosen (115.6).
+
+    "**Up to three** target creatures" (Tidal Surge's line): the fixture
+    printed a mandatory "Target player draws three cards", which is not a
+    spell that may have zero targets — its unnamed cast went on the stack
+    with none only because nothing announced the default until resolution.
+    It names the picker's first player now
+    (``engine/bare_announcements.py``); the spell this rule is about still
+    names nobody.
+    """
     no_target_spell = _mk_card(
-        "Ancestral Recall",
+        "Tidal Surge",
         "Instant",
-        "Target player draws three cards.",
+        "Tap up to three target creatures without flying.",
     )
     p1 = PlayerState(name="P1", hand=[no_target_spell])
     p2 = PlayerState(name="P2")
     game = Game(players=[p1, p2])
 
-    result = game.queue_from_hand(0, "Ancestral Recall")
+    result = game.queue_from_hand(0, "Tidal Surge")
 
     assert result.supported
     # No target chosen — stack item has no target

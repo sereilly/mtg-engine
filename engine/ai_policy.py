@@ -1911,6 +1911,8 @@ def _alternative_cost_is_payable(
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:
+    from .targeting import GRAVEYARD_TARGET_KIND
+
     player = game.players[player_index]
 
     best: ActivationAction | None = None
@@ -2235,6 +2237,65 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
                 return perm.effective_power if perm is not None else 0
 
             chosen = max(perms, key=_power)
+            target = chosen["seat"]
+            target_permanent_index = chosen["index"]
+            # "{T}: Untap **two** target lands" (Argothian Elder), "Choose two
+            # target blocked attacking creatures" (General Jarkeld): a printed
+            # count names that many (CR 601.2c), and the engine refuses an
+            # activation naming fewer. All on the chosen permanent's seat,
+            # because this action carries one seat beside its slots — the
+            # strongest there first, the order the single pick takes.
+            wanted = spec.get("max_targets")
+            if spec.get("exact_targets") and isinstance(wanted, int) and wanted > 1:
+                beside = sorted(
+                    (t for t in perms if t["seat"] == target),
+                    key=_power, reverse=True,
+                )
+                if len(beside) < wanted:
+                    continue
+                target_permanent_index = [t["index"] for t in beside[:wanted]]
+
+        # "{G}: Exile target card from a graveyard." (Scavenging Ooze.) A card
+        # in a graveyard is a target like any other (CR 115.1c), and this
+        # chooser named none: the block above reads battlefield kinds, so the
+        # announcement went out bare and the engine's default answered it —
+        # the picker's first card, which is a stated default for a script and
+        # not a choice. The seat's own pick instead: the pile the effect's
+        # side wants (`_activation_target_side`), and within it the card with
+        # the greatest mana value. Where the effect reads as neither side's —
+        # the Ooze's exile is one — an opposing pile is taken before the
+        # seat's own, which is the order an unnamed target is looked for in
+        # everywhere else. Skipped when nothing on the wanted side is legal,
+        # for the battlefield block's reason.
+        if (
+            target_permanent_index is None
+            and spec is not None
+            and spec.get("kind") == GRAVEYARD_TARGET_KIND
+            and not spec_is_a_cost(spec)
+            and not spec.get("source_of_choice")
+        ):
+            cards = [
+                t for t in game.activation_target_spec(
+                    player_index, permanent_index, ability_index=0,
+                ).get("valid_targets") or []
+                if t.get("kind") == "graveyard"
+            ]
+            side = _activation_target_side(permanent, ability.instruction)
+            if side == "you":
+                cards = [t for t in cards if t["seat"] == player_index]
+            elif side == "opponent":
+                cards = [t for t in cards if t["seat"] != player_index]
+            if not cards:
+                continue
+
+            def _mana_value(t):
+                pile = game.players[t["seat"]].graveyard
+                held = pile[t["index"]] if 0 <= t["index"] < len(pile) else None
+                return float(getattr(held, "cmc", 0) or 0)
+
+            if side is None and any(t["seat"] != player_index for t in cards):
+                cards = [t for t in cards if t["seat"] != player_index]
+            chosen = max(cards, key=_mana_value)
             target = chosen["seat"]
             target_permanent_index = chosen["index"]
 

@@ -174,15 +174,19 @@ def test_w1g1_reality_anchor_will_not_strip_a_noncreature(set_pool):
     assert [card.name for card in p0.hand] == ["Reality Anchor"]
     assert not any("Circle of Protection: Shadow loses" in line for line in game.log)
 
-    # …and the handler's own scan, reached the one way it still can be: the
-    # only creature leaves in response. The enchantment must not be taken as a
-    # substitute.
+    # …and the only creature leaving in response. The enchantment must not be
+    # taken as a substitute. This rig used to reach the handler's own scan —
+    # the cast named no permanent, so nothing was a target until the handler
+    # looked — and asserted its "no valid target to strip". A cast that names
+    # no permanent names the picker's first now, as it is announced, so the
+    # creature *is* the spell's target and CR 608.2b answers before any
+    # handler runs: the spell is removed from the stack.
     game, _, result = cast_with_no_permanent_named(
         ["Circle of Protection: Shadow", "Soltari Foot Soldier"],
         leaves_in_response=1,
     )
     assert result.supported, result.details
-    assert any("no valid target to strip" in line for line in game.log)
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
     assert not any("Circle of Protection: Shadow loses" in line for line in game.log)
 
     # A creature behind it: the scan finds the creature, not the enchantment.

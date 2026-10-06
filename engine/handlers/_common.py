@@ -2459,8 +2459,29 @@ def pick_target_permanent(
     predicate: Callable[[Permanent], bool] | None = None,
     fallback_players: Sequence[PlayerState] | None = None,
     fallback_on_invalid_choice: bool = True,
+    announced: bool = False,
 ) -> Permanent | None:
     """Core "honor the chosen target, else fall back" resolution.
+
+    **For an announced object there is no "else".** *announced* is
+    ``OracleExecutionContext.announced``: the resolution of a spell or an
+    activated ability, whose targets a player announced (CR 601.2c / 602.2b)
+    — named by the caller, or defaulted from the picker's own list as the
+    object was announced (``engine/bare_announcements.py``). For those the
+    answer is the announced permanent where it still answers this sentence
+    (steps 0 and 1 below), and otherwise **nobody**: no scan (step 2), and no
+    reading of the slot beside an id this sentence declined. Both were ways
+    for a resolution to act on a permanent nobody named — a bare announcement
+    resolved on whatever the scan met first, which is not the picker (it knows
+    the noun and nothing of protection, shroud or "with flying"), and a named
+    target the handler's own predicate rejected slid onto its neighbour.
+    CR 608.2b's last sentence is the rule: an illegal target is not affected,
+    and nothing takes its place. An "up to one target" announced with none is
+    the same answer for the same reason.
+
+    Steps 1's index and 2's scan remain for a context that is **not** an
+    announcement: a triggered ability whose fire site stamped no target, a
+    turn step's hand-built context, a test calling a handler directly.
 
     0. If ``permanent_id`` still names a permanent *player* controls and it
        passes ``predicate``, that is the target. This is the stable answer: the
@@ -2520,12 +2541,16 @@ def pick_target_permanent(
         # change wearing an identity change's clothes.
         if game.controls(player, chosen) and predicate(chosen):
             return chosen
+        if announced:
+            # The announced permanent is not one this sentence acts on, and
+            # the slot beside its id is that same choice said twice.
+            return None
     explicit = isinstance(index, int)
     if explicit and player is not None and 0 <= index < len(player.battlefield):
         candidate = player.battlefield[index]
         if predicate(candidate):
             return candidate
-    if explicit and not fallback_on_invalid_choice:
+    if announced or (explicit and not fallback_on_invalid_choice):
         return None
     if fallback_players is None:
         fallback_players = (player,) if player is not None else ()
@@ -2955,6 +2980,7 @@ def resolve_target_permanent(
         predicate=predicate,
         fallback_players=fallback_players,
         fallback_on_invalid_choice=fallback_on_invalid_choice,
+        announced=bool(getattr(context, "announced", False)),
     )
 
 
@@ -3114,30 +3140,34 @@ def described_target_predicate(
 def default_announced_permanent(
     game: Game, instruction, context: OracleExecutionContext, *, prefer: str = "you",
 ) -> Permanent | None:
-    """The permanent a resolution falls to when its announcement **named
-    none**: the first one the picker would have offered — the controller's own
-    before anybody else's for *prefer* ``"you"`` (a benefit), an opponent's
-    first otherwise. None when the picker offers no permanent.
+    """The permanent a **triggered** resolution falls to when nothing named
+    one: the first the picker would have offered — the controller's own before
+    anybody else's for *prefer* ``"you"`` (a benefit), an opponent's first
+    otherwise. None when the picker offers no permanent.
 
-    The headless convention lets a spell or ability be announced bare and
-    leaves the choice to its handler, and most handlers answer with
-    :func:`pick_target_permanent`'s scan: a seat's battlefield, a predicate.
-    That scan knows what the sentence *names* and nothing about what may be
-    *targeted* — protection, shroud, "other than this creature", an attacker
-    only — so a default built on it can land on a permanent CR 601.2c would
-    never have let anybody announce. This asks the announcement's own list
-    instead (``Game._enumerate_targets`` over the spec the instruction
-    derives), which is the list the activation gate and the browser's picker
-    read: a default that is by construction a legal target.
+    **Never for an announced object.** A spell or an activated ability that
+    owed a target and named none had the picker's first entry named for it as
+    it was announced (``engine/bare_announcements.py``), so by the time a
+    handler runs there is nothing left unnamed that was owed — and what was
+    *not* owed ("up to one target creature", announced with none) names
+    nobody, which is an answer and not a gap for a handler to fill. This used
+    to answer for both, as the one handler-side default drawn from the
+    picker's list; the announcement makes that default now, for every
+    sentence at once.
 
-    For a handler whose own fallback has no permanent to give — a prevention
-    shield's was the *player* — rather than a replacement for every scan in
-    the engine; those are each handler's standing answer for a board with
-    several legal targets, and the test corpus is written against them.
+    What is left is the trigger whose fire site stamped no target: its
+    handler's ordinary answer is :func:`pick_target_permanent`'s scan, which
+    knows what the sentence *names* and nothing about what may be *targeted*
+    — protection, shroud, "other than this creature" — and this asks the
+    announcement's own list instead (``Game._enumerate_targets`` over the
+    spec the instruction derives). For a handler whose own fallback has no
+    permanent to give: a prevention shield's was the *player*.
     """
     from ..legality import targeting_instruction
     from ..targeting import derive_instruction_spec
 
+    if getattr(context, "announced", False):
+        return None
     caster = context.caster
     if caster not in game.players:
         return None

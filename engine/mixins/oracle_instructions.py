@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from ..bare_announcements import resolving_slots
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
 from ..event_durations import end_event_durations
@@ -142,6 +143,15 @@ class OracleInstructionsMixin:
             self.log.append(f"Resolved supported pattern for {card.name} without state mutation")
             return
 
+        # The slot beside the seat, re-read off the ids the announcement
+        # stamped (`bare_announcements.announced_slots`): a handler that reads
+        # the slot alone then reads the permanent that was named, wherever the
+        # battlefield has moved it — and nothing at all once it has left.
+        target_permanent_index = resolving_slots(
+            self, target, target_permanent_index, target_permanent_id,
+            card=card, mode_index=mode_index,
+        )
+
         # CR 702.16b / 702.18: a spell that targets a permanent with shroud, or with
         # protection from the spell's color, has an illegal target. On resolution it
         # does nothing (608.3b — removed from the stack with no effect).
@@ -184,6 +194,9 @@ class OracleInstructionsMixin:
                 stack_target=stack_target,
                 cast_from_zone=cast_from_zone,
                 trigger_context=trigger_context,
+                # A spell's targets are its announcement's (CR 601.2c): the
+                # resolver has nobody to find that the cast did not name.
+                announced=True,
             ),
         )
         state_machine.run(instruction)
