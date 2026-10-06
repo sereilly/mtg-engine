@@ -3957,7 +3957,12 @@ class LegalityMixin:
             # would counter a spell whose player target is perfectly legal —
             # the wrong "yes" the table above is named for, arriving through a
             # role instead of through a kind.
-            return None
+            #
+            # That was the reason this returned None, and the reading it
+            # lacked exists: ``stack_targets.announcement_targets`` says which
+            # role named a seat and which an object, so each is judged as what
+            # it is — see :meth:`_role_target_legality`.
+            return self._role_target_legality(item, spec, holder)
 
         legality: list[bool] = []
         # **The printed description is re-asked too** (CR 608.2b: "Other
@@ -3977,15 +3982,40 @@ class LegalityMixin:
         # the two cheaper tests.
         #
         # **For a modal spell, the chosen mode's description** (*mode_index*).
-        # Not where **an opponent** chose the mode (CR 700.2e, Fatal Lore): its
-        # targets were named after the choice, against a spec carrying the
-        # chooser's seat ("…creatures **that player** controls") that only the
-        # prompt which asked held — re-asked here without that seat the
-        # enumeration offers nothing, and every such target would read illegal.
-        described = _resolution_rechecks_description(spec) and not (
-            program.modes and program.mode_chooser is not None
-        )
+        # Where **an opponent** chose the mode (CR 700.2e, Fatal Lore) this
+        # used not to be asked at all: its targets were named after the
+        # choice, against a spec carrying the chooser's seat ("…creatures
+        # **that player** controls"), and re-asked without that seat the
+        # enumeration offers nothing, so every such target would read illegal.
+        described = _resolution_rechecks_description(spec)
         offered: set[tuple[int, int]] | None = None
+        if described and program.modes and program.mode_chooser is not None:
+            # **That seat is on the stack item**, and has been since the mode's
+            # own text needed it ("**That player** draws up to three cards"):
+            # ``_resolve_opponent_mode_choice`` freezes who chose under the key
+            # every fire site freezes a seat under. The paragraph above was
+            # written before anything read it here, so a Fatal Lore whose two
+            # named creatures changed controller in response — neither any
+            # longer "a creature that player controls" — resolved, destroyed
+            # nothing and still let the opponent draw three, where every target
+            # is illegal and the spell does not resolve.
+            #
+            # Re-asked through the announcement's own call
+            # (``arm_modal_mode_targets``): the same spec, the same seat, the
+            # same enumeration. With no seat recorded the description is left
+            # unasked, as it was — the direction that never invents a fizzle.
+            chooser = self._mode_chooser_seat(item)
+            if chooser is None:
+                described = False
+            elif spec.get("that_player_only"):
+                offered = {
+                    (entry["seat"], entry["index"])
+                    for entry in self._enumerate_targets(
+                        item.caster_index, card,
+                        {**spec, "that_player_index": chooser}, for_cast=True,
+                    )
+                    if entry.get("kind") == "permanent"
+                }
         ids = getattr(holder, "target_permanent_id", None)
         for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
             if not isinstance(permanent_id, int):
@@ -4066,6 +4096,93 @@ class LegalityMixin:
                         obj is stack_target for obj in admitted
                     )
             legality.append(still_there)
+        return legality
+
+    def _mode_chooser_seat(self, item) -> int | None:
+        """The seat that chose *item*'s mode where the card gave that choice
+        to another player (CR 700.2e), or None if none is recorded.
+
+        Read off the stack item, where ``_resolve_opponent_mode_choice`` wrote
+        it as the mode was chosen — under the frozen-seat key the mode's own
+        "that player" is read through, so the gate and the effect cannot name
+        two different players.
+        """
+        from .grammar.lowering._events import EVENT_SUBJECT_PLAYER
+
+        seat = (getattr(item, "trigger_context", None) or {}).get(EVENT_SUBJECT_PLAYER)
+        if isinstance(seat, int) and 0 <= seat < len(self.players):
+            return seat
+        return None
+
+    def _role_target_legality(self, item, spec, holder) -> "list[bool] | None":
+        """CR 608.2b for a **several-role** announcement one of whose roles is
+        a player — "**Target player** gains control of **target permanent** you
+        control" (Donate), "…2 damage to **target creature** and 2 damage to
+        **target player** or planeswalker" (Lunge, Shower of Sparks) — one
+        answer per role that named something, or None where the announcement
+        cannot be read.
+
+        **Legal is the announcement's question, asked again**, as it is one
+        method down for a lone player target: is what this role named still
+        among what ``role_target_options`` would offer for it now, given the
+        objects the earlier roles named. That is the list the picker walked
+        and the cast gate checked, so a seat that gained shroud in response
+        (Ivory Mask, CR 702.18a) or left the game (CR 800.4a), a permanent
+        that left or stopped answering its role's noun phrase, and a relation
+        between two roles that no longer holds are each illegal by the rule
+        that would have refused naming them.
+
+        This is the *whole-object* half of the rule ("if all its targets … are
+        now illegal, the spell … doesn't resolve"). The per-target half — an
+        illegal target is not affected while the rest of the spell still
+        happens — is ``handlers/_common.resolve_role_player`` for the seat and
+        ``resolve_role_permanent`` for the object, each answering None for a
+        role that is no longer legal.
+
+        None for a role naming a card in a graveyard (no spell in the pool
+        prints one beside a player; Goblin Welder is an ability) and for an
+        announcement that named nothing for any role — a bare headless cast,
+        which is the standing convention rather than a target gone illegal.
+        """
+        from .stack_targets import announcement_targets
+
+        roles = spec_roles(spec)
+        named = {
+            target.position: target
+            for target in announcement_targets(self, item, spec, holder)
+        }
+        if not named:
+            return None
+        objects: list = []
+        for position in range(len(roles)):
+            target = named.get(position)
+            if target is None:
+                objects.append(None)
+            elif target.kind == "player":
+                objects.append(self.players[target.seat])
+            elif target.kind == "permanent":
+                permanent = self.permanent_by_id(target.permanent_id)
+                objects.append(
+                    permanent if permanent is not None
+                    and self.is_on_battlefield(permanent) else None
+                )
+            else:
+                return None
+        legality: list[bool] = []
+        for position in sorted(named):
+            chosen = objects[position]
+            if chosen is None:
+                legality.append(False)
+                continue
+            options = self.role_target_options(
+                item.caster_index, item.card, spec, tuple(objects[:position]),
+                for_cast=True,
+            )
+            wanted = _role_object_key(chosen)
+            legality.append(any(
+                _role_object_key(self.role_object_at(option)) == wanted
+                for option in options
+            ))
         return legality
 
     def _player_target_legality(

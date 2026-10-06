@@ -2815,9 +2815,52 @@ def resolve_role_player(
     # is no answer; a role that no longer resolves is CR 608.2b's illegal
     # target, so None is the answer here.
     target = context.target
-    return next(
+    seat = next(
         (index for index, player in enumerate(game.players) if player is target),
         None,
+    )
+    if seat is None or not _role_seat_is_still_a_target(game, context, roles[slot], seat):
+        return None
+    return seat
+
+
+def _role_seat_is_still_a_target(
+    game: Game, context: OracleExecutionContext, role: dict, seat: int,
+) -> bool:
+    """CR 608.2b for the **player** one role named: is that seat still one
+    this role's announcement would offer?
+
+    "An illegal target won't be affected by parts of a resolving spell's
+    effect for which it's illegal" — and the only thing asked of a named
+    player at resolution was whether they had left the game. A player who
+    gained **shroud** in response (Ivory Mask, CR 702.18a) was still handed
+    the permanent by Donate and still dealt Lunge's 2 damage, though no
+    announcement could have named them by then.
+
+    The question is the announcement's own, through the list the picker and
+    the cast gate read (``Game._enumerate_targets`` over the role, exactly as
+    ``legality.role_target_options`` asks it), so "may be targeted" has one
+    answer at both ends. Asked as a *triggered* ability's would be: that
+    skips the one test which depends on what kind of object is resolving —
+    "can't be the targets of spells or activated abilities" (Peace Talks),
+    which this context cannot tell apart — and nothing else.
+
+    True where the resolving object's controller cannot be found: a context
+    with no seat to ask from is not evidence that a target went illegal.
+    """
+    caster = next(
+        (index for index, player in enumerate(game.players) if player is context.caster),
+        None,
+    )
+    if caster is None:
+        return True
+    source = context.source_permanent
+    return any(
+        entry.get("kind") == "player" and entry.get("seat") == seat
+        for entry in game._enumerate_targets(
+            caster, context.card, dict(role), for_cast=False,
+            source_permanent=source, ability_source=source, triggered=True,
+        )
     )
 
 

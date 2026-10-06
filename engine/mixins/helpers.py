@@ -2735,6 +2735,26 @@ class GameHelpersMixin:
                 self._trigger_target_candidates(item, announced=True) is not None
             )
         self._stack_push_object(item, announce=not announced_at_cast)
+        if announced_at_cast:
+            # **The trigger is what targets, and now is when** (CR 115.1d,
+            # CR 603.3d). The permanent spell that named this target was not
+            # targeted (CR 115.1 lists what is: an instant or sorcery spell, an
+            # Aura spell, an activated ability, a triggered ability) and
+            # announced nothing as it was cast — ``spell_targets_nothing`` — so
+            # "becomes the target" is announced here, for the object that does
+            # the targeting, the first moment that object exists.
+            #
+            # Asked of the trigger's own evidence (``has_targets``: its spec
+            # targets and its printed line says the word), not of the fields
+            # being filled in: an Aura's "tap enchanted creature" carries the
+            # creature the Aura spell was cast on and targets nothing, and
+            # announcing that is how a Sleeping Potion ("when enchanted
+            # creature becomes the target of a spell or ability, sacrifice
+            # this Aura") came to sacrifice itself to its own entry trigger.
+            from ..stack_targets import has_targets
+
+            if has_targets(self, item):
+                self._announce_targeting(item)
         # "Up to one target …" activated with nothing named: the announcement
         # is complete and names nobody (CR 601.2c). After the stamping, which
         # is what turns an announced slot into the id this reads.
@@ -2789,17 +2809,58 @@ class GameHelpersMixin:
         # * an object the stack no longer holds was removed for having no legal
         #   target (CR 603.3d) or mode (CR 700.2b).
         #
-        # ...and a fourth: an entry trigger carrying its permanent spell's
-        # announcement (*announced_at_cast*) -- the cast announced that choice.
+        # There was a fourth: an entry trigger carrying its permanent spell's
+        # announcement (*announced_at_cast*) said nothing here, "the cast
+        # announced that choice". The cast no longer does — a permanent spell
+        # is not targeted (``spell_targets_nothing``) — so this is where the
+        # choice is announced, for the trigger, like any other trigger's.
+        # ``announce_targets_chosen`` asks whether there is anything to
+        # announce, so a trigger that carries the cast's fields and targets
+        # nothing still says nothing.
         if (
             item is not None
             and not item.is_copy
-            and not announced_at_cast
             and self.announcement_choice_for(item) is None
             and any(waiting is item for waiting in self.stack)
         ):
             self.announce_targets_chosen(item)
         return item
+
+    def spell_targets_nothing(self, item) -> bool:
+        """Whether *item* is a **permanent spell that is not an Aura** — the
+        one kind of stack object CR 115.1 leaves untargeted whatever its fields
+        hold.
+
+        CR 115.1a–d list what is targeted: an instant or sorcery spell, an
+        Aura spell, an activated ability and a triggered ability. A creature,
+        artifact, enchantment or planeswalker spell is none of them, and CR
+        115.1d says when its entry trigger's target is chosen: "as the ability
+        is put on the stack".
+
+        This engine *names* that target as the permanent is cast (a standing
+        convention; ROADMAP, "Entry triggers are stack objects"), so the spell
+        carries it in the fields a targeted spell uses — and until this was
+        asked, the cast **announced** it too. Every "becomes the target of a
+        spell or ability" watcher heard about a target the spell does not
+        have: at the wrong time (the trigger did not exist yet), as the wrong
+        thing ("a spell", so Forsaken Wastes charged 5 life for a Man-o'-War),
+        for a spell that was then countered and whose trigger never existed,
+        and for a creature the trigger could not choose at all — with
+        Cowardice out, a White Knight named for a Nekrataal went back to its
+        owner's hand. Measured over the 32 permanents that name a permanent
+        this way: 32, 32, 32 of 32 countered, and 128 of 128.
+
+        Read by :meth:`_announce_targeting`, which emits off the stamped ids;
+        :meth:`announce_targets_chosen` reaches the same answer through
+        ``stack_targets.has_targets``. The trigger makes both announcements as
+        it is pushed.
+        """
+        # One definition, and it is the reader's: ``stack_targets
+        # .announcements`` answers "no targets" for exactly these objects, so
+        # what is announced and what is read cannot disagree about them.
+        from ..stack_targets import permanent_spell_targets_nothing
+
+        return permanent_spell_targets_nothing(item)
 
     def _stack_push_object(self, item, *, announce: bool = True) -> None:
         """Put *item* on the stack, recording its target's identity (CR 601.2c),
@@ -3047,6 +3108,11 @@ class GameHelpersMixin:
         """
         from ..events import emit
 
+        # CR 115.1: a permanent spell that is not an Aura is not targeted, so
+        # nothing "becomes the target" of it — whatever it carries is its
+        # entry trigger's, announced when that trigger is put on the stack.
+        if self.spell_targets_nothing(item):
+            return
         self._announce_targeted_player(item)
         ids = item.target_permanent_id
         if ids is None:
@@ -3122,6 +3188,24 @@ class GameHelpersMixin:
         if spec.get("land_filter"):
             # Volcanic Eruption's "X target Mountains": the seat beside them is
             # a battlefield, exactly as it is above.
+            return
+        # **…and so it is beside any object this announcement named.** "Any
+        # target" and "player or planeswalker" may choose a face *or* a
+        # permanent, and when a permanent is chosen the seat field holds whose
+        # battlefield it is on. ``stack_targets._read`` has said so since
+        # Psychic Battle ("the permanent ids decide, and only without any is
+        # the seat a chosen player") and this announcement never asked: a
+        # Lightning Bolt aimed at a Grizzly Bears announced the Bears *and* its
+        # controller, so Rayne, Academy Chancellor drew twice for one target.
+        #
+        # A spec that is a player and nothing else never reads an id as its
+        # target (a fire site may thread a reference through the field), so
+        # for that kind the seat is still the announcement.
+        ids = getattr(item, "target_permanent_id", None)
+        if spec.get("kind") != "player" and any(
+            isinstance(permanent_id, int)
+            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+        ):
             return
         emit(
             self, "self_becomes_target",
@@ -3200,6 +3284,9 @@ class GameHelpersMixin:
             return 0
         if newly_targeted:
             self._announce_targeting(item)
+        # ``has_targets`` is also what answers for a permanent spell that is
+        # not an Aura: it chose none (CR 115.1), though it carries the one its
+        # entry trigger will choose.
         if not has_targets(self, item):
             return 0
         seat = item.caster_index if chooser is None else chooser

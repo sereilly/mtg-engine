@@ -134,9 +134,15 @@ def test_w2g6_sleeping_potion_is_not_sacrificed_to_its_own_entry_trigger(
 def test_w2g6_an_entry_triggers_cast_time_target_is_announced_once(catalog_by_name):
     """Rayne, Academy Chancellor draws when a permanent its controller controls
     "becomes the target of a spell or ability an opponent controls". A
-    Man-o'-War cast at Rayne's controller's creature is that once — as it is
-    cast, in this engine's convention — and not a second time when the trigger
-    carrying the same target is put on the stack."""
+    Man-o'-War cast at Rayne's controller's creature is that **once** — when
+    the trigger carrying that target is put on the stack, which is the object
+    that targets (CR 115.1d) — and not also as the creature spell is cast.
+
+    This used to pin the other half of the same "once": the announcement was
+    made *as the creature spell was cast* ("in this engine's convention") and
+    suppressed at the trigger. A creature spell targets nothing (CR 115.1), so
+    that was Rayne drawing for a spell that could then be countered, and for a
+    target the trigger might not have been able to choose at all."""
     game = _w2g6_duel(catalog_by_name, [catalog_by_name["Man-o'-War"]])
     _w2g6_put(game, 1, catalog_by_name["Rayne, Academy Chancellor"])
     bears = _w2g6_put(game, 1, catalog_by_name["Grizzly Bears"])
@@ -144,17 +150,14 @@ def test_w2g6_an_entry_triggers_cast_time_target_is_announced_once(catalog_by_na
     assert game.queue_from_hand(
         0, "Man-o'-War", target_permanent_ids=[bears.permanent_id]
     ).supported
-    assert [item.card.name for item in game.stack] == [
-        "Man-o'-War", "Rayne, Academy Chancellor",
-    ]
-    assert game.resolve_top_of_stack()
-    game.auto_resolve_pending_choices()
-    assert len(game.players[1].hand) == 1, "Rayne drew for the cast"
+    assert [item.card.name for item in game.stack] == ["Man-o'-War"]
+    assert game.players[1].hand == [], "nothing was targeted by the cast"
 
     assert game.resolve_top_of_stack(), "the creature spell"
-    (trigger,) = game.stack
+    trigger, rayne = game.stack
     assert trigger.is_ability and trigger.card.name == "Man-o'-War"
     assert trigger.target_permanent_id == [bears.permanent_id]
+    assert rayne.card.name == "Rayne, Academy Chancellor", "above what it answers"
 
     resolve_stack(game)
     game.auto_resolve_pending_choices()

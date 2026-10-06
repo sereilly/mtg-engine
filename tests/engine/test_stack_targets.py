@@ -225,6 +225,24 @@ _UNFLAGGED_NON_TARGETS = frozenset({
 })
 
 
+def _is_an_untargeted_permanent_spell(item) -> bool:
+    """CR 115.1, spelled out here rather than asked of the reader: what is
+    targeted is an instant or sorcery spell (a), an Aura spell (b), an
+    activated ability (c) and a triggered ability (d). A creature, artifact,
+    enchantment or planeswalker spell that is not an Aura is none of them.
+
+    This census used to count such a cast as "chose a target" — 52 of them,
+    Man-o'-War and Nekrataal among them — because the engine names an entry
+    trigger's target as the permanent is cast and reported the name as the
+    spell's. The trigger chooses it (CR 115.1d), and is judged where triggers
+    are: ``test_a_triggered_ability_that_prints_a_target_has_one_on_the_stack``.
+    """
+    if item.is_ability:
+        return False
+    line = item.card.type_line or ""
+    return not any(word in line for word in ("Instant", "Sorcery", "Aura"))
+
+
 class _Sweep:
     """What one pass over the pool found."""
 
@@ -247,6 +265,7 @@ class _Sweep:
             and not spec_is_a_cost(spec)
             and not any(spec.get(flag) for flag in _NOT_A_TARGET_FLAGS)
             and label not in _UNFLAGGED_NON_TARGETS
+            and not _is_an_untargeted_permanent_spell(item)
         )
         if is_target:
             if not _names(named, targets):

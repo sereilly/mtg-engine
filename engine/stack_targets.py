@@ -321,22 +321,34 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
         # creature card in a graveyard" (Animate Dead) — the spec's kind says
         # which channel the target is in.
         return (_Announcement(spec, item),)
-    # Any other permanent spell targets nothing by the rules — and in this
-    # engine **carries its entry trigger's target**, announced as it is cast
-    # (``targeting._cast_target_spec``'s last branch; the standing
-    # approximation ``_apply_self_enters_battlefield_triggers`` documents).
-    # That announcement is the only moment the choice exists as a stack
-    # object's, so it is reported here, on the evidence of the trigger's own
-    # printed line.
-    for trig in program.triggered_abilities:
-        if (
-            trig.condition.kind in ENTRY_TRIGGER_CONDITIONS
-            and trig.supported
-            and trig.instruction is not None
-            and names_a_target(trig.source_line)
-        ):
-            return (_Announcement(spec, item),)
+    # **Any other permanent spell targets nothing** (CR 115.1 names what is
+    # targeted: an instant or sorcery spell, an Aura spell, an activated
+    # ability, a triggered ability). It *carries* its entry trigger's target —
+    # this engine names that as the permanent is cast — and this function used
+    # to report it as the spell's own, "the only moment the choice exists as a
+    # stack object's". It is not: the trigger is a stack object too, carries
+    # the same fields, and is what CR 115.1d says chose them. Reported for the
+    # spell as well, every reader that asks what an object targets had it
+    # twice and at the wrong moment — "becomes the target" announced for a
+    # creature spell that was then countered, 32 of 32.
     return ()
+
+
+def permanent_spell_targets_nothing(item) -> bool:
+    """Whether *item* is a **permanent spell that is not an Aura**: the one
+    kind of stack object that is untargeted whatever its target fields hold
+    (CR 115.1) — see the last branch of :func:`announcements`, which is this
+    question answered for the reader of targets.
+
+    Its own function for the one caller that announces rather than reads:
+    ``Game._announce_targeting`` emits "becomes the target" off the stamped
+    ids, without asking this module what they are.
+    """
+    card = getattr(item, "card", None)
+    if card is None or getattr(item, "is_ability", False):
+        return False
+    type_line = (card.type_line or "").lower()
+    return not ("instant" in type_line or "sorcery" in type_line or "aura" in type_line)
 
 
 def _spell_names_a_target(card) -> bool:

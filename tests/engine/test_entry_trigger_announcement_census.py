@@ -38,11 +38,19 @@ Validated backwards: with ``cast_announcement_fault`` answering "it stands",
 statement 2 fails naming 16 cards by a protected creature and Hunting Drake by
 every creature it was handed.
 
-What it does not reach, counted rather than hidden: sixteen entry triggers
-whose target is a **card in a graveyard** (Gravedigger, Karmic Guide) or that
-bind their object some other way (Goremand). ``_choose_trigger_targets`` makes
-no choice for those on any road, so there is no list to hold a cast's
+What it does not reach, counted rather than hidden: entry triggers that bind
+their object some other way (Goremand). ``_choose_trigger_targets`` makes no
+choice for those on any road, so there is no list to hold a cast's
 announcement to and it rides the object as before.
+
+It used not to reach the entry triggers whose target is a **card in a
+graveyard** (Gravedigger, Karmic Guide) either, for the same reason. They
+choose now, so the helpers below read a third kind of slot — a pile and a
+position in it — and those cards are held to the first statement here and to
+the bare-seat naming of the second. A spell's enumeration of graveyard cards
+is the trigger's own, so there is no wider list to name an illegal slot out
+of; what is particular to them (a slot the trigger cannot choose, a card that
+leaves, the prompt) is driven in ``test_graveyard_trigger_target_census.py``.
 """
 
 from __future__ import annotations
@@ -139,6 +147,12 @@ def _announcing_cards() -> tuple:
 def _slot(entry: dict) -> tuple:
     if entry.get("kind") == "player":
         return ("player", entry.get("seat"), None)
+    if entry.get("kind") == "graveyard":
+        # A card in a graveyard, by pile and slot. The cast picker spells the
+        # slot ``index`` and the trigger's prompt ``graveyard_index``; one key
+        # here so the two lists compare.
+        slot = entry["index"] if "index" in entry else entry.get("graveyard_index")
+        return ("graveyard", entry.get("seat"), slot)
     return ("permanent", entry.get("seat"), entry.get("index"))
 
 
@@ -155,8 +169,8 @@ def _own_list(card) -> "set | None":
         return set() if removed else None
     slots = set()
     for entry in prompts[0].data.get("targets") or ():
-        if entry.get("kind") == "player":
-            slots.add(("player", entry.get("seat"), None))
+        if entry.get("kind") in ("player", "graveyard"):
+            slots.add(_slot(entry))
             continue
         permanent = game.permanent_by_id(entry.get("permanent_id"))
         if permanent is not source:
@@ -168,9 +182,12 @@ def _own_list(card) -> "set | None":
 
 
 def _announce(game, card, slot) -> dict:
-    _kind, seat, index = slot
+    kind, seat, index = slot
     if index is None:
         return {"target_player_index": seat}
+    if kind == "graveyard":
+        # The pile and the slot of it, which is how a cast names a card there.
+        return {"target_player_index": seat, "target_permanent_index": index}
     return {"target_permanent_ids": [game.players[seat].battlefield[index].permanent_id]}
 
 
@@ -206,6 +223,13 @@ def _illegal_carried(game, card) -> list[str]:
             if target.kind == "player":
                 slot = ("player", target.seat, None)
                 label = f"player {target.seat}"
+            elif target.kind == "graveyard":
+                where = game.graveyard_index_of(target.stamp)
+                if where is None:
+                    found.append("a card that has left its graveyard")
+                    continue
+                slot = ("graveyard", target.stamp.seat, where)
+                label = f"{target.stamp.card.name} in a graveyard"
             else:
                 permanent = game.permanent_by_id(target.permanent_id)
                 if permanent is None or not game.is_on_battlefield(permanent):
@@ -342,8 +366,8 @@ def test_h1_a_seat_that_can_be_asked_is_asked_when_its_announcement_is_set_aside
             findings.append(f"{card.name}: the prompt is owed by seat {choice.player_index}")
         offered = set()
         for entry in choice.data.get("targets") or ():
-            if entry.get("kind") == "player":
-                offered.add(("player", entry.get("seat"), None))
+            if entry.get("kind") in ("player", "graveyard"):
+                offered.add(_slot(entry))
                 continue
             permanent = game.permanent_by_id(entry.get("permanent_id"))
             if permanent.card is card:
