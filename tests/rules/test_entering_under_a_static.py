@@ -19,9 +19,10 @@ permanent they will reach has none as it enters: it does not enter tapped,
 enters with no counters and makes no "as this enters" choice, whatever it
 prints. Every creature (noncreature artifact) in the pool whose entry differs
 from a vanilla one is entered under Humility (the Song): 133 creatures and 30
-artifacts. On the tree before the fix 68 of the creatures and 29 of the
+artifacts. On the tree before the fix 68 of the creatures and 28 of the
 artifacts entered as printed (the other creatures differ by an entry
-*trigger*, which already read the board).
+*trigger*, which already read the board; a Mox Diamond, which is a 0/0 under
+the Song and does not stay to be read, is left out of the 30).
 
 *What it will be.* Titania's Song, Opalescence and the five land animators
 make a permanent a creature; Containment Priest, Uphill Battle and Kismet read
