@@ -81,9 +81,13 @@ def test_w2g3_a_named_card_is_shown_to_every_seat():
     game.resolve_top_of_stack()
     assert game.pending_choice_of("enter_choice", 0) is not None
 
-    # The default is stamped as it enters and is already visible.
+    # Nothing is shown while the name is still being asked: the value stamped
+    # as it enters is the engine's placeholder, not a choice anyone has made.
+    # This asserted the opposite ("the default … is already visible") until a
+    # browser showed "Chosen color: white" beside a colour prompt still on the
+    # screen - and to an opponent, a card name nobody had named.
     before = _w2g3_permanent(sid, "Runed Halo", viewer=1)["entry_choices"]
-    assert [entry["label"] for entry in before] == ["Named card"]
+    assert before == []
 
     _w2g3_answer(sid, card_name="Lightning Bolt")
     for viewer in (0, 1, None):

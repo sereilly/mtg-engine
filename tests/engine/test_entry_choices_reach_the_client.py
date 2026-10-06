@@ -85,6 +85,13 @@ def _w2g3_entered(name: str):
     game = _w2g3_table()
     permanent = Permanent(card=_POOL[name])
     game._put_permanent_onto_battlefield(0, permanent, None)
+    # Three choosers queue their number even for a seat nobody asks
+    # (Shapeshifter, Minion of the Wastes, Phyrexian Processor). Until it is
+    # answered the permanent is still entering and reports nothing chosen.
+    for _ in range(4):
+        if not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
     return game, permanent
 
 
@@ -260,3 +267,43 @@ def test_w2g3_phantasmal_terrains_choice_is_the_lands_badge():
     aura = next(p for p in game.controlled_by(0) if p.card.name == "Phantasmal Terrain")
     assert _serialize_permanent(aura, game)["entry_choices"] == []
     assert _serialize_permanent(forest, game)["land_type_override"] == "island"
+
+
+# --- Phase 5: a choice still being asked has not been made -------------------
+#
+# Found in a browser at the promotion, with Voice of All's colour prompt on the
+# screen and "Chosen color: white" already in the payload: the entry state
+# stamps a provisional default before it arms the prompt. Every test above
+# enters its permanent at a seat nobody asks, where that default *is* the
+# choice, so none of them could see it.
+
+#: A floor on the sweep below: how many choosers ask a human seat something as
+#: they enter, on this table. 38 on the day - 34 through `enter_choice`, three
+#: numbers and Primal Clay's body. (The "choose an opponent" cards ask nobody at
+#: a two-seat table: there is one opponent.)
+_ASKED_OF_A_HUMAN_FLOOR = 36
+
+
+def test_no_entry_choice_is_reported_while_its_prompt_is_still_open():
+    asked = 0
+    for name in _w2g3_choosers():
+        game = _w2g3_table()
+        game.interactive_seats = {0, 1}
+        permanent = Permanent(card=_POOL[name])
+        game._put_permanent_onto_battlefield(0, permanent, None)
+        if not game.permanent_is_entering(permanent):
+            continue
+        asked += 1
+        assert _serialize_permanent(permanent, game)["entry_choices"] == [], (
+            f"{name} reports a choice its controller is still being asked for"
+        )
+        for _ in range(4):
+            if not game.pending_choices:
+                break
+            game.auto_resolve_pending_choices()
+        assert not game.pending_choices, (name, [c.kind for c in game.pending_choices])
+        if name not in _SHOWN_ANOTHER_WAY:
+            assert _serialize_permanent(permanent, game)["entry_choices"], (
+                f"{name} answered its prompt and reports nothing"
+            )
+    assert asked >= _ASKED_OF_A_HUMAN_FLOOR, asked

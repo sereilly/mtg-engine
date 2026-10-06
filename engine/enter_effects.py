@@ -2053,7 +2053,21 @@ def chosen_as_entered(game, permanent) -> "list[dict[str, str]]":
     enters, in the open, and no sentence these rows read says "secretly" —
     ``test_entry_choices_reach_the_client.py`` fails if one ever does, because
     a hidden choice must not be sent to a viewer who may not see it.
+
+    **A choice still being asked has not been made.** The entry state stamps a
+    provisional default on the permanent before it arms the prompt, so that no
+    reader ever meets the record missing; until the seat answers, that value
+    is the engine's placeholder and not anything a player chose. Reported, it
+    read "Chosen color: white" beside a Voice of All whose colour prompt was
+    still on the screen — found by driving the card in a browser, since every
+    test of this field entered its permanent at a seat nobody asks. The
+    question is the one the state-based sweep already asks of a permanent
+    whose entry is unfinished (``Game.permanent_is_entering``), so it covers
+    every prompt kind an entry arms: the colour and name choices, a number
+    (Shapeshifter), a life payment (Phyrexian Processor).
     """
+    if game.permanent_is_entering(permanent):
+        return []
     shown = []
     for row in entry_choices_of(permanent.effective_card):
         if row.key not in permanent.metadata:

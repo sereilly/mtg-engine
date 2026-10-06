@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **4764**
-- Passed: **643** (404 checked in-game, 239 auto-passed)
+- Passed: **646** (407 checked in-game, 239 auto-passed)
 - Failed: **0**
 - Equivalent to a passing card: **52**
-- Untested: **4069**
+- Untested: **4066**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -2453,7 +2453,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Maze of Shadows | ⬜ untested |  |
 | Mazemind Tome | ⬜ untested |  |
 | Meddle | ⬜ untested |  |
-| Meddling Mage | ⬜ untested |  |
+| Meddling Mage | ✅ pass |  |
 | Medicine Bag | ⬜ untested |  |
 | Meditate | ⬜ untested |  |
 | Meekstone | ✅ pass |  |
@@ -3610,7 +3610,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shield Sphere | ⬜ untested |  |
 | Shield Wall | ⬜ untested |  |
 | Shield of the Ages | ⬜ untested |  |
-| Shifting Sky | ⬜ untested |  |
+| Shifting Sky | ✅ pass |  |
 | Shifting Wall | ⬜ untested |  |
 | Shimian Night Stalker | ⬜ untested |  |
 | Shimmer | ⬜ untested |  |
@@ -4502,7 +4502,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Vodalian Soldiers | ✅ pass | auto-pass: no abilities |
 | Vodalian War Machine | ⬜ untested |  |
 | Vodalian Zombie | ✅ pass | auto-pass: keywords only (protection from green) |
-| Voice of All | ⬜ untested |  |
+| Voice of All | ✅ pass |  |
 | Voice of Duty | ✅ pass | auto-pass: keywords only (flying, protection from green) |
 | Voice of Grace | ✅ pass | auto-pass: keywords only (flying, protection from black) |
 | Voice of Law | ✅ pass | auto-pass: keywords only (flying, protection from red) |
