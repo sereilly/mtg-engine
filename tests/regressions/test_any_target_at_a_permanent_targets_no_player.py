@@ -24,11 +24,13 @@ import pytest
 
 import engine.events as events
 from engine import Game, PlayerState
+from engine.faces import face_cards
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from tests.helpers import resolve_stack
 
-#: A floor, because a sweep that reaches nothing passes. 50 on the day.
+#: A floor, because a sweep that reaches nothing passes. 51 on the day, one of
+#: them a split card's half.
 _MIN_SPELLS = 40
 
 
@@ -62,31 +64,38 @@ def test_no_spell_aimed_at_a_permanent_announces_its_controller(
     examined = 0
     findings: list[str] = []
     for card in catalog:
-        if card.primary_type not in ("instant", "sorcery"):
-            continue
-        program = compile_card_oracle(card)
-        if not program.supported or program.modes:
-            continue
-        game = _duel(catalog_by_name, hand=[card])
-        bears = Permanent(card=catalog_by_name["Grizzly Bears"])
-        game._put_permanent_onto_battlefield(1, bears, None)
-        offered = game.cast_target_spec(0, card).get("valid_targets") or ()
-        faces = any(entry.get("kind") == "player" for entry in offered)
-        at_the_bears = any(
-            entry.get("kind") == "permanent"
-            and game.permanent_at(entry["seat"], entry["index"]) is bears
-            for entry in offered
-        )
-        if not (faces and at_the_bears):
-            continue
-        _targeted_seats.clear()
-        if not game.queue_from_hand(
-            0, card.name, target_permanent_ids=[bears.permanent_id], x_value=1,
-        ).supported:
-            continue
-        examined += 1
-        if _targeted_seats:
-            findings.append(f"{card.name}: named the Bears, announced seat(s) {_targeted_seats}")
+        # Half by half: a split card read whole is a supported program with no
+        # instructions, so a loop over whole cards would pass its halves
+        # without looking (tests/engine/test_face_blind_guards.py). The card is
+        # what is in the hand; the half is what is compiled and cast.
+        for face in (face_cards(card) or [card]):
+            if face.primary_type not in ("instant", "sorcery"):
+                continue
+            program = compile_card_oracle(face)
+            if not program.supported or program.modes:
+                continue
+            game = _duel(catalog_by_name, hand=[card])
+            bears = Permanent(card=catalog_by_name["Grizzly Bears"])
+            game._put_permanent_onto_battlefield(1, bears, None)
+            offered = game.cast_target_spec(0, face).get("valid_targets") or ()
+            a_face = any(entry.get("kind") == "player" for entry in offered)
+            at_the_bears = any(
+                entry.get("kind") == "permanent"
+                and game.permanent_at(entry["seat"], entry["index"]) is bears
+                for entry in offered
+            )
+            if not (a_face and at_the_bears):
+                continue
+            _targeted_seats.clear()
+            if not game.queue_from_hand(
+                0, face.name, target_permanent_ids=[bears.permanent_id], x_value=1,
+            ).supported:
+                continue
+            examined += 1
+            if _targeted_seats:
+                findings.append(
+                    f"{face.name}: named the Bears, announced seat(s) {_targeted_seats}"
+                )
 
     assert not findings, f"{len(findings)} of {examined}: " + "; ".join(findings[:12])
     assert examined >= _MIN_SPELLS, f"only {examined} spells driven"
