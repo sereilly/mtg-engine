@@ -117,19 +117,24 @@ class GameEndingMixin:
         Idempotent: the once-per-turn flag and the per-seat announced count are
         what a second call finds already spent.
 
-        **Its own method because it has two callers.** The state-based sweep
-        below is the general one: there is no single draw seam, so a site every
-        action already passes through cannot be forgotten by the next card. The
-        draw step is the other, and the reason this was lifted out of that
-        sweep: CR 504.2 gives the active player priority *after* the turn-based
+        **Its own method because it was lifted out for a second caller.** The
+        state-based sweep below is the general one: there is no single draw
+        seam, so a site every action already passes through cannot be
+        forgotten by the next card. The draw step was the other, and the
+        reason this was lifted out of that sweep: CR 504.2 gives the active
+        player priority *after* the turn-based
         draw, and CR 603.3 puts a trigger on the stack the next time a player
         would receive priority — but the step went from its draw straight to an
         empty priority window, so "whenever a player draws a card" off the
         draw step's own draw (Underworld Dreams, Phyrexian Tyranny) reached
         the stack a phase late, after the drawing player had played a land
-        they could then tap for Tyranny's {2}. The step asks for the
-        announcement alone rather than the whole state-based check, because
-        that is the whole of what was missing there.
+        they could then tap for Tyranny's {2}. The step asked for the
+        announcement alone for one set; it runs the whole state-based check
+        now (CR 704.3 — a draw from an empty library is CR 704.5b's to notice
+        at the same moment), which makes this call the sweep's again. It stays
+        a method of its own because the announcement is one idempotent thing
+        with a name, and the next caller that needs only it should not have to
+        lift it out a second time.
         """
         from ..events import emit
 

@@ -334,20 +334,30 @@ class DrawStepMixin:
         # exemption is one draw, not one event.
         drawn = self._draw_with_replacements(player, 1 + bonus, turn_based=True)
         self.log.append(f"{player.name} drew {drawn} card(s) in draw step")
-        # CR 504.2: "Second, the active player gets priority" — and CR 603.3
-        # puts every ability that triggered on the draw just made onto the
-        # stack *before* that. The announcement lives on the state-based sweep,
-        # which had not yet read this step's draw when the window below opened
-        # on an empty stack and closed again, so "whenever a player draws a
-        # card" (Underworld Dreams, Phyrexian Tyranny) reached the stack
-        # whenever something next happened to run the sweep — a main phase
-        # later, after the drawing player had played a land they could then tap
-        # for Tyranny's {2}.
+        # CR 504.2: "Second, the active player gets priority" — and CR 704.3
+        # checks state-based actions "whenever a player would get priority",
+        # then puts every ability that has triggered onto the stack (CR 603.3),
+        # *before* that. Two things the step's own draw may have done wait on
+        # that check:
         #
-        # The announcement alone, not the whole sweep: this step's own
-        # state-based check (a draw from an empty library, CR 704.5b) is still
-        # made where it always was, and moving *that* is a different change
-        # with a different blast radius.
-        self.announce_draws()
+        # * **CR 121.4 / CR 704.5b**: "A player who attempts to draw a card from
+        #   a library with no cards in it loses the game the next time a player
+        #   would receive priority." This step went from its draw straight to
+        #   the priority window, which runs no check when the stack is empty —
+        #   so a seat that decked itself here stayed in the game until
+        #   something else happened to run the sweep, a main phase later and
+        #   after it had played a land and cast its spells.
+        # * "Whenever a player draws a card" (Underworld Dreams, Phyrexian
+        #   Tyranny). The announcement lives on the same sweep
+        #   (``announce_draws``), so without it those reached the stack a phase
+        #   late, after the drawing player had played a land they could then
+        #   tap for Tyranny's {2}.
+        #
+        # This asked for the announcement alone for one set, on the stated
+        # ground that the whole check had "a different blast radius". Measured:
+        # one test, a three-seat fixture whose players had no libraries and so
+        # drew from nothing on the first turn (CR 103.8c: only a two-player
+        # game skips that draw) — a test passing on the defect.
+        self.check_state_based_actions()
         self._close_or_defer_step(phase, step, defer_priority)
         return drawn
