@@ -1180,7 +1180,17 @@ def test_spell_blast_does_not_counter_spell_with_wrong_x(all_cards):
     game.queue_from_hand(1, "Air Elemental")
     result = game.cast_from_hand(0, "Spell Blast", target_player_index=1, x_value=2)
 
-    assert result.supported
+    # "Counter target spell with mana value X": at X = 2 a five-mana spell is
+    # no target, and with nothing else on the stack the announcement cannot be
+    # made (CR 601.2c). This asserted the cast was *accepted* — paid for, and
+    # resolved countering nothing; a bare cast is answered from the picker's
+    # list for the X it announced now, and that list is empty.
+    assert not result.supported
+    assert result.details == "no valid target for Spell Blast"
+    assert p1.hand == [blast]
     assert not any("Spell Blast countered" in line for line in game.log)
     # The Air Elemental still resolves
+    from tests.helpers import resolve_stack
+
+    resolve_stack(game)
     assert any(p.card.name == "Air Elemental" for p in p2.battlefield)

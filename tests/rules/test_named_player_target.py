@@ -105,19 +105,30 @@ def test_a_player_with_shroud_cannot_be_named(catalog_by_name):
 
 @pytest.mark.cr("601.2c", "702.18a")
 def test_a_cast_naming_nobody_is_not_aimed_at_a_player_with_shroud(catalog_by_name):
-    """The headless default is a target too. A bare Lightning Bolt resolves at
-    the opposing seat; with that seat behind an Ivory Mask the default is one
-    the picker would not offer, and the cast says so instead of resolving."""
-    game = _duel(catalog_by_name, ["Lightning Bolt"], opp_board=["Ivory Mask"], mana={"R": 1})
+    """The headless default is a target too. A bare Lightning Bolt used to
+    resolve at the opposing seat whatever the picker said; with that seat
+    behind an Ivory Mask it is not a target anybody may name.
 
-    refused = game.cast_from_hand(0, "Lightning Bolt")
-
-    assert not refused.supported
-    assert refused.details == (
-        "Lightning Bolt has to name its target: P1 can't be chosen (CR 601.2c)"
+    **What the cast does instead changed with the default.** This asserted a
+    refusal ("…has to name its target: P1 can't be chosen"), the answer of the
+    round that found it. A cast that names nobody now names the picker's first
+    entry in standing order (``engine/bare_announcements.py``) — the default
+    every other owed target gets — so the statement the rule makes is kept
+    and the cast is not refused: the shrouded player is passed over for the
+    next legal target, here a creature on that player's battlefield.
+    """
+    game = _duel(
+        catalog_by_name, ["Lightning Bolt"],
+        opp_board=["Ivory Mask", "Hill Giant"], mana={"R": 1},
     )
+    giant = game.players[1].battlefield[1]
+
+    cast = game.cast_from_hand(0, "Lightning Bolt")
+
+    assert cast.supported
     assert game.players[1].life == 20
-    assert game.players[0].mana_pool["R"] == 1
+    assert giant.damage_marked == 3 or not game.is_on_battlefield(giant)
+    assert game.players[0].life == 20
 
     # Nothing about an unprotected table changes: the bare cast is the bolt to
     # the opposing face it has always been.

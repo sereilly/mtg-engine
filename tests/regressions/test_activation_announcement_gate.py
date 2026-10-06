@@ -46,8 +46,8 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.targeting import (
-    ROLES_TARGET_KIND, derive_activation_spec, spec_is_a_cost,
-    usable_activated_abilities,
+    ROLES_TARGET_KIND, activation_target_slot, derive_activation_spec,
+    spec_is_a_cost, usable_activated_abilities,
 )
 from tests.helpers import _nosick, resolve_stack
 
@@ -200,13 +200,24 @@ def _named_sweep(catalog, by_name, only=None):
         abilities += 1
         offered = _offer(game, source, index)
         label = f"{card.name}[{index}]"
+        # "{T}: Untap **two** target lands" (Argothian Elder). This sweep
+        # names one object at a time, and for a printed count one object is
+        # an announcement the gate refuses however legal that object is
+        # (CR 601.2c: two means two — the gate counts since
+        # `test_activation_count_and_chosen_source.py`). It used to accept
+        # one, which is what let these three abilities be swept this way; a
+        # refusal of an *offered* target is not a finding for them.
+        slot = activation_target_slot(ability)
+        counted = slot is not None and (
+            legality.exact_target_count(slot[0], slot[1], 1) or 0
+        ) >= 2
 
         def judge(refusal, is_offered, what):
             nonlocal announcements
             announcements += 1
             if refusal is None and not is_offered:
                 accepted_unoffered.append((label, kind, what))
-            if refusal is not None and is_offered:
+            if refusal is not None and is_offered and not counted:
                 refused_offered.append((label, kind, what, refusal))
 
         if kind == "graveyard_creature":
@@ -548,9 +559,10 @@ def test_the_only_legal_target_is_the_one_a_bare_activation_names(_by_name):
     """"{1}{R}, {T}: Tahngarth deals damage equal to its power to target
     creature. That creature deals damage equal to its power to Tahngarth."
     Alone on the battlefield Tahngarth is its own only legal target. The
-    handler's own pick looks at the other side of the table, so the ability
-    used to tap Tahngarth and do nothing; with one legal announcement there is
-    nothing to choose between, and the engine makes it."""
+    handler's own pick looked at the other side of the table, so the ability
+    used to tap Tahngarth and do nothing; a bare activation names the
+    picker's first entry (``engine/bare_announcements.py``), and here that
+    is the only one."""
     game, (tahngarth,), _ = _table(_by_name, ["Tahngarth, Talruum Hero"])
 
     result = game.activate_permanent_ability(0, "Tahngarth, Talruum Hero")
@@ -564,10 +576,12 @@ def test_the_only_legal_target_is_the_one_a_bare_activation_names(_by_name):
     assert not game.is_on_battlefield(tahngarth)    # 8 damage on a 4/4
 
 
-def test_several_legal_targets_leave_a_bare_activation_to_the_handler(_by_name):
-    """…and only then. With two creatures to choose between the announcement
-    is not the engine's to make, and the handler's standing pick — the
-    opposing creature — is what resolves, as it always has."""
+def test_with_several_legal_targets_the_default_is_the_opposing_seats_first(_by_name):
+    """…and with two creatures to choose between it is the first in standing
+    order: the opposing seat's, which is where an unnamed target has always
+    been looked for. (This test used to pin "the handler's pick"; the pick is
+    the announcement's now, made once and stamped on the stack object, and
+    for this board it is the same creature.)"""
     game, (tahngarth,), (bears,) = _table(
         _by_name, ["Tahngarth, Talruum Hero"], ["Grizzly Bears"],
     )
@@ -588,7 +602,15 @@ def test_a_creature_only_shield_announced_bare_never_arms_a_player(_by_name, nam
     player" — "any target"'s answer — and the default seat is the opponent:
     eight of the pool's ten such abilities shielded the *opponent* when
     announced bare. A player is not a creature; the bare announcement takes
-    the first creature the picker offers, the controller's own first."""
+    the first creature the picker offers.
+
+    **Which creature moved with the default.** The last round answered this
+    in the shield handler, "the controller's own first (a shield is a
+    benefit)". The answer is the announcement's now — one default for every
+    sentence, drawn from the picker's list in standing order — and standing
+    order is where an unnamed target is looked for, not what is good for the
+    activator: the opposing seat's first creature, exactly as for a bare
+    destroy. A caller that means its own creature names it."""
     game, mine, (theirs,) = _table(
         _by_name, [name, "Plains", "Grizzly Bears"], ["Grizzly Bears"],
     )
@@ -598,15 +620,15 @@ def test_a_creature_only_shield_announced_bare_never_arms_a_player(_by_name, nam
 
     assert result.supported, result.details
     assert not shields_on(game.players[0]) and not shields_on(game.players[1])
-    assert not shields_on(theirs)
-    shielded = [permanent for permanent in mine if shields_on(permanent)]
-    assert len(shielded) == 1 and shielded[0].is_creature
+    assert shields_on(theirs)
+    assert not any(shields_on(permanent) for permanent in mine)
 
 
 def test_the_bare_shield_default_is_a_legal_target(_by_name):
     """The default is the picker's, so it is a creature the ability could have
     targeted: a Black Knight has protection from white and Samite Sanctuary is
-    white, so the Knight in front of the Bears is passed over."""
+    white, so the Knight in front of the Bears is passed over. (With nothing
+    across the table, the picker's list is the activator's own creatures.)"""
     game, (_sanctuary, knight, bears), _ = _table(
         _by_name, ["Samite Sanctuary", "Black Knight", "Grizzly Bears"],
     )

@@ -410,6 +410,22 @@ def _action_activate(session, req, seat_type):
         usable = session.game.usable_abilities_of(
             permanent, card=permanent.effective_card
         )
+        # …and an index that names **no** ability of a land that still has its
+        # own is refused the same way, rather than read as "no ability named".
+        # It fell through both arms below: a Mishra's Factory asked for its
+        # ability 7 was tapped for mana, and a land that makes none ran its
+        # first ability instead. The index is the menu position the server
+        # handed the client, so one outside the list is a menu the board has
+        # moved under (a granted ability that left) — a stale request, and a
+        # stale request is a 400, never a different action.
+        if req.ability_index is not None and not 0 <= req.ability_index < len(usable):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{permanent.card.name} has no ability at index "
+                    f"{req.ability_index}"
+                ),
+            )
         chosen_ability = None
         if req.ability_index is not None and 0 <= req.ability_index < len(usable):
             chosen_ability = usable[req.ability_index]

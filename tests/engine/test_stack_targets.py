@@ -35,6 +35,7 @@ from engine import Game, PlayerState
 from engine.card_loader import load_cards, manifest_set_paths
 from engine import faces
 from engine import stack_targets
+from engine.bare_announcements import default_activation_target
 from engine.models import CardDefinition, Permanent
 from engine.modal_triggers import modal_trigger_modes
 from engine.oracle import compile_card_oracle
@@ -323,13 +324,13 @@ def _sweep_activations(pool, by_name, only=None) -> _Sweep:
             if keywords is None:
                 # ``_first_pick`` never names the source, so an ability whose
                 # only legal target is its own source is activated naming
-                # nothing — and an activation that owes a target, names none
-                # and has exactly one legal one **announces that one**
-                # (``Game.sole_legal_activation_target``; Alpha Kavu's "target
-                # Kavu creature" with no other Kavu). It used to go on the
-                # stack with no target at all and resolve doing nothing, which
-                # this sweep counted as an untargeted object.
-                sole = game.sole_legal_activation_target(0, source, ability, x_value=0)
+                # nothing — and an activation that owes a target and names
+                # none **announces the picker's first entry**
+                # (``bare_announcements.default_activation_target``; Alpha
+                # Kavu's "target Kavu creature" with no other Kavu). It used
+                # to go on the stack with no target at all and resolve doing
+                # nothing, which this sweep counted as an untargeted object.
+                sole = default_activation_target(game, 0, source, ability, x_value=0)
                 if sole is not None and sole.get("kind") == "permanent":
                     chosen = game.permanent_at(sole["seat"], sole["index"])
                     named = ("permanent", chosen.permanent_id)

@@ -22,6 +22,8 @@ import re
 from .._constants import _MANA_SYMBOLS as _POOL_SYMBOLS
 from ...cast_permissions import consume as consume_permission, permission_for
 from ...auras import aura_enchant_clause
+from ...bare_announcements import (announced_fields, default_cast_target,
+                                   names_an_object, seat_of_unseated_slot)
 from ...alternative_costs import (AlternativeCost, alternative_costs,
                                   board_noun)
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
@@ -163,6 +165,26 @@ def _optional_cost_announcement(
             )
         taken[key] = count
     return taken, None
+
+
+def _taken_offers(announced: dict | None) -> dict[str, int]:
+    """The optional additional costs an announcement **took**, by key — the
+    half of :func:`_optional_cost_announcement` that does not judge them.
+
+    For a reader that needs CR 601.2b's answer before that gate has run: the
+    bare-cast default asks which slot the cast owes (CR 702.33g — a
+    kicked-only target is a target of a kicked cast alone), and an
+    announcement the gate goes on to refuse has cost nothing by then.
+    """
+    taken: dict[str, int] = {}
+    for symbols, times in (announced or {}).items():
+        try:
+            count = int(times or 0)
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            taken[str(symbols)] = count
+    return taken
 
 
 def _optional_cost_totals(
@@ -1111,6 +1133,70 @@ class SpellCastingMixin:
                 card.name, False, classification.effect_kind, prohibition.details
             )
 
+        if (
+            not mode_choices
+            and target_player_index is None
+            and target_permanent_ids is None
+            and card.primary_type in ("instant", "sorcery")
+            and graveyard_target_spec(
+                card, compile_card_oracle(card), mode_index=mode_index
+            ) is None
+        ):
+            # CR 601.2c, completed before CR 601.2f determines the cost: a
+            # slot named beside **no seat** that the opposing seat does not
+            # have is the caster's own (`seat_of_unseated_slot`) — the reading
+            # `cast_target_refusal` judges it under, written onto the
+            # announcement so the object carries the permanent it names.
+            unseated = seat_of_unseated_slot(
+                self, caster_index, target_permanent_index,
+                self._spell_default_seat(caster_index),
+            )
+            if unseated is not None:
+                target_player_index = unseated
+                target_permanent_ids = [
+                    self.permanent_at(
+                        self.players[unseated], target_permanent_index
+                    ).permanent_id
+                ]
+        # **A cast that owes a target and named none names the first one its
+        # picker offers** (``engine/bare_announcements.py``) — here, because
+        # CR 601.2c chooses the targets before CR 601.2f determines the cost,
+        # and the taxes below are scoped to what the spell *targets*. A
+        # headless caller's omission used to be answered at resolution by
+        # whichever handler ran, from its own scan of a battlefield: the scan
+        # knows what the sentence names and nothing of what may be targeted
+        # (Ray of Command took a creature with shroud), the stack object
+        # carried no target for CR 608.2b to re-check or for anything to
+        # respond to, and a target nobody announced paid no targeting tax.
+        #
+        # The default is an entry of the list `cast_target_refusal` judges a
+        # named target by, so every gate below sees an announcement it would
+        # have accepted from a caller who named it. A "choose one or more"
+        # cast names its targets on each mode, and is defaulted there.
+        no_target_answers_x = False
+        if not mode_choices and not names_an_object(
+            target_permanent_index, target_permanent_ids,
+            target_stack_index
+            if target_stack_index is not None
+            and 0 <= target_stack_index < len(self.stack) else None,
+            None, divided_targets,
+        ):
+            default, no_target_answers_x = default_cast_target(
+                self, caster_index, card,
+                named_seat=target_player_index,
+                optional_cost_payments=_taken_offers(optional_cost_payments),
+                x_value=x_value, mode_index=mode_index,
+            )
+            named = announced_fields(self, default) if default is not None else {}
+            if "target_player_index" in named:
+                target_player_index = named["target_player_index"]
+            if "target_permanent_index" in named:
+                target_permanent_index = named["target_permanent_index"]
+            if named.get("target_permanent_ids"):
+                target_permanent_ids = named["target_permanent_ids"]
+            if "target_stack_index" in named:
+                target_stack_index = named["target_stack_index"]
+
         # What the spell points at, computed once: both taxes whose scope is
         # "that target this creature" need it, and the mana one is charged at
         # CR 601.2f while the life one is charged at 601.2h — the same fact,
@@ -1421,6 +1507,26 @@ class SpellCastingMixin:
         if mode_denial is not None:
             self.log.append(mode_denial)
             return SimulationResult(card.name, False, classification.effect_kind, mode_denial)
+        for mode in chosen_modes:
+            # …and the same default for each mode of a "choose one or more"
+            # cast that owes a target and named none (CR 601.2c, per mode).
+            if names_an_object(
+                mode.target_permanent_index, None, mode.target_stack_item,
+            ):
+                continue
+            default, _unanswerable = default_cast_target(
+                self, caster_index, card,
+                named_seat=mode.target_player_index,
+                optional_cost_payments=optional_paid,
+                x_value=x_value, mode_index=mode.index,
+            )
+            named = announced_fields(self, default) if default is not None else {}
+            if "target_player_index" in named:
+                mode.target_player_index = named["target_player_index"]
+            if "target_permanent_index" in named:
+                mode.target_permanent_index = named["target_permanent_index"]
+            if "target_stack_item" in named:
+                mode.target_stack_item = named["target_stack_item"]
         if chosen_modes:
             # Everything that reads one mode reads the first chosen one
             # (CR 608.2c resolves them in printed order, and the list is held in
@@ -1475,6 +1581,14 @@ class SpellCastingMixin:
                 optional_cost_payments=optional_paid, x_value=x_value,
                 mode_index=announced_mode,
             )
+            if unaimed is None and no_target_answers_x:
+                # …and the one shape of "nothing to name" that list cannot
+                # show: entries, and an announced X none of them answers
+                # ("destroy target artifact with mana value X", Detonate, cast
+                # bare for an X no artifact has — `bare_announcements.
+                # default_cast_target`). It was accepted, paid for and
+                # resolved onto nothing.
+                unaimed = f"no valid target for {card.name}"
             if unaimed is not None and mode_stack_item is None:
                 self.log.append(unaimed)
                 return SimulationResult(card.name, False, classification.effect_kind, unaimed)

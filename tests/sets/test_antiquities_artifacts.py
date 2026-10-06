@@ -36,7 +36,13 @@ def test_urzas_chalice_ignores_a_nonartifact_spell(set_pool):
     pool = set_pool("ATQ")
     chalice = Permanent(card=pool["Urza's Chalice"])
     p1 = PlayerState(name="P1", battlefield=[chalice], hand=[pool["Detonate"]])
-    game = Game(players=[p1, PlayerState(name="P2")])
+    # An artifact across the table for Detonate to be aimed at. Cast bare with
+    # the Chalice the only artifact in the game, the spell used to find no
+    # target and resolve doing nothing — which is what kept the Chalice's name
+    # out of the log. A bare cast names the picker's first target now, and
+    # with nothing else to name that was the Chalice itself.
+    thopter = Permanent(card=pool["Ornithopter"])
+    game = Game(players=[p1, PlayerState(name="P2", battlefield=[thopter])])
 
     game.cast_from_hand(0, "Detonate")
 

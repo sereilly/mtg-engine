@@ -72,9 +72,15 @@ def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[boo
     ``resolved`` is folded in as each step goes, not tallied afterwards.
     """
     outcome = {"resolved": False}
+    # The roles description of the nearest earlier step that spent one role of
+    # a several-role announcement — the antecedent of a back-reference behind
+    # it (see ``_antecedent_scoped``).
+    antecedent: dict = {"spent": None}
 
     def run_step(step) -> None:
         scoped = _role_scoped(game, step, context)
+        if scoped is context:
+            scoped = _antecedent_scoped(game, step, context, antecedent["spent"])
         if scoped is None:
             # CR 608.2b's last sentence: the announcement named this step's
             # object and it is no longer there, so the step does nothing while
@@ -82,11 +88,68 @@ def _run(game: Game, steps: tuple, context: OracleExecutionContext) -> tuple[boo
             # context with a hole in it, which is how a damage step whose
             # creature had died came to hit a face instead.
             return
+        antecedent["spent"] = _spent_role(step) or antecedent["spent"]
         supported, _ = game._execute_oracle_instruction(step, scoped)
         outcome["resolved"] = outcome["resolved"] or supported
 
     run_resumable(game, steps, run_step)
     return True, "resolved" if outcome["resolved"] else "no effect"
+
+
+def _spent_role(step: OracleInstruction) -> dict | None:
+    """The several-role description *step* carries, marked with the one role
+    it acts on, or None for a step that spends no role.
+
+    Two spellings of "which role is mine" exist and both are read: the key
+    inside the description (``targeting.payload_own_role``, a step of a
+    sentence spent a role at a time) and ``subject_role`` beside it (a
+    one-instruction roles sentence whose handler asks for its role by name —
+    "Put X glyph counters on target creature that target Wall blocked").
+    """
+    from ..targeting import payload_own_role, spec_roles
+
+    payload = step.payload if isinstance(step.payload, dict) else {}
+    described = payload.get("targets")
+    if not isinstance(described, dict) or not spec_roles(described):
+        return None
+    role = payload_own_role(payload) or payload.get("subject_role")
+    if not isinstance(role, str):
+        return None
+    return {**described, "role": role}
+
+
+def _antecedent_scoped(
+    game: Game, step: OracleInstruction, context: OracleExecutionContext,
+    spent: dict | None,
+):
+    """*context* for a **back-reference** behind a step that spent one role of
+    a several-role announcement: narrowed to that role's object. *context*
+    itself for every other step.
+
+    "Put X glyph counters on target creature that target Wall blocked this
+    turn… **The creature** gains "This creature doesn't untap…"" (Glyph of
+    Delusion). The second sentence names no target of its own — its "the
+    creature" is the first sentence's — so its step carries no description,
+    and against the unscoped announcement its handler read slot 0: the
+    *Wall*. The grant landed on the right creature anyway, and only by
+    accident: the Wall sits on the other battlefield, the resolver declined
+    it, and its fall-through scan took the first creature on the seat it was
+    looking at. An announced object has no scan
+    (``_common.pick_target_permanent``), so the antecedent is said here
+    instead: a step with no ``targets`` and no steps of its own, behind a step
+    that spent a role, is about that role's object.
+
+    None where that object has left (CR 608.2b), exactly as ``_role_scoped``
+    answers for a step naming the role itself.
+    """
+    from ..targeting import _nested_steps
+
+    payload = step.payload if isinstance(step.payload, dict) else {}
+    if spent is None or "targets" in payload or _nested_steps(step):
+        return context
+    return _role_scoped(
+        game, dataclasses.replace(step, payload={"targets": spent}), context
+    )
 
 
 def _role_scoped(

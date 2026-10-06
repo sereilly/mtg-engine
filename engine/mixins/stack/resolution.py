@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 
+from ...bare_announcements import resolving_slots
 from ...auras import aura_enchant_clause
 from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
@@ -395,11 +396,24 @@ class StackResolutionMixin:
             if item.target_player_index is not None
             else self._default_opposing_seat(item.caster_index)
         )
+        target_permanent_index = item.target_permanent_index
+        if item.activated:
+            # CR 602.2b: an activated ability's slot is re-read off the ids
+            # its announcement stamped, as a spell's is
+            # (`bare_announcements.resolving_slots`). Not for a triggered
+            # ability, whose fire site threads other things through these
+            # fields.
+            target_permanent_index = resolving_slots(
+                self, self.players[target_idx], target_permanent_index,
+                item.target_permanent_id, card=item.card,
+                mode_index=item.chosen_mode_index,
+                instruction=item.ability_instruction,
+            )
         return OracleExecutionContext(
             caster=self.players[item.caster_index],
             target=self.players[target_idx],
             card=item.card,
-            target_permanent_index=item.target_permanent_index,
+            target_permanent_index=target_permanent_index,
             target_permanent_id=item.target_permanent_id,
             # The graveyard half of the same announcement, for a roles
             # instruction whose slots sit in two zones (Goblin Welder). Every
@@ -418,6 +432,9 @@ class StackResolutionMixin:
             # what "that creature" names ran a turn ago. Empty for every
             # other trigger, which is the scratchpad they already had.
             results=dict(item.captured_results),
+            # CR 602.2b: an activated ability's targets are its announcement's.
+            # A triggered ability's are its fire site's, and stay unmarked.
+            announced=bool(item.activated),
         )
 
     def trigger_condition_holds(self, item: StackItem) -> bool:
