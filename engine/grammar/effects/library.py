@@ -461,6 +461,32 @@ def _parse_look_other_library_tail(
     return ast.LookAtLibraryTop(count, owner)
 
 
+def _accept_unchosen_cards(
+    stream: TokenStream, count: ast.Amount, picks: ast.Amount
+) -> bool:
+    """The looked-at cards a pick leaves behind: "the rest" or "the other".
+
+    True when the sentence printed the singular. "**The other**" (Sleight of
+    Hand: "…and the other on the bottom of your library"; Waker of Waves: "…the
+    other into your graveyard") names exactly one card, so it is this sentence
+    only where the two printed numbers leave exactly one — a look at three that
+    spoke of "the other" would leave a card the sentence never placed, and it
+    refuses here rather than being read as "the rest".
+    """
+    if stream.accept_phrase("the", "other"):
+        leaves_one = (
+            isinstance(count, ast.Fixed)
+            and isinstance(picks, ast.Fixed)
+            and count.value - picks.value == 1
+        )
+        if not leaves_one:
+            raise stream.error("'the other' names one card, and this pick leaves more")
+        return True
+    for word in ("the", "rest"):
+        stream.expect_word(word)
+    return False
+
+
 def _parse_look_at_hand(stream: TokenStream) -> ast.Statement:
     """``Look at <player>'s hand.`` (Glasses of Urza.) — and every other look.
 
@@ -589,19 +615,6 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
             if offered is not None:
                 return offered
             return _parse_look_pick_tail(stream, count, already_split=True)
-        # "Put one of **them** into your hand and the other into your
-        # graveyard." (Waker of Waves.) A compulsory, unfiltered pick like See
-        # the Truth's, differing only in where the rest go — which is a
-        # difference the sentence states and this production requires, because
-        # a card that bottomed them instead is a different card.
-        mark = stream.mark()
-        if stream.accept_phrase(
-            "put", "one", "of", "them", "into", "your", "hand",
-            "and", "the", "other", "into", "your", "graveyard",
-        ):
-            return ast.LookTopPickToHand(count, rest_destination="graveyard")
-
-        stream.reset(mark)
         # "Exile four of them at random, **then** put the rest on top of your
         # library in any order." (Orcish Librarian.) Nothing is picked and
         # nothing reaches a hand, so it is a different statement that happens
@@ -673,7 +686,7 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
         for word in ("into", "your", "hand"):
             stream.expect_word(word)
         # "…, and **exile** the rest." (Browse.) The third destination, beside
-        # the graveyard branch above and the two library ends below, and read
+        # the graveyard branch and the two library ends below, and read
         # for their reason: where the unchosen cards go is the card's own
         # statement. Exiling them is what makes Browse a repeatable engine that
         # eats its own library rather than a re-orderer.
@@ -684,20 +697,21 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
                 count, pick_count=picks, rest_destination="exile"
             )
         stream.reset(exiled_rest)
-        # "…and the rest **into your graveyard**." (Ancestral Memories.) The
-        # graveyard spelled as a destination for the whole remainder, where
-        # Waker of Waves prints the same fate for a named single card ("the
-        # other"). The preposition differs from the two library ends below —
-        # "into" a graveyard, "on" a library — so it is read here rather than
-        # as a fourth alternative under the shared "on".
-        graveyard_rest = stream.mark()
-        if stream.accept_phrase("and", "the", "rest", "into", "your", "graveyard"):
+        # What is left is named either way — "the rest" (Impulse) or "the
+        # other" (Sleight of Hand, Waker of Waves) — by the one reader below,
+        # which is also what holds the singular to a pile that leaves one card.
+        stream.expect_word("and")
+        one_left = _accept_unchosen_cards(stream, count, picks)
+        # "…and the rest **into your graveyard**." (Ancestral Memories; Waker
+        # of Waves prints the same fate for "the other".) The preposition
+        # differs from the two library ends below — "into" a graveyard, "on" a
+        # library — so it is read here rather than as a fourth alternative
+        # under the shared "on".
+        if stream.accept_phrase("into", "your", "graveyard"):
             return ast.LookTopPickToHand(
                 count, pick_count=picks, rest_destination="graveyard"
             )
-        stream.reset(graveyard_rest)
-        for word in ("and", "the", "rest", "on"):
-            stream.expect_word(word)
+        stream.expect_word("on")
         # Where the rest go is the card's own statement and a real difference:
         # the bottom is out of reach, the top is the next N draws. Read rather
         # than assumed, the same rule the graveyard branch above states.
@@ -707,8 +721,12 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
             rest_destination = "library_top"
         else:
             raise stream.error("expected where the rest of the cards go")
-        for word in ("in", "any", "order"):
-            stream.expect_word(word)
+        # "in any order" is a freedom over several cards, so it is printed
+        # behind "the rest" and never behind "the other": one card has no
+        # order, and a line that printed the words there is not this sentence.
+        if not one_left:
+            for word in ("in", "any", "order"):
+                stream.expect_word(word)
         # See the Truth's cast-zone sentence, and only its. Optional because it
         # is a *rider* on this template rather than part of it: Diabolic Vision
         # prints the pick and stops, and demanding the sentence refused it for

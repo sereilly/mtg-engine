@@ -1480,6 +1480,39 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     excluded_colors = filt.get("exclude_colors") or ()
     if excluded_colors and any(color in colors for color in excluded_colors):
         return False
+    # "…for each **Mountain and red** card in it" (Baleful Stare). A union
+    # across two *axes* — CR 205.3 subtype against CR 105 colour — which the
+    # keys above cannot say because they are AND'd: ``subtype_filter`` plus
+    # ``color_filter`` names a red Mountain, a card nothing prints. The card
+    # twin of the permanent matcher's reading of the same key, alternative for
+    # alternative, off what is printed where that one asks the layers: a card
+    # answering two of the alternatives is still one card, because the union is
+    # a test of each card and never a tally of qualities.
+    any_classes = filt.get("any_classes")
+    if any_classes:
+        # Idempotent over the read the two subtype keys above may already have
+        # made, so the three subtype tests cannot disagree about a card.
+        class_subtypes = _zone_card_creature_types(
+            card, printed=subtypes, game=game, owner=owner
+        )
+
+        def _class_holds(entry) -> bool:
+            axis, name = entry[0], entry[1]
+            if axis == "color":
+                return name in colors
+            if axis == "card_type":
+                # The third element is a colour negation on this one member
+                # ("land or **nonblack** creature"), as it is on a permanent.
+                excluded = entry[2] if len(entry) > 2 else ()
+                return name in types and not any(c in colors for c in excluded)
+            if axis == "subtype":
+                return name in class_subtypes
+            # An axis nothing here reads refuses rather than being ignored: a
+            # dropped alternative widens the union to every card.
+            return False
+
+        if not any(_class_holds(entry) for entry in any_classes):
+            return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —

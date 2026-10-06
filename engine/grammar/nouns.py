@@ -96,13 +96,14 @@ def _color_alternative_offset(stream: TokenStream) -> int | None:
     """How many tokens ahead the next "…or <colour>" alternative's colour word
     sits, or None when there is not one there.
 
-    English writes the same list four ways, and all four are one union:
+    English writes the same list five ways, and all five are one union:
 
     * ``or blue permanent`` (Nature's Wrath),
     * ``or **a** white permanent`` (Omen of Fire) — a repeated article,
     * ``**,** mountain, black permanent`` — a comma with no connector,
     * ``**, or** red permanent`` (Royal Decree) — the last item of a list,
-      which carries both.
+      which carries both,
+    * ``**and** red card`` (Baleful Stare) — a union of two sets.
 
     A pure lookahead, so nothing is consumed until the caller has committed:
     the separator is what tells this from a phrase that simply ended, and a
@@ -111,6 +112,18 @@ def _color_alternative_offset(stream: TokenStream) -> int | None:
     offset = 1 if stream.at_punct(",") else 0
     if stream.peek_word(offset) == "or":
         offset += 1
+    elif offset == 0 and stream.peek_word(0) == "and":
+        # "for each **Mountain and red card** in it" (Baleful Stare). The same
+        # union written with the conjunction English uses for a union of two
+        # *sets* — the reading "Soldiers **and** Warriors" already gets one
+        # axis over. Held to a colour that is directly followed by the shared
+        # head noun, because "and" also joins two clauses: "sacrifice a Swamp
+        # and black creatures get …" has the colour and no head behind it.
+        if stream.peek_word(1) in COLOR_WORDS and stream.peek_word(2) in (
+            "card", "cards", "permanent", "permanents",
+        ):
+            return 1
+        return None
     elif offset == 0:
         # No separator at all: an adjacent colour word is an adjective on this
         # noun phrase, not another member of a union.
@@ -669,7 +682,7 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 saw_head_noun = False
                 while _color_alternative_offset(stream) is not None:
                     stream.accept_punct(",")
-                    stream.accept_word("or")
+                    stream.accept_word("or", "and")
                     stream.accept_word("a", "an")
                     alternatives.append(
                         ("color", COLOR_WORDS[str(stream.peek_word())])

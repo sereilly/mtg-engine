@@ -5709,3 +5709,178 @@ def test_a_singular_counter_phrase_is_still_a_narrowing_not_an_arrival():
     exiled, = _tmp_w3g5_lower("Exile target creature with a bounty counter on it.")
     assert exiled.kind == "exile_target_permanent"
     assert exiled.payload["with_named_counter"] == "bounty"
+
+
+# --- 7ED G1: "the other", and a union of two sets counted in a revealed hand ---
+#
+# The two productions Seventh Edition's unsupported cards needed (Sleight of
+# Hand, Baleful Stare), probed as sentences rather than as those cards — the
+# per-card behaviour is in `tests/sets/test_7ed_cards.py`. Imports are local to
+# this block.
+
+from engine.grammar import compile_line as _7ed_g1_compile_line
+
+
+def _7ed_g1_read(text: str):
+    result = _7ed_g1_compile_line(text, card_name="Probe")
+    return [(i.kind, behavioural_payload(i.payload)) for i in result.instructions or ()]
+
+
+_7ED_G1_LOOK = "Look at the top {n} cards of your library. Put {k} of them into your hand and "
+
+
+def test_7ed_g1_the_other_is_impulses_sentence_with_one_card_left():
+    """"…and **the other** on the bottom of your library." (Sleight of Hand.)
+
+    The same pick Impulse prints as "the rest … in any order", lowered to the
+    same kind with nothing new on the payload: the count is the only number in
+    it, and where the unchosen card goes is still read rather than assumed —
+    the top of the library is a different card, and Waker of Waves' graveyard a
+    third.
+    """
+    two = _7ED_G1_LOOK.format(n="two", k="one")
+    assert _7ed_g1_read(two + "the other on the bottom of your library.") == [
+        ("look_top_pick_to_hand", {"amount": 2}),
+    ]
+    assert _7ed_g1_read(two + "the other on top of your library.") == [
+        ("look_top_pick_to_hand", {"amount": 2, "rest_destination": "library_top"}),
+    ]
+    assert _7ed_g1_read(two + "the other into your graveyard.") == [
+        ("look_top_pick_to_hand", {"amount": 2, "rest_destination": "graveyard"}),
+    ]
+    # Two of three leaves one, and "the other" names it.
+    assert _7ed_g1_read(
+        _7ED_G1_LOOK.format(n="three", k="two") + "the other on the bottom of your library."
+    ) == [("look_top_pick_to_hand", {"amount": 3, "pick_count": 2})]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Three looked at, one taken: two are left and "the other" is one card.
+        _7ED_G1_LOOK.format(n="three", k="one") + "the other on the bottom of your library.",
+        # The same miscount on the branch Waker of Waves reads, which took any
+        # count before the two spellings shared a reader.
+        _7ED_G1_LOOK.format(n="three", k="one") + "the other into your graveyard.",
+        # A count only the resolution knows cannot be shown to leave one.
+        _7ED_G1_LOOK.format(n="X", k="one") + "the other on the bottom of your library.",
+        # One card has no order, so the freedom is not printed behind it…
+        _7ED_G1_LOOK.format(n="two", k="one")
+        + "the other on the bottom of your library in any order.",
+        # …and it stays required behind "the rest", where it is.
+        _7ED_G1_LOOK.format(n="four", k="one") + "the rest on the bottom of your library.",
+    ],
+)
+def test_7ed_g1_the_other_refuses_where_it_does_not_name_one_card(line):
+    """The singular is a claim about the numbers in front of it, and the
+    production holds it to them: read as "the rest", a look at three would
+    bottom a card the sentence never placed. Each line here differs from a
+    supported one by a single word, and each refuses in the parse."""
+    result = _7ed_g1_compile_line(line, card_name="Probe")
+    assert result.parse_error is not None and not result.instructions
+
+
+_7ED_G1_REVEAL = "Target opponent reveals their hand. "
+_7ED_G1_REVEALS = ("reveal_hand", {})
+
+
+def test_7ed_g1_a_union_of_two_sets_is_counted_in_the_revealed_hand():
+    """"You draw a card **for each Mountain and red card in it**." (Baleful
+    Stare.) Three things read together, none of them the card's name:
+
+    * "Mountain **and** red card" is a union of two sets across two axes — a
+      land type and a colour — which is the ``any_classes`` the noun parser has
+      produced for "an Island **or** blue permanent" since Nature's Wrath;
+    * "**in it**" is the hand the sentence in front revealed, the record Blood
+      Oath's "revealed this way" reads;
+    * the count is spent by a draw, on the spec that damage already spends.
+
+    The land type and the colour are payload: Portal printed the cycle
+    (Withering Gaze is the Forest and green one), and a card printed with any
+    other pair needs nothing here.
+    """
+    def spec(subtype, colour):
+        return {"recorded_cards": "revealed_hand_cards",
+                "filter": {"any_classes": [["subtype", subtype], ["color", colour]]}}
+
+    assert _7ed_g1_read(
+        _7ED_G1_REVEAL + "You draw a card for each Mountain and red card in it."
+    ) == [
+        _7ED_G1_REVEALS,
+        ("draw_controller_cards", {"amount": "x", "x_from_count": spec("mountain", "R")}),
+    ]
+    assert _7ed_g1_read(
+        _7ED_G1_REVEAL + "You draw a card for each Forest and green card in it."
+    ) == [
+        _7ED_G1_REVEALS,
+        ("draw_controller_cards", {"amount": "x", "x_from_count": spec("forest", "G")}),
+    ]
+    # One axis at a time, and the participle spelling: the same record.
+    assert _7ed_g1_read(
+        _7ED_G1_REVEAL + "You draw a card for each red card revealed this way."
+    ) == [
+        _7ED_G1_REVEALS,
+        ("draw_controller_cards", {"amount": "x", "x_from_count": {
+            "recorded_cards": "revealed_hand_cards", "filter": {"color_filter": "R"}}}),
+    ]
+    # The damage sentence asks the same reader, so it reads "in it" too — and
+    # keeps its printed rate.
+    assert _7ed_g1_read(
+        _7ED_G1_REVEAL
+        + "Probe deals 2 damage to that player for each Swamp and black card in it."
+    )[1] == ("deal_damage", {
+        "amount": "x", "recipient": "target_player",
+        "x_from_count": {**spec("swamp", "B"), "multiplier": 2},
+    })
+
+
+@pytest.mark.parametrize(
+    ("line", "layer"),
+    [
+        # "It" with no hand revealed in front of it names nothing…
+        ("You draw a card for each Mountain and red card in it.", "lowering"),
+        # …and a hand that was looked at was not revealed: no record.
+        (
+            "Look at target opponent's hand. "
+            "You draw a card for each Mountain and red card in it.",
+            "lowering",
+        ),
+        # A card in a hand is not tapped; a narrowing the matcher cannot test
+        # is refused rather than counted as though it were not printed.
+        (_7ED_G1_REVEAL + "You draw a card for each tapped card in it.", "lowering"),
+        # "In it" is a phrase about cards. A creature *in a hand* is not a
+        # sentence, and the union needs its shared head noun.
+        (_7ED_G1_REVEAL + "You draw a card for each Mountain and red creature in it.", "parse"),
+        # A rate over the count is a product the draw has no node for.
+        (_7ED_G1_REVEAL + "You draw two cards for each Mountain and red card in it.", "parse"),
+    ],
+)
+def test_7ed_g1_the_revealed_hand_count_refuses_what_it_cannot_count(line, layer):
+    """Every refusal is the loud direction: a back-reference with no producer
+    would draw zero on a card reporting itself supported, and a dropped
+    narrowing would draw for the whole hand."""
+    result = _7ed_g1_compile_line(line, card_name="Probe")
+    assert not result.instructions
+    if layer == "parse":
+        assert result.parse_error is not None
+    else:
+        assert result.parse_error is None and result.lowering_error is not None
+
+
+def test_7ed_g1_and_joins_a_union_only_in_front_of_its_head_noun():
+    """"And" also joins two clauses, so the union is read only where the colour
+    is directly followed by the noun both halves share. "Sacrifice a Swamp and
+    black creatures get +1/+1" keeps its two sentences; "destroy all Islands and
+    blue permanents" is one set, the same one its "or" spelling names.
+    """
+    assert [kind for kind, _ in _7ed_g1_read(
+        "Sacrifice a Swamp and black creatures get +1/+1 until end of turn."
+    )] == ["sacrifice_matching_permanent", "buff_creatures_global"]
+
+    union = {"any_classes": [["subtype", "island"], ["color", "U"]]}
+    assert _7ed_g1_read("Destroy all Islands and blue permanents.") == [
+        ("destroy_all_matching", union),
+    ]
+    assert _7ed_g1_read("Destroy all Islands or blue permanents.") == [
+        ("destroy_all_matching", union),
+    ]

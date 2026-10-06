@@ -531,6 +531,37 @@ def lower_revealed_this_way_damage(
         raise LoweringError(
             "no handler aims a revealed-card count at this recipient", node=node
         )
+    spec = revealed_cards_count_spec(
+        node.amount, produced, node, multiplier=multiplier
+    )
+    # "Whenever Darigaaz deals combat damage to a player, … that player reveals
+    # their hand and Darigaaz deals damage to **the player** …". Under a damage
+    # trigger nobody targeted anyone: the player is the one the damage froze
+    # (CR 603.10), the seat the reveal in front of this sentence read under the
+    # same word — so the count and the damage cannot land on two players.
+    recipient = "damaged_player" if event in _DAMAGED_PLAYER_EVENTS else "target_player"
+    return (
+        OracleInstruction(
+            "deal_damage", "",
+            {"amount": "x", X_FROM_COUNT: spec, "recipient": recipient},
+        ),
+    )
+
+
+def revealed_cards_count_spec(
+    counted: ast.CountOfRevealsThisWay, produced: frozenset[str], node,
+    *, multiplier: int = 1,
+) -> dict[str, object]:
+    """The ``x_from_count`` spec for *"<cards> revealed this way"* — how many of
+    the cards a hand reveal recorded answer the printed noun phrase.
+
+    One builder for every sentence that spends the count: the damage above
+    (Blood Oath, Darigaaz) and the draw in ``cards._lower_draw`` ("You draw a
+    card for each Mountain and red card in it", Baleful Stare). The producer
+    gate and the card-only gate are the count's own, not the spender's, so a
+    second copy is where one of them would come to admit a phrase the evaluator
+    drops. *node* is the spending statement, for the refusal to point at.
+    """
     if REVEALED_HAND_CARDS not in produced:
         raise LoweringError(
             f"back-reference to {REVEALED_HAND_CARDS!r} with no producer in "
@@ -539,7 +570,7 @@ def lower_revealed_this_way_damage(
         )
     from ...subject_filters import card_only_filter
 
-    filt, bound = split_bound_card_type(node.amount.filter)
+    filt, bound = split_bound_card_type(counted.filter)
     if filt.color_chosen_this_way:
         # "…the number of cards **of that color** revealed this way" (Darigaaz,
         # the Igniter). The second narrowing beyond what is printed on a card,
@@ -568,18 +599,7 @@ def lower_revealed_this_way_damage(
         # Omitted at 1 for ``count_spec``'s reason: a spec written without the
         # factor stays byte-identical.
         spec["multiplier"] = multiplier
-    # "Whenever Darigaaz deals combat damage to a player, … that player reveals
-    # their hand and Darigaaz deals damage to **the player** …". Under a damage
-    # trigger nobody targeted anyone: the player is the one the damage froze
-    # (CR 603.10), the seat the reveal in front of this sentence read under the
-    # same word — so the count and the damage cannot land on two players.
-    recipient = "damaged_player" if event in _DAMAGED_PLAYER_EVENTS else "target_player"
-    return (
-        OracleInstruction(
-            "deal_damage", "",
-            {"amount": "x", X_FROM_COUNT: spec, "recipient": recipient},
-        ),
-    )
+    return spec
 
 
 #: Named counts whose number is **one per seat** and comes out of this

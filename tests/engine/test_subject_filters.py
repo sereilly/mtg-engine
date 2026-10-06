@@ -1590,6 +1590,47 @@ def test_alternatives_are_ord_not_anded(catalog_by_name, set_pool):
     assert card_matches_any(catalog_by_name["Juggernaut"], ())
 
 
+def test_a_class_union_is_answered_about_a_card_too(catalog_by_name):
+    """"…for each **Mountain and red** card in it" (Baleful Stare). The union
+    across two axes the permanent matcher has answered since Nature's Wrath,
+    asked of a card in a hand: every alternative is printed on the face — a
+    subtype and a card type on the type line, a colour on the mana cost — so
+    ``any_classes`` is in ``CARD_ONLY_FILTER_KEYS`` and this is the matcher
+    behind it.
+
+    Each axis is demonstrated to *reject* as well as admit. The key was absent
+    from this matcher before, which reads every card as matching: a count over
+    such a filter is the size of the whole hand.
+    """
+    from engine.grammar import card_filter_payload
+    from engine.handlers._common import _card_matches_filter
+    from engine.subject_filters import CARD_ONLY_FILTER_KEYS, card_only_filter
+
+    assert "any_classes" in CARD_ONLY_FILTER_KEYS
+    printed = card_filter_payload("a Mountain or red card")
+    assert printed == {"any_classes": [["subtype", "mountain"], ["color", "R"]]}
+    assert card_only_filter(printed) == printed
+
+    assert _card_matches_filter(catalog_by_name["Mountain"], printed), "the subtype"
+    assert _card_matches_filter(catalog_by_name["Taiga"], printed), "a dual land has it"
+    assert _card_matches_filter(catalog_by_name["Lightning Bolt"], printed), "the colour"
+    assert not _card_matches_filter(catalog_by_name["Island"], printed)
+    assert not _card_matches_filter(catalog_by_name["Grizzly Bears"], printed)
+
+    # The card-type axis, and the colour negation one member may carry
+    # ("land or **nonblack** creature", Befoul) — read off the same face.
+    befoul = {"any_classes": [["card_type", "land"], ["card_type", "creature", ("B",)]]}
+    assert _card_matches_filter(catalog_by_name["Swamp"], befoul)
+    assert _card_matches_filter(catalog_by_name["Grizzly Bears"], befoul)
+    assert not _card_matches_filter(catalog_by_name["Black Knight"], befoul)
+    assert not _card_matches_filter(catalog_by_name["Lightning Bolt"], befoul)
+
+    # An axis nothing reads refuses rather than widening the union to all.
+    assert not _card_matches_filter(
+        catalog_by_name["Mountain"], {"any_classes": [["rarity", "common"]]}
+    )
+
+
 # --- a supertype is a restriction, not a decoration (round 108) -------------
 
 
