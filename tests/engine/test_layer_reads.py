@@ -458,11 +458,14 @@ _PRINTED_TEXT_READS = re.compile(r"\.card\.(oracle_text|keywords)\b")
 
 #: module -> how many printed text/keyword reads survive in it, and why.
 PRINTED_TEXT_BASELINE: dict[str, int] = {
-    # A cycle, not a preference: ``effective_card`` appends the abilities these
-    # statics grant, so asking the effective text which permanents grant them
-    # would make the answer depend on itself. Both readers live here for that
-    # reason — ``_refresh_global_statics`` calls in rather than keeping its own.
-    "global_statics.py": 1,
+    # Empty. ``global_statics.py`` held the last one, for a cycle rather than
+    # a preference: ``effective_card`` appends the abilities these statics
+    # grant, so asking the effective text which permanents grant them would
+    # make the answer depend on itself. The cycle is real and the printed card
+    # was still the wrong answer to it — it skipped layers 1 and 3, which have
+    # no cycle in them, so a Sleight of Mind on Darkest Hour changed nothing
+    # and a Copy Artifact of Thran Lens was a source of nothing. That family
+    # asks ``Permanent.card_through_layer_3`` now.
 }
 
 

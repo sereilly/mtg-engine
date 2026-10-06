@@ -706,6 +706,25 @@ class Permanent:
             _abilities_stripped(self) or removed_ability_lines(self)
         ):
             return self.effective_card
+        return self.card_through_layer_3
+
+    @property
+    def card_through_layer_3(self) -> "CardDefinition":
+        """This permanent's own text: the printed card after **layer 1** (what
+        it copies, CR 707.2) and **layer 3** (what a text change rewrote,
+        CR 612) — and nothing a later layer adds or takes away.
+
+        The first two steps of :attr:`effective_card`, on their own, for the
+        one family that cannot ask for the rest: *whether this permanent is
+        the source of a board-wide static* (``global_statics
+        .global_static_sources``). ``effective_card`` appends the abilities
+        those very statics grant, so asking it would make the answer depend on
+        itself — two Aura Fluxes each grant the other an ability — and that
+        family therefore read the **printed** card. Which skipped the two
+        layers that have no cycle in them: a Darkest Hour whose "black" a
+        Sleight of Mind had made "white" went on making creatures black, and a
+        Copy Artifact that had become a Thran Lens was a source of nothing.
+        """
         base = copiable_card(self)
         if has_text_changes(self):
             base = apply_text_changes(base, text_changes(self))

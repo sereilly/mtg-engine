@@ -487,13 +487,19 @@ _SYMBOL_TO_LAND_TYPE = LAND_TYPE_WORDS
 def mark_text_modified(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     target = context.target
     card = context.card
-    perm_idx = context.target_permanent_index if isinstance(context.target_permanent_index, int) else None
-    # Resolve the actual targeted permanent (default to the first one).
-    target_perm = None
-    if perm_idx is not None and 0 <= perm_idx < len(target.battlefield):
-        target_perm = target.battlefield[perm_idx]
-    elif target.battlefield:
-        target_perm = target.battlefield[0]
+    # The permanent the announcement named, **by id** (CR 400.7), through the
+    # resolver every other targeted handler uses — "target permanent", so the
+    # predicate is every permanent rather than its creature default. This read
+    # the slot alone and fell back to the first permanent on that battlefield,
+    # so a Sleight of Mind announced by id (which is how every target reaches
+    # the engine from the wire once its slot has moved, and how a headless
+    # caller names one at all) rewrote whatever stood first: aimed at a
+    # Darkest Hour beside a Grizzly Bears, it "changed B text to W on Grizzly
+    # Bears". The recolour handler below was moved off the slot for the same
+    # reason; this one was left behind.
+    target_perm = resolve_target_permanent(
+        game, context, player=target, predicate=lambda p: True,
+    )
     # "target **white enchantment you control that doesn't have cumulative
     # upkeep**" (Balduvian Shaman). The Lace cycle prints no narrowing at all
     # and carries no description, so this is the whole of the check for it; a

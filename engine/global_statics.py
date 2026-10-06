@@ -552,15 +552,18 @@ def changes_types(static: GlobalStatic) -> bool:
 def global_static_sources(permanents) -> list[tuple]:
     """Which of *permanents* are themselves board-wide statics, paired with it.
 
-    **This family is the one place a permanent's text is read as printed**, and
-    the reason is a cycle rather than a preference: ``Permanent.effective_card``
-    appends the abilities these statics grant, so asking the effective text
-    which permanents grant them would make the answer depend on itself. It
-    terminates today only because no static in the pool applies to a static.
+    **This family does not ask ``Permanent.effective_card``**, and the reason
+    is a cycle rather than a preference: that accessor appends the abilities
+    these statics grant, so asking it which permanents grant them would make
+    the answer depend on itself (two Aura Fluxes each grant the other one).
 
-    Nothing needs the other reading. Both producers (Energy Flux, Titania's
-    Song) are enchantments, which nothing in this pool copies, and neither
-    prints a colour word or a basic land type for a text change to rewrite.
+    It asks ``Permanent.card_through_layer_3`` — the printed card after the
+    copy (layer 1) and the text change (layer 3), the two layers with no cycle
+    in them and both below every layer a static here applies in. It read the
+    **printed** card until the round after Seventh Edition, on the note that
+    "nothing needs the other reading": Darkest Hour prints a colour word, and
+    a Sleight of Mind that made it "All creatures are white" changed nothing;
+    Copy Artifact copies Thran Lens, and the copy was a source of nothing.
 
     **Except that a land can stop having its printed text at all** (CR 305.7),
     and that half of the effective reading has no cycle in it: whether an
@@ -580,7 +583,12 @@ def global_static_sources(permanents) -> list[tuple]:
         (perm, static)
         for perm in permanents
         if not lost_abilities_to_type_change(perm)
-        and (static := global_static_for(perm.card.oracle_text)) is not None
+        and (
+            static := global_static_for(
+                # A stand-in built by a test or a stack object has no layers.
+                getattr(perm, "card_through_layer_3", perm.card).oracle_text
+            )
+        ) is not None
     ]
 
 

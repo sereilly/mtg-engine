@@ -1416,3 +1416,107 @@ def test_j6_a_crusade_pumps_the_creature_that_is_white_now(catalog_by_name, set_
     game.resolve_cleanup_step(0)
     assert _w2g4_colours(game, bears) == ["G"]
     assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+# --- layers 1 and 3 under a board-wide static -------------------------------
+#
+# Whether a permanent is the source of a board-wide static was read off its
+# **printed** card, because ``Permanent.effective_card`` appends the abilities
+# those statics grant and so cannot be asked (two Aura Fluxes each grant the
+# other one). The printed card skips the two layers that have no cycle in
+# them and are below every layer such a static applies in: layer 1, what the
+# permanent copies (CR 707.2), and layer 3, what a text change rewrote
+# (CR 612). So a Sleight of Mind on Darkest Hour made its text "All creatures
+# are white" and its creatures black.
+
+_J6_REWORDED_STATICS = {
+    # static: (witness, the word Sleight of Mind replaces, with, colours after)
+    "Darkest Hour": ("Grizzly Bears", "B", "W", ["W"]),
+    "Celestial Dawn": ("Grizzly Bears", "W", "R", ["R"]),
+    "Dralnu's Crusade": ("Goblin Raider", "B", "U", ["U"]),
+}
+
+
+def _j6_sleight(game, card, permanent, old, new):
+    """Seat 0 casts Sleight of Mind on *permanent*: *old* becomes *new*."""
+    game.players[0].hand.append(card)
+    cast = game.queue_from_hand(
+        0, card.name, target_permanent_ids=[permanent.permanent_id],
+        old_color=old, new_color=new,
+    )
+    assert cast.supported, cast.details
+    _w2g4_settle(game, None)  # _j6_sleight
+
+
+@pytest.mark.cr("613.1c", "613.1e", "612.1")
+@pytest.mark.parametrize("static", sorted(_J6_REWORDED_STATICS))
+def test_j6_a_text_change_on_a_colour_static_changes_the_colour_it_sets(
+    catalog_by_name, set_pool, static,
+):
+    """Layer 3 before layer 5: the static sets the colour its text now names,
+    as the Sleight resolves."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    witness_name, old, new, wanted = _J6_REWORDED_STATICS[static]
+    game = _w2g4_table()
+    witness = _w2g4_enter(game, card(witness_name))
+    source = _w2g4_cast(game, card(static))
+    before = _w2g4_colours(game, witness)
+    assert before != wanted
+
+    _j6_sleight(game, card("Sleight of Mind"), source, old, new)
+    assert _w2g4_colours(game, witness) == wanted, (
+        f"{static} says {source.effective_card.oracle_text!r}"
+    )
+
+
+@pytest.mark.cr("613.1c", "613.1f", "612.1")
+def test_j6_a_text_change_on_a_colour_scope_moves_the_scope(catalog_by_name, set_pool):
+    """Breath of Dreams' "**Green** creatures have …" reworded to "Red
+    creatures": the Goblin Raider has the upkeep and the Grizzly Bears does
+    not."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    raider = _w2g4_enter(game, card("Goblin Raider"))
+    breath = _w2g4_cast(game, card("Breath of Dreams"))
+    assert _j6_reading(game, bears)["cumulative upkeep"]
+    assert not _j6_reading(game, raider)["cumulative upkeep"]
+
+    _j6_sleight(game, card("Sleight of Mind"), breath, "G", "R")
+    assert not _j6_reading(game, bears)["cumulative upkeep"]
+    assert _j6_reading(game, raider)["cumulative upkeep"]
+
+
+@pytest.mark.cr("613.1a", "707.2", "613.1e")
+def test_j6_a_copy_of_a_colour_static_is_one(catalog_by_name, set_pool):
+    """Layer 1. Copy Artifact enters as a copy of Thran Lens: it *is* a Thran
+    Lens (CR 707.2), and when the original leaves, all permanents are still
+    colourless. Read off the printed card, the copy was an enchantment that
+    said nothing."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    lens = _w2g4_enter(game, card("Thran Lens"))
+    assert _w2g4_colours(game, bears) == []
+
+    game.players[0].hand.append(card("Copy Artifact"))
+    cast = game.queue_from_hand(
+        0, "Copy Artifact", target_permanent_ids=[lens.permanent_id],
+    )
+    assert cast.supported, cast.details
+    for _ in range(20):
+        if game.stack:
+            game.resolve_top_of_stack()
+        for choice in list(game.pending_choices):
+            game.auto_resolve_pending_choices(choice.player_index, kinds=[choice.kind])
+        if not game.stack and not game.pending_choices:
+            break
+    copy = next(p for p in game.controlled_by(0) if p.card.name == "Copy Artifact")
+    assert copy.effective_card.name == "Thran Lens"
+
+    game.remove_from_battlefield(lens)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == [], "the copy is a Thran Lens too"
+    game.remove_from_battlefield(copy)
+    game._recompute_continuous_effects()
+    assert _w2g4_colours(game, bears) == ["G"]
