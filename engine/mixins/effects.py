@@ -4,6 +4,7 @@ import random
 import re
 
 from ..ante import is_ante_card
+from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
 from ..control import base_controller
 from ..auras import aura_restriction_active
@@ -1780,7 +1781,7 @@ class EffectsMixin:
         """
         if not symbol or permanent is None:
             return False
-        permanent.metadata["color_override"] = symbol
+        change_color(permanent, symbol)
         return True
 
     def _process_land_enters(self, land_controller_index: int) -> None:

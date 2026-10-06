@@ -366,7 +366,7 @@ def _lower_pump(
     # into here, by the one lowering whose handler now reads a list.
     #
     # ``_describe_several_targets`` refuses a phrase that prints no "target"
-    # (CR 115.1b: "up to two creatures" is chosen at resolution, not at
+    # (CR 115.10: "up to two creatures" is chosen at resolution, not at
     # announcement), so an untargeted plural still falls through to the class
     # reading below rather than raising a picker in front of it.
     if (

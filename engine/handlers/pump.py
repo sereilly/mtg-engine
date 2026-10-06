@@ -793,7 +793,7 @@ def add_loyalty_counters_to_chosen(game: Game, instruction: OracleInstruction, c
     (Liliana's Scrounger.)
 
     No "target" is printed, so nothing was chosen when the ability went on the
-    stack (CR 115.1b): the controller picks now, out of what the noun phrase
+    stack (CR 115.10): the controller picks now, out of what the noun phrase
     names *now* — the ``untap_up_to`` shape, not the targeted one. Reading it as
     a target would move the choice to announcement and let the ability be
     countered on resolution (CR 608.2b) when the walker it named has left, where

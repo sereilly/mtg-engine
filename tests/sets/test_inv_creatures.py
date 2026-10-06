@@ -285,7 +285,12 @@ def test_w1g6_alloy_golems_colour_follows_a_late_answer_and_yields_to_a_later_ef
     game._recompute_continuous_effects()
     assert sorted(game._effective_colors(golem)) == ["W"]
 
-    golem.metadata["color_override_until_eot"] = "U"
+    # Through the write API, which is what stamps the effect as beginning now
+    # (CR 613.7b): the Golem's own static carries the Golem's timestamp, so a
+    # value poked into the slot with no stamp reads as older than the Golem.
+    from engine.color_changes import change_color
+
+    change_color(golem, "U", until_eot=True)
     game._recompute_continuous_effects()
     assert sorted(game._effective_colors(golem)) == ["U"]
     game.resolve_cleanup_step(0)

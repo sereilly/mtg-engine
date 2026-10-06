@@ -79,3 +79,55 @@ def code_only_lines(path: Path) -> tuple[str, ...]:
             tail = line[end_col:] if row == end_row else ""
             lines[row - 1] = head + " " * (len(line) - len(head) - len(tail)) + tail
     return tuple(lines)
+
+
+def _docstring_nodes(tree: ast.AST) -> set[int]:
+    """The ids of the constants that are docstrings — prose, not code."""
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(
+            node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
+            body = getattr(node, "body", None) or []
+            if (
+                body and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                found.add(id(body[0].value))
+    return found
+
+
+@lru_cache(maxsize=None)
+def string_key_uses(path: Path, keys: tuple[str, ...]) -> tuple[tuple[int, str], ...]:
+    """Every place *path*'s **code** spells one of *keys* as a string:
+    ``(line, key)`` pairs.
+
+    The question a guard over a *storage key* asks, and one
+    :func:`code_only_lines` cannot answer: that function blanks string literals
+    along with the comments, so a pattern that is itself a quoted key matches
+    nothing it returns, in any file — the guard reads green over a raw poke
+    and over none alike. Two guards were written that way before this existed.
+
+    Read off the AST instead. A whole constant equal to a key counts, and so
+    does a constant piece of an f-string that *starts* with one
+    (``f"color_override{suffix}"`` spelled two keys at once). Docstrings are
+    skipped; a comment never reaches the AST at all.
+    """
+    tree = source_tree(path)
+    prose = _docstring_nodes(tree)
+    pieces = {
+        id(value)
+        for node in ast.walk(tree) if isinstance(node, ast.JoinedStr)
+        for value in node.values if isinstance(value, ast.Constant)
+    }
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
+            continue
+        if id(node) in prose:
+            continue
+        for key in keys:
+            if node.value == key or (id(node) in pieces and node.value.startswith(key)):
+                found.append((node.lineno, key))
+    return tuple(sorted(found))

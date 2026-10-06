@@ -1762,7 +1762,15 @@ def attach_aura(aura, target) -> None:
     # and then only leaves) and wrong for an Equipment, which moves: re-equipped
     # onto a second creature it kept the stamp of its first attachment, and so
     # ordered its +1/+1 before an effect that had in fact applied earlier.
-    aura.metadata["aura_timestamp"] = next_timestamp()
+    #
+    # The **object's** timestamp, which is what the rule says is replaced
+    # ("receives a new timestamp each time it becomes attached") — so every
+    # static ability on the Aura or Equipment is ordered by the attachment
+    # (CR 613.7a), not only the ones a collector remembered to read off the
+    # metadata key beside it. That key keeps the same number for the layers
+    # that still read it.
+    aura.timestamp = next_timestamp()
+    aura.metadata["aura_timestamp"] = aura.timestamp
 
 
 def detach_aura(aura, target) -> None:

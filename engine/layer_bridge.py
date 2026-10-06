@@ -35,6 +35,7 @@ from .auras import (
     auras_attached_to,
     chosen_landwalk_grants,
 )
+from .color_changes import color_changes
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
 from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
@@ -893,6 +894,13 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # CR 205.1a's scoped replacement, not the blanket one: the chosen type
     # replaces the creature's *creature* types and leaves any others alone, so
     # a Forest this seat has animated is a Goblin **and still a Forest**.
+    #
+    # Stamped with the source's own timestamp (CR 613.7a), because a
+    # replacement does not commute with an addition: "…and is a Knight in
+    # addition to its other types" (Dub) survives a Conspiracy that was already
+    # out and is replaced by one that arrives afterwards. This was a constant
+    # 0, which put every Conspiracy before every Aura whenever each arrived.
+    latest_type_set = 0
     for source, static in global_static_sources(
         perm.metadata.get("global_static_sources") or ()
     ):
@@ -911,12 +919,13 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             # creature's types on the strength of an unanswered choice is the
             # card doing something much larger than it says.
             continue
+        latest_type_set = max(latest_type_set, source.timestamp)
         effects.append(
             add_types(
                 only,
                 subtypes=[str(chosen).lower()],
                 replaces_subtypes_from=CREATURE_TYPES,
-                timestamp=0,
+                timestamp=source.timestamp,
                 label=f"{static.name}:{chosen}",
             )
         )
@@ -929,14 +938,21 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # rather than convenience: this static's scope is a creature type, so an
     # effect that sets creature types changes the set of objects it applies to
     # — it *depends* on that effect and applies after it whichever is older.
-    # Both share this layer's derived stamp, so position in the list is what
-    # decides, and read the other way a Bears that Conspiracy made a Goblin was
-    # given "zombie" and then had it replaced away.
-    for static in global_statics_applying_to(perm):
+    # CR 613.8b: "An effect dependent on one or more other effects waits to
+    # apply until just after all of those effects have been applied", so its
+    # place in the order is its own source's timestamp or the newest
+    # type-setting static's, whichever is later — and after it in the list, so
+    # an equal stamp still sorts behind. Read the other way a Bears that
+    # Conspiracy made a Goblin was given "zombie" and then had it replaced
+    # away.
+    for source, static in global_static_sources(
+        perm.metadata.get("global_static_sources") or ()
+    ):
         if static.adds_subtypes:
             effects.append(
                 add_types(
-                    only, subtypes=list(static.adds_subtypes), timestamp=0,
+                    only, subtypes=list(static.adds_subtypes),
+                    timestamp=max(source.timestamp, latest_type_set),
                     label=f"{static.name}:{'+'.join(static.adds_subtypes)}",
                 )
             )
@@ -1002,6 +1018,7 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # is. They are collected rather than merged, and each carries the timestamp
     # of the effect that recorded it, so 613.7 decides that and not the order the
     # writes happened to run in (engine/land_types.py).
+    replaced_land_types: frozenset[str] | None = None
     for change in land_type_changes(perm):
         land_type = str(change["land_type"])
         # "…**in addition to its other land types**" (Blanket of Night) is the
@@ -1011,17 +1028,48 @@ def collect_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
         # every Island's blue mana, which is the same effect written as a
         # strictly harsher card.
         replaces = not change.get("additive")
+        if replaces and replaced_land_types is None:
+            replaced_land_types = _land_subtypes_of(perm)
         effects.append(
             add_types(
                 only,
                 subtypes=[land_type],
-                replace_subtypes=replaces,
+                # CR 305.7: "the new land type(s) replaces any existing **land**
+                # types" — CR 205.1a's "subtypes from the appropriate set". It
+                # was the blanket flag, which replaced every subtype the
+                # permanent had: a Forest wearing Living Terrain stopped being
+                # a Treefolk when Evil Presence arrived after it, and an
+                # animated Mishra's Factory stopped being an Assembly-Worker
+                # under a later Blood Moon — but only when the land-type change
+                # was the *later* effect, so the same two cards gave two
+                # answers by the order they were played in.
+                replaces_subtypes_from=replaced_land_types if replaces else (),
                 timestamp=int(change.get("timestamp", 0)),
                 label=("is a " if replaces else "is also a ") + land_type,
             )
         )
 
     return effects
+
+
+def _land_subtypes_of(perm: Permanent) -> frozenset[str]:
+    """The subtypes a land-type change replaces on *perm* (CR 305.7): every
+    land type there is, and — on a card printed as a land and nothing else —
+    every subtype it prints.
+
+    The second half is what keeps this from depending on a catalog's spelling.
+    A subtype correlates to a card type (CR 205.3d), so every word after the
+    dash on a card whose only type is Land *is* a land type whether or not the
+    vocabulary lists it that way ("Urza's"), and a Blood Moon must not leave
+    one behind. On a card printed with a second type — a land creature — the
+    printed words are of two sets and only the catalog can tell them apart.
+    """
+    from .grammar.vocabulary import LAND_TYPES
+
+    printed_types, printed_subtypes = printed_shape(perm.effective_card)
+    if printed_types == {"land"}:
+        return frozenset(LAND_TYPES | printed_subtypes)
+    return frozenset(LAND_TYPES)
 
 
 def collect_control_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
@@ -1083,117 +1131,120 @@ _COLOR_WORD_SYMBOLS = {
 def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     """Layer 5: colour-changing effects (the laces, "becomes red").
 
+    **Every effect here carries the timestamp CR 613.7 gives it, and nothing
+    else orders them.** They were five channels with a constant apiece — the
+    permanent's own chosen colour −1, an indefinite recolour 0, a turn-long one
+    1, a board-wide static 2 — so which effect applied last was decided by what
+    *kind* it was: under Darkest Hour a later "becomes white until end of turn"
+    did nothing, and a lace cast after a turn-long recolour lost to it. Each
+    ``set_colors`` below replaces every colour the permanent had (CR 105.3), so
+    the order is the whole answer and the stamps have to be real:
+
+    * a resolved spell's or ability's effect — when it was created (CR 613.7b),
+      stamped by ``color_changes.change_color``, the one writer;
+    * a static ability's — its object's (CR 613.7a), which is the moment that
+      object entered the battlefield (CR 613.7d) or, for an Aura or Equipment,
+      last became attached (CR 613.7e): ``Permanent.timestamp`` either way.
+
+    No dependency (CR 613.8) can arise among them: no colour-setting static in
+    the pool has a scope that asks about colour, and a resolved recolour's set
+    of objects was fixed when it resolved (CR 611.2c). Held to the pool by
+    ``tests/rules/test_color_effects_timestamp_order.py``.
+
     A copy's colours are *not* here. CR 707.2a derives them from the copied mana
     cost, which makes them a copiable value settled in layer 1 — and modelling
     them as a layer-5 effect is what made Vesuvan Doppelganger's exception
     inexpressible, because "keeps its own colour" then had to mean "no effect was
     recorded", which is also what a copy of a colourless artifact looked like.
     """
+    only = scope_only(oid)
     effects = []
     # "This creature is the chosen color." (Alloy Golem.) The permanent's own
-    # static, and so the *earliest* stamp here: CR 613.7a gives a static
-    # ability the timestamp of the object it is on, which is the moment it
-    # entered, and every other channel below is an effect that began after
-    # that — a lace or a Sway of Illusion aimed at the Golem wins, as the later
-    # effect does (CR 613.7). Not contributed once its abilities are gone
-    # (CR 613.1f is layer 6, but a removal that has already happened is the
-    # same predicate layer 6 itself asks).
+    # static, so its effect has the permanent's own timestamp (CR 613.7a): the
+    # moment it entered. A lace or a Sway of Illusion aimed at the Golem is
+    # necessarily later and wins; a Darkest Hour that was already on the
+    # battlefield when the Golem arrived is *earlier*, and the Golem is the
+    # colour it chose. That second half is what the constant this replaced
+    # could not say — it put the choice before every other effect, which is
+    # CR 613.3's rule for a characteristic-defining ability, and this is not
+    # one: the colour it names exists only on the battlefield (CR 614.1c), and
+    # CR 604.3 has a CDA function in every zone.
+    #
+    # Not contributed once its abilities are gone (CR 613.1f is layer 6, but a
+    # removal that has already happened is the same predicate layer 6 itself
+    # asks).
     own = own_chosen_color(perm)
     if own is not None and not removes_all_abilities(perm):
         effects.append(
-            set_colors(scope_only(oid), [own], timestamp=-1, label="chosen colour")
+            set_colors(only, [own], timestamp=perm.timestamp, label="chosen colour")
         )
-    # Two channels, in timestamp order (CR 613.7b), for the reason layer 7b
-    # keeps two: an indefinite lace ("Target permanent becomes red", CR 105)
-    # and a turn-long one ("One or more target creatures become red until end
-    # of turn", the five Legends colour spells). Sharing one key would make the
-    # cleanup step's sweep either drop a lace that should outlive the turn, or
-    # keep a colour that should have worn off.
-    for suffix, stamp in (("", 0), ("_until_eot", 1)):
-        override = perm.metadata.get(f"color_override{suffix}")
-        # ``is not None``, not truthiness: the **empty tuple** is a real answer
-        # — CR 105.2c's colourless, which "becomes colorless" (Raging Spirit,
-        # Ersatz Gnomes) writes as an object with no colours rather than as a
-        # sixth colour. Every writer of this channel already refuses a falsy
-        # symbol at its own end, so nothing else reaches this branch by
-        # accident.
-        if override is not None:
-            # A *set* of colours where the card offered one ("becomes the color
-            # or colors of your choice", Dream Coat) — CR 105.2 makes an object
-            # of two colours one object, not two effects. Normalized here rather
-            # than at every write, because this is the one reader: a channel
-            # that could hold either and a reader that could only take one would
-            # make a multicoloured permanent read as a list-shaped colour.
-            colours = list(override) if isinstance(override, (list, tuple)) else [override]
-            effects.append(
-                set_colors(scope_only(oid), colours, timestamp=stamp,
-                           label=f"colour override{suffix}")
-            )
-
-    # "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.) The
-    # third channel into this layer, and the one that needs no sweep: like
-    # every other half of an Aura, it is derived from the Aura's own text on
-    # each recompute and stamped with the moment it attached (CR 613.7b), so
-    # detaching one simply stops contributing the colour. That is the whole
-    # reason it is here rather than written onto ``color_override`` when the
-    # Aura resolves — a stamped override would outlive the Aura, and CR 105.3
-    # replaces every colour the creature had, so there would be nothing left to
-    # put back.
-    # "Nonland permanents you control are white." (Celestial Dawn.) The fourth
-    # channel, and the only board-*wide* one: it is derived from the source's
-    # own text on every recompute exactly as the Aura channel below is, so a
-    # source leaving simply stops contributing and there is nothing to sweep.
-    # Stamped after the two override channels, because CR 105.3 makes the later
-    # effect the one that decides and a static that is still on the battlefield
-    # is later than a lace that has already resolved... which is *not* generally
-    # true, and is why the timestamp is the source's own rather than a constant:
-    # `static_source_timestamp` is the same ordering layer 4's statics use.
-    for static in global_statics_applying_to(perm):
-        # ``is not None``, not truthiness, for the reason the override channel
-        # above states in as many words: the **empty tuple** is CR 105.2c's
-        # colourless ("All permanents are colorless", Thran Lens) -- an object
-        # with no colours, rather than a static that says nothing about colour.
-        # A falsy test reads the two as one and drops the whole effect.
-        if static.sets_colors is None:
-            continue
+    # What a spell or an ability did to this permanent — an indefinite lace
+    # ("Target permanent becomes red", CR 105), a turn-long one ("One or more
+    # target creatures become red until end of turn", the five Legends colour
+    # spells) — and what a land-animating static keeps saying of it ("All
+    # Swamps are 1/1 **black** creatures", Kormus Bell). One reader for all
+    # three, each contribution with the stamp its writer gave it
+    # (``engine/color_changes.py``).
+    for change in color_changes(perm):
         effects.append(
             set_colors(
-                scope_only(oid),
-                [_COLOR_WORD_SYMBOLS[word] for word in static.sets_colors],
-                timestamp=2,
-                label="board-wide colour",
+                only, change["colors"], timestamp=int(change["timestamp"]),
+                label=str(change.get("label") or "colour change"),
             )
         )
 
-    # "All nonland permanents are **the chosen color**." (Shifting Sky.) The
-    # same channel with the colour read off the **source** rather than off the
-    # sentence — chosen as that permanent entered (CR 614.1c) and recorded on
-    # it — so this walks the source/static *pairs*, the way layer 4 reads
-    # Conspiracy's chosen creature type. Derived on every recompute like the
-    # rest of the family: a second answer to the entry prompt is the colour the
-    # board then is, and the source leaving ends the effect by dropping out of
-    # the list.
+    # "Nonland permanents you control are white." (Celestial Dawn.) Board-wide,
+    # and derived from the source's own text on every recompute exactly as the
+    # Aura channel below is, so a source leaving simply stops contributing and
+    # there is nothing to sweep. Walked as source/static *pairs* because the
+    # source is what the effect is stamped by (CR 613.7a) — and, for Shifting
+    # Sky, what it reads its colour from.
     for source, static in global_static_sources(
         perm.metadata.get("global_static_sources") or ()
     ):
-        if not static.sets_chosen_color:
-            continue
-        chosen = source.metadata.get(CHOSEN_COLOR_KEY)
-        if not chosen:
-            # The source is still entering, or the choice was never made. No
-            # contribution rather than an empty set: turning every nonland
-            # permanent colourless on the strength of an unanswered choice is
-            # the card doing something it does not say.
-            continue
-        effects.append(
-            set_colors(
-                scope_only(oid), [str(chosen)], timestamp=2,
-                label="board-wide chosen colour",
+        # ``is not None``, not truthiness: the **empty tuple** is CR 105.2c's
+        # colourless ("All permanents are colorless", Thran Lens) -- an object
+        # with no colours, rather than a static that says nothing about colour.
+        # A falsy test reads the two as one and drops the whole effect.
+        if static.sets_colors is not None:
+            effects.append(
+                set_colors(
+                    only,
+                    [_COLOR_WORD_SYMBOLS[word] for word in static.sets_colors],
+                    timestamp=source.timestamp,
+                    label=f"board-wide colour ({source.card.name})",
+                )
             )
-        )
+        # "All nonland permanents are **the chosen color**." (Shifting Sky.)
+        # The same effect with the colour read off the **source** rather than
+        # off the sentence — chosen as that permanent entered (CR 614.1c) and
+        # recorded on it, the way layer 4 reads Conspiracy's chosen creature
+        # type. A second answer to the entry prompt is the colour the board
+        # then is; the timestamp is still the source's, because it is still
+        # that object's static ability.
+        if static.sets_chosen_color:
+            chosen = source.metadata.get(CHOSEN_COLOR_KEY)
+            # No contribution while the source is still entering, or if the
+            # choice was never made: turning every nonland permanent colourless
+            # on the strength of an unanswered choice is the card doing
+            # something it does not say.
+            if chosen:
+                effects.append(
+                    set_colors(
+                        only, [str(chosen)], timestamp=source.timestamp,
+                        label=f"board-wide chosen colour ({source.card.name})",
+                    )
+                )
 
     from .grammar.vocabulary import COLOR_WORDS
 
+    # "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.)
+    # Derived from the Aura's own text on each recompute and stamped with the
+    # moment it attached (CR 613.7e), so detaching one simply stops
+    # contributing the colour. That is the whole reason it is here rather than
+    # recorded through ``change_color`` when the Aura resolves — a recorded
+    # effect would outlive the Aura, and CR 105.3 replaces every colour the
+    # creature had, so there would be nothing left to put back.
     for aura in auras_attached_to(perm):
         # The printed word mapped to the symbol every other colour in this
         # engine is spelled with, at the call site rather than in the reader —
@@ -1215,9 +1266,7 @@ def collect_color_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             continue
         effects.append(
             set_colors(
-                scope_only(oid),
-                granted,
-                timestamp=int(aura.metadata.get("aura_timestamp", 0)),
+                only, granted, timestamp=aura.timestamp,
                 label=f"aura:{aura.card.name}",
             )
         )

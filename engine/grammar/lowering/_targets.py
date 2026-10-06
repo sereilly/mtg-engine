@@ -632,7 +632,7 @@ def _is_target(subject: ast.Recipient) -> bool:
     does. "Up to two" does not, and must not — see
     :func:`_names_several_targets`. Neither does an "up to one" that prints no
     "target" at all: the parser records the word (``TargetSpec.targeted``)
-    because CR 115.1b makes the untargeted spelling a *resolution* choice, and
+    because CR 115.10 makes the untargeted spelling a *resolution* choice, and
     answering it with a cast-time picker would be the same wider-than-printed
     reading :func:`_describe_several_targets` refuses for "up to four lands".
     """

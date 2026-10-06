@@ -28,7 +28,7 @@ import pathlib
 import re
 
 import pytest
-from tests.source_index import code_only_lines, source_text
+from tests.source_index import code_only_lines, source_text, string_key_uses
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ENGINE = ROOT / "engine"
@@ -76,6 +76,22 @@ def _hits(pattern: re.Pattern, skip: set[str]) -> list[tuple[str, int, str]]:
     return found
 
 
+def _key_hits(keys: tuple[str, ...], skip: set[str]) -> list[tuple[str, int, str]]:
+    """Where an engine module's code spells one of *keys* as a string — the
+    same ``(file, line, text)`` rows :func:`_hits` returns, for a pattern that
+    is a string literal and so invisible to it."""
+    found = []
+    for path in _engine_files():
+        # By path, not by bare file name: ``engine/grammar/effects/`` has a
+        # ``text_changes.py`` of its own, and it is not the write API.
+        if str(path.relative_to(ENGINE)).replace("\\", "/") in skip:
+            continue
+        raw = source_text(path).splitlines()
+        for number, _key in string_key_uses(path, keys):
+            found.append((str(path.relative_to(ENGINE)), number, raw[number - 1].strip()))
+    return found
+
+
 def _module(hit: tuple[str, int, str]) -> str:
     return hit[0].replace("\\", "/")
 
@@ -118,9 +134,16 @@ def _assert_within_baseline(
 @pytest.mark.parametrize("owner,keys", sorted(STORAGE_OWNERS.items()))
 def test_the_storage_keys_are_touched_only_by_their_write_api(owner, keys):
     """A raw ``metadata["land_type_effects"]`` poke outside the write API is a
-    contribution nothing else can end, or an ending nothing else recorded."""
-    pattern = re.compile("|".join(re.escape(f'"{key}"') for key in keys))
-    offenders = _hits(pattern, skip=set(STORAGE_OWNERS) | set(ACKNOWLEDGED))
+    contribution nothing else can end, or an ending nothing else recorded.
+
+    Asked of the modules' **string constants** (``string_key_uses``). It was a
+    regex over ``code_only_lines``, which blanks string literals — so the
+    pattern, being a quoted key, matched nothing in any file and this test
+    could not fail. The floor below is what would have said so."""
+    offenders = _key_hits(tuple(keys), skip=set(STORAGE_OWNERS) | set(ACKNOWLEDGED))
+    # The reader is sighted: the owner itself spells every key it owns.
+    owner_path = ENGINE / owner
+    assert {key for _line, key in string_key_uses(owner_path, tuple(keys))} == set(keys)
     assert not offenders, (
         f"raw {'/'.join(keys)} access outside engine/{owner} — record the effect "
         "through its write API so removal is dropping a contribution:\n"
@@ -146,8 +169,13 @@ def test_each_channel_has_exactly_one_consumer(accessor, allowed):
 def test_the_stamped_land_type_override_is_gone():
     """The single-string channel every land-type effect used to share. Two
     effects on one land could not both be recorded in it, and neither could be
-    ended without ending the other."""
-    offenders = _hits(re.compile(re.escape(_RETIRED_KEY)), skip=set())
+    ended without ending the other.
+
+    Both spellings: the word in code (an attribute, a name) and the word as a
+    metadata key, which is a string constant the line scan cannot see."""
+    offenders = _hits(re.compile(re.escape(_RETIRED_KEY)), skip=set()) + _key_hits(
+        (_RETIRED_KEY,), skip=set()
+    )
     assert not offenders, (
         f"{_RETIRED_KEY} is back — a land-type change is a contribution with a "
         "source and a timestamp (engine/land_types.py), not a stamped value:\n"

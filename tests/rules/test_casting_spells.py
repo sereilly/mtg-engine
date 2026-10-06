@@ -878,7 +878,7 @@ def test_601_2c_a_variable_number_of_targets_may_be_announced_as_none():
     """"If the spell has a variable number of targets, the player announces how
     many targets they will choose." Zero is one of the answers, so a spell whose
     only targeting is "up to N" is castable with nothing legal to name — where a
-    spell requiring its one target could not be cast at all (CR 115.1b)."""
+    spell requiring its one target could not be cast at all (CR 601.2c)."""
     dredge = _mk_card(
         "Dredge Up",
         "Sorcery",

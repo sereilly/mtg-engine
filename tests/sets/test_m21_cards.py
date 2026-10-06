@@ -63,7 +63,7 @@ def test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses():
     resolve as a list. Rewind's "untap up to four lands" prints no "target" at
     all — it is chosen on resolution, through the pending-choice queue — so it
     still refuses here, and describing it would raise a cast-time picker in
-    front of a choice CR 115.1b makes later.
+    front of a choice CR 115.10 makes later.
 
     Untap gained its several-target handler in ATQ round 16; before that this
     test asserted it had none, which was true and is the only thing that
@@ -82,7 +82,7 @@ def test_a_targeted_several_tap_lowers_and_an_untargeted_one_still_refuses():
     assert instruction.payload["targets"]["count"] == 2
 
     # Rewind's spelling: no "target" printed, so nothing is chosen at cast
-    # (CR 115.1b) and it reaches a *different* handler — one that makes its
+    # (CR 115.10) and it reaches a *different* handler — one that makes its
     # choice on resolution through the pending-choice queue. Same words, same
     # count, different mechanism, and the `targeted` flag is the only thing
     # that says so.

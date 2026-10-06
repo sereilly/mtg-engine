@@ -397,7 +397,7 @@ def _lower_exile(
     if isinstance(subject, ast.TargetSpec) and subject.quantifier == "any_number":
         # "Exile **any number of** tokens created with this creature."
         # (Tetravus.) Not a sweep and not a target: the controller says how
-        # many, at resolution (CR 115.1b — nothing is chosen until then), and
+        # many, at resolution (CR 115.10 — nothing is chosen until then), and
         # the sentence after it reads the number back.
         filt = subject.filter
         if filt.zone != "battlefield" or filt.is_card:

@@ -163,6 +163,17 @@ def _global_static(clause: str):
         return None
     if static.applies_to.endswith("_you_control"):
         return None
+    # A static that sets a colour or a creature type does not commute with the
+    # other effects in its layer, so it is ordered by its object's timestamp
+    # (CR 613.7a) -- and ``layer_bridge`` reads that off the source *permanent*.
+    # A spell on the stack records none here, so such a clause is refused
+    # rather than admitted and applied in whatever place a constant gives it.
+    # The pool prints no such card today.
+    if (
+        static.sets_colors is not None or static.sets_chosen_color
+        or static.sets_creature_type or static.adds_subtypes
+    ):
+        return None
     return static
 
 
