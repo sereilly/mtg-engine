@@ -15607,6 +15607,20 @@ function previewCounterLines(card) {
   });
 }
 
+// What a permanent chose as it entered (CR 614.1c), one "label: value" line per
+// choice: "Chosen color: green" on a Ward, "Named card: Lightning Bolt" on a
+// Meddling Mage, "Chosen player: Guest" on a Black Vise. The server derives the
+// list (`entry_choices` on the permanent payload) from the engine's own table
+// of entry choices, so this neither knows nor lists which cards make one. Empty
+// for a card that made none, and for a bare name or a hand card, which has no
+// such field.
+function previewEntryChoiceLines(card) {
+  if (!card || typeof card !== "object" || !Array.isArray(card.entry_choices)) return [];
+  return card.entry_choices
+    .filter((choice) => choice && choice.label)
+    .map((choice) => `${choice.label}: ${choice.value ?? ""}`);
+}
+
 function showCardPreview(card) {
   _cancelPendingPreviewHide();
   q("cardPreviewOverlay")?.classList.remove("hidden");
@@ -15631,6 +15645,9 @@ function showCardPreview(card) {
     sections.push("👑 Commander - this is the designated commander card");
   }
   if (keywordLabel) sections.push(renderSymbolsInline(keywordLabel));
+  // Above the rules text, beside the keywords: "the chosen color" in the text
+  // below reads against the line that says which colour that is.
+  for (const line of previewEntryChoiceLines(card)) sections.push(renderSymbolsInline(line));
   if (previewText) sections.push(renderOracleTextWithChanges(previewText, textChanges));
   for (const line of counterLines) sections.push(renderSymbolsInline(line));
   if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));

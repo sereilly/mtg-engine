@@ -29,8 +29,10 @@ claiming it would report as understood a wording nothing implements.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import lru_cache
 import re
+from typing import Callable
 
 # --- CR 614.1c entry state, engine/mixins/permanent_state.py ---------------
 
@@ -1845,6 +1847,224 @@ def enter_effect_line(line: str, card_name: str | None = None) -> str | None:
     return None
 
 
+# --- what was chosen, as a thing a table can be told -------------------------
+
+#: The metadata keys the entry state records its other choices under. Spelled by
+#: the mixin that writes them and named here for the one reader below — and kept
+#: out of ``__all__`` for :data:`CHOSEN_COLOR_KEY`'s reason: they are channels,
+#: not phrases, and ``test_the_entry_phrases_have_exactly_one_spelling`` holds
+#: the mixin to not re-spelling a *phrase*.
+CHOSEN_PLAYER_KEY = "chosen_player_index"
+CHOSEN_CARD_NAME_KEY = "chosen_card_name"
+CHOSEN_CARD_NAMES_KEY = "chosen_card_names"
+CHOSEN_LAND_TYPES_KEY = "chosen_land_types"
+CHOSEN_CREATURE_TYPE_KEY = "chosen_creature_type"
+CHOSEN_NUMBER_KEY = "chosen_number"
+
+_COLOR_SYMBOL_WORDS = {
+    "W": "white", "U": "blue", "B": "black", "R": "red", "G": "green",
+}
+
+
+def _shown_word(game, value) -> str:
+    return str(value)
+
+
+def _shown_color(game, value) -> str:
+    return _COLOR_SYMBOL_WORDS.get(str(value).upper(), str(value))
+
+
+def _shown_player(game, value) -> str:
+    try:
+        return game.players[int(value)].name
+    except (IndexError, TypeError, ValueError):
+        return ""
+
+
+def _shown_card_name(game, value) -> str:
+    # Naming nothing is a legal answer (CR 201.4 bounds the choice, it does not
+    # require a useful one) and it is said rather than left blank: an empty
+    # value would read as "no choice was made".
+    return str(value) if value else "nothing"
+
+
+def _shown_each(game, value) -> str:
+    return ", ".join(str(part) if part else "nothing" for part in (value or ()))
+
+
+@dataclass(frozen=True)
+class EntryChoice:
+    """One thing a permanent records as it enters, as a player would say it.
+
+    ``key`` is the metadata record the entry state writes, ``label`` what the
+    table calls it, ``asked`` whether a card's text makes that choice as it
+    enters — built from the same readers ``_perform_entry_state`` branches on,
+    so the two cannot name different sentences — and ``shown`` turns the
+    recorded value into words (a seat into its player's name, a colour symbol
+    into the colour).
+    """
+
+    key: str
+    label: str
+    asked: "Callable[[str, tuple[str, ...], str], bool]"
+    shown: "Callable[[object, object], str]"
+
+
+def _two_options_record(lines: "tuple[str, ...]", card_name: str) -> "str | None":
+    for line in lines:
+        found = choose_one_of_two_on_enter(line, card_name)
+        if found is not None:
+            return found[0]
+    return None
+
+
+#: Every choice a permanent makes **as it enters** (CR 614.1c) that it then
+#: goes on reading: the opponent a Black Vise watches, the colour a Ward
+#: protects from, the name a Meddling Mage forbids. One row per *record*, each
+#: built out of this module's own readers of the printed sentence.
+#:
+#: It exists because the records were invisible. The engine wrote each one,
+#: read it at every seam that needed it, and told nobody: the wire carried no
+#: chosen colour, name, type or player, so a player facing an opponent's Voice
+#: of All learned what it was protected from by having a spell fizzle, and the
+#: log line one shape got (the single name) was the only place any of it
+#: surfaced. :func:`chosen_as_entered` is what a client is sent, and
+#: ``tests/engine/test_entry_choices_reach_the_client.py`` holds this table to
+#: the writer in both directions over every permanent in the pool: a row that
+#: claims a card finds its record written, and a ``chosen_*`` record the entry
+#: writes belongs to a row.
+#:
+#: **Not here, on purpose**: a body chosen as it enters (Primal Clay — the
+#: answer *is* the permanent's power, toughness, keyword and type, which the
+#: card face already shows) and what was sacrificed or exiled as it entered
+#: (Wood Elemental, Frankenstein's Monster — likewise its size and counters).
+#: These rows are the choices nothing else on the card displays.
+ENTRY_CHOICES: "tuple[EntryChoice, ...]" = (
+    EntryChoice(
+        CHOSEN_PLAYER_KEY, "Chosen player",
+        lambda text, lines, name: bool(
+            CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
+            or chooses_opponent_and_card_name_on_enter(text)
+            or chooses_opponent_on_enter(text)
+        ),
+        _shown_player,
+    ),
+    EntryChoice(
+        CHOSEN_COLOR_KEY, "Chosen color",
+        lambda text, lines, name: bool(
+            CHOOSE_COLOR_AND_OPPONENT_ON_ENTER in text
+            or chooses_color_on_enter(text)
+            or chooses_color_and_creature_type_on_enter(text)
+            or _two_options_record(lines, name) == CHOSEN_COLOR_KEY
+        ),
+        _shown_color,
+    ),
+    EntryChoice(
+        CHOSEN_CARD_NAME_KEY, "Named card",
+        lambda text, lines, name: bool(
+            chooses_opponent_and_card_name_on_enter(text)
+            or chooses_card_name_on_enter(text) is not None
+        ),
+        _shown_card_name,
+    ),
+    EntryChoice(
+        CHOSEN_CARD_NAMES_KEY, "Named cards",
+        lambda text, lines, name: chooses_two_card_names_on_enter(text),
+        _shown_each,
+    ),
+    EntryChoice(
+        CHOSEN_LAND_TYPES_KEY, "Chosen land types (first, second)",
+        lambda text, lines, name: chooses_two_land_types_on_enter(text),
+        _shown_each,
+    ),
+    EntryChoice(
+        CHOSEN_CREATURE_TYPE_KEY, "Chosen creature type",
+        lambda text, lines, name: bool(
+            chooses_creature_type_on_enter(text)
+            or chooses_color_and_creature_type_on_enter(text)
+        ),
+        _shown_word,
+    ),
+    EntryChoice(
+        CHOSEN_LAND_TYPE_KEY, "Chosen land type",
+        lambda text, lines, name: bool(
+            chooses_land_type_on_enter(text)
+            or _two_options_record(lines, name) == CHOSEN_LAND_TYPE_KEY
+        ),
+        _shown_word,
+    ),
+    EntryChoice(
+        CHOSEN_NUMBER_KEY, "Chosen number",
+        lambda text, lines, name: any(
+            choose_number_on_enter(line) is not None for line in lines
+        ),
+        _shown_word,
+    ),
+    EntryChoice(
+        LIFE_PAID_AS_ENTERED, "Life paid as it entered",
+        lambda text, lines, name: any(
+            pay_any_life_on_enter(line, name) is not None for line in lines
+        ),
+        _shown_word,
+    ),
+)
+
+
+def entry_choices_of(card) -> "tuple[EntryChoice, ...]":
+    """The rows of :data:`ENTRY_CHOICES` *card*'s text makes as it enters.
+
+    Read the way the entry state reads it — the compiled program's normalized
+    text for the substring probes and ``oracle.expand_card_lines`` for the
+    whole-line ones — so "does this card choose a colour as it enters" has the
+    answer the mixin acted on. Imported late for :func:`_entry_choice_catalogs`'
+    reason: ``engine/oracle.py`` imports this module.
+    """
+    # Cached by what the two readings below are functions of: a client polls,
+    # and every poll asks this of every permanent on the table.
+    key = (card.name, card.oracle_text, card.is_legendary)
+    found = _ENTRY_CHOICES_OF.get(key)
+    if found is None:
+        from .oracle import compile_card_oracle, expand_card_lines
+
+        text = compile_card_oracle(card).normalized_text
+        lines = tuple(expand_card_lines(card))
+        found = _ENTRY_CHOICES_OF[key] = tuple(
+            row for row in ENTRY_CHOICES if row.asked(text, lines, card.name)
+        )
+    return found
+
+
+_ENTRY_CHOICES_OF: "dict[tuple, tuple[EntryChoice, ...]]" = {}
+
+
+def chosen_as_entered(game, permanent) -> "list[dict[str, str]]":
+    """What *permanent* chose as it entered: ``[{"label", "value"}, …]``.
+
+    One entry per row its text asks for **and** its metadata holds a record of,
+    in table order. Asked of ``effective_card`` — a Clone of a Voice of All
+    chose a colour of its own as it entered (CR 707.2, CR 614.1c) — and gated
+    on the text as well as the record, because two of these keys are also
+    written by effects that are not entry choices ("choose a color" on a
+    resolving ability): what a permanent *currently says it chose as it
+    entered* is the claim, and a stale record under a sentence it no longer
+    prints is not one.
+
+    Every choice here is public. CR 614.1c's choices are made as the permanent
+    enters, in the open, and no sentence these rows read says "secretly" —
+    ``test_entry_choices_reach_the_client.py`` fails if one ever does, because
+    a hidden choice must not be sent to a viewer who may not see it.
+    """
+    shown = []
+    for row in entry_choices_of(permanent.effective_card):
+        if row.key not in permanent.metadata:
+            continue
+        shown.append({
+            "label": row.label,
+            "value": row.shown(game, permanent.metadata[row.key]),
+        })
+    return shown
+
+
 __all__ = [
     "CHOOSE_CARD_NAME_ON_ENTER",
     "CHOOSE_COLOR_AND_OPPONENT_ON_ENTER",
@@ -1896,6 +2116,10 @@ __all__ = [
     "SPEND_WHITE_AS_RED",
     "copy_on_enter_type",
     "enter_effect_line",
+    "ENTRY_CHOICES",
+    "EntryChoice",
+    "chosen_as_entered",
+    "entry_choices_of",
 ]
 
 
