@@ -986,9 +986,13 @@ def test_w1g2_nightscape_battlemage_destroys_a_land(set_pool):
 def test_w1g2_a_both_kicked_battlemage_asks_for_the_second_triggers_target(set_pool):
     """One cast carries one set of target fields, and they are the *first*
     trigger's. Nightscape Battlemage kicked both ways with two creatures named
-    returns them — and "destroy target land" then goes on the stack and asks
-    its controller, where it used to be handed the two creatures and report
-    its target gone (CR 603.3d)."""
+    returns them — and "destroy target land" asks its controller as it goes on
+    the stack, where it used to be handed the two creatures and report its
+    target gone (CR 603.3d).
+
+    Both triggers are stack objects (CR 603.3), so the land is asked for as
+    the pair goes on the stack — before either has resolved — and the first
+    printed, the bounce, resolves first."""
     game = _w1g2_duel(set_pool, ["Nightscape Battlemage"], humans=(0,))
     angel = _w1g2_put(game, set_pool, 1, "Serra Angel")
     bears = _w1g2_put(game, set_pool, 1, "Grizzly Bears")
@@ -1003,15 +1007,19 @@ def test_w1g2_a_both_kicked_battlemage_asks_for_the_second_triggers_target(set_p
     assert result.supported, result
     _w1g2_until_asked(game)
 
-    assert sorted(c.name for c in game.players[1].hand) == [
-        "Grizzly Bears", "Serra Angel",
-    ]
+    assert len(game.stack) == 2 and all(item.is_ability for item in game.stack)
+    assert game.players[1].hand == [], "nothing has resolved yet"
     (asked,) = game.pending_choices
     assert (asked.kind, asked.player_index) == ("trigger_target", 0)
     assert sorted(t["name"] for t in asked.data["targets"]) == ["Forest", "Mountain"]
+    assert game.confirm_trigger_target(0, permanent_id=forest.permanent_id)
+
+    assert game.resolve_top_of_stack()
+    assert sorted(c.name for c in game.players[1].hand) == [
+        "Grizzly Bears", "Serra Angel",
+    ]
     assert game.is_on_battlefield(forest) and game.is_on_battlefield(mountain)
 
-    assert game.confirm_trigger_target(0, permanent_id=forest.permanent_id)
     _w1g2_resolve_stack(game)
     assert not game.is_on_battlefield(forest) and game.is_on_battlefield(mountain)
 
@@ -1062,13 +1070,21 @@ def test_w1g2_a_trigger_is_never_handed_another_triggers_target(set_pool):
     assert result.supported, result
     _w1g2_until_asked(game)
 
+    # Both triggers are on the stack (CR 603.3); the enchantment's target is
+    # asked for as it goes there, and the discard has not begun.
     assert game.is_on_battlefield(crusade) and game.is_on_battlefield(castle)
+    assert len(game.stack) == 2 and len(game.players[0].hand) == 3
     kinds = sorted((choice.kind, choice.player_index) for choice in game.pending_choices)
-    assert kinds == [("discard", 0), ("trigger_target", 0)]
+    assert kinds == [("trigger_target", 0)]
     asked = next(c for c in game.pending_choices if c.kind == "trigger_target")
     assert sorted(t["name"] for t in asked.data["targets"]) == ["Castle", "Crusade"]
-
     assert game.confirm_trigger_target(0, permanent_id=castle.permanent_id)
+
+    # The first printed resolves first: the discard, at the seat the cast named.
+    _w1g2_until_asked(game)
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("discard", 0)]
+    assert game.is_on_battlefield(crusade) and game.is_on_battlefield(castle)
+
     game.auto_resolve_pending_choices()
     _w1g2_resolve_stack(game)
     assert game.is_on_battlefield(crusade) and not game.is_on_battlefield(castle)
@@ -1120,7 +1136,11 @@ def test_w1g2_a_both_kicked_battlemage_puts_two_triggers_on_the_stack(set_pool):
     assert game.resolve_top_of_stack()
 
     assert len(game.stack) == 2
-    damage, destroy = game.pending_choices
+    # The first printed is on top, so it resolves first (CR 603.3b at the
+    # engine's stated order) — which makes it the *last* put on the stack, and
+    # so the last asked.
+    assert "2 damage" in game.stack[-1].ability_text
+    destroy, damage = game.pending_choices
     assert (damage.kind, destroy.kind) == ("trigger_target", "trigger_target")
     assert sorted(t["name"] for t in damage.data["targets"]) == [
         "Black Knight", "Mage", "Rival", "Thornscape Battlemage",
@@ -1129,8 +1149,10 @@ def test_w1g2_a_both_kicked_battlemage_puts_two_triggers_on_the_stack(set_pool):
         "Mox Pearl", "Sol Ring",
     ]
 
-    assert game.confirm_trigger_target(0, permanent_id=knight.permanent_id)
+    # Each answer is held to the prompt it answers: the Knight is no artifact.
+    assert not game.confirm_trigger_target(0, permanent_id=knight.permanent_id)
     assert game.confirm_trigger_target(0, permanent_id=ring.permanent_id)
+    assert game.confirm_trigger_target(0, permanent_id=knight.permanent_id)
     _w1g2_resolve_stack(game)
     game.check_state_based_actions()
     assert sorted(c.name for c in game.players[1].graveyard) == [
@@ -1590,6 +1612,10 @@ def test_w1g2_cavern_harpy_pays_a_life_to_come_home(set_pool):
     game = _w1g2_duel(set_pool, [], pool={})
     _w1g2_put(game, set_pool, 0, "Black Knight")
     harpy = _w1g2_put(game, set_pool, 0, "Cavern Harpy")
+    # The gate is a stack object (CR 603.3); it returns the Knight when it
+    # resolves, not as the Harpy arrives.
+    assert _w1g2_names(game, 0) == ["Black Knight", "Cavern Harpy"]
+    _w1g2_resolve_stack(game)
     game.auto_resolve_pending_choices()
     assert _w1g2_names(game, 0) == ["Cavern Harpy"]
     assert game._has_keyword(harpy, "flying")
@@ -1640,7 +1666,11 @@ def test_w1g2_lava_zombie_pumps_until_end_of_turn(set_pool):
 
 def test_w1g2_marsh_crocodile_makes_each_player_discard(set_pool):
     """Two entry triggers: the gate, and "each player discards a card" — each
-    seat choosing its own."""
+    seat choosing its own.
+
+    Two stack objects, resolved one at a time (CR 603.3): the gate is asked
+    and answered before the discard begins, where the inline path ran the
+    discard into the gate's unanswered prompt and asked all three at once."""
     game = _w1g2_duel(
         set_pool, ["Marsh Crocodile", "Forest", "Island"], humans=(0, 1),
         their_hand=["Grizzly Bears", "Forest"],
@@ -1648,10 +1678,15 @@ def test_w1g2_marsh_crocodile_makes_each_player_discard(set_pool):
     knight = _w1g2_put(game, set_pool, 0, "Black Knight")
     assert game.queue_from_hand(0, "Marsh Crocodile").supported
     _w1g2_until_asked(game)
-    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
-        ("discard", 0), ("discard", 1), ("permanent_set_choice", 0),
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_set_choice", 0),
     ]
     assert game.confirm_permanent_set_choice(0, [knight.permanent_id])
+    assert "Black Knight" in [c.name for c in game.players[0].hand]
+    _w1g2_until_asked(game)
+    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
+        ("discard", 0), ("discard", 1),
+    ]
     game.auto_resolve_pending_choices()
     _w1g2_resolve_stack(game)
     assert _w1g2_names(game, 0) == ["Marsh Crocodile"]
@@ -1669,11 +1704,17 @@ def test_w1g2_razing_snidd_makes_each_player_sacrifice_a_land(set_pool):
         _w1g2_put(game, set_pool, seat, "Swamp")
         _w1g2_put(game, set_pool, seat, "Mountain")
     assert game.queue_from_hand(0, "Razing Snidd").supported
+    # Two stack objects, one at a time (CR 603.3): the gate first, and only
+    # once it is answered does the sacrifice ask anybody anything.
     _w1g2_until_asked(game)
-    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
-        ("permanent_set_choice", 0), ("sacrifice", 0), ("sacrifice", 1),
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [
+        ("permanent_set_choice", 0),
     ]
     assert game.confirm_permanent_set_choice(0, [knight.permanent_id])
+    _w1g2_until_asked(game)
+    assert sorted((c.kind, c.player_index) for c in game.pending_choices) == [
+        ("sacrifice", 0), ("sacrifice", 1),
+    ]
     game.auto_resolve_pending_choices()
     _w1g2_resolve_stack(game)
     for seat in (0, 1):
@@ -2335,8 +2376,14 @@ def test_w1g3_doomsday_specter_is_gated_by_a_blue_or_black_creature(set_pool):
 
 def _w1g3_cast_loon(set_pool, hand, library):
     """Cast Sawtooth Loon from a hand of the Loon plus *hand*, over *library*
-    (top first), and answer its gating by returning the Loon itself — the only
-    white or blue creature its controller has. Returns the game and seat 0."""
+    (top first), answer its gating by returning the Loon itself — the only
+    white or blue creature its controller has — and resolve its second entry
+    trigger up to its question. Returns the game and seat 0.
+
+    The two triggers are two stack objects (CR 603.3) and the first printed,
+    the gate, resolves first and completely: the Loon is back in its owner's
+    hand before "draw two cards, then put two cards from your hand on the
+    bottom of your library" begins."""
     game, card, _mine, _theirs = _w1g3_creature_table(
         set_pool, [], [], hands=(["Sawtooth Loon", *hand], []),
     )
@@ -2346,9 +2393,12 @@ def _w1g3_cast_loon(set_pool, hand, library):
     assert result.supported, result.details
     gating = next(c for c in game.pending_choices if c.kind == "permanent_set_choice")
     loon = next(p for p in game.controlled_by(0) if p.card.name == "Sawtooth Loon")
+    assert not any(c.kind == "hand_to_library" for c in game.pending_choices)
     assert game.resolve_pending_choice(
         gating.kind, 0, permanent_ids=[game.permanent_id_of(loon)]
     )
+    assert "Sawtooth Loon" in [held.name for held in player.hand]
+    assert game.resolve_top_of_stack(pause_for_choices=True)
     return game, player  # _w1g3_cast_loon
 
 
@@ -2364,7 +2414,9 @@ def test_w1g3_sawtooth_loon_draws_two_then_bottoms_two_in_the_order_named(set_po
     names = [card.name for card in player.hand]
 
     assert owed.data["count"] == 2 and owed.data["destination"] == "bottom"
-    assert sorted(names) == ["Counterspell", "Island", "Swamp"], "two drawn"
+    assert sorted(names) == [
+        "Counterspell", "Island", "Sawtooth Loon", "Swamp",
+    ], "two drawn, into a hand the gate has already returned the Loon to"
     assert not game.confirm_hand_to_library(0, [0]), "one card is not two"
     assert game.confirm_hand_to_library(
         0, [names.index("Swamp"), names.index("Counterspell")]
@@ -2381,16 +2433,19 @@ def test_w1g3_sawtooth_loon_draws_two_then_bottoms_two_in_the_order_named(set_po
 
 def test_w1g3_sawtooth_loon_bottoms_what_it_can_from_a_short_hand(set_pool):
     """CR 608.2's "as much as possible": an empty library draws nothing, the
-    hand holds one card, and that one card is what goes to the bottom."""
-    game, player = _w1g3_cast_loon(set_pool, ["Counterspell"], [])
+    hand holds one card, and that one card is what goes to the bottom.
+
+    The one card is the Loon itself — its gate resolved first and returned it,
+    so it is in the hand the second trigger bottoms from."""
+    game, player = _w1g3_cast_loon(set_pool, [], [])
     owed = next(c for c in game.pending_choices if c.kind == "hand_to_library")
 
     assert owed.data["count"] == 1
     assert game.confirm_hand_to_library(0, [0])
     _w1g3_resolve_stack(game)
 
-    assert [card.name for card in player.library] == ["Counterspell"]
-    assert [card.name for card in player.hand] == ["Sawtooth Loon"]
+    assert [card.name for card in player.library] == ["Sawtooth Loon"]
+    assert player.hand == []
 
 
 def _w1g3_lord_table(set_pool, mine_graveyard, *, interactive=(0, 1)):

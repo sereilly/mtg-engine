@@ -10,6 +10,7 @@ from engine import Game, PlayerState
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
+from tests.helpers import resolve_stack
 
 # --- G1: the return-to-hand family ---
 #
@@ -56,6 +57,12 @@ def test_coral_atoll_returns_an_untapped_island_and_stays(set_pool, catalog_by_n
     second = _enters(game, 0, catalog_by_name["Island"])
     atoll = _enters(game, 0, set_pool("VIS")["Coral Atoll"])
 
+    # CR 603.3: the entry trigger is an object on the stack, and nothing has
+    # been asked until it resolves — which it does up to its first question.
+    assert game.pending_choices == []
+    assert [item.card.name for item in game.stack] == ["Coral Atoll"]
+    assert game.resolve_top_of_stack(pause_for_choices=True)
+
     assert game.confirm_optional_pay(0, accept=True) is True
     # The price is a *choice*: the seat names which Island, and the prompt is
     # still owed until it does.
@@ -91,6 +98,9 @@ def test_the_karoo_cycle_is_sacrificed_with_no_untapped_basic(
     tapped = _enters(game, 0, catalog_by_name[basic])
     game.become_tapped(tapped)
     _enters(game, 0, set_pool("VIS")[land])
+    # CR 603.3: on the stack first, then resolved.
+    assert _names(alice.battlefield) == [basic, land]
+    resolve_stack(game)
 
     # No offer was made at all: `_action_is_takeable` found nothing the price
     # could be paid with, so the decline branch ran without asking.

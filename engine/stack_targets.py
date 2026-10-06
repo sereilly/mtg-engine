@@ -56,7 +56,7 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 from .divided_damage import DIVIDED_TARGETS, divided_entry, divided_entry_id
-from .modal_triggers import INLINE_TRIGGER_CONDITIONS, modal_trigger_modes
+from .modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .game import Game
@@ -329,7 +329,7 @@ def announcements(item: "StackItem") -> "tuple[_Announcement, ...] | None":
     # printed line.
     for trig in program.triggered_abilities:
         if (
-            trig.condition.kind in INLINE_TRIGGER_CONDITIONS
+            trig.condition.kind in ENTRY_TRIGGER_CONDITIONS
             and trig.supported
             and trig.instruction is not None
             and names_a_target(trig.source_line)
@@ -603,7 +603,7 @@ def _printed_target_instances(item: "StackItem") -> int | None:
     return sum(
         count(trig.source_line)
         for trig in program.triggered_abilities
-        if trig.condition.kind in INLINE_TRIGGER_CONDITIONS
+        if trig.condition.kind in ENTRY_TRIGGER_CONDITIONS
         and trig.supported and trig.instruction is not None
     )
 

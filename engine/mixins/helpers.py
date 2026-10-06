@@ -1289,11 +1289,11 @@ class GameHelpersMixin:
         # its own announcement.
         #
         # Named **here** rather than aliased into ``dies`` at the compiler,
-        # because the two halves are dispatched by different mechanisms: the
-        # entry half is carried out inline by
+        # because the two halves are announced from different fire sites: the
+        # entry half by
         # ``stack/resolution._apply_self_enters_battlefield_triggers`` and this
-        # half goes on the stack (CR 603.3). A single kind that meant "dies" to
-        # the compiler would have no entry half at all.
+        # half here, each onto the stack (CR 603.3). A single kind that meant
+        # "dies" to the compiler would have no entry half at all.
         for trig in matching_triggers(
             permanent.effective_card, condition_kinds={"dies", "enters_or_dies"},
         ):
@@ -2658,7 +2658,10 @@ class GameHelpersMixin:
         permanent = self.permanent_at(seat, index)
         return None if permanent is None else permanent.permanent_id
 
-    def _stack_push(self, item=None, *, targets_already_chosen: bool = False):
+    def _stack_push(
+        self, item=None, *, targets_already_chosen: bool = False,
+        announced_at_cast: bool = False,
+    ):
         """Put *item* on the stack and finish announcing it, then return it.
 
         Two steps, because the second is only meaningful once the first has
@@ -2682,11 +2685,25 @@ class GameHelpersMixin:
         can refuse this method, and it returns ``None`` when it does. Every
         caller ignores the return except the fire sites that log "added to the
         stack", which now say so only if it was.
+
+        *announced_at_cast* is an entry trigger carrying what its permanent
+        spell announced (``_apply_self_enters_battlefield_triggers``): this
+        engine names an entry trigger's target as the permanent is cast, so the
+        choice was made, and **announced**, by the spell. The trigger therefore
+        asks for nothing here, and neither announcement is made a second time —
+        "becomes the target of a spell or ability" and "whenever a player
+        chooses one or more targets" each heard about it from the cast. Made
+        again, a Sleeping Potion ("When enchanted creature becomes the target
+        of a spell or ability, sacrifice this Aura") sacrificed itself to its
+        own "tap enchanted creature", whose stack object carries the enchanted
+        creature it was cast on.
         """
         if not self.trigger_condition_holds(item):
             return None
-        self._stack_push_object(item)
-        self._choose_trigger_mode(item, targets_already_chosen=targets_already_chosen)
+        self._stack_push_object(item, announce=not announced_at_cast)
+        self._choose_trigger_mode(
+            item, targets_already_chosen=targets_already_chosen or announced_at_cast
+        )
         # …and its non-modal twin: an ability whose printed noun phrase is a
         # *choice* the event did not make chooses it now, at the same moment
         # and for the same rule (CR 603.3d/601.2c). Both hang off this method
@@ -2701,7 +2718,7 @@ class GameHelpersMixin:
         # original's (CR 707.10). Both were announced with their targets
         # already made, so asking again would replace a choice a player has
         # made with one they have not.
-        if not targets_already_chosen:
+        if not targets_already_chosen and not announced_at_cast:
             self._choose_trigger_targets(item)
         # CR 113.6b: an ability that functions while the card is **on the
         # stack** starts functioning the moment the object is put there, and
@@ -2733,16 +2750,20 @@ class GameHelpersMixin:
         #   the answer announces (``_resolve_trigger_target``);
         # * an object the stack no longer holds was removed for having no legal
         #   target (CR 603.3d) or mode (CR 700.2b).
+        #
+        # ...and a fourth: an entry trigger carrying its permanent spell's
+        # announcement (*announced_at_cast*) -- the cast announced that choice.
         if (
             item is not None
             and not item.is_copy
+            and not announced_at_cast
             and self.announcement_choice_for(item) is None
             and any(waiting is item for waiting in self.stack)
         ):
             self.announce_targets_chosen(item)
         return item
 
-    def _stack_push_object(self, item) -> None:
+    def _stack_push_object(self, item, *, announce: bool = True) -> None:
         """Put *item* on the stack, recording its target's identity (CR 601.2c),
         then announce the targeting (CR 603.2).
 
@@ -2776,7 +2797,8 @@ class GameHelpersMixin:
         handed the id of whatever permanent sat in battlefield slot 1."""
         self._stamp_stack_targets(item)
         self.stack.append(item)
-        self._announce_targeting(item)
+        if announce:
+            self._announce_targeting(item)
 
     def _stamp_stack_targets(self, item) -> None:
         """Record the identity behind every index *item* carries (CR 601.2c).
@@ -3732,8 +3754,11 @@ class GameHelpersMixin:
         # fact about an entry, asked by two rules.
         #
         # ``targets_announced=False`` is that "no equivalent" said out loud: a
-        # trigger with a target to choose goes on the stack and chooses it there
-        # (CR 603.3d) instead of resolving against the fallback scan.
+        # trigger with a target to choose chooses it as it is put on the stack
+        # (CR 603.3d). Every trigger goes on the stack either way (CR 603.3) —
+        # which, for an entry made during another object's resolution, is
+        # *under* that object if a prompt holds it there, and so resolves after
+        # it has finished.
         if not was_cast:
             self._apply_self_enters_battlefield_triggers(
                 controller_index, permanent, target_player_index, None, None,

@@ -62,30 +62,42 @@ MODAL_INSTRUCTION_KIND = "choose_one"
 MODAL_HEAD_KEY = "modal"
 
 
-#: Trigger conditions this engine carries out **inline**, without ever putting
-#: the ability on the stack.
+#: The conditions of a permanent's **own entry trigger** — what
+#: ``stack/resolution._apply_self_enters_battlefield_triggers`` announces as the
+#: permanent enters (CR 603.6a) and puts on the stack (CR 603.3).
 #:
-#: An enters-the-battlefield trigger is fired and executed inside the resolution
-#: of the spell that put the permanent there
-#: (``stack/resolution._apply_self_enters_battlefield_triggers``) — a standing
-#: approximation of CR 603.3, which would give it its own stack object and its
-#: own priority window. That approximation is why it is named here: a trigger
-#: with no push has no moment at which CR 700.2b lets its mode be chosen, so a
-#: *targeted* mode on one of these would reach resolution with no picker in
-#: front of it and run against whatever the cast happened to target.
-#:
-#: The set is read by the compiler's gate (which refuses such a card) and by the
-#: inline path itself (which is what makes the claim true), so the two cannot
-#: drift. It shrinks — to empty — the day an ETB trigger uses the stack.
 #: ``enters_or_dies`` (Goblin Marshal, Hunting Moa) is here for its **entry**
-#: half only. Its death half is announced by `_permanent_to_graveyard` and goes
-#: on the stack like any other death trigger; membership here is the claim that
-#: the *entry* announcement is carried out inline, which is exactly the claim
-#: ``enters_battlefield`` above makes and exactly as approximate. Left out, the
-#: entry half would be announced by nothing at all — the card would make its
-#: Goblins when it died and not when it arrived, which is a supported card
-#: playing as half of itself.
-INLINE_TRIGGER_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
+#: half only. Its death half is announced by `_permanent_to_graveyard`; left out
+#: of this set, the entry half would be announced by nothing at all — the card
+#: would make its Goblins when it died and not when it arrived, which is a
+#: supported card playing as half of itself.
+#:
+#: Three readers, and they have to agree about which triggers these are: the
+#: entry site itself, and ``stack_targets``' two questions about a permanent
+#: spell — which in this engine *carries its entry trigger's target*, announced
+#: as the permanent is cast (the standing approximation
+#: ``targeting._cast_target_spec`` documents; CR 603.3d would choose it as the
+#: trigger is put on the stack).
+ENTRY_TRIGGER_CONDITIONS = frozenset({"enters_battlefield", "enters_or_dies"})
+
+#: Trigger conditions this engine carries out **inline**, without ever putting
+#: the ability on the stack. **Empty**, and meant to stay that way.
+#:
+#: It held the two entry conditions above until Planeshift: an entry trigger
+#: was executed inside the event that put the permanent onto the battlefield, a
+#: standing approximation of CR 603.3 that went in with Arabian Nights. A
+#: trigger with no push has no moment at which CR 700.2b lets its mode be
+#: chosen, so the compiler refused a *targeted* mode on one
+#: (:func:`modal_trigger_targeting_refusal`). Its own comment said it "shrinks —
+#: to empty — the day an ETB trigger uses the stack", and that day came: a modal
+#: entry trigger now chooses its mode and that mode's targets as it is put on
+#: the stack, like every other modal trigger.
+#:
+#: The registry and its gate stay, because the reason for them is not about
+#: entry triggers: a condition somebody later dispatches without a push has to
+#: be named here, and the compiler then refuses the card whose targeted mode
+#: would have no picker instead of admitting it.
+INLINE_TRIGGER_CONDITIONS: frozenset = frozenset()
 
 
 def modal_trigger_modes(instruction: OracleInstruction | None) -> tuple[dict, ...]:

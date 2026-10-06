@@ -29,6 +29,7 @@ from engine import Game, PlayerState
 from engine.auras import attach_aura
 from engine.models import CardDefinition, Permanent
 from engine.oracle import compile_card_oracle
+from tests.helpers import resolve_stack
 
 
 def _r30_modal_aura(name: str, *bullets: str) -> CardDefinition:
@@ -192,53 +193,119 @@ def test_a_non_interactive_seat_takes_the_first_offered_mode():
     assert p1.life == 21, "the life-gain mode was the only one that could be chosen"
 
 
-@pytest.mark.cr("700.2b", "603.3")
-def test_a_targeted_mode_is_refused_where_the_trigger_never_reaches_the_stack():
-    """The gate and the dispatch read one table.
-
-    An enters-the-battlefield trigger is still carried out *inline*, inside the
-    resolution of the spell that put the permanent there — a standing
-    approximation of CR 603.3. A trigger with no push has no moment at which
-    CR 700.2b lets its mode be chosen, so a targeted mode there would reach
-    resolution with no picker and run against whatever the cast happened to
-    name. The compiler refuses the card instead, reading the same
-    ``INLINE_TRIGGER_CONDITIONS`` the inline path selects on — so the day an
-    ETB trigger uses the stack, both change together.
-    """
-    card = CardDefinition(
+def _w2g6_probe_boar(*bullets: str) -> CardDefinition:
+    """A creature whose **entry** trigger offers *bullets* as its modes."""
+    return CardDefinition(
         name="Probe Boar", mana_cost="{2}{G}", cmc=3.0, type_line="Creature — Boar",
-        oracle_text=(
-            "When this creature enters, choose one —\n"
-            "• Destroy target artifact.\n"
-            "• You gain 4 life."
+        oracle_text="\n".join(
+            ["When this creature enters, choose one —"]
+            + [f"• {bullet}" for bullet in bullets]
         ),
         colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
         raw={"name": "Probe Boar", "type_line": "Creature - Boar", "power": "2",
              "toughness": "2"},
     )
 
-    program = compile_card_oracle(card)
 
-    assert not program.supported
-    assert "has no picker" in program.reason
-    assert "Destroy target artifact" in program.reason
+@pytest.mark.cr("700.2b", "603.3", "603.3c")
+def test_w2g6_a_targeted_mode_on_an_entry_trigger_is_chosen_as_it_goes_on_the_stack():
+    """An entry trigger is put on the stack like any other (CR 603.3), so its
+    mode and that mode's target are chosen there (CR 603.3c, CR 700.2b).
+
+    This test used to assert the opposite: the compiler **refused** this card,
+    because an entry trigger was carried out inline, inside the resolution of
+    the spell that put the permanent there, and a trigger with no push has no
+    moment at which its mode can be chosen. Its docstring said "the day an ETB
+    trigger uses the stack, both change together" — this is that day.
+    """
+    card = _w2g6_probe_boar("Destroy target artifact.", "You gain 4 life.")
+    assert compile_card_oracle(card).supported, compile_card_oracle(card).reason
+
+    trinket = Permanent(card=_r30_artifact("Trinket"))
+    p1 = PlayerState(name="A", hand=[card])
+    game = Game(players=[p1, PlayerState(name="B", battlefield=[trinket])])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game._sync_control()
+
+    assert game.cast_from_hand(0, "Probe Boar").supported
+    # The creature is on the battlefield and its trigger is on the stack,
+    # mid-announcement (the spell that armed the prompt is held with it).
+    (boar,) = list(game.controlled_by(0))
+    assert boar.card.name == "Probe Boar"
+    trigger = next(item for item in game.stack if item.is_ability)
+    assert trigger.source_permanent is boar
+    assert trigger.chosen_mode_index is None
+    choice = game.pending_choices_of("mode_choice", 0)[0]
+    assert choice.data["labels"] == ["Destroy target artifact", "You gain 4 life"]
+
+    assert game.resolve_pending_choice(
+        "mode_choice", 0, mode_index=0,
+        target={"permanent_id": trinket.permanent_id},
+    )
+    assert game.is_on_battlefield(trinket), "chosen, not yet resolved"
+    assert game.stack == [trigger] and trigger.chosen_mode_index == 0
+    resolve_stack(game)
+
+    assert not game.is_on_battlefield(trinket)
+    assert p1.life == 20, "the other mode was not also taken"
+
+
+@pytest.mark.cr("700.2b", "603.3c")
+def test_w2g6_an_entry_triggers_untargetable_mode_cannot_be_chosen():
+    """CR 700.2b's other half, on the same card: with no artifact anywhere the
+    destroy mode is illegal and is not offered, so the life is all there is."""
+    card = _w2g6_probe_boar("Destroy target artifact.", "You gain 4 life.")
+    p1 = PlayerState(name="A", hand=[card])
+    game = Game(players=[p1, PlayerState(name="B")])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+
+    assert game.cast_from_hand(0, "Probe Boar").supported
+    choice = game.pending_choices_of("mode_choice", 0)[0]
+    assert choice.data["labels"] == ["You gain 4 life"]
+    # The answer names a position in the *offered* list.
+    assert game.resolve_pending_choice("mode_choice", 0, mode_index=0)
+    assert p1.life == 20
+    resolve_stack(game)
+
+    assert p1.life == 24
 
 
 @pytest.mark.cr("700.2b")
-def test_an_untargeted_mode_is_fine_on_that_same_inline_trigger():
-    """The refusal is about the *target*, not about the modal head: an inline
-    trigger whose modes choose nothing has nothing to pick and works
-    (Trufflesnout, which ships)."""
-    card = CardDefinition(
-        name="Probe Boar", mana_cost="{2}{G}", cmc=3.0, type_line="Creature — Boar",
-        oracle_text=(
-            "When this creature enters, choose one —\n"
-            "• Put a +1/+1 counter on this creature.\n"
-            "• You gain 4 life."
-        ),
-        colors=("G",), color_identity=("G",), keywords=(), produced_mana=(),
-        raw={"name": "Probe Boar", "type_line": "Creature - Boar", "power": "2",
-             "toughness": "2"},
+def test_w2g6_the_inline_registry_is_empty_and_its_gate_still_reads_it(monkeypatch):
+    """The gate and the dispatch read one table — and the table is empty.
+
+    ``INLINE_TRIGGER_CONDITIONS`` names the conditions carried out with no
+    push, where a targeted mode would have no picker. Nothing is dispatched
+    that way any more, so nothing is refused; a condition somebody later adds
+    to it is refused again, which is what the registry is kept for.
+    """
+    import engine.modal_triggers as modal_triggers
+
+    modes = ({
+        "label": "Destroy target artifact",
+        "instruction": compile_card_oracle(
+            _w2g6_probe_boar("Destroy target artifact.", "You gain 4 life.")
+        ).triggered_abilities[0].instruction.payload["modes"][0]["instruction"],
+    },)
+    assert modal_triggers.INLINE_TRIGGER_CONDITIONS == frozenset()
+    assert modal_triggers.modal_trigger_targeting_refusal(
+        "enters_battlefield", modes
+    ) is None
+
+    monkeypatch.setattr(
+        modal_triggers, "INLINE_TRIGGER_CONDITIONS", frozenset({"enters_battlefield"})
     )
+    refusal = modal_triggers.modal_trigger_targeting_refusal("enters_battlefield", modes)
+    assert refusal is not None and "has no picker" in refusal
+    assert "Destroy target artifact" in refusal
+
+
+@pytest.mark.cr("700.2b")
+def test_an_untargeted_mode_is_fine_on_an_entry_trigger():
+    """An entry trigger whose modes choose nothing has only a mode to pick
+    (Trufflesnout, which ships)."""
+    card = _w2g6_probe_boar("Put a +1/+1 counter on this creature.", "You gain 4 life.")
 
     assert compile_card_oracle(card).supported

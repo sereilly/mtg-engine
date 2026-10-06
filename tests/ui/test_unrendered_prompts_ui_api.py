@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 from engine.game_types import OracleExecutionContext
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 from web.app import app, store
 
 client = TestClient(app)
@@ -87,8 +87,15 @@ def test_mode_choice_round_trip(set_pool):
 
     answered = _act(sid, seat=0, action="mode_choice_confirm", hand_index=1)
     assert answered.status_code == 200, answered.json()
-    assert p1.life == life_before + 4
     assert _state(sid)["mode_choice"] is None
+    # CR 700.2b / CR 603.3: the mode was chosen as the entry trigger went on
+    # the stack, and the trigger is still there to be resolved.
+    assert p1.life == life_before
+    assert [
+        (entry["card"]["name"], entry["is_triggered"]) for entry in _state(sid)["stack"]
+    ] == [("Trufflesnout", True)]
+    resolve_stack(game)
+    assert p1.life == life_before + 4
 
 
 # --- name_and_strip: Necromentia ---------------------------------------------

@@ -25,7 +25,7 @@ from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
-from ...modal_triggers import INLINE_TRIGGER_CONDITIONS, modal_trigger_modes
+from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
 # program announced a target — this picker (CR 603.3d) and the ``may``
@@ -288,6 +288,13 @@ class StackResolutionMixin:
         captured_results: dict | None = None,
         hook_key: str | None = None,
         hook_event: dict | None = None,
+        # CR 107.3m: an entry trigger that refers to X uses the X chosen for
+        # the spell that became its permanent. None for every other trigger.
+        x_value: int | None = None,
+        # The target fields above were announced by the permanent spell this
+        # trigger's source was cast as, not chosen for this object -- see
+        # ``_stack_push``.
+        announced_at_cast: bool = False,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -316,6 +323,8 @@ class StackResolutionMixin:
                 captured_results=captured_results,
                 hook_key=hook_key,
                 hook_event=hook_event,
+                x_value=x_value,
+                announced_at_cast=announced_at_cast,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -340,7 +349,7 @@ class StackResolutionMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     target_permanent_id=target_permanent_id,
-                    x_value=None,
+                    x_value=x_value,
                     ability_instruction=instruction,
                     ability_effect_kind=effect_kind,
                     source_permanent=source_permanent,
@@ -349,7 +358,8 @@ class StackResolutionMixin:
                     captured_results=dict(captured_results or {}),
                     hook_key=hook_key,
                     hook_event=hook_event,
-                )
+                ),
+                announced_at_cast=announced_at_cast,
             )
 
     def _ability_execution_context(self, item: StackItem) -> OracleExecutionContext:
@@ -1703,19 +1713,60 @@ class StackResolutionMixin:
         *,
         targets_announced: bool = True,
     ) -> None:
-        """Fire a just-entered permanent's own "when this enters the
-        battlefield" triggered abilities (e.g. Oubliette). This engine doesn't
-        model a separate priority window for choosing the trigger's own
-        target, so the caster's cast-time target choice is reused directly —
-        the same convention an Aura's enchant target already follows.
+        """Put a just-entered permanent's own "when this enters" triggered
+        abilities on the stack (CR 603.6a, CR 603.3).
 
-        The id travels with the index because an index is unstable: anything
-        leaving the battlefield renumbers every later slot, so a trigger that
-        picked slot 2 at cast time and resolves after something died in response
-        hits whichever permanent slid into that slot. This context was built
-        without the id, so every targeting ETB trigger in the pool resolved by
-        index alone — Oubliette among them. ``chosen_permanent`` prefers the id
-        and only falls back to the index when there is none.
+        **Each one is a stack object, and nothing of it happens here.** CR 603.3:
+        "Once an ability has triggered, its controller puts it on the stack as
+        an object that's not a card the next time a player would receive
+        priority." Until Planeshift this method *executed* the trigger, inside
+        the event that put the permanent onto the battlefield — an
+        approximation that went in with Arabian Nights (Oubliette), whose stated
+        reason was that the engine had no window in which a trigger's target
+        could be chosen. ``_choose_trigger_targets`` has been that window since,
+        and the approximation outlived its reason by eleven sets: 265 of the
+        pool's 278 entry triggers resolved with no object on the stack, so
+        nothing could respond to one. Cavern Harpy ("When this creature enters,
+        return a blue or black creature you control to its owner's hand. / Pay
+        1 life: Return this creature to its owner's hand.") could not be
+        returned in response to its own gate, which is the best-known play with
+        the card.
+
+        Measured before it was changed: run both ways over every entry trigger
+        in both manifest roles on three roads onto the battlefield (807
+        scenarios), the two paths ended in the same game state everywhere but
+        four cards, and three of those were the inline path being wrong — see
+        the seat below. ``tests/engine/test_entry_trigger_stack_census.py``
+        holds the invariant.
+
+        **Order.** The triggers of one permanent trigger together, and CR
+        603.3b lets their controller put them on the stack in any order. This
+        engine has no prompt for that choice anywhere (every batch takes its
+        collection order), so the stated policy is the printed one: the *first
+        printed resolves first*, which is the order they ran in inline, and so
+        the last printed is pushed first. Each resolves alone — Sawtooth Loon's
+        gate is asked, answered and finished before its "draw two cards, then
+        put two cards … on the bottom" begins, where inline the second ran into
+        the first's unanswered prompt.
+
+        **The cast's announcement rides the object.** This engine names an
+        entry trigger's target as the permanent is cast (the standing
+        approximation ``targeting._cast_target_spec`` documents; CR 603.3d
+        would choose it here), so the seat, slot and id the cast handed in are
+        stamped on the stack object, flagged ``announced_at_cast`` so the push
+        neither asks again nor announces the same choice twice. The id travels
+        with the index because an index is unstable: anything leaving the
+        battlefield renumbers every later slot, and the trigger now waits
+        through a priority round of its own.
+
+        **The seat is the one the cast named, or none.** Inline, a trigger
+        nobody named a player for ran with its *controller* as "the target
+        player"; every other trigger in the engine defaults that to the first
+        opponent (``_ability_execution_context``), and the stack object takes
+        that default like the rest. The difference was three shipped cards,
+        all wrong inline: Rishadan Brigand, Cutpurse and Footpad ("each
+        opponent sacrifices a permanent of their choice unless they pay {N}")
+        charged the toll to their own controller.
 
         **Whose triggers** is what the permanent *has*, which is
         ``effective_card`` and not ``card``. CR 707.5: an object that enters as
@@ -1725,26 +1776,17 @@ class StackResolutionMixin:
         after the event. Reading the printed card, every copy in the pool —
         Clone, Vesuvan Doppelganger, Copy Artifact and the token copies of
         Dance of Many, Dual Nature, Echo Chamber and Sublime Epiphany — fired
-        nothing on arrival: a Clone is printed with no entry trigger, and a
-        token copy's own card carries nothing but a name. The death half of
-        the same question (``_permanent_to_graveyard``) already read the
-        effective card; this was the entry half lagging behind it. A permanent
-        that is not a copy has the one card either way, so it fires once.
+        nothing on arrival. The death half of the same question
+        (``_permanent_to_graveyard``) already read the effective card.
 
         *targets_announced* says whether the targets handed in were chosen
         *for these triggers*. True for a cast whose picker was derived from the
-        entry trigger (``targeting._cast_target_spec``'s last branch) — the
-        standing approximation above. False for an entry nothing cast (a token,
-        a reanimation), for a cast that announced nothing, and for a copy, whose
-        cast announced the object to copy instead: nothing chose a target for
-        the trigger at all, and the inline
-        path's answer to that was the fallback scan over the *controller's*
-        own board — a reanimated Nekrataal destroyed its controller's creature,
-        a token Ravenous Rats made its own controller discard. Such a trigger
-        that has a target to choose goes on the stack instead, where
-        ``_choose_trigger_targets`` asks for it as CR 603.3d says (a
-        non-interactive seat takes the picker's stated default). One with
-        nothing to choose stays inline, which is the approximation unchanged.
+        entry trigger (``targeting._cast_target_spec``'s last branch). False
+        for an entry nothing cast (a token, a reanimation), for a cast that
+        announced nothing, and for a copy, whose cast announced the object to
+        copy instead: nothing chose a target for the trigger at all, so one
+        that has a target to choose chooses it as it is put on the stack
+        (CR 603.3d; a non-interactive seat takes the picker's stated default).
 
         **An announcement is spent by the one trigger it was made for.** The
         cast's picker is derived from the *first* entry trigger that describes
@@ -1755,67 +1797,99 @@ class StackResolutionMixin:
         it the first one's target is two wrong answers: "destroy target land"
         handed two creatures finds its target gone and does nothing, and
         "destroy target enchantment" handed a *player* falls to the handler's
-        fallback scan and destroys whichever enchantment that seat controls --
-        the caster's own, when the discard was aimed at themselves. So once a
-        choosing trigger has taken the announcement, every later choosing
-        trigger goes on the stack and chooses there (CR 603.3d).
+        fallback scan and destroys whichever enchantment that seat controls.
+        So once a choosing trigger has taken the announcement, every later
+        choosing trigger chooses for itself (CR 603.3d). Planeshift's
+        Battlemages ("Kicker {2}{U} and/or {2}{R}", one trigger per cost) are
+        the cards that reach it.
 
-        Nothing shipped before Planeshift could reach this: no permanent in the
-        pool printed two entry triggers that each choose a target until the
-        Battlemages ("Kicker {2}{U} and/or {2}{R}", one trigger per cost)."""
+        **A modal trigger takes nothing from the cast.** CR 603.3c: its mode,
+        and then that mode's targets, are chosen as it is put on the stack —
+        ``_choose_trigger_mode`` — and the cast's picker derives nothing for a
+        bulleted head, so there is no announcement that could be its.
+        """
         program = compile_card_oracle(permanent.effective_card)
+        if target_player_index is not None and not (
+            0 <= target_player_index < len(self.players)
+        ):
+            target_player_index = None
+        handed_over = any(
+            value is not None
+            for value in (
+                target_player_index, target_permanent_index, target_permanent_id,
+            )
+        )
         announcement_spent = False
+        triggered: list[dict] = []
         for trig in program.triggered_abilities:
             if (
-                trig.condition.kind not in INLINE_TRIGGER_CONDITIONS
+                trig.condition.kind not in ENTRY_TRIGGER_CONDITIONS
                 or not trig.supported
                 or trig.instruction is None
             ):
                 continue
-            chooses = self._entry_trigger_chooses_a_target(trig.instruction)
-            if chooses and (not targets_announced or announcement_spent):
-                self._enqueue_triggered_ability(
-                    controller_index=controller_index,
-                    source_permanent=permanent,
-                    card=permanent.card,
-                    instruction=trig.instruction,
-                    effect_kind=trig.effect_kind,
-                    ability_text=trig.source_line,
-                )
-                continue
-            caster = self.players[controller_index]
-            target_idx = target_player_index if target_player_index is not None else controller_index
-            if not (0 <= target_idx < len(self.players)):
-                target_idx = controller_index
-            target = self.players[target_idx]
-            context = OracleExecutionContext(
-                caster=caster,
-                target=target,
-                card=permanent.card,
-                target_permanent_index=target_permanent_index,
-                target_permanent_id=target_permanent_id,
+            event = dict(
+                controller_index=controller_index,
                 source_permanent=permanent,
-                # The cast's X, stamped on the permanent by `_stack_push`.
-                # "When this Aura enters, … put X sleep counters on it"
-                # (Venarian Gold) reads it, and without it every amount in an
-                # ETB trigger resolved "x" to zero.
+                card=permanent.card,
+                instruction=trig.instruction,
+                effect_kind=trig.effect_kind,
+                ability_text=trig.source_line,
+                # CR 107.3m: the cast's X, stamped on the permanent by
+                # `_resolve_card`. "When this Aura enters, … put X sleep
+                # counters on it" (Venarian Gold) reads it, and without it
+                # every amount in an entry trigger resolved "x" to zero.
                 x_value=permanent.metadata.get("cast_x_value"),
             )
-            # CR 603.4: an intervening-if gates the trigger. This inline path
-            # is both fire and resolution for an ETB trigger, so the one read
-            # here is the same check the stack path makes at line ~223 —
-            # without it, Turret Ogre would ping with no big creature in play.
-            gate = (trig.instruction.payload or {}).get("intervening_if")
-            if gate is not None and not evaluate_condition(self, context, gate):
-                self.log.append(
-                    f"{permanent.card.name}'s trigger did nothing: its condition is not met"
+            chooses = self._entry_trigger_chooses_a_target(trig.instruction)
+            chooses_on_the_stack = bool(modal_trigger_modes(trig.instruction)) or (
+                chooses and (not targets_announced or announcement_spent)
+            )
+            if handed_over and not chooses_on_the_stack:
+                event.update(
+                    target_player_index=target_player_index,
+                    target_permanent_index=target_permanent_index,
+                    target_permanent_id=target_permanent_id,
+                    announced_at_cast=True,
                 )
-                continue
-            # Only a trigger that *fired* spends the announcement: one whose
+            # CR 603.4: an ability whose "if" is false as the event occurs does
+            # not trigger at all. Asked here as well as at the push, because
+            # only a trigger that *fired* spends the announcement: one whose
             # "if" was false (a Battlemage kicked with its second cost alone)
             # was never the trigger the picker described.
-            announcement_spent = announcement_spent or chooses
-            self._execute_oracle_instruction(trig.instruction, context)
+            if not self._entry_trigger_triggers(event):
+                continue
+            if not chooses_on_the_stack:
+                announcement_spent = announcement_spent or chooses
+            triggered.append(event)
+        # Last printed first, so the first printed is on top and resolves
+        # first (CR 603.3b's order, at the stated policy above).
+        for event in reversed(triggered):
+            self._enqueue_triggered_ability(**event)
+
+    def _entry_trigger_triggers(self, event: dict) -> bool:
+        """CR 603.4's first check for one entry trigger, before it is queued.
+
+        Asked through :meth:`trigger_condition_holds`, of an object built the
+        way the push will build it, so the answer is the one ``_stack_push``
+        will reach a moment later: the rule's two checks, and this early read
+        of the first, all go through the one context builder
+        (:meth:`_ability_execution_context`). Nothing is put on the stack here.
+        """
+        if (event["instruction"].payload or {}).get("intervening_if") is None:
+            return True
+        return self.trigger_condition_holds(StackItem(
+            card=event["card"],
+            caster_index=event["controller_index"],
+            target_player_index=event.get("target_player_index"),
+            target_permanent_index=event.get("target_permanent_index"),
+            x_value=event.get("x_value"),
+            target_permanent_id=event.get("target_permanent_id"),
+            ability_instruction=event["instruction"],
+            ability_effect_kind=event["effect_kind"],
+            source_permanent=event["source_permanent"],
+            ability_text=event["ability_text"],
+        ))
 
     def _entry_trigger_chooses_a_target(self, instruction: OracleInstruction) -> bool:
         """Whether CR 603.3d has a target for :meth:`_choose_trigger_targets`
@@ -1825,8 +1899,8 @@ class StackResolutionMixin:
         same spec derivation, the same two kind sets, and the same
         :func:`announces_a_target` requirement on a player. A trigger it would
         decline — a graveyard card, a spell, a seat nobody prints "target" for —
-        has no choice to make, so moving it to the stack would change only when
-        it resolves, and it stays on the inline path it has always taken.
+        has no choice that picker could make, so it goes on the stack carrying
+        whatever the cast announced, exactly as it was handed it inline.
         """
         from ...targeting import derive_instruction_spec
 

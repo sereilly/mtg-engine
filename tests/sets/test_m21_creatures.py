@@ -19,7 +19,7 @@ from engine.grammar import compile_line
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_activation_spec
-from tests.helpers import _nosick
+from tests.helpers import _nosick, resolve_stack
 
 
 # --- Round 32: the opponent-scoped board, in both readings --------------------
@@ -512,6 +512,12 @@ def test_trufflesnout_interactive_controller_may_take_the_life_instead(set_pool)
         "an index outside the printed list is refused and the prompt stays owed"
     )
     assert game.resolve_pending_choice("mode_choice", 0, mode_index=1)
+    # CR 700.2b: the mode is chosen as the trigger is put on the stack, and
+    # the trigger is still an object there (CR 603.3) — choosing is not
+    # resolving.
+    assert p1.life == 20
+    assert [item.card.name for item in game.stack] == ["Trufflesnout"]
+    resolve_stack(game)
     assert p1.life == 24
     snout = next(p for p in p1.battlefield if p.card.name == "Trufflesnout")
     assert snout.metadata.get("plus_counters", 0) == 0, "the counter mode was declined"
