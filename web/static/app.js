@@ -10347,10 +10347,14 @@ function renderActivationPrompt() {
       : "Select which mode to cast.";
     const modeButtons = pendingModalChoice.modes
       .map((mode, index) => {
-        const disabled = mode.supported === false ? " disabled" : "";
+        // `announceable === false` is CR 601.2c's "no legal target for this
+        // mode", sent per mode by the server (`mode_announcement_refusal`) —
+        // shown on the button for the reason an unsupported mode is.
+        const untargetable = !faceChoice && mode.announceable === false;
+        const disabled = mode.supported === false || untargetable ? " disabled" : "";
         const suffix = mode.supported === false
           ? (faceChoice ? " (can't be cast now)" : " (unsupported)")
-          : "";
+          : (untargetable ? " (no legal target)" : "");
         const on = several && picked.includes(index) ? " prompt-choice-btn-on" : "";
         const tick = several && picked.includes(index) ? "✓ " : "";
         return `<button type="button" class="prompt-choice-btn${on}" data-mode-choice="${index}"${disabled}>${tick}${escapeHtml(mode.label)}${suffix}</button>`;
@@ -12871,7 +12875,7 @@ function promptNextModeTarget() {
   const index = run.order[run.cursor];
   const mode = run.modes[index];
   updateActionHint(`${run.cardName} — ${mode.label}.`);
-  dispatchModalCast(run.card, run.castAction, mode.target_kind, mode.valid_targets);
+  dispatchModalCast(run.card, run.castAction, mode.target_kind, mode.valid_targets, mode.target_spec);
 }
 
 // Send the accumulated modes as one cast. Cleared first, so the sendAction below
@@ -12917,6 +12921,14 @@ function chooseModalMode(index) {
     updateActionHint("That mode isn't supported yet — pick another.", true);
     return;
   }
+  if (mode.announceable === false) {
+    // CR 601.2c: this mode names a target and nothing legal exists to name.
+    // The server said so (`mode_announcement_refusal`), which is the answer
+    // the cast would be refused with — so the click is declined here rather
+    // than spent on a prompt with nothing to pick.
+    updateActionHint("That mode has no legal target right now — pick another.", true);
+    return;
+  }
 
   // A multi-select prompt toggles and waits for the confirm; a single-mode one
   // is finished by this click, which is the difference between "which mode" and
@@ -12933,28 +12945,48 @@ function chooseModalMode(index) {
   pendingCastModeIndex = index;
   renderActivationPrompt();
   updateActionHint(`${choice.cardName} — ${mode.label}.`);
-  dispatchModalCast(choice.card, choice.castAction, mode.target_kind, mode.valid_targets);
+  dispatchModalCast(choice.card, choice.castAction, mode.target_kind, mode.valid_targets, mode.target_spec);
 }
 
 // Route a chosen mode to the targeting prompt its effect needs, or cast directly
 // when the mode targets nothing.
-function dispatchModalCast(card, castAction, targetKind, validTargets = null) {
+function dispatchModalCast(card, castAction, targetKind, validTargets = null, modeSpec = null) {
+  // **The chosen mode is the spell** (CR 700.2a), so every prompt below reads
+  // the mode's own spec where it would read the card's. The backend sends one
+  // per mode (`Game.cast_target_spec(mode_index=)`) — the spec that mode would
+  // have as a spell of its own, enumerated through the cast gate's own probe —
+  // and it is laid over a copy of the card rather than threaded through each
+  // prompt, because the prompts already ask `targetSpecOf(card)` for the
+  // roles, the several-target count, the graveyard narrowing and the rest. A
+  // modal card's own spec says only "modal", which is why Hull Breach's
+  // "destroy target artifact **and** target enchantment" was offered a single
+  // permanent and Read the Tides' "up to two target creatures" a single one.
+  // `modes` is emptied on the copy so nothing downstream asks for the mode a
+  // second time; `pendingCastModeIndex` is what carries the answer.
+  if (modeSpec && typeof modeSpec === "object") {
+    card = { ...card, target_spec: modeSpec, modes: [] };
+  }
   // A mode naming several targets takes the several-target prompt whatever its
-  // kind says, for the same reason the cast cascade checks it first.
-  if (cardRequiresSeveralTargets(card)) {
+  // kind says, for the same reason the cast cascade checks it first. Not a
+  // roles mode or a graveyard one, which carry their own multi-select — the
+  // order `startCastTargetCascade` asks in.
+  if (
+    targetKind !== "roles" && targetKind !== "graveyard_creature"
+    && cardRequiresSeveralTargets(card)
+  ) {
     startCastSeveralTargetsPrompt(card, castAction, validTargets);
     return;
   }
   if (targetKind !== "none" && !startCastPromptForKind(card, castAction, targetKind, validTargets)) {
-    // A kind the client cannot collect. The mode's kind comes from a *different*
-    // backend function than a card's cast spec does
-    // (`web/serialization._mode_target_kind`, whose own fall-through answers
-    // "player" for anything it does not recognize), so the two can name kinds
-    // this switch has never heard of. This used to fall through to the cast
-    // below and send a modal spell with no target at all — a silent wrong cast,
-    // which is the trade `engine/grammar/` refuses in the same words: loud
-    // failure beats a silent partial match. `tests/ui/test_modal_target_kinds.py`
-    // is what keeps this branch unreachable for the pool.
+    // A kind the client cannot collect. A mode's kind is the kind of the spec
+    // the engine derives for it (`web/serialization.mode_target_kind`, the
+    // card-level derivation asked per mode), so this is the same tripwire the
+    // cascade has: a kind the backend can name and this switch has never heard
+    // of. It used to fall through to the cast below and send a modal spell
+    // with no target at all — a silent wrong cast, which is the trade
+    // `engine/grammar/` refuses in the same words: loud failure beats a silent
+    // partial match. `tests/ui/test_cast_target_kinds.py` is what keeps this
+    // branch unreachable for the pool.
     clearPendingHandCast();
     updateActionHint(
       `${normalizeCardName(card)}: that mode's target can't be chosen here yet.`, true,

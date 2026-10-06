@@ -2788,12 +2788,51 @@ def _kicked_arms(instructions, paid) -> tuple:
     return tuple(kept)
 
 
+def announced_mode_instructions(program, mode_index: "int | None") -> tuple:
+    """The instructions a cast naming *mode_index* will run: the chosen mode's
+    own for a modal spell (CR 700.2a), *program*'s otherwise.
+
+    **The one answer to "which steps is this announcement about?"** for a
+    "Choose one —" spell, and it is the resolution's answer read early:
+    ``Game._select_executable_instruction`` runs
+    ``program.modes[mode_index].instruction`` when the caster named a real mode
+    and falls back to ``program.instructions`` — which for a modal card *is*
+    mode 0's instruction — when it named none (the AI, a headless caller). So a
+    spec, an obligation or a legality question derived through this function
+    is about the very steps that will resolve, whichever mode was named.
+
+    It was three readers. The cast gates declined modal spells outright ("the
+    derived spec is mode 0's"), ``web/serialization`` kept a per-kind table of
+    its own whose fall-through answered "player", and the per-kind arms in
+    ``_validate_cast_targets`` were the only thing that read the chosen mode —
+    for the eleven kinds they name, and by index alone. Planeshift's Charms sat
+    between all three: Rith's Charm was accepted at a *basic* land, Crosis's
+    Charm at a black creature, and the browser offered a player for "deals 1
+    damage to target creature".
+    """
+    modes = tuple(getattr(program, "modes", ()) or ())
+    if (
+        isinstance(mode_index, int)
+        and not isinstance(mode_index, bool)
+        and 0 <= mode_index < len(modes)
+        and modes[mode_index].instruction is not None
+    ):
+        return (modes[mode_index].instruction,)
+    return tuple(program.instructions)
+
+
 def _cast_target_spec(
-    card, program, *, kickers: "tuple[str, ...] | None" = None
+    card, program, *, kickers: "tuple[str, ...] | None" = None,
+    mode_index: "int | None" = None,
 ) -> dict | None:
     """What *card* announces as a **target** when it is cast (CR 601.2c), or
     None when it targets nothing. The cost half of the announcement is
     :func:`_cast_cost_picker`; :func:`derive_cast_spec` is the two together.
+
+    *mode_index* is CR 601.2b's other answer, for a "Choose one —" spell: the
+    chosen mode's steps are the spell (:func:`announced_mode_instructions`), so
+    its target is that mode's and no other's. None reads mode 0, which is what
+    a cast naming no mode resolves as.
 
     *kickers* is CR 702.33g's answer when the caller has one
     (:func:`_kickers_announced`): a tuple of the kicker costs the cast paid --
@@ -2832,7 +2871,9 @@ def _cast_target_spec(
     # gate is removed, so it is measured rather than assumed.
     type_line = card.type_line.lower()
     if "instant" in type_line or "sorcery" in type_line:
-        return _from_instructions(viewed(program.instructions))
+        return _from_instructions(
+            viewed(announced_mode_instructions(program, mode_index))
+        )
 
     # A permanent's enters-the-battlefield trigger is the one exception: this
     # engine picks its target as the permanent is cast (Oubliette), where
@@ -2888,9 +2929,15 @@ def entry_trigger_instructions(
 def derive_cast_spec(
     card, program, *, from_zone: str = "hand",
     optional_cost_payments: dict | None = None,
+    mode_index: "int | None" = None,
 ) -> dict | None:
     """The cast-time spec of *card* cast from *from_zone*, or None when it
     chooses nothing.
+
+    *mode_index* is the mode a "Choose one —" spell was announced with
+    (CR 601.2b): the spec is then **that mode's**, through
+    :func:`announced_mode_instructions`. A caller that names none is asking
+    about a cast that named none, which resolves mode 0.
 
     None is the answer for a permanent whose only targeting belongs to an
     activated ability — Royal Assassin picks its victim when the ability is
@@ -2914,6 +2961,7 @@ def derive_cast_spec(
     target_spec = _cast_target_spec(
         card, program,
         kickers=_kickers_announced(card, optional_cost_payments),
+        mode_index=mode_index,
     )
     if cost_spec is None:
         return target_spec
@@ -2942,6 +2990,7 @@ def derive_cast_spec(
 
 def cast_target_slot(
     card, program, *, optional_cost_payments: dict | None = None,
+    mode_index: "int | None" = None,
 ) -> "tuple[dict, object] | None":
     """``(spec, instruction)`` for the target an **instant or sorcery**
     announces as it is cast: the target half of :func:`derive_cast_spec`
@@ -2957,11 +3006,14 @@ def cast_target_slot(
     A permanent spell answers None: its spec is an Aura's enchant line or an
     entry trigger's target, neither of which is a step of the spell's own
     resolution, and each has its own gate.
+
+    *mode_index* names the chosen mode of a modal spell, whose steps are then
+    the ones read (:func:`announced_mode_instructions`).
     """
     type_line = card.type_line.lower()
     if "instant" not in type_line and "sorcery" not in type_line:
         return None
-    instructions = tuple(program.instructions)
+    instructions = announced_mode_instructions(program, mode_index)
     kickers = _kickers_announced(card, optional_cost_payments)
     if kickers is not None:
         instructions = _as_kicked(instructions, kickers)
@@ -2970,6 +3022,7 @@ def cast_target_slot(
 
 def instructions_as_announced(
     card, program, optional_cost_payments: dict | None,
+    *, mode_index: "int | None" = None,
 ) -> tuple:
     """*program*'s instructions as a cast announcing *optional_cost_payments*
     will run them: the :func:`_as_kicked` view for a card that prints a kicker
@@ -2987,8 +3040,13 @@ def instructions_as_announced(
     divided step at all — it walks a ``sequence`` and nothing else — so a
     kicked Magma Burst announced two targets, had no share stamped on either,
     and resolved the even split of 3: one damage each.
+
+    *mode_index* is the chosen mode of a modal spell
+    (:func:`announced_mode_instructions`): the steps a "Choose one —" cast
+    will run are that mode's, so a division printed in one mode is a division
+    only of a cast that chose it.
     """
-    instructions = tuple(program.instructions)
+    instructions = announced_mode_instructions(program, mode_index)
     kickers = _kickers_announced(card, optional_cost_payments)
     if kickers is None:
         return instructions
@@ -4237,15 +4295,8 @@ def graveyard_target_spec(
     """
     if instruction is not None:
         spec = _from_instructions((instruction,))
-    elif (
-        mode_index is not None
-        and program.modes
-        and 0 <= mode_index < len(program.modes)
-        and program.modes[mode_index].instruction is not None
-    ):
-        spec = _from_instructions((program.modes[mode_index].instruction,))
     else:
-        spec = derive_cast_spec(card, program)
+        spec = derive_cast_spec(card, program, mode_index=mode_index)
     if spec is not None and spec.get("kind") == GRAVEYARD_TARGET_KIND:
         return spec
     return None

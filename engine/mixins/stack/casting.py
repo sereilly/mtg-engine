@@ -459,6 +459,35 @@ def _named_divided_targets(
     return 1
 
 
+def _mode_announcements(
+    chosen_modes, mode_index, target_player_index, target_permanent_index,
+    target_permanent_ids, target_stack_item,
+) -> list[tuple]:
+    """``(mode_index, seat, slot, ids, stack_item)`` for every announcement a
+    cast makes (CR 601.2b–c).
+
+    One row for an ordinary spell and for the single-mode ``mode_index=``
+    spelling, read off the cast's own target fields. One row **per chosen
+    mode** for a "choose one or more" cast (``mode_choices``), read off the
+    mode that named them: two modes of Sublime Epiphany may name two objects
+    on two boards, and the cast's own fields name neither. A mode's targets
+    travel as a slot beside its seat, never as ids — ``ChosenMode`` is stamped
+    with ids only as it reaches the stack.
+    """
+    if chosen_modes:
+        return [
+            (
+                mode.index, mode.target_player_index,
+                mode.target_permanent_index, None, mode.target_stack_item,
+            )
+            for mode in chosen_modes
+        ]
+    return [(
+        mode_index, target_player_index, target_permanent_index,
+        target_permanent_ids, target_stack_item,
+    )]
+
+
 def _x_mana_actually_spent(
     allocation: dict[str, int], cost: dict[str, int]
 ) -> dict[str, int]:
@@ -1601,67 +1630,87 @@ class SpellCastingMixin:
         # needed there and one reading of `target_stack_index` is what keeps
         # the tax and the validation talking about the same object.
 
-        target_ok, target_reason = self._validate_cast_targets(
-            card, caster_index, target_player_index, target_permanent_index, target_stack_item,
-            mode_index=mode_index, x_value=x_value,
-            target_permanent_ids=target_permanent_ids,
-            # CR 601.2b is answered above; CR 702.33g makes the targets this
-            # gate counts depend on it.
-            optional_cost_payments=optional_paid,
-        )
-        if not target_ok:
-            self.log.append(target_reason)
-            return SimulationResult(card.name, False, classification.effect_kind, target_reason)
+        # **Once per announced mode** (CR 601.2b chooses the modes, then
+        # CR 601.2c chooses each mode's targets). An ordinary spell and the
+        # `mode_index=` spelling make one announcement, on the cast's own
+        # target fields; a "choose one or more" cast (`mode_choices`) makes one
+        # per chosen mode, each carrying the targets it named — which were
+        # checked by nobody, because every gate below was handed the cast's
+        # own (empty) fields beside the first chosen mode's index.
+        for (
+            announced_mode, mode_seat, mode_slot, mode_ids, mode_stack_item,
+        ) in _mode_announcements(
+            chosen_modes, mode_index, target_player_index,
+            target_permanent_index, target_permanent_ids, target_stack_item,
+        ):
+            target_ok, target_reason = self._validate_cast_targets(
+                card, caster_index, mode_seat, mode_slot, mode_stack_item,
+                mode_index=announced_mode, x_value=x_value,
+                target_permanent_ids=mode_ids,
+                # CR 601.2b is answered above; CR 702.33g makes the targets this
+                # gate counts depend on it.
+                optional_cost_payments=optional_paid,
+            )
+            if not target_ok:
+                self.log.append(target_reason)
+                return SimulationResult(card.name, False, classification.effect_kind, target_reason)
 
-        # CR 601.2c's other half, asked before what was *named*: a spell that
-        # must announce a target cannot be cast while no legal target exists.
-        # The arms above ask it of the kinds they name; this asks it of every
-        # spell, through the list the picker is handed — so "Destroy target
-        # artifact or enchantment. Draw two cards." on an empty board is an
-        # illegal announcement rather than a two-mana cantrip. Nothing has been
-        # spent yet.
-        unaimed = self.no_legal_cast_target_refusal(
-            caster_index, card,
-            optional_cost_payments=optional_paid, x_value=x_value,
-        )
-        if unaimed is not None and target_stack_item is None:
-            self.log.append(unaimed)
-            return SimulationResult(card.name, False, classification.effect_kind, unaimed)
+            # CR 601.2c's other half, asked before what was *named*: a spell that
+            # must announce a target cannot be cast while no legal target exists.
+            # The arms above ask it of the kinds they name; this asks it of every
+            # spell, through the list the picker is handed — so "Destroy target
+            # artifact or enchantment. Draw two cards." on an empty board is an
+            # illegal announcement rather than a two-mana cantrip. Nothing has been
+            # spent yet.
+            #
+            # **And of every mode**, by the mode announced: Chaos Charm's "deals
+            # 1 damage to target creature" was castable at an empty board, and
+            # Treva's Charm's "exile target attacking creature" outside combat.
+            unaimed = self.no_legal_cast_target_refusal(
+                caster_index, card,
+                optional_cost_payments=optional_paid, x_value=x_value,
+                mode_index=announced_mode,
+            )
+            if unaimed is not None and mode_stack_item is None:
+                self.log.append(unaimed)
+                return SimulationResult(card.name, False, classification.effect_kind, unaimed)
 
-        # CR 601.2c for the target the caller *named*, beside the per-kind arms
-        # above rather than inside them: a spell whose primary instruction is a
-        # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.
-        # You gain life equal to its mana value" could be cast on a Grizzly
-        # Bears — the destroy then found nothing and the life was gained anyway.
-        # Still before any mana leaves the pool.
-        named_refusal = self.cast_target_refusal(
-            caster_index, card,
-            target_player_index=target_player_index,
-            target_permanent_index=target_permanent_index,
-            target_permanent_ids=target_permanent_ids,
-            from_zone=from_zone,
-            # CR 601.2b is announced above; CR 601.2c's target count follows
-            # from it for a spell that prints "for each additional <cost> you
-            # paid, … another target …". The gate is the only reader that can
-            # see both announcements at once.
-            optional_cost_payments=optional_paid,
-        )
-        if named_refusal is not None:
-            self.log.append(named_refusal)
-            return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
-        # …and the same rule for a target **on the stack**, which the gate
-        # above does not read (its slots are battlefield slots). One call
-        # where Invasion's first wave left two: see
-        # `legality.cast_stack_target_refusal`. Without it "counter target
-        # creature spell" was announceable at any spell, paid for, and then
-        # declined by its own handler — and a bare cast was accepted with
-        # nothing on the stack its phrase admits.
-        stack_refusal = self.cast_stack_target_refusal(
-            caster_index, card, target_stack_item, from_zone=from_zone,
-        )
-        if stack_refusal is not None:
-            self.log.append(stack_refusal)
-            return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
+            # CR 601.2c for the target the caller *named*, beside the per-kind arms
+            # above rather than inside them: a spell whose primary instruction is a
+            # `sequence` wrapper reaches no arm at all, so "Destroy target artifact.
+            # You gain life equal to its mana value" could be cast on a Grizzly
+            # Bears — the destroy then found nothing and the life was gained anyway.
+            # Still before any mana leaves the pool.
+            named_refusal = self.cast_target_refusal(
+                caster_index, card,
+                target_player_index=mode_seat,
+                target_permanent_index=mode_slot,
+                target_permanent_ids=mode_ids,
+                from_zone=from_zone,
+                # CR 601.2b is announced above; CR 601.2c's target count follows
+                # from it for a spell that prints "for each additional <cost> you
+                # paid, … another target …". The gate is the only reader that can
+                # see both announcements at once.
+                optional_cost_payments=optional_paid,
+                mode_index=announced_mode,
+            )
+            if named_refusal is not None:
+                self.log.append(named_refusal)
+                return SimulationResult(card.name, False, classification.effect_kind, named_refusal)
+            # …and the same rule for a target **on the stack**, which the gate
+            # above does not read (its slots are battlefield slots). One call
+            # where Invasion's first wave left two: see
+            # `legality.cast_stack_target_refusal`. Without it "counter target
+            # creature spell" was announceable at any spell, paid for, and then
+            # declined by its own handler — and a bare cast was accepted with
+            # nothing on the stack its phrase admits.
+            stack_refusal = self.cast_stack_target_refusal(
+                caster_index, card, mode_stack_item, from_zone=from_zone,
+                mode_index=announced_mode,
+            )
+            if stack_refusal is not None:
+                self.log.append(stack_refusal)
+                return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
 
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
@@ -1869,11 +1918,63 @@ class SpellCastingMixin:
         # the ordinary way, and Pollen Remedy's shares total 3 or 6 — so which
         # divided step is the spell's is CR 601.2b's answer, read through the
         # same view the picker's spec is.
+        # CR 601.2c's **count**, here because here is where X is a number:
+        # "two target creatures" names two and "Tap X target creatures" names
+        # X (`legality.cast_target_count_refusal`). Once per announced mode,
+        # like the gates above. An X the caller announced (or the card
+        # defined) is counted; one this function inferred from the pool a few
+        # lines up is not — the caster never said it.
+        counted_x = (
+            resolved_x_value
+            if x_value is not None or announced_x is not None
+            or defines_cast_x(card.oracle_text)
+            else None
+        )
+        for (
+            announced_mode, mode_seat, mode_slot, mode_ids, _mode_stack_item,
+        ) in _mode_announcements(
+            chosen_modes, mode_index, target_player_index,
+            target_permanent_index, target_permanent_ids, target_stack_item,
+        ):
+            miscounted = self.cast_target_count_refusal(
+                caster_index, card,
+                target_player_index=mode_seat,
+                target_permanent_index=mode_slot,
+                target_permanent_ids=mode_ids,
+                x_value=counted_x,
+                optional_cost_payments=optional_paid,
+                mode_index=announced_mode,
+            )
+            if miscounted is not None:
+                self.log.append(miscounted)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, miscounted,
+                )
+
         found = divided_description(
             instructions_as_announced(
-                card, compile_card_oracle(card), optional_paid
+                card, compile_card_oracle(card), optional_paid,
+                mode_index=mode_index,
             )
         )
+        if found is None and divided_targets:
+            # CR 601.2d is about a spell that **divides or distributes**. A
+            # division announced for one that does not is not an announcement
+            # this spell can make — and it was accepted: nothing above looks at
+            # the list unless a divided step exists, while every damage handler
+            # reads `choices["divided_targets"]` whenever it is present. So
+            # `cast_from_hand(0, "Lightning Bolt", divided_targets=[(1, None),
+            # (0, None)])` split its 3 between two faces, and 483 of the pool's
+            # 910 non-divided instants and sorceries took the list the same
+            # way. Neither the client nor the AI sends one; the engine's own
+            # announcement API was laxer than the rule. Of the steps this
+            # announcement will run, so a division printed only in a kicked
+            # arm or in one mode belongs to that cast alone.
+            refusal = f"{card.name} divides nothing among targets (CR 601.2d)"
+            self.log.append(refusal)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, refusal,
+            )
         if found is not None:
             division = found[1].get("division", EVENLY)
             total = _divided_total(found[0], resolved_x_value)
@@ -2122,11 +2223,14 @@ class SpellCastingMixin:
                 # the topmost object the printed phrase admits, so the default
                 # is a target `cast_stack_target_refusal` would have accepted
                 # by name. The text reading below is what is left for the
-                # shapes that gate declines — a modal spell, whose spec is
-                # mode 0's — and it is not consulted where the enumeration
-                # answered, an answer of "nothing" included.
+                # shape that gate declines — a permanent spell, whose "counter
+                # target spell" is an entry trigger's — and it is not consulted
+                # where the enumeration answered, an answer of "nothing"
+                # included. A modal spell is always answered, for the mode it
+                # announced.
                 enumerated, target_stack_item_val = self.default_stack_target(
                     caster_index, card, from_zone=from_zone,
+                    mode_index=mode_index,
                 )
             if (
                 not enumerated
@@ -4183,8 +4287,15 @@ class SpellCastingMixin:
             if isinstance(target_permanent_index, list)
             else None
         )
+        # **Of the mode announced** (CR 601.2b). Derived as mode 0's whatever
+        # was chosen, the count and the roles below were another mode's: Hull
+        # Breach's third mode ("destroy target artifact and target
+        # enchantment") was two roles nothing counted, and Reign of Chaos'
+        # second ("target Island and target blue creature") was refused for
+        # not naming a Plains and a white creature.
         cast_spec = derive_cast_spec(
             card, program, optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
         ) or {}
         maximum = cast_spec.get("max_targets")
         if isinstance(maximum, int) and announced is not None and announced > maximum:
@@ -4199,7 +4310,9 @@ class SpellCastingMixin:
         if (
             optional_cost_payments is not None
             and not spec_roles(cast_spec)
-            and spec_roles(derive_cast_spec(card, program) or {})
+            and spec_roles(
+                derive_cast_spec(card, program, mode_index=mode_index) or {}
+            )
         ):
             named = (
                 [pid for pid in target_permanent_ids if pid is not None]
@@ -4271,7 +4384,9 @@ class SpellCastingMixin:
             # arms and that gate cannot disagree about which spells need one.
             from ...legality import cast_may_name_no_target
 
-            return cast_may_name_no_target(card, program, x_value=x_value)
+            return cast_may_name_no_target(
+                card, program, x_value=x_value, mode_index=mode_index,
+            )
 
         # CR 702.16b: a spell can't be cast targeting a creature with protection
         # from the spell's quality (or with shroud). Reject the illegal target at

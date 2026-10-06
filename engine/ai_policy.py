@@ -71,7 +71,8 @@ from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
-from .targeting import (bounce_subject_filter, derive_activation_spec,
+from .targeting import (bounce_subject_filter, cast_target_slot,
+                        derive_activation_spec,
                         derive_cast_spec, derive_instruction_spec,
                         instructions_as_announced, role_is_seat,
                         spec_is_a_cost, spec_roles,
@@ -873,13 +874,25 @@ def _cast_candidate_announcing(
                 return None
             target, target_permanent_index, target_permanent_ids = roles
         else:
-            several = _choose_several_targets(game, player_index, card)
+            several = _choose_several_targets(
+                game, player_index, card, x_value=x_value, preferred_seat=target,
+            )
             if several == ():
                 # The announced count has no legal set of targets on the side
                 # the effect wants (CR 601.2c). Not proposed.
                 return None
             if several is not None:
                 target, target_permanent_index, target_permanent_ids = several
+                # --- W2G2: "X target creatures" names exactly X (CR 601.2c) ---
+                # X was sized above as the most the lands could pay, before any
+                # target existed; the cast gate now counts the targets against
+                # it (`legality.cast_target_count_refusal`). So X is the number
+                # of targets this board supplied, never more — the seat used to
+                # announce X=5, name one creature and pay for five. The cost
+                # below is planned against this X.
+                if _names_x_targets(card):
+                    x_value = len(target_permanent_index)
+                # --- end W2G2 ---------------------------------------------------
             else:
                 single = _choose_single_object_target(game, player_index, card, target)
                 if single == ():
@@ -3102,12 +3115,13 @@ def _no_legal_cast_target(game: Game, caster_index: int, card: CardDefinition) -
     # play. Declining those is this policy's business; refusing them is not
     # the engine's.
     program = compile_card_oracle(card)
-    # A modal spell is *not* excepted here, unlike in `cast_target_refusal`
-    # where the caller may have chosen any mode. This policy names no mode, so
-    # the spell is cast as mode 0 and mode 0's spec — which is what
-    # `derive_cast_spec` returns — is exactly the question to ask. Blue
-    # Elemental Blast's mode 0 counters a red spell, so an AI holding one with
-    # an empty stack offered it every turn and was refused every turn.
+    # A modal spell is asked about **mode 0**. This policy names no mode, so
+    # the spell is cast as mode 0 — and that is what the engine's gates judge
+    # a cast naming no mode as, and what `derive_cast_spec` returns when it is
+    # handed none. Blue Elemental Blast's mode 0 counters a red spell, so an AI
+    # holding one with an empty stack offered it every turn and was refused
+    # every turn. (Choosing among modes is `Game.announceable_modes`' list and
+    # a chooser this policy does not have yet.)
     spec = _cast_spec(card, program)
     if spec is None or spec.get("kind") in ("none", "modal") or spec_roles(spec):
         # No spec, no target; roles are `_choose_role_targets`' question and it
@@ -3474,8 +3488,24 @@ def _choose_role_targets(
     return seat, indices, ids
 
 
+def _names_x_targets(card: CardDefinition) -> bool:
+    """Whether *card*'s cast names "**X** target …" for an X its caster
+    announces — the spec's ``x_targets`` on a slot printed as an exact count
+    (Winter Blast), not "up to X" (Reap, whose X is counted off the board and
+    answered by ``Game.announced_cast_x``)."""
+    program = compile_card_oracle(card)
+    slot = cast_target_slot(
+        card, program, optional_cost_payments=_OFFERS_ANNOUNCED.get()
+    )
+    if slot is None or not slot[0].get("x_targets"):
+        return False
+    described = (slot[1].payload or {}).get("targets")
+    return isinstance(described, dict) and described.get("quantifier") == "exactly"
+
+
 def _choose_several_targets(
-    game: Game, caster_index: int, card: CardDefinition
+    game: Game, caster_index: int, card: CardDefinition,
+    *, x_value: int | None = None, preferred_seat: int | None = None,
 ) -> tuple[int, list[int], list[int] | None] | tuple[()] | None:
     """Pick ``(seat, [permanent_index, …], [permanent_id, …] | None)`` for a spell
     naming several targets, None when the card names no such choice, or ``()``
@@ -3512,7 +3542,14 @@ def _choose_several_targets(
         game.announced_cast_x(caster_index, card)
         if (spec or {}).get("x_targets") else None
     )
-    exact = False
+    # "Exile **two** target artifacts" (Dust to Dust): a printed count is the
+    # number, not a ceiling (CR 601.2c) — the spec's ``exact_targets``, which
+    # the browser's confirm has always waited for and the cast gate now counts
+    # (`legality.cast_target_count_refusal`). Read here for every branch below;
+    # it was read only for the cost-sized one, so this chooser named one
+    # creature for "two target creatures" whenever one was all the side held.
+    exact = bool((spec or {}).get("exact_targets"))
+    sized_by_x = False
     if announced is not None:
         if announced < 1:
             # CR 601.2c: naming nothing is a legal announcement for an "up to"
@@ -3520,6 +3557,17 @@ def _choose_several_targets(
             # the honest answer at X=0 is "no several-target choice to make".
             return None
         maximum = announced
+        exact = False
+    elif (
+        (spec or {}).get("x_targets")
+        and isinstance(x_value, int) and x_value >= 1
+        and _names_x_targets(card)
+    ):
+        # "Tap **X** target creatures" (Winter Blast): up to the X the lands
+        # can pay, and the caller then announces the X this board filled. With
+        # nothing to name there is no cast worth an X of one or more.
+        maximum = x_value
+        sized_by_x = True
     elif not isinstance(maximum, int) or maximum <= 1:
         # "Destroy target artifact. For each additional {1}{R} you paid, destroy
         # **another** target artifact…" (Primitive Justice): the count is fixed
@@ -3560,7 +3608,36 @@ def _choose_several_targets(
             continue
         by_seat.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
     if not by_seat:
-        return None
+        # An X-sized list with nothing to name has no announcement at an X of
+        # one or more (`()`), where every other shape hands on to the
+        # one-target chooser as it always has.
+        return () if sized_by_x else None
+
+    if sized_by_x:
+        # "X target …" is one printed instance of the word, so every slot wants
+        # the same board — and which board is the reading the **one-target**
+        # chooser has always made for these cards (`spell_target_side`, then
+        # the score's seat), because until the count gate they reached that
+        # chooser: the seat named one permanent for an X of five. Same seat
+        # order, more of its permanents, so a tap or a destroy sized by X is
+        # aimed where it was and never at the caster's own board by the
+        # several-target default below.
+        side = spell_target_side(card)
+        others = sorted(seat for seat in by_seat if seat != caster_index)
+        if side == "you":
+            order = [caster_index]
+        elif side == "opponent":
+            order = others
+        else:
+            order = [
+                seat for seat in dict.fromkeys(
+                    [preferred_seat, caster_index, *others]
+                ) if seat is not None
+            ]
+        seat = next((seat for seat in order if by_seat.get(seat)), None)
+        if seat is None:
+            return ()
+        return seat, by_seat[seat][:maximum], None
 
     # Which board each slot wants, derived from the compiled program rather than
     # from the card's name. A card whose slots all want the same thing — every
@@ -3588,6 +3665,9 @@ def _choose_several_targets(
             )
             if chosen is not None:
                 picks.append(chosen)
+        if exact and len(picks) < maximum:
+            # A printed count the two boards cannot fill between them.
+            return ()
         if picks:
             ids = []
             for seat, slot in picks:
