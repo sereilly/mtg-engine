@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2892 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2902 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(124 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(134 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -833,7 +833,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 700. General
 
 - [ ] **700.1** Anything that happens in a game is an event. Multiple events may take place during the resolution...
-- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(26 tests, subrules abde)*
+- [x] **700.2** A spell or ability is modal if it has two or more options in a bulleted list preceded by instruct... *(29 tests, subrules abde)*
 - [ ] **700.3** Some effects cause objects to be temporarily grouped into piles.
 - [x] **700.4** The term dies means “is put into a graveyard from the battlefield.” *(10 tests)*
 - [ ] **700.5** A player’s devotion to [color] is equal to the number of mana symbols of that color among the man...
