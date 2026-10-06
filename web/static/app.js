@@ -8977,13 +8977,17 @@ function renderPermanentSetChoiceModal(info) {
 // rest." The seat picks what *survives*, over its own battlefield, and
 // everything else in the pool goes.
 //
-// The confirm button is disabled until exactly `keep_count` are selected, and
-// that number comes from the server rather than from counting the slots: how
-// many a seat may keep is a maximum matching between their permanents and the
-// printed slots (CR 609.3), so two artifact creatures fill both the artifact
-// and the creature slot where two plain artifacts fill one. The engine refuses
-// a short or unassignable answer either way — this only keeps the player from
-// sending one.
+// The confirm button is disabled until the selection is between `keep_fewest`
+// and `keep_count` and answers every printed slot, and both numbers come from
+// the server rather than from counting the slots. The most a seat may choose is
+// a maximum matching between their permanents and the printed slots (CR 609.3),
+// so two artifact creatures fill both the artifact and the creature slot where
+// two plain artifacts fill one. The fewest is smaller wherever one permanent
+// answers several slots — the cards' rulings let a dual land be chosen "for
+// either or for both" of its types — so each candidate carries `fills` (the
+// slots it may stand for, shown on its tile) and each slot `need`. The engine
+// refuses an unassignable answer or one that leaves a slot out either way —
+// this only keeps the player from sending one.
 let keepPermanentsSelected = new Set();
 
 function getKeepPermanentsInfo(state = currentState) {
@@ -9004,10 +9008,19 @@ function renderKeepPermanentsModal(info) {
   }
   modal.classList.remove("hidden");
   const keepCount = Number(info.keep_count || 0);
+  const keepFewest = Number(info.keep_fewest ?? keepCount);
   const subtitle = document.getElementById("keepPermanentsSubtitle");
-  const slots = (info.slots || [])
+  const slotList = info.slots || [];
+  const slots = slotList
     .map((slot) => `${slot.count} ${slot.type}${slot.count === 1 ? "" : "s"}`)
     .join(", ");
+  const fillsById = new Map(
+    (info.candidates || []).map((entry) => [entry.id, entry.fills || []])
+  );
+  const howMany = keepFewest < keepCount ? `${keepFewest} to ${keepCount}` : `${keepCount}`;
+  const shared = keepFewest < keepCount
+    ? " One permanent may be chosen for more than one of these."
+    : "";
   // Planar Overlay: "…chooses a land they control of each basic land type.
   // Return those lands to their owners' hands." The same choice with the other
   // half moving — what the seat picks is what *leaves* — so the server sends
@@ -9019,21 +9032,42 @@ function renderKeepPermanentsModal(info) {
   if (title) title.textContent = returning ? "Return Permanents" : "Keep Permanents";
   if (subtitle) {
     subtitle.textContent = returning
-      ? `${info.card_name}: return ${slots || "permanents"} — choose ${keepCount}. ` +
+      ? `${info.card_name}: return ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `They go to their owners' hands; everything else stays.`
-      : `${info.card_name}: keep ${slots || "permanents"} — choose ${keepCount}. ` +
+      : `${info.card_name}: keep ${slots || "permanents"} — choose ${howMany}.${shared} ` +
         `Everything else you control that it names is sacrificed.`;
   }
   const list = document.getElementById("keepPermanentsList");
   const confirmBtn = document.getElementById("keepPermanentsConfirmBtn");
+  // Every slot the seat can answer has enough of the selection standing for
+  // it. A payload with no `need` (an older server) asks nothing here and the
+  // size range alone gates the button, as it always did.
+  const everySlotAnswered = () =>
+    slotList.every((slot, slotIndex) => {
+      const need = Number(slot.need || 0);
+      if (!need) return true;
+      let standing = 0;
+      keepPermanentsSelected.forEach((id) => {
+        if ((fillsById.get(id) || []).includes(slotIndex)) standing += 1;
+      });
+      return standing >= need;
+    });
   const syncConfirm = () => {
-    if (confirmBtn) confirmBtn.disabled = keepPermanentsSelected.size !== keepCount;
+    const size = keepPermanentsSelected.size;
+    if (confirmBtn) {
+      confirmBtn.disabled = size < keepFewest || size > keepCount || !everySlotAnswered();
+    }
   };
   if (list) {
     list.innerHTML = (info.candidates || [])
       .map((entry) => {
         const selectedClass = keepPermanentsSelected.has(entry.id) ? " selected" : "";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}</div></div>`;
+        // What this permanent may be chosen as — "Island / Forest" on a
+        // Tropical Island — shown only where the slots are told apart by more
+        // than one noun, so Limited Resources' tiles read as they did.
+        const fills = (entry.fills || []).map((slotIndex) => (slotList[slotIndex] || {}).type).filter(Boolean);
+        const standsFor = slotList.length > 1 && fills.length ? ` as ${fills.join(" / ")}` : "";
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${pickLabel}${escapeHtml(standsFor)}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to ${pickLabel}.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {

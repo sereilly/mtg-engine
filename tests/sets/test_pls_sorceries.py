@@ -759,10 +759,16 @@ def test_w1g4_planar_overlay_names_no_target(set_pool):
 def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_pool):
     """"Each player chooses a land they control of each basic land type.
     Return those lands to their owners' hands." A headless table takes the
-    largest choice in board order: one Plains of two, the Forest, and the
-    Tropical Island as the Island. The spare Plains, a land with no basic type
-    and everything that is not a land stay where they are, and nothing is
-    sacrificed — this is Global Ruin's choice with the other half moving."""
+    *fewest* lands that answer every type it holds, in board order: one Plains
+    of two, and the Tropical Island as both the Forest and the Island — the
+    card's ruling (2004-10-04): "If you have a land which counts as multiple
+    land types, you can choose that land as each of those types." So the
+    Forest stays, with the spare Plains, a land with no basic type and
+    everything that is not a land, and nothing is sacrificed — this is Global
+    Ruin's choice with the other half moving.
+
+    (W2G1 rewrote this: it asserted the Forest went back too, on the wave-1
+    reading that a dual land is the chosen land for one type only.)"""
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay",
         mine=["Plains", "Plains", "Forest", "Tropical Island", "Grizzly Bears",
@@ -771,10 +777,12 @@ def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_poo
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert _w1g4_land_names(game, 0) == ["Grizzly Bears", "Mishra's Factory", "Plains"]
+    assert _w1g4_land_names(game, 0) == [
+        "Forest", "Grizzly Bears", "Mishra's Factory", "Plains",
+    ]
     assert _w1g4_land_names(game, 1) == ["Black Lotus", "Mountain"]
     assert sorted(c.name for c in game.players[0].hand) == [
-        "Forest", "Plains", "Tropical Island",
+        "Plains", "Tropical Island",
     ]
     assert sorted(c.name for c in game.players[1].hand) == ["Island", "Mountain"]
     assert [c.name for c in game.players[0].graveyard] == ["Planar Overlay"]
@@ -785,11 +793,17 @@ def test_w1g4_planar_overlay_each_player_returns_one_land_per_basic_type(set_poo
     )
 
 
-def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
-    """A Tropical Island is a Forest and an Island and is *the* land for one
-    of them — the constraint Global Ruin's keep has, on the same matching.
-    Alone it is the only land returned; beside a Forest it is the Island and
-    both go; five duals can each stand for a different type and all return."""
+def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_each_of_its_types(set_pool):
+    """A Tropical Island is a Forest and an Island and may be the chosen land
+    for **both** — the card's ruling (2004-10-04): "you can choose that land
+    as each of those types. For example, a dual land could be chosen as two of
+    your land types." Alone it is the only land returned; beside a Forest it
+    is the Forest and the Island and the Forest stays; and six lands holding
+    five types go back as three, the fewest that answer all five.
+
+    (W2G1 rewrote this: it asserted "one type only" — both lands returned in
+    the second case and five in the third — which made a seat return lands the
+    card lets it keep.)"""
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay", mine=["Tropical Island", "Mishra's Factory"],
     )
@@ -802,7 +816,8 @@ def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert not _w1g4_land_names(game, 0)
+    assert _w1g4_land_names(game, 0) == ["Forest"]
+    assert [c.name for c in game.players[0].hand] == ["Tropical Island"]
 
     game, _mine, _theirs = _w1g4_sorcery_table(
         set_pool, "Planar Overlay",
@@ -810,7 +825,12 @@ def test_w1g4_planar_overlay_a_dual_land_is_chosen_for_one_type(set_pool):
     )
     assert game.cast_from_hand(0, "Planar Overlay").supported
     _w1g4_resolve(game)
-    assert _w1g4_land_names(game, 0) == ["Forest"], "six lands, five types"
+    # Tundra is the Plains and the Island, Badlands the Swamp and the Mountain,
+    # and the first Forest the Forest.
+    assert sorted(c.name for c in game.players[0].hand) == [
+        "Badlands", "Forest", "Tundra",
+    ], "six lands, five types, three lands"
+    assert _w1g4_land_names(game, 0) == ["Forest", "Taiga", "Tropical Island"]
 
 
 def test_w1g4_planar_overlay_asks_the_player_and_checks_the_answer(set_pool):

@@ -632,8 +632,8 @@ def parse_choose_each_then_return(
     production's node — same chooser, same pool, same one-slot-per-value list
     from the one reader of "of each basic land type"
     (``distinct.accept_one_of_each``) — with ``fate`` saying which half of the
-    partition moves and where. One prompt, one matching: a dual land is the
-    chosen land for one type or the other, exactly as it is one keep there.
+    partition moves and where. One prompt, one validation: a dual land may be
+    the chosen land for either type or for both, exactly as it may there.
 
     A paragraph in ``paragraphs``' sense — two printed sentences that are one
     effect — and read whole for that module's reason: "those lands" names a

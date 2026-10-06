@@ -2270,12 +2270,21 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
     pickers beside it do and for their reason: the answer is checked against
     that same rule, so the list offered and the list accepted cannot disagree.
 
-    ``keep_count`` is sent because the client cannot derive it. How many a seat
-    may keep is the size of a maximum matching between their permanents and the
-    printed slots (CR 609.3), which is a number only the engine can compute -
-    two artifact creatures fill an artifact slot and a creature slot at once,
-    where two plain artifacts fill one. ``slots`` rides along so the modal can
-    say what the keeps *are*; it is a label, and nothing is decided from it.
+    ``keep_count`` is sent because the client cannot derive it. The *most* a
+    seat may choose is the size of a maximum matching between their permanents
+    and the printed slots (CR 609.3), which is a number only the engine can
+    compute - two artifact creatures fill an artifact slot and a creature slot
+    at once, where two plain artifacts fill one. ``slots`` rides along so the
+    modal can say what the keeps *are*.
+
+    ``keep_fewest`` is the other end of the range, and is there because one
+    permanent may be chosen for several slots (the rulings of Cataclysm, Global
+    Ruin and Planar Overlay all say so): a Tropical Island alone answers Forest
+    and Island. Each slot carries ``need`` — how many of the seat's permanents
+    must be chosen for it, zero where the seat holds none — and each candidate
+    ``fills``, the slots it may stand for, so the modal can label a dual land
+    with both its types and hold the confirm button until every slot is
+    answered. The engine re-checks the answer either way.
 
     ``fate`` is sent only when the prompt carries one — Planar Overlay's
     "Return those lands to their owners' hands", where what the seat picks is
@@ -2297,17 +2306,21 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
             perm for perm in live
             if ctx.game._match_keeps([perm], slot_filters)
         ]
+    printed = list(choice.data.get("slots") or ())
+    needs = ctx.game.keep_slot_needs(live, printed)
     return {
         **extra,
         "player_seat": choice.player_index,
         "card_name": choice.data.get("reason", ""),
         "keep_count": len(ctx.game._match_keeps(live, slot_filters)),
+        "keep_fewest": len(ctx.game.fewest_keeps(live, printed)),
         "slots": [
             {
                 "count": int(slot.get("count", 0)),
                 "type": _keep_slot_noun(slot.get("filter") or {}),
+                "need": need,
             }
-            for slot in (choice.data.get("slots") or ())
+            for slot, (_described, need) in zip(printed, needs)
         ],
         "candidates": [
             {
@@ -2315,6 +2328,7 @@ def _keep_permanents(ctx: PromptContext, choices: list) -> dict:
                 "index": index,
                 "id": ctx.game.permanent_id_of(perm),
                 "name": perm.card.name,
+                "fills": ctx.game.keep_slots_answered_by(perm, printed),
             }
             for index, perm in enumerate(ctx.game.players[choice.player_index].battlefield)
             if any(perm is candidate for candidate in live)

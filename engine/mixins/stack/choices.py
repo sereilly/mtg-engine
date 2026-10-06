@@ -7075,8 +7075,21 @@ class PendingChoicesMixin:
     # only permanents are two artifact creatures keeps *both* - one as the
     # artifact and one as the creature - where "sacrifice all but one artifact"
     # and "sacrifice all but one creature" would take one each and leave
-    # nothing. So the keeps are an assignment, and the number the card allows is
+    # nothing. So the keeps are an assignment, and the *most* the card allows is
     # the size of a **maximum matching** between the permanents and the slots.
+    #
+    # The most, not the number. The printed slots are separate choices, and
+    # nothing in the sentence says each must be answered with a different
+    # permanent: "If you control a permanent with more than one type, you can
+    # choose that same permanent for more than one of the choices if you want
+    # to" (Cataclysm's ruling), "a dual land could be chosen as two of your
+    # land types" (Planar Overlay's), "you can choose it for either or for
+    # both" (Global Ruin's). So a legal answer is any set in which every chosen
+    # permanent answers a slot of its own **and** every printed slot the seat
+    # can answer is answered — and the largest such set is the matching, while
+    # the smallest is a cover. Which end a seat wants depends on which half of
+    # the partition moves, so the *default* reads the fate; the validation does
+    # not.
 
     def keep_choice_candidates(self, player_index: int, pool: dict) -> list:
         """The seat's own permanents the pool phrase describes.
@@ -7146,6 +7159,86 @@ class PendingChoicesMixin:
             assign(perm, set())
         return taken
 
+    def keep_slot_needs(self, live: list, slots) -> list[tuple[dict, int]]:
+        """Each printed slot with how many of *live* must be chosen for it.
+
+        The printed count, or every permanent that fits when the seat holds
+        fewer (CR 609.3: as much as possible) — so zero for a slot the seat
+        cannot answer at all. Per **printed** slot rather than per keep:
+        "five lands" is one choice of five different lands, where "an artifact,
+        a creature" is two choices that one artifact creature may answer both
+        of.
+        """
+        needs: list[tuple[dict, int]] = []
+        for slot in slots or ():
+            described = dict(slot.get("filter") or {})
+            held = sum(1 for perm in live if subject_matches(self, perm, described))
+            needs.append((described, min(max(0, int(slot.get("count", 0))), held)))
+        return needs
+
+    def keep_slots_answered_by(self, perm, slots) -> list[int]:
+        """Which printed slots *perm* may be chosen for, by position.
+
+        More than one for a dual land or an artifact creature, which is the
+        whole of what the prompt has to show a player: this Tropical Island is
+        a Forest **and** an Island, and may be named as either or as both.
+        """
+        return [
+            index for index, slot in enumerate(slots or ())
+            if subject_matches(self, perm, dict(slot.get("filter") or {}))
+        ]
+
+    def keeps_answer_every_slot(self, live: list, kept: list, slots) -> bool:
+        """Whether *kept* leaves no printed slot short of what the seat holds.
+
+        The half of a legal answer the matching cannot ask. A seat holding a
+        Forest must choose a land for Forest; which land — and whether it is
+        also the Island — is the player's.
+        """
+        return all(
+            sum(1 for perm in kept if subject_matches(self, perm, described)) >= need
+            for described, need in self.keep_slot_needs(live, slots)
+        )
+
+    def fewest_keeps(self, live: list, slots) -> list:
+        """The smallest legal answer, the first in board order among equals.
+
+        A minimum cover of the printed slots by the seat's permanents, found by
+        size: the slots are a printed handful (five basic land types, four card
+        types), and a permanent beyond the first few sharing one *signature* —
+        the set of slots it answers — can never be in a smallest answer, so the
+        search is over a board's worth of distinct signatures rather than its
+        permanents. Each candidate set is held to both halves of the
+        validation, so what this returns is an answer the resolver accepts.
+        """
+        from itertools import combinations
+
+        needs = self.keep_slot_needs(live, slots)
+        slot_filters = self._keep_slot_filters(slots)
+        by_signature: dict[frozenset, int] = {}
+        candidates: list = []
+        for perm in live:
+            signature = frozenset(
+                index for index, (described, need) in enumerate(needs)
+                if need and subject_matches(self, perm, described)
+            )
+            if not signature:
+                continue
+            most = max(needs[index][1] for index in signature)
+            if by_signature.get(signature, 0) >= most:
+                continue
+            by_signature[signature] = by_signature.get(signature, 0) + 1
+            candidates.append(perm)
+        floor = max((need for _described, need in needs), default=0)
+        for size in range(floor, len(candidates) + 1):
+            for picked in combinations(candidates, size):
+                chosen = list(picked)
+                if not self.keeps_answer_every_slot(live, chosen, slots):
+                    continue
+                if len(self._match_keeps(chosen, slot_filters)) == len(chosen):
+                    return chosen
+        return []
+
     def arm_keep_permanents(
         self, player_index: int, *, pool: dict, slots: list, reason: str,
         fate: str | None = None,
@@ -7199,13 +7292,21 @@ class PendingChoicesMixin:
         """Validated whole before anything is sacrificed.
 
         Three things are checked and the third is the one a client cannot be
-        trusted with: the ids name permanents still in the pool, they can be
-        assigned to distinct slots, and there are **as many of them as the board
-        allows**. CR 608.2d lets a player choose only what is legal and CR 609.3
-        makes the effect do as much as it can, so keeping fewer than the card
-        offers is not one of the answers - and a prompt that accepted a short
-        list would let a seat sacrifice permanents the card said they could
-        keep.
+        trusted with: the ids name permanents still in the pool, each can be
+        given a slot of its own, and **no printed slot the seat can answer is
+        left unanswered**. CR 608.2d lets a player choose only what is legal
+        and CR 609.3 makes the effect do as much as it can, so a seat holding a
+        creature chooses a creature — a prompt that accepted a list with none
+        would let a seat skip a choice the card makes it take.
+
+        What is *not* checked is that the list is as long as the board allows.
+        One permanent may answer several slots — the three cards' rulings say
+        so in as many words (the section comment above quotes them) — so an
+        artifact creature named alone answers Cataclysm's artifact and its
+        creature, and a Tropical Island named alone is Planar Overlay's Forest
+        and its Island. A shorter list is a legal answer wherever the chosen
+        permanents cover every slot; it used to be refused, which for Planar
+        Overlay made a player return a land the card let them keep.
         """
         ids = [pid for pid in (permanent_ids or []) if isinstance(pid, int)]
         if len(ids) != len(permanent_ids or []) or len(set(ids)) != len(ids):
@@ -7219,19 +7320,21 @@ class PendingChoicesMixin:
             if perm is None or not any(perm is candidate for candidate in live):
                 return False
             kept.append(perm)
-        allowed = len(self._match_keeps(live, slot_filters))
-        if len(kept) != allowed:
-            return False
         if len(self._match_keeps(kept, slot_filters)) != len(kept):
-            # The set is short enough but not *assignable*: two keeps wanting
-            # the same single slot ("an artifact, a creature" answered with two
-            # plain artifacts) is a pair the card never offered.
+            # Not *assignable*: two keeps wanting the same single slot ("an
+            # artifact, a creature" answered with two plain artifacts) is a
+            # pair the card never offered, and so is a third land for two
+            # types. Every chosen permanent is the choice for some slot.
+            return False
+        if not self.keeps_answer_every_slot(
+            live, kept, choice.data.get("slots")
+        ):
             return False
         # Which half of the partition moves is the sentence's, carried on the
         # prompt. Everything above is the same question either way — who may
-        # be chosen, into which slots, and that the choice is as large as the
-        # board allows — so the two fates share one validation and cannot
-        # disagree about whether a dual land fills one slot or two.
+        # be chosen, for which slots, and that no slot goes unanswered — so
+        # the two fates share one validation and cannot disagree about whether
+        # a dual land may stand for one type or for two.
         if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
             self._return_the_chosen(choice, kept)
         else:
@@ -7289,19 +7392,29 @@ class PendingChoicesMixin:
         )
 
     def _default_keep_permanents(self, choice: PendingChoice) -> None:
-        """The stated policy: **a maximum keep, in board order.**
+        """The stated policy: **the end of the legal range that leaves the
+        seat the most permanents, in board order.**
+
+        The card does offer a choice about *how many* — one permanent may
+        answer several slots — and which end is the seat's best play is the
+        fate's. Where the chosen stay and the rest are sacrificed (Cataclysm,
+        Global Ruin, Limited Resources) that is the **maximum** keep: the
+        matching, not a greedy walk. Where the chosen are what leaves (Planar
+        Overlay) it is the **fewest** permanents that answer every slot — a
+        Tropical Island for Forest and Island, and the Forest stays.
 
         Board order rather than a valuation, which is every other permanent
         prompt's rule here and for its reason - seed-determinism is what AI and
         headless play need, and a seat that should keep its best permanents
         wants a weight in ``engine/ai_valuation.py`` rather than a branch here.
-        Maximum rather than greedy because the matching says so; the card is not
-        offering a choice about *how many*.
         """
         pool = choice.data.get("pool") or {}
         live = self.keep_choice_candidates(choice.player_index, pool)
         slot_filters = self._keep_slot_filters(choice.data.get("slots"))
-        picks = list(self._match_keeps(live, slot_filters).values())
+        if choice.data.get("fate") == RETURN_CHOSEN_TO_HAND:
+            picks = self.fewest_keeps(live, choice.data.get("slots"))
+        else:
+            picks = list(self._match_keeps(live, slot_filters).values())
         ordered = [perm for perm in live if any(perm is pick for pick in picks)]
         chosen = [
             pid for pid in (self.permanent_id_of(perm) for perm in ordered)
