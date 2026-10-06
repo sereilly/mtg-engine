@@ -18,6 +18,12 @@ against ``<something>.name`` and the web's first offender compared a bare
   skipping its draw was a comparison against **Island Sanctuary**'s name, a
   second copy of the hook registry the engine reads.
 
+(The last two were known: ``tests/engine/test_printed_name_reads.py`` does walk
+``web/`` for ``.card.name`` reads, and held each at a ratchet of one as a fix
+"nothing can exercise" — true of an enchantment being *copied*, which is the
+question that guard asks, and not of the sentence being printed on a second
+card, which is this one's. The first was visible to neither guard.)
+
 Each is derived now from the compiled program, the engine's cost-tax table and
 the engine's own reader of its hook. This file is the guard — a scan of every
 comparison under ``web/`` — and the behavioural halves, each given an invented

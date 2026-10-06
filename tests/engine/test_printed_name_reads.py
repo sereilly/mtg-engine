@@ -61,11 +61,14 @@ no card to verify it is a guess. They fall into two families:
     ``_find_controlled_permanent``, ``phases/beginning_phase.py``,
     ``web/action_helpers.py``): a client or a test names a permanent by the
     printed name serialization gave it. Same protocol both ways.
-  * **Uncopyable name-keyed statics** (``phases/draw_step.py`` and
-    ``web/turn_steps.py`` on Island Sanctuary; ``web/state_view.py`` and
-    ``web/serialization.py`` on Gloom): both are enchantments, and the pool
-    has no way to copy an enchantment or change any permanent's name — so the
-    effective-name spelling would be a fix nothing can exercise.
+  * **Uncopyable name-keyed statics** (``phases/draw_step.py`` on Island
+    Sanctuary): an enchantment, and the pool has no way to copy an enchantment
+    or change any permanent's name — so the effective-name spelling would be a
+    fix nothing can exercise. The web's three copies of this family are gone:
+    ``web/turn_steps.py`` asks the engine's one reader of that hook, and
+    ``web/state_view.py`` and ``web/serialization.py`` ask
+    ``engine/cost_modifiers.py`` for what Gloom's sentence charges
+    (tests/ui/test_web_reads_no_card_names.py).
 """
 
 from __future__ import annotations
@@ -156,17 +159,19 @@ PRINTED_NAME_DISPATCH_BASELINE: dict[str, int] = {
     "engine/phases/beginning_phase.py": 2,
     "web/action_helpers.py": 2,
     # Island Sanctuary (an enchantment nothing in the pool can copy/rename).
+    # ``web/turn_steps.py`` held a second copy of this read and reached zero at
+    # R3 J8: it asks ``Game.may_skip_draw_for_protection``, which is this one.
     "engine/phases/draw_step.py": 1,
-    "web/turn_steps.py": 1,
-    # Gloom (the same, through the client-hint payloads). ``state_view``'s went
-    # at 6ED's wave: the castable highlight priced a spell with ``3 if a
-    # permanent is named "Gloom" and the card is white``, and now asks
-    # ``engine/cost_modifiers.py`` — the text-keyed table the cast path and the
-    # AI's affordability read both go through, which knows 28 shipped cards
-    # where the name knew one. ``serialization``'s is the same read for the
-    # *displayed* cost string and needs a cost-dict-to-symbols renderer that
-    # keeps ``{X}``, so it is still here.
-    "web/serialization.py": 1,
+    # Gloom was here twice, through the client-hint payloads, and both are
+    # gone. ``state_view``'s went at 6ED's wave: the castable highlight priced
+    # a spell with ``3 if a permanent is named "Gloom" and the card is white``,
+    # and now asks ``engine/cost_modifiers.py`` — the text-keyed table the cast
+    # path and the AI's affordability read both go through, which knows 28
+    # shipped cards where the name knew one. ``serialization``'s went at R3 J8,
+    # for the *displayed* cost string: this comment said it needed a
+    # cost-dict-to-symbols renderer that keeps ``{X}``, and it did not — the
+    # tax is a number, and the string renderer that already added Gloom's
+    # three to the printed cost adds the engine's number the same way.
 }
 
 
