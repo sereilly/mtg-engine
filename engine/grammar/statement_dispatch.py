@@ -444,7 +444,7 @@ def lower_statement(
     if isinstance(statement, ast.PutOntoBattlefield):
         # One node, two families, composed here because composing them is what
         # this dispatch is for. No printed "target" plus a graveyard named by a
-        # referent is a *pick made during resolution* (CR 115.1b) and belongs to
+        # referent is a *pick made during resolution* (CR 115.10) and belongs to
         # the search-prompt family; everything else is the zone-change family's.
         # Asked first because the zone lowering demands a target and would
         # refuse this line on the more confident-sounding of the two errors, and

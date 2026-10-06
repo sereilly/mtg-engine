@@ -29,6 +29,7 @@ from ...faces import castable_faces, has_name, is_multi_face, spell_named
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
+from ...color_changes import change_color
 from ...continuous import next_timestamp
 from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
@@ -8963,9 +8964,11 @@ class PendingChoicesMixin:
             return True
         # A tuple whenever the card offered a set, so layer 5 writes every
         # colour rather than the first — the shape `collect_color_effects`
-        # already reads, and a bare symbol otherwise.
-        permanent.metadata["color_override"] = (
-            tuple(symbols) if data.get("several") else symbols[0]
+        # already reads, and a bare symbol otherwise. Stamped now, as the
+        # answer is given: the effect begins when the colour is known
+        # (CR 613.7b), not when the prompt was armed.
+        change_color(
+            permanent, tuple(symbols) if data.get("several") else symbols[0]
         )
         self._recalculate_lord_buffs()
         self.log.append(

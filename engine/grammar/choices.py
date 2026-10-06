@@ -49,9 +49,9 @@ def _accept_targeted_player(stream: TokenStream) -> "ast.PlayerRef | None":
 
     Through ``parse_recipient``, so the printed references this admits are the
     ones every other player-targeting sentence admits — and the ``target``
-    quantifier is what CR 115.1b requires: an untargeted "choose a player" is a
-    *resolution* choice and reading one as the other would raise a picker for a
-    decision the card makes later.
+    quantifier is what CR 115.10a requires: an untargeted "choose a player" is a
+    *resolution* choice (CR 115.10) and reading one as the other would raise a
+    picker for a decision the card makes later.
     """
     mark = stream.mark()
     try:
@@ -252,7 +252,7 @@ def _parse_choose_target(stream: TokenStream, parse_statement) -> "ast.ChooseTar
     # the counted spelling — "Choose **X target** attacking creatures"
     # (Winter's Chill) — is the same production with the same quantifier
     # machinery every other counted target phrase in the grammar uses. The word
-    # "target" is still required (the `targeted` check below): CR 115.1b makes
+    # "target" is still required (the `targeted` check below): CR 115.10 makes
     # an untargeted "choose" a *resolution* choice, and reading one as the other
     # would raise a cast-time picker for a decision the card makes later.
     try:

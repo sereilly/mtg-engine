@@ -510,7 +510,7 @@ def _lower_graveyard_pick_onto_battlefield(
     Here rather than beside the rest of the "put … onto the battlefield" family
     in ``lowering/zones``, because what it emits decides the family: no
     ``target`` is printed, so the card is not chosen until the effect resolves
-    (CR 115.1b), and a pick made during resolution out of a named zone is a
+    (CR 115.10), and a pick made during resolution out of a named zone is a
     *search prompt* — the same instruction ``search._lower_search_library``
     emits, narrowed to a graveyard. Sending it to the reanimation handler
     instead would have made it a cast-time target, which is a different card:
@@ -588,7 +588,7 @@ def _lower_put_graveyard_position_onto_battlefield(
     answer one question — which card leaves a graveyard for the battlefield
     when the sentence names no target — and differ in the one way that decides
     the instruction: that one is a *pick* made as the effect resolves
-    (CR 115.1b), and this one names the card by its **position** in an ordered
+    (CR 115.10), and this one names the card by its **position** in an ordered
     pile (CR 404.2), so nobody chooses and no prompt is armed.
 
     That pair is not in ``lowering/zones``, where the *targeted* reanimation

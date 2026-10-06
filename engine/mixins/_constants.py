@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ..color_changes import UNTIL_EOT_KEYS as _COLOR_UNTIL_EOT_KEYS
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                  MAY_ASSIGN_AS_UNBLOCKED,
                                  MUST_ASSIGN_AS_UNBLOCKED)
@@ -162,10 +163,13 @@ _EOT_METADATA_KEYS = (
     "land_destruction_shield_this_turn",
     # Ebony Horse: combat-damage shield on the untapped attacker
     # "One or more target creatures become red until end of turn" (Dwarven Song
-    # and its four Legends siblings). The indefinite `color_override` beside it
-    # is a lace and must survive the turn, which is why this is a second key
-    # rather than a flag on the first.
-    "color_override_until_eot",
+    # and its four Legends siblings). The indefinite slot beside it is a lace
+    # and must survive the turn, which is why this is a second slot rather than
+    # a flag on the first. The keys are ``engine/color_changes.py``'s — the
+    # value **and its CR 613.7b stamp**, so an effect that has ended leaves
+    # nothing behind — and are imported rather than spelled, because that
+    # module is the only one that may name them.
+    *_COLOR_UNTIL_EOT_KEYS,
     # "Prevent all combat damage that would be dealt by target creature this
     # turn" (Horn of Deafening, Lady Evangela). The direction is the value, so
     # the key is one rather than one per direction.

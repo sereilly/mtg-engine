@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..color_changes import change_color
 from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
@@ -615,15 +616,14 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # nobody targeted it, the firing bound it, and which half fired decides how
     # it is found — `block_pair_permanents` is the one reader of that.
     if instruction.payload.get(SUBJECT_FROM_TRIGGER) == BLOCK_PAIR_SUBJECT:
-        # The permanent is already in hand, so the indefinite colour channel is
-        # written directly — `_apply_color_override` beside it takes a *player*
-        # and picks a permanent off their battlefield, which is the wrong
-        # question once the trigger has named one. Same channel, same layer 5
-        # read (`engine/layer_bridge.py`), and no duration: Aisling Leprechaun's
-        # reminder text says the effect lasts indefinitely.
+        # The permanent is already in hand, so the indefinite colour effect is
+        # recorded on it at once — the same write `_apply_color_override` makes
+        # for a targeted lace, the same layer 5 read (`engine/layer_bridge.py`),
+        # and no duration: Aisling Leprechaun's reminder text says the effect
+        # lasts indefinitely.
         recoloured = block_pair_permanents(game, context) if symbol else []
         for perm in recoloured:
-            perm.metadata["color_override"] = symbol
+            change_color(perm, symbol)
             game.log.append(f"{perm.card.name} became {symbol} ({context.card.name})")
         if not recoloured:
             game.log.append(f"{context.card.name}: no creature to recolour")
@@ -700,18 +700,13 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
             f"{context.card.name}: no colour was chosen, so nothing is recoloured"
         )
         return True, "resolved"
-    # "…**until end of turn**" (Distorting Lens). The turn-long layer-5 channel
+    # "…**until end of turn**" (Distorting Lens). The turn-long layer-5 slot
     # rather than the indefinite one — layer_bridge reads both and the cleanup
     # step sweeps this one, so a permanent laced permanently earlier in the game
-    # keeps its colour when the Lens wears off. Which channel is written is the
+    # keeps its colour when the Lens wears off. Which slot is written is the
     # printed duration and nothing else, which is why the key is read here
     # rather than inferred from the card.
-    channel = (
-        "color_override_until_eot"
-        if instruction.payload.get("until_eot")
-        else "color_override"
-    )
-    target.metadata[channel] = symbol
+    change_color(target, symbol, until_eot=bool(instruction.payload.get("until_eot")))
     game.log.append(
         f"{target.card.name} became {symbol}"
         + (" until end of turn" if instruction.payload.get("until_eot") else "")
@@ -829,7 +824,7 @@ def recolor_targets_until_eot(game: Game, instruction: OracleInstruction, contex
         game.log.append(f"{context.card.name}: nothing to recolour")
         return True, "resolved"
     for perm in targets:
-        perm.metadata["color_override_until_eot"] = written
+        change_color(perm, written, until_eot=True)
         game.log.append(
             f"{perm.card.name} became {_colour_override_word(written)} until end "
             f"of turn ({context.card.name})"
@@ -897,7 +892,7 @@ def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     source = context.source_permanent
     if written is None or source is None:
         return True, "resolved"
-    source.metadata["color_override_until_eot"] = written
+    change_color(source, written, until_eot=True)
     game._recompute_continuous_effects()
     game.log.append(
         f"{source.card.name} became {_colour_override_word(written)} until end of turn"
@@ -1257,9 +1252,11 @@ def _record_animation_colors(perm, payload: dict, *, until_eot: bool) -> None:
     an animation sentence.
 
     A separate channel from the animation record because it is a separate
-    layer, and the *same* channel the laces write — "what colour is this
-    permanent?" has one answer (``layer_bridge.collect_color_effects``), and an
-    animation inventing a second would be two opinions about CR 105.3.
+    layer, and the *same* one the laces write — through the same write API
+    (``engine/color_changes.py``), so it is stamped when the animation resolves
+    (CR 613.7b) and a later recolour of the animated land wins. "What colour is
+    this permanent?" has one answer (``layer_bridge.collect_color_effects``),
+    and an animation inventing a second would be two opinions about CR 105.3.
 
     Which of the two colour channels is the animation's own duration, for the
     reason the P/T write takes ``until_eot``: an indefinite animation whose
@@ -1275,7 +1272,7 @@ def _record_animation_colors(perm, payload: dict, *, until_eot: bool) -> None:
     colors = list(payload.get("colors") or ())
     if not colors:
         return
-    perm.metadata["color_override_until_eot" if until_eot else "color_override"] = colors
+    change_color(perm, colors, until_eot=until_eot)
 
 
 def _animate_target(
@@ -2731,7 +2728,7 @@ def exile_any_number_of_own_tokens(
     """Tetravus: "Exile **any number of** tokens created with this creature."
 
     The set is found here rather than picked by a target picker, because the
-    phrase names no target at all (CR 115.1b) — it names a set the game can
+    phrase names no target at all (CR 115.10a) — it names a set the game can
     identify, and asks its controller how many of it to take.
 
     **How many, not which.** Every token in that set was made by the same

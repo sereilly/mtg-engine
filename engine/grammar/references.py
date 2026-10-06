@@ -227,13 +227,13 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # to" prints a maximum a picker shows and a re-check enforces, and there is
     # none here — the bound is the set itself. Untargeted by construction, like
     # Rewind's "up to four lands": no "target" is printed, so nothing is chosen
-    # until the effect resolves (CR 115.1b).
+    # until the effect resolves (CR 115.10).
     if stream.accept_phrase("any", "number", "of"):
         # "any number of **target** artifact cards" (Drafna's Restoration). The
         # word is recorded, not merely consumed, for the reason it is
         # everywhere else here: with it the objects are chosen as the spell is
         # cast (CR 601.2c) and every one of them is a target; without it
-        # nothing is chosen until the effect resolves (CR 115.1b), which is
+        # nothing is chosen until the effect resolves (CR 115.10), which is
         # Siege Striker's "tap any number of untapped creatures you control".
         targeted_any = bool(stream.accept_word("target"))
         return ast.TargetSpec(

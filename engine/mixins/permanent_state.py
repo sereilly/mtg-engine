@@ -47,6 +47,7 @@ from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
 from ..cast_costs import KICKED
+from ..color_changes import add_derived_color_change, clear_derived_color_changes
 from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
 from ..keywords import (add_derived_ability_line, add_derived_grant,
@@ -2441,10 +2442,10 @@ class PermanentStateMixin:
         overridden land animates by its override, not its printed type line.
         """
         for permanent in all_permanents:
-            animation = (
+            animator, animation = (
                 next(
                     (
-                        a for source, a in animations
+                        (source, a) for source, a in animations
                         # Which lands is ``land_animation_reaches``' answer: the
                         # printed land type (None is the untyped "All lands
                         # are…", Living Plane) and, since Natural Emergence,
@@ -2452,21 +2453,32 @@ class PermanentStateMixin:
                         # controller, which is why the source rides the list.
                         if land_animation_reaches(self, source, a, permanent)
                     ),
-                    None,
+                    (None, None),
                 )
                 if permanent.card.primary_type == "land"
-                else None
+                else (None, None)
             )
+            # "…are 1/1 **black** creatures" (Kormus Bell): CR 613 layer 5 of a
+            # static, so it is a *derived* contribution — cleared and rebuilt
+            # here on every pass, stamped with the animator's own timestamp
+            # (CR 613.7a). It was written into the indefinite recolour slot,
+            # which made the Bell overwrite a lace that was on the Swamp first,
+            # win against one cast afterwards, and take either away with it
+            # when it left.
+            clear_derived_color_changes(permanent)
             if animation is not None:
                 permanent.metadata["land_animated"] = True
                 set_base_pt(permanent, animation.power, animation.toughness)
                 if animation.color:
-                    permanent.metadata["color_override"] = animation.color
+                    add_derived_color_change(
+                        permanent, animation.color,
+                        timestamp=animator.timestamp,
+                        label=f"animated ({animator.card.name})",
+                    )
             elif permanent.metadata.get("land_animated"):
                 # The animating source is gone: the land is no longer a creature.
                 permanent.metadata.pop("land_animated", None)
                 clear_base_pt(permanent)
-                permanent.metadata.pop("color_override", None)
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
         """Whether *permanent* currently has a keyword ability.

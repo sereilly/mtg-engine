@@ -4,6 +4,7 @@ import re
 
 from ..card_hooks import ON_LEAVE_BATTLEFIELD
 from ..cast_permissions import end_while_exiled_grants
+from ..continuous import next_timestamp
 from ..auras import auras_attached_to, detach_aura
 from ..control import (
     base_controller,
@@ -3627,6 +3628,12 @@ class GameHelpersMixin:
         # so no reader can observe the permanent on the battlefield under an id
         # it is about to lose.
         permanent.permanent_id = next_permanent_id()
+        # CR 613.7d, beside the id and for its reason: the object receives its
+        # timestamp as it enters the zone, which is what a static ability on it
+        # is ordered by (CR 613.7a). Before the append, so no layer read can
+        # see the permanent on the battlefield under the stamp it was built
+        # with.
+        permanent.timestamp = next_timestamp()
         self.players[controller_index].battlefield.append(permanent)
         # "…put a nontoken permanent onto the battlefield" (Arboria, CR 506.3):
         # the per-turn half of the last-own-turn record, folded per seat at the

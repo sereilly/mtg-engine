@@ -206,7 +206,7 @@ def parse_player_chooses_permanent(
     at the verb.
 
     Nothing is targeted: the sentence prints no "target" and the pick is made as
-    the ability resolves (CR 601.2c/115.1b), which is exactly the shape
+    the ability resolves (CR 115.10a, CR 115.10), which is exactly the shape
     ``engine/handlers/permanent_choices.py`` already performs — so this is a
     noun phrase and a seat, not a new mechanism.
 

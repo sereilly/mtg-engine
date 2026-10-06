@@ -9,6 +9,7 @@ from . import shields as _shields
 # Safe at module level: copies and text_changes import only the layer system's
 # timestamp counter, nothing from here. effective_card is read on nearly every
 # rules query, so this is not a function-local import.
+from .continuous import next_timestamp
 from .copies import copiable_card, copied_name
 from .text_changes import apply_text_changes, has_text_changes, text_changes
 
@@ -398,6 +399,26 @@ class Permanent:
     # detached clones). Folding identity into ``__eq__`` would be a *separate*
     # behavioural change; this field is purely additive.
     permanent_id: int = field(default_factory=next_permanent_id, compare=False)
+    # CR 613.7d: "An object receives a timestamp at the time it enters a zone."
+    # The object's own timestamp, off the one clock every layer's effects are
+    # stamped from (``engine/continuous.py``'s ``next_timestamp``) — which is
+    # the whole point of it: CR 613.7a gives a static ability's continuous
+    # effect "the same timestamp as the object the static ability is on", so
+    # "All creatures are black" (Darkest Hour) is ordered against a lace by
+    # when the *enchantment* arrived, and that is only a comparison if the two
+    # numbers come from one counter. ``permanent_id`` above cannot stand in:
+    # it counts permanents, not moments, so an id and an effect's stamp are
+    # not comparable at all.
+    #
+    # Stamped at construction, for ``permanent_id``'s reason (a board built by
+    # hand in a test still has an order), **re-stamped as the permanent enters
+    # the battlefield** (``Game._put_permanent_onto_battlefield``; CR 400.7
+    # makes a returning permanent a new object) and again each time an Aura or
+    # Equipment becomes attached (CR 613.7e, ``auras.attach_aura``). Not
+    # re-stamped by phasing in: CR 702.26d says phasing changes no zone.
+    #
+    # ``compare=False`` and last, for the two reasons the id is.
+    timestamp: int = field(default_factory=next_timestamp, compare=False)
 
     @property
     def prevention_shields(self) -> list["_shields.Shield"]:
