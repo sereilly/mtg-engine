@@ -45,7 +45,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PCY | 143 | 207 | 91.3% | 89.4% | 59.4% | 116 |
 | INV | 335 | 547 | 87.9% | 87.9% | 62.3% | 278 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| PLS *(measured)* | 143 | 255 | 90.6% | 90.2% | 67.5% | 125 |
+| PLS *(measured)* | 143 | 255 | 91.0% | 90.6% | 67.8% | 126 |
 | **All (shipped)** | **6785** | **9998** | **90.4%** | **89.8%** | **61.2%** | **5197** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -59,7 +59,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
 | 538 | 249 | expected a subject |  |
-| 151 | 78 | unrecognized effect verb |  |
+| 150 | 77 | unrecognized effect verb |  |
 | 129 | 64 | unconsumed text |  |
 | 52 | 34 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
@@ -3544,6 +3544,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}: This enchantment deals 1 damage to any target. Flip a coin. If you lose the flip, choose one of your opponents. That player gains control of this enchantment.`
 - **Goblin Flotilla**
   - `At the beginning of each combat, unless you pay {R}, whenever this creature blocks or becomes blocked by a creature this combat, that creature gains first strike until end of turn.`
+- **Goblin Game**
+  - `Each player hides at least one item, then all players reveal them simultaneously. Each player loses life equal to the number of items they revealed. The player who revealed the fewest items then loses half their life, rounded up. If two or more players are tied for fewest, each loses half their life, rounded up.`
 - **Goblin Gardener**
   - `When this creature dies, destroy target land.`
 - **Goblin Grenade**
