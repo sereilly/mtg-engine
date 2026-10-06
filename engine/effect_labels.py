@@ -219,6 +219,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # these are the same ability with a different word after "gains".
     "grant_self_keyword_until_eot": "activated_pump",
     "grant_target_keyword_until_eot": "activated_pump",
+    # ...and to the creature an Aura is attached to: Keldon Mantle's "{G}:
+    # Enchanted creature gains trample until end of turn." The same ability
+    # with the Aura's host for a subject - its two siblings on that card are
+    # a regeneration and a pump, each already in the bucket its verb names.
+    "grant_enchanted_keyword_until_eot": "activated_pump",
     # Phyrexian Splicer's move, which is a removal and a grant in one
     # instruction — the bucket its two halves would each have had.
     "move_chosen_keyword_between_targets": "activated_pump",
@@ -767,6 +772,11 @@ TRIGGERED_LABELS: dict[str, str] = {
     "if_then": "triggered_label",
     "remove_all_counters_from_matching": "triggered_counter",
     "search_library": "triggered_library",
+    # Skyship Weatherlight's entry: "search your library for any number of
+    # artifact and/or creature cards, exile them, then shuffle." A search
+    # whose finds go to exile instead of a hand is still what the trigger is
+    # *for* - the library - and the bucket names that, not the destination.
+    "search_and_exile_matching": "triggered_library",
     "pump_enchanted_creature": "triggered_pump",
     "untap_and_tap_matching": "triggered_tap",
     "phase_out_target": "triggered_phasing",
@@ -1090,6 +1100,10 @@ TRIGGERED_LABELS: dict[str, str] = {
     # Cackling Fiend, beside `discard_hand` above: the seat set is payload, and
     # a discard is a discard whoever the sentence names (CR 701.9a).
     "each_opponent_discards_cards": "triggered_discard",
+    # Marsh Crocodile's "When this creature enters, each player discards a
+    # card." - the row above with every seat in the set, its controller's
+    # included.
+    "each_player_discards_a_card": "triggered_discard",
     # Noetic Scales returns every creature whose power outruns its controller's
     # hand. `triggered_return` for `return_source_card_to_owners_hand`'s reason
     # — the destination is a hand and the act is a bounce; that it names a

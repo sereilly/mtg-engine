@@ -359,6 +359,40 @@ def _another_seat_chooses(ability) -> bool:
     )
 
 
+_COLOR_OF_YOUR_CHOICE = "the color of your choice"
+
+
+def _only_choice_is_made_on_resolution(ability, line: str) -> bool:
+    """Whether the one thing this line leaves to its controller is a colour the
+    ability asks for **as it resolves** (CR 608.2d) - a choice no activation
+    picker could offer, because nothing is announced.
+
+    Root Greevil: "{2}{G}, {T}, Sacrifice this creature: Destroy all
+    enchantments of the color of your choice." `_TARGETY` reads "of your
+    choice" as a target-like announcement, for the Circles' "a source of your
+    choice" - and here it is neither: the line names no target, an untargeted
+    sweep derives no spec (as Tranquil Grove's and Powder Keg's do not), and the
+    compiled program says exactly when the colour is chosen - a `choose_color`
+    step in front of the sweep, the `color_choice` prompt
+    `tests/engine/test_color_choice_timing.py` holds every such line to.
+
+    Knight of Dawn and Caldera Kavu print the same phrase and never reached
+    this question only because the step behind *their* choice has a spec that
+    says "none" out loud. Derived from the program, like
+    `_another_seat_chooses` above and for its reason; and narrow on purpose - a
+    line that also prints "target", or any other "... of your choice", is not
+    excused by a colour.
+    """
+    if re.search(r"\btargets?\b", line):
+        return False
+    if "of your choice" in line.replace(_COLOR_OF_YOUR_CHOICE, ""):
+        return False
+    steps = ability.instruction.payload.get("steps") or (ability.instruction,)
+    return _COLOR_OF_YOUR_CHOICE in line and any(
+        step.kind == "choose_color" for step in steps
+    )
+
+
 def test_every_ability_that_names_a_target_derives_its_own_prompt(supported_cards):
     """The end state of this migration, as a ratchet.
 
@@ -374,6 +408,7 @@ def test_every_ability_that_names_a_target_derives_its_own_prompt(supported_card
         and (card.name, index) not in _FALLBACK_ABILITIES
         and (card.name, index) not in _UNANNOUNCEABLE_TARGETS
         and not _another_seat_chooses(ability)
+        and not _only_choice_is_made_on_resolution(ability, line)
     ]
 
     assert gaps == [], "these abilities target but derive no prompt:\n  " + "\n  ".join(gaps)

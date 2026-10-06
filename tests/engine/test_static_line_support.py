@@ -46,6 +46,7 @@ from engine.ante import is_ante_deck_line
 from engine.hand_size import hand_size_line
 from engine.untap_restrictions import self_untap_line
 from engine.grammar import compile_line
+from engine.grammar.registries import registry_for_line
 from engine.oracle import (
     _derived_static_claims,
     _is_supported_static_creature_line,
@@ -203,6 +204,30 @@ def _derived(normalized: str) -> bool:
         # above records, arriving a second time: widening a gate is the moment
         # to re-read the guards keyed on the old answer.
         or aura_continuous_claim(normalized) is not None
+        # **Whatever registry the grammar itself says implements this line in
+        # full** (`grammar.registries.registry_for_line`). The arm that makes
+        # the list above stop being a list: a text-keyed table has to be named
+        # there for its line to *parse* - a line neither a production nor a
+        # registry claims costs the card its support - so a table cannot exist
+        # without being asked here.
+        #
+        # Added at Planeshift's promotion rehearsal, which was the fourth time
+        # this guard reported a working line as implemented nowhere because it
+        # keeps its own copy of which tables exist (`cast_timing`, the block
+        # permissions and the chosen-name ban are the three arms above that
+        # record the first three). Magnigoth Treefolk's "For each basic land
+        # type among lands you control, this creature has landwalk of that
+        # type" is derived by `engine/landwalk.py`, claimed in the grammar's
+        # registries, and enforced at the declare-blockers step - driven, its
+        # walks follow the board - and no arm here had heard of the module.
+        # Measured before it was trusted: over 1,168 admitted static lines with
+        # Planeshift in the shipped role, 677 are claimed by a registry and
+        # exactly **one** is backed by this arm alone, which is that line.
+        #
+        # Without the card's name, for `_derived_static_claims`' reason above:
+        # a claim keyed on a name is about a card, and only a text-derived
+        # table may answer a question about one line of text.
+        or registry_for_line(normalized) is not None
         # The strongest claim of all, and the last asked: **the grammar lowered
         # this line to an instruction**. "This creature gets +X/+0, where X is
         # the greatest power among creature cards in your graveyard" (Carrion
