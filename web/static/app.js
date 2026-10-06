@@ -17546,7 +17546,7 @@ function renderCombatControls(state) {
 
       const openBtn = document.createElement("button");
       openBtn.type = "button";
-      openBtn.textContent = "Assign Banding Damage";
+      openBtn.textContent = "Assign Attackers' Damage";
       openBtn.addEventListener("click", () => openBandingDamageDialog(state));
       actions.appendChild(openBtn);
 
@@ -18278,7 +18278,7 @@ function openDamageDialog(state = currentState, mode = "attacker") {
             banding_damage: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
           });
-          updateActionHint("Banding combat damage assigned.");
+          updateActionHint("Attackers' combat damage assigned.");
         } else {
           await sendAction({
             seat,
@@ -18343,7 +18343,10 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
   const titleEl = q("combatDamageTitle");
   const subtitleEl = document.querySelector("#combatDamageModal .modal-subtitle");
   if (titleEl) {
-    titleEl.textContent = mode === "banding" ? "Assign Banding Damage" : "Assign Combat Damage";
+    // "Banding" is one of the reasons the defending player assigns; a
+    // permanent that says so (Defensive Formation) is another, so the title
+    // names the seat rather than the keyword.
+    titleEl.textContent = mode === "banding" ? "Assign Attackers' Damage (You Are Defending)" : "Assign Combat Damage";
   }
   const anyOffer = groups.some((g) => g.offer);
   const offerNote = anyOffer
@@ -19914,7 +19917,18 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       return;
     }
 
-    // Dragging a battlefield permanent onto the canvas (activate, or blocker)
+    // Dragging a battlefield permanent onto the canvas (activate, or blocker).
+    //
+    // UNREACHED, measured 2026-10-06: nothing produces a "permanent" payload.
+    // The only `dragKind` any element is rendered with is "hand", and the
+    // canvas has one drag of its own — a blocker onto an attacker, which
+    // goes to `onBlockerAssign` and never here (battlefield-canvas.js:
+    // "Moved too far to be a click; cards can't be repositioned manually").
+    // So there is no drag-to-activate: dragging a permanent across the board
+    // sends nothing, for a land that has lost its abilities as for any
+    // other (driven in a browser — zero action requests). Left in place
+    // rather than removed, because `startActivationPrompt` below is the
+    // route it would have to take if a drag were ever wired up.
     if (payload.kind === "permanent") {
       // If the drop landed on an opponent card during declare_blockers, assign block
       if (
