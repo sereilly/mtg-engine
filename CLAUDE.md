@@ -15,15 +15,24 @@ Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
 Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143),
-Invasion (335), Planeshift (143) and Core Set 2021 (285), 4,764 unique cards,
-all classified as supported.
-**Thirty sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Invasion (335), Planeshift (143), Seventh Edition (335) and Core Set 2021
+(285), 4,781 unique cards, all classified as supported.
+**Thirty-one sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
 here and **two were not**, Blaze and Regal Unicorn, whose earlier printings were
 in Portal, a set this manifest does not carry. A reprint set is a set that
-reprints from *this pool*, not from Magic, and the difference is two cards; Ice Age is the largest ever ingested and brought
+reprints from *this pool*, not from Magic, and the difference is two cards.
+**7ED is the fourth, and the one that priced "almost"**: 318 of its 335 were
+here and **seventeen were not** — Portal, Portal Second Age and Starter again
+— of which five are vanilla creatures, ten arrived supported, and two needed a
+production (Sleight of Hand, Baleful Stare). `set_progress.json` records it
+with 0 new cards, as it did 6ED, and ROADMAP said in advance to read that
+number the way 6ED turned out. A reprint-shaped set is still an ingest and a
+rehearsal rather than a set of rounds, but it is not nothing: the fifteen
+that "arrived supported" were each driven in a game, and driving them found
+three pool-wide defects no census could see; Ice Age is the largest ever ingested and brought
 **346 new cards**, more than any set since Alpha; and Fallen Empires is the
 smallest work set yet, 102 cards of which every single one was new. Homelands
 is the second set after FEM to bring nothing but new cards — 115 of 115, with
@@ -95,6 +104,14 @@ is M21. At index 28 the Dryad's origin reads `pls`; appended after M21 it reads
 rehearsed twice with the same move script — on the day of the ingest and again
 at the promotion — and named in the ingest's commit message before any card was
 implemented, which is what the lesson looks like once it has stopped being one.
+**Seventh Edition is the same card-sized trap inside a reprint set, where the
+prefix guard is silent for two reasons at once.** Of its 318 reprints exactly
+one — **Mind Rot** — has its only other printing later than 2001, in M21. At
+index 29 Mind Rot's origin reads `7ed`; appended after M21 it reads `m21`,
+the prefix guard green, the printing-order guard failing at index 29 and
+nothing else. Rehearsed at the ingest and again at the promotion with the
+promotion's own script; `test_7ed_cards.py` asserts the eighteen cards that
+originate in the set, seventeen new ones and that one.
 What Planeshift brought is the *second half* of what Invasion built: a kicker
 whose cost is not mana, two kickers on one card (CR 702.33b) and the question
 "which one was paid" (CR 702.33f), domain sizing a *cost*, and no machinery
@@ -111,7 +128,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 4,764 — they are printings (6,928 of
+the per-set totals sum to far more than 4,781 — they are printings (7,263 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -153,7 +170,7 @@ them on the stack, colour effects ordered by what kind they were rather than by
 timestamp (CR 613.7), a castable highlight that glowed over 3,543 unpayable
 land-and-cost pairs, and 28 shipped "as this enters, choose…" cards whose
 prompt a human player could not answer in the browser at all.
-Reliance is **1.1% of supported cards**, 52 of 4,764, down from 53 of 3,715 —
+Reliance is **1.1% of supported cards**, 52 of 4,781, down from 53 of 3,715 —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
 restriction pair, which that hook's own comment said no second card printed.
@@ -185,7 +202,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0% and Planeshift at 65.7%, and all twenty-two were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7% and Seventh Edition at 99.4%, and all twenty-three were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -207,7 +224,10 @@ is precisely what the rehearsal is for. It took a fourth wave to clear.
 miss**: its rehearsal turned three guards red and all three were ratchets, where
 accepting is the review — which is what four sets of guard fixes look like from
 the far side, and is why the reprint-shaped ingest keeps happening rather than
-being skipped. The next ingested set goes there first.
+being skipped. **7ED's paid nothing the same way** — a green suite at the
+ingest, and an early rehearsal whose only red guards were three ratchets and
+the three that name an unsupported card. The next ingested set goes there
+first.
 
 **The manifest is printing-ordered, and the order is load-bearing.** Antiquities
 went in at index 4, Legends at index 6, The Dark at index 7, Fallen Empires at
@@ -1286,8 +1306,8 @@ The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (646 of the 4,764 catalog cards passing — 407
-checked in-game and 239 auto-passed — with 52 more reported `equivalent`; the
+manually validated in-game (652 of the 4,781 catalog cards passing — 407
+checked in-game and 245 auto-passed — with 53 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
 Stronghold, Exodus, Urza's Saga and every set since, Invasion and Planeshift

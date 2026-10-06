@@ -11,6 +11,7 @@
     "Crookshank Kobolds",
     "Durkwood Boars",
     "Dwarven Trader",
+    "Eager Cadet",
     "Earth Elemental",
     "Elvish Ranger",
     "Femeref Scouts",
@@ -18,6 +19,7 @@
     "Fresh Volunteers",
     "Garruk's Gorehorn",
     "Giant Cockroach",
+    "Giant Octopus",
     "Goblin Hero",
     "Gorilla Warrior",
     "Gray Ogre",
@@ -32,6 +34,7 @@
     "Jerrard of the Closed Fist",
     "Kasimir the Lone Wolf",
     "Keepers of the Faith",
+    "Knight Errant",
     "Kobolds of Kher Keep",
     "Lady Orca",
     "Lowland Giant",
@@ -59,7 +62,9 @@
     "Tor Giant",
     "Torsten Von Ursus",
     "Trained Armodon",
+    "Trained Orgg",
     "Viashino Warrior",
+    "Vizzerdrix",
     "Vodalian Soldiers",
     "Walking Corpse",
     "Water Elemental",
@@ -385,6 +390,12 @@
     "Storm Shaman"
   ],
   [
+    "Goblin Chariot",
+    "Lightning Elemental",
+    "Raging Goblin",
+    "Thundering Giant"
+  ],
+  [
     "Laccolith Grunt",
     "Laccolith Titan",
     "Laccolith Warrior",
@@ -410,6 +421,11 @@
     "Bog Imp",
     "Mahamoti Djinn",
     "Storm Crow"
+  ],
+  [
+    "Breath of Life",
+    "Resurrection",
+    "Rise Again"
   ],
   [
     "Breezekeeper",
@@ -472,9 +488,9 @@
     "Whiptongue Frog"
   ],
   [
-    "Lightning Elemental",
-    "Raging Goblin",
-    "Thundering Giant"
+    "Lone Wolf",
+    "Pride of Lions",
+    "Thorn Elemental"
   ],
   [
     "Metathran Soldier",
@@ -660,6 +676,10 @@
     "Hungry Mist"
   ],
   [
+    "Death Stroke",
+    "Vengeance"
+  ],
+  [
     "Deathgazer",
     "Dread Specter"
   ],
@@ -758,6 +778,10 @@
   [
     "Glittering Lion",
     "Glittering Lynx"
+  ],
+  [
+    "Goblin Glider",
+    "Kyren Glider"
   ],
   [
     "Goblin Mutant",
@@ -868,10 +892,6 @@
     "Nature's Revolt"
   ],
   [
-    "Lone Wolf",
-    "Thorn Elemental"
-  ],
-  [
     "Mana Leech",
     "Mole Worms"
   ],
@@ -966,10 +986,6 @@
   [
     "Reckless Ogre",
     "Rogue Kavu"
-  ],
-  [
-    "Resurrection",
-    "Rise Again"
   ],
   [
     "Revitalize",

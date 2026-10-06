@@ -221,21 +221,63 @@ def test_every_card_compiles_supported(set_cards):
     assert not unsupported, f"unsupported 7ED cards: {unsupported}"
 
 
-# --- PROMOTION: the integrator's assertions go here --------------------------
+# --- PROMOTION ---------------------------------------------------------------
 #
-# Deliberately not asserted while 7ED is `measured`, because both depend on the
-# set's manifest index and on `load_catalog` reading it:
-#
-#   1. Which cards ORIGINATE in 7ED (`catalog_by_name[...].original_printing ==
-#      "7ed"`). At the right index — after Planeshift, before M21 — that is the
-#      seventeen in NEW_TO_THE_POOL **plus Mind Rot**, eighteen names. Appended
-#      after M21 it is the seventeen alone, with the prefix guard green; the
-#      wrong-insert rehearsal is what tells the two apart.
-#   2. That every 7ED card records a `7ed` printing in the catalog (6ED's
-#      `test_promoting_the_set_actually_recorded_its_printings`) — the positive
-#      half, without which "only eighteen originate here" also passes for a set
-#      that was never loaded.
-#
+# Asserted from the day 7ED moved to `sets` at index 29, between Planeshift and
+# M21. Both depend on that index and on `load_catalog` reading the set, which
+# is why the card group left them to the promotion.
+
+#: Mind Rot is printed in 7ED and M21 and nowhere earlier in this pool, so the
+#: set's manifest index decides its origin. Rehearsed both ways with the
+#: promotion's own move script: appended after M21 it read `m21`, with the
+#: prefix guard green and only `test_the_shipped_sets_are_in_printing_order`
+#: failing; at index 29 it reads `7ed`.
+ORIGIN_DECIDED_BY_THE_INDEX = "Mind Rot"
+
+
+def test_eighteen_cards_are_originally_printed_in_seventh_edition(
+    set_cards, catalog_by_name,
+):
+    """The seventeen the pool had never seen, **and Mind Rot** — the one
+    reprint whose only other printing here is later. A reprint set is the shape
+    for which the prefix guard is silent twice over (every other card already
+    has an earlier origin, and the guard compares what was there before), so
+    this is the assertion that goes red if the set is ever moved: appended
+    after M21 the answer is seventeen."""
+    originates = sorted(
+        card.name
+        for card in set_cards("7ED")
+        if catalog_by_name[card.name].original_printing == "7ed"
+    )
+    assert originates == sorted(NEW_TO_THE_POOL + [ORIGIN_DECIDED_BY_THE_INDEX])
+    assert list(catalog_by_name[ORIGIN_DECIDED_BY_THE_INDEX].printings) == ["7ed", "m21"]
+
+
+def test_promoting_the_set_actually_recorded_its_printings(set_cards, catalog_by_name):
+    """The positive half, and the reason the origin test above means anything:
+    "only eighteen cards originate in 7ED" also passes if the set was never
+    loaded. Every 7ED card must carry `7ed` in `printings` — that, and not its
+    origin, is what promotion added for the other 317."""
+    cards = set_cards("7ED")
+    assert len(cards) == 335
+    missing = sorted(
+        card.name for card in cards
+        if "7ed" not in catalog_by_name[card.name].printings
+    )
+    assert not missing, f"7ED cards the catalog records no 7ed printing for: {missing}"
+
+
+def test_every_card_ships_supported(set_cards, catalog_by_name):
+    """What promotion claims, asserted of the set by name so a card dropped
+    from the catalog fails here rather than passing by absence."""
+    unsupported = sorted(
+        card.name
+        for card in set_cards("7ED")
+        if not compile_card_oracle(catalog_by_name[card.name]).supported
+    )
+    assert not unsupported, f"7ED cards the catalog does not support: {unsupported}"
+
+
 # -----------------------------------------------------------------------------
 
 

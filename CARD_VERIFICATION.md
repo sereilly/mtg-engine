@@ -2,11 +2,11 @@
 
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
-- Total cards: **4764**
-- Passed: **646** (407 checked in-game, 239 auto-passed)
+- Total cards: **4781**
+- Passed: **652** (407 checked in-game, 245 auto-passed)
 - Failed: **0**
-- Equivalent to a passing card: **52**
-- Untested: **4066**
+- Equivalent to a passing card: **53**
+- Untested: **4076**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -296,6 +296,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Balduvian Shaman | ⬜ untested |  |
 | Balduvian Trading Post | ⬜ untested |  |
 | Balduvian War-Makers | ⬜ untested |  |
+| Baleful Stare | ⬜ untested |  |
 | Ball Lightning | ⬜ untested |  |
 | Ballista Squad | ⬜ untested |  |
 | Balloon Peddler | ⬜ untested |  |
@@ -489,6 +490,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Breaking Wave | ⬜ untested |  |
 | Breath of Darigaaz | ⬜ untested |  |
 | Breath of Dreams | ⬜ untested |  |
+| Breath of Life | ≡ equivalent | same behaviour as Resurrection |
 | Breathstealer | ⬜ untested |  |
 | Breathstealer's Crypt | ⬜ untested |  |
 | Breeding Pit | ⬜ untested |  |
@@ -872,6 +874,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cyclopean Tomb | ✅ pass |  |
 | D'Avenant Archer | ⬜ untested |  |
 | Dakkon Blackblade | ⬜ untested |  |
+| Dakmor Lancer | ⬜ untested |  |
 | Damping Engine | ⬜ untested |  |
 | Damping Field | ⬜ untested |  |
 | Dance of Many | ⬜ untested |  |
@@ -1128,6 +1131,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Dwarven Weaponsmith | ⬜ untested |  |
 | Dying Wail | ⬜ untested |  |
 | Dystopia | ⬜ untested |  |
+| Eager Cadet | ✅ pass | auto-pass: no abilities |
 | Early Harvest | ⬜ untested |  |
 | Earth Elemental | ✅ pass |  |
 | Earthbind | ✅ pass |  |
@@ -1596,6 +1600,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Giant Crab | ⬜ untested |  |
 | Giant Growth | ✅ pass |  |
 | Giant Mantis | ✅ pass | auto-pass: keywords only (reach) |
+| Giant Octopus | ✅ pass | auto-pass: no abilities |
 | Giant Oyster | ⬜ untested |  |
 | Giant Shark | ⬜ untested |  |
 | Giant Slug | ⬜ untested |  |
@@ -1635,6 +1640,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Bombardment | ⬜ untested |  |
 | Goblin Cadets | ⬜ untested |  |
 | Goblin Caves | ⬜ untested |  |
+| Goblin Chariot | ✅ pass | auto-pass: keywords only (haste) |
 | Goblin Chirurgeon | ⬜ untested |  |
 | Goblin Digging Team | ⬜ untested |  |
 | Goblin Elite Infantry | ⬜ untested |  |
@@ -1642,6 +1648,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Flotilla | ⬜ untested |  |
 | Goblin Game | ⬜ untested |  |
 | Goblin Gardener | ⬜ untested |  |
+| Goblin Glider | ⬜ untested |  |
 | Goblin Grenade | ✅ pass |  |
 | Goblin Grenadiers | ⬜ untested |  |
 | Goblin Hero | ✅ pass | auto-pass: no abilities |
@@ -2167,6 +2174,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Kjeldoran Skycaptain | ✅ pass | auto-pass: keywords only (flying, first strike, banding) |
 | Kjeldoran Skyknight | ✅ pass | auto-pass: keywords only (flying, first strike, banding) |
 | Kjeldoran Warrior | ✅ pass | auto-pass: keywords only (banding) |
+| Knight Errant | ✅ pass | auto-pass: no abilities |
 | Knight of Dawn | ⬜ untested |  |
 | Knight of Dusk | ⬜ untested |  |
 | Knight of Stromgald | ⬜ untested |  |
@@ -2593,6 +2601,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Monkey Cage | ⬜ untested |  |
 | Mons's Goblin Raiders | ✅ pass |  |
 | Monsoon | ⬜ untested |  |
+| Monstrous Growth | ⬜ untested |  |
 | Monstrous Hound | ⬜ untested |  |
 | Moonlit Wake | ⬜ untested |  |
 | Moor Fiend | ✅ pass | auto-pass: keywords only (swampwalk) |
@@ -2993,6 +3002,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Presence of the Master | ⬜ untested |  |
 | Pretender's Claim | ⬜ untested |  |
 | Price of Progress | ⬜ untested |  |
+| Pride of Lions | ⬜ untested |  |
 | Pridemalkin | ⬜ untested |  |
 | Priest of Gix | ⬜ untested |  |
 | Priest of Titania | ⬜ untested |  |
@@ -3393,6 +3403,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sacred Ground | ⬜ untested |  |
 | Sacred Guide | ⬜ untested |  |
 | Sacred Mesa | ⬜ untested |  |
+| Sacred Nectar | ⬜ untested |  |
 | Sacred Prey | ⬜ untested |  |
 | Sacrifice | ✅ pass |  |
 | Sadistic Glee | ⬜ untested |  |
@@ -3727,6 +3738,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sleeper's Guile | ⬜ untested |  |
 | Sleeper's Robe | ⬜ untested |  |
 | Sleeping Potion | ⬜ untested |  |
+| Sleight of Hand | ⬜ untested |  |
 | Sleight of Mind | ✅ pass |  |
 | Slimy Kavu | ⬜ untested |  |
 | Slingshot Goblin | ⬜ untested |  |
@@ -3919,6 +3931,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Stangg | ⬜ untested |  |
 | Star Compass | ⬜ untested |  |
 | Starke of Rath | ⬜ untested |  |
+| Starlight | ⬜ untested |  |
 | Stasis | ✅ pass |  |
 | Statecraft | ⬜ untested |  |
 | Static Orb | ⬜ untested |  |
@@ -4282,6 +4295,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Tragic Poet | ⬜ untested |  |
 | Trailblazer | ⬜ untested |  |
 | Trained Armodon | ✅ pass | auto-pass: no abilities |
+| Trained Orgg | ✅ pass | auto-pass: no abilities |
 | Traitorous Greed | ⬜ untested |  |
 | Tranquil Cove | ⬜ untested |  |
 | Tranquil Domain | ⬜ untested |  |
@@ -4433,6 +4447,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Venarian Gold | ⬜ untested |  |
 | Vendetta | ⬜ untested |  |
 | Venerable Monk | ⬜ untested |  |
+| Vengeance | ⬜ untested |  |
 | Venom | ⬜ untested |  |
 | Venomous Breath | ⬜ untested |  |
 | Venomous Dragonfly | ⬜ untested |  |
@@ -4492,6 +4507,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Vitalizing Cascade | ⬜ untested |  |
 | Vitalizing Wind | ⬜ untested |  |
 | Vito, Thorn of the Dusk Rose | ⬜ untested |  |
+| Vizzerdrix | ✅ pass | auto-pass: no abilities |
 | Vodalian Arcanist | ⬜ untested |  |
 | Vodalian Hypnotist | ⬜ untested |  |
 | Vodalian Illusionist | ⬜ untested |  |
@@ -4512,6 +4528,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Volcanic Dragon | ✅ pass | auto-pass: keywords only (flying, haste) |
 | Volcanic Eruption | ✅ pass |  |
 | Volcanic Geyser | ⬜ untested |  |
+| Volcanic Hammer | ⬜ untested |  |
 | Volcanic Island | ✅ pass |  |
 | Volcanic Salvo | ⬜ untested |  |
 | Volcanic Wind | ⬜ untested |  |
