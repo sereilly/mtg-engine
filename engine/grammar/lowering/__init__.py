@@ -174,6 +174,8 @@ from .shuffles import (
     _lower_shuffle_library,
 )
 from .zones import (
+    _lower_put_on_library_bottom,
+    _lower_put_graveyard_top_on_library_bottom,
     _lower_reveal_top_of_library,
 
     _lower_put_onto_battlefield,
@@ -237,9 +239,6 @@ from .attachments import (
 from .phasing import (_lower_cant_phase_out, _lower_phase_out,
                       _lower_simultaneous_phasing)
 from .board import (
-    _lower_put_on_library_bottom,
-    _lower_put_graveyard_top_on_library_bottom,
-    _lower_delayed_self_action,
     _lower_regenerate,
     _lower_rebalance_lands,
     _lower_keep_chosen_sacrifice_rest,
@@ -366,6 +365,7 @@ from .stack import (
     _lower_put_exiled_card_on_stack_as_copy,
 )
 from .delayed import (
+    _lower_delayed_self_action,
     _lower_choose_target,
     _lower_create_delayed_trigger,
     _lower_delayed_destroy,

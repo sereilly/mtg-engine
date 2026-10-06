@@ -17,6 +17,12 @@ this file until Tempest's Phase 0 and are now `_zone_categories.py`, a third of
 the module gone in one cut: a registry with no call graph, against the dispatch
 that is everything left here. `categories` still composes the two, so there is
 one table and one row per kind and no reader's address changed.
+
+The three library-**bottom** lowerings — a graveyard card, a permanent, the
+graveyard's top card — came home from `board` at R3 J8, where they had lodged
+since the split for want of ninety lines of room here. They sit beside
+`_lower_put_on_library_top`, whose other end the permanent one is, down to the
+instruction kind.
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from .. import ast
 from ..errors import LoweringError
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ._deaths import BOUND_CARD_EVENTS
+from ._described_returns import _graveyard_to_hand_payload
 from ._events import binds_block_pair
 from ._piles import _chosen_graveyard_cards
 from ._common import (
@@ -212,6 +219,98 @@ def _lower_put_on_library_top(
             )
         payload["bottom_instead_colors"] = list(node.bottom_instead_colors)
     return (OracleInstruction("put_target_on_library_top", "", payload),)
+
+
+#: What a bottomed graveyard card may be narrowed by: exactly the printed
+#: characteristics ``handlers/_common.graveyard_card_matches`` reads off a card
+#: in a graveyard (CR 613.1 leaves it nothing else), which is the one predicate
+#: the picker, the activation gate and the handler all ask.
+_BOTTOMING_HONOURED_FIELDS = frozenset({
+    "is_card", "zone", "zone_owner",
+    "card_types", "subtypes", "supertypes", "colors",
+})
+
+
+def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:
+    """"Put target card from your graveyard on the bottom of your library."
+    (Epitaph Golem.) Only that exact scope has a handler: the card comes out
+    of the caster's own graveyard and goes under their own library.
+
+    "Put target **Rebel** card from your graveyard …" (Lin Sivvi, Defiant
+    Hero) is the same move narrowed, and the narrowing is carried on the keys
+    ``graveyard_card_matches`` reads — the shape the graveyard-to-hand return
+    already emits for "target Griffin card" — so what the picker offers, what
+    the activation gate admits and what the resolution takes are one answer.
+    The bare phrase keeps its empty payload, which is what "any card" has
+    always meant to this kind."""
+    spec = node.target
+    if node.to_owner == "owner":
+        return _lower_permanent_on_library_bottom(node)
+    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
+        raise LoweringError("the bottoming handler reads one chosen card", node=node)
+    filt = spec.filter
+    if not filt.is_card or filt.zone != "graveyard" or (
+        filt.zone_owner is None or filt.zone_owner.kind != "you"
+    ):
+        raise LoweringError(
+            "the bottoming handler reads the caster's own graveyard", node=node
+        )
+    if filt == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
+        return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
+    if _restrictions_beyond(filt, _BOTTOMING_HONOURED_FIELDS):
+        raise LoweringError("no bottoming handler honours this restriction", node=node)
+    return (
+        OracleInstruction(
+            "put_graveyard_card_on_library_bottom", "",
+            _graveyard_to_hand_payload(filt),
+        ),
+    )
+
+
+def _lower_permanent_on_library_bottom(
+    node: ast.PutOnLibraryBottom,
+) -> tuple[OracleInstruction, ...]:
+    """"Put target nontoken Mercenary on the bottom of its owner's library."
+    (Mercenary Informer, Rebel Informer.)
+
+    Teferi's tuck (``put_target_on_library_top``) at the library's other end:
+    one chosen permanent, sent to CR 400.3's owner by the handler. The end is
+    payload (``library_end``) rather than a second kind, because every table
+    keyed by the kind — the AI's aim, the effect label, the category — answers
+    a tuck the same way whichever end it lands on.
+    """
+    spec = node.target
+    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
+        raise LoweringError("the bottom tuck resolves one chosen permanent", node=node)
+    if spec.filter.zone != "battlefield" or spec.filter.is_card:
+        raise LoweringError(
+            "the bottom tuck moves a permanent, not a card in a zone", node=node
+        )
+    payload: dict[str, object] = {}
+    _describe_targets(payload, spec)
+    refuse_untestable(
+        (payload.get("targets") or {}).get("filter") or {},
+        refusal="the tuck cannot narrow by", node=node,
+    )
+    payload["library_end"] = "bottom"
+    return (OracleInstruction("put_target_on_library_top", "", payload),)
+
+
+def _lower_put_graveyard_top_on_library_bottom(
+    node: ast.PutGraveyardTopOnLibraryBottom,
+) -> tuple[OracleInstruction, ...]:
+    """"Put the top card of your graveyard on the bottom of your library."
+    (Soldevi Digger.)
+
+    Its own kind rather than a payload flag on the bottoming above it: that one
+    is a *target*, and `engine/targeting.py` maps a kind to a picker — a flag
+    could not stop the picker asking for a graveyard card this sentence never
+    lets anyone choose. No payload at all, because the node carries none: the
+    zone, whose it is and which card are all fixed by the printed words.
+    """
+    return (
+        OracleInstruction("put_top_of_graveyard_on_library_bottom", "", {}),
+    )
 
 
 def _lower_graveyard_cards_on_library_top(

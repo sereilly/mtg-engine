@@ -27,20 +27,12 @@ an earlier sentence chose** (``_chosen_members``): ``_lower_sacrifice`` reads
 its sacrifice half back from that floor, and its exile half was never this
 module's.
 
-**Two lodgers, named so the next cut can find them.** Neither sacrifices or
-regenerates anything:
-
-* the three library-bottom lowerings — a graveyard card, a permanent, the
-  graveyard's top card — answer ``zones``' question, "which zone does this
-  object end up in", and the permanent one is the other end of the tuck
-  ``zones._lower_put_on_library_top`` lowers, down to the instruction kind;
-* ``_lower_delayed_self_action`` ("sacrifice it at the beginning of the next
-  end step") arranges for something later, which is ``delayed``'s opening
-  sentence.
-
-They stay because a lodger's home has to have room for it: ``zones`` stood at
-855 lines and ``delayed`` at 901 when this was written, and the first lodger is
-ninety.
+**Two lodgers sat here after that and have gone home** (R3 J8): the three
+library-bottom lowerings to ``zones``, whose question they answer, and
+``_lower_delayed_self_action`` to ``delayed``, whose opening sentence it is.
+They had stayed for want of room — ``zones`` at 855 lines, ``delayed`` at 901,
+the first lodger ninety — and both had it by then. Nothing here now lowers
+anything but a sacrifice or a regeneration.
 """
 
 import dataclasses
@@ -52,107 +44,11 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import halved_count_spec
 from ._chosen_members import _lower_sacrifice_one_of_chosen
-from ._described_returns import _graveyard_to_hand_payload
 from ._sacrifices import _forced_sacrifice_filter
 from ._common import (_describe_targets, _filter_payload,
-                      _is_enchanted, _is_source, _is_target,
-                      _restrictions_beyond, player_deed_payload,
-                      refuse_untestable)
-from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload, CREATED_TOKEN, _PERMANENTS_MADE_BY_THIS_EFFECT)
-from ._delays import (_BOUND_OBJECT_DELAYED_EVENTS,
-                      end_step_action_on_made_permanent)
-
-
-#: What a bottomed graveyard card may be narrowed by: exactly the printed
-#: characteristics ``handlers/_common.graveyard_card_matches`` reads off a card
-#: in a graveyard (CR 613.1 leaves it nothing else), which is the one predicate
-#: the picker, the activation gate and the handler all ask.
-_BOTTOMING_HONOURED_FIELDS = frozenset({
-    "is_card", "zone", "zone_owner",
-    "card_types", "subtypes", "supertypes", "colors",
-})
-
-
-def _lower_put_on_library_bottom(node: ast.PutOnLibraryBottom) -> tuple[OracleInstruction, ...]:
-    """"Put target card from your graveyard on the bottom of your library."
-    (Epitaph Golem.) Only that exact scope has a handler: the card comes out
-    of the caster's own graveyard and goes under their own library.
-
-    "Put target **Rebel** card from your graveyard …" (Lin Sivvi, Defiant
-    Hero) is the same move narrowed, and the narrowing is carried on the keys
-    ``graveyard_card_matches`` reads — the shape the graveyard-to-hand return
-    already emits for "target Griffin card" — so what the picker offers, what
-    the activation gate admits and what the resolution takes are one answer.
-    The bare phrase keeps its empty payload, which is what "any card" has
-    always meant to this kind."""
-    spec = node.target
-    if node.to_owner == "owner":
-        return _lower_permanent_on_library_bottom(node)
-    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
-        raise LoweringError("the bottoming handler reads one chosen card", node=node)
-    filt = spec.filter
-    if not filt.is_card or filt.zone != "graveyard" or (
-        filt.zone_owner is None or filt.zone_owner.kind != "you"
-    ):
-        raise LoweringError(
-            "the bottoming handler reads the caster's own graveyard", node=node
-        )
-    if filt == ast.ObjectFilter(is_card=True, zone="graveyard", zone_owner=filt.zone_owner):
-        return (OracleInstruction("put_graveyard_card_on_library_bottom", "", {}),)
-    if _restrictions_beyond(filt, _BOTTOMING_HONOURED_FIELDS):
-        raise LoweringError("no bottoming handler honours this restriction", node=node)
-    return (
-        OracleInstruction(
-            "put_graveyard_card_on_library_bottom", "",
-            _graveyard_to_hand_payload(filt),
-        ),
-    )
-
-
-def _lower_permanent_on_library_bottom(
-    node: ast.PutOnLibraryBottom,
-) -> tuple[OracleInstruction, ...]:
-    """"Put target nontoken Mercenary on the bottom of its owner's library."
-    (Mercenary Informer, Rebel Informer.)
-
-    Teferi's tuck (``put_target_on_library_top``) at the library's other end:
-    one chosen permanent, sent to CR 400.3's owner by the handler. The end is
-    payload (``library_end``) rather than a second kind, because every table
-    keyed by the kind — the AI's aim, the effect label, the category — answers
-    a tuck the same way whichever end it lands on.
-    """
-    spec = node.target
-    if not isinstance(spec, ast.TargetSpec) or not _is_target(spec):
-        raise LoweringError("the bottom tuck resolves one chosen permanent", node=node)
-    if spec.filter.zone != "battlefield" or spec.filter.is_card:
-        raise LoweringError(
-            "the bottom tuck moves a permanent, not a card in a zone", node=node
-        )
-    payload: dict[str, object] = {}
-    _describe_targets(payload, spec)
-    refuse_untestable(
-        (payload.get("targets") or {}).get("filter") or {},
-        refusal="the tuck cannot narrow by", node=node,
-    )
-    payload["library_end"] = "bottom"
-    return (OracleInstruction("put_target_on_library_top", "", payload),)
-
-
-def _lower_put_graveyard_top_on_library_bottom(
-    node: ast.PutGraveyardTopOnLibraryBottom,
-) -> tuple[OracleInstruction, ...]:
-    """"Put the top card of your graveyard on the bottom of your library."
-    (Soldevi Digger.)
-
-    Its own kind rather than a payload flag on the bottoming above it: that one
-    is a *target*, and `engine/targeting.py` maps a kind to a picker — a flag
-    could not stop the picker asking for a graveyard card this sentence never
-    lets anyone choose. No payload at all, because the node carries none: the
-    zone, whose it is and which card are all fixed by the printed words.
-    """
-    return (
-        OracleInstruction("put_top_of_graveyard_on_library_bottom", "", {}),
-    )
+                      _is_enchanted, _is_source, player_deed_payload)
+from ._events import (ATTACHED_SUBJECT_EVENTS, LOOP_BOUND_OBJECT, _DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER, names_attached_permanent, _RECORDED_PERMANENTS, _back_reference_payload)
+from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
 
 
 def _lower_regenerate(node: ast.Regenerate) -> tuple[OracleInstruction, ...]:
@@ -679,41 +575,6 @@ def _lower_sacrifice_expansion_permanents(
     return (
         OracleInstruction(
             "sacrifice_expansion_permanents", "", {"set_code": node.set_code}
-        ),
-    )
-
-
-def _lower_delayed_self_action(
-    node: ast.DelayedSelfAction, produced: frozenset[str] = frozenset(),
-) -> tuple[OracleInstruction, ...]:
-    """Rocket Launcher / Rakalite. The action is payload, the delay is the kind
-    — because what a reader downstream must not get wrong is *when*."""
-    made = produced & (_PERMANENTS_MADE_BY_THIS_EFFECT | {CREATED_TOKEN})
-    if node.subject == "bound" and made:
-        # "Create a 3/1 … token with haste. **Sacrifice it** at the beginning
-        # of the next end step." (Balduvian Dead; Hornet Cannon, Tidal Wave.)
-        # The pronoun names what the step in front *made* — never the target or
-        # the source the handler below falls back to. See the builder.
-        if len(made) != 1:
-            raise LoweringError(
-                "several earlier steps made permanents; which one \"it\" "
-                "names is ambiguous", node=node,
-            )
-        return (end_step_action_on_made_permanent(node.action, next(iter(made))),)
-    return (
-        OracleInstruction(
-            # Keyed `self_action`, not `action`: a payload key called
-            # "action" is read as *nested instructions* by the composition
-            # readers (test_front_end_safety's flattener among them), and a
-            # bare word sitting where a list of steps is expected is a crash
-            # rather than a wrong answer — but only because something looked.
-            "arm_self_action_at_next_end_step", "",
-            # The referent rides beside the action for the same reason the
-            # action does: one sentence, one kind, and what differs is data.
-            # Absent for "this artifact", so every payload written before Glyph
-            # of Destruction is byte-identical.
-            {"self_action": node.action}
-            | ({"subject": node.subject} if node.subject != "source" else {}),
         ),
     )
 
