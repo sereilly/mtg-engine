@@ -8,7 +8,8 @@ different half of it:
   the stack;
 * ``targeting.spell_targets`` answers for a spell and never for an ability;
 * ``legality.illegal_targets_refusal`` has to know an object's targets to say
-  they are all illegal, and declines every object that may target a player;
+  they are all illegal, and declined every object that may target a player
+  (it asks this module now: :func:`announcement_targets`);
 * ``mixins/helpers._announce_targeting`` reads the stamped ids and believes a
   seat only when the derived spec is a player kind.
 
@@ -486,6 +487,24 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
             return []
         return [ChosenTarget("player", seat=seat, channel="player", mode=mode)]
     return permanents
+
+
+def announcement_targets(
+    game: "Game", item: "StackItem", spec: dict, holder, *, mode: int | None = None,
+) -> "tuple[ChosenTarget, ...]":
+    """The targets **one** announcement of *item* recorded, read off the
+    channel *spec* says they are in.
+
+    :func:`chosen_targets` for a caller that already holds the announcement —
+    ``legality.illegal_targets_refusal`` walks a spell one chosen mode at a
+    time, each with the spec the cast gate derived for it, and has to read
+    each mode's targets against **that** spec rather than re-derive one. It
+    is the same reader (:func:`_read`), which is the point: whether
+    ``target_player_index`` is a chosen player or the battlefield a permanent
+    sits on is decided in one place, and the rule that re-asks a target's
+    legality must not hold a second opinion about which targets there are.
+    """
+    return tuple(_read(game, item, _Announcement(spec, holder, mode=mode)))
 
 
 def chosen_targets(game: "Game", item: "StackItem") -> "tuple[ChosenTarget, ...] | None":

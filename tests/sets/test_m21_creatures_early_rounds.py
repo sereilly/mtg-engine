@@ -521,11 +521,16 @@ def test_roaming_ghostlight_cannot_bounce_a_spirit(set_pool):
         0, "Roaming Ghostlight", target_player_index=1, target_permanent_index=0,
     )
     assert result.supported, result.details
-    # The chosen Spirit is not a legal object for the trigger, and "up to one"
-    # may legally affect nothing — so nothing was bounced.
+    # The chosen Spirit is not a legal object for the trigger, so it is not
+    # bounced. This went on "…and 'up to one' may legally affect nothing — so
+    # nothing was bounced", which was the handler declining a target it had
+    # been handed: the trigger chooses as it is put on the stack (CR 603.3d),
+    # an announcement it could not have made is set aside, and a seat nobody
+    # can ask takes the picker's default — the Pegasus, exactly as when the
+    # Ghostlight enters with nothing announced.
     assert game.is_on_battlefield(spirit)
-    assert game.is_on_battlefield(pegasus)
-    assert len(p2.hand) == 0
+    assert not game.is_on_battlefield(pegasus)
+    assert [card.name for card in p2.hand] == ["Concordia Pegasus"]
 
 
 def test_roaming_ghostlight_bounces_a_non_spirit(set_pool):
