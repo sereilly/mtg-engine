@@ -2651,7 +2651,7 @@ def _entry_sacrifice_candidates(game, payload: dict) -> list[int]:
     from .enter_effects import entry_sacrifice_requirement
 
     permanent = payload["permanent"]
-    required = entry_sacrifice_requirement(permanent.card)
+    required = entry_sacrifice_requirement(permanent.effective_card)
     if required is None:
         return []
     return game._sacrifice_candidate_indices(
@@ -2671,7 +2671,7 @@ def _entry_sacrifice_refuses_entry(game, payload: dict) -> bool:
     """
     from .enter_effects import entry_sacrifice_requirement
 
-    required = entry_sacrifice_requirement(payload["permanent"].card)
+    required = entry_sacrifice_requirement(payload["permanent"].effective_card)
     return required is not None and required["unpaid"] == "graveyard"
 
 
@@ -2695,7 +2695,7 @@ def _applies_unpayable_entry_sacrifice(game, payload: dict) -> bool:
     # they pay?" and "how many do they give up?" cannot disagree.
     from .enter_effects import entry_sacrifice_requirement
 
-    required = entry_sacrifice_requirement(payload["permanent"].card)
+    required = entry_sacrifice_requirement(payload["permanent"].effective_card)
     owed = int(required["count"]) if required is not None else 1
     return len(_entry_sacrifice_candidates(game, payload)) < owed
 

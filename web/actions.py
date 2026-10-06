@@ -398,9 +398,13 @@ def _action_activate(session, req, seat_type):
         # was set) is refused with the engine's own reason. The list below is
         # empty for such a land, and an index into an empty list used to fall
         # through to "no ability named": the request asked for the Factory's
-        # animation and got a mana tap.
+        # animation and got a mana tap. The index goes with the question, for
+        # the land another effect granted an ability: its list is not empty,
+        # and an index past the granted ones still names one of its own.
         if req.ability_index is not None:
-            lost = session.game.lost_abilities_refusal(permanent)
+            lost = session.game.lost_abilities_refusal(
+                permanent, req.ability_index
+            )
             if lost is not None:
                 raise HTTPException(status_code=400, detail=lost)
         usable = session.game.usable_abilities_of(

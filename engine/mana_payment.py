@@ -734,13 +734,14 @@ def land_text_is_run(land) -> bool:
 
     A land whose types an effect has replaced is answered by its new types
     (CR 305.7: it loses its printed abilities and gains the basic one), so it
-    counts as run whatever its printed text was.
+    counts as run whatever its printed text was — and that needs no arm of its
+    own: the effective card *is* the land with its own text struck
+    (``Permanent.effective_card``), which compiles as a land with nothing to
+    run, plus whatever another effect granted it, which is text the engine
+    does run.
     """
-    from .land_types import lost_abilities_to_type_change
     from .oracle import compile_card_oracle
 
-    if lost_abilities_to_type_change(land):
-        return True
     return compile_card_oracle(land.effective_card).supported
 
 

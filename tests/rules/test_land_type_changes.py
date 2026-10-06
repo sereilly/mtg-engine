@@ -361,8 +361,12 @@ def test_305_7_a_set_land_type_removes_a_triggered_ability(catalog):
 @pytest.mark.cr("305.7")
 def test_305_7_keeps_an_ability_granted_by_another_effect(catalog):
     """"Note that this doesn't remove any abilities that were granted to the
-    land by other effects." The removal is built from the *printed* abilities
-    for exactly this reason, so a grant made afterwards outlives it."""
+    land by other effects." What is struck is the land's own text, where it
+    is read (``Permanent.effective_card``), so a grant outlives it — the one
+    made afterwards, which is all this asked while the loss was a layer-6
+    removal stamped with the type change's timestamp, and the one made
+    *before*, which that removal took (``test_land_type_set_loses_abilities``
+    crosses every granter with every kind of setter in both orders)."""
     from engine.keywords import grant_keyword
 
     factory = Permanent(card=catalog["Mishra's Factory"])
@@ -373,6 +377,17 @@ def test_305_7_keeps_an_ability_granted_by_another_effect(catalog):
     game._recompute_continuous_effects()
 
     assert factory.has_keyword("flying")
+
+    # …and in the other order: granted first, then the type is set.
+    isle = Permanent(card=catalog["Teferi's Isle"])
+    game, _p1, _p2 = _game(isle)
+    assert isle.has_keyword("phasing")
+    grant_keyword(isle, "flying")
+    change_land_type(isle, "mountain", source="test")
+    game._recompute_continuous_effects()
+
+    assert isle.has_keyword("flying")
+    assert not isle.has_keyword("phasing"), "its own keyword went with its text"
 
 
 @pytest.mark.cr("305.7")

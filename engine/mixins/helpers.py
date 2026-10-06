@@ -3599,6 +3599,15 @@ class GameHelpersMixin:
         wrongly exiled is a card a player watches disappear, where a reanimation
         wrongly surviving is nothing happening.
         """
+        # CR 614.12, before anything asks how this permanent enters: a land
+        # is judged "as it would exist on the battlefield", under the
+        # continuous effects already there. With Blood Moon out a nonbasic
+        # land enters as a Mountain that has lost its own abilities (CR 305.7)
+        # — the toll the replacement just below charges, "enters tapped" and
+        # "enters with … counters" in the entry state, each a static ability
+        # of the land (CR 603.6d) it no longer has by then. One write, read by
+        # all of them through ``Permanent.effective_card``.
+        self.fold_land_type_statics_onto_entering(permanent, controller_index)
         # CR 614: "if a nontoken creature would enter … exile it instead"
         # (Containment Priest). Asked before anything else, because a
         # replacement means the permanent never enters at all — no id is

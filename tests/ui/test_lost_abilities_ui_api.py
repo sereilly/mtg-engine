@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
 from engine.models import Permanent
-from tests.helpers import app_js_function_body
+from tests.helpers import app_js_function_body, resolve_stack
 from web.app import app, store
 
 client = TestClient(app)
@@ -67,10 +67,60 @@ def test_the_payload_says_a_set_land_type_took_the_abilities():
     assert payload["abilities_lost"] == (
         "Mishra's Factory lost its abilities when its land type was set (CR 305.7)"
     )
-    # The text still prints them — which is exactly why the flag has to travel.
-    assert "Assembly-Worker" in payload["oracle_text"]
+    # This asserted that the text **still printed** them ("which is exactly why
+    # the flag has to travel"). It does not any more: the wire sends the
+    # permanent's *effective* text, and a land whose type an effect set has
+    # none of its own (``Permanent.effective_card`` strikes it, CR 305.7) — so
+    # the text and the flag now say the same thing, and the flag is the reason.
+    assert payload["oracle_text"] == ""
     assert payload["target_spec"]["kind"] == "none"
     assert "ability_target_specs" not in payload
+
+
+def test_a_granted_ability_of_a_set_type_land_is_on_the_wire_and_works():
+    """CR 305.7 keeps "any abilities that were granted to the land by other
+    effects". Caribou Range grants the land it enchants "{W}{W}, {T}: Create a
+    0/1 white Caribou creature token." — under Blood Moon that is the Factory's
+    only ability: the payload does not say its abilities are lost, the text
+    the menu is built from is the granted line alone, and activating it makes
+    the Caribou."""
+    sid, game, (factory, _moon) = _session("Mishra's Factory", "Blood Moon")
+    game.players[0].hand.append(_CARDS["Caribou Range"])
+    assert game.cast_from_hand(
+        0, "Caribou Range", target_permanent_ids=[factory.permanent_id]
+    ).supported
+    resolve_stack(game)
+    game._recompute_continuous_effects()
+    game.start_priority_window(0)
+
+    payload = _my_permanent(sid, factory)
+
+    assert payload["abilities_lost"] is None
+    assert "caribou" in payload["oracle_text"].lower()
+    assert "assembly-worker" not in payload["oracle_text"].lower()
+
+    # The Factory's own animation was ability 1 of the printed card. It is
+    # ability 1 of nothing now, and a client still counting the printed card
+    # is told why — not answered with a tap for mana.
+    stale = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "activate", "permanent_id": factory.permanent_id,
+        "ability_index": 1,
+    })
+    assert stale.status_code == 400, stale.text
+    assert "CR 305.7" in stale.json()["detail"]
+    assert not factory.tapped and not factory.is_creature
+
+    activated = client.post(f"/api/sessions/{sid}/action", json={
+        "seat": 0, "action": "activate", "permanent_id": factory.permanent_id,
+        "ability_index": 0,
+    })
+
+    assert activated.status_code == 200, activated.text
+    resolve_stack(game)
+    assert factory.tapped and not factory.is_creature
+    assert any(
+        "Caribou" in permanent.card.type_line for permanent in game.controlled_by(0)
+    )
 
 
 def test_an_untouched_factory_still_lists_all_three():

@@ -22,6 +22,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .land_types import lost_abilities_to_type_change
+
 _REMINDER = re.compile(r"\([^)]*\)")
 
 
@@ -559,11 +561,26 @@ def global_static_sources(permanents) -> list[tuple]:
     Nothing needs the other reading. Both producers (Energy Flux, Titania's
     Song) are enchantments, which nothing in this pool copies, and neither
     prints a colour word or a basic land type for a text change to rewrite.
+
+    **Except that a land can stop having its printed text at all** (CR 305.7),
+    and that half of the effective reading has no cycle in it: whether an
+    effect *set* a land's type is a question about the land-type contributions
+    recorded on it, which no granted ability can change. So a reader of the
+    printed text asks the one predicate the effective text is struck by
+    (``land_types.lost_abilities_to_type_change``) — and this, the only such
+    reader, did not: The Tabernacle at Pendrell Vale under Blood Moon was a
+    Mountain, and every creature on the table still had "At the beginning of
+    your upkeep, destroy this creature unless you pay {1}."
+
+    The answer is as current as the land-type contributions are.
+    ``_refresh_global_statics`` rebuilds the derived half of those part-way
+    through its own pass, so it asks again once layer 4 is that pass's.
     """
     return [
         (perm, static)
         for perm in permanents
-        if (static := global_static_for(perm.card.oracle_text)) is not None
+        if not lost_abilities_to_type_change(perm)
+        and (static := global_static_for(perm.card.oracle_text)) is not None
     ]
 
 

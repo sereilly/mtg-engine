@@ -166,13 +166,21 @@ def test_an_artifact_that_lost_all_abilities_lists_none_and_the_door_agrees(
 def test_the_land_sweep_finds_a_list_that_reads_the_program(
     _catalog, _by_name, monkeypatch
 ):
-    """Backwards: the list as the picker and the wire read it — the effective
-    card's program, whatever the board did to the land's type. The sweep then
-    names every land it examines."""
+    """Backwards: a list that reads the land's program off the card as it
+    prints, whatever the board did to the land's type. The sweep then names
+    every land it examines.
+
+    This patched in the *effective* card's program — the list as the picker
+    and the wire read it — and that reading was the one that lied. It is the
+    right one now: ``Permanent.effective_card`` strikes the text of a land
+    whose type an effect set (CR 305.7), exactly as it has for a permanent
+    that lost all abilities, so a list built from it names nothing and could
+    no longer stand in for the defect. The printed card's program is what a
+    list that forgets the rule reads, as in the artifact twin below."""
     monkeypatch.setattr(
         Game, "usable_abilities_of",
         lambda self, permanent, *, card=None: usable_activated_abilities(
-            compile_card_oracle(card if card is not None else permanent.effective_card)
+            compile_card_oracle(permanent.card)
         ),
     )
     examined, listed, _accepted = _land_sweep(_catalog, _by_name)

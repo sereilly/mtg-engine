@@ -199,9 +199,14 @@ def test_the_payload_carries_what_the_click_asks(boards, label):
     assert payload["taps_for_mana"] is True
     assert payload["produced_mana"] == ["R"]
     assert "land" in payload["type"].lower()
-    # …and the text still prints the abilities, which is why none of those
-    # three may be read off it.
-    assert payload["oracle_text"] == permanent.card.oracle_text
+    # …and the wire's text is empty: a land whose type was set has no ability
+    # of its own for any reader (CR 305.7, `Permanent.effective_card`), so an
+    # empty text box is what the client is sent - which is why none of those
+    # three may be read off it. (When this test was written the wire still
+    # printed the lost abilities; the two changes met at the merge, and this
+    # line is the one place they disagreed.)
+    assert permanent.card.oracle_text, "the printed card does have text"
+    assert payload["oracle_text"] == ""
 
 
 @needs_node
