@@ -1737,6 +1737,13 @@ class AbilityActivationMixin:
         # itself, so a lone Hobblefiend has no legal payment and cannot activate
         # at all. That exclusion is `exclude_self` inside the filter, which is
         # why the source is handed to the matcher rather than tested here.
+        # **Every permanent a chosen cost of this ability could be paid with**,
+        # gathered as each block below builds its own candidate list, for the
+        # one check beneath them (``_named_cost_refusal``): a permanent the
+        # payer *named* that is in none of these lists is an announcement that
+        # cannot be paid (CR 601.2h through CR 602.2b), and the activation is
+        # refused rather than paid with something else.
+        cost_candidates: list = []
         sacrifice_cost_permanent = None
         sacrifice_cost_set: list = []
         if (
@@ -1768,6 +1775,7 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+            cost_candidates.extend(candidates)
             named = [
                 found for found in (
                     self.permanent_by_id(pid) for pid in (cost_permanent_ids or [])
@@ -1794,6 +1802,13 @@ class AbilityActivationMixin:
             # creatures for a seat that named none would sacrifice a board to
             # pay a cost of zero.
             described = ability.cost.sacrifice_filter
+            cost_candidates.extend(
+                perm for perm in self.controlled_by(controller_index)
+                if perm is not permanent and subject_matches(
+                    self, perm, described,
+                    observer=controller_index, source=permanent,
+                )
+            )
             for permanent_id in cost_permanent_ids or []:
                 found = self.permanent_by_id(permanent_id)
                 if (
@@ -1840,6 +1855,7 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -1932,6 +1948,7 @@ class AbilityActivationMixin:
                 # would have excluded.
                 if not perm.tapped and subject_matches(self, perm, described)
             ]
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -1980,6 +1997,7 @@ class AbilityActivationMixin:
                 for perm in self.controlled_by(controller_index)
                 if subject_matches(self, perm, described)
             ]
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -2028,6 +2046,7 @@ class AbilityActivationMixin:
                     observer=controller_index, source=permanent,
                 )
             ]
+            cost_candidates.extend(candidates)
             named = next(
                 (
                     found
@@ -2077,6 +2096,7 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -2126,6 +2146,7 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -2168,6 +2189,7 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
+            cost_candidates.extend(candidates)
             named = [
                 found
                 for found in (
@@ -2220,6 +2242,42 @@ class AbilityActivationMixin:
         exiled_for_cost = None
         exiled_set_for_cost: list = []
         exile_cost_choice = None
+        # Which list ``cost_permanent_index`` counts into. A battlefield slot
+        # for every cost above; a slot in a hand or a graveyard for an exile
+        # cost paid out of one, which the check below must not read as a
+        # permanent.
+        cost_index_is_a_pile_slot = (
+            ability.cost.exile_filter is not None
+            and ability.cost.exile_zone in ("hand", "graveyard")
+        )
+        if ability.cost.exile_filter is not None:
+            if not cost_index_is_a_pile_slot:
+                cost_candidates.extend(
+                    self._exile_cost_candidates(
+                        ability.cost, controller_index, permanent
+                    )
+                )
+            named_slot_refusal = self._named_exile_slot_refusal(
+                ability.cost, controller,
+                cost_hand_index
+                if ability.cost.exile_zone == "hand" and isinstance(cost_hand_index, int)
+                else cost_permanent_index,
+            )
+            if named_slot_refusal is not None:
+                details = f"{permanent.card.name}: {named_slot_refusal}"
+                self.log.append(details)
+                return SimulationResult(
+                    permanent.card.name, False, "unsupported", details
+                )
+        named_cost_refusal = self._named_cost_refusal(
+            permanent, controller, cost_candidates, cost_permanent_ids,
+            None if cost_index_is_a_pile_slot else cost_permanent_index,
+        )
+        if named_cost_refusal is not None:
+            self.log.append(named_cost_refusal)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", named_cost_refusal
+            )
         if ability.cost.exile_filter is not None:
             exile_cost_choice = self._choose_exile_cost(
                 ability.cost, controller, controller_index, permanent,
@@ -2230,6 +2288,7 @@ class AbilityActivationMixin:
                 cost_hand_index
                 if ability.cost.exile_zone == "hand" and isinstance(cost_hand_index, int)
                 else cost_permanent_index,
+                cost_permanent_ids=cost_permanent_ids,
             )
             if exile_cost_choice is None:
                 details = (
@@ -3068,6 +3127,7 @@ class AbilityActivationMixin:
             # was activated, so it does not choose again here.
             targets_already_chosen=True,
             item=StackItem(
+                activated=True,
                 card=permanent.card,
                 caster_index=controller_index,
                 target_player_index=announced_target_idx,
@@ -3221,7 +3281,7 @@ class AbilityActivationMixin:
 
     def _choose_exile_cost(
         self, cost, controller, controller_index: int, permanent,
-        cost_permanent_index,
+        cost_permanent_index, cost_permanent_ids=None,
     ) -> "tuple | None":
         """What an "Exile <noun phrase>" activation cost will eat, chosen and
         **not yet paid** — or None when nothing in the named zone could pay,
@@ -3334,18 +3394,30 @@ class AbilityActivationMixin:
                     tuple(pile.graveyard[slot] for slot in chosen_slots),
                 )
             return None
-        candidates = [
-            perm for perm in self.controlled_by(controller_index)
-            if subject_matches(
-                self, perm, described, observer=controller_index, source=permanent,
-            )
-        ]
+        candidates = self._exile_cost_candidates(cost, controller_index, permanent)
         if len(candidates) < wanted:
             return None
         named = (
             self.permanent_at(controller, cost_permanent_index)
             if isinstance(cost_permanent_index, int) else None
         )
+        if named is None:
+            # …or by **id**, the channel every other chosen cost reads. This
+            # block read the slot alone, so "exile a creature you control"
+            # (City of Shadows, Food Chain) named by id was not read at all and
+            # the first creature on the battlefield went instead.
+            named = next(
+                (
+                    found for found in (
+                        self.permanent_by_id(permanent_id)
+                        for permanent_id in (cost_permanent_ids or [])
+                        if permanent_id is not None
+                    )
+                    if found is not None
+                    and any(found is option for option in candidates)
+                ),
+                None,
+            )
         victim = (
             named if any(named is option for option in candidates) else candidates[0]
         )
@@ -3359,6 +3431,100 @@ class AbilityActivationMixin:
             if not any(option is already for already in picked):
                 picked.append(option)
         return ("battlefield", None, (), tuple(picked))
+
+    def _exile_cost_candidates(self, cost, controller_index: int, permanent) -> list:
+        """The permanents an "Exile <noun phrase> you control" cost may eat:
+        what the payer controls that answers the printed phrase. One list for
+        the chooser above and for ``_named_cost_refusal``."""
+        described = cost.exile_filter or {}
+        return [
+            perm for perm in self.controlled_by(controller_index)
+            if subject_matches(
+                self, perm, described, observer=controller_index, source=permanent,
+            )
+        ]
+
+    def _named_exile_slot_refusal(self, cost, controller, named_slot) -> str | None:
+        """Why the hand or graveyard slot the payer **named** for an exile cost
+        cannot pay it, or None (CR 601.2h through CR 602.2b).
+
+        The pile half of :meth:`_named_cost_refusal`, for a cost whose object
+        is a card in a zone and so has no id to be named by. Asked only where
+        the slot counts into one known pile — the payer's hand, or the payer's
+        own graveyard. A cost that may be paid out of *any* graveyard
+        (``exile_zone_owner``) takes one index and does not say whose pile it
+        counts into, so there the chooser's standing order of piles answers,
+        as it did.
+        """
+        if not isinstance(named_slot, int) or isinstance(named_slot, bool):
+            return None
+        if cost.exile_zone == "hand":
+            pile, where = controller.hand, "hand position"
+        elif (
+            cost.exile_zone == "graveyard"
+            and getattr(cost, "exile_zone_owner", "you") == "you"
+        ):
+            pile, where = controller.graveyard, "graveyard position"
+        else:
+            return None
+        described = cost.exile_filter or {}
+        if 0 <= named_slot < len(pile) and _card_matches_filter(
+            pile[named_slot], described
+        ):
+            return None
+        return f"no card at {where} {named_slot} that can be exiled for its cost"
+
+    def _named_cost_refusal(
+        self, permanent, controller, candidates, cost_permanent_ids,
+        cost_permanent_index,
+    ) -> str | None:
+        """Why a permanent the payer **named** to pay a chosen cost cannot pay
+        it, or None.
+
+        CR 601.2h, reached through CR 602.2b: "Unpayable costs can't be paid",
+        and CR 601.2e sends an activation that cannot be completed as proposed
+        back to the moment before it. A payer who names what they will
+        sacrifice, tap, return, untap or exile has *announced* that payment
+        (CR 601.2b); if the named permanent cannot make it, the activation is
+        illegal — it is not a different activation paid with something else.
+
+        Every chosen-cost block in ``_activate_onto_stack`` honoured a named
+        permanent "where it is legal" and otherwise fell to its default pick,
+        which is right for a seat that named nothing and wrong for one that
+        did: Ertai, the Corrupted ("{U}, {T}, Sacrifice a creature or
+        enchantment: Counter target spell"), told to sacrifice a Sol Ring,
+        sacrificed **Ertai**. One check here, over the union of the candidate
+        lists those blocks build, rather than a branch in each of the ten:
+        the next cost block gets it by adding its candidates.
+
+        *candidates* empty means the ability has no chosen permanent cost, and
+        then a stray cost field names nothing and substitutes nothing. A cost
+        the caller did **not** name still takes each block's default — the
+        headless convention, which the AI and the test corpus rely on.
+        """
+        if not candidates:
+            return None
+        # A permanent on every path but one: an ability activated from a
+        # graveyard (Ashen Ghoul) has a card for its source.
+        source_name = getattr(getattr(permanent, "card", permanent), "name", "")
+        named: list = [
+            self.permanent_by_id(permanent_id)
+            for permanent_id in (cost_permanent_ids or [])
+            if permanent_id is not None
+        ]
+        if isinstance(cost_permanent_index, int) and not isinstance(
+            cost_permanent_index, bool
+        ):
+            named.append(self.permanent_at(controller, cost_permanent_index))
+        for found in named:
+            if found is None:
+                return (
+                    f"{source_name}: the permanent named to pay its "
+                    "cost is not on the battlefield"
+                )
+            if not any(found is option for option in candidates):
+                return f"{source_name}: {found.card.name} cannot pay its cost"
+        return None
 
     def _pay_exile_cost(
         self, choice, controller, controller_index: int, permanent
@@ -3531,6 +3697,7 @@ class AbilityActivationMixin:
             # was activated, so it does not choose again here.
             targets_already_chosen=True,
             item=StackItem(
+                activated=True,
                 card=card,
                 caster_index=controller_index,
                 target_player_index=None,
@@ -3729,6 +3896,19 @@ class AbilityActivationMixin:
                 )
                 self.log.append(details)
                 return SimulationResult(card.name, False, "unsupported", details)
+            # The same announcement an ability on the battlefield makes, so the
+            # same check: a permanent named to pay that cannot is a refusal,
+            # not a request for the default (CR 601.2h).
+            named_cost_refusal = self._named_cost_refusal(
+                card, controller, candidates,
+                [cost_permanent_id] if cost_permanent_id is not None else None,
+                None,
+            )
+            if named_cost_refusal is not None:
+                self.log.append(named_cost_refusal)
+                return SimulationResult(
+                    card.name, False, "unsupported", named_cost_refusal
+                )
             named = (
                 self.permanent_by_id(cost_permanent_id)
                 if cost_permanent_id is not None else None
@@ -3758,6 +3938,7 @@ class AbilityActivationMixin:
         self._stack_push(
             targets_already_chosen=True,
             item=StackItem(
+                activated=True,
                 card=card,
                 caster_index=controller_index,
                 target_player_index=target_player_index,

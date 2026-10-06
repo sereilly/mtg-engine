@@ -3800,6 +3800,63 @@ class LegalityMixin:
             "comparison, so its only target is illegal (608.2b)"
         )
 
+    def vanished_graveyard_target_refusal(self, item) -> str | None:
+        """CR 608.2b for **an activated ability whose every target was a card
+        in a graveyard that is no longer there**, and for nothing else.
+
+        "A target that's no longer in the zone it was in when it was targeted
+        is illegal. … If all its targets … are now illegal, the spell or
+        ability doesn't resolve." For a spell :meth:`illegal_targets_refusal`
+        answers this from the stamp ``_stack_push_object`` recorded. An ability
+        never reached that gate, so its resolution found the stamp re-located
+        to nothing — which the handlers read as *no card was announced*, the
+        headless caller's bare activation — and took their own pick: exile the
+        card Adun Oakenshield was activated at in response and it returned the
+        creature card beside it, a card nobody named. Every graveyard handler
+        behind an activated ability did the same, because the decision was
+        each handler's and none of them could tell the two cases apart.
+
+        Asked above the instructions, like the gates beside it, so the answer
+        is the object's: nothing printed after the targeted sentence runs
+        either.
+
+        Three bounds, each the rule or the data model rather than caution:
+
+        * an **activated** ability (``StackItem.activated``). A triggered
+          ability's target is stamped at its fire site, where an index can be
+          a slot nobody chose; that is ROADMAP's first decline under this rule
+          and it is not lifted here;
+        * every target the object chose is a graveyard card — read through
+          ``stack_targets.chosen_targets``, the one reader of what an object
+          announced. An object that also chose a permanent or a player
+          (Goblin Welder) has a target this cannot judge, so "every target" is
+          not answerable and the handlers' per-slot answers stand;
+        * the stamp resolves to **no** slot: no copy of that card is left in
+          that pile. Two copies of one card are one ``CardDefinition``, so
+          while any copy survives the target is legal — the ambiguity
+          ``Game.graveyard_index_of`` documents and deliberately clamps.
+
+        A bare activation recorded no stamp and is untouched: its handler's
+        pick is the standing convention, not a target that went away.
+        """
+        if not getattr(item, "activated", False):
+            return None
+        if resolves_with_illegal_targets(item.card, item.ability_text):
+            return None
+        from .stack_targets import chosen_targets
+
+        chosen = chosen_targets(self, item)
+        if not chosen:
+            return None
+        if any(target.kind != "graveyard" for target in chosen):
+            return None
+        if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
+            return None
+        return (
+            f"{item.card.name} ability was removed from the stack: its target "
+            "is no longer in the graveyard (608.2b)"
+        )
+
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(
         self, caster_index: int, card: CardDefinition, spec: dict, *, for_cast: bool,

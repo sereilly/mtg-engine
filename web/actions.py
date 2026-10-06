@@ -95,7 +95,11 @@ def _resolve_permanent_ids(game, req: GameActionRequest) -> GameActionRequest:
         # and the seat is filled in when the request did not name one.
         update["permanent_index"] = game.battlefield_index_of(permanent)
         update["permanent_name"] = permanent.card.name
-        if req.target_seat is None:
+        # Not for ``activate``, whose handler makes the same fill itself: there
+        # ``target_seat`` also says whether the client *announced* a seat
+        # (CR 601.2c), and a value written here would make every activation
+        # sent by id look as though it had.
+        if req.target_seat is None and req.action != "activate":
             update["target_seat"] = seat
 
     if req.target_permanent_id is not None:
@@ -428,6 +432,14 @@ def _action_activate(session, req, seat_type):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
         if req.target_seat is not None:
             target = req.target_seat
+        elif req.permanent_id is not None:
+            # The fill ``_resolve_permanent_ids`` makes for every other action
+            # sent by id — the seat the named permanent is on — made here so
+            # that ``req.target_seat`` still says what the client sent.
+            target = (
+                source_controller_seat
+                if source_controller_seat is not None else req.seat
+            )
         elif len(session.game.players) == 2:
             target = 1 - req.seat
         else:
@@ -442,6 +454,23 @@ def _action_activate(session, req, seat_type):
         engine_source_stack_index = None
         if req.source_stack_index is not None:
             engine_source_stack_index = len(session.game.stack) - 1 - req.source_stack_index
+        # **The permanent a cost was announced with, by identity.** The request
+        # resolver above turns ``cost_permanent_id`` into a bare slot and writes
+        # no seat beside it, and the engine counts a cost slot into the
+        # *payer's* battlefield — so an id naming somebody else's permanent
+        # arrived as whatever the payer happened to hold in that slot. The
+        # engine refuses a named payment that cannot pay
+        # (``_named_cost_refusal``, CR 601.2h), and it can only refuse what it
+        # is told was named: the id travels, and the slot only where it means
+        # what the engine will read it as.
+        cost_permanent_ids = req.cost_permanent_ids
+        cost_permanent_index = req.cost_permanent_index
+        if req.cost_permanent_id is not None:
+            if cost_permanent_ids is None:
+                cost_permanent_ids = [req.cost_permanent_id]
+            named_cost = session.game.permanent_by_id(req.cost_permanent_id)
+            if named_cost is None or not session.game.controls(req.seat, named_cost):
+                cost_permanent_index = None
         result = session.game.queue_permanent_ability(
             req.seat,
             permanent.card.name,
@@ -488,8 +517,8 @@ def _action_activate(session, req, seat_type):
             target_stack_index=engine_stack_index,
             ability_index=req.ability_index,
             x_value=req.x_value,
-            cost_permanent_index=req.cost_permanent_index,
-            cost_permanent_ids=req.cost_permanent_ids,
+            cost_permanent_index=cost_permanent_index,
+            cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=req.cost_hand_index,
             cost_other_hand_indices=req.cost_other_hand_indices,
             # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
