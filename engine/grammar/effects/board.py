@@ -514,9 +514,9 @@ def _accept_keep_slots(stream: TokenStream) -> "tuple[ast.KeepSlot, ...] | None"
 
     "…a land **of each basic land type**" (Global Ruin) is five keeps printed
     as one: a Plains, an Island, a Swamp, a Mountain and a Forest, each a slot
-    of its own for exactly the reason Cataclysm's four are. One permanent fills
-    at most one slot, which is what makes a Tropical Island a choice between
-    being the Forest and being the Island rather than both keeps at once.
+    of its own for exactly the reason Cataclysm's four are. Separate slots are
+    what let a Tropical Island be named as the Forest, as the Island, or — the
+    card's ruling — as both, which a single counted slot could not express.
 
     Only a singular keep can be distributed: "two lands of each basic land
     type" is not a sentence any card prints, and the slot count it would mean

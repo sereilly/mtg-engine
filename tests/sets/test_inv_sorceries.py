@@ -505,10 +505,14 @@ def test_w1g3_global_ruin_each_player_keeps_one_land_per_basic_type(set_pool):
     assert [c.name for c in game.players[1].graveyard].count("Mountain") == 2
 
 
-def test_w1g3_global_ruin_a_dual_land_fills_one_type_only(set_pool):
-    """A Tropical Island is a Forest and an Island and can be *the* land for
-    one of them. Beside a Forest and an Island it is spare; beside only a
-    Forest it is the Island, and all of them survive."""
+def test_w1g3_global_ruin_headless_keeps_a_land_for_each_type(set_pool):
+    """The headless default is the *most* lands the card lets a seat keep: a
+    Tropical Island beside a Forest and an Island leaves one of the three
+    spare; beside only a Forest it is the Island, and all of them survive.
+    (W2G1 renamed this: it was "a dual land fills one type only", which the
+    card's ruling contradicts — "you can choose it for either or for both" —
+    and which is tested in tests/regressions/
+    test_one_permanent_chosen_for_several_slots.py. The default did not move.)"""
     game, _mine, _theirs = _w1g3_sorcery_table(
         set_pool, "Global Ruin", mine=["Forest", "Island", "Tropical Island"],
     )
@@ -530,8 +534,9 @@ def test_w1g3_global_ruin_a_dual_land_fills_one_type_only(set_pool):
 
 def test_w1g3_global_ruin_asks_the_player_and_checks_the_answer(set_pool):
     """The keeps are a decision each seat owes (CR 608.2d). Two Plains cannot
-    both be kept — there is one Plains slot — and a short list is refused, so
-    the spell stays on the stack until a legal keep is named."""
+    both be kept — there is one Plains slot — and a list that leaves a type the
+    seat holds unchosen is refused, so the spell stays on the stack until a
+    legal keep is named."""
     game, mine, _theirs = _w1g3_sorcery_table(
         set_pool, "Global Ruin",
         mine=["Plains", "Plains", "Tropical Island", "Forest", "Swamp"],

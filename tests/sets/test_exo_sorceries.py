@@ -380,9 +380,11 @@ def test_cataclysm_leaves_each_seat_one_of_each_named_type(set_pool):
     ],
 )
 def test_cataclysm_keeps_as_many_as_the_board_allows(set_pool, mine, kept):
-    """An artifact creature can fill the artifact slot or the creature slot and
-    not both (CR 608.2d), so how many survive is a **maximum matching** rather
-    than a per-type count.
+    """Each kept permanent answers a slot of its own, so the *most* a seat
+    keeps — the headless default — is a **maximum matching** rather than a
+    per-type count. (One artifact creature may also be named for both its
+    slots, by the card's ruling: tests/regressions/
+    test_one_permanent_chosen_for_several_slots.py.)
 
     The third row is the one that separates the two implementations: greedy
     assignment keeps one permanent where the card lets the player keep two, and
@@ -398,9 +400,9 @@ def test_cataclysm_keeps_as_many_as_the_board_allows(set_pool, mine, kept):
 def test_cataclysm_asks_an_interactive_seat_and_refuses_a_short_answer(set_pool):
     """The prompt is a decision the seat owes, and the answer is checked.
 
-    Keeping fewer than the board allows is not one of the answers — it would
-    sacrifice permanents the card said were safe — so a short list leaves the
-    prompt owed rather than being taken as a partial keep. The full answer is
+    Leaving out a type the seat holds is not one of the answers — a player
+    with a creature chooses a creature — so a list naming only the artifact
+    leaves the prompt owed rather than being taken as a partial keep. The full answer is
     honoured exactly as sent, which is the other half: the *player* picks, not
     the engine's default.
     """

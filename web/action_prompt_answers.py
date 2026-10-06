@@ -325,9 +325,10 @@ def _action_permanent_set_choice_confirm(session, req, seat_type):
 def _action_keep_permanents_confirm(session, req, seat_type):
     # Cataclysm / Limited Resources: the permanents this seat *keeps*, by stable
     # id. The engine re-checks them against the same pool rule the prompt was
-    # rendered from and against how many the board allows, so a client cannot
-    # keep fewer than the card offers (which would sacrifice permanents it said
-    # were safe) or more.
+    # rendered from: each answers a slot of its own, and no printed slot the
+    # seat can answer is left out — so a client cannot keep more than the card
+    # offers, or skip a choice it makes the seat take. Fewer is legal where one
+    # permanent answers several slots (the cards' rulings), and only there.
     pending = next(
         (c for c in session.game.pending_choices_of("keep_permanents")),
         None,
