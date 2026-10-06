@@ -2,9 +2,9 @@
 
 "A player can't begin to activate an ability that's prohibited from being
 activated." The activation path refused a prohibited ability through ten
-inline checks; the AI's chooser asked four of them, the wire none, and an
+inline checks; the AI's chooser asked three of them, the wire none, and an
 ability activated from a hand or a graveyard — a parallel entry point — asked
-nothing at all. So an AI seat under a City of Solitude, a Hand to Hand, a
+one at most. So an AI seat under a City of Solitude, a Hand to Hand, a
 Faith's Fetters or a Katabatic Winds proposed the same refused activation
 every turn; the client's ability menu offered every ability the text prints
 and the click was a 400; and a card was cycled on an opponent's turn.
@@ -311,7 +311,7 @@ def test_no_reader_offers_what_a_pool_permanent_forbids(session):
 
 def test_the_sweep_names_a_reader_with_a_list_of_its_own(session, monkeypatch):
     """Backwards: the AI's one call and the wire's taken out, which is each of
-    them as it was — the AI asking the four gates it had always asked, the
+    them as it was — the AI asking the three gates it had always asked, the
     wire asking none."""
     import web.serialization
 

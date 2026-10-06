@@ -1230,9 +1230,9 @@ class AbilityActivationMixin:
         # They were ten inline checks from here down, each logging its own
         # sentence. They are the table's rows now, in the order they stood
         # here and with the words they logged, because this door was the only
-        # reader that asked all ten: the AI's chooser asked four, the wire
+        # reader that asked all ten: the AI's chooser asked three, the wire
         # none, and an ability activated from a hand or a graveyard — which
-        # never comes down this road — asked nothing at all.
+        # never comes down this road — asked one at most.
         prohibited = activation_prohibition(
             self, controller_index, permanent, ability
         )

@@ -1623,12 +1623,12 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             continue
         # CR 602.5 as **one question** (``engine/activation_prohibitions.py``):
         # the table the activation path refuses with. The two checks around
-        # this one are four of its ten rows; the other six this chooser never
-        # asked — City of Solitude's "…activate abilities only during their
-        # own turns", Hand to Hand's "during combat", an Abeyance, an
-        # Interdict, Faith's Fetters, Katabatic Winds — so it proposed the
-        # ability and the engine refused it, the seat's only activation of
-        # the turn, every turn.
+        # this one are three of its ten rows; the other seven this chooser
+        # never asked — City of Solitude's "…activate abilities only during
+        # their own turns", Hand to Hand's "during combat", an Abeyance, an
+        # Interdict, Faith's Fetters, Volrath's Curse, Katabatic Winds — so it
+        # proposed the ability and the engine refused it, the seat's only
+        # activation of the turn, every turn.
         if activation_prohibition(game, player_index, permanent, ability) is not None:
             continue
         # CR 602.5: the printed timing ("Activate only during your upkeep",

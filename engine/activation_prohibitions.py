@@ -7,8 +7,8 @@ ten inline checks, each logging its own sentence, part-way down
 every other reader kept a list of its own — and a list of somebody else's
 gates is the thing that falls behind:
 
-* the **AI**'s activation chooser asked four of the ten (the printed
-  restriction, the printed permission and the two board-wide bans). City of
+* the **AI**'s activation chooser asked three of the ten (the printed
+  restriction, the printed permission and the board-wide ban). City of
   Solitude's "…and activate abilities only during their own turns", Hand to
   Hand's "during combat", an Abeyance, an Interdict, the two Aura clauses and
   Katabatic Winds it proposed straight through, and the engine refused each
