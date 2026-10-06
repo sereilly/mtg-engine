@@ -136,11 +136,35 @@ def _action_assign_combat_damage(session, req, seat_type):
         if req.blocker_damage_split
         else None
     )
+    if attacker_damage is not None:
+        # The dialog announces only the attackers it *shows* — the ones with a
+        # decision in them. Every other blocked attacker has none (CR 510.1c:
+        # "If exactly one creature is blocking it, it assigns all its combat
+        # damage to that creature"), so it keeps the engine's default rather
+        # than the nothing an absent entry means to `resolve_combat_damage`.
+        #
+        # That nothing was live: with one attacker double-blocked and another
+        # single-blocked, confirming the dialog had the second deal no damage
+        # at all to its blocker. It mattered little while the dialog opened
+        # only for a multi-block; it opens for one blocked Thorn Elemental now,
+        # beside whatever else attacked.
+        #
+        # An attacker with "as though it weren't blocked" is not in the default
+        # (`_build_auto_damage_assignment` leaves it out, which is the offer
+        # taken), so filling in cannot answer that question for anybody.
+        attacker_damage = {
+            **session.game._build_auto_damage_assignment(),
+            **attacker_damage,
+        }
     ok, details = session.game.resolve_combat_damage(
         req.seat,
         attacker_damage=attacker_damage,
         blocker_damage=blocker_damage,
         blocker_damage_split=blocker_damage_split,
+        # The offer taken, by attacker id; the engine holds each id to the
+        # rule (an attacker, with the offer, the active player's to take, and
+        # not also assigned among its blockers).
+        as_though_unblocked=req.as_though_unblocked_ids,
     )
     if not ok:
         raise HTTPException(status_code=400, detail=details)

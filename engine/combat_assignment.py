@@ -66,6 +66,16 @@ MUST_ASSIGN_AS_UNBLOCKED = "must_assign_combat_damage_as_unblocked_until_eot"
 #: not swept and is not a mark at all: see :func:`may_assign_as_unblocked`.
 MAY_ASSIGN_AS_UNBLOCKED = "assign_combat_damage_as_unblocked_until_eot"
 
+#: The tail of the log line the damage step writes for each blocked attacker
+#: whose combat damage went past its blockers — the offer taken, or Outmaneuver's
+#: restriction — as "<name> assigns its combat damage as though it weren't
+#: blocked". Named because it has a second reader: the client's combat damage
+#: animation rebuilds the strikes from the previous state and the new log
+#: lines, the way it already reads "Resolved combat damage", and matches this
+#: tail to know the blow landed on the player. A log line is the only thing
+#: both seats' clients and an AI's attack all pass through.
+AS_THOUGH_UNBLOCKED_LOG = "as though it weren't blocked"
+
 #: "Target unblocked attacking creature **becomes blocked**." (Dazzling Beauty;
 #: CR 509.1h.) Named here rather than beside the combat maps because the maps
 #: record *who blocks whom*, and this is precisely the state CR 509.1h says a
@@ -174,6 +184,14 @@ def may_assign_as_unblocked(permanent) -> bool:
     (:data:`MUST_ASSIGN_AS_UNBLOCKED`, Outmaneuver) gives its controller nothing
     to decline, and one function answering both would make it optional for
     whoever bothered to assign.
+
+    Nor is it *whose* offer. That needs the combat maps — a creature has to be
+    blocked for the sentence to say anything, and where the defending player
+    assigns its damage (CR 702.22j) the choice is theirs — so it is
+    ``Game.unblocked_assignment_chooser``, on the damage step, which asks this
+    and then says which seat answers. Taking the offer is announced to the
+    step by the creature's id (``resolve_combat_damage(as_though_unblocked=)``),
+    so a seat that is asked can say yes as plainly as it can say no.
     """
     from .oracle import compile_card_oracle
 
@@ -200,6 +218,7 @@ def combat_damage_assigned_by(permanent) -> int:
 
 
 __all__ = [
+    "AS_THOUGH_UNBLOCKED_LOG",
     "ASSIGNS_NO_COMBAT_DAMAGE",
     "MAY_ASSIGN_AS_UNBLOCKED",
     "combat_damage_assigned_by",

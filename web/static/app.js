@@ -114,6 +114,13 @@ let debugAddManaMode = false;
 let symbolMap = {};
 let combatDragSource = null;
 let combatDamageDraft = {};
+// "You may have this creature assign its combat damage as though it weren't
+// blocked": the answer the player has picked in the damage dialog for each
+// attacker that has the offer, by attacker index — "unblocked" (all of it to
+// the player or planeswalker being attacked) or "blockers" (CR 510.1c's
+// ordinary assignment). Absent until they pick: the dialog asks, it does not
+// pre-answer, and Confirm stays disabled until every such attacker has one.
+let combatDamageOfferDraft = {};
 let combatDamageDialogKey = "";
 let combatAttackerDraft = [];
 // Whether the active player is grouping the currently-selected attackers into a
@@ -677,7 +684,16 @@ function attackerBlockedByBandingClient(state, attackerIdx) {
 // Rebuild the damage events of a combat damage resolution from the state that
 // preceded it, mirroring the engine's default assignment (lethal to each
 // blocker in declared order, deathtouch needs 1, trample excess to the player).
-function buildCombatDamageStrikes(prev, firstStrikePass, regularPass) {
+//
+// `sentPastBlockers` is how many attackers of each name the log says assigned
+// their combat damage "as though [they] weren't blocked" in this update (Lone
+// Wolf, Thorn Elemental; Outmaneuver). Those strike the player, not the
+// creatures in front of them — which no reading of the previous state can
+// tell, so the engine says it and this draws it. By name and count because a
+// log line is what both seats' clients and an AI's attack all receive; two
+// same-named attackers that answered differently draw in battlefield order.
+function buildCombatDamageStrikes(prev, firstStrikePass, regularPass, sentPastBlockers) {
+  const past = sentPastBlockers || new Map();
   const combat = getCombatState(prev);
   const attackerSeat = prev.current_turn;
   const defenderSeat = Number.isInteger(combat.defending_player_index)
@@ -713,7 +729,11 @@ function buildCombatDamageStrikes(prev, firstStrikePass, regularPass) {
     const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
     const trample = cardHasKeyword(attackerCard, "trample");
 
-    let powerLeft = attackerStrikes ? power : 0;
+    const pastCount = past.get(attackerCard.name) || 0;
+    const goesPast = attackerStrikes && (blockerIndices.length > 0 || attackerCard.blocked) && pastCount > 0;
+    if (goesPast) past.set(attackerCard.name, pastCount - 1);
+
+    let powerLeft = attackerStrikes && !goesPast ? power : 0;
     const blockers = [];
     blockerIndices.forEach((blockerIdx, i) => {
       const blockerCard = defenderBattlefield[blockerIdx];
@@ -736,7 +756,9 @@ function buildCombatDamageStrikes(prev, firstStrikePass, regularPass) {
     });
 
     let playerDamage = 0;
-    if (attackerStrikes) {
+    if (goesPast) {
+      playerDamage = power;
+    } else if (attackerStrikes) {
       if (!blockerIndices.length) {
         // Blocked stays blocked even if the blocker died to first strike.
         playerDamage = attackerCard.blocked && !trample ? 0 : power;
@@ -765,7 +787,16 @@ function maybeTriggerCombatDamageFx(prev, next) {
   const firstStrikePass = newEntries.includes("Resolved first strike combat damage");
   const regularPass = newEntries.includes("Resolved combat damage");
   if (!firstStrikePass && !regularPass) return;
-  const strikes = buildCombatDamageStrikes(prev, firstStrikePass, regularPass);
+  // "<name> assigns its combat damage as though it weren't blocked" — the
+  // engine's line for a blocked attacker whose damage went to the player.
+  const sentPastBlockers = new Map();
+  const pastSuffix = " assigns its combat damage as though it weren't blocked";
+  for (const entry of newEntries) {
+    if (!entry.endsWith(pastSuffix)) continue;
+    const name = entry.slice(0, -pastSuffix.length);
+    sentPastBlockers.set(name, (sentPastBlockers.get(name) || 0) + 1);
+  }
+  const strikes = buildCombatDamageStrikes(prev, firstStrikePass, regularPass, sentPastBlockers);
   if (strikes.length) battlefieldCanvas.playCombatDamage(strikes);
 }
 
@@ -17458,14 +17489,25 @@ function renderCombatControls(state) {
   }
 
   if (isCombatStep(state, "combat_damage") && seat === state.current_turn && !combat?.damage_resolved) {
-    // Manual assignment is only needed when an attacker is blocked by 2+ creatures,
-    // excluding those a banding blocker hands to the defender (CR 702.22j).
+    // Manual assignment is needed when an attacker is blocked by 2+ creatures
+    // (excluding those a banding blocker hands to the defender, CR 702.22j), or
+    // when a blocked attacker may assign its damage as though it weren't
+    // blocked — a choice that exists with a single blocker too.
     const groups = getAttackerAssignGroups(state);
     if (groups.length === 0) return;
 
     const prompt = document.createElement("div");
     prompt.className = "combat-summary";
-    prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
+    const offered = groups.filter((g) => g.offer);
+    const divided = groups.some((g) => !g.offer);
+    if (offered.length === 0) {
+      prompt.textContent = "An attacker is blocked by multiple creatures. Open the dialog to split its damage.";
+    } else {
+      const names = offered.map((g) => g.attackerCard?.name || "A creature").join(", ");
+      prompt.textContent =
+        `${names} may assign combat damage as though ${offered.length === 1 ? "it weren't" : "they weren't"} blocked. Open the dialog to choose`
+        + (divided ? ", and to split the damage of an attacker blocked by multiple creatures." : ".");
+    }
     damagePanel.appendChild(prompt);
 
     const openBtn = document.createElement("button");
@@ -17488,6 +17530,41 @@ function renderCombatControls(state) {
 // the engine's view: attacker on the active player's battlefield, blockers on the
 // defender's, blockers processed in ascending (declared) index order.
 function getMultiBlockedAttackerGroups(state = currentState) {
+  return getBlockedAttackerGroups(state, () => 2);
+}
+
+// "You may have this creature assign its combat damage as though it weren't
+// blocked." (Lone Wolf, Thorn Elemental, Rhox; Garruk, Savage Herald's grant.)
+// The attackers the server says THIS seat has to answer that for, by attacker
+// index: { attackerId, damage, recipient }. The server's list, not a reading of
+// the card here — it is the same list that stops the combat damage step, so the
+// dialog and the step cannot disagree about who is being asked.
+function getUnblockedAssignmentOffers(state = currentState) {
+  const offers = new Map();
+  const info = state?.unblocked_assignment;
+  if (!info || seat === null || seat !== info.attacker_seat) return offers;
+  for (const entry of info.attackers || []) {
+    offers.set(Number(entry.attacker_index), {
+      attackerId: Number(entry.attacker_id),
+      damage: Math.max(0, Number(entry.damage) || 0),
+      recipient: entry.recipient || {},
+    });
+  }
+  return offers;
+}
+
+// Who the damage goes to when an attacker assigns as though it weren't blocked:
+// the player it is attacking, or the planeswalker (CR 510.1b).
+function unblockedRecipientLabel(recipient) {
+  if (recipient?.kind === "planeswalker") return recipient.name || "the planeswalker";
+  return recipient?.name || "the defending player";
+}
+
+// Blocked attackers the damage dialog presents, each with the card data and
+// per-blocker lethal thresholds it needs. `minBlockersFor(attackerIdx)` says how
+// many blockers make that attacker a decision: two for an ordinary attacker (a
+// division), one for an attacker whose controller may send its damage past them.
+function getBlockedAttackerGroups(state = currentState, minBlockersFor = () => 2) {
   const combat = getCombatState(state);
   if (!combat) return [];
   const attackerSeat = state.current_turn;
@@ -17506,7 +17583,8 @@ function getMultiBlockedAttackerGroups(state = currentState) {
 
   const groups = [];
   for (const [attackerIdx, blockerIndices] of byAttacker) {
-    if (blockerIndices.length < 2) continue;
+    const minBlockers = Math.max(1, Number(minBlockersFor(attackerIdx)) || 2);
+    if (blockerIndices.length < minBlockers) continue;
     const attackerCard = attackerBattlefield[attackerIdx];
     if (!attackerCard) continue;
     const deathtouch = cardHasKeyword(attackerCard, "deathtouch");
@@ -17521,7 +17599,7 @@ function getMultiBlockedAttackerGroups(state = currentState) {
         return { blockerIdx, card, lethal };
       })
       .filter((b) => b.card);
-    if (blockers.length < 2) continue;
+    if (blockers.length < minBlockers) continue;
     groups.push({
       attackerIdx,
       attackerCard,
@@ -17565,7 +17643,28 @@ function autoAssignCombatDamage(groups) {
 // tramples through to the player — but only once every blocker is assigned at
 // least lethal damage (CR 702.19e). The same totals apply in "banding" mode,
 // where the defender divides the damage instead (CR 702.22j).
+//
+// An attacker with "as though it weren't blocked" has a question in front of
+// the division: until it is answered nothing is valid, and answered "unblocked"
+// the whole of its damage is assigned at once — to nobody blocking it. The
+// sentence is all or nothing ("You can't split the damage assignment between
+// them", Thorn Elemental ruling, 2018-04-27), so there is no third state where
+// some goes each way, and the engine refuses one if it is sent.
 function validateCombatDamageGroup(group, mode = combatDamageDialogMode) {
+  if (group.offer) {
+    const answer = combatDamageOfferDraft[group.attackerIdx];
+    if (answer === "unblocked") {
+      return { total: group.power, violation: null, valid: true, unblocked: true };
+    }
+    if (answer !== "blockers") {
+      return {
+        total: 0,
+        violation: `Choose how ${group.attackerCard?.name || "this creature"} assigns its combat damage.`,
+        valid: false,
+        unanswered: true,
+      };
+    }
+  }
   const draft = combatDamageDraft[group.attackerIdx] || {};
   let total = 0;
   let underLethal = false;
@@ -17907,12 +18006,25 @@ function openMultiblockDamageDialog(state = currentState) {
   }
 }
 
-// Multi-blocked attackers the *active player* assigns (everything except those a
-// banding blocker hands to the defender per CR 702.22j).
+// The attackers the *active player* has a damage decision about:
+//
+//   - multi-blocked ones (everything except those a banding blocker hands to
+//     the defender per CR 702.22j) — a division among the blockers; and
+//   - ones that "may … assign [their] combat damage as though [they] weren't
+//     blocked", with ONE blocker as readily as with several. Those carry
+//     `offer`, and the dialog asks the question before any division.
+//
+// The second kind used to be invisible here with one blocker — the server
+// resolved the damage without asking, always past the blocker — and present
+// with two only as an ordinary division that had to total the attacker's power,
+// so the offer could not be taken at all.
 function getAttackerAssignGroups(state = currentState) {
-  return getMultiBlockedAttackerGroups(state).filter(
-    (g) => !attackerBlockedByBandingClient(state, g.attackerIdx),
-  );
+  const offers = getUnblockedAssignmentOffers(state);
+  return getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
+    .filter(
+      (g) => offers.has(g.attackerIdx) || !attackerBlockedByBandingClient(state, g.attackerIdx),
+    )
+    .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g));
 }
 
 // Multi-blocked attackers the *defending player* assigns because at least one of
@@ -17955,6 +18067,12 @@ function openDamageDialog(state = currentState, mode = "attacker") {
   if (autoBtn) {
     autoBtn.onclick = () => {
       autoAssignCombatDamage(groups);
+      // Auto-assign is "what the engine would do unasked", and for an attacker
+      // with the offer that is to take it (the default every seat that is not
+      // asked gets) — so the button answers the question the same way.
+      for (const g of groups) {
+        if (g.offer) combatDamageOfferDraft[g.attackerIdx] = "unblocked";
+      }
       renderCombatDamageDialogBody(groups, mode);
     };
   }
@@ -17963,21 +18081,53 @@ function openDamageDialog(state = currentState, mode = "attacker") {
     confirmBtn.onclick = async () => {
       if (groups.some((g) => !validateCombatDamageGroup(g, mode).valid)) return;
       const assignment = {};
-      for (const g of groups) assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
+      // The offer taken is announced by the attacker's id and by NOT sending a
+      // division for it: an entry in attacker_damage is the other answer, and
+      // the engine refuses an attacker that is given both.
+      const asThoughUnblockedIds = [];
+      for (const g of groups) {
+        if (g.offer && combatDamageOfferDraft[g.attackerIdx] === "unblocked") {
+          asThoughUnblockedIds.push(g.offer.attackerId);
+          continue;
+        }
+        assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
+      }
+      // One answer per combat damage step (CR 510.4): with first or double
+      // strike there is a second step, and an attacker with the offer is asked
+      // again — with nothing selected, not shown already answered the way the
+      // first step was. The dialog auto-opens once per step key and this
+      // handler closes it, so the second asking is opened from here, after the
+      // `finally` below has put the button back (the fresh dialog disables it
+      // itself until the question is answered).
+      let askAgain = false;
       try {
         confirmBtn.disabled = true;
         if (mode === "banding") {
           await sendAction({ seat, action: "assign_banding_damage", banding_damage: assignment });
           updateActionHint("Banding combat damage assigned.");
         } else {
-          await sendAction({ seat, action: "assign_combat_damage", attacker_damage: assignment });
+          await sendAction({
+            seat,
+            action: "assign_combat_damage",
+            attacker_damage: assignment,
+            as_though_unblocked_ids: asThoughUnblockedIds,
+          });
+          combatDamageOfferDraft = {};
           updateActionHint("Combat damage resolved.");
+          askAgain =
+            isCombatStep(currentState, "combat_damage") &&
+            !getCombatState(currentState)?.damage_resolved &&
+            getAttackerAssignGroups(currentState).some((g) => g.offer);
         }
         closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
       } finally {
         confirmBtn.disabled = false;
+      }
+      if (askAgain) {
+        updateActionHint("First-strike combat damage resolved. Choose again for the second combat damage step.");
+        openCombatDamageDialog(currentState);
       }
     };
   }
@@ -17997,11 +18147,15 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
   if (titleEl) {
     titleEl.textContent = mode === "banding" ? "Assign Banding Damage" : "Assign Combat Damage";
   }
+  const anyOffer = groups.some((g) => g.offer);
   if (subtitleEl) {
     subtitleEl.textContent =
       mode === "banding"
         ? "A creature with banding is blocking, so you (the defender) choose how each attacker's damage is split among its blockers (CR 702.22j)."
-        : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage.";
+        : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
+          + (anyOffer
+            ? " A creature that may assign its combat damage as though it weren't blocked deals all of it one way or the other — choose for each."
+            : "");
   }
 
   const cardThumb = (card, sub) => {
@@ -18045,9 +18199,12 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     arrow.textContent = "→";
     section.appendChild(arrow);
 
-    // Blockers side.
+    // Blockers side. For an attacker sending its damage past them the amounts
+    // are not part of the assignment at all, so they read 0 and are disabled —
+    // the draft underneath is kept, so changing the answer back restores it.
+    const sentPast = Boolean(result.unblocked);
     const blockersSide = document.createElement("div");
-    blockersSide.className = "cda-blockers";
+    blockersSide.className = "cda-blockers" + (sentPast ? " cda-blockers-off" : "");
     for (const { blockerIdx, card, lethal } of group.blockers) {
       const col = document.createElement("div");
       col.className = "cda-blocker";
@@ -18058,10 +18215,15 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
       input.min = "0";
       input.max = String(group.power);
       input.className = "cda-input";
-      input.value = String(Math.max(0, Number(combatDamageDraft?.[group.attackerIdx]?.[blockerIdx]) || 0));
+      input.disabled = sentPast;
+      input.value = sentPast
+        ? "0"
+        : String(Math.max(0, Number(combatDamageDraft?.[group.attackerIdx]?.[blockerIdx]) || 0));
       input.addEventListener("input", () => {
         if (!combatDamageDraft[group.attackerIdx]) combatDamageDraft[group.attackerIdx] = {};
         combatDamageDraft[group.attackerIdx][blockerIdx] = Math.max(0, Math.floor(Number(input.value) || 0));
+        // Typing an amount onto a blocker IS the other answer.
+        if (group.offer) combatDamageOfferDraft[group.attackerIdx] = "blockers";
         renderCombatDamageDialogBody(groups, mode);
       });
       col.appendChild(input);
@@ -18069,12 +18231,58 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     }
     section.appendChild(blockersSide);
 
+    // "You may have this creature assign its combat damage as though it
+    // weren't blocked": the question, asked before the division and answered
+    // by one of two buttons. Neither starts selected.
+    if (group.offer) {
+      const answer = combatDamageOfferDraft[group.attackerIdx];
+      const recipient = unblockedRecipientLabel(group.offer.recipient);
+      const offerRow = document.createElement("div");
+      offerRow.className = "cda-offer";
+      const question = document.createElement("div");
+      question.className = "cda-offer-question";
+      question.textContent =
+        `${group.attackerCard?.name || "This creature"} may assign its combat damage as though it weren't blocked.`;
+      offerRow.appendChild(question);
+      const choices = document.createElement("div");
+      choices.className = "cda-offer-choices";
+      const choice = (value, label) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "cda-offer-btn secondary-btn" + (answer === value ? " selected" : "");
+        btn.dataset.offer = value;
+        btn.dataset.attackerIndex = String(group.attackerIdx);
+        btn.setAttribute("aria-pressed", answer === value ? "true" : "false");
+        btn.textContent = label;
+        btn.addEventListener("click", () => {
+          combatDamageOfferDraft[group.attackerIdx] = value;
+          renderCombatDamageDialogBody(groups, mode);
+        });
+        return btn;
+      };
+      choices.appendChild(choice("unblocked", `All ${group.power} to ${recipient}, as though it weren't blocked`));
+      choices.appendChild(
+        choice(
+          "blockers",
+          group.blockers.length > 1
+            ? "Divide it among the creatures blocking it"
+            : group.trample
+              ? `To ${group.blockers[0].card?.name || "its blocker"}, the creature blocking it (excess tramples over)`
+              : `All ${group.power} to ${group.blockers[0].card?.name || "its blocker"}, the creature blocking it`,
+        ),
+      );
+      offerRow.appendChild(choices);
+      section.appendChild(offerRow);
+    }
+
     // Running total + validation message.
     const footer = document.createElement("div");
     footer.className = "cda-attacker-footer";
     const totalEl = document.createElement("span");
     totalEl.className = "cda-total" + (result.valid ? "" : " cda-total-over");
-    totalEl.textContent = `Assigned ${result.total} / ${group.power}`;
+    totalEl.textContent = sentPast
+      ? `Assigned ${group.power} / ${group.power} to ${unblockedRecipientLabel(group.offer.recipient)}`
+      : `Assigned ${result.total} / ${group.power}`;
     footer.appendChild(totalEl);
     if (result.violation) {
       const warn = document.createElement("span");
@@ -19074,6 +19282,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   syncCombatDrafts(state);
   if (!isCombatStep(state, "combat_damage") || getCombatState(state)?.damage_resolved) {
     combatDamageDraft = {};
+    combatDamageOfferDraft = {};
     combatBandBlockerDraft = {};
     combatMultiblockDraft = {};
     combatDamageDialogKey = "";

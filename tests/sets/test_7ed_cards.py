@@ -743,10 +743,16 @@ def test_pride_of_lions_sends_its_damage_past_a_blocker(set_pool):
     weren't blocked." Thorn Elemental's line, word for word, and the same
     instruction — the offer is one static two cards print.
 
-    Through the real combat steps: declared, blocked by the Bears, and the
-    damage step taken with no assignment given, which is the offer accepted
-    (CR 510.1b in place of CR 510.1c). Four to the player; the blocker is
-    untouched and still deals its own two.
+    Through the real combat steps: declared, blocked by the Bears, and — both
+    seats here being interactive — **stopped at the damage step to be asked**,
+    then answered with the offer taken (CR 510.1b in place of CR 510.1c). Four
+    to the player; the blocker is untouched and still deals its own two.
+
+    This test used to step straight through, "the damage step taken with no
+    assignment given", and that was the defect it was standing on: a person at
+    the table was never asked, so the offer was always taken for them. The
+    unasked default is still the offer taken and is still pinned, for a seat
+    nobody is sitting in, by Lone Wolf's twin of this test.
     """
     pool = set_pool("7ED")
     game = _duel(pool)
@@ -763,6 +769,12 @@ def test_pride_of_lions_sends_its_damage_past_a_blocker(set_pool):
     game.advance_combat_phase()
     assert game.current_step == "declare_blockers"
     assert game.declare_blockers(1, {0: 0})[0]
+    game.advance_combat_phase()
+    assert game.current_step == "combat_damage" and not game.combat_damage_resolved
+    assert game.unblocked_assignments_to_ask() == [0]
+    assert game.resolve_combat_damage(
+        0, attacker_damage={}, as_though_unblocked=[pride.permanent_id]
+    )[0]
     _finish_combat(game)
 
     assert game.players[1].life == 16
@@ -775,9 +787,11 @@ def test_pride_of_lions_may_fight_its_blocker_instead(set_pool):
     which is CR 510.1c's ordinary assignment: the Bears die and no damage
     reaches the player. Without this half the line would be a restriction.
 
-    Given at the damage step directly, as Lone Wolf's twin of this test does:
-    the stepping above resolves a single block's damage as it enters the step
-    and has no point at which the attacker is asked.
+    Given at the damage step directly, as Lone Wolf's twin of this test does.
+    (That was once the only way to give it: the stepping resolved a single
+    block's damage as it entered the step and had no point at which the
+    attacker was asked. It stops there for an interactive seat now — the test
+    above — and this is the other thing that seat may say.)
     """
     pool = set_pool("7ED")
     game = _duel(pool)

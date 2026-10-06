@@ -1486,6 +1486,42 @@ h2.targeting-valid {
   text-align: center;
 }
 
+/* "You may have this creature assign its combat damage as though it weren't
+   blocked": the question and its two answers, across the attacker's whole row. */
+.cda-offer {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+.cda-offer-question {
+  font-size: 0.85rem;
+  color: var(--accent);
+}
+
+.cda-offer-choices {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cda-offer-btn {
+  border: 2px solid transparent;
+}
+
+.cda-offer-btn.selected {
+  border-color: #5db0ff;
+  background: rgba(93, 176, 255, 0.15);
+}
+
+/* The blockers of an attacker that is sending its damage past them. */
+.cda-blockers-off {
+  opacity: 0.45;
+}
+
 .cda-total {
   font-size: 0.9rem;
   font-weight: 600;
