@@ -15,6 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
+from engine.color_changes import spell_color_override
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
@@ -890,16 +891,25 @@ def _serialize_stack_item(item, game: Game) -> dict:
                 break
 
     # A Lace card (Lifelace, Chaoslace, …) that targeted this spell on the stack
-    # recolored it, recorded on the stack item as ``choices["color_override"]``
-    # (the effective color the engine reads via _stack_item_colors). Surface it
-    # as color_override so the canvas badges the floating stack card exactly
-    # like a recolored permanent, and swap the displayed colors to match
-    # "becomes [color]".
+    # recolored it, recorded on the stack item by
+    # ``color_changes.change_spell_color`` (the effective color the engine
+    # reads via _stack_item_colors). Surface it as color_override so the canvas
+    # badges the floating stack card exactly like a recolored permanent, and
+    # swap the displayed colors to match "becomes [color]".
+    #
+    # Read through the engine's reader rather than off the item's key: the
+    # record is two stamped slots now (an indefinite lace, a Blind Seer's
+    # "until end of turn"), and which of them the spell *is* is CR 613.7's
+    # answer, not the first key found. The wire keeps the one symbol the canvas
+    # badges from — "C", the swatch it already has, for a spell an effect made
+    # colourless (Ersatz Gnomes), and the first of several.
     serialized_card = _serialize_card(item.card)
-    recolored = item.choices.get("color_override")
-    if recolored:
+    override = spell_color_override(item)
+    recolored = None
+    if override is not None:
+        recolored = override[0] if override else "C"
         serialized_card["color_override"] = recolored
-        serialized_card["colors"] = [recolored]
+        serialized_card["colors"] = list(override)
 
     return {
         "type": item_type,

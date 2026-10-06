@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
+from ..color_changes import without_spell_color_changes
 from ..counter_conditions import cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
@@ -59,7 +60,9 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
             # CR 707.10: the copy has the original's choices. New targets are
             # the copy controller's option and are not chosen here — the AI and
             # the headless path keep the original's, which is the legal default.
-            choices=dict(copied.choices),
+            # Not what an effect did to the original's colour (CR 707.2: "other
+            # effects … are not copied"), which rides the same dict.
+            choices=without_spell_color_changes(copied.choices),
             chosen_mode_index=copied.chosen_mode_index,
             target_stack_item=copied.target_stack_item,
             is_copy=True,
@@ -124,8 +127,10 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
             target_permanent_id=new_target_permanent_id,
             x_value=copied.x_value,
             # CR 707.10: the copy has the same choices as the original, so this
-            # is one assignment rather than one per choice the original made.
-            choices=dict(copied.choices),
+            # is one assignment rather than one per choice the original made —
+            # less the one thing in the dict that is not a choice: a lace on
+            # the original is an effect, and CR 707.2 does not copy effects.
+            choices=without_spell_color_changes(copied.choices),
             chosen_mode_index=copied.chosen_mode_index,
             target_stack_item=copied.target_stack_item,
             is_copy=True,
@@ -334,7 +339,9 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         target_permanent_id=announcement.target_permanent_id,
         target_graveyard_card=announcement.target_graveyard_card,
         x_value=announcement.x_value,
-        choices=dict(announcement.choices),
+        # A **copy** of the original spell (CR 707.2): its choices, and not a
+        # colour an effect gave the original while it was on the stack.
+        choices=without_spell_color_changes(announcement.choices),
         chosen_mode_index=announcement.chosen_mode_index,
         chosen_modes=announcement.chosen_modes,
         target_stack_item=announcement.target_stack_item,
@@ -1250,7 +1257,9 @@ def copy_this_spell(game: Game, instruction: OracleInstruction, context: OracleE
             else context.target_permanent_id
         ),
         x_value=original.x_value if original is not None else context.x_value,
-        choices=dict(original.choices if original is not None else context.choices),
+        choices=without_spell_color_changes(
+            original.choices if original is not None else context.choices
+        ),
         chosen_mode_index=original.chosen_mode_index if original is not None else None,
         target_stack_item=(
             original.target_stack_item if original is not None

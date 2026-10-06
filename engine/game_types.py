@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Callable
 
+from .color_changes import SPELL_COLOR_KEYS
 from .models import CardDefinition, Permanent, PlayerState
 from .oracle import OracleInstruction
 
@@ -36,7 +37,13 @@ class SimulationResult:
 #                    read by ``_stack_item_colors``. Its own key, not
 #                    new_color, because what a spell was announced with and
 #                    what was done to it are two facts — one key made Sleight
-#                    of Mind cast to write "red" a red spell.
+#                    of Mind cast to write "red" a red spell. One of four
+#                    (``color_changes.SPELL_COLOR_KEYS``): the indefinite slot,
+#                    the until-end-of-turn slot and the timestamp of each
+#                    (CR 613.7b), written only by ``change_spell_color`` and
+#                    handed whole to the permanent a permanent spell becomes
+#                    (CR 400.7a). Declared from that module's constants, which
+#                    is the one place the four are spelled.
 #   divided_targets  a divided spell's full cross-seat target list (Fireball,
 #                    Volcanic Eruption) as (seat, battlefield_index) pairs, where
 #                    a (seat, None) entry is that player's face. Takes precedence
@@ -45,7 +52,7 @@ class SimulationResult:
 #                    choice prevention spells): a battlefield Permanent or a
 #                    stack spell's CardDefinition
 CHOICE_KEYS = (
-    "new_color", "old_color", "color_override", "divided_targets", "chosen_source",
+    "new_color", "old_color", *SPELL_COLOR_KEYS, "divided_targets", "chosen_source",
     # "For each additional {1}{R} you paid, …" (Primitive Justice, Taste of
     # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
     # An *offer* the caster took, counted — not an object a cost ate like the

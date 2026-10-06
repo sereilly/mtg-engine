@@ -16,6 +16,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            KICKED_WITH, buyback_paid, kicked,
                            kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
+from ...color_changes import carry_spell_color_changes
 from ...classifier import CardClassification, classify_card
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
@@ -1546,6 +1547,17 @@ class StackResolutionMixin:
             # reads the right owner too.
             if owner_seat != caster_index:
                 permanent.metadata["owner_player_index"] = owner_seat
+            # CR 400.7a: "Effects … that change the characteristics … of a
+            # permanent spell on the stack continue to apply to the permanent
+            # that spell becomes." A Deathlaced creature spell was black on the
+            # stack and its printed colour as a permanent, because the lace
+            # was a key on the stack item and this function never read it.
+            # Handed over with the timestamp the effect was created at
+            # (CR 613.7b) and the duration it was created with — and before
+            # the entry, so the permanent's own timestamp (CR 613.7d, stamped
+            # in ``_put_permanent_onto_battlefield``) is the later of the two,
+            # which is what happened.
+            carry_spell_color_changes(choices, permanent)
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,

@@ -46,29 +46,26 @@ _PRIVATE_KEYS = (
     color_changes.DERIVED_COLOR_CHANGES,
 )
 
-#: ``"color_override"`` is also — and separately — the key a **spell on the
-#: stack** carries its recolour under (``StackItem.choices``, the Lace cycle's
-#: "target spell") and the name of the wire field the canvas badges from. Those
-#: are a different object's record and a payload name; neither is a
-#: permanent's slot. Each module that spells the word is listed with how many
-#: times and why, held in both directions: one more is a new use to justify,
-#: one fewer is a stale allowance.
+#: ``"color_override"`` is also — and separately — the name of the wire field
+#: the canvas badges from, which is a payload name and not a permanent's slot.
+#: Each module that spells the word is listed with how many times and why, held
+#: in both directions: one more is a new use to justify, one fewer is a stale
+#: allowance.
+#:
+#: It was the key a **spell on the stack** carried its recolour under too
+#: (``StackItem.choices``, the Lace cycle's "target spell"), spelled by the
+#: handler that wrote it, the reader in ``mixins/helpers.py`` and the
+#: declaration in ``game_types.py``. That record is the write API's now
+#: (``change_spell_color`` / ``spell_color_override``, CR 400.7a), so those
+#: three allowances are gone and the serializer's fell by the one read it made
+#: of the item's key.
 _SHARED_WORD_USES = {
-    "engine/game_types.py": (
-        1, "the StackItem.choices keys a copy of a spell does not inherit",
-    ),
-    "engine/handlers/board_misc.py": (
-        1, "recolor_target_from_text writes the stack item's own key",
-    ),
-    "engine/mixins/helpers.py": (
-        1, "_stack_item_colors reads the stack item's own key",
-    ),
     "web/serialization.py": (
-        5,
-        "the wire field's name (permanent, stack card, stack item), the stack "
-        "item's own key, and one read of a permanent's indefinite slot for the "
-        "canvas's colour badge — a display hint, never an answer about colour "
-        "(the payload's `colors` is `Game._effective_colors`)",
+        4,
+        "the wire field's name (permanent, stack card, stack item) and one "
+        "read of a permanent's indefinite slot for the canvas's colour badge "
+        "— a display hint, never an answer about colour (the payload's "
+        "`colors` is `Game._effective_colors`)",
     ),
 }
 

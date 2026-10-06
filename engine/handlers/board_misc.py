@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..color_changes import change_color
+from ..color_changes import change_color, change_spell_color
 from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
@@ -609,9 +609,21 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # override — its own key, never ``new_color``: that one is what the spell
     # was announced with (a text change's word, a mana spell's colour), and one
     # key for both made every such spell the colour it announced.
+    #
+    # Written through ``change_spell_color``, which stamps it (CR 613.7b): the
+    # effect goes on applying to the permanent a permanent spell becomes
+    # (CR 400.7a), and it can only be handed over with the timestamp it was
+    # created at if it was given one. The value is ``_colour_override_value``'s
+    # — the empty tuple for "becomes colorless" (Ersatz Gnomes), where the bare
+    # payload word used to be stored and read back as a colour named
+    # "colorless".
     if context.stack_target is not None and symbol:
-        context.stack_target.choices["color_override"] = symbol
-        game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
+        written = _colour_override_value(symbol)
+        change_spell_color(context.stack_target, written)
+        game.log.append(
+            f"{context.stack_target.card.name} (on the stack) became "
+            f"{_colour_override_word(written)}"
+        )
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
     # nobody targeted it, the firing bound it, and which half fired decides how

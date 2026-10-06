@@ -107,7 +107,8 @@ class GameHelpersMixin:
         """Effective color symbols of a spell on the stack.
 
         Two effects can move it, in this order. A Lace card's recolour
-        (``StackItem.choices["color_override"]``) is on the object itself and
+        (recorded on the item by ``color_changes.change_spell_color``) is on
+        the object itself and
         wins, because it was applied to this spell; a board-wide static ("The
         same is true for **spells you control**", Celestial Dawn) is read off
         the board under it, so a Lace resolved onto one spell is not undone by
@@ -127,10 +128,17 @@ class GameHelpersMixin:
         call site already passed through ``self``/``game``, so the board became
         askable without touching one of them.
         """
-        recolored = getattr(item, "choices", {}).get("color_override")
-        if recolored:
-            return (recolored,)
+        from ..color_changes import spell_color_override
         from ..object_colors import card_colors
+
+        # ``is not None``: the empty tuple is a spell an effect made
+        # **colourless** (Ersatz Gnomes, CR 105.2c), which is an answer and not
+        # the absence of one. The reader picks the later-stamped of the item's
+        # two slots (CR 613.7), the way layer 5 does for the permanent this
+        # spell will become (CR 400.7a).
+        recolored = spell_color_override(item)
+        if recolored is not None:
+            return recolored
 
         return tuple(card_colors(
             self, item.card, getattr(item, "caster_index", None)
