@@ -4371,6 +4371,28 @@ def derive_activation_spec(ability) -> dict | None:
     return {**target_spec, "cost_spec": cost_spec}
 
 
+def activation_target_slot(ability) -> "tuple[dict, object] | None":
+    """``(spec, instruction)`` for the target *ability* announces as it is
+    activated: the target half of :func:`derive_activation_spec` beside the
+    instruction that carries it, or None when the ability targets nothing.
+
+    :func:`cast_target_slot`'s twin, for CR 601.2c's other question asked of an
+    activation (CR 602.2b sends one through CR 601.2b–i). The spec says *what*
+    may be chosen; whether a choice **must** be made is that one slot's printed
+    quantifier, which only the instruction keeps. Read through the same
+    :func:`_first_described_slot` the spec is, so the slot whose quantifier is
+    asked is the slot the picker describes — a second walk beside it is how
+    "does this ability owe a target?" came to be answered about a different
+    sentence than the one the picker offered targets for.
+    """
+    if not getattr(ability, "supported", False):
+        return None
+    instruction = getattr(ability, "instruction", None)
+    if instruction is None:
+        return None
+    return _first_described_slot((instruction,))
+
+
 def usable_activated_abilities(program, *, zone: str = BATTLEFIELD):
     """The activated abilities of *program* the engine can actually run **from
     *zone***.

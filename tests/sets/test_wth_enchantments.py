@@ -913,7 +913,9 @@ def test_infernal_tribute_will_not_eat_a_token(set_pool):
     """The narrowing enforced from the other side, and it is the whole card:
     with tokens allowed to pay it, one token generator turns this into
     unbounded draw. The payer names the token and it is not a candidate, so
-    the payment falls to the enchantment itself and the token survives."""
+    the activation is **refused** — nothing is sacrificed and nothing drawn
+    (CR 601.2h through 602.2b). It used to fall to the enchantment itself,
+    which is a payment nobody announced; naming nothing still takes it."""
     from engine.tokens import make_token_card
 
     pool = set_pool("WTH")
@@ -924,14 +926,21 @@ def test_infernal_tribute_will_not_eat_a_token(set_pool):
     p1.battlefield.append(token)
     p1.library = [pool["Infernal Tribute"]] * 3
 
-    result = game.activate_permanent_ability(
+    refused = game.activate_permanent_ability(
         0, "Infernal Tribute", cost_permanent_index=1
     )
+
+    assert not refused.supported
+    assert refused.details == "Infernal Tribute: Goblin cannot pay its cost"
+    assert [p.card.name for p in p1.battlefield] == ["Infernal Tribute", "Goblin"]
+    assert p1.hand == [] and p1.graveyard == []
+
+    result = game.activate_permanent_ability(0, "Infernal Tribute")
     resolve_stack(game)
 
     assert result.supported, result.details
     assert [p.card.name for p in p1.battlefield] == ["Goblin"], (
-        "the token was named and refused; the enchantment paid instead"
+        "nothing was named, so the one nontoken permanent paid"
     )
     assert [c.name for c in p1.graveyard] == ["Infernal Tribute"]
 

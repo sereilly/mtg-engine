@@ -307,7 +307,13 @@ def test_portcullis_vine_charges_the_narrowed_sacrifice(set_pool):
     The Vine itself has defender, so it can eat itself; the Cat beside it
     cannot be chosen even though it is a creature. Naming the Cat is the case
     that matters: the charger re-checks the answer, and before the filter
-    arrived there was nothing to re-check it against."""
+    arrived there was nothing to re-check it against.
+
+    **And a named payment that cannot pay is refused** (CR 601.2h through
+    602.2b). This test used to assert the other half of the old policy — the
+    Cat was named, dropped, and the Vine sacrificed in its place — which is a
+    different activation from the one announced. Naming nothing still takes
+    the default."""
     pool = set_pool("M21")
     vine = Permanent(card=pool["Portcullis Vine"])
     cat = Permanent(card=pool["Pridemalkin"])
@@ -317,13 +323,20 @@ def test_portcullis_vine_charges_the_narrowed_sacrifice(set_pool):
     game.start_turn(0)
     _nosick(vine)
 
-    result = game.activate_permanent_ability(
+    refused = game.activate_permanent_ability(
         0, "Portcullis Vine", permanent_index=0, cost_permanent_index=1
     )
 
+    assert not refused.supported
+    assert refused.details == "Portcullis Vine: Pridemalkin cannot pay its cost"
+    assert game.is_on_battlefield(cat), "the Cat has no defender and cannot pay"
+    assert game.is_on_battlefield(vine) and not vine.tapped and p1.hand == []
+
+    result = game.activate_permanent_ability(0, "Portcullis Vine", permanent_index=0)
+
     assert result.supported
     assert len(p1.hand) == 1
-    assert game.is_on_battlefield(cat), "the Cat has no defender and cannot pay"
+    assert game.is_on_battlefield(cat)
     assert not game.is_on_battlefield(vine)
 
 

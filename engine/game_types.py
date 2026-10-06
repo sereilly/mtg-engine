@@ -319,6 +319,19 @@ class StackItem:
     # Fixed at construction, never recomputed from ``caster_index``: an effect
     # that changes who controls a spell does not change who owns its card.
     owner_index: int | None = None
+    # CR 113.3b against 113.3c: this object is an **activated** ability — put
+    # on the stack by a player announcing it (CR 602.2), with every target it
+    # has chosen by that player and checked by the announcement gate. Set by
+    # the three activation paths and by nothing else, so a triggered ability
+    # and a hook-keyed object read False.
+    #
+    # A positive mark rather than "an ability that is not a trigger": the
+    # effect label says ``triggered_`` for most triggers and not for all of
+    # them, both kinds carry their printed line, and the reader that needs
+    # this (``legality.vanished_graveyard_target_refusal``) must not answer for
+    # a trigger — a trigger's target is stamped at its fire site, which is the
+    # bug ROADMAP's CR 608.2b entry declines the rule over.
+    activated: bool = False
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

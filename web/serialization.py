@@ -486,6 +486,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # third copy of one card's quoted text, so a lord granting anything else
         # showed the player nothing.
         "granted_abilities": list(derived_ability_lines(perm)),
+        # Why this permanent has **no** activated ability to offer although
+        # its text prints some — "loses all abilities", or a land whose type
+        # was set (CR 305.7) — or None. The client builds its ability menu
+        # from the oracle text above, which an effect like that does not
+        # rewrite, so without this it offered every printed ability and each
+        # one was a 400 (``Game.lost_abilities_refusal``, the engine's own
+        # reason, read by the menu's one reader of that text).
+        "abilities_lost": game.lost_abilities_refusal(perm),
         # What this permanent chose **as it entered** (CR 614.1c), as
         # ``[{"label": "Chosen color", "value": "green"}, …]``: the opponent a
         # Black Vise watches, the colour a Ward protects from, the name a
@@ -1113,7 +1121,7 @@ def _serialize_player(
             # Multi-ability permanents whose abilities target differently
             # (Pyramids): one spec per usable ability, indexed like the
             # ability_index the activate action takes.
-            usable = usable_activated_abilities(compile_card_oracle(perm.effective_card))
+            usable = game.usable_abilities_of(perm, card=perm.effective_card)
             if len(usable) > 1:
                 perm_dict["ability_target_specs"] = [
                     game.activation_target_spec(seat, idx, ability_index=k)

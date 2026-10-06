@@ -1178,6 +1178,13 @@ class StackResolutionMixin:
             # abilities that does not exist. `legality.stale_comparison_refusal`
             # states its own bounds.
             illegal = self.stale_comparison_refusal(item)
+        if illegal is None:
+            # …and the third, for the same reason a second call was made
+            # rather than a branch: CR 608.2b for an *activated* ability whose
+            # only targets were graveyard cards that have all left. The
+            # handlers behind it read a vanished stamp as "nothing was
+            # announced" and returned a different card.
+            illegal = self.vanished_graveyard_target_refusal(item)
         if illegal is not None:
             self.log.append(illegal)
             if item.ability_instruction is None and not item.is_copy:

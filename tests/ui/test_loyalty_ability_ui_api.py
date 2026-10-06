@@ -157,7 +157,11 @@ def test_a_non_planeswalker_is_not_reported_as_one():
 def test_ugin_plus_two_and_its_unaffordable_minus_ten(index, expected):
     """Ugin enters at 7: +2 is payable, -10 is not."""
     sid, _game, walker = _walker_session("Ugin, the Spirit Dragon")
-    response = _activate(sid, "Ugin, the Spirit Dragon", index)
+    # "+2: Ugin deals 3 damage to **any target**": the client names one — the
+    # browser runs the picker and cannot send this ability without it — so the
+    # request carries the seat it chose (CR 601.2c through 602.2b). It was sent
+    # bare, which the route used to accept and aim at its own default.
+    response = _activate(sid, "Ugin, the Spirit Dragon", index, target_seat=1)
     if expected is None:
         assert response.status_code == 400
         assert "does not have enough loyalty counters" in response.json()["detail"]

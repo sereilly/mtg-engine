@@ -320,6 +320,19 @@ def _sweep_activations(pool, by_name, only=None) -> _Sweep:
                 _put_a_spell_on_the_stack(game, by_name)
                 spec = game.activation_target_spec(0, slot, ability_index=index)
             keywords, named = _first_pick(game, spec, source)
+            if keywords is None:
+                # ``_first_pick`` never names the source, so an ability whose
+                # only legal target is its own source is activated naming
+                # nothing — and an activation that owes a target, names none
+                # and has exactly one legal one **announces that one**
+                # (``Game.sole_legal_activation_target``; Alpha Kavu's "target
+                # Kavu creature" with no other Kavu). It used to go on the
+                # stack with no target at all and resolve doing nothing, which
+                # this sweep counted as an untargeted object.
+                sole = game.sole_legal_activation_target(0, source, ability, x_value=0)
+                if sole is not None and sole.get("kind") == "permanent":
+                    chosen = game.permanent_at(sole["seat"], sole["index"])
+                    named = ("permanent", chosen.permanent_id)
             offered = _offered_keys(game, spec)
             before = len(game.stack)
             result = game.queue_permanent_ability(

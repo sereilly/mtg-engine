@@ -590,8 +590,15 @@ def _w1g5i_pinger(name):
 def _w1g5i_board(set_pool):
     pinger = Permanent(card=_w1g5i_pinger("Pinger"))
     spare = Permanent(card=_w1g5i_pinger("Spare"))
+    # A library for the Interdict's own "Draw a card": without one its caster
+    # loses the game to the draw, and a player who has left the game is not a
+    # legal target for the pings these tests go on to aim at them. The
+    # activation gate used not to compare a seat named for "any target".
     game = Game(players=[
-        PlayerState(name="P1", hand=[set_pool("TMP")["Interdict"]]),
+        PlayerState(
+            name="P1", hand=[set_pool("TMP")["Interdict"]],
+            library=[set_pool("TMP")["Interdict"]] * 3,
+        ),
         PlayerState(name="P2", battlefield=[pinger, spare]),
     ])
     game.enforce_mana_costs = False
