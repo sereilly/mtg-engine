@@ -1549,6 +1549,10 @@ class StackResolutionMixin:
             self._put_permanent_onto_battlefield(
                 caster_index, permanent, target_player_index,
                 was_cast=True, from_zone=cast_from_zone,
+                # …and a land that came down this road was played, not cast
+                # (CR 305.1) — the same road, so the same flag, and this one
+                # beside it for the two readers that mean a *spell*.
+                played_as_land=primary_type == "land",
             )
             # CR 614: an entry replacement may have consumed the event, and then
             # the permanent is on no battlefield at all - Frankenstein's Monster

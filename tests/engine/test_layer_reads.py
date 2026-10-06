@@ -479,6 +479,78 @@ def test_printed_text_and_keyword_reads_stay_where_they_belong():
     )
 
 
+# ---------------------------------------------------------------------------
+# The printed card handed over whole
+# ---------------------------------------------------------------------------
+#
+# Every pattern above looks for a *field* read through the possessive
+# (``perm.card.oracle_text``). The same wrong answer has a shape none of them
+# sees: the printed card passed whole to something that reads it —
+# ``compile_card_oracle(observer.card)`` reads the text one call down, where
+# no possessive is left to find. The death-observer scan did exactly that for
+# as long as the text guard above has existed: a Sengir Vampire under Humility
+# took its counter, and a Clone of one never did.
+#
+# So the compile is ratcheted by its argument. A **stack item's** ``.card`` is
+# the object itself (``engine/faces.py``: the cast face) and is what those
+# entries are; a permanent's is the card as printed.
+
+_PRINTED_COMPILES = re.compile(r"compile_card_oracle\(\s*[\w\.]+\.card\s*\)")
+
+#: module -> how many compiles of a possessive ``.card`` survive, and why.
+PRINTED_COMPILE_BASELINE: dict[str, int] = {
+    # A spell on the stack: the stack item's card is the object being asked.
+    "counter_conditions.py": 1,
+    "mixins/helpers.py": 1,
+    "mixins/stack/casting.py": 1,
+    "stack_targets.py": 1,
+    # CR 707.9: a copier's *own* exceptions ("except it's an enchantment in
+    # addition to its other types") are read off the copier as printed, before
+    # the copy that would replace its text is recorded.
+    "mixins/permanent_state.py": 1,
+    # **Debt, not a blessing**: the AI's own-seat activation chooser compiles
+    # the permanent's printed card, so it proposes nothing a Clone copied and
+    # nothing an Aura granted. Named in the round that added this guard.
+    "ai_policy.py": 1,
+}
+
+
+def test_no_new_compile_of_a_permanents_printed_card():
+    """"What does this permanent say?" is ``effective_card`` when the question
+    is asked by compiling it, exactly as when it is asked by reading a field."""
+    _assert_within_baseline(
+        _PRINTED_COMPILES,
+        PRINTED_COMPILE_BASELINE,
+        "compile_card_oracle(<x>.card) above its module's baseline — compile "
+        "permanent.effective_card (or Game.playable_card_of), or raise the "
+        "module's entry in PRINTED_COMPILE_BASELINE with the reason it really "
+        "means the card",
+    )
+
+
+# …and the **mana value**, which is a copiable value like the text (CR 707.2:
+# the mana cost is copied): ``perm.card.cmc`` is the copier's own. "Power and
+# toughness each equal to its mana value" made a Copy Artifact of a Rod of
+# Ruin a 2/2 under Titania's Song and a token copy of one a 0/0.
+
+_PRINTED_MANA_VALUE = re.compile(r"\.card\.cmc\b")
+
+#: module -> how many printed mana-value reads survive. Untriaged AI weights.
+PRINTED_MANA_VALUE_BASELINE: dict[str, int] = {
+    "ai_policy.py": 4,
+}
+
+
+def test_no_new_printed_mana_value_read():
+    """A permanent's mana value is its effective card's (CR 202.3, 707.2)."""
+    _assert_within_baseline(
+        _PRINTED_MANA_VALUE,
+        PRINTED_MANA_VALUE_BASELINE,
+        "printed card.cmc read above its module's baseline — ask "
+        "permanent.effective_card.cmc",
+    )
+
+
 @pytest.mark.parametrize(
     "baseline,pattern",
     [
@@ -486,8 +558,11 @@ def test_printed_text_and_keyword_reads_stay_where_they_belong():
         (PRINTED_COLOR_BASELINE, _PRINTED_COLOR_READS),
         (PRINTED_TEXT_BASELINE, _PRINTED_TEXT_READS),
         (PRIMARY_TYPE_BASELINE, _PRINTED_PRIMARY_TYPE),
+        (PRINTED_COMPILE_BASELINE, _PRINTED_COMPILES),
+        (PRINTED_MANA_VALUE_BASELINE, _PRINTED_MANA_VALUE),
     ],
-    ids=["type-and-colour", "colour-of-a-non-permanent", "text", "primary-type"],
+    ids=["type-and-colour", "colour-of-a-non-permanent", "text", "primary-type",
+         "compiled-whole", "mana-value"],
 )
 def test_no_baseline_sits_above_its_real_count(baseline, pattern):
     """The half that makes a ratchet ratchet.

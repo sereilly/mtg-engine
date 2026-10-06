@@ -1609,6 +1609,75 @@ class PermanentStateMixin:
         if statics:
             apply_type_statics([permanent], statics)
 
+    def fold_board_statics_onto_entering(
+        self, permanent: Permanent, controller_index: int
+    ) -> bool:
+        """Write onto *permanent* — about to enter under *controller_index* —
+        what **every** board-wide static will make of it once it is there.
+        Returns whether there was any to ask.
+
+        CR 614.12 again, and the rest of it: the land-type fold above covers
+        one family of static, and the rule names none. "Check the
+        characteristics of the permanent as it would exist on the battlefield,
+        taking into account … continuous effects that already exist and would
+        apply to the permanent." So:
+
+        * under **Humility** a creature enters with no ability — it does not
+          enter tapped, enters with no counters, makes no "as this enters"
+          choice (a Clone copies nothing) and pays no entry toll, whatever it
+          prints; under **Titania's Song** a noncreature artifact likewise;
+        * under Titania's Song, **Opalescence** or a land animator (Living
+          Lands, Kormus Bell) the permanent is a *creature* as it enters — so
+          a Containment Priest exiles one that was not cast, a played Forest
+          included, and "creatures … enter tapped" reaches it.
+
+        Every reader of an entry already asks the permanent through the CR 613
+        accessors (``effective_card``, ``has_type``, ``is_creature``); what
+        was missing is the contributions those accessors read, which
+        ``_refresh_global_statics`` writes for a permanent on the battlefield
+        as the **last** thing an entry does. This runs that same pass with the
+        entering permanent in its list, before any of those reads — the pass
+        itself, not a second reading of each family, so a static it learns
+        tomorrow is folded here the same day. ``controller_index_of`` answers
+        the entering seat for the one permanent while it runs.
+
+        The entry's own recompute rebuilds everything from the real board a
+        moment later; if the entry is *replaced* instead, the caller does
+        (``_put_permanent_onto_battlefield``). What the pass remembers about
+        which statics were out — Titania's Song lingers when it leaves — is
+        put back as it was, because a permanent that has not arrived cannot
+        have left.
+
+        Not asked (no entry reader in the pool reads them): what a lord will
+        grant the permanent, and its layer-7 size.
+        """
+        from ..global_statics import global_static_sources
+
+        board = list(self.all_permanents())
+        # Is there any static to ask? Nearly every entry in nearly every game
+        # finds none, and pays for one walk of the board rather than a pass.
+        judging = (
+            bool(self.lingering_global_statics)
+            or bool(global_static_sources(board))
+            or any(
+                instr.kind in (LAND_ANIMATION_KIND, STATIC_SUPERTYPE_REMOVAL_KIND)
+                for source in board
+                for instr in compile_card_oracle(source.effective_card).instructions
+            )
+        )
+        if not judging:
+            return False
+        remembered = list(self._global_static_sources_last)
+        lingering = list(self.lingering_global_statics)
+        self._entering_under = (permanent, controller_index)
+        try:
+            self._refresh_global_statics(board + [permanent])
+        finally:
+            self._entering_under = None
+            self._global_static_sources_last = remembered
+            self.lingering_global_statics[:] = lingering
+        return True
+
     def _land_type_static(
         self, source: Permanent, payload: dict, *,
         entering: tuple[Permanent, int] | None = None,

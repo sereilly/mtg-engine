@@ -461,8 +461,14 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # 7b — Animate Artifact sets P/T to the artifact's mana value. A mana value
     # of 0 really does mean 0/0: a Mox animated this way dies to CR 704.5f, and
     # clamping it to 1/1 (as the card-rebuilding version did) kept it alive.
+    #
+    # The mana value of the **permanent** (CR 202.3), which for a copy is the
+    # copied object's: the mana cost is a copiable value (CR 707.2), so a Copy
+    # Artifact of a Rod of Ruin is 4 and a token copy of one is 4, where the
+    # copier's own printed cost says 2 and the token's says nothing at all.
+    # All three readers below asked the printed card.
     for aura in animating_auras(perm):
-        mana_value = int(perm.card.cmc)
+        mana_value = int(perm.effective_card.cmc)
         effects.append(
             set_pt(
                 only,
@@ -492,7 +498,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     # die to CR 704.5f.
     for gained in gained_types(perm):
         if gained.get("pt_from_mana_value"):
-            value = int(perm.card.cmc)
+            value = int(perm.effective_card.cmc)
             effects.append(set_pt(
                 only, value, value,
                 timestamp=_DERIVED_TIMESTAMP,
@@ -501,7 +507,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
 
     for static in global_statics_applying_to(perm):
         if static.pt_from_mana_value:
-            value = int(perm.card.cmc)
+            value = int(perm.effective_card.cmc)
             effects.append(
                 set_pt(only, value, value, timestamp=_DERIVED_TIMESTAMP, label=static.name)
             )

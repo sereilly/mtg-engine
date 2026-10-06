@@ -360,7 +360,17 @@ class GameHelpersMixin:
         """
         seat = self._holding_seat(permanent)
         if seat is None:
-            return None
+            # CR 614.12: a permanent *about to enter* is judged "as it would
+            # exist on the battlefield", and there it is controlled by the
+            # seat it enters under. Answered only while the board's statics
+            # are being asked what they will make of it
+            # (``fold_board_statics_onto_entering``), so that "creatures
+            # **you** control" has a seat to compare for the one permanent
+            # the control seam cannot see yet.
+            entering = getattr(self, "_entering_under", None)
+            if entering is None or entering[0] is not permanent:
+                return None
+            seat = entering[1]
         if not has_control_change(permanent):
             return seat
         base = base_controller(permanent)
@@ -3475,7 +3485,13 @@ class GameHelpersMixin:
             "event_subject_controller": dead_seat,
         }
         for controller_index, observer in self.permanents_with_controller():
-            program = compile_card_oracle(observer.card)
+            # The **effective** card (CR 613 layers 1, 3 and 6), like the two
+            # scans just below: what the observer says now. This compiled the
+            # printed card, so a Sengir Vampire under Humility went on taking
+            # its counter for an ability it did not have, a Soul Net under
+            # Titania's Song still offered its life — and a Clone of the
+            # Vampire, which does have the ability (CR 707.2), never got one.
+            program = compile_card_oracle(observer.effective_card)
             # The two controller-scoped death conditions, which differ only in
             # *whose* creature died — so the scope is the whole dispatch and
             # they cannot share a kind. Collected before the self-exclusion
@@ -3607,6 +3623,7 @@ class GameHelpersMixin:
         *,
         was_cast: bool = False,
         from_zone: str | None = None,
+        played_as_land: bool = False,
     ) -> None:
         """Put *permanent* onto the battlefield — the one entry path there is.
 
@@ -3621,7 +3638,16 @@ class GameHelpersMixin:
         The default is also the direction that fails *visibly*: a cast creature
         wrongly exiled is a card a player watches disappear, where a reanimation
         wrongly surviving is nothing happening.
+
+        *played_as_land* is the one caller that says ``was_cast`` and does not
+        mean it. A land play resolves down the same road a permanent spell does
+        (which is what ``was_cast`` tells this method, so the road's own entry
+        trigger is not fired twice), and **a land is never cast** (CR 305.1:
+        playing a land is a special action). It could not matter while no
+        entering land could be a creature; under Living Lands a played Forest
+        is one as it enters (CR 614.12), and Containment Priest asks.
         """
+        cast_as_a_spell = was_cast and not played_as_land
         # CR 614.12, before anything asks how this permanent enters: a land
         # is judged "as it would exist on the battlefield", under the
         # continuous effects already there. With Blood Moon out a nonbasic
@@ -3631,6 +3657,13 @@ class GameHelpersMixin:
         # of the land (CR 603.6d) it no longer has by then. One write, read by
         # all of them through ``Permanent.effective_card``.
         self.fold_land_type_statics_onto_entering(permanent, controller_index)
+        # …and the same rule for every other board-wide static: what the
+        # permanent will *be* (a creature under Titania's Song or Opalescence,
+        # a Forest that Living Lands animates) and what it will *have* (no
+        # ability at all under Humility) once it is there. Asked before the
+        # replacements just below and the entry state after them, each of
+        # which reads the permanent through the CR 613 accessors.
+        judged = self.fold_board_statics_onto_entering(permanent, controller_index)
         # CR 614: "if a nontoken creature would enter … exile it instead"
         # (Containment Priest). Asked before anything else, because a
         # replacement means the permanent never enters at all — no id is
@@ -3643,7 +3676,7 @@ class GameHelpersMixin:
             {
                 "permanent": permanent,
                 "controller_index": controller_index,
-                "was_cast": was_cast,
+                "was_cast": cast_as_a_spell,
                 # CR 616.1 asks the *affected* player to choose among contending
                 # effects; for an entry that is the seat the permanent would
                 # enter under.
@@ -3651,6 +3684,11 @@ class GameHelpersMixin:
             },
         )
         if consumed:
+            if judged:
+                # The fold asked the board's statics about a permanent that
+                # then never arrived; what it wrote on everything else is
+                # rebuilt from the board as it really is.
+                self._recompute_continuous_effects()
             return
         # "…if it **entered from your graveyard**" (Archfiend's Vessel). Stamped
         # on the permanent rather than kept on the game, because the question is
@@ -3673,7 +3711,7 @@ class GameHelpersMixin:
         # one function over: a reanimated creature entered this turn and was
         # never cast (CR 701.5a), which is exactly the creature this phrase does
         # not name.
-        if was_cast:
+        if cast_as_a_spell:
             permanent.metadata[CAST_THIS_TURN_STAMP] = {
                 "seat": controller_index, "turn": self.turn,
             }
