@@ -42,12 +42,16 @@ _PRIVATE_KEYS = (
     type_changes.LOST_TYPES,
     type_changes.DERIVED_LOST_SUPERTYPES,
     type_changes.STATIC_TYPE_ORDER,
+    type_changes.ANIMATES_HOST,
 )
 
 #: The two constants' *names*, which a module could import and index a
 #: permanent's metadata with — the same poke with the string spelled once
 #: removed, and invisible to a scan for the string.
-_KEY_NAMES = ("GAINED_TYPES", "LOST_TYPES", "DERIVED_LOST_SUPERTYPES", "STATIC_TYPE_ORDER")
+_KEY_NAMES = (
+    "GAINED_TYPES", "LOST_TYPES", "DERIVED_LOST_SUPERTYPES", "STATIC_TYPE_ORDER",
+    "ANIMATES_HOST",
+)
 
 #: Who may *import* a key's name, and why. Held in both directions: one more
 #: is a new holder of the key to justify, one fewer a stale allowance.

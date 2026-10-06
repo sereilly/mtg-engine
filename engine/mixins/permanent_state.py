@@ -41,8 +41,9 @@ from ..enter_effects import (
     own_chosen_protection_color,
 )
 from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
-                     CHOSEN_PROTECTION_COLOR, aura_protection_colors,
-                     auras_attached_to, conditional_ability_lines_for)
+                     CHOSEN_PROTECTION_COLOR, aura_animates_artifact,
+                     aura_protection_colors, auras_attached_to,
+                     conditional_ability_lines_for)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
@@ -81,6 +82,7 @@ from ..land_types import (
 )
 from ..layer_bridge import (
     QUALIFIED_BUFFS,
+    attached_animation_type_effect,
     global_static_type_effect,
     land_animation_type_effect,
     land_type_effect,
@@ -90,6 +92,7 @@ from ..type_changes import (
     LAND_ANIMATION_ORDER,
     add_derived_lost_supertype,
     clear_derived_type_changes,
+    set_animates_host,
     set_static_type_order,
 )
 from ..type_statics import TypeStatic, apply_type_statics
@@ -1456,7 +1459,7 @@ class PermanentStateMixin:
         """Every board-wide static with a **layer-4** part, as the board-wide
         pass applies it (``engine/type_statics.py``).
 
-        Four families, one list, because CR 613.7 and 613.8 order the *layer*
+        Five families, one list, because CR 613.7 and 613.8 order the *layer*
         and not each kind of card in it:
 
         * "All Mountains are Plains." (Conversion.) "Nonbasic lands are
@@ -1473,6 +1476,10 @@ class PermanentStateMixin:
           .changes_types``): Titania's Song, Opalescence, Conspiracy, Dralnu's
           Crusade. *global_sources* is the caller's list, lingering ones
           included, so the two cannot disagree about which are out.
+        * "As long as enchanted artifact **isn't a creature**, it's an artifact
+          creature…" (Animate Artifact.) One permanent's, and here all the
+          same: the condition is a scope over a type, so whether the Aura
+          applies is a question about the intermediate state like the rest.
 
         What this method owns is **what each scope means**, read where it has
         always been read: ``land_types.py``'s two predicates,
@@ -1515,6 +1522,11 @@ class PermanentStateMixin:
                     statics.append(self._land_animation_static(
                         source, land_animation_from_payload(instr.payload),
                     ))
+            host = source.metadata.get("attached_to")
+            if host is not None and aura_animates_artifact(
+                source.effective_card.oracle_text
+            ):
+                statics.append(self._attached_animation_static(source, host))
         from ..global_statics import changes_types
 
         by_source: dict[int, TypeStatic] = {}
@@ -1602,6 +1614,35 @@ class PermanentStateMixin:
             ),
             record=lambda permanent, stamp, order: set_static_type_order(
                 permanent, LAND_ANIMATION_ORDER, timestamp=stamp, order=order,
+            ),
+        )
+
+    def _attached_animation_static(self, aura: Permanent, host: Permanent) -> TypeStatic:
+        """"As long as enchanted artifact isn't a creature, it's an artifact
+        creature…" — Animate Artifact's layer-4 half, for the pass.
+
+        Its reach is one permanent and a condition on it, and the condition is
+        why it is here: Titania's Song asks the same question of the same
+        artifact from the other side, each changes the other's answer, and
+        CR 613.8b applies such a loop in timestamp order — so the older of the
+        two is the one that animates the artifact, and only the Song also
+        takes its abilities.
+
+        An Aura's timestamp is the moment it became attached (CR 613.7e).
+        """
+        return TypeStatic(
+            source=aura,
+            timestamp=int(aura.metadata.get("aura_timestamp", aura.timestamp)),
+            label=aura.card.name,
+            payload=host,
+            reaches=lambda permanent, types: (
+                permanent is host and "creature" not in types.card_types
+            ),
+            effect=lambda permanent, stamp, order: attached_animation_type_effect(
+                id(permanent), timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: set_static_type_order(
+                permanent, aura.permanent_id, timestamp=stamp, order=order,
             ),
         )
 
@@ -2284,6 +2325,15 @@ class PermanentStateMixin:
             clear_derived_type_changes(perm)
         type_statics, type_static_of = self._board_type_statics(all_permanents, sources)
         reach = apply_type_statics(all_permanents, type_statics)
+        for found in type_statics:
+            # An attached animating Aura: whether it reached its host is the
+            # answer every later layer reads (``auras.animating_auras``), so a
+            # *no* is written down as carefully as a yes.
+            # (Its payload is the host; no other static's is a permanent.)
+            if isinstance(found.payload, Permanent):
+                set_animates_host(found.source, any(
+                    applied is found for applied in reach.get(id(found.payload), ())
+                ))
         self._refresh_land_animation(all_permanents, reach)
         for perm in all_permanents:
             reached_by = reach.get(id(perm), ())
@@ -2361,27 +2411,22 @@ class PermanentStateMixin:
         apply in a later layer. One reading of each scope for both moments, so
         the pass and the refresh cannot disagree about a word.
 
-        **"Noncreature artifact" still reads the printed type line**, for both
-        moments, and that is a known gap rather than a reading. It was written
-        that way because asking whether the permanent is *currently* a creature
-        would include the type this very effect adds; the intermediate state is
-        the rule's own answer to that (CR 613.6's example: the effect "is
-        applied to all noncreature artifacts in layer 4 … even though those
-        permanents aren't noncreature artifacts by then"), and under it the
-        Song would pass by a Howling Mine that Karn has already animated — it
-        depends on that effect (CR 613.8a). But Animate Artifact's own "as long
-        as enchanted artifact isn't a creature" is the same question asked the
-        other way, read off the printed line for the same reason
-        (``auras.animating_auras``), and the two form a dependency **loop**
-        (CR 613.8b) that only timestamp order settles. Moving one of the pair
-        onto the intermediate state without the other trades the order the
-        engine gets right for the one it gets wrong, so both stay printed until
-        the Aura's condition joins the layer-4 pass as a scope of its own:
-        a ``TypeStatic`` per attached animating Aura whose reach is "the host,
-        while it presents no creature type"; ``auras.animating_auras`` and the
-        two ``layer_bridge`` collectors that call it reading that reach
-        (CR 613.6) instead of the printed line; and this branch reading
-        *types*.
+        "Noncreature artifact" is the scope that needed the distinction. It
+        read the **printed** type line for the creature half, because asking
+        whether the permanent is *currently* a creature would include the type
+        this very effect adds, and the answer would then depend on whether it
+        had already been asked. The intermediate state is the rule's own answer
+        to that (CR 613.6's example: the effect "is applied to all noncreature
+        artifacts in layer 4 … even though those permanents aren't noncreature
+        artifacts by then"): a Howling Mine is a noncreature artifact as
+        Titania's Song starts to apply, and one Karn has already animated is
+        not — the Song depends on that effect (CR 613.8a) and passes it by,
+        abilities and all. Animate Artifact's own "as long as enchanted
+        artifact isn't a creature" is the same question asked from the other
+        side (``_attached_animation_static``); the two form a dependency loop,
+        and the pass settles it by timestamp (CR 613.8b). The printed line
+        still answers a caller with no intermediate state to offer, of which
+        there is none for a type-changing static.
 
         *source* and *game* are needed only by a scope that is **relative** —
         "creatures **you** control" is a comparison between two seats (CR 109.5),
@@ -2440,6 +2485,8 @@ class PermanentStateMixin:
                 )
             return True
         if static.applies_to == "noncreature_artifact":
+            if types is not None:
+                return has_type("artifact") and not has_type("creature")
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
         if static.applies_to == "non_aura_enchantment":

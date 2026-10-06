@@ -51,13 +51,13 @@ and ``_OI_WERE_WRONG`` the rows that failed on the tree before the board-wide
 layer-4 pass (``engine/type_statics.py``) and the type write API
 (``engine/type_changes.py``) — measured there with this file's own cases.
 
-One pairing the census can arrange is deliberately **not** in it, because the
-engine still answers it by the printed type line rather than by the rule:
-Titania's Song's "each *noncreature* artifact" against the effects that make an
-artifact a creature (Karn, Xenic Poltergeist, Animate Artifact). The type line
-comes out the same either way — an artifact creature — and what differs is
-whether the Song strips the artifact's abilities, which is layer 6 reading the
-Song's layer-4 reach (CR 613.6). The round's report carries its parts.
+One family of meetings is below the census rather than in it, because the type
+line cannot tell its answers apart: Titania's Song's "each *noncreature*
+artifact" against the effects that make an artifact a creature (Karn, Animate
+Artifact). The artifact is an artifact creature either way; what differs is
+whether the Song *reached* it, and so whether it lost its abilities — layer 6
+reading the Song's layer-4 reach (CR 613.6). Those are asserted on the
+abilities, in ``test_oi_the_song_…``.
 """
 
 from __future__ import annotations
@@ -797,6 +797,70 @@ def test_oi_opalescence_gives_a_sculpted_creature_its_mana_value_as_a_body(
 
     assert bears.is_creature and bears.has_type("enchantment")
     assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("613.8a", "613.8b", "613.6")
+@pytest.mark.parametrize("order, song_reaches", [
+    (("Animate Artifact", "Titania's Song"), False),
+    (("Titania's Song", "Animate Artifact"), True),
+])
+def test_oi_the_song_and_animate_artifact_are_a_loop_the_older_one_wins(
+    catalog_by_name, set_pool, order, song_reaches,
+):
+    """Titania's Song reaches "each **noncreature** artifact"; Animate Artifact
+    applies "as long as enchanted artifact **isn't a creature**". Each makes
+    the artifact a creature, so each changes whether the other applies: a
+    dependency loop, which CR 613.8b applies in timestamp order. The older one
+    animates the Howling Mine and the younger finds a creature and does
+    nothing.
+
+    The type line is the same either way. What differs is the rest of the
+    Song's sentence — "loses all abilities" — which CR 613.6 applies in layer 6
+    to the set of objects layer 4 found: the Mine keeps its ability under an
+    Animate Artifact that was there first, and loses it under a Song that was.
+    Both scopes read the printed type line, so the Song always applied."""
+    from engine.global_statics import removes_all_abilities
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    mine = b.enter("Howling Mine")
+    for name in order:
+        b.cast(name, at=mine if name == "Animate Artifact" else None)
+
+    assert _w2g4_types(mine)[0] == ["artifact", "creature"]
+    assert removes_all_abilities(mine) is song_reaches
+    assert ("draws an additional card" in mine.effective_card.oracle_text) is (
+        not song_reaches
+    )
+    # Its mana value either way: both effects set the same body (layer 7b).
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+
+
+@pytest.mark.cr("613.8a", "613.6", "514.2")
+def test_oi_the_song_passes_by_an_artifact_karn_already_animated(
+    catalog_by_name, set_pool,
+):
+    """Karn makes a Howling Mine an artifact creature until end of turn; then
+    Titania's Song arrives. The Song depends on Karn's effect (CR 613.8a) — it
+    is what stops the Mine being a noncreature artifact — so it applies after
+    it and does not reach the Mine, which keeps its ability for the turn. At
+    cleanup Karn's effect ends (CR 514.2) and the Song takes the Mine after
+    all."""
+    from engine.global_statics import removes_all_abilities
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    karn, mine = b.enter("Karn, Silver Golem"), b.enter("Howling Mine")
+    b.activate(karn, 0, at=mine)
+    b.cast("Titania's Song")
+
+    assert _w2g4_types(mine)[0] == ["artifact", "creature"]
+    assert not removes_all_abilities(mine)
+    assert "draws an additional card" in mine.effective_card.oracle_text
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
+
+    b.game.resolve_cleanup_step(0)
+    assert _w2g4_types(mine)[0] == ["artifact", "creature"]
+    assert removes_all_abilities(mine)
+    assert (mine.effective_power, mine.effective_toughness) == (2, 2)
 
 
 # ---------------------------------------------------------------------------

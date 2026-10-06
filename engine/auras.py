@@ -3540,15 +3540,32 @@ def controller_cast_ban(game, seat: int, card) -> str | None:
 def animating_auras(permanent) -> list:
     """Attached Auras that animate *permanent*, honouring "isn't a creature".
 
-    The condition is read from the permanent's **printed** type line rather than
-    its computed one: asking whether it is currently a creature would include
-    the creature type this very effect adds, and the answer would depend on
-    whether it had already been asked.
+    **Whether the host "isn't a creature" is asked as the effect starts to
+    apply** — of CR 613 layer 4's intermediate state, by the board-wide pass
+    (``engine/type_statics.py``), which records its answer on each Aura. That
+    is the only moment the question has one answer: asked of the finished
+    layer it would include the creature type this very effect adds, and asked
+    of the printed type line — which is what this did — it cannot see what
+    some *other* effect has already made the artifact. Under an older
+    Titania's Song the artifact is a creature by the time this Aura applies,
+    so the Aura does nothing (and the Song strips the artifact's abilities);
+    under a younger one the Aura applies first and the Song passes the artifact
+    by. The two depend on each other, which is a loop, and CR 613.8b settles a
+    loop by timestamp. CR 613.6 then keeps the layer-7b half on the set of
+    objects layer 4 found, which is why both collectors read this one answer.
+
+    Where no refresh has decided it — a board built by hand, an Aura read
+    before anything recomputed — the printed type line stands in, as it always
+    did.
     """
-    if "creature" in permanent.card.type_line.lower():
-        return []
-    return [
-        aura
-        for aura in auras_attached_to(permanent)
-        if aura_animates_artifact(aura.effective_card.oracle_text)
-    ]
+    from .type_changes import animates_host
+
+    printed_creature = "creature" in permanent.card.type_line.lower()
+    found = []
+    for aura in auras_attached_to(permanent):
+        if not aura_animates_artifact(aura.effective_card.oracle_text):
+            continue
+        decided = animates_host(aura)
+        if decided if decided is not None else not printed_creature:
+            found.append(aura)
+    return found

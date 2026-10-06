@@ -81,6 +81,15 @@ DERIVED_LOST_SUPERTYPES = "derived_lost_supertypes"
 #: Opalescence).
 STATIC_TYPE_ORDER = "static_type_order"
 
+#: Whether an attached animating Aura currently animates its host ("As long as
+#: enchanted artifact isn't a creature, it's an artifact creature…", Animate
+#: Artifact), recorded **on the Aura** by the layer-4 pass each refresh: True,
+#: False, or absent when no refresh has decided it. The Aura's condition is a
+#: question about the layer's intermediate state — is the host a creature *as
+#: this effect starts to apply* — which only that pass can answer; every later
+#: layer reads the answer it left (CR 613.6).
+ANIMATES_HOST = "animates_host"
+
 #: The :data:`STATIC_TYPE_ORDER` key of a land animator's contribution. One key
 #: rather than one per animator: every animator adds the same card type, and
 #: additions commute, so the earliest place any of them took is the place the
@@ -199,6 +208,7 @@ def clear_derived_type_changes(perm: "Permanent") -> None:
     """
     perm.metadata.pop(DERIVED_LOST_SUPERTYPES, None)
     perm.metadata.pop(STATIC_TYPE_ORDER, None)
+    perm.metadata.pop(ANIMATES_HOST, None)
 
 
 def add_derived_lost_supertype(
@@ -240,6 +250,18 @@ def set_static_type_order(
     )
 
 
+def set_animates_host(aura: "Permanent", animates: bool) -> None:
+    """Record the layer-4 pass's answer for one attached animating Aura."""
+    aura.metadata[ANIMATES_HOST] = bool(animates)
+
+
+def animates_host(aura: "Permanent") -> bool | None:
+    """Whether the layer-4 pass found *aura* animating its host — or None when
+    no refresh has asked (a board built by hand, an Aura attached and read
+    before anything recomputed), which the caller answers some other way."""
+    return aura.metadata.get(ANIMATES_HOST)
+
+
 def static_type_order(perm: "Permanent", key: Any) -> tuple[int, int] | None:
     """The applied-order key the static named *key* took on *perm*, or None
     when no refresh has placed it (a board built by hand)."""
@@ -247,9 +269,11 @@ def static_type_order(perm: "Permanent", key: Any) -> tuple[int, int] | None:
 
 
 __all__ = [
-    "DERIVED_LOST_SUPERTYPES", "GAINED_TYPES", "LAND_ANIMATION_ORDER",
-    "LOST_TYPES", "STATIC_TYPE_ORDER", "add_derived_lost_supertype",
+    "ANIMATES_HOST", "DERIVED_LOST_SUPERTYPES", "GAINED_TYPES",
+    "LAND_ANIMATION_ORDER", "LOST_TYPES", "STATIC_TYPE_ORDER",
+    "add_derived_lost_supertype", "animates_host",
     "clear_derived_type_changes", "derived_lost_supertypes",
     "end_type_changes", "gain_types", "gained_types", "lose_types",
-    "lost_types", "set_static_type_order", "static_type_order",
+    "lost_types", "set_animates_host", "set_static_type_order",
+    "static_type_order",
 ]

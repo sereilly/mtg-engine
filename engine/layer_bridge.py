@@ -882,14 +882,6 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
             timestamp=int(replacement.get("timestamp") or 0),
             label=f"set types ({replacement.get('source', 'effect')})",
         ))
-    # Animate Artifact (CR 613.1d). Derived from the attached Aura, so the
-    # artifact stops being a creature the moment the Aura leaves — where the
-    # card-rebuilding version had to stash the original and restore it.
-    if animating_auras(perm):
-        effects.append(
-            add_types(only, card_types=["creature"], timestamp=0, label="animated artifact")
-        )
-
     # "…it becomes your choice of … a 1/6 **Wall** artifact creature with
     # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is
     # layer 6; its creature type is here, added rather than replacing, and
@@ -1001,6 +993,19 @@ def collect_static_type_effects(perm: Permanent, oid: int) -> list[ContinuousEff
             oid, str(removal["supertype"]),
             timestamp=int(removal.get("timestamp") or 0),
             sequence=int(removal.get("order") or 0),
+        ))
+
+    # Animate Artifact (CR 613.1d): "As long as enchanted artifact isn't a
+    # creature, it's an artifact creature…". Derived from the attached Aura, so
+    # the artifact stops being a creature the moment the Aura leaves — and on
+    # this half of the collector although it is one permanent's, because the
+    # Aura's own condition is a *scope*: whether it applies is decided by the
+    # board pass against the layer's intermediate state (``auras
+    # .animating_auras``), and where, against Titania's Song, by the loop rule.
+    for aura in animating_auras(perm):
+        stamp, order = static_type_order(perm, aura.permanent_id) or (0, 0)
+        effects.append(attached_animation_type_effect(
+            oid, timestamp=stamp, sequence=order,
         ))
 
     # The board-wide statics recorded as **sources** on this permanent
@@ -1120,6 +1125,17 @@ def land_animation_type_effect(
     return add_types(
         scope_only(oid), card_types=["creature"], timestamp=timestamp,
         sequence=sequence, label="animated",
+    )
+
+
+def attached_animation_type_effect(
+    oid: int, *, timestamp: int, sequence: int = 0
+) -> ContinuousEffect:
+    """Layer 4: an attached Aura makes this artifact "an artifact creature"
+    (Animate Artifact) — the creature type, added (CR 205.1b)."""
+    return add_types(
+        scope_only(oid), card_types=["creature"], timestamp=timestamp,
+        sequence=sequence, label="animated artifact",
     )
 
 
@@ -1540,6 +1556,7 @@ def computed_pt(perm: Permanent) -> tuple[int, int]:
 
 
 __all__ = [
+    "attached_animation_type_effect",
     "collect_control_effects", "collect_own_type_effects", "collect_pt_effects",
     "collect_static_type_effects", "computed_controller", "computed_pt",
     "computed_supertypes", "global_static_type_effect",
