@@ -60,6 +60,7 @@ from .targeting import (
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
     _nested_steps,
+    announced_mode_instructions,
     cast_target_slot,
     derive_activation_spec,
     derive_cast_spec,
@@ -505,9 +506,11 @@ def _resolution_rechecks_description(spec: dict) -> bool:
       enumeration here would compare the second role's target against the
       first role's list.
 
-    A **modal** spell is the caller's exclusion rather than this function's:
-    its derived spec is the first mode's whatever mode was chosen, which is a
-    fact about the program and not about the spec.
+    A modal spell is asked like any other, about the spec of **the mode that
+    was chosen** (``_resolving_announcements``). The one modal shape left out
+    is the caller's exclusion rather than this function's — a mode an
+    *opponent* chose (CR 700.2e), whose spec needs a seat only the prompt that
+    asked for its targets held.
     """
     kind = spec.get("kind")
     if kind in (_UNCHECKED_CAST_TARGET_KINDS - {"spell_or_permanent"}):
@@ -668,6 +671,7 @@ def cast_target_obligation(
     card: CardDefinition, program, *,
     optional_cost_payments: dict | None = None,
     x_value: int | None = None,
+    mode_index: int | None = None,
 ) -> dict | None:
     """The spec of the target an instant or sorcery **must** announce as it is
     cast (CR 601.2c), or None when it may be announced naming none.
@@ -694,16 +698,28 @@ def cast_target_obligation(
       graveyard return, a Lace) — obliged, *unless* the slot is a choice the
       spell merely offers (:func:`_inside_an_offer`).
 
-    Not answered for a **modal** spell (its spec is mode 0's whichever mode was
-    chosen; the chosen mode's arm in ``_validate_cast_targets`` judges it) or
-    for the kinds in :data:`_UNOBLIGED_CAST_KINDS`. *optional_cost_payments* is
-    CR 601.2b's answer so far, for CR 702.33g: a kicked-only target is a target
-    only of a spell that was kicked.
+    **A modal spell answers for the mode it was announced with** (CR 601.2b
+    chooses the mode before CR 601.2c chooses the targets): *mode_index* picks
+    the steps through :func:`targeting.announced_mode_instructions`, and a cast
+    naming no mode is the mode-0 cast it resolves as. This function used to
+    answer None for every modal spell — "its spec is mode 0's whichever mode
+    was chosen; the chosen mode's arm in ``_validate_cast_targets`` judges it"
+    — and the arms name eleven instruction kinds, so 18 of the pool's 46
+    mandatory object-targeting modes were castable with no legal target
+    anywhere (Chaos Charm's "1 damage to target creature" on an empty board,
+    Treva's Charm's "exile target attacking creature" outside combat).
+
+    Not answered where **an opponent** chooses the mode (CR 700.2e): the caster
+    names no target as it casts, and ``arm_modal_mode_targets`` asks once the
+    mode is known. Nor for the kinds in :data:`_UNOBLIGED_CAST_KINDS`.
+    *optional_cost_payments* is CR 601.2b's answer so far, for CR 702.33g: a
+    kicked-only target is a target only of a spell that was kicked.
     """
-    if program.modes:
+    if program.modes and program.mode_chooser is not None:
         return None
     slot = cast_target_slot(
-        card, program, optional_cost_payments=optional_cost_payments
+        card, program, optional_cost_payments=optional_cost_payments,
+        mode_index=mode_index,
     )
     if slot is None:
         return None
@@ -714,7 +730,9 @@ def cast_target_obligation(
         return None
     unnamed = _slot_may_name_nobody(instruction, x_value)
     if unnamed is None:
-        if _inside_an_offer(program.instructions, instruction):
+        if _inside_an_offer(
+            announced_mode_instructions(program, mode_index), instruction
+        ):
             return None
         return spec
     return None if unnamed else spec
@@ -741,8 +759,51 @@ def _slot_may_name_nobody(instruction, x_value: int | None) -> bool | None:
     return False
 
 
+def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> int | None:
+    """How many targets the slot *instruction* carries **must** name (CR
+    601.2c), or None when it prints no exact number.
+
+    "Exile **two** target artifacts" (Dust to Dust) — two, not "up to two".
+    "Tap **X** target creatures" (Winter Blast) — X, once X is a number: CR
+    601.2b announces it first, so *x_value* None means "not announced yet" and
+    answers None rather than guessing a count the caster never named.
+
+    The grammar has told "exactly" from "up to" since it parsed them and the
+    spec carries it to the picker (``exact_targets``), where the browser's
+    confirm has always waited for the printed number. The engine's own gate
+    did not: a count was a ceiling the announcement could fall short of, so
+    "two target creatures" was castable naming one — 15 of 15 measured — and
+    Malicious Advice at X=3 naming two tapped two and charged 3 life.
+
+    None for the shapes another gate counts: a **roles** list
+    (``_validate_cast_targets`` counts roles), a **cost-sized** list
+    (``cast_target_refusal`` counts payments) and a **divided** one
+    (``division_refusal``). And None for a count of one — the bare word
+    "target" — whose unnamed cast is this engine's standing headless default
+    (the handler picks), which is a different and far larger question.
+    """
+    if not spec or spec_roles(spec) or spec.get("cost_targets"):
+        return None
+    if spec.get("kind") == "divided" or spec.get("division"):
+        return None
+    described = (getattr(instruction, "payload", None) or {}).get("targets")
+    if not isinstance(described, dict) or described.get("quantifier") != "exactly":
+        return None
+    count = described.get("count")
+    if isinstance(count, bool):
+        return None
+    if isinstance(count, int):
+        return count if count >= 2 else None
+    if count == "x":
+        if not isinstance(x_value, int) or isinstance(x_value, bool):
+            return None
+        return max(0, x_value)
+    return None
+
+
 def cast_may_name_no_target(
     card: CardDefinition, program, *, x_value: int | None = None,
+    mode_index: int | None = None,
 ) -> bool:
     """Whether an instant or sorcery's target may legally be left unnamed —
     the positive half of :func:`cast_target_obligation`, for the per-kind arms
@@ -758,12 +819,13 @@ def cast_may_name_no_target(
     them every turn and was refused every turn.
 
     True only on printed evidence (:func:`_slot_may_name_nobody`); a slot with
-    no quantifier, a modal spell and a spell with no target all answer False,
-    which leaves each arm exactly as strict as it was.
+    no quantifier and a spell with no target both answer False, which leaves
+    each arm exactly as strict as it was. A modal spell is asked about the
+    mode it was announced with (*mode_index*): "Return **up to two** target
+    creatures to their owners' hands" (Read the Tides' second mode) answered
+    False here for being modal, and was uncastable at a board with no creature.
     """
-    if program.modes:
-        return False
-    slot = cast_target_slot(card, program)
+    slot = cast_target_slot(card, program, mode_index=mode_index)
     if slot is None:
         return False
     return _slot_may_name_nobody(slot[1], x_value) is True
@@ -991,11 +1053,23 @@ class LegalityMixin:
         from_zone: str = "hand",
         spell_hand_index: int | None = None,
         optional_cost_payments: dict[str, int] | None = None,
+        mode_index: int | None = None,
     ) -> dict:
         """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
         the target kind plus every legal target, enumerated and gated through the
         engine's own cast-target validation so the UI offers exactly what would
         resolve.
+
+        ``mode_index`` asks for **one mode** of a "Choose one —" spell: the
+        whole spec that mode would have were it a spell of its own — kind,
+        narrowing flags, roles, the several-target count, the chosen-source
+        list — enumerated through the same per-candidate probe the cast gate
+        runs for that mode (``_enumerate_targets(mode_index=)``). Without it a
+        modal card answers ``"modal"``, as it always has: there is a choice to
+        make before any target. ``web/serialization._serialize_modes`` sends
+        one of these per mode, which replaced a per-kind table of its own whose
+        fall-through answered "player" — so what the browser offers for a mode
+        and what :meth:`cast_target_refusal` accepts for it are one list.
 
         ``from_zone`` is the zone the cast would leave, because a printed
         additional cost may name one (Demonic Embrace's graveyard price) and the
@@ -1021,7 +1095,7 @@ class LegalityMixin:
         # own target spec (filled in by the web layer per mode), so report "modal"
         # and let the UI run its mode-choice flow rather than enumerating here.
         program = compile_card_oracle(card)
-        if len(program.modes) >= 2:
+        if len(program.modes) >= 2 and mode_index is None:
             return {"kind": "modal", "requires_target": False, "valid_targets": []}
         # The compiled program answers in full — the kind *and* the flags that
         # narrow the picker (own_only, stack filters, sacrifice_cost, ...).
@@ -1040,6 +1114,7 @@ class LegalityMixin:
             # as the unkicked cast it so far is -- Benalish Emissary asks for no
             # land -- and the offer prompt re-asks with the kicker taken.
             optional_cost_payments=optional_cost_payments or {},
+            mode_index=mode_index,
         ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
         # CR 107.3c: a spell that defines its own X takes the announcement away
@@ -1068,7 +1143,7 @@ class LegalityMixin:
         # becomes an ordinary ``max_targets`` here. ``x_targets`` is dropped in
         # the same breath: that flag means "however many the announced X pays
         # for", which is a question with an answer now.
-        announced = self.announced_cast_x(caster_index, card)
+        announced = self.announced_cast_x(caster_index, card, mode_index=mode_index)
         if announced is not None:
             spec["defined_x"] = announced
             spec.pop("x_targets", None)
@@ -1172,6 +1247,8 @@ class LegalityMixin:
             caster_index, card, spec, for_cast=True,
             # The same answer the spec above was derived under (CR 702.33g).
             optional_cost_payments=optional_cost_payments or {},
+            # …and the same mode (CR 601.2b).
+            mode_index=mode_index,
         )
         # Demonic Embrace, Goblin Grenade, Soul Exchange: a spell with a target
         # *and* a choosable cost carries two pickers, each enumerating its own
@@ -1800,11 +1877,91 @@ class LegalityMixin:
         return True
 
     def enumerate_targets_for_kind(self, caster_index: int, card: CardDefinition, kind: str, **flags) -> list[dict]:
-        """Enumerate legal targets for a pre-classified target ``kind`` (used by the
-        web layer to fill in valid targets for each mode of a modal spell, whose
-        kind is derived from the chosen mode's instruction rather than card text)."""
+        """Enumerate legal targets for a pre-classified target ``kind``.
+
+        A bare enumeration over a spec the *caller* wrote, for a caller that
+        has no card-level derivation to ask. It was how the web layer filled in
+        a modal mode's targets, from a kind table of its own; a mode's list is
+        now ``cast_target_spec(mode_index=)``, the cast gate's own, and nothing
+        in ``web/`` calls this any more."""
         spec = {"kind": kind, **flags}
         return self._enumerate_targets(caster_index, card, spec, for_cast=False)
+
+    def mode_announcement_refusal(
+        self, caster_index: int, card: CardDefinition, mode_index: int, *,
+        optional_cost_payments: dict | None = None,
+        x_value: int | None = None,
+    ) -> str | None:
+        """Why mode *mode_index* of a modal spell has **no legal announcement
+        at all** right now (CR 601.2c), or None when one exists.
+
+        "Could this mode be cast, if the caster picked well?" — the question
+        with nothing named, asked by the three callers that pick a mode before
+        any target: the web's castable highlight, the mode list the client is
+        sent (a mode that cannot be announced is not offered), and the AI's
+        mode chooser. The same gates ``_cast_onto_stack`` runs for a named
+        announcement, with nothing named, so a mode this passes is one some
+        cast of it will not be refused for want of a target:
+
+        * a **roles** mode ("destroy target artifact and target enchantment",
+          Hull Breach) needs a whole chain — the picker's own walk;
+        * every other mode needs its mandatory target to exist
+          (:meth:`no_legal_cast_target_refusal`, the per-kind arm's "nothing
+          named" half, and :meth:`cast_stack_target_refusal` for a target on
+          the stack).
+        """
+        program = compile_card_oracle(card)
+        if not program.modes or not 0 <= mode_index < len(program.modes):
+            return f"{card.name}: no mode {mode_index!r}"
+        spec = derive_cast_spec(
+            card, program, optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
+        )
+        if spec_roles(spec):
+            if self.targeting_bans:
+                return f"no valid target for {card.name}"
+            if not self._role_target_walk(caster_index, card, spec, (), for_cast=True):
+                return f"no valid target for {card.name}"
+            return None
+        ok, reason = self._validate_cast_targets(
+            card, caster_index, None, mode_index=mode_index, x_value=x_value,
+            optional_cost_payments=optional_cost_payments,
+        )
+        if not ok:
+            return reason
+        unaimed = self.no_legal_cast_target_refusal(
+            caster_index, card, optional_cost_payments=optional_cost_payments,
+            x_value=x_value, mode_index=mode_index,
+        )
+        if unaimed is not None:
+            return unaimed
+        return self.cast_stack_target_refusal(
+            caster_index, card, None, mode_index=mode_index,
+        )
+
+    def announceable_modes(
+        self, caster_index: int, card: CardDefinition, *,
+        optional_cost_payments: dict | None = None,
+        x_value: int | None = None,
+    ) -> list[int]:
+        """The supported modes of a modal spell that have a legal announcement
+        right now, in printed order — every mode
+        :meth:`mode_announcement_refusal` does not refuse.
+
+        Empty for a card that is not modal, and for one whose mode **an
+        opponent** chooses (CR 700.2e): its caster picks no mode, so "which
+        mode could I cast" is not a question it is asked.
+        """
+        program = compile_card_oracle(card)
+        if not program.modes or program.mode_chooser is not None:
+            return []
+        return [
+            index for index, mode in enumerate(program.modes)
+            if mode.supported and self.mode_announcement_refusal(
+                caster_index, card, index,
+                optional_cost_payments=optional_cost_payments, x_value=x_value,
+            ) is None
+        ]
 
     def _size_activation_x_targets(
         self, controller_index: int, spec: dict, ability, source_permanent
@@ -2443,6 +2600,7 @@ class LegalityMixin:
     def _described_cast_target_slots(
         self, caster_index: int, card: CardDefinition, spec: dict,
         *, optional_cost_payments: dict | None = None,
+        mode_index: int | None = None,
     ) -> set[tuple[int, int]]:
         """Every battlefield slot *card*'s printed target description admits
         **now**, as ``(seat, index)``.
@@ -2461,10 +2619,14 @@ class LegalityMixin:
         *optional_cost_payments* is the announcement *spec* was derived under
         (CR 702.33g), handed on so the per-candidate probe judges each slot
         against that same spec rather than against the card's every arm.
+        *mode_index* is the mode it was derived under, handed on for the same
+        reason: the probe's per-kind arm has to read the chosen mode's
+        instruction, not the first one's.
         """
         valid = self._enumerate_targets(
             caster_index, card, spec, for_cast=True,
             optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
         )
         return {
             (t["seat"], t["index"]) for t in valid
@@ -2475,6 +2637,7 @@ class LegalityMixin:
         self, caster_index: int, card: CardDefinition, *,
         optional_cost_payments: dict | None = None,
         x_value: int | None = None,
+        mode_index: int | None = None,
     ) -> str | None:
         """CR 601.2c's first half: a spell that must announce a target cannot
         be cast while **no legal target exists**. Returns the refusal, or None.
@@ -2505,8 +2668,14 @@ class LegalityMixin:
         * a standing **targeting ban** (Peace Talks) — ``targeting_ban_refusal``
           already refused, and under a ban the enumeration is empty for a
           reason that is not this rule's;
-        * everything :func:`cast_target_obligation` declines: modal spells,
-          roles, divided spells, and every announcement that may name nobody.
+        * everything :func:`cast_target_obligation` declines: a mode an
+          opponent chooses, roles, divided spells, and every announcement that
+          may name nobody.
+
+        **A modal spell is asked about its announced mode** (*mode_index*; a
+        cast naming none is the mode-0 cast it resolves as), so "the chosen
+        mode has no legal target" is this refusal for a Charm exactly as it is
+        for the one-sentence spell printing the same words.
 
         Whatever the caller named is not consulted. With no legal target in
         existence a named one is illegal by construction, and
@@ -2519,25 +2688,67 @@ class LegalityMixin:
         spec = cast_target_obligation(
             card, compile_card_oracle(card),
             optional_cost_payments=optional_cost_payments, x_value=x_value,
+            mode_index=mode_index,
         )
         if spec is None or spec.get("kind") == "stack":
             return None
-        if self._enumerate_targets(
+        offered = self._enumerate_targets(
             caster_index, card, dict(spec), for_cast=True,
             optional_cost_payments=optional_cost_payments,
-        ):
-            return None
-        return f"no valid target for {card.name}"
+            mode_index=mode_index,
+        )
+        if not offered:
+            return f"no valid target for {card.name}"
+        # CR 601.2c: "two target creatures" needs **two** to exist, not one. A
+        # printed count names that many different objects (CR 115.3,
+        # ``distinct_targets``), so with fewer legal ones no announcement is
+        # possible and the spell cannot be cast — the same refusal as above
+        # with a bigger number, asked through the same list.
+        #
+        # The **printed** number only. "X target creatures" is not held to an
+        # announced X here: CR 601.2b settles X first — "X can't be greater
+        # than the number of snow lands you control" (Winter's Chill) is an
+        # illegal X whatever is on the table — and this method runs above that
+        # check, so a shortfall against X is `cast_target_count_refusal`'s,
+        # asked below the X resolution where the number is final.
+        slot = cast_target_slot(
+            card, compile_card_oracle(card),
+            optional_cost_payments=optional_cost_payments, mode_index=mode_index,
+        )
+        required = (
+            exact_target_count(slot[0], slot[1], None) if slot is not None else None
+        )
+        if required and spec.get("distinct_targets") and len(offered) < required:
+            return (
+                f"{card.name} needs {required} targets and only "
+                f"{len(offered)} can be chosen"
+            )
+        return None
 
     def cast_target_refusal(
         self, caster_index: int, card: CardDefinition, *,
         target_player_index=None, target_permanent_index=None,
         target_permanent_ids=None, from_zone: str = "hand",
         optional_cost_payments: dict | None = None,
+        mode_index: int | None = None,
     ) -> str | None:
         """CR 601.2c: a **named** target — a battlefield permanent, or a slot
         in a graveyard — must be a legal one, checked before any cost is paid.
         Returns the refusal, or None.
+
+        **For a modal spell, legal for the mode it was announced with**
+        (*mode_index*, CR 601.2b before CR 601.2c). This gate used to return
+        None for every modal spell, on the ground that its derived spec was
+        mode 0's; the spec is now derived per mode
+        (``targeting.derive_cast_spec(mode_index=)``), which is the same
+        derivation the client's mode picker is sent and the same one the
+        resolution re-asks. Left to the per-kind arms, a mode named **by id**
+        was checked by nobody — the arms read the index — so "Destroy target
+        artifact" (Hull Breach) accepted a creature, and a mode whose kind has
+        no arm (damage, a keyword grant, an exile, phasing) accepted anything
+        by either spelling: 1,066 of 1,516 census casts naming an illegal
+        permanent for a mode were accepted, and 220 of those then acted on a
+        permanent nobody named.
 
         The cast-side twin of :meth:`activation_target_refusal`, and it exists
         for the same reason that one replaced a per-kind if-chain in
@@ -2572,17 +2783,16 @@ class LegalityMixin:
         announcement, and CR 601.2c makes that an uncastable spell rather than
         an ineffective one: the refusal lands before any mana is spent.
 
-        That is the engine's only enforced target **count**. Everywhere else a
-        printed count is a maximum the announcement may fall short of — there is
-        no ``min_targets`` in this engine, so "one or more target creatures"
-        (Heaven's Gate and its four colour siblings) and "two target creatures"
-        may still be cast naming fewer *while a legal target exists*; the
-        handler then picks or does less. What is enforced for them is the
-        floor of one: with no legal target anywhere the cast is refused
-        (:meth:`no_legal_cast_target_refusal`). Widening the count to those is
-        a separate change with a separate blast radius; what makes the
-        cost-sized case answerable *now* is that its number comes from an
-        announcement the same cast already made.
+        That was the engine's only enforced target count, and this docstring
+        said so: "there is no ``min_targets`` in this engine". A **printed**
+        exact count ("two target creatures") and an **announced X** ("X target
+        creatures") are counted now too, by :meth:`cast_target_count_refusal`
+        — a method of its own because X is not a number until below the X
+        resolution, which is later in the cast than this gate runs. What is
+        still a ceiling the announcement may fall short of is the count that
+        prints one: "up to N", "any number of", and "one or more target
+        creatures" (Heaven's Gate and its four colour siblings), whose floor of
+        one is :meth:`no_legal_cast_target_refusal`.
         """
         if card.primary_type not in ("instant", "sorcery"):
             # **A permanent spell does not target.** ``derive_cast_spec`` reads
@@ -2595,12 +2805,11 @@ class LegalityMixin:
             # target has its own arm in ``_validate_cast_targets``.
             return None
         program = compile_card_oracle(card)
-        if program.modes:
-            # A modal spell's spec is the *first* mode's, and the caller chose
-            # another: Healing Salve's mode 0 targets a player and its mode 1 a
-            # creature, so gating mode 1 against mode 0's enumeration refuses a
-            # legal cast. The chosen mode's own targets are checked by the arms
-            # in ``_validate_cast_targets``, which is handed the mode index.
+        if program.modes and program.mode_chooser is not None:
+            # "**An opponent** chooses one —" (CR 700.2e): the caster names no
+            # target as it casts, because it does not yet know which mode it
+            # would be naming one for. ``arm_modal_mode_targets`` asks after
+            # the answer, over this same enumeration.
             return None
         # Under the announcement where there is one (CR 702.33g): a target
         # printed only in a kicked half belongs to a kicked cast alone, so the
@@ -2609,9 +2818,15 @@ class LegalityMixin:
         # which the branch below hands to ``_validate_cast_targets`` — and the
         # one target of an *unkicked* Falling Timber was then checked by
         # nobody: it could be aimed at a land.
+        #
+        # …and under the **mode** (CR 601.2b): Healing Salve's mode 0 targets a
+        # player and its mode 1 a creature, so a modal spell judged against
+        # mode 0's enumeration refuses a legal cast — which is why this gate
+        # declined modal spells until the spec could be asked per mode.
         spec = derive_cast_spec(
             card, program, from_zone=from_zone,
             optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
         )
         if spec is None or spec.get("kind") in _UNCHECKED_CAST_TARGET_KINDS:
             return None
@@ -2665,7 +2880,7 @@ class LegalityMixin:
         # cards as they like: the resolution clamps the list it *acts* on to X
         # and nothing ever says the announcement was illegal, which is an
         # ability that works more often than the card allows.
-        announced = self.announced_cast_x(caster_index, card)
+        announced = self.announced_cast_x(caster_index, card, mode_index=mode_index)
         if announced is not None:
             named_count = len(named_ids) if named_ids else len(indices)
             if named_count > announced:
@@ -2698,7 +2913,9 @@ class LegalityMixin:
             )
             if repeated is not None:
                 return repeated
-            valid = self._enumerate_targets(caster_index, card, spec, for_cast=True)
+            valid = self._enumerate_targets(
+                caster_index, card, spec, for_cast=True, mode_index=mode_index,
+            )
             legal_slots = {
                 (t["seat"], t["index"]) for t in valid
                 if t.get("kind") == "graveyard" and t.get("index") is not None
@@ -2720,6 +2937,7 @@ class LegalityMixin:
         legal = self._described_cast_target_slots(
             caster_index, card, spec,
             optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
         )
         refused = f"no valid target for {card.name}"
         chosen: list = []
@@ -2757,6 +2975,66 @@ class LegalityMixin:
             if not any((seat, index) in legal for seat in seats):
                 return refused
         return None
+
+    def cast_target_count_refusal(
+        self, caster_index: int, card: CardDefinition, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None, x_value: int | None = None,
+        optional_cost_payments: dict | None = None,
+        mode_index: int | None = None,
+    ) -> str | None:
+        """CR 601.2c: a spell printing an **exact** number of targets names
+        exactly that many. Returns the refusal, or None.
+
+        "The player announces their choice of an appropriate object or player
+        for **each** target the spell requires." A printed "two" requires two;
+        "up to two" and "any number of" make fewer legal, and those are not
+        this gate's (:func:`exact_target_count` answers None for them). The
+        count is the slot's own, for the mode announced (*mode_index*) and the
+        kicker paid (*optional_cost_payments*, CR 702.33g).
+
+        Asked **after X is settled** — "Tap X target creatures" is counted
+        against the X the caster announced (CR 601.2b precedes CR 601.2c), so
+        the cast path calls this below the X resolution rather than beside the
+        other target gates, and hands it None for an X the engine merely
+        inferred from the pool: a number the caster never said is not a number
+        to hold their targets to.
+
+        A cast naming **nothing** is counted like any other. That is the
+        difference from a one-target spell, whose unnamed cast is the
+        engine's headless default: "two target creatures" naming none has no
+        default that is a legal announcement, and the several-target handlers
+        have no board scan to fall into — so it resolved doing nothing, with
+        its costs paid.
+        """
+        if card.primary_type not in ("instant", "sorcery"):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes and program.mode_chooser is not None:
+            return None
+        slot = cast_target_slot(
+            card, program, optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
+        )
+        if slot is None:
+            return None
+        required = exact_target_count(slot[0], slot[1], x_value)
+        if required is None:
+            return None
+        named_ids = [pid for pid in (target_permanent_ids or []) if isinstance(pid, int)]
+        indices = (
+            [i for i in target_permanent_index if isinstance(i, int)]
+            if isinstance(target_permanent_index, list)
+            else ([target_permanent_index] if isinstance(target_permanent_index, int) else [])
+        )
+        named = len(named_ids) if named_ids else len(indices)
+        if named == required:
+            return None
+        return (
+            f"{card.name} needs {required} target"
+            + ("s" if required != 1 else "")
+            + f", not {named}"
+        )
 
     def _offered_stack_targets(
         self, caster_index: int, card: CardDefinition, spec: dict,
@@ -2796,28 +3074,33 @@ class LegalityMixin:
 
     def _stack_target_spec(
         self, card: CardDefinition, *, from_zone: str = "hand",
+        mode_index: int | None = None,
     ) -> dict | None:
         """*card*'s cast spec where :meth:`_offered_stack_targets` is the
         question to ask of it, else None.
 
-        Instants and sorceries, non-modal, for :meth:`cast_target_refusal`'s
-        reasons: a permanent spell's derived spec is its trigger's, and a modal
-        spell's is mode 0's — Blue Elemental Blast cast in its *destroy* mode
-        would be asked for a red spell.
+        Instants and sorceries, for :meth:`cast_target_refusal`'s reason: a
+        permanent spell's derived spec is its trigger's. A modal spell answers
+        for the mode it was announced with (*mode_index*) — Blue Elemental
+        Blast cast in its *destroy* mode is not asked for a red spell, and
+        Dromar's Charm cast in its *counter* mode is asked for a spell, where
+        both used to be declined for being modal at all.
         """
         if card.primary_type not in ("instant", "sorcery"):
             return None
         program = compile_card_oracle(card)
-        if program.modes:
+        if program.modes and program.mode_chooser is not None:
             return None
-        spec = derive_cast_spec(card, program, from_zone=from_zone)
+        spec = derive_cast_spec(
+            card, program, from_zone=from_zone, mode_index=mode_index,
+        )
         if spec is None or spec.get("kind") not in _STACK_TARGET_KINDS:
             return None
         return spec
 
     def cast_stack_target_refusal(
         self, caster_index: int, card: CardDefinition, target_stack_item,
-        *, from_zone: str = "hand",
+        *, from_zone: str = "hand", mode_index: int | None = None,
     ) -> str | None:
         """CR 601.2c for a spell whose target is **an object on the stack**:
         the one named must be one the printed target phrase admits, and with
@@ -2868,7 +3151,9 @@ class LegalityMixin:
         "is there any legal target at all" across both zones is the bare-cast
         question :meth:`cast_target_refusal` owns.
         """
-        spec = self._stack_target_spec(card, from_zone=from_zone)
+        spec = self._stack_target_spec(
+            card, from_zone=from_zone, mode_index=mode_index,
+        )
         if spec is None:
             return None
         refused = f"no valid target for {card.name}"
@@ -2883,6 +3168,7 @@ class LegalityMixin:
 
     def default_stack_target(
         self, caster_index: int, card: CardDefinition, *, from_zone: str = "hand",
+        mode_index: int | None = None,
     ) -> tuple[bool, object]:
         """``(answered, item)``: the object a **bare** cast of *card* is taken
         to name — the topmost one its target phrase admits.
@@ -2898,9 +3184,23 @@ class LegalityMixin:
         of the phrase: a regex over the oracle text that knew the colour word
         and nothing else, so a bare Remove Soul above a creature spell and an
         instant was aimed at whichever was on top.
+
+        **A modal instant or sorcery is always answered** (*mode_index*; none
+        named is mode 0). The mode decides whether the stack is where its
+        target is, so a mode that names nothing there — Dromar's Charm giving
+        -2/-2 — is answered "nothing", and the caller's text fallback must not
+        hand it the topmost spell for printing "counter target spell" in a
+        mode nobody chose: a stack target the object never announced is one
+        CR 608.2b would then count as a still-legal target.
         """
-        spec = self._stack_target_spec(card, from_zone=from_zone)
+        spec = self._stack_target_spec(
+            card, from_zone=from_zone, mode_index=mode_index,
+        )
         if spec is None or spec.get("kind") != "stack":
+            if card.primary_type in ("instant", "sorcery"):
+                program = compile_card_oracle(card)
+                if program.modes and program.mode_chooser is None:
+                    return True, None
             return False, None
         offered = self._offered_stack_targets(caster_index, card, spec)
         return True, (offered[-1] if offered else None)
@@ -3015,12 +3315,76 @@ class LegalityMixin:
             # a decision for the round that can verify it.
             return None
         program = compile_card_oracle(card)
-        spec = derive_cast_spec(card, program)
-        if spec is None or spec.get("kind") in _UNFIZZLABLE_TARGET_KINDS:
-            # Either the spell does not target at all — a creature spell whose
-            # caller passed a stray index still gets an id stamped, and
-            # countering it would be inventing a target the card never printed
-            # — or its target may be a player, above.
+        legality: list[bool] = []
+        for spec, holder, mode_index in self._resolving_announcements(item, program):
+            verdict = self._announcement_target_legality(
+                item, program, spec, holder, mode_index
+            )
+            if verdict is None:
+                return None
+            legality.extend(verdict)
+        if not legality or any(legality):
+            return None
+        return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
+
+    def _resolving_announcements(self, item, program) -> list[tuple]:
+        """``(spec, holder, mode_index)`` for every announcement the spell
+        *item* made: one for an ordinary spell, one **per chosen mode** for a
+        modal one.
+
+        *holder* is where that announcement's targets are recorded — the item
+        itself, or the ``ChosenMode`` a "choose one or more" cast named them on
+        (both carry ``target_permanent_id`` and ``target_stack_item`` under the
+        same names, which is what lets one loop read either). *spec* is derived
+        for that mode through ``targeting.derive_cast_spec(mode_index=)``, the
+        derivation the announcement itself was gated by, so CR 601.2c and
+        CR 608.2b stay one predicate for a Charm as they are for a Terror.
+
+        A cast that named no mode resolves mode 0
+        (``Game._select_executable_instruction``), and its spec is mode 0's by
+        the same rule.
+        """
+        card = item.card
+        if not program.modes:
+            return [(derive_cast_spec(card, program), item, None)]
+        chosen = tuple(getattr(item, "chosen_modes", ()) or ())
+        if chosen:
+            return [
+                (derive_cast_spec(card, program, mode_index=mode.index), mode, mode.index)
+                for mode in chosen
+            ]
+        mode_index = getattr(item, "chosen_mode_index", None)
+        return [
+            (derive_cast_spec(card, program, mode_index=mode_index), item, mode_index)
+        ]
+
+    def _announcement_target_legality(
+        self, item, program, spec, holder, mode_index
+    ) -> "list[bool] | None":
+        """Whether each target one announcement of *item* recorded is still
+        legal (CR 608.2b) — or None when "every target" cannot be answered for
+        the whole object, and it must simply resolve.
+
+        The body :meth:`illegal_targets_refusal` had, asked once per
+        announcement so a modal spell is judged against **the mode that was
+        chosen**. It was judged against mode 0's spec and then excluded from
+        the description re-check altogether ("Active Volcano's 'return target
+        Island' re-asked as 'target blue permanent' countered every Island
+        bounce"); with the spec derived per mode the exclusion has nothing left
+        to protect, and a Crosis's Charm whose target was turned black in
+        response is countered by the rule instead of falling to its handler.
+        """
+        card = item.card
+        if spec is None or spec.get("kind") in ("none", "modal", "hand_card"):
+            # This announcement does not target at all — a creature spell whose
+            # caller passed a stray index still gets an id stamped, a mode that
+            # only draws names nobody — and countering the object on its
+            # account would be inventing a target the card never printed.
+            return []
+        if spec.get("kind") in _UNFIZZLABLE_TARGET_KINDS:
+            # …or its target may be a player (see the caller's docstring): the
+            # object has a target this loop cannot read, so "every target is
+            # illegal" has no answer.
             return None
         if spec_is_a_cost(spec):
             # …and the second spelling of "does not target at all": a spell
@@ -3036,7 +3400,7 @@ class LegalityMixin:
             # printed: 15 of 15 in the pool, Diabolic Intent in a simulated
             # game. A payment is not a target (CR 601.2b vs 601.2c), which is
             # what a cost flag at the top of a spec says.
-            return None
+            return []
         if any(
             role.get("kind") in _UNFIZZLABLE_TARGET_KINDS
             for role in spec_roles(spec)
@@ -3070,15 +3434,17 @@ class LegalityMixin:
         # Computed lazily, once per resolution, only for a target that survived
         # the two cheaper tests.
         #
-        # **Not for a modal spell**, for ``cast_target_refusal``'s reason: the
-        # derived spec is the *first* mode's, and the caster chose another —
-        # Active Volcano's "return target Island" re-asked as "target blue
-        # permanent" countered every Island bounce. The chosen mode's target
-        # was checked by its own arm at announcement; re-asking it here needs
-        # the chosen mode's spec, which is a change of its own.
-        described = _resolution_rechecks_description(spec) and not program.modes
+        # **For a modal spell, the chosen mode's description** (*mode_index*).
+        # Not where **an opponent** chose the mode (CR 700.2e, Fatal Lore): its
+        # targets were named after the choice, against a spec carrying the
+        # chooser's seat ("…creatures **that player** controls") that only the
+        # prompt which asked held — re-asked here without that seat the
+        # enumeration offers nothing, and every such target would read illegal.
+        described = _resolution_rechecks_description(spec) and not (
+            program.modes and program.mode_chooser is not None
+        )
         offered: set[tuple[int, int]] | None = None
-        ids = item.target_permanent_id
+        ids = getattr(holder, "target_permanent_id", None)
         for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
             if not isinstance(permanent_id, int):
                 continue
@@ -3096,14 +3462,17 @@ class LegalityMixin:
             if legal and described:
                 if offered is None:
                     offered = self._described_cast_target_slots(
-                        item.caster_index, card, spec
+                        item.caster_index, card, spec, mode_index=mode_index,
                     )
                 legal = (
                     self.controller_index_of(target),
                     self.battlefield_index_of(target),
                 ) in offered
             legality.append(legal)
-        stamps = item.target_graveyard_card
+        # A graveyard stamp is recorded on the item alone — a "choose one or
+        # more" mode carries no such field — so it is read for the item's own
+        # announcement and for nothing else.
+        stamps = item.target_graveyard_card if holder is item else None
         for stamp in (stamps if isinstance(stamps, list) else [stamps]):
             if stamp is None:
                 continue
@@ -3112,11 +3481,19 @@ class LegalityMixin:
             # docstring above. While a copy survives, `graveyard_index_of`
             # answers a slot (clamping where it must) and the target is legal.
             legality.append(self.graveyard_index_of(stamp) is not None)
-        if item.target_stack_item is not None:
+        stack_target = getattr(holder, "target_stack_item", None)
+        if stack_target is not None and (
+            not program.modes or spec.get("kind") in _STACK_TARGET_KINDS
+        ):
             # A countered or already-resolved spell has left the zone it was
             # targeted in, which is CR 608.2b's first sentence.
-            still_there = any(obj is item.target_stack_item for obj in self.stack)
-            if still_there and not program.modes:
+            #
+            # **Of a modal spell, only where the chosen mode's target is on the
+            # stack.** A stack object recorded beside a mode that names a
+            # creature is not something that mode announced, and counting it
+            # would keep a spell whose one real target is gone "partly legal".
+            still_there = any(obj is stack_target for obj in self.stack)
+            if still_there:
                 # …and its second: "that targets a land you control" stops
                 # being true when the land leaves or the object is re-aimed
                 # (Teferi's Response), "red" when the spell is recoloured in
@@ -3132,13 +3509,10 @@ class LegalityMixin:
                 )
                 if admitted is not None:
                     still_there = any(
-                        obj is item.target_stack_item for obj in admitted
+                        obj is stack_target for obj in admitted
                     )
             legality.append(still_there)
-
-        if not legality or any(legality):
-            return None
-        return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
+        return legality
 
     def stale_comparison_refusal(self, item) -> str | None:
         """CR 608.2b for **a printed comparison between two seats**, and for
@@ -3223,6 +3597,13 @@ class LegalityMixin:
         # different spec for a kicked cast than for an unkicked one. None reads
         # every arm, which is what the probe did before a card printed one.
         optional_cost_payments: dict | None = None,
+        # CR 601.2b's other answer, for the same probe: the mode a modal spell
+        # was announced with. ``_validate_cast_targets`` reads the chosen
+        # mode's instruction for its per-kind arm, so a probe that named none
+        # judged every candidate for mode *n* against mode 0's sentence — which
+        # is why the web layer enumerated a mode's targets through a second
+        # path (``for_cast=False``) that skipped the arms altogether.
+        mode_index: int | None = None,
     ) -> list[dict]:
         kind = spec["kind"]
         if kind in ("none", "modal"):
@@ -3310,6 +3691,7 @@ class LegalityMixin:
                 caster_index, card, {**spec, "kind": spec.get("permanent_kind", "permanent")},
                 for_cast=for_cast, ability_instruction=ability_instruction,
                 ability_source=ability_source, triggered=triggered,
+                mode_index=mode_index,
             )
             return perms + self._enumerate_stack_targets(caster_index, card, spec)
 
@@ -3542,6 +3924,7 @@ class LegalityMixin:
                             card, caster_index,
                             target_player_index=seat, target_permanent_index=idx,
                             optional_cost_payments=optional_cost_payments,
+                            mode_index=mode_index,
                         )
                         if not ok:
                             continue

@@ -1,9 +1,11 @@
 """Every target kind the backend can name is a kind the browser can collect.
 
-Two functions on the server decide what a cast asks the player for, and they
-are *different* functions: ``engine.targeting.derive_cast_spec`` answers for a
-card, and ``web.serialization._mode_target_kind`` answers for one mode of a
-modal spell. The browser has one table for both
+One function on the server decides what a cast asks the player for —
+``engine.targeting.derive_cast_spec`` — asked about a card, and (through
+``web.serialization.mode_target_kind``) about one mode of a modal spell. It was
+two: a mode's kind came from a per-instruction-kind table in the web layer,
+whose fall-through answered "player", until PLS W2G2 pointed the mode at the
+card-level derivation. The browser has one table for both
 (``startCastPromptForKind`` in ``web/static/app.js``), and a kind missing from
 it is not a missing feature — it is a cast sent with **no target at all**,
 which the engine then aims at whatever its fallback points to. That is how
@@ -26,11 +28,10 @@ import pytest
 
 from engine.faces import compilation_units
 from engine.card_loader import load_cards, manifest_set_paths
-from engine.legality import targeting_instruction
 from engine.oracle import compile_card_oracle
 from engine.targeting import derive_cast_spec
 from tests.helpers import app_js_function_body
-from web.serialization import _mode_target_kind
+from web.serialization import mode_target_kind
 
 APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").read_text(
     encoding="utf-8"
@@ -82,11 +83,10 @@ def _mode_kinds() -> frozenset[str]:
         program = compile_card_oracle(card)
         if len(program.modes) < 2:
             continue
-        for mode in program.modes:
+        for index, mode in enumerate(program.modes):
             if not mode.supported:
                 continue
-            instruction = targeting_instruction(mode.instruction) or mode.instruction
-            found.add(_mode_target_kind(instruction))
+            found.add(mode_target_kind(card, index))
     return frozenset(found)
 
 
@@ -108,11 +108,11 @@ def test_every_cast_spec_kind_has_a_prompt():
 
 
 def test_every_modal_mode_kind_has_a_prompt():
-    """The half that has no other guard: a mode's kind comes from
-    ``_mode_target_kind``, whose own fall-through answers "player" for an
-    instruction it does not recognize, so a kind it *does* recognize and the
-    client does not is the only way this goes wrong — and it goes wrong
-    silently."""
+    """A mode's kind is the kind of the spec the engine derives for that mode
+    (``mode_target_kind``), so every kind a *card* can report a mode can too —
+    roles, a graveyard card, "any target" — and each needs the prompt the
+    card-level cascade already has. A kind the client cannot route is a mode
+    it refuses out loud (``dispatchModalCast``), never a bare cast."""
     missing = _mode_kinds() - _routed_kinds() - _NO_PROMPT
     assert not missing, (
         f"a modal mode in the pool reports {sorted(missing)} and the client "

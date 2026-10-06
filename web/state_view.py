@@ -371,6 +371,26 @@ def _card_castable_now(
         # that would judge the cast.
         if not game.cast_target_spec(player_index, card).get("valid_targets"):
             return False
+    # --- W2G2: a modal spell is castable when one of its modes is ------------
+    elif (
+        card.primary_type in ("instant", "sorcery")
+        and compile_card_oracle(card).modes
+        and compile_card_oracle(card).mode_chooser is None
+    ):
+        # CR 601.2b chooses the mode before CR 601.2c chooses its targets, so
+        # "castable now" is "some mode has a legal announcement" — the engine's
+        # own answer (`Game.announceable_modes`), which is also the list the
+        # mode prompt greys the others out by. This branch did not exist: a
+        # modal card fell to the arms below, which read **mode 0** and nothing
+        # else, so Rith's Charm (destroy a nonbasic land / three Saprolings /
+        # a prevention shield) never glowed on a board with no nonbasic land,
+        # and Reign of Chaos — two modes, both of them roles — never glowed at
+        # all, its card-level spec answering "modal" with no targets.
+        if not game.announceable_modes(
+            player_index, card, optional_cost_payments=_NO_OFFERS,
+        ):
+            return False
+    # --- end W2G2 -----------------------------------------------------------
     elif card.primary_type in ("instant", "sorcery") and spec_roles(
         derive_cast_spec(
             card, compile_card_oracle(card), optional_cost_payments=_NO_OFFERS,

@@ -2066,7 +2066,12 @@ def test_115_3_a_two_target_spell_is_not_castable_with_one_legal_target(
     )
 
     assert not result.supported
-    assert "same target" in result.details
+    # The refusal is the title's own reason now: the count is asked before the
+    # repeat is (PLS W2G2, `no_legal_cast_target_refusal`'s floor of N). It was
+    # "can't name the same target twice", the only gate that stood between this
+    # announcement and the stack; that refusal is still held, with two legal
+    # creatures in play, by the tests below.
+    assert "needs 2 targets and only 1 can be chosen" in result.details
     assert p1.life == 20, "the printed 5 damage was charged for a refused cast"
     assert [perm.card.name for perm in p2.battlefield] == ["Grizzly Bears"]
     assert [card.name for card in p1.hand] == ["Ashes to Ashes"]

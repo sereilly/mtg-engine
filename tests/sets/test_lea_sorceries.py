@@ -745,11 +745,21 @@ def test_volcanic_eruption_resolves_without_error(all_cards):
     p2 = PlayerState(name="P2", battlefield=[Permanent(card=mountain)])
     game = Game(players=[p1, p2])
 
-    result = game.cast_from_hand(0, "Volcanic Eruption", target_player_index=1, x_value=1)
+    # "Destroy X target Mountains": X=1 names one (CR 601.2c). This cast named
+    # none and was accepted, resolving with nothing destroyed — the announcement
+    # the count gate now refuses (PLS W2G2).
+    bare = game.cast_from_hand(0, "Volcanic Eruption", target_player_index=1, x_value=1)
+    assert not bare.supported
+
+    result = game.cast_from_hand(
+        0, "Volcanic Eruption", target_player_index=1, x_value=1,
+        target_permanent_index=[0],
+    )
 
     assert result.supported
     assert not p1.hand
     assert any(c.name == "Volcanic Eruption" for c in p1.graveyard)
+    assert not p2.battlefield, "the named Mountain was destroyed"
 
 
 def test_wrath_of_god_destroys_all_creatures(all_cards):

@@ -2120,7 +2120,7 @@ def test_the_modal_bounce_offers_only_the_land_it_names(
 
     mode = _serialize_modes(card, game, 0)[1]
 
-    assert mode["target_kind"] == "permanent"
+    assert mode["target_kind"] == "land"  # the engine's per-mode spec (PLS W2G2)
     assert [t["name"] for t in mode["valid_targets"]] == [named]
 
 # Round 27 — Indestructible Aura. "Prevent all damage that would be dealt to

@@ -17,7 +17,7 @@ from engine import Game
 from engine.activation_permissions import card_widens_activation
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
-from engine.legality import cast_target_kind, targeting_instruction
+from engine.legality import cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
@@ -26,8 +26,7 @@ from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.keywords import derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.subject_filters import filter_head_noun
-from engine.targeting import bounce_subject_filter, usable_activated_abilities
+from engine.targeting import derive_cast_spec, usable_activated_abilities
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -566,86 +565,44 @@ def _serialize_counters(perm) -> dict:
     return counters
 
 
-# Maps an effect instruction kind to the client target-prompt kind a modal mode
-# uses, so the UI can route the right targeting flow after a mode is chosen.
-_MODE_TARGET_KIND_OVERRIDES = {
-    "counter_top_stack_spell": "stack",
-    "copy_top_stack_spell": "stack",
-}
+def mode_target_kind(card, mode_index: int) -> str:
+    """The client target-prompt kind of one mode of a modal spell.
 
-
-def _mode_target_kind(instruction) -> str:
-    """The client targeting kind for one modal mode's instruction."""
-    if instruction is None:
-        return "none"
-    kind = instruction.kind
-    if kind in _MODE_TARGET_KIND_OVERRIDES:
-        return _MODE_TARGET_KIND_OVERRIDES[kind]
-    if kind == "destroy_target_permanent":
-        type_filter = instruction.payload.get("type_filter")
-        if type_filter == "creature":
-            return "creature"
-        if type_filter == "artifact":
-            return "artifact"
-        return "permanent"
-    if kind == "bounce_target_creature":
-        # "…or return target Island to its owner's hand" (Active Volcano,
-        # Flash Flood). The printed noun is payload, so the picker's kind is
-        # read off the filter the lowering carried rather than off the
-        # instruction's name — which says "creature" and would have sent a
-        # Mountain-bouncing mode to the fall-through below and offered the
-        # caster a *player*.
-        return filter_head_noun(bounce_subject_filter(instruction.payload))
-    if kind == "grant_prevention_shield":
-        # "...dealt to you this turn" goes to the controller (no target choice);
-        # "...dealt to any target" lets the caster shield a creature or a player.
-        if instruction.payload.get("to_self") or instruction.payload.get("protection_kind"):
-            return "none"
-        return "any"
-    # Life gain / loss, draws, discards, etc. all designate a target player.
-    return "player"
-
-
-def _mode_target_flags(instruction) -> dict:
-    """Extra target filters for a modal mode (e.g. a colour-restricted destroy),
-    passed to the legality enumerator so each mode highlights the right targets."""
-    if instruction is not None and instruction.kind == "destroy_target_permanent":
-        color_filter = instruction.payload.get("color_filter")
-        if color_filter:
-            return {"color_filter": color_filter}
-    if instruction is not None and instruction.kind == "bounce_target_creature":
-        # Everything the noun said past its head word — "Island", "nonland" —
-        # travels as the enumerator's own ``filter``, which it tests with the
-        # same ``subject_matches`` the cast gate and the handler ask. Without it
-        # the mode would highlight every permanent and then refuse the cast on
-        # all but one of them.
-        described = bounce_subject_filter(instruction.payload)
-        if described:
-            return {"filter": described}
-    return {}
+    **The kind of the spec the engine's own cast gate derives for that mode**
+    (``targeting.derive_cast_spec(mode_index=)``), and nothing else. This was a
+    table of its own — keyed by instruction kind, four kinds long, with a
+    fall-through that answered "player" — so a mode whose kind it did not name
+    was sent to the life pills: 21 of the pool's 47 modes that target one
+    permanent asked the caster for a *player* (Chaos Charm's "deals 1 damage to
+    target creature", Treva's Charm's "exile target attacking creature"), nine
+    more highlighted permanents their mode cannot target (the table knew the
+    head noun and not "nonblack", "nonbasic" or "Aura"), Darigaaz's Charm's
+    graveyard return asked for a player, and a mode that targets nothing ("You
+    gain 5 life", "Create three 1/1 Saproling tokens") asked for one too.
+    A second derivation of what a mode targets cannot agree with the first for
+    long, and the engine's gate reading the first is what would have turned
+    that disagreement into a cast the browser offers and the engine refuses.
+    """
+    spec = derive_cast_spec(card, compile_card_oracle(card), mode_index=mode_index)
+    return spec["kind"] if spec is not None else "none"
 
 
 def _serialize_modes(card, game: Game | None = None, caster_index: int | None = None) -> list[dict]:
     """Selectable modes of a "Choose one —" modal spell, or [] when not modal.
 
     When ``game``/``caster_index`` are supplied (the viewer's own hand), each mode
-    also carries the backend-computed ``valid_targets`` for its target kind so the
-    UI can highlight legal targets after a mode is chosen."""
+    also carries ``target_spec`` — the **whole** cast spec that mode would have
+    as a spell of its own (``Game.cast_target_spec(mode_index=)``: kind, flags,
+    roles, the several-target count, and the legal targets enumerated through
+    the cast gate's own per-candidate probe for that mode). ``valid_targets``
+    is that spec's list, kept at the top level for the readers that predate the
+    spec. So what a mode highlights is what CR 601.2c will let it name."""
     program = compile_card_oracle(card)
     if not program.modes:
         return []
     modes = []
     for index, mode in enumerate(program.modes):
-        # Unwrapped once, here, and both readers below get the instruction that
-        # actually names a target. A mode may be a control-flow wrapper —
-        # Hydroblast's "Counter target spell **if it's red**" is a whole
-        # `if_then` — and reading the kind off the wrapper fell past every
-        # branch of `_mode_target_kind` to its "designates a player" default.
-        # `targeting_instruction` is the engine's own descent, the one
-        # `legality.py`'s gate asks, so the picker and the gate cannot describe
-        # different cards.
-        instruction = targeting_instruction(mode.instruction) or mode.instruction
-        kind = _mode_target_kind(instruction)
+        kind = mode_target_kind(card, index)
         entry = {
             "index": index,
             "label": mode.label,
@@ -653,11 +610,18 @@ def _serialize_modes(card, game: Game | None = None, caster_index: int | None = 
             "target_kind": kind,
         }
         if game is not None and caster_index is not None and kind not in ("none",):
-            entry["valid_targets"] = game.enumerate_targets_for_kind(
-                caster_index, card, kind, **_mode_target_flags(instruction)
-            )
+            spec = game.cast_target_spec(caster_index, card, mode_index=index)
+            entry["target_spec"] = spec
+            entry["valid_targets"] = spec.get("valid_targets") or []
         else:
             entry["valid_targets"] = []
+        if game is not None and caster_index is not None and program.mode_chooser is None:
+            # CR 601.2c: a mode whose mandatory target has nothing to name
+            # cannot be announced, so the prompt says so on the button instead
+            # of taking the click and having the cast refused. The engine's
+            # answer, the one the castable highlight is built from.
+            refusal = game.mode_announcement_refusal(caster_index, card, index)
+            entry["announceable"] = refusal is None
         modes.append(entry)
     return modes
 
