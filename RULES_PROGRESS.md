@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2734 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2745 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -381,10 +381,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 205. Type Line
 
-- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(13 tests, subrules ab)*
+- [x] **205.1** The type line is printed directly below the illustration. It contains the card’s card type(s). It... *(14 tests, subrules ab)*
 - [x] **205.2** Card Types *(13 tests, subrules ab)*
 - [x] **205.3** Subtypes *(3 tests, subrules bi)*
-- [x] **205.4** Supertypes *(10 tests, subrules abcd)*
+- [x] **205.4** Supertypes *(11 tests, subrules abcd)*
 
 ### 206. Expansion Symbol
 
@@ -456,7 +456,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
 - [ ] **305.5** Land subtypes are always a single word and are listed after a long dash. Land subtypes are also c...
-- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(3 tests)*
+- [x] **305.6** The basic land types are Plains, Island, Swamp, Mountain, and Forest. If an object uses the words... *(4 tests)*
 - [x] **305.7** If an effect sets a land’s subtype to one or more of the basic land types, the land no longer has... *(25 tests)*
 - [ ] **305.8** Any land with the supertype “basic” is a basic land. Any land that doesn’t have this supertype is...
 - [ ] **305.9** If an object is both a land and another card type, it can be played only as a land. It can’t be c...
@@ -661,7 +661,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(14 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(15 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
@@ -782,9 +782,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.3** Within layers 2–6, apply effects from characteristic-defining abilities first (see rule 604.3), t... *(2 tests)*
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(76 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
-- [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(1 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(54 tests, subrules abde)*
-- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(11 tests, subrules abc)*
+- [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(5 tests)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(57 tests, subrules abde)*
+- [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(30 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
 - [x] **613.11** Some continuous effects affect game rules rather than objects. For example, effects may modify a ... *(2 tests)*
