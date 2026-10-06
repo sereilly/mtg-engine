@@ -528,6 +528,25 @@ def global_static_for(oracle_text: str) -> GlobalStatic | None:
     return None
 
 
+def changes_types(static: GlobalStatic) -> bool:
+    """Whether *static* has a **layer-4** part (CR 613.1d): it adds a card type
+    (Titania's Song, Opalescence), sets a creature type (Conspiracy) or adds
+    one (Dralnu's Crusade).
+
+    The question that decides *when* the static's scope is judged. A static
+    with a layer-4 part starts to apply in layer 4, against that layer's
+    intermediate state, and CR 613.6 keeps it on "the same set of objects" in
+    every later layer — so its reach is decided once, by the board-wide pass in
+    ``engine/type_statics.py``, in the order CR 613.8 gives. One without is
+    judged against layer 4's finished answer. Asked in one place so the pass,
+    the refresh that records the reach and the collector that re-applies it
+    cannot disagree about which statics those are.
+    """
+    return bool(
+        static.adds_creature_type or static.sets_creature_type or static.adds_subtypes
+    )
+
+
 def global_static_sources(permanents) -> list[tuple]:
     """Which of *permanents* are themselves board-wide statics, paired with it.
 

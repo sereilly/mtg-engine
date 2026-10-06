@@ -3013,6 +3013,15 @@ class PendingChoicesMixin:
                 )
                 + f" becomes a {land_type.title()}"
             )
+            # The answer is the effect: until it is given nothing has changed,
+            # and once it is, every type-scoped static on the board has a
+            # different land to reach or to pass by (CR 613.8a — "All
+            # Mountains are Plains" depends on the choice that makes a
+            # Mountain). The other land-type answers below recompute the board
+            # for the same reason; this one did not, so the land read as its
+            # new type and as nothing a static says of that type until some
+            # later action happened to refresh it.
+            self._recompute_continuous_effects()
         self.discard_pending_choice(choice)
         return True
 
@@ -4434,6 +4443,16 @@ class PendingChoicesMixin:
                     # A chosen colour can condition a static (Jihad's anthem),
                     # and the board was last computed against the default.
                     self._recalculate_lord_buffs()
+                if word is not None:
+                    # …and a chosen creature type *is* a static's effect
+                    # ("Creatures you control are the chosen type", Conspiracy)
+                    # — CR 613 layer 4, where which permanents every other
+                    # type-scoped static reaches was last decided against the
+                    # default. Dralnu's Crusade's "All Goblins" did not include
+                    # the Goblins this answer had just made until some later
+                    # action happened to recompute the board; and a lord's "Elf
+                    # creatures get +1/+1" reads the same types one layer up.
+                    self._recompute_continuous_effects()
             self.discard_pending_choice(choice)
             return True
         # "…choose **two basic land types**." (Illusionary Terrain.) A fourth

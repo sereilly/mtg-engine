@@ -41,8 +41,9 @@ from ..enter_effects import (
     own_chosen_protection_color,
 )
 from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
-                     CHOSEN_PROTECTION_COLOR, aura_protection_colors,
-                     auras_attached_to, conditional_ability_lines_for)
+                     CHOSEN_PROTECTION_COLOR, aura_animates_artifact,
+                     aura_protection_colors, auras_attached_to,
+                     conditional_ability_lines_for)
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
@@ -62,6 +63,7 @@ from ..land_animation import (
     LandAnimation,
     land_animation_from_payload,
     land_animation_reaches,
+    land_animation_reaches_types,
 )
 from ..zone_copies import (
     ZONE_TOP_COPY_KIND,
@@ -70,19 +72,30 @@ from ..zone_copies import (
 from ..cast_restrictions import CHOSEN_CARD_NAMES
 from ..land_types import (
     CHOSEN_LAND_TYPES,
+    STATIC_LAND_TYPE_KIND,
     STATIC_SUPERTYPE_REMOVAL_KIND,
     add_derived_land_type,
     clear_derived_land_types,
     resolve_static_land_type_change,
     static_land_type_change_applies,
-    static_source_timestamp,
     static_supertype_removal_applies,
 )
 from ..layer_bridge import (
-    DERIVED_LOST_SUPERTYPES,
     QUALIFIED_BUFFS,
-    types_before_timestamp,
+    attached_animation_type_effect,
+    global_static_type_effect,
+    land_animation_type_effect,
+    land_type_effect,
+    lost_supertype_effect,
 )
+from ..type_changes import (
+    LAND_ANIMATION_ORDER,
+    add_derived_lost_supertype,
+    clear_derived_type_changes,
+    set_animates_host,
+    set_static_type_order,
+)
+from ..type_statics import TypeStatic, apply_type_statics
 from ..lord_buffs import (
     LORD_BUFF_KIND,
     LordBuff,
@@ -1440,123 +1453,215 @@ class PermanentStateMixin:
                     key=instr.kind,
                 )
 
-    def _refresh_static_land_types(self, all_permanents: list[Permanent]) -> None:
-        """Apply static basic-land-type changes (e.g. Conversion: "All Mountains
-        are Plains."). Recomputed every call so a land reverts the moment the
-        source enchantment leaves the battlefield (CR 611.3a/b).
+    def _board_type_statics(
+        self, all_permanents: list[Permanent], global_sources: list[tuple],
+    ) -> tuple[list[TypeStatic], dict[int, TypeStatic]]:
+        """Every board-wide static with a **layer-4** part, as the board-wide
+        pass applies it (``engine/type_statics.py``).
 
-        The *derived* land-type channel, cleared and rebuilt here together — a
-        static's contribution is not recorded, because CR 611.3a means this runs
-        constantly and a recorded one would accumulate an entry per pass. The
-        recorded channel (an Aura's, a mire counter's) is untouched, so a
-        Conversion leaving can no longer take a Phantasmal Terrain's type with
-        it; the two are separate contributions and layer 4 sorts them by
-        timestamp.
+        Five families, one list, because CR 613.7 and 613.8 order the *layer*
+        and not each kind of card in it:
 
-        **The statics chain in timestamp order (CR 613.7)**, each judged
-        against the state the earlier ones left: with Blood Moon out first, a
-        nonbasic land is a Mountain by the time Conversion asks "is this a
-        Mountain?", so Conversion reaches it too. Each candidate is therefore
-        evaluated against ``layer_bridge.types_before_timestamp`` — the seed
-        plus every layer-4 effect stamped earlier, recorded *and* derived so
-        far — rather than against a finished layer read (the circularity: this
-        refresh computes layer 4's inputs) or against the layer-3 type line
-        (which no earlier layer-4 effect can ever reach). And a static that
-        applies does not stop the walk: 613.7 chains the effects, it does not
-        pick one, so "All Mountains are Plains" beside "All Plains are Islands"
-        turns a Mountain into an Island.
+        * "All Mountains are Plains." (Conversion.) "Nonbasic lands are
+          Mountains." (Blood Moon.) CR 305.7's replacement of a land's land
+          types, or — with the printed rider — an addition (Blanket of Night).
+        * "All lands are no longer snow." (Melting.) CR 205.4a's half of the
+          type line, its contributions on their own channel because a
+          supertype removal is not a land-type replacement.
+        * "All Swamps are 1/1 black creatures that are still lands." (Kormus
+          Bell.) The creature type; the colour and the size are layers 5 and
+          7b and are written by ``_refresh_land_animation`` for the lands this
+          reached.
+        * the global statics that change a type (``global_statics
+          .changes_types``): Titania's Song, Opalescence, Conspiracy, Dralnu's
+          Crusade. *global_sources* is the caller's list, lingering ones
+          included, so the two cannot disagree about which are out.
+        * "As long as enchanted artifact **isn't a creature**, it's an artifact
+          creature…" (Animate Artifact.) One permanent's, and here all the
+          same: the condition is a scope over a type, so whether the Aura
+          applies is a question about the intermediate state like the rest.
+
+        What this method owns is **what each scope means**, read where it has
+        always been read: ``land_types.py``'s two predicates,
+        ``land_animation_reaches_types`` and ``_global_static_applies`` — each
+        handed the layer's *intermediate* state by the pass rather than asking
+        the permanent for its finished one. That is the whole change: the three
+        refreshes this replaces each asked a finished or a previous-pass
+        answer, and which permanents a type-scoped static reaches is a
+        question about the moment it applies.
+
+        Every static carries its **source's** timestamp (CR 613.7a, 613.7d) —
+        ``Permanent.timestamp``, the one clock. The land-type ones carried a
+        stand-in stamped the first time a refresh saw them
+        (``land_types.static_source_timestamp``), which ordered them correctly
+        against each other and only by coincidence against a Conspiracy.
+
+        Returns the statics and, beside them, which of them is each global
+        source's — keyed by ``id(source)`` — so the caller can turn the pass's
+        reach back into its per-permanent source lists.
         """
-        changes: list[tuple[dict, Permanent]] = []
-        # "All lands are no longer snow." (Melting.) CR 205.4a's half of the
-        # type line, collected in the same pass because it is the same
-        # question — which board-wide statics are out — asked about a different
-        # word. Its contributions go on their own channel (`layer_bridge
-        # .DERIVED_LOST_SUPERTYPES`), because a supertype removal is not a
-        # land-type replacement and folding the two would give every Conversion
-        # a supertype field it must not set.
-        removals: list[tuple[dict, Permanent]] = []
-        for perm in all_permanents:
-            for instr in compile_card_oracle(perm.effective_card).instructions:
-                if instr.kind == "static_land_type_change":
-                    changes.append((instr.payload, perm))
+        statics: list[TypeStatic] = []
+        for source in all_permanents:
+            for instr in compile_card_oracle(source.effective_card).instructions:
+                if instr.kind == STATIC_LAND_TYPE_KIND:
+                    # "Basic lands of **the first chosen type** are **the
+                    # second chosen type**." (Illusionary Terrain.) The
+                    # sentence names no land type at all: both come from the
+                    # ordered pair its controller chose as it entered.
+                    # Resolved once, against the source, and then read like
+                    # any other payload — a source that has not chosen yet
+                    # resolves to None and contributes nothing, which is the
+                    # honest answer rather than a static over every land or
+                    # none.
+                    payload = resolve_static_land_type_change(instr.payload, source)
+                    if payload is not None:
+                        statics.append(self._land_type_static(source, payload))
                 elif instr.kind == STATIC_SUPERTYPE_REMOVAL_KIND:
-                    removals.append((instr.payload, perm))
-        # Both derived channels are cleared before anything is judged, so no
-        # candidate can read a previous pass's contribution as this pass's
-        # board (CR 611.3b: a static's effect lasts exactly as long as the
-        # rebuild keeps putting it back).
-        for perm in all_permanents:
-            perm.metadata.pop(DERIVED_LOST_SUPERTYPES, None)
-            clear_derived_land_types(perm)
-        if not changes and not removals:
-            return
-        # One ordered walk over every board-wide layer-4 static, type changes
-        # and supertype removals together, because CR 613.7 orders the layer
-        # and not each kind separately.
-        events: list[tuple[int, str, dict, Permanent]] = []
-        for payload, source in changes:
-            # "Basic lands of **the first chosen type** are **the second
-            # chosen type**." (Illusionary Terrain.) The sentence names no
-            # land type at all: both come from the ordered pair its
-            # controller chose as it entered. Resolved once, against the
-            # source, and then read like any other payload — a source that
-            # has not chosen yet resolves to None and contributes nothing,
-            # which is the honest answer rather than a static over every
-            # land or none.
-            resolved = resolve_static_land_type_change(payload, source)
-            if resolved is None:
+                    statics.append(self._supertype_removal_static(source, instr.payload))
+                elif instr.kind == LAND_ANIMATION_KIND:
+                    statics.append(self._land_animation_static(
+                        source, land_animation_from_payload(instr.payload),
+                    ))
+            host = source.metadata.get("attached_to")
+            if host is not None and aura_animates_artifact(
+                source.effective_card.oracle_text
+            ):
+                statics.append(self._attached_animation_static(source, host))
+        from ..global_statics import changes_types
+
+        by_source: dict[int, TypeStatic] = {}
+        for source, static in global_sources:
+            if not changes_types(static):
                 continue
-            events.append(
-                (static_source_timestamp(source), "change", resolved, source)
-            )
-        for payload, source in removals:
-            events.append(
-                (static_source_timestamp(source), "removal", payload, source)
-            )
-        events.sort(key=lambda event: event[0])
-        for perm in all_permanents:
-            is_land = perm.card.primary_type == "land"
-            lost: list[str] = []
+            # "Creatures you control are the chosen type" with no type chosen
+            # yet (the source is still entering) is no effect at all, and so
+            # not one for another to depend on.
+            if global_static_type_effect(0, source, static, timestamp=0) is None:
+                continue
+            by_source[id(source)] = self._global_type_static(source, static)
+            statics.append(by_source[id(source)])
+        return statics, by_source
+
+    def _land_type_static(self, source: Permanent, payload: dict) -> TypeStatic:
+        """"All Mountains are Plains." — one land-type static, for the pass."""
+        to_type = str(payload.get("to_type", ""))
+        additive = bool(payload.get("additive"))
+
+        def reaches(permanent: Permanent, types) -> bool:
             # Which lands a source reaches is `land_types.py`'s question, not
-            # this loop's: Conversion names a land type and Blood Moon names a
-            # missing supertype, and a second reading of either here would be
-            # the gate/dispatch split this engine keeps finding. What this loop
-            # owns is the order — and the intermediate state each candidate is
-            # judged against, which is everything stamped before it, including
-            # the contributions the walk itself has written so far.
-            for stamp, kind, payload, source in events:
-                if kind == "removal":
-                    word = str(payload.get("supertype") or "")
-                    if not word or word in lost:
-                        continue
-                    if static_supertype_removal_applies(
-                        payload, types_before_timestamp(perm, stamp)
-                    ):
-                        lost.append(word)
-                        perm.metadata[DERIVED_LOST_SUPERTYPES] = sorted(lost)
-                elif is_land and static_land_type_change_applies(
-                    payload,
-                    types_before_timestamp(perm, stamp),
-                    # "Lands **you control** are Plains" (Celestial Dawn). The
-                    # one fact about a candidate that is not a characteristic,
-                    # read through the control seam so a land the source's
-                    # controller has taken is one of theirs and a land they
-                    # have lost is not. Computed only when the payload asks,
-                    # because `controller_index_of` resolves layer 2 and this
-                    # loop runs on every refresh over every permanent.
-                    same_controller=(
-                        self.controller_index_of(perm)
-                        == self.controller_index_of(source)
-                        if payload.get("controller_only") else None
-                    ),
-                ):
-                    add_derived_land_type(
-                        perm,
-                        str(payload.get("to_type", "")),
-                        timestamp=stamp,
-                        label=source.card.name,
-                        additive=bool(payload.get("additive")),
-                    )
+            # this method's: Conversion names a land type and Blood Moon names
+            # a missing supertype, and a second reading of either here would
+            # be the gate/dispatch split this engine keeps finding.
+            return "land" in types.card_types and static_land_type_change_applies(
+                payload, types,
+                # "Lands **you control** are Plains" (Celestial Dawn). The one
+                # fact about a candidate that is not a characteristic, read
+                # through the control seam so a land the source's controller
+                # has taken is one of theirs and a land they have lost is not.
+                # Computed only when the payload asks, because
+                # `controller_index_of` resolves layer 2 and this runs on
+                # every refresh over every permanent.
+                same_controller=(
+                    self.controller_index_of(permanent)
+                    == self.controller_index_of(source)
+                    if payload.get("controller_only") else None
+                ),
+            )
+
+        return TypeStatic(
+            source=source, timestamp=source.timestamp, label=source.card.name,
+            reaches=reaches,
+            effect=lambda permanent, stamp, order: land_type_effect(
+                permanent, id(permanent), to_type, additive=additive,
+                timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: add_derived_land_type(
+                permanent, to_type, timestamp=stamp, label=source.card.name,
+                additive=additive, order=order,
+            ),
+        )
+
+    def _supertype_removal_static(self, source: Permanent, payload: dict) -> TypeStatic:
+        """"All lands are no longer snow." — Melting, for the pass."""
+        word = str(payload.get("supertype") or "")
+        return TypeStatic(
+            source=source, timestamp=source.timestamp, label=source.card.name,
+            reaches=lambda permanent, types: bool(word)
+            and static_supertype_removal_applies(payload, types),
+            effect=lambda permanent, stamp, order: lost_supertype_effect(
+                id(permanent), word, timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: add_derived_lost_supertype(
+                permanent, word, timestamp=stamp, order=order,
+                label=source.card.name,
+            ),
+        )
+
+    def _land_animation_static(
+        self, source: Permanent, animation: LandAnimation
+    ) -> TypeStatic:
+        """"All Swamps are 1/1 black creatures that are still lands." — the
+        layer-4 half of a land animator, for the pass."""
+        return TypeStatic(
+            source=source, timestamp=source.timestamp, label=source.card.name,
+            payload=animation,
+            reaches=lambda permanent, types: land_animation_reaches_types(
+                self, source, animation, permanent,
+                types.card_types, types.subtypes,
+            ),
+            effect=lambda permanent, stamp, order: land_animation_type_effect(
+                id(permanent), timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: set_static_type_order(
+                permanent, LAND_ANIMATION_ORDER, timestamp=stamp, order=order,
+            ),
+        )
+
+    def _attached_animation_static(self, aura: Permanent, host: Permanent) -> TypeStatic:
+        """"As long as enchanted artifact isn't a creature, it's an artifact
+        creature…" — Animate Artifact's layer-4 half, for the pass.
+
+        Its reach is one permanent and a condition on it, and the condition is
+        why it is here: Titania's Song asks the same question of the same
+        artifact from the other side, each changes the other's answer, and
+        CR 613.8b applies such a loop in timestamp order — so the older of the
+        two is the one that animates the artifact, and only the Song also
+        takes its abilities.
+
+        An Aura's timestamp is the moment it became attached (CR 613.7e).
+        """
+        return TypeStatic(
+            source=aura,
+            timestamp=int(aura.metadata.get("aura_timestamp", aura.timestamp)),
+            label=aura.card.name,
+            payload=host,
+            reaches=lambda permanent, types: (
+                permanent is host and "creature" not in types.card_types
+            ),
+            effect=lambda permanent, stamp, order: attached_animation_type_effect(
+                id(permanent), timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: set_static_type_order(
+                permanent, aura.permanent_id, timestamp=stamp, order=order,
+            ),
+        )
+
+    def _global_type_static(self, source: Permanent, static) -> TypeStatic:
+        """A global static's layer-4 half (Conspiracy, Dralnu's Crusade,
+        Titania's Song, Opalescence), for the pass."""
+        return TypeStatic(
+            source=source, timestamp=source.timestamp,
+            label=f"{source.card.name} ({static.name})",
+            reaches=lambda permanent, types: self._global_static_applies(
+                static, permanent, source, self, types=types,
+            ),
+            effect=lambda permanent, stamp, order: global_static_type_effect(
+                id(permanent), source, static, timestamp=stamp, sequence=order,
+            ),
+            record=lambda permanent, stamp, order: set_static_type_order(
+                permanent, source.permanent_id, timestamp=stamp, order=order,
+            ),
+        )
 
     def _refresh_mana_spending(self) -> None:
         """CR 106.6: what each seat may currently spend a unit of mana as.
@@ -1752,17 +1857,14 @@ class PermanentStateMixin:
         for perm in all_permanents:
             perm.metadata.pop("derived_buff_power", None)
             perm.metadata.pop("derived_buff_toughness", None)
-        # Every land animator currently on the battlefield, read off the
-        # compiled program rather than matched by name. Two `card.name ==`
-        # comparisons stood here; the payload carries the land type, the P/T and
-        # the colour, so a third animator needs no code (engine/land_animation.py).
-        animations = self._board_land_animations(all_permanents)
         self._refresh_linked_tapped_pumps(all_permanents)
-        self._refresh_global_statics(all_permanents)
-        self._refresh_static_land_types(all_permanents)
         # Layer 4 before layer 7: a characteristic-defining P/T that counts
         # creatures must see the lands this pass animates, not last pass's.
-        self._refresh_land_animation(all_permanents, animations)
+        # One call, because layer 4 is one application: the land-type statics,
+        # the supertype removals, the land animators and the type-changing
+        # global statics are ordered against each other (CR 613.7, 613.8) and
+        # were three refreshes that each read what the one before had left.
+        self._refresh_global_statics(all_permanents)
         # A landwalk **named by the board** — "For each basic land type among
         # lands you control, this creature has landwalk of that type."
         # (Magnigoth Treefolk.) Layer 6 reading layer 4, so it is rebuilt here,
@@ -2169,8 +2271,25 @@ class PermanentStateMixin:
         Rebuilt from scratch each pass rather than adjusted, for the reason
         recorded on `_add_static_pt`: an adjustment that does not exactly match
         what it undid compounds, and CR 611.3a means this runs constantly.
+
+        **Layer 4 first, and as one application** (``engine/type_statics.py``).
+        A static that changes types (``global_statics.changes_types`` — and
+        beside them every land-type static, supertype removal and land
+        animator) starts to apply in layer 4, so which permanents it reaches is
+        a question about that layer's *intermediate* state, in the order
+        CR 613.7 gives and CR 613.8 rearranges; CR 613.6 then keeps it on "the
+        same set of objects" in every later layer, which is why the reach the
+        pass decides is recorded here as the static applying, whole. Every
+        other static is judged afterwards, against the layer 4 the pass has
+        just finished writing.
+
+        It used to judge them all in one loop against whatever layer 4 the
+        *previous* refresh had left: Dralnu's Crusade found the Goblin a
+        Conspiracy had just made one refresh late, and a Conspiracy could not
+        wait behind the effect that made a land a creature.
         """
-        from ..global_statics import STACK_STATICS_KEY, global_static_sources
+        from ..global_statics import (STACK_STATICS_KEY, changes_types,
+                                      global_static_sources)
         from ..stack_statics import stack_static_grant_sources
 
         sources = global_static_sources(all_permanents)
@@ -2197,7 +2316,27 @@ class PermanentStateMixin:
         sources = sources + [
             (perm, static) for perm, static in self.lingering_global_statics
         ]
+        # Both derived layer-4 channels are cleared before anything is judged,
+        # so no candidate can read a previous pass's contribution as this
+        # pass's board (CR 611.3b: a static's effect lasts exactly as long as
+        # the rebuild keeps putting it back).
         for perm in all_permanents:
+            clear_derived_land_types(perm)
+            clear_derived_type_changes(perm)
+        type_statics, type_static_of = self._board_type_statics(all_permanents, sources)
+        reach = apply_type_statics(all_permanents, type_statics)
+        for found in type_statics:
+            # An attached animating Aura: whether it reached its host is the
+            # answer every later layer reads (``auras.animating_auras``), so a
+            # *no* is written down as carefully as a yes.
+            # (Its payload is the host; no other static's is a permanent.)
+            if isinstance(found.payload, Permanent):
+                set_animates_host(found.source, any(
+                    applied is found for applied in reach.get(id(found.payload), ())
+                ))
+        self._refresh_land_animation(all_permanents, reach)
+        for perm in all_permanents:
+            reached_by = reach.get(id(perm), ())
             # **A static's own source is not exempt.** The scope is whatever
             # the printed sentence says, and none of these templates says
             # "other" — "Creatures you control attack each combat if able" (the
@@ -2216,7 +2355,15 @@ class PermanentStateMixin:
             applying = [
                 source
                 for source, static in sources
-                if self._global_static_applies(static, perm, source, self)
+                if (
+                    # A type-changing static applies to exactly what the
+                    # layer-4 pass found it reaching (CR 613.6)…
+                    any(found is type_static_of.get(id(source)) for found in reached_by)
+                    if changes_types(static)
+                    # …and every other one to what its scope describes now
+                    # that layer 4 is this pass's.
+                    else self._global_static_applies(static, perm, source, self)
+                )
             ]
             if applying:
                 perm.metadata["global_static_sources"] = applying
@@ -2252,13 +2399,34 @@ class PermanentStateMixin:
     }
 
     @staticmethod
-    def _global_static_applies(static, permanent: Permanent, source=None, game=None) -> bool:
+    def _global_static_applies(
+        static, permanent: Permanent, source=None, game=None, *, types=None,
+    ) -> bool:
         """Whether *static* covers *permanent*.
 
-        "Noncreature artifact" reads the **printed** type line for the creature
-        half: asking whether it is currently a creature would include the type
+        *types* is the layer-4 state to ask the **type** words of: the layer's
+        intermediate ``Characteristics`` when the board-wide pass is deciding a
+        type-changing static's reach (``engine/type_statics.py``), and absent —
+        the permanent's finished answer — for every static that starts to
+        apply in a later layer. One reading of each scope for both moments, so
+        the pass and the refresh cannot disagree about a word.
+
+        "Noncreature artifact" is the scope that needed the distinction. It
+        read the **printed** type line for the creature half, because asking
+        whether the permanent is *currently* a creature would include the type
         this very effect adds, and the answer would then depend on whether it
-        had already been asked.
+        had already been asked. The intermediate state is the rule's own answer
+        to that (CR 613.6's example: the effect "is applied to all noncreature
+        artifacts in layer 4 … even though those permanents aren't noncreature
+        artifacts by then"): a Howling Mine is a noncreature artifact as
+        Titania's Song starts to apply, and one Karn has already animated is
+        not — the Song depends on that effect (CR 613.8a) and passes it by,
+        abilities and all. Animate Artifact's own "as long as enchanted
+        artifact isn't a creature" is the same question asked from the other
+        side (``_attached_animation_static``); the two form a dependency loop,
+        and the pass settles it by timestamp (CR 613.8b). The printed line
+        still answers a caller with no intermediate state to offer, of which
+        there is none for a type-changing static.
 
         *source* and *game* are needed only by a scope that is **relative** —
         "creatures **you** control" is a comparison between two seats (CR 109.5),
@@ -2282,11 +2450,19 @@ class PermanentStateMixin:
         if getattr(static, "other_than_source", False):
             if source is None or permanent is source:
                 return False
+
+        def has_type(word: str) -> bool:
+            # ``Permanent.has_type``'s reading of a type word — a card type or
+            # a subtype — over whichever state the caller is asking about.
+            if types is None:
+                return permanent.has_type(word)
+            return word in types.card_types or word in types.subtypes
+
         if static.applies_to in ("artifact", "creature", "enchantment"):
             # Through the layer-6/4 accessors rather than the printed line, so
             # an animated land is a creature to The Tabernacle at Pendrell Vale
             # and a Clone of an artifact is an artifact to Energy Flux.
-            if not permanent.has_type(static.applies_to):
+            if not has_type(static.applies_to):
                 return False
             # "**Green** creatures have …" (Breath of Dreams). Asked through
             # ``subject_matches``, the one reader of what a printed noun phrase
@@ -2309,6 +2485,8 @@ class PermanentStateMixin:
                 )
             return True
         if static.applies_to == "noncreature_artifact":
+            if types is not None:
+                return has_type("artifact") and not has_type("creature")
             printed = permanent.card.type_line.lower()
             return "artifact" in printed and "creature" not in printed
         if static.applies_to == "non_aura_enchantment":
@@ -2323,14 +2501,14 @@ class PermanentStateMixin:
             # the layers are safe and are what the words mean. A Licid that has
             # become an Aura is out while it is one, and an enchantment an
             # effect has turned into something else is judged on what it is now.
-            return permanent.has_type("enchantment") and not permanent.has_type("aura")
+            return has_type("enchantment") and not has_type("aura")
         if static.applies_to == "nonland_permanent_you_control":
             # "**Nonland** permanents you control are white." (Celestial Dawn.)
             # The type half through the layer accessor, so a land this very
             # board has animated is still a land and stays out -- CR 305.7's
             # replacement does not stop a Plains being a land, and the printed
             # line would have said so wrongly for an animated one.
-            if source is None or game is None or permanent.has_type("land"):
+            if source is None or game is None or has_type("land"):
                 return False
             return (
                 game.controller_index_of(permanent)
@@ -2343,14 +2521,14 @@ class PermanentStateMixin:
             # Not self-referential the way the artifact row above is: the type
             # this static adds is never the type its own scope names.
             return bool(static.subtypes) and all(
-                permanent.has_type(subtype) for subtype in static.subtypes
+                has_type(subtype) for subtype in static.subtypes
             )
         if static.applies_to == "nonland_permanent":
             # "All **nonland** permanents are the chosen color." (Shifting Sky.)
             # The branch above with no seat to compare: every battlefield's
             # nonland permanents, through the same layer accessor and for the
             # same reason — an animated land is still a land and stays out.
-            return not permanent.has_type("land")
+            return not has_type("land")
         if static.applies_to == "permanent":
             # "**All permanents** are colorless." (Thran Lens.) The widest noun
             # this table prints, and the one scope with nothing to test:
@@ -2360,7 +2538,7 @@ class PermanentStateMixin:
             # merits rather than by a blanket skip of the source.
             return True
         if static.applies_to == "creature_you_control":
-            if source is None or game is None or not permanent.is_creature:
+            if source is None or game is None or not has_type("creature"):
                 return False
             return (
                 game.controller_index_of(permanent)
@@ -2416,17 +2594,22 @@ class PermanentStateMixin:
         ]
 
     def _refresh_land_animation(
-        self,
-        all_permanents: list[Permanent],
-        animations: list[tuple[Permanent, LandAnimation]],
+        self, all_permanents: list[Permanent], reach: dict[int, list[TypeStatic]],
     ) -> None:
         """Land animators turn lands of a named type into creatures while the
         source is on the battlefield (CR 613 layer 4).
 
-        *animations* is what the sources on the battlefield derive from their
-        own printed text (engine/land_animation.py). Nothing here knows which
-        cards they are: Kormus Bell's colour and Living Lands' silence about
-        colour are both payload.
+        **Which lands is not decided here.** *reach* is the board-wide layer-4
+        pass's answer (``engine/type_statics.py``): the statics that reached
+        each permanent, in the order they applied. An animator's scope is a
+        land type, so it depends on whatever makes a land that type (CR 613.8a)
+        and its reach is a question about the layer's intermediate state —
+        which is why this method no longer asks it of the finished layer after
+        the fact. What is written here is everything an animation says that is
+        *not* its place in layer 4: the flag the collector reads, the size
+        (layer 7b) and the colour (layer 5). Nothing here knows which cards
+        the animators are: Kormus Bell's colour and Living Lands' silence
+        about colour are both payload (engine/land_animation.py).
 
         Its own pass, ahead of everything that asks "is this a creature?".
         This ran inside the same per-permanent loop as the layer-7a
@@ -2441,22 +2624,20 @@ class PermanentStateMixin:
         Phantasmal Terrain) REPLACES the printed type (CR 305.7), so an
         overridden land animates by its override, not its printed type line.
         """
+        position = {id(perm): index for index, perm in enumerate(all_permanents)}
         for permanent in all_permanents:
-            animator, animation = (
-                next(
-                    (
-                        (source, a) for source, a in animations
-                        # Which lands is ``land_animation_reaches``' answer: the
-                        # printed land type (None is the untyped "All lands
-                        # are…", Living Plane) and, since Natural Emergence,
-                        # whose lands — "Lands **you control**" is the source's
-                        # controller, which is why the source rides the list.
-                        if land_animation_reaches(self, source, a, permanent)
-                    ),
-                    (None, None),
-                )
-                if permanent.card.primary_type == "land"
-                else (None, None)
+            # The first animator, in battlefield order, of those the pass found
+            # reaching this land: its size and colour are the ones written.
+            # (Two animators reaching one land both make it a creature; whose
+            # size it then has is layer 7b's question and is unchanged here.)
+            animator, animation = min(
+                (
+                    (static.source, static.payload)
+                    for static in reach.get(id(permanent), ())
+                    if isinstance(static.payload, LandAnimation)
+                ),
+                key=lambda pair: position.get(id(pair[0]), len(position)),
+                default=(None, None),
             )
             # "…are 1/1 **black** creatures" (Kormus Bell): CR 613 layer 5 of a
             # static, so it is a *derived* contribution — cleared and rebuilt

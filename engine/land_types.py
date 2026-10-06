@@ -46,12 +46,14 @@ LAND_TYPE_EFFECTS = "land_type_effects"
 # turn into an accumulation.
 DERIVED_LAND_TYPES = "derived_land_type_changes"
 
-# Key under which a static source's own timestamp lives (CR 613.7a: a static
-# ability's continuous effect has the timestamp of the object it is on). Stamped
-# once, the first time a refresh sees the static on the battlefield, so the
-# derived contribution it rebuilds every refresh keeps a stable place in the
-# order.
-STATIC_SOURCE_TIMESTAMP = "static_land_type_timestamp"
+# A static source's timestamp is its object's (CR 613.7a) — ``Permanent
+# .timestamp``, stamped as the permanent enters (CR 613.7d). This module kept a
+# stand-in for it, ``static_source_timestamp``, stamped the first time a
+# refresh saw the static: the engine had no per-permanent timestamp when the
+# derived channel was written, and the stand-in outlived the reason by a set.
+# It came off a second moment on the same clock, so a land-type static could
+# only be ordered against a Conspiracy or a Dralnu's Crusade — which read the
+# real one — by coincidence.
 
 # The source label for Cyclopean Tomb's mire counter. The counter, not the
 # artifact, is what the type change hangs on ("for as long as it has a mire
@@ -158,9 +160,16 @@ def clear_derived_land_types(perm: Permanent) -> None:
 
 def add_derived_land_type(
     perm: Permanent, land_type: str, *, timestamp: int, label: str = "",
-    additive: bool = False,
+    additive: bool = False, order: int = 0,
 ) -> None:
     """Layer 4: *perm* is *land_type* for as long as a static keeps saying so.
+
+    *timestamp* and *order* are the contribution's **applied-order key**: the
+    timestamp it applied at — its source's (CR 613.7a), or that of the effect
+    it waited behind when it depends on one (CR 613.8b) — and its position
+    among the statics applied at that moment. ``engine/type_statics.py``
+    decides both for the whole board; the layer bridge re-applies them by
+    sorting.
 
     *additive* is Blanket of Night's printed "in addition to its other land
     types": the contribution **adds** the type instead of replacing every type
@@ -178,31 +187,23 @@ def add_derived_land_type(
     }
     if additive:
         entry["additive"] = True
+    # Emitted only when set, so a contribution that applied at its own
+    # source's timestamp is the record it always was.
+    if order:
+        entry["order"] = int(order)
     derived.append(entry)
 
 
-def static_source_timestamp(source: Permanent) -> int:
-    """*source*'s own timestamp, stamped the first time a refresh sees it.
-
-    CR 613.7a gives a static ability's continuous effect the timestamp of the
-    object the ability is on. The engine has no general per-permanent timestamp
-    yet, so this stands in for one: stable across refreshes (which is what the
-    derived channel needs) and ordered against everything else by when the
-    static first reached a refresh — which, with the continuous-effects refresh
-    running after every action, is when it arrived. It used to be stamped only
-    when the static first *applied* to some land, which let a static that
-    entered earlier but found its first subject later slot in after a
-    younger one.
-    """
-    stamp = source.metadata.get(STATIC_SOURCE_TIMESTAMP)
-    if stamp is None:
-        stamp = next_timestamp()
-        source.metadata[STATIC_SOURCE_TIMESTAMP] = stamp
-    return int(stamp)
-
-
-def land_type_changes(perm: Permanent) -> tuple[dict, ...]:
+def land_type_changes(
+    perm: Permanent, *, derived: bool | None = None
+) -> tuple[dict, ...]:
     """Every layer-4 land-type contribution on *perm*, in **storage** order.
+
+    *derived* picks a half: ``False`` the recorded contributions alone (an
+    Aura's, a mire counter's — the permanent's own effects), ``True`` the ones
+    a board-wide static keeps saying, ``None`` both. The halves are told apart
+    by the channel they are stored on and by nothing else, which is why the
+    question is asked here.
 
     Deliberately not sorted here. Each contribution becomes its own
     :class:`ContinuousEffect` carrying its own timestamp, and CR 613.7 is what
@@ -217,8 +218,8 @@ def land_type_changes(perm: Permanent) -> tuple[dict, ...]:
     second reader of this list would be a second opinion about CR 305.7.
     """
     return (
-        *(perm.metadata.get(LAND_TYPE_EFFECTS) or ()),
-        *(perm.metadata.get(DERIVED_LAND_TYPES) or ()),
+        *((perm.metadata.get(LAND_TYPE_EFFECTS) or ()) if derived is not True else ()),
+        *((perm.metadata.get(DERIVED_LAND_TYPES) or ()) if derived is not False else ()),
     )
 
 
@@ -276,7 +277,8 @@ class StaticLandTypeChange:
     """Lands of one type are another type while the source is on the battlefield.
 
     Both types are singular and lowercase, which is the form
-    ``_refresh_static_land_types`` compares against a land's computed subtypes.
+    :func:`static_land_type_change_applies` compares against a land's subtypes
+    as the layer-4 pass presents them (``engine/type_statics.py``).
 
     ``from_type`` is None exactly when ``from_nonbasic`` is set: "**Nonbasic**
     lands are Mountains" (Blood Moon) describes its subjects by a supertype
@@ -588,9 +590,9 @@ def static_supertype_removal_applies(payload: dict, types: Characteristics) -> b
     """Whether the static removal *payload* describes reaches a permanent that
     currently presents *types*.
 
-    *types* is the CR 613.7 intermediate state
-    (``layer_bridge.types_before_timestamp``): what layer 4 has said so far, at
-    this static's own place in timestamp order. It used to ask
+    *types* is the layer's intermediate state (``engine/type_statics.py``): what
+    layer 4 has said so far, at this static's own place in the order. It used
+    to ask
     ``permanent.has_type`` — layer 4's *finished* answer — while the refresh
     was still deciding layer 4's inputs, which read the previous pass's result
     back in as this pass's premise. The card-type-or-subtype reading is
@@ -613,12 +615,12 @@ def static_land_type_change_applies(
 
     The one reader of what the payload's subject half means, so the derivation
     and the refresh cannot disagree about which lands a source reaches. *types*
-    is the CR 613.7 intermediate state
-    (``layer_bridge.types_before_timestamp``): the seed — layer 3 runs before
-    layer 4, so a land Magical Hack has rewritten into a Mountain is one of the
-    "All Mountains" Conversion means — plus every layer-4 effect with an
-    earlier timestamp, so a Mountain that Blood Moon (an earlier static) made
-    is one of them too. This predicate used to read the layer-3 line while the
+    is the layer's intermediate state (``engine/type_statics.py``): the seed —
+    layer 3 runs before layer 4, so a land Magical Hack has rewritten into a
+    Mountain is one of the "All Mountains" Conversion means — plus every
+    layer-4 effect already applied, so a Mountain that Blood Moon made is one
+    of them too, whichever of the two statics is older (Conversion depends on
+    the Moon, CR 613.8a). This predicate used to read the layer-3 line while the
     removal one beside it asked layer 4's finished ``has_type``: two answers to
     "what is this land?", neither of them CR 613.7's, and two layer-4 statics
     that could not chain.
@@ -656,11 +658,11 @@ def static_land_type_change_applies(
 
 __all__ = [
     "DERIVED_LAND_TYPES", "LAND_TYPE_EFFECTS", "MIRE_COUNTER",
-    "STATIC_LAND_TYPE_KIND", "STATIC_SOURCE_TIMESTAMP", "StaticLandTypeChange",
+    "STATIC_LAND_TYPE_KIND", "StaticLandTypeChange",
     "CHOSEN_LAND_TYPES", "add_derived_land_type", "change_land_type",
     "clear_derived_land_types",
     "end_land_type_change", "end_land_type_changes_from", "land_type_changes",
     "static_land_type_change_applies",
     "static_land_type_change_for", "static_land_type_change_payload",
-    "static_source_timestamp", "resolve_static_land_type_change",
+    "resolve_static_land_type_change",
 ]

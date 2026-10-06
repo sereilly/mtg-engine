@@ -122,6 +122,16 @@ class ContinuousEffect:
     sublayer: str = ""
     # 613.7: earlier timestamps apply first.
     timestamp: int = 0
+    # 613.8b: where an effect that **waited** applies among the effects sharing
+    # its timestamp. A dependent effect "waits to apply until just after" the
+    # ones it depends on, so the place it takes is *their* timestamp and a
+    # position behind them — which no single integer on the one clock can say
+    # without colliding with whatever was stamped next. Zero for every effect
+    # that applies at its own timestamp; set only by the board-wide layer-4
+    # pass (``engine/type_statics.py``), which is the one place the engine
+    # decides a dependency and the reason the per-object collectors can then
+    # re-apply its answer by sorting.
+    sequence: int = 0
     # 613.3 / 613.8a: CDAs apply before other effects in layers 2–6, and an
     # effect never depends on one unless both are CDAs.
     from_cda: bool = False
@@ -132,7 +142,7 @@ class ContinuousEffect:
     def order_key(self) -> tuple:
         # Within layers 2–6 CDAs come first (613.3); within layer 7 the
         # sublayers already separate them, so the flag is inert there.
-        return (0 if self.from_cda else 1, self.timestamp)
+        return (0 if self.from_cda else 1, self.timestamp, self.sequence)
 
 
 def _targets(effect: ContinuousEffect, state: State) -> tuple[int, ...]:
@@ -413,6 +423,7 @@ def add_types(
     replaces_subtypes_from: Iterable[str] = (),
     replace_card_types: bool = False,
     timestamp: int,
+    sequence: int = 0,
     label: str = "",
 ) -> ContinuousEffect:
     """Layer 4: type-changing. ``replace_subtypes`` covers "is a Swamp"-style
@@ -463,7 +474,7 @@ def add_types(
 
     return ContinuousEffect(
         layer=LAYER_TYPE, modify=modify, applies_to=target,
-        timestamp=timestamp, label=label,
+        timestamp=timestamp, sequence=sequence, label=label,
     )
 
 
@@ -474,6 +485,7 @@ def remove_types(
     subtypes: Iterable[str] = (),
     supertypes: Iterable[str] = (),
     timestamp: int,
+    sequence: int = 0,
     label: str = "",
 ) -> ContinuousEffect:
     """Layer 4's other half: a type an effect takes away.
@@ -502,7 +514,7 @@ def remove_types(
 
     return ContinuousEffect(
         layer=LAYER_TYPE, modify=modify, applies_to=target,
-        timestamp=timestamp, label=label,
+        timestamp=timestamp, sequence=sequence, label=label,
     )
 
 

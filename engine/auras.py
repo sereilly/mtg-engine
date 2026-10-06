@@ -1404,7 +1404,7 @@ def attached_subject_triggers(game, host, condition_kinds, payload_key):
 
 #: What a permanent that *became* an Aura was given (Necromancy). The record the
 #: sentence "it becomes an Aura with "enchant <quality>."" leaves behind: the
-#: subtype is CR 613 layer 4 and goes on ``layer_bridge.GAINED_TYPES`` like any
+#: subtype is CR 613 layer 4 and goes through ``type_changes.gain_types`` like any
 #: other gained type, and this is the other half — the enchant ability (CR 702.5)
 #: that says what the permanent may legally be attached to.
 #:
@@ -1458,7 +1458,7 @@ def end_became_aura_effect(game, permanent) -> bool:
     Returns whether there was an effect to end.
     """
     from .keywords import restore_ability_line
-    from .layer_bridge import GAINED_TYPES, LOST_TYPES
+    from .type_changes import end_type_changes
 
     record = permanent.metadata.pop(BECAME_AURA_ENCHANT, None)
     if record is None:
@@ -1466,15 +1466,7 @@ def end_became_aura_effect(game, permanent) -> bool:
     host = permanent.metadata.get("attached_to")
     if host is not None:
         detach_aura(permanent, host)
-    for key in (GAINED_TYPES, LOST_TYPES):
-        entries = permanent.metadata.get(key)
-        if not entries:
-            continue
-        kept = [entry for entry in entries if not entry.get(BECAME_AURA_RECORD)]
-        if kept:
-            permanent.metadata[key] = kept
-        else:
-            permanent.metadata.pop(key, None)
+    end_type_changes(permanent, lambda entry: bool(entry.get(BECAME_AURA_RECORD)))
     line = record.get("ability_line")
     if line:
         restore_ability_line(permanent, str(line))
@@ -3548,15 +3540,32 @@ def controller_cast_ban(game, seat: int, card) -> str | None:
 def animating_auras(permanent) -> list:
     """Attached Auras that animate *permanent*, honouring "isn't a creature".
 
-    The condition is read from the permanent's **printed** type line rather than
-    its computed one: asking whether it is currently a creature would include
-    the creature type this very effect adds, and the answer would depend on
-    whether it had already been asked.
+    **Whether the host "isn't a creature" is asked as the effect starts to
+    apply** — of CR 613 layer 4's intermediate state, by the board-wide pass
+    (``engine/type_statics.py``), which records its answer on each Aura. That
+    is the only moment the question has one answer: asked of the finished
+    layer it would include the creature type this very effect adds, and asked
+    of the printed type line — which is what this did — it cannot see what
+    some *other* effect has already made the artifact. Under an older
+    Titania's Song the artifact is a creature by the time this Aura applies,
+    so the Aura does nothing (and the Song strips the artifact's abilities);
+    under a younger one the Aura applies first and the Song passes the artifact
+    by. The two depend on each other, which is a loop, and CR 613.8b settles a
+    loop by timestamp. CR 613.6 then keeps the layer-7b half on the set of
+    objects layer 4 found, which is why both collectors read this one answer.
+
+    Where no refresh has decided it — a board built by hand, an Aura read
+    before anything recomputed — the printed type line stands in, as it always
+    did.
     """
-    if "creature" in permanent.card.type_line.lower():
-        return []
-    return [
-        aura
-        for aura in auras_attached_to(permanent)
-        if aura_animates_artifact(aura.effective_card.oracle_text)
-    ]
+    from .type_changes import animates_host
+
+    printed_creature = "creature" in permanent.card.type_line.lower()
+    found = []
+    for aura in auras_attached_to(permanent):
+        if not aura_animates_artifact(aura.effective_card.oracle_text):
+            continue
+        decided = animates_host(aura)
+        if decided if decided is not None else not printed_creature:
+            found.append(aura)
+    return found

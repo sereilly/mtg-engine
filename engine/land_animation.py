@@ -251,9 +251,37 @@ def land_animation_reaches(game, source, animation: LandAnimation, permanent) ->
       land or an animator that changes hands is answered as it stands. A
       source nobody controls reaches nothing.
     """
-    if not permanent.has_type("land"):
+    return _reaches(game, source, animation, permanent, permanent.has_type)
+
+
+def land_animation_reaches_types(
+    game, source, animation: LandAnimation, permanent, card_types, subtypes
+) -> bool:
+    """:func:`land_animation_reaches` asked of a **given** layer-4 state.
+
+    The same noun phrase read against whatever types the caller holds — inside
+    the board-wide pass that decides the layer (``engine/type_statics.py``),
+    its intermediate state at the animator's own place in the order. "All
+    **Swamps** are 1/1 black creatures" depends on any effect that makes a land
+    a Swamp or stops one being a Swamp (CR 613.8a), so *when* the question is
+    asked is part of the answer and one reading of the phrase has to serve
+    both moments.
+
+    The type words are read the way ``Permanent.has_type`` reads them, a card
+    type or a subtype, so the two callers cannot disagree about a word.
+    """
+    return _reaches(
+        game, source, animation, permanent,
+        lambda word: word in card_types or word in subtypes,
+    )
+
+
+def _reaches(game, source, animation: LandAnimation, permanent, has) -> bool:
+    """The one reading of "which lands", over whichever answer to "is it a
+    <word>?" the caller supplies."""
+    if not has("land"):
         return False
-    if animation.land_type is not None and not permanent.has_type(animation.land_type):
+    if animation.land_type is not None and not has(animation.land_type):
         return False
     if animation.controller == "you":
         seat = game.controller_index_of(source)
@@ -269,4 +297,5 @@ __all__ = [
     "land_animation_from_payload",
     "land_animation_payload",
     "land_animation_reaches",
+    "land_animation_reaches_types",
 ]

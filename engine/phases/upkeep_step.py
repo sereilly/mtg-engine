@@ -23,7 +23,7 @@ from ..keywords import (clear_granted_ability_lines,
                         clear_all_abilities_removals)
 from ..copies import RECOPY_EACH_UPKEEP, grants_ability
 from ..land_types import MIRE_COUNTER, end_land_type_change
-from ..layer_bridge import GAINED_TYPES
+from ..type_changes import end_type_changes
 from ..models import Permanent
 from ..cast_permissions import expire_at_upkeep as expire_upkeep_permissions
 from ..phasing_locks import expire_phase_out_locks
@@ -1071,19 +1071,13 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             # chance to grant a fresh one. Whose upkeep is the seat recorded
             # when the ability resolved, because CR 109.5 makes it the
             # controller of the ability rather than of the affected permanent.
-            gained = perm.metadata.get(GAINED_TYPES)
-            if gained:
-                kept = [
-                    g for g in gained
-                    if not (
-                        g.get("duration") == "until_your_next_upkeep"
-                        and g.get("seat") == player_index
-                    )
-                ]
-                if kept:
-                    perm.metadata[GAINED_TYPES] = kept
-                else:
-                    perm.metadata.pop(GAINED_TYPES, None)
+            end_type_changes(
+                perm,
+                lambda record: (
+                    record.get("duration") == "until_your_next_upkeep"
+                    and record.get("seat") == player_index
+                ),
+            )
         # Non-interactive "at the beginning of upkeep" triggers (fixed upkeep damage)
         # are collected here and put on the stack (CR 603.3); they resolve through the
         # upkeep priority window. The pay-or-consequence triggers below stay inline

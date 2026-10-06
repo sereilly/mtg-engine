@@ -2699,7 +2699,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
 
     Every rider is payload, and each is recorded on the permanent as a *layer*
     contribution rather than applied: the lost subtype is layer 4
-    (``layer_bridge.LOST_TYPES``), the lost and gained ability lines are layer 6
+    (``type_changes.lose_types``), the lost and gained ability lines are layer 6
     (``keywords``), and both are read back by ``Permanent.effective_card`` and
     ``computed_types``. So the CR 704.5m sweep, the UI and the compiler all get
     one answer to "what is this permanent now?" — which is the whole reason the
@@ -2707,7 +2707,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     """
     from ..auras import attach_aura, aura_attach_refusal
     from ..keywords import grant_ability_line, remove_ability_line
-    from ..layer_bridge import LOST_TYPES
+    from ..type_changes import lose_types
 
     card = context.card
     source = context.source_permanent
@@ -2752,9 +2752,7 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     payload = instruction.payload
     permanent = Permanent(card=card)
     for subtype in payload.get("losing_subtypes") or ():
-        permanent.metadata.setdefault(LOST_TYPES, []).append(
-            {"subtypes": (str(subtype).lower(),), "source": card.name}
-        )
+        lose_types(permanent, subtypes=[str(subtype)], source=card.name)
     for line in payload.get("losing_abilities") or ():
         remove_ability_line(permanent, line)
     for line in payload.get("gaining_abilities") or ():
