@@ -348,7 +348,9 @@ def _nonland_mana_source(
         return None
     if game._is_summoning_sick(permanent):
         return None
-    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(permanent)))
+    # The permanent's own list: a Sol Ring under Titania's Song has lost its
+    # mana ability, and planning its mana planned a cast the pool cannot pay.
+    usable = game.usable_abilities_of(permanent)
     for index, ability in enumerate(usable):
         if not is_tap_alone_mana_ability(ability):
             continue
@@ -1243,6 +1245,11 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         if game._is_summoning_sick(permanent):
             continue
 
+        # A permanent an effect stripped of its abilities ("loses all
+        # abilities", CR 305.7) has none to propose: the engine refuses every
+        # one, so naming one is a turn spent on a refusal, every turn.
+        if game.lost_abilities_refusal(permanent) is not None:
+            continue
         program = compile_card_oracle(permanent.card)
         # The shared reader, not a third copy of its predicate: it carries
         # CR 113.6's zone read, so a cycling creature's "{2}, Discard this card:
@@ -1785,7 +1792,6 @@ def choose_foreign_activation_action(
     CR 602.2b's target gate.
     """
     from .activation_permissions import card_widens_activation
-    from .global_statics import global_statics_applying_to
 
     player = game.players[player_index]
     best: ActivationAction | None = None
@@ -1797,12 +1803,12 @@ def choose_foreign_activation_action(
         permanent_index = game.battlefield_index_of(permanent)
         if permanent_index is None:
             continue
-        if global_activation_ban(game, permanent) or any(
-            static.removes_abilities for static in global_statics_applying_to(permanent)
-        ):
+        if global_activation_ban(game, permanent):
             continue
-        program = compile_card_oracle(game.playable_card_of(permanent))
-        for ability_index, ability in enumerate(usable_activated_abilities(program)):
+        # ``usable_abilities_of``: empty for a permanent that lost its
+        # abilities — "loses all abilities", which this asked inline, and a
+        # land whose type was set (CR 305.7), which it did not.
+        for ability_index, ability in enumerate(game.usable_abilities_of(permanent)):
             candidate = _foreign_activation_candidate(
                 game, player_index, player, source_seat, permanent,
                 permanent_index, ability_index, ability,

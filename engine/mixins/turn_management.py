@@ -528,14 +528,7 @@ class TurnManagementMixin:
         Only a tap-alone mana ability: anything costing more is the activation
         path's to pay (CR 602.2b), which this seam refuses by design.
         """
-        from ..land_types import lost_abilities_to_type_change
-        from ..targeting import usable_activated_abilities
-
-        if lost_abilities_to_type_change(land):
-            return None
-        usable = usable_activated_abilities(
-            compile_card_oracle(self.playable_card_of(land))
-        )
+        usable = self.usable_abilities_of(land)
         if not 0 <= ability_index < len(usable):
             return None
         chosen = usable[ability_index]

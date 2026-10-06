@@ -394,7 +394,18 @@ def _action_activate(session, req, seat_type):
     land_as_mana_tap = permanent.has_type("land")
     seam_ability_index = None
     if land_as_mana_tap:
-        usable = usable_activated_abilities(compile_card_oracle(permanent.effective_card))
+        # A named ability of a land that has none left (CR 305.7 — its type
+        # was set) is refused with the engine's own reason. The list below is
+        # empty for such a land, and an index into an empty list used to fall
+        # through to "no ability named": the request asked for the Factory's
+        # animation and got a mana tap.
+        if req.ability_index is not None:
+            lost = session.game.lost_abilities_refusal(permanent)
+            if lost is not None:
+                raise HTTPException(status_code=400, detail=lost)
+        usable = session.game.usable_abilities_of(
+            permanent, card=permanent.effective_card
+        )
         chosen_ability = None
         if req.ability_index is not None and 0 <= req.ability_index < len(usable):
             chosen_ability = usable[req.ability_index]

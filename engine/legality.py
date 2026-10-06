@@ -2131,6 +2131,75 @@ class LegalityMixin:
         ):
             spec["division_total"] = defined
 
+    def lost_abilities_refusal(self, permanent) -> str | None:
+        """Why *permanent* has no activated ability to activate at all, or
+        None: an effect took them away.
+
+        Two rules, one answer, because every reader needs both or neither:
+
+        * "**loses all abilities**" (Titania's Song on a noncreature artifact).
+          Layer 6 removes the keywords; an activated ability is read off the
+          compiled program rather than the ability channel, so the removal has
+          to be asked for;
+        * CR 305.7 — a land whose subtype an effect **set** to a basic land
+          type "loses all abilities generated from its rules text". A Mishra's
+          Factory under Blood Moon is a Mountain: it taps for {R} (the tap
+          seam gives it its new type's mana ability, the rule's other half)
+          and does not animate.
+
+        This was two inline checks at the top of ``_activate_onto_stack`` and
+        a different subset of them at each place that *lists* abilities — the
+        foreign chooser asked the first, the land tap seam the second, the
+        picker and the wire neither. So both doors refused what the lists
+        still offered: a dead button in the ability menu and a proposal the AI
+        made every turn. One predicate, and :meth:`usable_abilities_of` is the
+        list that asks it.
+
+        (Standing approximation, unchanged: CR 305.7 leaves a land the
+        abilities *other effects granted* it, and this takes those too — as
+        the door always has.)
+        """
+        from .global_statics import global_statics_applying_to
+        from .land_types import lost_abilities_to_type_change
+
+        if any(
+            static.removes_abilities
+            for static in global_statics_applying_to(permanent)
+        ):
+            return f"{permanent.card.name} has lost all abilities"
+        if lost_abilities_to_type_change(permanent):
+            return (
+                f"{permanent.card.name} lost its abilities when its land type "
+                "was set (CR 305.7)"
+            )
+        return None
+
+    def usable_abilities_of(self, permanent, *, card=None) -> list:
+        """The activated abilities *permanent* has to activate from the
+        battlefield **now** — ``targeting.usable_activated_abilities`` over its
+        program, or none where an effect took them (:meth:`lost_abilities_
+        refusal`).
+
+        The permanent's answer rather than the program's. A compiled program
+        is the card as it reads; whether that text is still the permanent's is
+        a question about the board, and a reader that listed the program's
+        abilities listed some the activation path refuses on sight. This list
+        *is* the index — the web layer, the AI and
+        ``queue_permanent_ability`` address an ability by its position in it —
+        so it is empty or whole, never renumbered.
+
+        *card* is the caller's reading of the permanent where it has one in
+        hand (the picker reads ``effective_card``); otherwise the playable
+        card, which is what the activation path compiles.
+        """
+        if self.lost_abilities_refusal(permanent) is not None:
+            return []
+        return usable_activated_abilities(
+            compile_card_oracle(
+                card if card is not None else self.playable_card_of(permanent)
+            )
+        )
+
     def activation_target_spec(
         self, controller_index: int, permanent_index: int, ability_index: int | None = None
     ) -> dict:
@@ -2151,7 +2220,10 @@ class LegalityMixin:
         # effective_card so a copy (Clone / Vesuvan Doppelganger) offers the
         # copied creature's activated abilities (CR 707.2).
         card = source_permanent.effective_card
-        usable = usable_activated_abilities(compile_card_oracle(card))
+        # Through the permanent's own list: a land whose type was set (CR
+        # 305.7) and a permanent that lost all abilities have none to describe,
+        # and a spec derived for one was a picker in front of a refusal.
+        usable = self.usable_abilities_of(source_permanent, card=card)
         if ability_index is not None:
             usable = usable[ability_index:ability_index + 1] if 0 <= ability_index < len(usable) else []
         spec, spec_ability = _activation_spec(usable)

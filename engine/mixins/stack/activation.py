@@ -719,13 +719,7 @@ class AbilityActivationMixin:
         # has to be enforced where activation is authorised. Without this the
         # card would be half-implemented: a Jayemdae Tome under Titania's Song
         # would lose nothing it visibly had and keep drawing cards.
-        from ...global_statics import global_statics_applying_to
-
-        if any(static.removes_abilities for static in global_statics_applying_to(permanent)):
-            details = f"{permanent.card.name} has lost all abilities"
-            self.log.append(details)
-            return SimulationResult(permanent.card.name, False, "unsupported", details)
-
+        #
         # CR 305.7, for the same reason and at the same place: a land whose
         # subtype an effect *set* to basic land types loses the abilities its
         # rules text generated. Layer 6 drops the keywords; an activated ability
@@ -736,13 +730,13 @@ class AbilityActivationMixin:
         # It does not touch tapping for mana: that path is `tap_land_for_mana`,
         # which reads `effective_produced_mana` and already gives the land the
         # mana ability of its new type, which is 305.7's other half.
-        from ...land_types import lost_abilities_to_type_change
-
-        if lost_abilities_to_type_change(permanent):
-            details = (
-                f"{permanent.card.name} lost its abilities when its land type "
-                "was set (CR 305.7)"
-            )
+        #
+        # Both asked of ``lost_abilities_refusal``, one predicate: the same one
+        # every *list* of a permanent's abilities asks (``usable_abilities_of``),
+        # so what is offered and what is refused here cannot differ. They were
+        # two inline checks, and each list asked a different one or neither.
+        details = self.lost_abilities_refusal(permanent)
+        if details is not None:
             self.log.append(details)
             return SimulationResult(permanent.card.name, False, "unsupported", details)
 

@@ -96,16 +96,12 @@ def _seam_abilities(game: "Game", land: "Permanent") -> list:
     ability a tap alone pays for — ``None`` standing for the printed-summary
     path a basic or a dual takes."""
     from .mixins.turn_management import is_tap_alone_mana_ability
-    from .oracle import compile_card_oracle
-    from .targeting import usable_activated_abilities
 
     found: list = []
     if game.land_mana_tap_refusal(land) is None:
         free, _priced = game._land_mana_abilities(land)
         found.append(free)
-    usable = usable_activated_abilities(
-        compile_card_oracle(game.playable_card_of(land))
-    )
+    usable = game.usable_abilities_of(land)
     for index, ability in enumerate(usable):
         if not is_tap_alone_mana_ability(ability):
             continue

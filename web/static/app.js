@@ -1563,6 +1563,14 @@ async function maybeAutoStepAi(state = currentState) {
 // treats granted lines exactly like printed ones.
 function activatedAbilityText(card) {
   if (!card || typeof card === "string") return "";
+  // An effect took this permanent's abilities — "loses all abilities", or a
+  // land whose type was set (CR 305.7; a Mishra's Factory under Blood Moon is
+  // a Mountain). The server says so and refuses every one of them, and the
+  // oracle text below still prints them: read here, the one place every menu,
+  // cost and prompt on this page starts from, so none of them is offered. A
+  // land then falls through to its plain tap for mana, which is the mana
+  // ability of its new type.
+  if (card.abilities_lost) return "";
   const granted = Array.isArray(card.granted_abilities) ? card.granted_abilities : [];
   return [(card.oracle_text || "").trim(), ...granted].filter(Boolean).join("\n");
 }
