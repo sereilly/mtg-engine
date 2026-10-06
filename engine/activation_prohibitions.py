@@ -81,7 +81,18 @@ def _name(source) -> str:
 
 def _is_mana(ability) -> bool:
     # CR 605.1a decides which abilities a printed "…unless they're mana
-    # abilities" leaves open — one reader, the activation path's own.
+    # abilities" leaves open — a mana ability is defined by what it *does*,
+    # so the test is ``mana_payment.is_mana_ability``, the activation path's
+    # own reader, for all three rows that print the exception (Abeyance, Hand
+    # to Hand, Faith's Fetters).
+    #
+    # **Not the same-named function in ``ai_valuation``**, which is a strictly
+    # weaker answer to the same question: it takes a bare instruction, tests
+    # membership of a smaller kind set, and answers False for the twelve
+    # painlands and depletion lands whose mana ability lowers to a
+    # ``sequence``. Reached for here it would shut off a mana ability the card
+    # leaves open — it once did exactly that to Faith's Fetters, by a
+    # function-level import rebinding the name for a whole function.
     from .mana_payment import is_mana_ability
 
     return is_mana_ability(ability)

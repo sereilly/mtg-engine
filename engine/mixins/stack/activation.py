@@ -1220,48 +1220,14 @@ class AbilityActivationMixin:
                 self.log.append(details)
                 return SimulationResult(permanent.card.name, False, "unsupported", details)
 
-        # Every printed "Activate only …" clause on *this* ability line
-        # (engine/activation_restrictions.py, CR 602.5). One table, read here and
-        # by the support gate, replacing a hand-written if-chain whose branches
-        # were substring tests: everything the chain did not list was silently
-        # unenforced, which is how Caged Zombie drained two life on an empty
-        # graveyard while reporting supported.
-        # "Activated abilities of creatures can't be activated." (Cursed
-        # Totem.) The *board* half of CR 602.5, read before any cost is paid
-        # and before the per-line clauses below: this one is not printed on the
-        # ability at all, so `activation_denial` — which is handed one line and
-        # rightly asks only about it — cannot see it.
-        #
-        # No mana-ability exception. CR 605 makes a mana ability an activated
-        # ability like any other and the sentence names none, which is the
-        # whole of what this card does to a Bird of Paradise. The Aura clause
-        # further down prints its exception out loud and keeps it.
-        # "Until end of turn, … that player can't activate abilities that
-        # **aren't mana abilities**." (Abeyance.) CR 602.5's prohibition with
-        # no permanent behind it — a resolved effect named the seat and the
-        # window — so it is asked of the per-turn record rather than of any
-        # card's text, beside the board-scanned clauses here for the reason
-        # the cast gate asks its twin beside the board-scanned cast bans.
-        #
-        # The exception is not a card type but a *rule*: CR 605.1a defines a mana
-        # ability by what it *does*, so the test is ``mana_payment.is_mana_ability``
-        # — the reader Faith's Fetters' identical exception already asks below,
-        # and the one this module has imported since it was written.
-        #
-        # **Not the same-named function in ``ai_valuation``**, which is a
-        # strictly weaker answer to the same question: it takes a bare
-        # instruction, tests membership of a smaller kind set, and answers False
-        # for the twelve painlands and depletion lands whose mana ability lowers
-        # to a ``sequence``. Reaching for it here would have shut off a mana
-        # ability the card leaves open — and, because a function-level import
-        # rebinds the name for the whole function, it silently broke Faith's
-        # Fetters two hundred lines below. Two names for one question, which is
-        # the hazard SET_PLAYBOOK.md names and the suite caught.
         # **One question, asked of one table** (``engine/activation_
-        # prohibitions.py``, CR 602.5). Everything the comment above describes
-        # — the board-wide bans, the turn-long records, the Aura clauses, the
-        # printed "Activate only …" and "…may activate this ability" on this
-        # line — was ten inline checks from here down, each logging its own
+        # prohibitions.py``, CR 602.5): the board-wide bans (Cursed Totem,
+        # Null Rod, City of Solitude, Hand to Hand, Katabatic Winds), the
+        # turn-long records (Interdict, Abeyance), the Aura clauses (Faith's
+        # Fetters, Volrath's Curse), and the printed "Activate only …" and
+        # "…may activate this ability" on this line
+        # (``engine/activation_restrictions.py``, ``activation_permissions.py``).
+        # They were ten inline checks from here down, each logging its own
         # sentence. They are the table's rows now, in the order they stood
         # here and with the words they logged, because this door was the only
         # reader that asked all ten: the AI's chooser asked four, the wire
