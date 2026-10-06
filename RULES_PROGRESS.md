@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2757 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2782 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -631,17 +631,17 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 509. Declare Blockers Step
 
-- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(87 tests, subrules abcdfghi)*
+- [x] **509.1** First, the defending player declares blockers. This turn-based action doesn’t use the stack. To d... *(89 tests, subrules abcdfghi)*
 - [x] **509.2** Second, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
 - [x] **509.3** Triggered abilities that trigger on blockers being declared may have different trigger conditions. *(15 tests, subrules acdg)*
 - [x] **509.4** If a creature is put onto the battlefield blocking, its controller chooses which attacking creatu... *(1 tests)*
 
 ### 510. Combat Damage Step
 
-- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(18 tests, subrules abcde)*
+- [x] **510.1** First, the active player announces how each attacking creature assigns its combat damage, then th... *(51 tests, subrules abcde)*
 - [x] **510.2** Second, all combat damage that’s been assigned is dealt simultaneously. This turn-based action do... *(7 tests)*
 - [x] **510.3** Third, the active player gets priority. (See rule 117, “Timing and Priority.”) *(4 tests, subrules a)*
-- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(2 tests)*
+- [x] **510.4** If at least one attacking or blocking creature has first strike (see rule 702.7) or double strike... *(4 tests)*
 
 ### 511. End of Combat Step
 
@@ -661,7 +661,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 514. Cleanup Step
 
 - [x] **514.1** First, if the active player’s hand contains more cards than their maximum hand size (normally sev... *(6 tests)*
-- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(15 tests)*
+- [x] **514.2** Second, the following actions happen simultaneously: all damage marked on permanents (including p... *(16 tests)*
 - [x] **514.3** Normally, no player receives priority during the cleanup step, so no spells can be cast and no ab... *(4 tests, subrules a)*
 
 ### 601. Casting Spells
@@ -889,9 +889,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.16** Protection *(53 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
 - [x] **702.18** Shroud *(5 tests, subrules a)*
-- [x] **702.19** Trample *(10 tests, subrules bdf)*
+- [x] **702.19** Trample *(11 tests, subrules bdf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
-- [x] **702.22** Banding *(35 tests, subrules abcdefghjk)*
+- [x] **702.22** Banding *(37 tests, subrules abcdefghjk)*
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(32 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
