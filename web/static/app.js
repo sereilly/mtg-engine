@@ -1567,9 +1567,13 @@ function activatedAbilityText(card) {
   // land whose type was set (CR 305.7; a Mishra's Factory under Blood Moon is
   // a Mountain). The server says so and refuses every one of them, and the
   // oracle text below still prints them: read here, the one place every menu,
-  // cost and prompt on this page starts from, so none of them is offered. A
-  // land then falls through to its plain tap for mana, which is the mana
-  // ability of its new type.
+  // cost and prompt on this page starts from, so none of them is offered.
+  //
+  // What such a land still does — tap for the mana of its new type — is NOT
+  // reached by returning nothing here: both click handlers ask
+  // `hasActivatedAbility` first, and a basic Mountain passes that only because
+  // its reminder text prints "{T}:". `landTapsOnlyAsItsNewType` below is that
+  // click's own question, asked ahead of the gate.
   if (card.abilities_lost) return "";
   const granted = Array.isArray(card.granted_abilities) ? card.granted_abilities : [];
   return [(card.oracle_text || "").trim(), ...granted].filter(Boolean).join("\n");
@@ -1637,6 +1641,67 @@ function hasActivatedAbility(card) {
   const text = activatedAbilityText(card);
   if (!text) return false;
   return /\{t\}|:\s*/i.test(text) || /^\s*equip\b/im.test(text);
+}
+
+// CR 305.7: a land whose subtype an effect set to a basic land type "loses all
+// abilities generated from its rules text … and it gains the appropriate mana
+// ability for each new basic land type." So a Maze of Ith or a Mishra's
+// Factory under Blood Moon is a Mountain and nothing else: no printed ability
+// to offer, and a click taps it for {R}.
+//
+// The server's three fields are the whole answer, and none of them is the
+// oracle text: `abilities_lost` (its sentence for why), `taps_for_mana` (the
+// tap seam would accept it) and `produced_mana` (what the new type makes).
+// Without this the click reached "has no activated ability to use" and
+// stopped — a land no person could tap, where the same Factory tapped fine
+// before the menu learned its abilities were gone.
+function landTapsOnlyAsItsNewType(card) {
+  if (!card || typeof card === "string" || !card.abilities_lost) return false;
+  if (!(card.type || "").toLowerCase().includes("land")) return false;
+  if (card.taps_for_mana === false) return false;
+  return Array.isArray(card.produced_mana) && card.produced_mana.length > 0;
+}
+
+// The click of such a land: the route a basic land's click ends on (`activate`
+// with no ability named, which the server turns into its tap for mana), with
+// the colour the server reports rather than anything read off the card. Two
+// new types (a land made a Swamp *and* an Island) ask through the on-board
+// mana fan, offering exactly the server's colours.
+function tapLandAsItsNewType(card, permanentIndex) {
+  const cardName = normalizeCardName(card);
+  const colors = card.produced_mana.map((symbol) => String(symbol).toUpperCase());
+  if (colors.length > 1) {
+    const colorOptions = MANA_COLOR_OPTIONS.filter((o) => colors.includes(o.symbol));
+    pendingManaColor = {
+      cardName, permanentIndex, targetSeat: seat, oracleText: "", abilityIndex: null,
+      colorOptions, fan: true,
+    };
+    if (battlefieldCanvas && seat !== null) {
+      battlefieldCanvas.showManaFan(`${seat}-${permanentIndex}`, colorOptions);
+    }
+    renderActivationPrompt();
+    updateActionHint(`Choose a mana color for ${cardName}.`);
+    return;
+  }
+  const body = withPermanentId(
+    {
+      seat, action: "activate", permanent_name: cardName,
+      permanent_index: permanentIndex, mana_color: colors[0],
+    },
+    "permanent_id", seat, permanentIndex,
+  );
+  sendAction(body)
+    .then(() => updateActionHint(`Tapped ${cardName} for {${colors[0]}}.`))
+    .catch((e) => updateActionHint(e.message, true));
+}
+
+// What to say when a permanent with nothing to activate is clicked: the
+// server's own sentence where an effect is the reason ("… lost its abilities
+// when its land type was set (CR 305.7)", "… has lost all abilities"), so the
+// player is told why the text in front of them does nothing.
+function noActivatedAbilityHint(card, cardName) {
+  if (card && typeof card === "object" && card.abilities_lost) return String(card.abilities_lost);
+  return `${cardName} has no activated ability to use.`;
 }
 
 // The activation cost of one of a card's abilities — the one at `abilityIndex`
@@ -11833,6 +11898,18 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   const cardName = normalizeCardName(card);
   if (!cardName) return;
 
+  // A land an effect stripped of its printed abilities (CR 305.7) has one
+  // thing left to do, and it is not on its text: tap for the mana of its new
+  // type. Asked first and here, in the one function every activation starts
+  // from — the two click handlers, a permanent dragged onto the board, a
+  // prompt resuming — because everything below reads the printed text for
+  // what to ask (a painland's colour fan and damage, "any color", a timing
+  // line), and none of that text is this land's any more.
+  if (landTapsOnlyAsItsNewType(card) && Number.isInteger(permanentIndex)) {
+    tapLandAsItsNewType(card, permanentIndex);
+    return;
+  }
+
   // Cards with more than one activated ability (Rock Hydra, Basalt Monolith) must
   // let the player choose which ability to use before paying any cost. A
   // planeswalker asks even when it has only one loyalty ability: the cost is
@@ -15963,7 +16040,21 @@ function showCardPreview(card) {
   // Above the rules text, beside the keywords: "the chosen color" in the text
   // below reads against the line that says which colour that is.
   for (const line of previewEntryChoiceLines(card)) sections.push(renderSymbolsInline(line));
-  if (previewText) sections.push(renderOracleTextWithChanges(previewText, textChanges));
+  // An effect took this permanent's abilities ("loses all abilities"; a land
+  // whose type was set, CR 305.7). The printed text is still what the card
+  // says, so it stays — struck through, under the server's own sentence for
+  // why it does nothing, and for a land beside what it taps for instead.
+  const abilitiesLost = typeof card === "object" && card?.abilities_lost ? String(card.abilities_lost) : "";
+  if (abilitiesLost) {
+    const tapsFor = landTapsOnlyAsItsNewType(card)
+      ? ` It taps for ${card.produced_mana.map((s) => `{${String(s).toUpperCase()}}`).join(" or ")}.`
+      : "";
+    sections.push(renderSymbolsInline(`⛔ ${abilitiesLost}.${tapsFor}`));
+  }
+  if (previewText) {
+    const rulesHtml = renderOracleTextWithChanges(previewText, textChanges);
+    sections.push(abilitiesLost ? `<span class="text-changed-old">${rulesHtml}</span>` : rulesHtml);
+  }
   for (const line of counterLines) sections.push(renderSymbolsInline(line));
   if (sicknessLabel) sections.push(renderSymbolsInline(sicknessLabel));
   const previewEl = q("cardPreviewText");
@@ -16191,8 +16282,18 @@ function createCardElement(card, options = {}) {
           return;
         }
 
-        if (!hasActivatedAbility(card)) {
-          updateActionHint(`${cardName} has no activated ability to use.`, true);
+        // A land an effect stripped of its printed abilities taps for the mana
+        // of its new type (CR 305.7). It cannot pass the gate below — it has
+        // no ability text left to read — so it is let through here, and
+        // `startActivationPrompt` sends it down its own path.
+        const tapsAsNewType = zoneKind === "battlefield" && landTapsOnlyAsItsNewType(card);
+        if (tapsAsNewType && card.tapped) {
+          SFX.onError();
+          updateActionHint("Card is already tapped.", true);
+          return;
+        }
+        if (!tapsAsNewType && !hasActivatedAbility(card)) {
+          updateActionHint(noActivatedAbilityHint(card, cardName), true);
           return;
         }
 
@@ -19535,8 +19636,14 @@ function initBattlefieldCanvas() {
           return;
         }
 
-        if (!hasActivatedAbility(card)) {
-          updateActionHint(`${card.name} has no activated ability to use.`, true);
+        // A land an effect stripped of its printed abilities taps for the mana
+        // of its new type (CR 305.7). It cannot pass the gate below — it has
+        // no ability text left to read — so it is let through here; once the
+        // pile redirect has picked the copy, `startActivationPrompt` sends it
+        // down its own path.
+        const tapsAsNewType = landTapsOnlyAsItsNewType(card);
+        if (!tapsAsNewType && !hasActivatedAbility(card)) {
+          updateActionHint(noActivatedAbilityHint(card, card.name), true);
           return;
         }
 
@@ -19560,7 +19667,12 @@ function initBattlefieldCanvas() {
         // If the ability costs {T} and the (chosen) copy is still tapped — no
         // untapped copy was found in the pile — it can't be activated. Don't
         // open a prompt; just play the error sound and say so.
-        if (activateCard.tapped && abilityCostRequiresTap(activateCard)) {
+        // (A land tapping as its new type has no printed cost to read, and its
+        // tap is the whole of what a click does.)
+        if (
+          activateCard.tapped
+          && (abilityCostRequiresTap(activateCard) || landTapsOnlyAsItsNewType(activateCard))
+        ) {
           SFX.onError();
           updateActionHint("Card is already tapped.", true);
           return;
