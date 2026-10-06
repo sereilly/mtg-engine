@@ -2903,6 +2903,54 @@ def _entry_trigger_instructions(program) -> list:
     ]
 
 
+def cast_announced_entry_trigger(
+    card, program, *, optional_cost_payments: dict | None = None
+) -> "tuple[object, object] | None":
+    """``(ability, instruction)`` for the entry trigger whose target a cast of
+    *card* names, or None when its cast names no trigger's target.
+
+    :func:`_cast_target_spec`'s last branch, made askable from the other side.
+    That branch answers *what kind* of thing the cast picks; the list of what
+    may be picked has to be the trigger's own (CR 603.3d — the cast is naming
+    in advance what the trigger chooses as it is put on the stack), and the
+    enumerator can only build that list from the trigger: its instruction
+    carries the printed narrowing, and it is an **ability**, which is what
+    protection, hexproof and shroud are asked about.
+
+    The trigger is the first that describes a choice, under the kicker the
+    cast announced (CR 702.33g) — the same walk, one trigger at a time, so the
+    ability comes back beside the instruction as that announcement will run
+    it. None for an Aura (its cast names what it enchants, CR 115.1b), for a
+    copy-as-it-enters permanent (its cast names what it copies) and for an
+    instant or sorcery.
+    """
+    type_line = card.type_line.lower()
+    if "instant" in type_line or "sorcery" in type_line:
+        return None
+    text = program.normalized_text or ""
+    if (
+        _ENCHANT_GRAVEYARD_LINE.search(text) is not None
+        or card_enchant_subject(card.oracle_text) is not None
+        or copy_on_enter_type(text) is not None
+    ):
+        return None
+    kickers = _kickers_announced(card, optional_cost_payments)
+    for ability in program.triggered_abilities:
+        if not (
+            ability.supported
+            and ability.instruction is not None
+            and ability.condition.kind == "enters_battlefield"
+        ):
+            continue
+        instructions = (ability.instruction,)
+        if kickers is not None:
+            instructions = _as_kicked(instructions, kickers)
+        slot = _first_described_slot(instructions)
+        if slot is not None and slot[0].get("kind") != "none":
+            return ability, instructions[0]
+    return None
+
+
 def entry_trigger_instructions(
     card, program, *, optional_cost_payments: dict | None = None
 ) -> tuple:
@@ -4431,6 +4479,31 @@ def usable_activated_abilities(program, *, zone: str = BATTLEFIELD):
 _PLAYER_TARGET_SPEC_KINDS = frozenset({
     "player", "any", "player_or_planeswalker", "divided",
 })
+
+
+def spec_offers_a_player(spec: dict | None) -> bool:
+    """Whether *spec*'s picker offers a **player's face** at all (CR 115.1).
+
+    The one answer to "may the seat this announcement names be a target?",
+    read by the three places that have to agree about it:
+    ``legality._enumerate_targets`` (which seats the picker lists),
+    ``legality.cast_target_refusal`` (whether a seat named with no object
+    beside it is held to that list, CR 601.2c) and
+    ``legality.illegal_targets_refusal`` (whether it is re-asked at resolution,
+    CR 608.2b).
+
+    A player kind, less the two divided shapes whose printed noun admits no
+    player: "…among any number of **target creatures**" (Fire Covenant) and "X
+    **target Mountains**" (Volcanic Eruption). The seat beside one of those is
+    the battlefield its permanents sit on — or the seat every cast carries —
+    and comparing it against a list of faces would refuse a legal cast.
+    """
+    return (
+        bool(spec)
+        and spec.get("kind") in _PLAYER_TARGET_SPEC_KINDS
+        and not spec.get("land_filter")
+        and not spec.get("creatures_only")
+    )
 
 
 def stack_object_mana_value(item) -> int:

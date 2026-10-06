@@ -373,11 +373,18 @@ def test_niambi_cannot_bounce_a_creature_you_do_not_control(set_pool):
         target_player_index=1, target_permanent_index=0,
     )
     game._settle()
-    # The trigger really did offer, and the offer really was accepted. Without
+    # The trigger really did fire, and what stopped it is the phrase. Without
     # this the assertions below hold vacuously on any engine where the card is
     # unsupported and nothing fires at all.
-    assert game.confirm_optional_pay(0, accept=True)
-    game._settle()
+    #
+    # It used to reach its "you may" with the opponent's Angel still attached
+    # and have the bounce decline it. The Angel is not a target the trigger
+    # could choose, so the cast's announcement is set aside as the trigger is
+    # put on the stack (CR 603.3d) — and with no other creature under Niambi's
+    # controller there is no legal target, so the ability is removed and no
+    # offer is ever made.
+    assert any("no legal target" in line for line in game.log), game.log[-6:]
+    assert not game.stack and not game.pending_choices
 
     assert [p.card.name for p in game.controlled_by(1)] == ["Baneslayer Angel"]
     assert p1.life == 20

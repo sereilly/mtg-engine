@@ -784,7 +784,10 @@ def test_w2g1_spinal_graft_destroys_a_host_a_spell_points_at(set_pool):
 
     assert not game.is_on_battlefield(bear)
     assert [c.name for c in p0.graveyard] == ["Trained Armodon", "Spinal Graft"]
-    assert any("no effect" in line for line in game.log), "CR 608.2b"
+    # The rule's own line, where this read the handler's "no effect": "any
+    # target" was a kind CR 608.2b's gate declined to judge, so the Bolt
+    # resolved and its handler found nothing to hit.
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
 
 
 def test_w2g1_spinal_grafts_trigger_names_the_attached_host(set_pool):

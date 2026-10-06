@@ -268,6 +268,23 @@ class StackResolutionMixin:
         fallback = 1 - caster_index
         return fallback if 0 <= fallback < len(self.players) else caster_index
 
+    def _spell_default_seat(self, caster_index: int) -> int:
+        """The seat an instant or sorcery that named no player resolves at.
+
+        ``1 - caster``: the opposing seat of a two-player game, which is the
+        arithmetic :meth:`_resolve_card` has always done and the default the
+        web route sends for a cast with no ``target_seat``. A method so that
+        the announcement gate (``legality._cast_player_target_refusal``,
+        CR 601.2c) and the resolution gate (``illegal_targets_refusal``,
+        CR 608.2b) ask about the very seat the resolution will read — the
+        default is a target like any other, and a gate that guessed it
+        differently would be judging a player the spell never reaches.
+
+        Not range-checked here: at three seats it can name no seat at all, and
+        each reader decides what that means (the gates decline to judge).
+        """
+        return 1 - caster_index
+
     def _enqueue_triggered_ability(
         self,
         *,
@@ -574,6 +591,108 @@ class StackResolutionMixin:
         a kind table that answers "player" for a whole family of instructions,
         including the ones whose seat the firing event already fixed.
         """
+        offer = self._trigger_target_candidates(item)
+        if offer is None:
+            return
+        spec, chooser_index, candidates = offer
+        self._arm_trigger_target_choice(item, spec, chooser_index, candidates)
+
+    def cast_announcement_fault(self, item: StackItem) -> str | None:
+        """Why the target *item* carries from its permanent spell's cast is
+        **not** one this trigger could have chosen for itself (CR 603.3d), or
+        None when the announcement stands.
+
+        This engine names an entry trigger's target as the permanent is cast —
+        a standing convention, measured and kept (ROADMAP, "Entry triggers are
+        stack objects"). The rule chooses it here, as the trigger is put on the
+        stack, so the honest reading of the convention is that the cast's
+        announcement is a **pre-answer** to this choice: it has to be an answer
+        the choice would have accepted. Nothing asked. The cast picker offered
+        every permanent of the right type and no gate stood behind it (a
+        permanent spell does not target, so CR 601.2c has nothing to refuse),
+        which left the trigger's own legality — the one
+        :meth:`_trigger_target_candidates` applies to a target it chooses
+        itself — unasked of a target it was handed: Nekrataal destroyed a White
+        Knight, sixteen shipped permanents acted on a creature with protection
+        from their own colour or from creatures, and Hunting Drake ("target red
+        or green creature") took any creature at all.
+
+        Asked **now**, of the board as it is when the trigger is put on the
+        stack, so it also answers everything that happened while the permanent
+        spell waited to resolve: the named creature left, gained protection or
+        changed sides, the named player gained shroud (Ivory Mask).
+
+        It stands where the trigger has no choice this picker could make (a
+        card in a graveyard, a spell, a phrase the enumerator cannot narrow):
+        there is no list to hold the announcement to, and it rides the object
+        as it always has.
+
+        Two faults, told apart because only one of them is news to a player:
+
+        * ``"illegal"`` — a target was named and the trigger cannot choose it;
+        * ``"unnamed"`` — a seat was named alone for a trigger that can only
+          target an **object** (``spec_offers_a_player`` says no). That announces nothing the trigger could choose (it is
+          what the web route sends for a cast no picker ran in front of), so
+          the trigger chooses rather than leaving its handler to scan that
+          seat's board for a target nobody picked.
+        """
+        offer = self._trigger_target_candidates(item, announced=True)
+        if offer is None:
+            return None
+        spec, _chooser, candidates = offer
+        ids = item.target_permanent_id
+        named = [
+            permanent_id
+            for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids])
+            if isinstance(permanent_id, int)
+        ]
+        # A spec that is a player and nothing else never reads an id
+        # (``stack_targets._read``): the seat is the announcement.
+        if named and spec.get("kind") != "player":
+            legal = set()
+            for candidate in candidates:
+                if candidate.get("kind") != "permanent":
+                    continue
+                permanent = self.permanent_at(candidate["seat"], candidate["index"])
+                if permanent is not None:
+                    legal.add(permanent.permanent_id)
+            if all(permanent_id in legal for permanent_id in named):
+                return None
+            return "illegal"
+        seats = {
+            candidate.get("seat") for candidate in candidates
+            if candidate.get("kind") == "player"
+        }
+        if item.target_player_index in seats:
+            return None
+        from ...targeting import spec_offers_a_player
+
+        return "illegal" if spec_offers_a_player(spec) else "unnamed"
+
+    def _trigger_target_candidates(
+        self, item: StackItem, *, announced: bool = False,
+    ) -> "tuple[dict, int, list] | None":
+        """``(spec, chooser seat, candidates)`` — what CR 603.3d lets *item*
+        choose its target from, or None when this picker makes no choice for it.
+
+        The whole of :meth:`_choose_trigger_targets`' decision, split from the
+        prompt it arms because the list has a second and a third reader:
+
+        * :meth:`cast_announcement_fault` — an entry trigger carrying the
+          target its permanent spell named is asked whether that target is one
+          it could have chosen itself;
+        * ``legality.entry_trigger_cast_targets`` — the cast picker that names
+          it, which has to offer this list and not a wider one.
+
+        *announced* is those two readers' question: the item's target fields
+        hold (or will hold) a **cast's announcement** rather than something the
+        firing event bound, so the two early-outs that read them as "the event
+        made the choice" are skipped. Every other way out stands — a phrase this
+        picker cannot narrow is one it cannot judge either.
+
+        The candidates are ``_enumerate_targets``' own entries (the picker's
+        vocabulary: a ``permanent`` by seat and slot, a ``player`` by seat).
+        """
         from ...targeting import derive_instruction_spec
 
         instruction = item.ability_instruction
@@ -603,7 +722,7 @@ class StackResolutionMixin:
         # this branch, never as a general gate: for an unstamped trigger the
         # record is evidence rather than proof, and a False there would take a
         # real target away (Man-o'-War's bounce answers False today).
-        if item.target_permanent_id is not None and not (
+        if not announced and item.target_permanent_id is not None and not (
             item.source_permanent is not None
             and item.target_permanent_id == item.source_permanent.permanent_id
             and announces_a_target(instruction)
@@ -631,7 +750,7 @@ class StackResolutionMixin:
             # is the player half of the ``target_permanent_id`` early-out above:
             # a fire site that stamps the seat its event was about has made the
             # choice, and asking again would replace it with one nobody made.
-            if item.target_player_index is not None:
+            if not announced and item.target_player_index is not None:
                 return
         # **Only pick what the enumerator can narrow.** A printed noun phrase's
         # controller reaches the spec as a flag ("you control" → `own_only`,
@@ -695,6 +814,17 @@ class StackResolutionMixin:
             ability_source=item.source_permanent,
             triggered=True,
         )
+        return spec, chooser_index, candidates
+
+    def _arm_trigger_target_choice(
+        self, item: StackItem, spec: dict, chooser_index: int, candidates: list,
+    ) -> None:
+        """Ask *chooser_index* for *item*'s target out of *candidates*, or take
+        the ability off the stack when there is none to ask about (CR 603.3c).
+
+        The prompt half of :meth:`_choose_trigger_targets`.
+        """
+        instruction = item.ability_instruction
         offered = []
         for candidate in candidates:
             if candidate.get("kind") == "player":
@@ -1579,7 +1709,10 @@ class StackResolutionMixin:
             return
 
         # Sorceries and instants resolve immediately in this basic engine.
-        target_idx = target_player_index if target_player_index is not None else (1 - caster_index)
+        target_idx = (
+            target_player_index if target_player_index is not None
+            else self._spell_default_seat(caster_index)
+        )
         target = self.players[target_idx]
 
         def apply_text() -> None:
@@ -1776,7 +1909,12 @@ class StackResolutionMixin:
         approximation ``targeting._cast_target_spec`` documents; CR 603.3d
         would choose it here), so the seat, slot and id the cast handed in are
         stamped on the stack object, flagged ``announced_at_cast`` so the push
-        neither asks again nor announces the same choice twice. The id travels
+        neither asks again nor announces the same choice twice — **provided
+        the announcement is one the trigger could have made**: the push asks
+        :meth:`cast_announcement_fault`, and a target the trigger could not
+        choose (protection from this permanent, a creature that left while the
+        spell waited) is set aside there, the trigger then choosing as one
+        nobody announced for. The id travels
         with the index because an index is unstable: anything leaving the
         battlefield renumbers every later slot, and the trigger now waits
         through a priority round of its own.

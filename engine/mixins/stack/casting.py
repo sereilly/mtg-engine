@@ -1497,6 +1497,15 @@ class SpellCastingMixin:
                 # see both announcements at once.
                 optional_cost_payments=optional_paid,
                 mode_index=announced_mode,
+                # CR 601.2d's list, whose every entry is a target too — and it
+                # is the cast's own, never one mode's: a "choose one or more"
+                # mode names its targets on the mode (`_mode_announcements`).
+                divided_targets=None if chosen_modes else divided_targets,
+                # …and the two things that say whether a cast naming no player
+                # named *nothing* (a spell on the stack is a target) and whether
+                # it owed a target at all ("X target …" at an announced X).
+                target_stack_item=mode_stack_item,
+                x_value=x_value,
             )
             if named_refusal is not None:
                 self.log.append(named_refusal)

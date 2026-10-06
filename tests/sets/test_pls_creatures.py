@@ -927,7 +927,12 @@ def test_w1g2_a_mandatory_target_can_be_the_battlemage_itself(set_pool):
 
 def test_w1g2_stormscape_battlemage_cannot_be_aimed_at_a_black_creature(set_pool):
     """"Destroy target **nonblack** creature." The picker never offers the
-    black one, and a cast that names it anyway destroys nothing."""
+    black one, and a cast that names it anyway does not destroy it.
+
+    It used to end "…destroys nothing": the handler declining an illegal
+    target it had been handed. The trigger chooses as it is put on the stack
+    (CR 603.3d), so an announcement it could not have made is set aside and
+    it takes the picker's default instead — the Bears."""
     card = set_pool("PLS")["Stormscape Battlemage"]
     game = _w1g2_duel(set_pool, ["Stormscape Battlemage"])
     knight = _w1g2_put(game, set_pool, 1, "Black Knight")
@@ -939,7 +944,7 @@ def test_w1g2_stormscape_battlemage_cannot_be_aimed_at_a_black_creature(set_pool
         game, "Stormscape Battlemage", kick=("{2}{B}",),
         target_permanent_ids=[knight.permanent_id],
     )
-    assert game.is_on_battlefield(knight) and game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(knight) and not game.is_on_battlefield(bears)
 
 
 def test_w1g2_nightscape_battlemage_returns_up_to_two_nonblack_creatures(set_pool):

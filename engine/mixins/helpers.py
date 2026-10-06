@@ -2690,7 +2690,10 @@ class GameHelpersMixin:
         *announced_at_cast* is an entry trigger carrying what its permanent
         spell announced (``_apply_self_enters_battlefield_triggers``): this
         engine names an entry trigger's target as the permanent is cast, so the
-        choice was made, and **announced**, by the spell. The trigger therefore
+        choice was made, and **announced**, by the spell — where it is a
+        choice the trigger could have made (``cast_announcement_fault``; one
+        that is not is set aside below and the trigger is pushed as if nobody
+        had announced for it). The trigger therefore
         asks for nothing here, and neither announcement is made a second time —
         "becomes the target of a spell or ability" and "whenever a player
         chooses one or more targets" each heard about it from the cast. Made
@@ -2701,6 +2704,26 @@ class GameHelpersMixin:
         """
         if not self.trigger_condition_holds(item):
             return None
+        fault = self.cast_announcement_fault(item) if announced_at_cast else None
+        if fault is not None:
+            # **The cast's announcement is a pre-answer to this trigger's own
+            # choice, and it has to be one the choice would accept** (CR
+            # 603.3d; ``cast_announcement_fault``). One that is not — a
+            # creature with protection from this permanent, a player who gained
+            # shroud while the spell waited, a target that has left — is set
+            # aside, and the trigger is put on the stack as one nobody chose
+            # for: it chooses below (a prompt for a seat that can be asked, the
+            # picker's default otherwise), announces that choice, and is
+            # removed if nothing is legal (CR 603.3c).
+            if fault == "illegal":
+                self.log.append(
+                    f"{item.card.name}'s triggered ability can't target what "
+                    "was named as it was cast; it chooses again (603.3d)"
+                )
+            item.target_player_index = None
+            item.target_permanent_index = None
+            item.target_permanent_id = None
+            announced_at_cast = False
         self._stack_push_object(item, announce=not announced_at_cast)
         self._choose_trigger_mode(
             item, targets_already_chosen=targets_already_chosen or announced_at_cast

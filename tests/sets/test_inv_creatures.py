@@ -1382,7 +1382,14 @@ def test_w1g1_an_emissary_names_a_target_only_when_kicked(
 
 def test_w1g1_shivan_emissary_cannot_be_aimed_at_a_black_creature(set_pool):
     """"Destroy target **nonblack** creature." The picker never offers the
-    black one, and a cast that names it anyway destroys nothing."""
+    black one, and a cast that names it anyway does not destroy it.
+
+    It used to end "…destroys nothing", and that was the handler declining an
+    illegal target it had been handed. CR 603.3d chooses the target as the
+    trigger is put on the stack, and a mandatory target with a legal object on
+    the table is not one that may go unchosen: the announcement is set aside
+    (``Game.cast_announcement_fault``) and the trigger takes the picker's
+    default — the Bears."""
     game = _w1g1_duel(set_pool, ["Shivan Emissary"])
     knight = _w1g1_put(game, 1, set_pool("LEA")["Black Knight"])
     bears = _w1g1_put(game, 1, set_pool("LEA")["Grizzly Bears"])
@@ -1395,7 +1402,7 @@ def test_w1g1_shivan_emissary_cannot_be_aimed_at_a_black_creature(set_pool):
         game, "Shivan Emissary", kick="{1}{B}",
         target_permanent_ids=[knight.permanent_id],
     )
-    assert game.is_on_battlefield(knight) and game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(knight) and not game.is_on_battlefield(bears)
 
 
 def test_w1g1_a_kicked_emissary_with_no_target_named_chooses_on_the_stack(set_pool):
