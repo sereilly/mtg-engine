@@ -405,7 +405,7 @@ class PermanentStateMixin:
         #
         # "…enters tapped **unless** …" is a condition on the tapping and is
         # not this unconditional line's to perform — which is a question about
-        # the *sentence* that says "enters tapped". It was asked of the whole
+        # the *sentence* that says the land enters so. It was asked of the whole
         # text, so a card whose **other** sentence said "unless" never entered
         # tapped: "This land enters tapped. When this land enters, sacrifice it
         # unless you return an untapped Plains you control to its owner's
@@ -1567,9 +1567,9 @@ class PermanentStateMixin:
         against "the characteristics of the permanent **as it would exist on
         the battlefield**, taking into account … continuous effects that
         already exist and would apply to the permanent". With Blood Moon out
-        a nonbasic land enters as a Mountain: it has no "enters tapped" to
-        apply, no toll to pay, no counters to enter with (CR 305.7, and each
-        of those is a static ability of the land's own — CR 603.6d).
+        a nonbasic land enters as a Mountain: it does not enter tapped, pays
+        no toll and enters with no counters, whatever it prints (CR 305.7, and
+        each of those is a static ability of the land's own — CR 603.6d).
 
         The board-wide pass (``_refresh_global_statics``) is what decides that
         for a land on the battlefield, and it runs as the last thing an entry
