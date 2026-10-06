@@ -34,6 +34,7 @@ from .ai_valuation import (
     is_mana_ability,
     mana_ability_amount,
     mana_ability_symbols,
+    offer_trade,
     planned_mana_yield,
     returns_creature_to_hand,
     role_target_sides,
@@ -4572,6 +4573,45 @@ def choose_target_change(game: Game, seat: int, item, slots) -> "list | None":
             return None
         onto_mine = [c for c in candidates if controller_of(c) == seat]
         return [onto_mine[0]] if onto_mine else None
+    return None
+
+
+#: Lands — on the battlefield and in hand — below which a seat gives up its
+#: draw step for a land card (`offer_trade_is_worth_taking`). The number the
+#: tutor score already uses for "mana-screwed" is three; one more, because the
+#: card bought here costs a draw rather than a tutor.
+LAND_FOR_DRAW_FLOOR = 4
+def offer_trade_is_worth_taking(
+    game: Game, player_index: int, entry: dict
+) -> "bool | None":
+    """Whether a seat nobody asks takes a "you may A. If you do, B." offer
+    whose two halves are a price and a purchase (`ai_valuation.offer_trade`) —
+    True, False, or None when the offer is not one this can weigh and the
+    standing policy answers.
+
+    * **A draw step for a land card** (Elfhame Sanctuary): only while the seat
+      is short of lands (`LAND_FOR_DRAW_FLOOR`). Taken every turn it is a seat
+      that never draws a spell again.
+    * **A card from hand for the source untapped** (Forsaken City): not taken.
+      One mana is worth less than a card to a seat that can use its cards, and
+      the case where it is not — a card the seat would discard at cleanup
+      anyway — did not arise once in six simulated games. It is also not yet
+      *payable* by a seat nobody asks: the pick behind the offer defaults to
+      no card, and "If you do, untap this land" then untaps it regardless, so
+      taking the offer here would be a free untap rather than a trade.
+    """
+    trade = offer_trade(entry.get("_on_accept") or ())
+    if trade is None:
+        return None
+    player = game.players[player_index]
+    if (trade.price, trade.purchase) == ("draw", "land_card"):
+        lands = sum(
+            1 for permanent in game.controlled_by(player_index)
+            if permanent.has_type("land")
+        ) + sum(1 for card in player.hand if card.primary_type == "land")
+        return lands < LAND_FOR_DRAW_FLOOR
+    if (trade.price, trade.purchase) == ("card", "untap_source"):
+        return False
     return None
 
 

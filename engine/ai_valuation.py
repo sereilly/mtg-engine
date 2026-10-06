@@ -1014,6 +1014,69 @@ def offered_action_is_a_payment(steps, self_recipients=()) -> bool:
     return _step_is_a_payment(leading, frozenset(self_recipients))
 
 
+@dataclass(frozen=True)
+class OfferTrade:
+    """A "You may A. If you do, B." offer whose two halves are a **price** the
+    taker pays and a **purchase** it gets, each named in the terms a policy can
+    weigh — see :func:`offer_trade`."""
+
+    #: "card" — a card out of the taker's own hand; "draw" — the taker's own
+    #: draw step.
+    price: str
+    #: "untap_source" — the offer's own source untaps; "land_card" — a land
+    #: card searched out of the taker's library.
+    purchase: str
+
+
+#: Leading steps that take a card out of the taker's own hand.
+_HAND_CARD_PRICE_KINDS = frozenset({"exile_chosen_card_from_hand"})
+
+
+def offer_trade(steps) -> OfferTrade | None:
+    """The trade an offer's accept branch makes, or None when it is not one of
+    the two shapes this can price on both sides.
+
+    *steps* is the branch as ``_offer_to_seat`` builds it: the offered action
+    first, then what follows from taking it.
+
+    The optional-pay default was two constants and each was wrong on one
+    card. An offer whose **leading** step spends something is refused
+    ("make no trades"), so Forsaken City's "you may exile a card from your
+    hand. If you do, untap this land" was declined at every upkeep of every
+    game — 122 offers and no untap in six simulated games — and the land was a
+    mana once. An offer whose leading step is a gift is taken, so Elfhame
+    Sanctuary's "you may search your library for a basic land card … If you
+    do, **you skip your draw step this turn**" was taken at every upkeep: 56
+    offers, 56 draw steps skipped, a seat that never drew again. The price is
+    in the *consequence*, where a reader of the leading step does not look.
+
+    Both are one question — what does it cost and what does it buy — and the
+    answer depends on the board (a land is worth a draw to a seat short of
+    them; a mana is worth a card to a seat about to discard one), so this names
+    the two halves and `ai_policy.offer_trade_is_worth_taking` weighs them.
+    """
+    steps = [step for step in steps if getattr(step, "kind", None)]
+    if len(steps) < 2:
+        return None
+    leading, rest = steps[0], steps[1:]
+    if leading.kind in _HAND_CARD_PRICE_KINDS and all(
+        step.kind == "untap_self" for step in rest
+    ):
+        return OfferTrade(price="card", purchase="untap_source")
+    if (
+        leading.kind == "search_library"
+        and (leading.payload or {}).get("card_type") == "land"
+        and all(
+            step.kind == "skip_next_step"
+            and (step.payload or {}).get("step") == "draw"
+            and (step.payload or {}).get("seat") == "you"
+            for step in rest
+        )
+    ):
+        return OfferTrade(price="draw", purchase="land_card")
+    return None
+
+
 #: The alternatives whose whole effect is to give one permanent a keyword, or
 #: take one away, and whose recipient a resolution context names: the source
 #: itself, or the object the ability was announced with (CR 602.2b).
@@ -2500,6 +2563,7 @@ __all__ = [
     "CounterProfile",
     "DividedShape",
     "ManaYield",
+    "OfferTrade",
     "TollLoss",
     "ability_target_side",
     "cards_drawn_by_controller",
@@ -2520,6 +2584,7 @@ __all__ = [
     "harms_its_own_source",
     "hand_pick_entry_consumer",
     "instruction_target_side",
+    "offer_trade",
     "offered_action_is_a_payment",
     "pick_is_tested_for_a_shared_color",
     "planned_mana_yield",

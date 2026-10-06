@@ -8482,6 +8482,21 @@ class PendingChoicesMixin:
             entry.get("_on_accept") or (), self._offer_self_recipients(choice)
         )
 
+    def _weighed_offer_trade(self, choice: PendingChoice) -> "bool | None":
+        """`ai_policy.offer_trade_is_worth_taking` for a **free, untolled**
+        offer — the only kind whose accept branch is the whole of its price —
+        or None for every other, which the standing policy answers."""
+        from ...ai_policy import offer_trade_is_worth_taking
+
+        entry = choice.data
+        if (
+            entry.get("cost") or entry.get("life_cost")
+            or entry.get("cost_alternatives") or entry.get("_on_decline")
+            or int(entry.get("damage", 0) or 0)
+        ):
+            return None
+        return offer_trade_is_worth_taking(self, choice.player_index, entry)
+
     def _offer_self_recipients(self, choice: PendingChoice) -> frozenset[str]:
         """The printed player references in this offer's branches that resolve
         to the offered seat ("caster", "target_player"), for the readers whose
@@ -8630,6 +8645,22 @@ class PendingChoicesMixin:
             self.log.append(
                 f"{player.name} declined to pay for {entry['card_name']}"
             )
+        # **A trade this policy can price on both sides is weighed, not
+        # refused or taken by rule** (`ai_policy.offer_trade_is_worth_taking`:
+        # a draw step for a land card, a card from hand for the source
+        # untapped). Asked before the two constants below because each was
+        # wrong about one of them: "make no trades" declined Forsaken City at
+        # every upkeep, and "take gifts" took Elfhame Sanctuary's search at
+        # every upkeep and with it the seat's every draw step.
+        elif floating is not None and (
+            weighed := self._weighed_offer_trade(choice)
+        ) is not None:
+            if not weighed:
+                floating = None
+                self.log.append(
+                    f"{player.name} declined {entry['card_name']} "
+                    "(the price is worth more than what it buys)"
+                )
         # Take gifts, pay tolls, make no trades: an offer whose price is a deed
         # rather than a payment, and whose refusal the card prices at nothing,
         # is refused. A *toll* — an offer with a printed "if you don't" — is
