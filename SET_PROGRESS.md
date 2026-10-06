@@ -41,7 +41,7 @@ Do not edit by hand — re-run the script instead.
 | 27 | Prophecy | PCY | 2000-06-05 | 143 | 143 | Complete (143/143 supported) |
 | 28 | Invasion | INV | 2000-10-02 | 335 | 310 | Complete (335/335 supported) |
 | 29 | Planeshift | PLS | 2001-02-05 | 143 | 143 | Complete (143/143 supported) |
-| 30 | Seventh Edition | 7ED | 2001-04-11 | 335 | 0 | Measured (333/335 supported, not shipped) |
+| 30 | Seventh Edition | 7ED | 2001-04-11 | 335 | 0 | Measured (335/335 supported, not shipped) |
 | 31 | Apocalypse | APC | 2001-06-04 | 143 | 143 | Not Implemented |
 | 32 | Odyssey | ODY | 2001-10-01 | 335 | 321 | Not Implemented |
 | 33 | Torment | TOR | 2002-02-04 | 143 | 142 | Not Implemented |
