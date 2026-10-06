@@ -34,6 +34,7 @@ from engine import Game, PlayerState
 from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.targeting import cast_announced_entry_trigger
 from tests.helpers import resolve_stack
 
 #: A floor, because a sweep that reaches nothing passes. 32 on the day.
@@ -89,16 +90,27 @@ def _table(pool, card, *, extra=()) -> Game:
     return game
 
 
-def _units(pool) -> list:
+@pytest.fixture(scope="module")
+def _units(_pool) -> list:
     """Each supported non-Aura permanent whose cast picker is its entry
-    trigger's own list and offers a permanent."""
+    trigger's own list and offers a permanent.
+
+    Found once for the module, and a table is laid out only for a card whose
+    program says its cast names an entry trigger's target at all
+    (``cast_announced_entry_trigger``, which needs no game): the first draft
+    built a table for every permanent in the pool, twice, and cost the suite
+    five minutes to find the same 32 cards.
+    """
     found = []
-    for card in sorted(pool.values(), key=lambda c: c.name):
+    for card in sorted(_pool.values(), key=lambda c: c.name):
         if card.primary_type in ("instant", "sorcery", "land") or "Aura" in card.type_line:
             continue
-        if not compile_card_oracle(card).supported:
+        program = compile_card_oracle(card)
+        if not program.supported:
             continue
-        game = _table(pool, card)
+        if cast_announced_entry_trigger(card, program, optional_cost_payments={}) is None:
+            continue
+        game = _table(_pool, card)
         if game.entry_trigger_cast_targets(0, card, optional_cost_payments={}) is None:
             continue
         offered = [
@@ -119,8 +131,10 @@ def _cast(pool, card, entry, **table):
     return game, target
 
 
-def test_the_cast_announces_nothing_and_the_trigger_announces_once(_pool, _announced):
-    units = _units(_pool)
+def test_the_cast_announces_nothing_and_the_trigger_announces_once(
+    _pool, _units, _announced,
+):
+    units = _units
     findings: list[str] = []
     for card, entry in units:
         _announced.clear()
@@ -142,8 +156,8 @@ def test_the_cast_announces_nothing_and_the_trigger_announces_once(_pool, _annou
     assert not findings, "\n".join(findings)
 
 
-def test_a_countered_permanent_spell_never_targeted_anything(_pool, _announced):
-    units = _units(_pool)
+def test_a_countered_permanent_spell_never_targeted_anything(_pool, _units, _announced):
+    units = _units
     findings: list[str] = []
     for card, entry in units:
         _announced.clear()

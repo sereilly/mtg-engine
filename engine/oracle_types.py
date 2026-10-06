@@ -267,8 +267,9 @@ EVENT_CHOSEN_TARGETS = "event_chosen_targets"
 #: sentence names and nothing about what may be targeted, so an "up to one
 #: target creature" that could legally name only nobody went on to act on a
 #: creature with shroud: Barrin, Tolarian Archmage and Roaming Ghostlight
-#: bounced one, Feline Sovereign destroyed one, and the +1 of three
-#: planeswalkers put its counter on one.
+#: bounced one, Feline Sovereign destroyed a shrouded artifact, and the +1 of
+#: three planeswalkers landed on one (Basri Ket's and Basri, Devoted
+#: Paladin's counter, Garruk, Unleashed's +3/+3).
 #:
 #: Written by ``Game.record_no_target_named`` and read by
 #: :func:`named_no_target`; nothing else spells the key. Here rather than in
