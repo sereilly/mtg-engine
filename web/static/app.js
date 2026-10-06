@@ -137,6 +137,9 @@ let combatBandBlockerDraft = {};
 // damage (Two-Headed Giant of Foriys). Maps blocker_idx -> {attacker_idx: damage}.
 let combatMultiblockDraft = {};
 let combatDraftStepKey = "";
+// The combat damage step the damage drafts below were made for (see
+// getCombatDamagePassKey). A second step starts them empty.
+let combatDamagePassKey = "";
 let combatPromptKey = "";
 let previousLifeBySeat = {};
 let aiAutoStepInFlight = false;
@@ -403,6 +406,19 @@ function getCombatDraftStepKey(state = currentState) {
   return `${state.turn_number || 0}:${state.current_turn}:${state.current_turn_phase}:${state.current_step}`;
 }
 
+// Which combat damage step this is. CR 510.4: a combat with first or double
+// strike has TWO of them, and CR 510.1 is an announcement made in each — but
+// the server keeps one `current_step` for both and says which it is on with
+// `combat.first_strike_done`. The damage dialogs auto-open once per key and
+// keep their drafts per key; keyed by the step alone they opened for the
+// first-strike step, were closed by their own Confirm, and never came back
+// for the second, whose only way in was a button on the side panel.
+function getCombatDamagePassKey(state = currentState) {
+  if (!state) return "";
+  const pass = getCombatState(state)?.first_strike_done ? "second" : "first";
+  return `${getCombatDraftStepKey(state)}:${pass}`;
+}
+
 function syncCombatDrafts(state = currentState) {
   if (!state) return;
   const nextKey = getCombatDraftStepKey(state);
@@ -664,21 +680,20 @@ function selectedAttackersCanBand(state) {
   return banders >= 1 && nonbanders <= 1;
 }
 
-// CR 702.22j: an attacker is "banding-blocked" when at least one of the creatures
-// blocking it has banding — the defending player, not the attacker's controller,
-// then assigns that attacker's combat damage among its blockers.
-function attackerBlockedByBandingClient(state, attackerIdx) {
-  const combat = getCombatState(state);
-  if (!combat) return false;
-  const defenderSeat = Number.isInteger(combat.defending_player_index)
-    ? combat.defending_player_index
-    : 1 - state.current_turn;
-  const defenderBattlefield = state.players?.[defenderSeat]?.battlefield || [];
-  return (combat.blockers || []).some(
-    (pair) =>
-      Number(pair.attacker_index) === attackerIdx &&
-      cardHasBanding(defenderBattlefield[Number(pair.blocker_index)]),
-  );
+// CR 510.1 / 702.22j: whether the DEFENDING player, not the attacker's
+// controller, assigns this attacker's combat damage. The server's answer —
+// `combat.damage_assigned_by` maps each attacker's index to the seat that
+// announces its assignment — and nothing read off a card here.
+//
+// This used to look for the word "banding" on the creatures blocking it, which
+// is one of the three ways the engine says yes: it also counts a "bands with
+// other" pair among the blockers (CR 702.22j's second half) and "rather than
+// the attacking player, you assign the combat damage of each creature
+// attacking you" (Defensive Formation). For those two the attacker was shown
+// a division the server then refused, and the defender was shown nothing.
+function defenderAssignsAttackerDamage(state, attackerIdx) {
+  const assigner = getCombatState(state)?.damage_assigned_by?.[attackerIdx];
+  return Number.isInteger(assigner) && assigner !== state.current_turn;
 }
 
 // Rebuild the damage events of a combat damage resolution from the state that
@@ -11885,8 +11900,112 @@ function abilityOptionDisabledReason(opt, card) {
   return abilityLineDisabledReason(opt.line);
 }
 
+// Where a permanent is now, by its id: { seat, index, card } or null if it has
+// left the battlefield. An index is the address that moves — anything leaving
+// renumbers every later slot — so a prompt that outlives a state update finds
+// its permanent again by id.
+function findPermanentInState(state, permanentId) {
+  if (!state || permanentId === null || permanentId === undefined) return null;
+  const players = Array.isArray(state.players) ? state.players : [];
+  for (let s = 0; s < players.length; s += 1) {
+    const battlefield = players[s]?.battlefield || [];
+    for (let i = 0; i < battlefield.length; i += 1) {
+      const card = battlefield[i];
+      if (card && typeof card === "object" && card.id === permanentId) {
+        return { seat: s, index: i, card };
+      }
+    }
+  }
+  return null;
+}
+
+// What an ability menu's options amount to, for telling two readings apart.
+function abilityOptionsSignature(options) {
+  return JSON.stringify((options || []).map((o) => [o.index, o.cost, o.orCost || "", o.text, o.line]));
+}
+
+// A prompt opened on a permanent is a reading of that permanent AS IT WAS, and
+// the board can change underneath it while it is open: an opponent's spell
+// resolves, a state update arrives, and the menu is still on screen.
+//
+// The ability menu kept its snapshot. Opened on a Karplusan Forest before a
+// Blood Moon resolved, it went on listing "{T}: Add {C}" and "{T}: Add {R} or
+// {G}", ran whichever was clicked — through to a mana fan offering green from
+// a land that is a Mountain — and sent it; the server refused, which is the
+// only thing that stopped it. So on every state the open menu is read again
+// from the permanent the server now describes:
+//
+//   * it has left the battlefield -> the menu closes;
+//   * it offers something different (its abilities were lost or changed) ->
+//     the menu closes, with the server's sentence for why where it gives one;
+//   * otherwise the menu stays, re-pointed at the permanent's current slot.
+//
+// The on-board mana fan is the same reading one click later (it holds the
+// colours of an ability chosen from that menu, or from a click), and is
+// dropped the same way when the land under it has lost its abilities.
+function refreshPendingPermanentPrompts(state = currentState) {
+  if (!state) return;
+
+  if (pendingAbilityChoice && pendingAbilityChoice.card && Number.isInteger(pendingAbilityChoice.permanentIndex)) {
+    const pending = pendingAbilityChoice;
+    const permanentId = pending.card.id;
+    if (permanentId !== null && permanentId !== undefined) {
+      const found = findPermanentInState(state, permanentId);
+      if (!found) {
+        pendingAbilityChoice = null;
+        updateActionHint(`${pending.cardName} is no longer on the battlefield.`, true);
+      } else {
+        const options = getActivatedAbilityOptions(found.card);
+        if (abilityOptionsSignature(options) !== abilityOptionsSignature(pending.options)) {
+          pendingAbilityChoice = null;
+          updateActionHint(
+            found.card.abilities_lost
+              ? String(found.card.abilities_lost)
+              : `${pending.cardName}'s abilities changed — select it again.`,
+            true,
+          );
+        } else {
+          pendingAbilityChoice = { ...pending, card: found.card, permanentIndex: found.index };
+        }
+      }
+    }
+  }
+
+  // A fan (or colour prompt) for an activated ability read off printed text.
+  // `oracleText === ""` is the fan a land opens for the mana of its NEW type,
+  // which is exactly what a land that has lost its abilities still does.
+  if (
+    pendingManaColor
+    && !pendingManaColor.kind
+    && Number.isInteger(pendingManaColor.permanentIndex)
+    && pendingManaColor.oracleText
+  ) {
+    // Dropped only on a positive finding — the same card, in the slot the
+    // prompt was opened on, now reported as having lost its abilities. The
+    // prompt holds no id to look further with, and guessing would close a
+    // fan the player is entitled to.
+    const pending = pendingManaColor;
+    const card = state.players?.[seat]?.battlefield?.[pending.permanentIndex];
+    if (
+      card && typeof card === "object"
+      && normalizeCardName(card) === pending.cardName
+      && card.abilities_lost
+    ) {
+      pendingManaColor = null;
+      battlefieldCanvas?.hideManaFan();
+      updateActionHint(String(card.abilities_lost), true);
+    }
+  }
+}
+
 function resolveAbilityChoice(optionIndex) {
-  if (!pendingAbilityChoice) return;
+  // The click reads the permanent as the server describes it NOW, not as it
+  // was when the menu opened (see refreshPendingPermanentPrompts).
+  refreshPendingPermanentPrompts(currentState);
+  if (!pendingAbilityChoice) {
+    renderActivationPrompt();
+    return;
+  }
   const pending = pendingAbilityChoice;
   const opt = pending.options.find((o) => o.index === optionIndex);
   if (!opt) return;
@@ -17413,8 +17532,16 @@ function renderCombatControls(state) {
     if (groups.length > 0) {
       const prompt = document.createElement("div");
       prompt.className = "combat-summary";
+      // Which attackers is the server's list; "a banding creature is
+      // blocking" is one of its reasons, so the panel no longer claims it.
+      const offered = groups.filter((g) => g.offer);
+      const divided = groups.some((g) => !g.offer || g.blockers.length > 1);
       prompt.textContent =
-        "A banding creature is blocking — you choose how each banded attacker's damage is split.";
+        "You assign the combat damage of an attacker your creatures are blocking (CR 702.22j)."
+        + (offered.length > 0
+          ? ` ${offered.map((g) => g.attackerCard?.name || "A creature").join(", ")} may assign combat damage as though ${offered.length === 1 ? "it weren't" : "they weren't"} blocked — that choice is yours too.`
+          : "")
+        + (divided ? " Open the dialog to split the damage." : " Open the dialog to choose.");
       damagePanel.appendChild(prompt);
 
       const openBtn = document.createElement("button");
@@ -17423,7 +17550,7 @@ function renderCombatControls(state) {
       openBtn.addEventListener("click", () => openBandingDamageDialog(state));
       actions.appendChild(openBtn);
 
-      const key = `banding:${getCombatDraftStepKey(state)}`;
+      const key = `banding:${getCombatDamagePassKey(state)}`;
       if (combatDamageDialogKey !== key) {
         combatDamageDialogKey = key;
         openBandingDamageDialog(state);
@@ -17452,7 +17579,7 @@ function renderCombatControls(state) {
     openBtn.addEventListener("click", () => openMultiblockDamageDialog(state));
     actions.appendChild(openBtn);
 
-    const key = `multiblock:${getCombatDraftStepKey(state)}`;
+    const key = `multiblock:${getCombatDamagePassKey(state)}`;
     if (combatDamageDialogKey !== key) {
       combatDamageDialogKey = key;
       openMultiblockDamageDialog(state);
@@ -17480,7 +17607,7 @@ function renderCombatControls(state) {
     openBtn.addEventListener("click", () => openBandBlockerDialog(state));
     actions.appendChild(openBtn);
 
-    const key = `bandblock:${getCombatDraftStepKey(state)}`;
+    const key = `bandblock:${getCombatDamagePassKey(state)}`;
     if (combatDamageDialogKey !== key) {
       combatDamageDialogKey = key;
       openBandBlockerDialog(state);
@@ -17516,21 +17643,14 @@ function renderCombatControls(state) {
     openBtn.addEventListener("click", () => openCombatDamageDialog(state));
     actions.appendChild(openBtn);
 
-    // Auto-open the dialog the first time we reach this assignment for this step.
-    const key = getCombatDraftStepKey(state);
+    // Auto-open the dialog the first time we reach this assignment for this
+    // combat damage step — each of the two, when there is a first-strike one.
+    const key = getCombatDamagePassKey(state);
     if (combatDamageDialogKey !== key) {
       combatDamageDialogKey = key;
       openCombatDamageDialog(state);
     }
   }
-}
-
-// Collect attackers blocked by 2+ creatures, with the card data and per-blocker
-// lethal thresholds needed to drive the manual damage-assignment dialog. Mirrors
-// the engine's view: attacker on the active player's battlefield, blockers on the
-// defender's, blockers processed in ascending (declared) index order.
-function getMultiBlockedAttackerGroups(state = currentState) {
-  return getBlockedAttackerGroups(state, () => 2);
 }
 
 // "You may have this creature assign its combat damage as though it weren't
@@ -17557,6 +17677,9 @@ function getUnblockedAssignmentOffers(state = currentState) {
 // the player it is attacking, or the planeswalker (CR 510.1b).
 function unblockedRecipientLabel(recipient) {
   if (recipient?.kind === "planeswalker") return recipient.name || "the planeswalker";
+  // A defending player answering for an attacker they assign is choosing
+  // whether its damage comes to them.
+  if (seat !== null && recipient?.kind === "player" && recipient.seat === seat) return "you";
   return recipient?.name || "the defending player";
 }
 
@@ -17834,17 +17957,22 @@ function openBandBlockerDialog(state = currentState) {
         blockerDamageSplit[b.blocker_idx] = {};
         for (const m of b.member_indices) blockerDamageSplit[b.blocker_idx][m] = Number(split[m]) || 0;
       }
+      // As in openDamageDialog: what this seat is still owed after the answer
+      // (the second combat damage step's assignment, CR 510.4) is opened once
+      // the `finally` has put the button back.
+      let accepted = false;
       try {
         confirmBtn.disabled = true;
         await sendAction({ seat, action: "assign_combat_damage", blocker_damage_split: blockerDamageSplit });
         updateActionHint("Band blocker damage assigned.");
         combatBandBlockerDraft = {};
-        closeCombatDamageDialog();
+        accepted = true;
       } catch (e) {
         updateActionHint(e.message, true);
       } finally {
         confirmBtn.disabled = false;
       }
+      if (accepted) settleCombatDamageDialog();
     };
   }
 }
@@ -17991,17 +18119,19 @@ function openMultiblockDamageDialog(state = currentState) {
         blockerDamageSplit[b.blocker_idx] = {};
         for (const a of b.attacker_indices) blockerDamageSplit[b.blocker_idx][a] = Number(split[a]) || 0;
       }
+      let accepted = false;
       try {
         confirmBtn.disabled = true;
         await sendAction({ seat, action: "assign_multiblock_damage", blocker_damage_split: blockerDamageSplit });
         updateActionHint("Blocker damage divided.");
         combatMultiblockDraft = {};
-        closeCombatDamageDialog();
+        accepted = true;
       } catch (e) {
         updateActionHint(e.message, true);
       } finally {
         confirmBtn.disabled = false;
       }
+      if (accepted) settleCombatDamageDialog();
     };
   }
 }
@@ -18022,17 +18152,43 @@ function getAttackerAssignGroups(state = currentState) {
   const offers = getUnblockedAssignmentOffers(state);
   return getBlockedAttackerGroups(state, (attackerIdx) => (offers.has(attackerIdx) ? 1 : 2))
     .filter(
-      (g) => offers.has(g.attackerIdx) || !attackerBlockedByBandingClient(state, g.attackerIdx),
+      (g) => offers.has(g.attackerIdx) || !defenderAssignsAttackerDamage(state, g.attackerIdx),
     )
     .map((g) => (offers.has(g.attackerIdx) ? { ...g, offer: offers.get(g.attackerIdx) } : g));
 }
 
-// Multi-blocked attackers the *defending player* assigns because at least one of
-// their banding creatures is among the blockers (CR 702.22j).
+// The attackers the *defending player* assigns the combat damage of and still
+// owes an answer about (CR 702.22j: a creature with banding is blocking it, a
+// "bands with other" pair is, or a permanent of theirs says they assign).
+//
+// The SERVER's list, `state.banding_assignment`, by attacker index — which
+// attackers, and for each whether it carries the other decision: an attacker
+// that "may … assign its combat damage as though it weren't blocked" is the
+// defending player's to answer when they assign its damage ("If blocked by a
+// creature with banding, the defending player decides…", 2018-04-27), with
+// ONE blocker as readily as with several. Such a group carries `offer`, the
+// same shape the active player's own offered groups do, so the dialog asks
+// both seats the question with the same two buttons.
 function getDefenderBandingGroups(state = currentState) {
-  return getMultiBlockedAttackerGroups(state).filter((g) =>
-    attackerBlockedByBandingClient(state, g.attackerIdx),
-  );
+  const info = state?.banding_assignment;
+  if (!info || seat === null || seat !== info.defender_seat) return [];
+  const owed = new Map();
+  for (const attackerIdx of info.attacker_indices || []) owed.set(Number(attackerIdx), null);
+  for (const entry of info.attackers || []) owed.set(Number(entry.attacker_index), entry);
+  return getBlockedAttackerGroups(state, (attackerIdx) => (owed.get(attackerIdx)?.offer ? 1 : 2))
+    .filter((g) => owed.has(g.attackerIdx))
+    .map((g) => {
+      const entry = owed.get(g.attackerIdx);
+      if (!entry?.offer) return g;
+      return {
+        ...g,
+        offer: {
+          attackerId: Number(entry.attacker_id),
+          damage: Math.max(0, Number(entry.damage) || 0),
+          recipient: entry.offer.recipient || {},
+        },
+      };
+    });
 }
 
 function openCombatDamageDialog(state = currentState) {
@@ -18069,9 +18225,11 @@ function openDamageDialog(state = currentState, mode = "attacker") {
       autoAssignCombatDamage(groups);
       // Auto-assign is "what the engine would do unasked", and for an attacker
       // with the offer that is to take it (the default every seat that is not
-      // asked gets) — so the button answers the question the same way.
+      // asked gets) — so the button answers the question the same way. A
+      // DEFENDING player's unasked answer is the other one: the damage stays
+      // on the creatures blocking it.
       for (const g of groups) {
-        if (g.offer) combatDamageOfferDraft[g.attackerIdx] = "unblocked";
+        if (g.offer) combatDamageOfferDraft[g.attackerIdx] = mode === "banding" ? "blockers" : "unblocked";
       }
       renderCombatDamageDialogBody(groups, mode);
     };
@@ -18093,17 +18251,33 @@ function openDamageDialog(state = currentState, mode = "attacker") {
         assignment[g.attackerIdx] = combatDamageDraft[g.attackerIdx] || {};
       }
       // One answer per combat damage step (CR 510.4): with first or double
-      // strike there is a second step, and an attacker with the offer is asked
-      // again — with nothing selected, not shown already answered the way the
-      // first step was. The dialog auto-opens once per step key and this
-      // handler closes it, so the second asking is opened from here, after the
-      // `finally` below has put the button back (the fresh dialog disables it
-      // itself until the question is answered).
+      // strike there is a second step, and it is assigned afresh — an offer
+      // with nothing selected, a division re-seeded over the creatures the
+      // first strike left. This handler closes the dialog it was pressed in,
+      // so whatever the NEW state still owes this seat is opened from here,
+      // after the `finally` below has put the button back (a fresh dialog
+      // disables it itself until it is answered).
+      //
+      // "Still owes" is any of this seat's assignments, not only an offer:
+      // the second asking used to be opened for an offered attacker alone, so
+      // an ordinary multi-block's second step sat behind a closed dialog and a
+      // hint reading "Combat damage resolved." with half of it unresolved.
       let askAgain = false;
+      let firstStrikeDealt = false;
+      const wasFirstStrikeStep = !getCombatState(currentState)?.first_strike_done;
       try {
         confirmBtn.disabled = true;
         if (mode === "banding") {
-          await sendAction({ seat, action: "assign_banding_damage", banding_damage: assignment });
+          // The defending player's announcement: a division for each attacker
+          // they assign, or — for one that may assign as though it weren't
+          // blocked — the offer taken, by id, exactly as the active player
+          // announces their own.
+          await sendAction({
+            seat,
+            action: "assign_banding_damage",
+            banding_damage: assignment,
+            as_though_unblocked_ids: asThoughUnblockedIds,
+          });
           updateActionHint("Banding combat damage assigned.");
         } else {
           await sendAction({
@@ -18112,25 +18286,49 @@ function openDamageDialog(state = currentState, mode = "attacker") {
             attacker_damage: assignment,
             as_though_unblocked_ids: asThoughUnblockedIds,
           });
-          combatDamageOfferDraft = {};
           updateActionHint("Combat damage resolved.");
-          askAgain =
-            isCombatStep(currentState, "combat_damage") &&
-            !getCombatState(currentState)?.damage_resolved &&
-            getAttackerAssignGroups(currentState).some((g) => g.offer);
         }
+        combatDamageOfferDraft = {};
+        const after = getCombatState(currentState);
+        const stillInStep = isCombatStep(currentState, "combat_damage") && !after?.damage_resolved;
+        firstStrikeDealt = stillInStep && wasFirstStrikeStep && !!after?.first_strike_done;
+        askAgain = stillInStep && combatDamageDialogOwed(currentState);
         closeCombatDamageDialog();
       } catch (e) {
         updateActionHint(e.message, true);
       } finally {
         confirmBtn.disabled = false;
       }
+      if (firstStrikeDealt) {
+        updateActionHint(
+          askAgain
+            ? "First-strike combat damage resolved. Assign again for the second combat damage step."
+            : "First-strike combat damage resolved. The second combat damage step follows.",
+        );
+      }
       if (askAgain) {
-        updateActionHint("First-strike combat damage resolved. Choose again for the second combat damage step.");
-        openCombatDamageDialog(currentState);
+        settleCombatDamageDialog();
       }
     };
   }
+}
+
+// Whether this seat still has a combat damage dialog to answer in this state:
+// a division or offer of its own, the defending player's (banding, a
+// multi-blocking creature), or the active player's band-blocker assignment.
+function combatDamageDialogOwed(state = currentState) {
+  return combatDamageAssignmentPending(state) || !!getBandBlockerInfo(state);
+}
+
+// After an assignment has been accepted: close the dialog that sent it, forget
+// which one was auto-opened, and let the combat panel open whichever this seat
+// is owed NOW — the same assignment for the second combat damage step
+// (CR 510.4), or another dialog's turn in this one. Each dialog used to close
+// itself and leave the panel's button as the only way back in.
+function settleCombatDamageDialog() {
+  closeCombatDamageDialog();
+  combatDamageDialogKey = "";
+  if (currentState) renderCombatControls(currentState);
 }
 
 // Build the per-attacker assignment UI. Rebuilt on every change so totals and
@@ -18148,14 +18346,16 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
     titleEl.textContent = mode === "banding" ? "Assign Banding Damage" : "Assign Combat Damage";
   }
   const anyOffer = groups.some((g) => g.offer);
+  const offerNote = anyOffer
+    ? " A creature that may assign its combat damage as though it weren't blocked deals all of it one way or the other — choose for each."
+    : "";
   if (subtitleEl) {
     subtitleEl.textContent =
       mode === "banding"
-        ? "A creature with banding is blocking, so you (the defender) choose how each attacker's damage is split among its blockers (CR 702.22j)."
+        ? "You (the defending player) assign this combat damage rather than the attacker — a creature with banding is blocking, or an effect you control says so (CR 702.22j). Choose how each attacker's damage is split among the creatures blocking it."
+          + offerNote
         : "Distribute each attacker's power among the creatures blocking it. The total assigned to a blocker's row cannot exceed the attacker's damage."
-          + (anyOffer
-            ? " A creature that may assign its combat damage as though it weren't blocked deals all of it one way or the other — choose for each."
-            : "");
+          + offerNote;
   }
 
   const cardThumb = (card, sub) => {
@@ -18241,8 +18441,12 @@ function renderCombatDamageDialogBody(groups, mode = combatDamageDialogMode) {
       offerRow.className = "cda-offer";
       const question = document.createElement("div");
       question.className = "cda-offer-question";
+      // In "banding" mode the viewer is the DEFENDING player and the choice is
+      // theirs because the assignment is (ruling, 2018-04-27) — say so, since
+      // it is an opponent's creature they are deciding for.
       question.textContent =
-        `${group.attackerCard?.name || "This creature"} may assign its combat damage as though it weren't blocked.`;
+        `${group.attackerCard?.name || "This creature"} may assign its combat damage as though it weren't blocked.`
+        + (mode === "banding" ? " You assign its damage, so the choice is yours." : "");
       offerRow.appendChild(question);
       const choices = document.createElement("div");
       choices.className = "cda-offer-choices";
@@ -19280,6 +19484,22 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   if (state && !state.pregame && !state.winner) MUSIC.start();
   currentState = state;
   syncCombatDrafts(state);
+  // A menu opened on a permanent is a reading of that permanent as it was.
+  refreshPendingPermanentPrompts(state);
+  // A second combat damage step (CR 510.4) is assigned afresh: the first
+  // step's divisions were made over creatures that may be dead or damaged
+  // now, and its offers were answered for that step alone. Dropping the
+  // drafts and the open dialog here is also what lets the panel below open
+  // the dialog again — its auto-open key carries the same pass.
+  const damagePassKey = getCombatDamagePassKey(state);
+  if (damagePassKey !== combatDamagePassKey) {
+    combatDamagePassKey = damagePassKey;
+    combatDamageDraft = {};
+    combatDamageOfferDraft = {};
+    combatBandBlockerDraft = {};
+    combatMultiblockDraft = {};
+    closeCombatDamageDialog();
+  }
   if (!isCombatStep(state, "combat_damage") || getCombatState(state)?.damage_resolved) {
     combatDamageDraft = {};
     combatDamageOfferDraft = {};

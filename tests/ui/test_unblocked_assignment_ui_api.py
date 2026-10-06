@@ -551,8 +551,12 @@ def test_the_dialog_asks_afresh_in_the_second_step():
     dialog = app_js_function_body("openDamageDialog")
     sent = dialog.index("as_though_unblocked_ids: asThoughUnblockedIds")
     cleared = dialog.index("combatDamageOfferDraft = {};", sent)
-    still_owed = dialog.index("getAttackerAssignGroups(currentState).some((g) => g.offer)", cleared)
+    # Round 3 widened "still owed" from an offered attacker to any assignment
+    # this seat has (an ordinary multi-block's second step did not come back),
+    # and the reopening to whichever dialog the new state owes — so these two
+    # lines name the wider question and the shared reopener.
+    still_owed = dialog.index("combatDamageDialogOwed(currentState)", cleared)
     put_back = dialog.index("confirmBtn.disabled = false;", still_owed)
-    reopened = dialog.index("openCombatDamageDialog(currentState);", put_back)
+    reopened = dialog.index("settleCombatDamageDialog();", put_back)
     assert sent < cleared < still_owed < put_back < reopened
     assert "if (askAgain) {" in dialog[put_back:reopened]

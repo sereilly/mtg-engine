@@ -459,7 +459,29 @@ class CombatPhaseMixin:
             else:
                 self.log.append("No attackers; declare blockers step skipped")
         if self.current_step == "combat_damage" and not self.combat_damage_resolved:
-            return  # Awaiting manual damage assignment
+            # Awaiting a damage assignment — with one exception, which is the
+            # second combat damage step (CR 510.4) when it has nothing in it
+            # for anybody to announce.
+            #
+            # A step resolved one pass at a time (the web layer's
+            # ``assign_combat_damage``, which is how a person assigns) leaves
+            # the first-strike step dealt and the regular one owed. Where a
+            # division is still owed the dialog asks for it. Where none is —
+            # the first strike killed the attacker, or one of its two blockers
+            # (CR 510.1c: "If exactly one creature is blocking it, it assigns
+            # all its combat damage to that creature") — nothing asked, this
+            # returned, and the game sat in a combat damage step that could
+            # neither be assigned nor left. The players have had the priority
+            # window between the two steps by the time anybody advances
+            # (CR 510.3), so advancing deals the second step and stays in it:
+            # the window after that damage is the step's own.
+            if (
+                self.combat_first_strike_done
+                and not self.resume_stack
+                and not self._needs_manual_damage_assignment()
+            ):
+                self.resolve_combat_damage(self.active_player_index)
+            return
 
         if self.current_step == "declare_attackers":
             self.log.append(
@@ -802,6 +824,19 @@ class CombatPhaseMixin:
                 for blocker_idx, atks in sorted(blocker_map.items())
                 for a in atks
             ],
+            # CR 510.1: which seat announces how each attacker assigns its
+            # combat damage — the active player, or the defending player where
+            # a creature with banding blocks it (CR 702.22j: one with banding,
+            # or a "bands with other" pair) or a permanent says "rather than
+            # the attacking player, you assign…". The client reads this; it
+            # used to decide from one blocker's keyword line, which is one of
+            # the three ways the engine says yes. A key of its own rather than
+            # a field on each attacker entry, so nothing comparing those
+            # entries whole sees a new one.
+            "damage_assigned_by": {
+                attacker_idx: self.combat_damage_assigner(attacker_idx)
+                for attacker_idx in sorted(self.combat_attackers)
+            },
             "damage_resolved": self.combat_damage_resolved,
             "first_strike_done": self.combat_first_strike_done,
             "attackers_locked": self.combat_attackers_locked,

@@ -66,6 +66,49 @@ MUST_ASSIGN_AS_UNBLOCKED = "must_assign_combat_damage_as_unblocked_until_eot"
 #: not swept and is not a mark at all: see :func:`may_assign_as_unblocked`.
 MAY_ASSIGN_AS_UNBLOCKED = "assign_combat_damage_as_unblocked_until_eot"
 
+#: The offer **taken by the defending player**, for one combat damage step.
+#:
+#: Where the defending player assigns an attacker's combat damage (CR 702.22j:
+#: a creature with banding is blocking it; or a permanent that says "rather
+#: than the attacking player, you assign…") the offer above is theirs to take
+#: — "If blocked by a creature with banding, the defending player decides
+#: whether or not the damage is assigned 'as though it weren't blocked'."
+#: (Thorn Elemental / Lone Wolf / Rhox / Pride of Lions, 2018-04-27.) And for
+#: the printed substitution: "Damage assignment choices from Trample and other
+#: things which allow alternative damage assignments for attacking creatures
+#: are all made by you." (Defensive Formation, 2004-10-04.)
+#:
+#: The defending player announces before the active player's assignment is
+#: resolved (``Game.assign_banding_combat_damage``), so their answer has to be
+#: *held* until the step deals its damage — the one place in this module where
+#: an answer is stored rather than announced with the assignment it belongs to.
+#: It is held the way their division is (``Game.combat_banding_damage``): for
+#: the combat, as what that player last said about this creature.
+#:
+#: A mark on the attacker rather than an entry in a combat map, for
+#: :data:`BLOCKED_WITHOUT_BLOCKERS`'s reason: the maps are keyed by battlefield
+#: slot and have to be renumbered whenever anything leaves, and this travels
+#: with the permanent. Swept with that mark by the end of combat step.
+DEFENDER_ASSIGNS_AS_UNBLOCKED = "defender_assigns_as_unblocked_this_combat"
+
+#: Whether the defending player has **announced** how this attacker assigns
+#: its combat damage in the combat damage step in progress — either answer,
+#: the division or the mark above.
+#:
+#: Separate from the answer because the two have different lifetimes. CR 510.4
+#: gives a combat with first or double strike two combat damage steps, and
+#: CR 510.1 is an announcement made in each: a double striker blocked by a
+#: Benalish Hero is divided by the defending player twice, over a board the
+#: first strike changed. So the *asking* is per step — the step that deals an
+#: attacker's damage clears this, and a person is asked again — while the
+#: *answer* stays where it was, as the default for a seat nobody is asking (a
+#: headless combat replays the division it was given, where it is still one).
+#:
+#: An attacker that has not struck yet keeps the mark across the first step:
+#: its announcement has not been used, and asking for it twice would be asking
+#: about one assignment two times.
+DEFENDER_ANNOUNCED_THIS_STEP = "defender_announced_assignment_this_step"
+
 #: The tail of the log line the damage step writes for each blocked attacker
 #: whose combat damage went past its blockers — the offer taken, or Outmaneuver's
 #: restriction — as "<name> assigns its combat damage as though it weren't
@@ -220,6 +263,8 @@ def combat_damage_assigned_by(permanent) -> int:
 __all__ = [
     "AS_THOUGH_UNBLOCKED_LOG",
     "ASSIGNS_NO_COMBAT_DAMAGE",
+    "DEFENDER_ANNOUNCED_THIS_STEP",
+    "DEFENDER_ASSIGNS_AS_UNBLOCKED",
     "MAY_ASSIGN_AS_UNBLOCKED",
     "combat_damage_assigned_by",
     "may_assign_as_unblocked",

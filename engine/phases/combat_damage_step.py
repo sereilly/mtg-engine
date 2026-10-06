@@ -29,6 +29,8 @@ interrupted.
 """
 
 from ..combat_assignment import (AS_THOUGH_UNBLOCKED_LOG,
+                                 DEFENDER_ANNOUNCED_THIS_STEP,
+                                 DEFENDER_ASSIGNS_AS_UNBLOCKED,
                                  MUST_ASSIGN_AS_UNBLOCKED,
                                  combat_damage_assigned_by,
                                  may_assign_as_unblocked)
@@ -104,49 +106,389 @@ class CombatDamageStepMixin:
             return True
         return bands_with_other_pair(self, blockers)
 
+    def combat_damage_assigner(self, attacker_idx: int) -> int | None:
+        """The seat that announces how this attacker assigns its combat damage
+        (CR 510.1) — or None when the slot is not one of this combat's
+        attackers.
+
+        The active player, unless the defending player assigns it instead
+        (CR 702.22j, or a printed substitution — see
+        :meth:`_defender_assigns_attacker_damage`). **This is the answer the
+        client is sent** (``get_combat_state``'s ``damage_assigned_by``): it
+        used to work the answer out for itself, from one blocker's keyword
+        line, while the server also counted "bands with other" pairs and
+        Defensive Formation — so a legendary band's division, or any division
+        under that enchantment, was offered to the attacking player by a dialog
+        the server then refused.
+        """
+        if attacker_idx not in self.combat_attackers:
+            return None
+        if self._defender_assigns_attacker_damage(attacker_idx):
+            return self.combat_attackers[attacker_idx]
+        return self.active_player_index
+
+    def _attacker_division_refusal(
+        self,
+        attacker_idx: int,
+        requested: dict[int, int],
+        *,
+        offered: bool = False,
+    ) -> str | None:
+        """Why *requested* is not a legal division of this blocked attacker's
+        combat damage among the creatures blocking it — or None when it is one.
+
+        **One check, three readers**: the damage step, for whichever seat's
+        division it is about to deal; :meth:`assign_banding_combat_damage`,
+        when a defending player announces theirs; and the question "is the
+        division this seat announced earlier still an announcement?", asked
+        again when a second combat damage step has changed what it divides
+        among. It was written out twice — once per seat — and the two had
+        drifted: the defending player's copy required all of the damage to be
+        assigned and never asked about trample's lethal damage, and the active
+        player's asked about trample and required nothing at all, so a creature
+        with three power blocked by two could announce one and none and two
+        points of combat damage went nowhere.
+
+        The rules it holds:
+
+        * CR 510.1c — "A blocked creature assigns its combat damage to the
+          creatures blocking it": **to them** (an amount on any other creature
+          is refused rather than dropped), and **its combat damage** — all of
+          it. With two or more blockers it is "divided as its controller
+          chooses among them", which chooses the shares and not the total.
+        * CR 510.1a — the total is the creature's power, never more.
+        * CR 702.19b — trample is the one way some of it may go elsewhere: the
+          excess over lethal damage to *each* blocker, to the player or
+          planeswalker being attacked. So a trampler may leave a remainder, and
+          only once every blocker has been assigned lethal damage.
+
+        *offered* is whether this attacker also had "as though it weren't
+        blocked" to choose from, and changes only the sentence: for that
+        creature an under-assignment is a third answer its card does not print.
+
+        Nothing here asks whether the creature strikes in the step being
+        resolved (CR 510.4) — a creature that is not assigning has announced
+        nothing, and its caller skips it.
+        """
+        defending_index = self.combat_attackers.get(attacker_idx)
+        attacker = self.permanent_at(self.active_player_index, attacker_idx)
+        if attacker is None or defending_index is None:
+            return "that creature is not attacking"
+        if not (0 <= defending_index < len(self.players)):
+            return "that creature is not attacking a player"
+        defender = self.players[defending_index]
+        name = attacker.card.name
+        assignable = combat_damage_assigned_by(attacker)
+        blockers = [
+            blocker_idx
+            for blocker_idx in self._attacker_all_blockers(attacker_idx)
+            if 0 <= blocker_idx < len(defender.battlefield)
+        ]
+        amounts = {int(slot): int(amount) for slot, amount in requested.items()}
+        if any(amount < 0 for amount in amounts.values()):
+            return "combat damage assignment cannot be negative"
+        has_trample = self._has_keyword(attacker, "trample")
+        has_deathtouch = self._has_keyword(attacker, "deathtouch")
+        total = 0
+        under_lethal = False
+        for blocker_idx in blockers:
+            amount = amounts.get(blocker_idx, 0)
+            blocker = defender.battlefield[blocker_idx]
+            lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+            if has_deathtouch and lethal > 0:
+                lethal = 1
+            if amount < lethal:
+                under_lethal = True
+            total += amount
+        if total > assignable:
+            return "assigned combat damage exceeds attacker power"
+        strays = sorted(
+            slot for slot, amount in amounts.items()
+            if amount > 0 and slot not in blockers
+        )
+        if strays:
+            return (
+                f"{name} assigns its combat damage only to the creatures "
+                "blocking it (CR 510.1c)"
+            )
+        if not blockers:
+            # CR 510.1c: "If no creatures are currently blocking it … it
+            # assigns no combat damage." Nothing to divide and nothing owed.
+            return None
+        if total < assignable:
+            if not has_trample:
+                if offered:
+                    return (
+                        f"{name} assigns all of its combat damage to the "
+                        "creatures blocking it or all of it as though it "
+                        "weren't blocked"
+                    )
+                return (
+                    f"{name} assigns all of its combat damage among the "
+                    "creatures blocking it (CR 510.1c)"
+                )
+            if under_lethal:
+                return "trample requires lethal damage assigned to each blocker"
+        return None
+
+    def _default_attacker_division(self, attacker_idx: int) -> dict[int, int]:
+        """The engine's own division of one blocked attacker's combat damage
+        among the creatures blocking it — the default a seat that is not asked
+        is given, and the only one where there is no choice (CR 510.1c: "If
+        exactly one creature is blocking it, it assigns all its combat damage
+        to that creature").
+
+        One blocker takes all of it (only lethal from a trampler, so the rest
+        can trample over). Several are assigned lethal damage in slot order
+        until the power runs out, and what is left goes onto the last one that
+        got lethal — which kills as many as the power allows. A heuristic, and
+        the attacker's rather than the defender's: any division
+        :meth:`_attacker_division_refusal` accepts is as legal.
+        """
+        attacker = self.permanent_at(self.active_player_index, attacker_idx)
+        defending_index = self.combat_attackers.get(attacker_idx)
+        if attacker is None or defending_index is None:
+            return {}
+        defender = (
+            self.players[defending_index]
+            if 0 <= defending_index < len(self.players)
+            else None
+        )
+        blockers = self._attacker_all_blockers(attacker_idx)
+        if not blockers:
+            return {}
+        has_trample = self._has_keyword(attacker, "trample")
+        has_deathtouch = self._has_keyword(attacker, "deathtouch")
+
+        def lethal_for(blocker_idx: int) -> int:
+            if defender is None or blocker_idx >= len(defender.battlefield):
+                return 0
+            blocker = defender.battlefield[blocker_idx]
+            need = max(0, blocker.effective_toughness - blocker.damage_marked)
+            if has_deathtouch and need > 0:
+                return 1
+            return need
+
+        if len(blockers) == 1:
+            blocker_idx = blockers[0]
+            assign = combat_damage_assigned_by(attacker)
+            # For trample assign only lethal to the blocker; the remainder
+            # flows to the defending player via the existing trample logic.
+            if has_trample:
+                assign = min(assign, lethal_for(blocker_idx))
+            return {blocker_idx: assign}
+
+        # Multiple blockers: walk them in index order assigning lethal to each
+        # until the attacker runs out of power, then dump the remainder on the
+        # last blocker that received lethal.
+        power_left = combat_damage_assigned_by(attacker)
+        per_blocker: dict[int, int] = {}
+        last_lethal_idx: int | None = None
+        exhausted = False
+        for blocker_idx in blockers:
+            if exhausted:
+                per_blocker[blocker_idx] = 0
+                continue
+            need = lethal_for(blocker_idx)
+            if need <= power_left:
+                per_blocker[blocker_idx] = need
+                power_left -= need
+                last_lethal_idx = blocker_idx
+            else:
+                # Can't kill this blocker — assign the remainder here (the legal
+                # sub-lethal breakpoint) and stop assigning to later blockers.
+                per_blocker[blocker_idx] = power_left
+                power_left = 0
+                exhausted = True
+        # Dump any leftover power onto the last blocker we killed (now > lethal,
+        # still legal). Tramplers keep the leftover so it spills to the defender.
+        if power_left > 0 and not has_trample and last_lethal_idx is not None:
+            per_blocker[last_lethal_idx] += power_left
+        return per_blocker
+
+    def _defender_assignment_recorded(self, attacker_idx: int) -> bool:
+        """Whether the defending player's announcement for this attacker is on
+        record **for the combat damage step about to be resolved** — their
+        division among its blockers, or "as though it weren't blocked".
+
+        "For this step" is :data:`~engine.combat_assignment.
+        DEFENDER_ANNOUNCED_THIS_STEP`: the step that deals an attacker's damage
+        clears it, so a double striker's second step (CR 510.4) asks again.
+
+        A division is on record only while it is still a division: if what it
+        divides among has changed since it was announced (a blocker left in the
+        window between two combat damage steps), it is the announcement of a
+        board that no longer exists. Counting it would have the step refuse the
+        *active* player's resolution for a fault only the defending player can
+        mend, with nothing asking them to.
+        """
+        attacker = self.permanent_at(self.active_player_index, attacker_idx)
+        if attacker is None:
+            return False
+        if not attacker.metadata.get(DEFENDER_ANNOUNCED_THIS_STEP):
+            return False
+        if attacker.metadata.get(DEFENDER_ASSIGNS_AS_UNBLOCKED):
+            return True
+        return self._defender_division_stands(attacker_idx)
+
+    def _defender_division_stands(self, attacker_idx: int) -> bool:
+        """Whether the defending player's division for this attacker — the
+        last one they gave this combat — is still a legal division of it.
+
+        Asked by the damage step, which deals a standing division in whichever
+        step the attacker assigns in: an answer given once is that seat's
+        answer until it gives another, so a combat nobody is sitting at
+        replays it for a double striker's second step where it still divides
+        all of the damage among the creatures still blocking.
+        """
+        stored = self.combat_banding_damage.get(attacker_idx)
+        if stored is None:
+            return False
+        return self._attacker_division_refusal(attacker_idx, stored) is None
+
+    def defender_assignments_owed(self, defender_index: int | None = None) -> list[int]:
+        """The attackers a **defending** player assigns the combat damage of,
+        has a decision about, and has not yet announced for this step —
+        ascending by battlefield slot, for one defending seat or for all.
+
+        Whether there is a decision is the same test the active player's own
+        dialog applies: two or more creatures blocking is a division, and one
+        is a decision only for an attacker that "may … assign its combat damage
+        as though it weren't blocked", where the choice is this seat's
+        (:meth:`unblocked_assignment_chooser`). A single creature with banding
+        in front of an ordinary attacker is none — all of the damage goes to
+        it whoever says so.
+
+        **Seat-blind, like every other reason the step stops**: whether
+        somebody is sitting there to be asked is the web layer's question, and
+        :meth:`unblocked_assignments_to_ask` is the one arm that puts it to
+        the engine. ``web/combat_prompts.py`` reads this list — it used to
+        rebuild it from the wire payload and required two blockers, which is
+        how a Thorn Elemental blocked by one Benalish Hero went unasked.
+        """
+        owed: list[int] = []
+        for attacker_idx in sorted(self.combat_attackers):
+            seat = self.combat_attackers[attacker_idx]
+            if defender_index is not None and seat != defender_index:
+                continue
+            if not self._defender_assigns_attacker_damage(attacker_idx):
+                continue
+            attacker = self.permanent_at(self.active_player_index, attacker_idx)
+            if attacker is None or combat_damage_assigned_by(attacker) <= 0:
+                continue
+            declared = self._combat_blockers_for_attacker(attacker_idx)
+            offered = self.unblocked_assignment_chooser(attacker_idx) == seat
+            if len(declared) < (1 if offered else 2):
+                continue
+            if self._defender_assignment_recorded(attacker_idx):
+                continue
+            owed.append(attacker_idx)
+        return owed
+
     def assign_banding_combat_damage(
         self,
         defender_index: int,
         attacker_damage: dict[int, dict[int, int]],
+        as_though_unblocked=None,
     ) -> tuple[bool, str]:
-        """CR 702.22j: the defending player pre-commits how each attacker that is
-        blocked by a creature with banding assigns its combat damage.
+        """CR 702.22j: the defending player announces how each attacker whose
+        combat damage *they* assign — one blocked by a creature with banding,
+        or any attacker while they control "rather than the attacking player,
+        you assign…" — assigns it.
 
-        Stored and consumed by :meth:`resolve_combat_damage` in place of the active
-        player's assignment for those attackers.
+        Held, and read by :meth:`resolve_combat_damage` in place of the active
+        player's assignment for those attackers. The *announcement* is for one
+        combat damage step — the step that deals an attacker's damage marks it
+        unannounced again (CR 510.4: a second step is a second announcement,
+        and a person is asked again) — while the answer itself stands as what
+        this seat last said, which is what a seat nobody asks goes on saying.
+
+        Two answers per attacker, the same two the active player has for their
+        own:
+
+        * an entry in ``attacker_damage`` — a division among the creatures
+          blocking it, held to :meth:`_attacker_division_refusal`;
+        * the attacker's ``permanent_id`` in ``as_though_unblocked`` — for a
+          creature that "may … assign its combat damage as though it weren't
+          blocked", the offer **taken by the defending player**, to whom the
+          cards' ruling gives it (2018-04-27; see
+          :data:`~engine.combat_assignment.DEFENDER_ASSIGNS_AS_UNBLOCKED`).
+          Until this argument existed the answer was always "keep it on the
+          blockers" and nobody was asked.
+
+        Some of each for one attacker is refused — "You can't split the damage
+        assignment between them." An attacker the announcement does not name
+        keeps whatever was recorded for it, so two actions may answer two
+        attackers.
         """
         if defender_index not in self.combat_defending_players():
             return False, "only the defending player may assign banding damage"
-        attacker_controller = self.players[self.active_player_index]
-        for attacker_idx, split in attacker_damage.items():
-            attacker_idx = int(attacker_idx)
+        divisions = {
+            int(attacker_idx): {int(b): int(v) for b, v in (split or {}).items()}
+            for attacker_idx, split in (attacker_damage or {}).items()
+        }
+        active = self.active_player_index
+        sent_past: dict[int, Permanent] = {}
+        for permanent_id in sorted({int(pid) for pid in (as_though_unblocked or ())}):
+            attacker = self.permanent_by_id(permanent_id)
+            attacker_idx = (
+                self.battlefield_index_of(attacker)
+                if attacker is not None and self.controls(active, attacker)
+                else None
+            )
+            if attacker_idx is None or attacker_idx not in self.combat_attackers:
+                return False, "that creature is not attacking"
+            if self.combat_attackers.get(attacker_idx) != defender_index:
+                return False, "that attacker isn't attacking this player"
+            name = attacker.card.name
+            chooser = self.unblocked_assignment_chooser(attacker_idx)
+            if chooser is None:
+                return False, (
+                    f"{name} can't assign its combat damage as though it "
+                    "weren't blocked"
+                )
+            if chooser != defender_index:
+                return False, (
+                    f"the attacking player assigns {name}'s combat damage"
+                )
+            if any(amount > 0 for amount in divisions.get(attacker_idx, {}).values()):
+                return False, (
+                    f"{name} assigns all of its combat damage to the creatures "
+                    "blocking it or all of it as though it weren't blocked, "
+                    "not some of each"
+                )
+            sent_past[attacker_idx] = attacker
+        for attacker_idx, split in divisions.items():
+            if attacker_idx in sent_past:
+                continue
             if self.combat_attackers.get(attacker_idx) != defender_index:
                 return False, "that attacker isn't attacking this player"
             if not self._defender_assigns_attacker_damage(attacker_idx):
                 return False, (
                     "the attacking player assigns this attacker's damage"
                 )
-            if not (0 <= attacker_idx < len(attacker_controller.battlefield)):
+            if self.permanent_at(active, attacker_idx) is None:
                 return False, "attacker index out of range"
-            attacker = attacker_controller.battlefield[attacker_idx]
-            total = 0
-            for amount in split.values():
-                amount = int(amount)
-                if amount < 0:
-                    return False, "combat damage assignment cannot be negative"
-                total += amount
-            power = combat_damage_assigned_by(attacker)
-            if total > power:
-                return False, "assigned combat damage exceeds attacker power"
-            # CR 702.22j: the defender divides ALL the attacker's combat damage
-            # among its blockers. Only a trampler may hold some back (the
-            # remainder tramples through to the defending player, CR 702.19b).
-            if total < power and not self._has_keyword(attacker, "trample"):
-                return False, "all of the attacker's combat damage must be assigned"
-        self.combat_banding_damage = {
-            int(a): {int(b): int(v) for b, v in dmg.items()}
-            for a, dmg in attacker_damage.items()
-        }
+            refusal = self._attacker_division_refusal(
+                attacker_idx, split,
+                offered=self.unblocked_assignment_chooser(attacker_idx) == defender_index,
+            )
+            if refusal is not None:
+                return False, refusal
+        # Nothing is written until the whole announcement has been accepted
+        # (CR 510.1e), and each attacker holds exactly one of the two answers.
+        for attacker_idx, split in divisions.items():
+            if attacker_idx in sent_past:
+                continue
+            self.combat_banding_damage[attacker_idx] = dict(split)
+            attacker = self.permanent_at(active, attacker_idx)
+            if attacker is not None:
+                attacker.metadata.pop(DEFENDER_ASSIGNS_AS_UNBLOCKED, None)
+                attacker.metadata[DEFENDER_ANNOUNCED_THIS_STEP] = True
+        for attacker_idx, attacker in sent_past.items():
+            self.combat_banding_damage.pop(attacker_idx, None)
+            attacker.metadata[DEFENDER_ASSIGNS_AS_UNBLOCKED] = True
+            attacker.metadata[DEFENDER_ANNOUNCED_THIS_STEP] = True
         return True, "banding damage assignment recorded"
 
     def assign_multiblock_blocker_damage(
@@ -245,10 +587,11 @@ class CombatDamageStepMixin:
             return self.combat_attackers[attacker_idx]
         return self.active_player_index
 
-    def unblocked_assignments_to_ask(self) -> list[int]:
+    def unblocked_assignments_to_ask(self, seat: int | None = None) -> list[int]:
         """The attackers whose "as though it weren't blocked" an **interactive**
-        active player has to answer before combat damage can be assigned,
-        ascending by battlefield slot.
+        seat has to answer before combat damage can be assigned, ascending by
+        battlefield slot — every such seat's, or with *seat* given, that
+        seat's alone (which is what each seat's own dialog is built from).
 
         This is what makes the game *stop*. The step used to resolve a single
         block as it was entered, taking the offer on the attacker's behalf — so
@@ -270,21 +613,32 @@ class CombatDamageStepMixin:
           other answer is CR 510.1c's "assigns no combat damage", which the
           default never picks and no table is stopped to be offered.
 
-        The defending player's own version of the question (they assign under
-        CR 702.22j) is not asked here: that seat's unasked answer is to keep
-        the damage on the blockers it is already dividing among.
+        **The defending player's version of the question is asked here too**,
+        where that player assigns the attacker's damage (CR 702.22j, Defensive
+        Formation) and is sitting at the table — the cards' ruling gives them
+        the choice in as many words (2018-04-27). It used not to be: their
+        unasked answer was "keep it on the blockers", and it was unasked every
+        time, so a person defending with one Benalish Hero in front of a Thorn
+        Elemental was never offered the seven damage to themself that would
+        have kept the Hero alive. Theirs is asked once per step and then held
+        (:meth:`assign_banding_combat_damage`), because they announce before
+        the active player resolves; the active player's rides the assignment
+        itself.
         """
         active = self.active_player_index
-        if active not in self.interactive_seats:
-            return []
         asked: list[int] = []
         for attacker_idx in sorted(self.combat_attackers):
-            if self.unblocked_assignment_chooser(attacker_idx) != active:
+            chooser = self.unblocked_assignment_chooser(attacker_idx)
+            if chooser is None or chooser not in self.interactive_seats:
+                continue
+            if seat is not None and chooser != seat:
                 continue
             attacker = self.permanent_at(active, attacker_idx)
             if attacker is None or combat_damage_assigned_by(attacker) <= 0:
                 continue
             if not self._attacker_all_blockers(attacker_idx):
+                continue
+            if chooser != active and self._defender_assignment_recorded(attacker_idx):
                 continue
             asked.append(attacker_idx)
         return asked
@@ -390,11 +744,30 @@ class CombatDamageStepMixin:
         the web layer reads it for is the sentence above — *can the dialog
         surface this assignment* — and auto-resolving past an offer the dialog
         is showing is the defect this arm exists to stop.
+
+        **And False for a division that is nobody's dialog's to show.** A
+        multi-blocked attacker whose damage the *defending* player assigns
+        (CR 702.22j) is not in the active player's dialog, and it is in the
+        defending player's only while somebody sits there who has not answered
+        yet. This answered True for any two declared blockers, so a person
+        attacking into an AI's Benalish Hero and a second blocker reached a
+        combat damage step with no dialog on either side and nothing that would
+        resolve it — and two people did the moment the defender had answered.
+        Where no dialog can surface it, the default stands and the web layer's
+        auto-resolve is what this returning False permits.
         """
         if self.unblocked_assignments_to_ask():
             return True
         for attacker_idx in self.combat_attackers:
-            if len(self._combat_blockers_for_attacker(attacker_idx)) >= 2:
+            if len(self._combat_blockers_for_attacker(attacker_idx)) < 2:
+                continue
+            assigner = self.combat_damage_assigner(attacker_idx)
+            if assigner == self.active_player_index:
+                return True
+            if (
+                assigner in self.interactive_seats
+                and not self._defender_assignment_recorded(attacker_idx)
+            ):
                 return True
         return False
 
@@ -408,22 +781,19 @@ class CombatDamageStepMixin:
         for the AI / auto-resolve path — it maximizes how many blockers die. The
         resolver no longer requires lethal-in-order (CR 510.1c), so a human attacker
         may freely override this with any legal division.
+
+        The division itself is :meth:`_default_attacker_division`, one
+        attacker at a time, so that a single attacker's default can be asked
+        for on its own (the announcement that does not name it; the second
+        combat damage step, where the first changed what it divides among).
         """
         if not self.combat_attackers:
             return {}
         attacker_controller = self.players[self.active_player_index]
         assignment: dict[int, dict[int, int]] = {}
-        for attacker_idx, defending_index in self.combat_attackers.items():
+        for attacker_idx in self.combat_attackers:
             if attacker_idx >= len(attacker_controller.battlefield):
                 continue
-            attacker = attacker_controller.battlefield[attacker_idx]
-            # Each attacker resolves its own defender's battlefield — blocker
-            # indices are only unambiguous within one defender (CR 802).
-            defender = (
-                self.players[defending_index]
-                if 0 <= defending_index < len(self.players)
-                else None
-            )
             blockers = self._attacker_all_blockers(attacker_idx)
             if not blockers:
                 continue
@@ -452,57 +822,7 @@ class CombatDamageStepMixin:
             # blocked by a Benalish Hero went past it on the attacker's say-so.
             if self.unblocked_assignment_chooser(attacker_idx) == self.active_player_index:
                 continue
-            has_trample = self._has_keyword(attacker, "trample")
-            has_deathtouch = self._has_keyword(attacker, "deathtouch")
-
-            def lethal_for(blocker_idx: int) -> int:
-                if defender is None or blocker_idx >= len(defender.battlefield):
-                    return 0
-                blocker = defender.battlefield[blocker_idx]
-                need = max(0, blocker.effective_toughness - blocker.damage_marked)
-                if has_deathtouch and need > 0:
-                    return 1
-                return need
-
-            if len(blockers) == 1:
-                blocker_idx = blockers[0]
-                assign = combat_damage_assigned_by(attacker)
-                # For trample assign only lethal to the blocker; the remainder
-                # flows to the defending player via the existing trample logic.
-                if has_trample:
-                    assign = min(assign, lethal_for(blocker_idx))
-                assignment[attacker_idx] = {blocker_idx: assign}
-                continue
-
-            # Multiple blockers: walk them in index order assigning lethal to each
-            # until the attacker runs out of power, then dump the remainder on the
-            # last blocker that received lethal. This kills as many blockers as the
-            # attacker's power allows. It's just the default — any non-negative
-            # division summing to <= power is legal (CR 510.1c).
-            power_left = combat_damage_assigned_by(attacker)
-            per_blocker: dict[int, int] = {}
-            last_lethal_idx: int | None = None
-            exhausted = False
-            for blocker_idx in blockers:
-                if exhausted:
-                    per_blocker[blocker_idx] = 0
-                    continue
-                need = lethal_for(blocker_idx)
-                if need <= power_left:
-                    per_blocker[blocker_idx] = need
-                    power_left -= need
-                    last_lethal_idx = blocker_idx
-                else:
-                    # Can't kill this blocker — assign the remainder here (the legal
-                    # sub-lethal breakpoint) and stop assigning to later blockers.
-                    per_blocker[blocker_idx] = power_left
-                    power_left = 0
-                    exhausted = True
-            # Dump any leftover power onto the last blocker we killed (now > lethal,
-            # still legal). Tramplers keep the leftover so it spills to the defender.
-            if power_left > 0 and not has_trample and last_lethal_idx is not None:
-                per_blocker[last_lethal_idx] += power_left
-            assignment[attacker_idx] = per_blocker
+            assignment[attacker_idx] = self._default_attacker_division(attacker_idx)
         return assignment
 
     def _participates_in_first_strike(self, permanent: Permanent) -> bool:
@@ -707,18 +1027,24 @@ class CombatDamageStepMixin:
             # never say yes.
             #
             # Where the defending player assigns this attacker's damage the
-            # offer is theirs (see the chooser), and theirs is not asked — so
-            # it is never taken, and the division they made stands. It used to
-            # be taken over their heads: a defender divided seven damage among
-            # a band of blockers in a dialog and was then dealt all seven.
-            declined_offer = False
+            # offer is theirs (see the chooser). They announce before the
+            # active player's assignment is resolved, so their yes is *held* —
+            # ``assign_banding_combat_damage`` marks the attacker — and their
+            # unsaid answer is no: the damage stays on the creatures blocking
+            # it. It used to be taken over their heads (a defender divided
+            # seven damage among a band of blockers in a dialog and was then
+            # dealt all seven), and then, for one round, could not be taken by
+            # them at all.
             chooser = self.unblocked_assignment_chooser(attacker_idx)
             if chooser is not None:
-                takes_offer = False
                 if chooser == self.active_player_index:
-                    declined_offer = attacker_idx in attacker_damage
                     takes_offer = (
-                        attacker.permanent_id in unblocked_ids or not declined_offer
+                        attacker.permanent_id in unblocked_ids
+                        or attacker_idx not in attacker_damage
+                    )
+                else:
+                    takes_offer = bool(
+                        attacker.metadata.get(DEFENDER_ASSIGNS_AS_UNBLOCKED)
                     )
                 if takes_offer:
                     to_players.append((defending_index, power_left, attacker, attacked_walker_id))
@@ -734,63 +1060,55 @@ class CombatDamageStepMixin:
                 to_players.append((defending_index, power_left, attacker, attacked_walker_id))
                 continue
 
-            # CR 702.22j: when an attacker is blocked by a creature with banding, the
-            # defending player (not the active player) assigns that attacker's damage.
-            if self._defender_assigns_attacker_damage(attacker_idx) and attacker_idx in self.combat_banding_damage:
+            # Whose division this is, in the order the rules settle it:
+            #
+            # * the **defending** player's, where that player assigns this
+            #   attacker's damage (CR 702.22j, Defensive Formation) and has
+            #   announced a division that is still one;
+            # * the entry the **active** player's announcement gives it;
+            # * and for an attacker the announcement does not name, the
+            #   engine's default — CR 510.1c leaves a creature with one blocker
+            #   no choice at all, and a seat that is not asked about several
+            #   keeps the default every seat that is not asked keeps.
+            #
+            # The last arm read an absent entry as "assigns nothing", which is
+            # not something a blocked creature with a creature in front of it
+            # can do. ``web/action_combat.py`` had to fill the default in
+            # itself before calling this (the dialog names only the attackers
+            # it shows), and every other caller that named one attacker
+            # silently unassigned the rest.
+            if (
+                self._defender_assigns_attacker_damage(attacker_idx)
+                and self._defender_division_stands(attacker_idx)
+            ):
                 requested = self.combat_banding_damage[attacker_idx]
+            elif attacker_idx in attacker_damage:
+                requested = attacker_damage[attacker_idx]
             else:
-                requested = attacker_damage.get(attacker_idx, {})
-            has_trample = self._has_keyword(attacker, "trample")
-            assigned_total = 0
-            block_order = sorted(blockers)
+                requested = self._default_attacker_division(attacker_idx)
+            # CR 510.1e: the assignment is checked before any of it is dealt,
+            # and an illegal one returns the game to the moment before it was
+            # announced. One check for either seat's division — all of the
+            # creature's combat damage, to the creatures blocking it, a
+            # trampler's excess only past lethal damage — where the active
+            # player's used to be asked for no total at all.
+            refusal = self._attacker_division_refusal(
+                attacker_idx, requested, offered=chooser is not None
+            )
+            if refusal is not None:
+                return False, refusal, [], []
             # CR 510.1c: a creature blocked by two or more creatures assigns its
             # combat damage divided among them however its controller chooses.
             # There is no damage-assignment order and no requirement to assign
             # lethal to one blocker before another — that pre-2017 rule is gone.
-            # The only constraints (CR 510.1e) are non-negative per-blocker amounts
-            # whose total doesn't exceed the attacker's power, checked below.
-            trample_underlethal = False
-            for blocker_idx in block_order:
+            for blocker_idx in sorted(blockers):
                 if blocker_idx >= len(defender.battlefield):
                     continue
-                blocker = defender.battlefield[blocker_idx]
-                lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
-                if self._has_keyword(attacker, "deathtouch") and lethal > 0:
-                    lethal = 1
                 requested_damage = int(requested.get(blocker_idx, 0))
-                if requested_damage < 0:
-                    return False, "combat damage assignment cannot be negative", [], []
-                if requested_damage > power_left:
-                    return False, "assigned combat damage exceeds attacker power", [], []
-                # CR 702.19b: a trampler may assign excess to the defending player
-                # only once each blocker has been assigned at least lethal damage.
-                if has_trample and requested_damage < lethal:
-                    trample_underlethal = True
-                assigned_total += requested_damage
                 power_left -= requested_damage
                 if requested_damage > 0:
                     to_blockers.append((defending_index, blocker_idx, requested_damage, attacker_idx))
-
-            if assigned_total > assignable:
-                return False, "assigned combat damage exceeds attacker power", [], []
-            # The offer declined is CR 510.1c in full: *all* of its combat
-            # damage to the creatures blocking it. Held here for the creature
-            # that had the other answer, because for it an under-assignment is
-            # a third thing the card does not print — some of the damage
-            # nowhere — and the ruling's "all … or all" is about exactly that.
-            # (A trampler's remainder goes to the player by CR 702.19b, which
-            # is checked below and is not this.) An ordinary blocked creature's
-            # division is not re-examined: its dialog already asks for the
-            # whole, and this round was told to leave that path as it is.
-            if declined_offer and not has_trample and assigned_total < assignable:
-                return False, (
-                    f"{attacker.card.name} assigns all of its combat damage to "
-                    "the creatures blocking it or all of it as though it "
-                    "weren't blocked"
-                ), [], []
-            if has_trample and power_left > 0 and trample_underlethal:
-                return False, "trample requires lethal damage assigned to each blocker", [], []
-            if has_trample and power_left > 0:
+            if power_left > 0 and self._has_keyword(attacker, "trample"):
                 # CR 702.19b: the excess goes to the player *or planeswalker*
                 # the creature is attacking. Without trample over planeswalkers
                 # none of it may go to the defending player instead (702.19c) —
@@ -824,6 +1142,15 @@ class CombatDamageStepMixin:
         a new channel and a slot is the address that moves. For an attacker
         with the offer, an entry in ``attacker_damage`` is the other answer and
         neither is the default; see :meth:`_assign_attacker_combat_damage`.
+
+        ``attacker_damage`` names the attackers the active player is saying
+        something about, and **each one it names is held to CR 510.1c**: all of
+        the creature's combat damage, among the creatures blocking it
+        (:meth:`_attacker_division_refusal`). An attacker it does not name
+        keeps the engine's default — so ``None`` and ``{}`` are one
+        announcement, "nothing to add". ``{}`` used to mean "every blocked
+        attacker assigns nothing", which no rule lets a blocked creature do;
+        it was the wire's way of making combat damage vanish.
         """
         if self.current_turn_phase != "combat" or self.current_step != "combat_damage":
             return False, "combat damage can only be resolved during combat_damage"
@@ -839,12 +1166,14 @@ class CombatDamageStepMixin:
 
         attacker_controller = self.players[self.active_player_index]
 
-        # None means "no explicit assignment given" — fall back to the engine's
-        # default assignment (full power to blockers). An empty dict, by contrast,
-        # is an explicit "assign nothing". This lets a caller supply only
-        # blocker_damage (CR 702.22k) and still have attackers deal normally.
+        # None means "no explicit assignment given", and so does an attacker
+        # the dict leaves out: each such attacker takes the engine's default
+        # where it is read (``_assign_attacker_combat_damage``). That lets a
+        # caller supply only blocker_damage (CR 702.22k), or only the one
+        # attacker it has a decision about, and still have the rest deal
+        # normally.
         if attacker_damage is None:
-            attacker_damage = self._build_auto_damage_assignment()
+            attacker_damage = {}
 
         ok, message = self._validate_blocker_damage_split(blocker_damage_split)
         if not ok:
@@ -867,6 +1196,18 @@ class CombatDamageStepMixin:
         )
         if not ok:
             return False, message
+        # The attackers that assign in this pass. The defending player's
+        # announcement for each of them (CR 702.22j) is used up by it: `finish`
+        # marks them unannounced, so a second combat damage step asks that
+        # player again (CR 510.4). By permanent, because the slots may have
+        # moved by the time the step's tail runs.
+        assigned_this_pass = [
+            attacker
+            for attacker_idx in sorted(self.combat_attackers)
+            if (attacker := self.permanent_at(self.active_player_index, attacker_idx))
+            is not None
+            and self._strikes_in_pass(attacker, run_first_pass, has_first_strike_pass)
+        ]
         # Said out loud, once the assignment has been accepted and before a
         # point of it is dealt. A blocked creature's damage arriving on a
         # player is the one thing in this step a table cannot work out from
@@ -1151,6 +1492,11 @@ class CombatDamageStepMixin:
             # window after it.
             self._fire_batched_combat_damage_triggers(damagers_by_defender)
 
+            # This step's damage is dealt, so what the defending player
+            # announced for it has been used (see `assigned_this_pass`).
+            for attacker in assigned_this_pass:
+                attacker.metadata.pop(DEFENDER_ANNOUNCED_THIS_STEP, None)
+
             # CR 702.15b: apply lifelink life gain for damage dealt this step.
             for controller_index, amount in lifelink_gain.items():
                 if 0 <= controller_index < len(self.players):
@@ -1206,17 +1552,112 @@ class CombatDamageStepMixin:
         is recorded behind the first instead, and runs once the answer arrives.
         """
         report: dict[str, tuple[bool, str]] = {}
+        progress = {"first_step_dealt": False, "refused": False}
+        active = self.active_player_index
+        in_step = (
+            self.current_turn_phase == "combat"
+            and self.current_step == "combat_damage"
+            and controller_index == active
+            and not self.combat_damage_resolved
+        )
+
+        # One announcement, two steps. ``attacker_damage`` is keyed by
+        # battlefield slot and says how much goes to which blocker *as the
+        # board stands now*; the first-strike step can change the board under
+        # it — a blocker dies and every later slot moves down, or the creature
+        # it divided among is simply gone. So the announcement is remembered by
+        # permanent, and restated for the second step from what is still true
+        # of it (`restated` below).
+        remembered: list[tuple[Permanent, list[tuple[Permanent | None, int]]]] = []
+        if in_step and attacker_damage:
+            self._prune_combat_state()
+            for attacker_idx, split in attacker_damage.items():
+                attacker = self.permanent_at(active, attacker_idx)
+                defending_index = self.combat_attackers.get(int(attacker_idx))
+                if attacker is None or defending_index is None:
+                    continue
+                remembered.append((
+                    attacker,
+                    [
+                        (self.permanent_at(defending_index, blocker_idx), int(amount))
+                        for blocker_idx, amount in (split or {}).items()
+                    ],
+                ))
+            # CR 510.1e checks an assignment whole before any of it is dealt.
+            # With two steps in one call that has to be asked here: the first
+            # step examines only the creatures that strike in it, so an illegal
+            # division for an ordinary attacker would be found after the first
+            # strikers had dealt their damage. Recording, and dealing nothing.
+            if self._first_strike_pass_pending() and not self.combat_first_strike_done:
+                unblocked_ids = frozenset(int(pid) for pid in (as_though_unblocked or ()))
+                ok, message = self._validate_unblocked_announcement(
+                    attacker_damage, unblocked_ids
+                )
+                if ok:
+                    ok, message, _to_blockers, _to_players = (
+                        self._assign_attacker_combat_damage(
+                            attacker_damage, False, True, unblocked_ids
+                        )
+                    )
+                if not ok:
+                    return False, message
+
+        def restated() -> dict[int, dict[int, int]]:
+            """The announcement, as it reads on the board the first-strike step
+            left. Each attacker it named is still named — an entry is how an
+            attacker with "as though it weren't blocked" says no, and dropping
+            one would turn that no into a yes — with its division carried over
+            where that is still a division of all its damage among the
+            creatures still blocking it, and the default among them where it is
+            not (CR 510.4: the second step is assigned afresh; this caller
+            asked not to be stopped for it)."""
+            second: dict[int, dict[int, int]] = {}
+            for attacker, shares in remembered:
+                attacker_idx = (
+                    self.battlefield_index_of(attacker)
+                    if self.controls(active, attacker)
+                    else None
+                )
+                if attacker_idx is None or attacker_idx not in self.combat_attackers:
+                    continue
+                defending_index = self.combat_attackers[attacker_idx]
+                division: dict[int, int] = {}
+                for blocker, amount in shares:
+                    if blocker is None or not self.controls(defending_index, blocker):
+                        continue
+                    blocker_idx = self.battlefield_index_of(blocker)
+                    if blocker_idx is not None:
+                        division[blocker_idx] = amount
+                if self._attacker_division_refusal(attacker_idx, division) is not None:
+                    division = self._default_attacker_division(attacker_idx)
+                second[attacker_idx] = division
+            return second
 
         def strike_pass() -> None:
-            if self.combat_damage_resolved:
+            if self.combat_damage_resolved or progress["refused"]:
                 return
-            report["last"] = self.resolve_combat_damage(
+            assignment = attacker_damage
+            if progress["first_step_dealt"] and attacker_damage:
+                assignment = restated()
+            is_first_step = (
+                in_step
+                and not self.combat_first_strike_done
+                and self._first_strike_pass_pending()
+            )
+            result = self.resolve_combat_damage(
                 controller_index,
-                attacker_damage=attacker_damage,
+                attacker_damage=assignment,
                 blocker_damage=blocker_damage,
                 blocker_damage_split=blocker_damage_split,
                 as_though_unblocked=as_though_unblocked,
             )
+            report["last"] = result
+            if not result[0]:
+                # A refused assignment deals nothing (CR 510.1e); running the
+                # other pass would only ask the same question again.
+                progress["refused"] = True
+            elif is_first_step:
+                progress["first_step_dealt"] = True
 
         run_resumable(self, [strike_pass, strike_pass], lambda step: step())
         return report.get("last", (True, "combat damage already resolved"))
