@@ -277,7 +277,8 @@ class StaticLandTypeChange:
     """Lands of one type are another type while the source is on the battlefield.
 
     Both types are singular and lowercase, which is the form
-    ``_refresh_static_land_types`` compares against a land's computed subtypes.
+    :func:`static_land_type_change_applies` compares against a land's subtypes
+    as the layer-4 pass presents them (``engine/type_statics.py``).
 
     ``from_type`` is None exactly when ``from_nonbasic`` is set: "**Nonbasic**
     lands are Mountains" (Blood Moon) describes its subjects by a supertype
