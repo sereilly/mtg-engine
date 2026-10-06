@@ -33,8 +33,9 @@ productions' module is nowhere near its guard.
 ``ast/cards.py`` is where its own first line would put them ("Cards moving:
 draw, discard, mill, search, shuffle, reveal"), and they were never there; it
 stood at 794 lines and could not have taken them. The three-line ``Shuffle`` it
-does hold is the up-front inventory's node and nothing builds it —
-:class:`ShuffleLibrary` below is the bare shuffle the productions produce.
+did hold was the up-front inventory's node and nothing built it; it has been
+removed, and :class:`ShuffleLibrary` below is the bare shuffle the productions
+produce.
 
 A family rather than a floor, and it reads nothing: ``_core`` and no sibling,
 re-exported flat by ``__init__``, so no caller names it and none moved.

@@ -216,3 +216,46 @@ def test_the_union_only_names_real_nodes():
     pass while describing something that cannot be lowered."""
     for name in _union_members():
         assert hasattr(ast, name), f"`ast.Effect` names {name}, which does not exist"
+
+
+def _constructed_names() -> set[str]:
+    """Every name some module under ``engine/grammar`` *calls* — the nodes a
+    production can actually build, read off the call sites."""
+    called: set[str] = set()
+    for path in sorted(GRAMMAR_DIR.rglob("*.py")):
+        for node in pyast.walk(pyast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, pyast.Call):
+                continue
+            if isinstance(node.func, pyast.Attribute):
+                called.add(node.func.attr)
+            elif isinstance(node.func, pyast.Name):
+                called.add(node.func.id)
+    return called
+
+
+def test_every_union_member_is_built_by_something():
+    """The other direction (R3 J8). Every test above asks whether the union
+    names what the lowering dispatches on; none asked whether anything
+    *produces* what the union names — so ``ast.Shuffle(player)`` sat in
+    ``ast.Effect`` and in ``__all__`` from the up-front inventory onwards,
+    built by no production and lowered by no table, answering "what is an
+    Effect?" with a node that never occurs. ``ShuffleLibrary`` is the bare
+    shuffle the productions build.
+
+    One of 240 on the tree this was written against, and removed. A member
+    nothing constructs is either a production somebody has yet to write — in
+    which case the node belongs in the commit that writes it — or a leftover.
+    """
+    members = _union_members() | {
+        t.__name__ for t in typing.get_args(ast.Statement) if hasattr(t, "__name__")
+    }
+    # The floor: the union stood at 239 names with `Statement`'s wrappers.
+    assert len(members) >= 230, len(members)
+    constructed = _constructed_names()
+    assert len(constructed & members) >= 230, len(constructed & members)
+
+    unbuilt = sorted(members - constructed)
+    assert unbuilt == [], (
+        f"{unbuilt} are in `ast.Effect`/`ast.Statement` and no module under "
+        "engine/grammar constructs them"
+    )
