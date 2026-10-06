@@ -62,8 +62,14 @@ def test_junk_diver_does_not_return_itself():
 
     assert [card.name for card in p1.hand] == []
     assert [card.name for card in p1.graveyard] == ["Junk Diver"]
+    # "The ability had no legal choice at all", as the module docstring says —
+    # and CR 603.3d takes such an ability off the stack. This line used to
+    # read the handler's own "No artifact card in graveyard to return", from
+    # when a graveyard target was found at resolution: the trigger went on the
+    # stack unnamed and resolved into finding nothing. It chooses as it is put
+    # on the stack now, through the same exclusion, and has nothing to choose.
     assert any(
-        "No artifact card in graveyard to return" in line for line in game.log
+        "it has no legal target (603.3d)" in line for line in game.log
     ), game.log[-6:]
 
 

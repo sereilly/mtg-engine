@@ -253,6 +253,43 @@ REVEALED_TOP_CARDS_BY_SEAT = "revealed_top_cards_by_seat"
 #: printing it under any other event would compile clean and change nothing.
 EVENT_CHOSEN_TARGETS = "event_chosen_targets"
 
+#: The ``StackItem.choices`` key that says **this object's announcement named
+#: no target, and that was a legal announcement** (CR 601.2c: "up to one target
+#: creature" at zero; CR 115.6: such an object is not targeted at all).
+#:
+#: A record rather than something read off the empty target fields, because
+#: the fields cannot say it. They are empty for three different reasons — the
+#: announcement was complete and named nobody, a headless caller announced
+#: bare and left the pick to the handler (the standing convention), and a
+#: trigger whose target its handler finds for itself — and every resolver
+#: under them answers the empty case with a **scan** of the battlefield
+#: (``handlers/_common.pick_target_permanent``). The scan knows what the
+#: sentence names and nothing about what may be targeted, so an "up to one
+#: target creature" that could legally name only nobody went on to act on a
+#: creature with shroud: Barrin, Tolarian Archmage and Roaming Ghostlight
+#: bounced one, Feline Sovereign destroyed a shrouded artifact, and the +1 of
+#: three planeswalkers landed on one (Basri Ket's and Basri, Devoted
+#: Paladin's counter, Garruk, Unleashed's +3/+3).
+#:
+#: Written by ``Game.record_no_target_named`` and read by
+#: :func:`named_no_target`; nothing else spells the key. Here rather than in
+#: ``engine/stack_targets.py``, whose subject it is, because the reader is a
+#: handler floor (``handlers/_common``) and that module sits above it in the
+#: import order — this file imports nothing from the engine.
+NAMED_NO_TARGET = "named_no_target"
+
+
+def named_no_target(choices) -> bool:
+    """Whether the object these *choices* ride announced **zero targets**
+    (CR 601.2c) — see :data:`NAMED_NO_TARGET`.
+
+    Takes the dict rather than the stack item because both ends hold it: the
+    item at the push and the ``OracleExecutionContext`` at resolution carry
+    the same object.
+    """
+    return bool(choices) and bool(choices.get(NAMED_NO_TARGET))
+
+
 # The payload key an effect carries when the object it acts on was **bound by
 # the firing trigger** rather than chosen as a target — "…that creature becomes
 # green" under a block trigger (Aisling Leprechaun). Here for the same reason as

@@ -157,6 +157,15 @@ CHOICE_KEYS = (
     # announcement to the matcher is what keeps a cast-time choice and an
     # entry-time choice (An-Zerrin Ruins) answerable by one reader.
     "chosen_creature_type",
+    # The announcement named **no target, legally** ("up to one target
+    # creature" at zero — CR 601.2c, CR 115.6). Not a choice beyond the target
+    # but the record that the target choice was *made and came back empty*,
+    # which the empty target fields cannot say: they are just as empty for a
+    # bare headless announcement that leaves the pick to its handler. On this
+    # dict because it is the one thing that reaches the handler from the stack
+    # item with no second field to keep in step. ``oracle_types`` names the
+    # key and holds its one reader.
+    "named_no_target",
 )
 
 
@@ -339,6 +348,20 @@ class StackItem:
     # a trigger — a trigger's target is stamped at its fire site, which is the
     # bug ROADMAP's CR 608.2b entry declines the rule over.
     activated: bool = False
+    # CR 603.3d: this **triggered** ability's target was chosen for it as it
+    # was put on the stack, out of the picker's own list — by the seat that was
+    # asked, by the default a seat nobody asks takes, or by its permanent
+    # spell's cast where that announcement was one the trigger could have made
+    # (``cast_announcement_fault``). The triggered twin of ``activated`` above,
+    # and positive for the same reason: a trigger's target fields are also
+    # where a fire site threads an object *the event* named, and a slot nobody
+    # chose must not be read as a target that can later become illegal.
+    #
+    # Set by ``_resolve_trigger_target`` and by ``_stack_push`` for a standing
+    # cast announcement, and read by
+    # ``legality.vanished_graveyard_target_refusal`` — the one clause of
+    # CR 608.2b a trigger is held to so far.
+    target_chosen: bool = False
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

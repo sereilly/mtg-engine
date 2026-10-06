@@ -226,6 +226,24 @@ _UNFLAGGED_NON_TARGETS = frozenset({
 })
 
 
+def _is_an_untargeted_permanent_spell(item) -> bool:
+    """CR 115.1, spelled out here rather than asked of the reader: what is
+    targeted is an instant or sorcery spell (a), an Aura spell (b), an
+    activated ability (c) and a triggered ability (d). A creature, artifact,
+    enchantment or planeswalker spell that is not an Aura is none of them.
+
+    This census used to count such a cast as "chose a target" — 52 of them,
+    Man-o'-War and Nekrataal among them — because the engine names an entry
+    trigger's target as the permanent is cast and reported the name as the
+    spell's. The trigger chooses it (CR 115.1d), and is judged where triggers
+    are: ``test_a_triggered_ability_that_prints_a_target_has_one_on_the_stack``.
+    """
+    if item.is_ability:
+        return False
+    line = item.card.type_line or ""
+    return not any(word in line for word in ("Instant", "Sorcery", "Aura"))
+
+
 class _Sweep:
     """What one pass over the pool found."""
 
@@ -248,6 +266,7 @@ class _Sweep:
             and not spec_is_a_cost(spec)
             and not any(spec.get(flag) for flag in _NOT_A_TARGET_FLAGS)
             and label not in _UNFLAGGED_NON_TARGETS
+            and not _is_an_untargeted_permanent_spell(item)
         )
         if is_target:
             if not _names(named, targets):
@@ -610,12 +629,12 @@ def test_the_census_sees_a_change_offered_from_a_wider_list(pool, by_name, monke
 #: ratchet in both directions: a new entry is a new card with the gap, and an
 #: entry that starts announcing has to come off the list.
 _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
-    # a graveyard card, found at resolution
-    "Necromancy#0", "Sylvan Hierophant#0", "Gravedigger#0", "Treasure Hunter#0",
-    "Scrivener#0", "Anarchist#0", "Cartographer#0", "Monk Idealist#0",
-    "Diabolic Servitude#0", "Iridescent Drake#0", "Body Snatcher#1",
-    "Junk Diver#0", "Strongarm Thug#0", "Shipwreck Dowser#0",
-    "Reya Dawnbringer#0", "Crypt Angel#0", "Phyrexian Delver#0",
+    # Seventeen names stood here under "a graveyard card, found at resolution"
+    # (Gravedigger, Necromancy, Junk Diver, Reya Dawnbringer, …): the pin of a
+    # defect, and it is gone. A target card in a graveyard is chosen as the
+    # trigger goes on the stack now (CR 115.1d / CR 603.3d), by the seat that
+    # is asked or by the default — tests/engine/
+    # test_graveyard_trigger_target_census.py holds every one of them.
     # narrowed by a seat only the firing event knows
     "Heart of Bogardan#1", "Oath of Lieges#0", "Oath of Scholars#0",
     "Oath of Ghouls#0", "Oath of Mages#0", "Oath of Druids#0",

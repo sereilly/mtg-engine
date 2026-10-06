@@ -110,6 +110,30 @@ def _controller_narrowing_is_in(spec: dict, instruction) -> bool:
     return bool(flag and spec.get(flag))
 
 
+def _names_a_graveyard_target(spec: dict | None, ability_text: str | None) -> bool:
+    """Whether a triggered ability with this *spec* and printed line chooses a
+    **card in a graveyard** as its target (CR 115.1d, CR 603.3d).
+
+    Two pieces of evidence, the pair ``engine/stack_targets.py`` reads every
+    announcement by: the compiled program says the choice is a graveyard card,
+    and the printed words say "target" about it. The second is what separates
+    Gravedigger ("you may return **target** creature card from your graveyard
+    to your hand") from Harvest Wurm ("sacrifice it unless you return a basic
+    land card from your graveyard to your hand") and from Animate Dead's entry
+    sentence: those derive the same spec and choose nothing as they are put on
+    the stack — the card is found while the effect is applied (CR 608.2d), and
+    with none to find the ability must still resolve, where CR 603.3d would
+    have taken a targeted one off the stack.
+    """
+    from ...stack_targets import names_a_target
+    from ...targeting import GRAVEYARD_TARGET_KIND
+
+    return bool(
+        spec and spec.get("kind") == GRAVEYARD_TARGET_KIND
+        and names_a_target(ability_text)
+    )
+
+
 def _target_is_up_to(payload) -> bool:
     """Whether an instruction's printed target is "**up to** one target …".
 
@@ -550,8 +574,17 @@ class StackResolutionMixin:
     #: Permanents on the battlefield: the kinds whose printed noun phrase can
     #: *narrow* ("target artifact defending player controls"), so a fire site
     #: that names one by position rather than by choice is naming something the
-    #: card may not permit. A spell on the stack and a card in a zone reach the
-    #: resolution through their own paths and are left exactly as they were.
+    #: card may not permit. A spell on the stack reaches the resolution through
+    #: its own path and is left exactly as it was.
+    #:
+    #: **A card in a graveyard is chosen too**, and is not in this set because
+    #: its kind alone does not say it is a target: ``_names_a_graveyard_target``
+    #: asks the printed line as well (Harvest Wurm derives the same spec and
+    #: targets nothing). This note said such a card was "left exactly as it
+    #: was", which was eighteen triggered abilities (fourteen of them entry
+    #: triggers) nobody was ever asked about — Gravedigger took the first
+    #: creature card in the pile for a player who could see three — and no
+    #: list to hold the cast's announcement to.
     _CHOOSABLE_TRIGGER_TARGET_KINDS = frozenset({
         "permanent", "creature", "artifact", "enchantment", "land",
         "planeswalker",
@@ -641,9 +674,10 @@ class StackResolutionMixin:
         changed sides, the named player gained shroud (Ivory Mask).
 
         It stands where the trigger has no choice this picker could make (a
-        card in a graveyard, a spell, a phrase the enumerator cannot narrow):
-        there is no list to hold the announcement to, and it rides the object
-        as it always has.
+        spell, a phrase the enumerator cannot narrow, a graveyard card its
+        line does not call a target): there is no list to hold the
+        announcement to, and it rides the object as it always has. A **target
+        card in a graveyard** is held to its list like a permanent is.
 
         Two faults, told apart because only one of them is news to a player:
 
@@ -658,6 +692,28 @@ class StackResolutionMixin:
         if offer is None:
             return None
         spec, _chooser, candidates = offer
+        if _names_a_graveyard_target(spec, item.ability_text):
+            # **A card in a graveyard**, named by pile and slot — the two
+            # fields a battlefield target reads as a seat and a slot there.
+            # The slot is the one the permanent spell's own stamp re-located
+            # as it resolved (``_run_stack_item_resolution``), so a card that
+            # left the pile while the spell waited arrives here as no slot at
+            # all: nothing is named any more, and the trigger chooses.
+            #
+            # There was no arm here, because there was no list: a graveyard
+            # kind answered None above and the announcement "rode the object as
+            # it always has" — onto a handler that reads a missing slot as
+            # leave to scan, which is how Gravedigger returned the Ornithopter
+            # when the Hill Giant it had named was exiled in response.
+            slot = item.target_permanent_index
+            if not isinstance(slot, int):
+                return "unnamed"
+            pile = self.graveyard_target_seat(item, spec)
+            legal = {
+                (candidate.get("seat"), candidate.get("index"))
+                for candidate in candidates if candidate.get("kind") == "graveyard"
+            }
+            return None if (pile, slot) in legal else "illegal"
         ids = item.target_permanent_id
         named = [
             permanent_id
@@ -750,10 +806,21 @@ class StackResolutionMixin:
         if spec is None:
             return
         picks_a_player = spec.get("kind") in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
+        picks_a_card = _names_a_graveyard_target(spec, item.ability_text)
         if (
             not picks_a_player
+            and not picks_a_card
             and spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
         ):
+            return
+        if picks_a_card and not announced and (
+            item.target_permanent_index is not None
+            or item.target_graveyard_card is not None
+        ):
+            # The graveyard half of the stamped-target early-out above: a slot
+            # the fire site handed in is the event's, not a choice left to
+            # make. (A graveyard target has no ``permanent_id`` for that
+            # early-out to see.)
             return
         if picks_a_player:
             # The printed line has to have said "target". See
@@ -844,6 +911,7 @@ class StackResolutionMixin:
         """
         instruction = item.ability_instruction
         offered = []
+        stamps: dict = {}
         for candidate in candidates:
             if candidate.get("kind") == "player":
                 seat = candidate.get("seat")
@@ -853,6 +921,29 @@ class StackResolutionMixin:
                     "kind": "player",
                     "seat": seat,
                     "name": self.players[seat].name,
+                })
+                continue
+            if candidate.get("kind") == "graveyard":
+                # A **card in a graveyard** (Gravedigger, Karmic Guide): the
+                # third shape, addressed by pile and slot because that is all a
+                # graveyard has. The stamp those two name *now* is kept beside
+                # the list, so the answer is checked against the card that was
+                # offered rather than against whatever sits in that slot when
+                # it arrives. Two copies of one card in one pile are one
+                # object; the stamp's ordinal is what tells the offers apart.
+                # (Beside the list, under a private key: an offer is what the
+                # client is sent, and a stamp holds a live card.)
+                stamp = self.graveyard_target_at(
+                    candidate.get("seat"), candidate.get("index")
+                )
+                if stamp is None:
+                    continue
+                stamps[(stamp.seat, candidate["index"])] = stamp
+                offered.append({
+                    "kind": "graveyard",
+                    "seat": stamp.seat,
+                    "graveyard_index": candidate["index"],
+                    "name": stamp.card.name,
                 })
                 continue
             if candidate.get("kind") != "permanent":
@@ -870,11 +961,22 @@ class StackResolutionMixin:
                 "permanent_id": perm.permanent_id,
                 "name": perm.card.name,
             })
+        up_to = _target_is_up_to(getattr(instruction, "payload", None))
         if not offered:
             # "Up to one" with nothing to name is an announcement of zero
             # targets (CR 601.2c), not a choice that cannot be made — the
             # ability stays on the stack with no target and resolves.
-            if _target_is_up_to(getattr(instruction, "payload", None)):
+            #
+            # **And it says so on the object.** Left as an ability with empty
+            # target fields it was indistinguishable from one whose handler is
+            # expected to find its own target, and the scan under every
+            # single-target handler found one: with nothing but a shrouded
+            # creature across the table, Barrin, Tolarian Archmage and Roaming
+            # Ghostlight returned it to its owner's hand and Feline Sovereign
+            # destroyed it — the picker had offered nothing and the resolution
+            # acted on what the picker refused.
+            if up_to:
+                self.record_no_target_named(item)
                 return
             self.stack = [existing for existing in self.stack if existing is not item]
             self.log.append(
@@ -896,6 +998,15 @@ class StackResolutionMixin:
                 printed,
                 sum(1 for entry in offered if entry["kind"] == "permanent"),
             )
+        # "Up to": naming **nobody** is one of the answers (CR 601.2c), and
+        # the prompt has to say so or the seat it asks cannot give it. It did
+        # not, so a player whose Barrin entered beside nothing but their own
+        # creatures was made to return one of them. Absent for every ability
+        # that owes its target, which keeps that prompt byte-identical.
+        if up_to:
+            several["up_to"] = True
+        if stamps:
+            several["_graveyard_stamps"] = stamps
         self.arm_pending_choice(
             "trigger_target", chooser_index,
             card_name=item.card.name,
@@ -2049,7 +2160,9 @@ class StackResolutionMixin:
                 # every amount in an entry trigger resolved "x" to zero.
                 x_value=permanent.metadata.get("cast_x_value"),
             )
-            chooses = self._entry_trigger_chooses_a_target(trig.instruction)
+            chooses = self._entry_trigger_chooses_a_target(
+                trig.instruction, trig.source_line
+            )
             chooses_on_the_stack = bool(modal_trigger_modes(trig.instruction)) or (
                 chooses and (not targets_announced or announcement_spent)
             )
@@ -2099,16 +2212,20 @@ class StackResolutionMixin:
             ability_text=event["ability_text"],
         ))
 
-    def _entry_trigger_chooses_a_target(self, instruction: OracleInstruction) -> bool:
+    def _entry_trigger_chooses_a_target(
+        self, instruction: OracleInstruction, ability_text: str | None = None,
+    ) -> bool:
         """Whether CR 603.3d has a target for :meth:`_choose_trigger_targets`
         to choose on this entry trigger.
 
         The picker's own gate, asked before the push rather than after it: the
-        same spec derivation, the same two kind sets, and the same
-        :func:`announces_a_target` requirement on a player. A trigger it would
-        decline — a graveyard card, a spell, a seat nobody prints "target" for —
-        has no choice that picker could make, so it goes on the stack carrying
-        whatever the cast announced, exactly as it was handed it inline.
+        same spec derivation, the same two kind sets, the same
+        :func:`announces_a_target` requirement on a player and the same
+        printed-word requirement on a graveyard card. A trigger it would
+        decline — a spell, a seat nobody prints "target" for, a graveyard card
+        its line does not call a target — has no choice that picker could
+        make, so it goes on the stack carrying whatever the cast announced,
+        exactly as it was handed it inline.
         """
         from ...targeting import derive_instruction_spec
 
@@ -2119,6 +2236,8 @@ class StackResolutionMixin:
             return False
         kind = spec.get("kind")
         if kind in self._CHOOSABLE_TRIGGER_TARGET_KINDS:
+            return True
+        if _names_a_graveyard_target(spec, ability_text):
             return True
         return (
             kind in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
