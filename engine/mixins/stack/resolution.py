@@ -1190,6 +1190,21 @@ class StackResolutionMixin:
         finally:
             self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
+        # **The resolution seam** (CR 611.3a: a static ability's effect applies
+        # at any given moment to whatever its text indicates). Whatever this
+        # object just did — recoloured a creature, changed a type, moved a
+        # permanent, put a counter on one — the board-wide statics are judged
+        # again here, once, before anything else reads the board: the prompt
+        # the resolution may have armed, the next object down the stack, a
+        # client polling the state.
+        #
+        # There was no recompute here. A handler that knew its effect could
+        # move a static's reach did its own (eight of the type-changing ones,
+        # after last round), and every other resolution left the board as its
+        # last handler happened to leave it until a state-based check came by:
+        # a Bears laced black under Breath of Dreams kept the green creatures'
+        # upkeep, and one laced white under a Crusade was not pumped.
+        self._recompute_continuous_effects()
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).

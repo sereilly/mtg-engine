@@ -80,6 +80,16 @@ if TYPE_CHECKING:
 # because addition commutes.
 _DERIVED_TIMESTAMP = 0
 
+#: The place in a layer of something that is part of the object's **copiable
+#: values** but is recorded as an effect rather than folded into the seed: what
+#: an "as this enters" choice made the permanent (Primal Clay's body — a
+#: layer-1 copiable effect by CR 613.2a). Copiable values are where every later
+#: layer *starts* (CR 613.2c, CR 707.2), so such a contribution applies before
+#: every effect the clock has stamped — the same number an unstamped record
+#: reads as, and a different claim: this one is first by rule, that one by
+#: omission.
+COPIABLE_VALUE = 0
+
 # Derived layer-7c contributions from a lord buff whose filter names a state the
 # buffed creature must be in. ``{qualifier: (power, toughness)}``, cleared and
 # rebuilt by ``_recalculate_lord_buffs``; the qualifier itself is checked here,
@@ -850,11 +860,14 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
                 subtypes=subtypes,
                 replace_card_types=replaces,
                 replace_subtypes=replaces and bool(subtypes),
-                # Zero for every record written before a replacement could be
-                # one: the additions commute, so nothing needed an order. A
-                # replacement does not — Opal Acrolith turns itself back into
-                # an enchantment and then animates again — so those records
-                # carry the stamp CR 613.7b gives them.
+                # CR 613.7b: the stamp the effect was created with
+                # (``handlers/board_misc._animation_record``, the one writer).
+                # It mattered first for a replacement — Opal Acrolith turns
+                # itself back into an enchantment and then animates again —
+                # and an addition carries one for the same reason one layer
+                # of argument down: it commutes with other additions and not
+                # with an effect that *sets* the card types. Zero only for a
+                # record a test built by hand.
                 timestamp=int(animation.get("timestamp") or 0),
                 label=f"animated ({_key})",
             ))
@@ -877,12 +890,24 @@ def collect_own_type_effects(perm: Permanent, oid: int) -> list[ContinuousEffect
     # defender" (Primal Clay). The body's P/T is layer 7b and its keyword is
     # layer 6; its creature type is here, added rather than replacing, and
     # derived from the recorded choice so swapping bodies needs nothing undone.
+    #
+    # **Before every other layer-4 effect, and that is the rule rather than a
+    # missing stamp.** CR 613.2a puts it in layer 1: "'As … enters' … abilities
+    # generate copiable effects if they set power and toughness, even if they
+    # also define other characteristics" — and CR 613.2c makes what layer 1
+    # leaves the object's copiable values (CR 707.2), which is where every
+    # later layer starts, ahead of any timestamp. So a Conspiracy that was
+    # already out and one that arrives later both find a Wall and leave an
+    # Elf; stamped with the permanent's own timestamp, the older Conspiracy
+    # would have applied first and the Clay been an Elf Wall.
+    # ``COPIABLE_VALUE`` says which kind of zero this one is.
     chosen_body = meta.get("chosen_body") or {}
     body_subtypes = list(chosen_body.get("subtypes") or ())
     if body_subtypes:
-        effects.append(
-            add_types(only, subtypes=body_subtypes, timestamp=0, label="chosen body")
-        )
+        effects.append(add_types(
+            only, subtypes=body_subtypes, timestamp=COPIABLE_VALUE,
+            label="chosen body",
+        ))
 
     # "…and is a Knight in addition to its other types" (Dub, Demonic Embrace).
     # *Added*, not replacing — which is the whole difference from the land-type

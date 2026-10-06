@@ -1189,3 +1189,230 @@ def test_j6_a_copy_of_a_laced_spell_is_not_laced(catalog_by_name, set_pool):
     assert copy.is_copy and copy.card is bolt.card
     assert sorted(game._stack_item_colors(copy)) == ["R"], "the printed colour"
     assert sorted(game._stack_item_colors(bolt)) == ["B"], "the original keeps its lace"
+
+
+# --- a static whose *scope* is a colour, and the seam that judges it --------
+#
+# "**Green** creatures have "Cumulative upkeep {1}."" (Breath of Dreams),
+# "**White** creatures get +1/+1." (Crusade), "**Black** creatures get +1/+1."
+# (Bad Moon.) Each reads layer 5's finished answer from a later layer — the
+# granted ability is layer 6 and an anthem is layer 7c — so none of them can
+# *depend* on a colour effect (CR 613.8a holds a dependency only between two
+# effects "in the same layer"). What they need is to be asked again whenever a
+# colour has moved (CR 611.3a), and they were not:
+#
+# * a spell or ability that resolved left the board as its last handler left
+#   it. A lace has no reason to know a colour-scoped static exists, so a Bears
+#   laced black under Breath of Dreams kept the green creatures' upkeep, and
+#   one laced white under a Crusade was not pumped, until a state-based check
+#   came by (18 of the 210 rows below);
+# * the cleanup step ended the turn's colour effects and recomputed nothing
+#   unless a control change had also ended (12 rows);
+# * inside one refresh, the Breath's colour scope was judged in the loop that
+#   records which permanents "All creatures are black" reaches — against the
+#   list the previous refresh had left (10 of 10 rows where a colour static
+#   left and one pass ran).
+#
+# The census is every effect of the matrix above, on every subject it reaches,
+# under each of the three, in both orders. Its statement is one invariant:
+# **when an engine call returns, a recompute changes nothing.**
+
+_J6_SCOPED = {"Breath of Dreams": "G", "Crusade": "W", "Bad Moon": "B"}
+
+
+def _j6_reading(game, perm):
+    """What a colour-scoped static decides about *perm*, and what it reads."""
+    return {
+        "colours": _w2g4_colours(game, perm),
+        "creature": perm.is_creature,
+        "pt": (perm.effective_power, perm.effective_toughness),
+        "cumulative upkeep": "cumulative upkeep {1}"
+        in (perm.effective_card.oracle_text or "").lower(),
+    }  # _j6_reading
+
+
+def _j6_assert_settled(game, perm, when, *, one_pass=False):
+    """A recompute now must change nothing: the board the engine left is the
+    board. *one_pass* asks it of a single refresh rather than the pair
+    ``_recompute_continuous_effects`` runs."""
+    left = _j6_reading(game, perm)
+    if one_pass:
+        game._refresh_dynamic_creatures()
+    else:
+        game._recompute_continuous_effects()
+    assert left == _j6_reading(game, perm), f"stale {when}"
+    return left  # _j6_assert_settled
+
+
+def _j6_scoped_rows():
+    rows = []
+    for static in _J6_SCOPED:
+        for effect, spec in _W2G4_EFFECTS.items():
+            subjects = [
+                kind for kind in sorted(spec["reaches"])
+                if _W2G4_RESERVED.get(kind) in (None, effect)
+            ]
+            rows.append((static, effect, tuple(subjects)))
+    return rows  # _j6_scoped_rows
+
+
+_J6_SCOPED_ROWS = _j6_scoped_rows()
+
+
+def _j6_colour_into_or_out_of(spec, scope, printed):
+    """The colour a choosing effect is answered with: the scope's own, so the
+    subject enters it — or, where it starts there, another, so it leaves."""
+    if spec["colour"] is not None:
+        return None
+    if printed != [scope]:
+        return scope
+    return next(c for c in _W2G4_ALL if c != scope)  # _j6_colour_into_or_out_of
+
+
+@pytest.mark.cr("611.3a", "613.8a", "514.2", "608.2")
+@pytest.mark.parametrize(
+    "static, effect, subjects", _J6_SCOPED_ROWS,
+    ids=[f"{s}|{e}" for s, e, _subjects in _J6_SCOPED_ROWS],
+)
+def test_j6_a_colour_scoped_static_is_judged_as_each_colour_effect_arrives_and_ends(
+    catalog_by_name, set_pool, static, effect, subjects,
+):
+    """*static* out, then the colour effect — and the other way round — on each
+    subject: after every step the static reaches the permanent exactly if it
+    is a creature of the scope's colour, without anything recomputing the
+    board on the test's behalf."""
+    spec = _W2G4_EFFECTS[effect]
+    scope = _J6_SCOPED[static]
+    for subject_kind in subjects:
+        printed = _W2G4_SUBJECTS[subject_kind][1]
+        for static_first in (True, False):
+            where = f"{effect} on the {subject_kind}, {static} " + (
+                "first" if static_first else "second"
+            )
+            case = _W2G4Case(catalog_by_name, set_pool)
+            case.prepare([effect])
+            game = case.game
+            card = case._card(static)
+            colour = _j6_colour_into_or_out_of(spec, scope, printed)
+            if static_first:
+                _w2g4_cast(game, card)
+            if effect != "own_chosen":
+                case.enter_subject(subject_kind)
+                _j6_assert_settled(game, case.subject, f"as the subject entered ({where})")
+            case.apply(effect, colour)
+            if not static_first:
+                _w2g4_cast(game, card)
+            now = _j6_assert_settled(game, case.subject, f"after both arrived ({where})")
+            if static == "Breath of Dreams":
+                # The one of the three whose reach can be read off the
+                # permanent with nothing else pumping it.
+                assert now["cumulative upkeep"] == (
+                    now["creature"] and scope in now["colours"]
+                ), where
+
+            if spec["ends"] == "leaves":
+                game.remove_from_battlefield(case.made.pop(effect))
+                # One refresh pass, not the two a recompute runs: the order
+                # *inside* a pass is what is being asked.
+                game._refresh_dynamic_creatures()
+                game._recalculate_lord_buffs()
+                after = _j6_assert_settled(
+                    game, case.subject, f"one pass after the effect left ({where})",
+                    one_pass=True,
+                )
+                _j6_assert_settled(game, case.subject, f"after the effect left ({where})")
+            elif spec["ends"] == "cleanup":
+                game.resolve_cleanup_step(0)
+                after = _j6_assert_settled(
+                    game, case.subject, f"after cleanup ended the effect ({where})",
+                )
+            else:
+                continue
+            if static == "Breath of Dreams":
+                assert after["cumulative upkeep"] == (
+                    after["creature"] and scope in after["colours"]
+                ), where
+
+
+@pytest.mark.cr("611.3a")
+def test_j6_the_colour_scope_census_examined_every_effect_under_every_static():
+    """The floor: three statics by eighteen effects, and no fewer games than
+    the 210 the defect was measured over."""
+    assert {static for static, _e, _s in _J6_SCOPED_ROWS} == set(_J6_SCOPED)
+    assert {effect for _s, effect, _subjects in _J6_SCOPED_ROWS} == set(_W2G4_EFFECTS)
+    games = sum(2 * len(subjects) for _s, _e, subjects in _J6_SCOPED_ROWS)
+    assert games >= 210, games
+    assert all(subjects for _s, _e, subjects in _J6_SCOPED_ROWS)
+
+
+@pytest.mark.cr("611.3a", "613.8a")
+def test_j6_the_three_colour_scoped_statics_are_the_kinds_the_pool_has():
+    """What the census stands in for. A board-wide static with a colour in its
+    scope is either a ``global_statics`` row carrying ``colors`` — one card,
+    Breath of Dreams — or a lord buff whose filter names a colour, of which
+    Crusade and Bad Moon are two of many and all one mechanism
+    (``_recalculate_lord_buffs``). A second global static with a colour scope
+    is a second thing ``_refresh_global_statics`` has to defer, and it should
+    be driven here by name."""
+    from engine import global_statics
+    from engine.oracle import compiled_units
+
+    pool = _w2g4_whole_pool()
+    scoped = {
+        card.name for card, _program in compiled_units(pool)
+        if (static := global_statics.global_static_for(card.oracle_text or ""))
+        is not None and static.colors
+    }
+    assert scoped == {"Breath of Dreams"}
+    assert len(pool) >= 4700, len(pool)
+
+
+@pytest.mark.cr("611.3a", "702.24a")
+def test_j6_breath_of_dreams_charges_the_creature_that_is_green_now(
+    catalog_by_name, set_pool,
+):
+    """In the cards' words, to the upkeep. Breath of Dreams out; Deathlace the
+    Grizzly Bears and Lifelace the Goblin Raider. The Raider is the green
+    creature now: it has the cumulative upkeep the moment the lace resolves,
+    and it — not the Bears — is sacrificed when its controller declines."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    _w2g4_cast(game, card("Breath of Dreams"))
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    raider = _w2g4_enter(game, card("Goblin Raider"))
+    assert _j6_reading(game, bears)["cumulative upkeep"]
+    assert not _j6_reading(game, raider)["cumulative upkeep"]
+
+    _w2g4_cast(game, card("Deathlace"), at=bears)
+    _w2g4_cast(game, card("Lifelace"), at=raider)
+    assert not _j6_reading(game, bears)["cumulative upkeep"]
+    assert _j6_reading(game, raider)["cumulative upkeep"]
+
+    game.interactive_seats = set()
+    game.resolve_upkeep(
+        0, human_choices={"Goblin Raider": False, "Breath of Dreams": True},
+    )
+    game._settle()
+    board = list(game.controlled_by(0))
+    assert bears in board
+    assert raider not in board
+
+
+@pytest.mark.cr("611.3a", "613.4c", "514.2")
+def test_j6_a_crusade_pumps_the_creature_that_is_white_now(catalog_by_name, set_pool):
+    """Crusade out, Heaven's Gate on the Grizzly Bears ("…become white until
+    end of turn"): a 3/3 as the spell resolves, and a 2/2 again as cleanup
+    ends it — it stayed a 3/3 green creature into the next turn."""
+    card = lambda name: _w2g4_card(catalog_by_name, set_pool, name)  # noqa: E731
+    game = _w2g4_table()
+    _w2g4_cast(game, card("Crusade"))
+    bears = _w2g4_enter(game, card("Grizzly Bears"))
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+    _w2g4_cast(game, card("Heaven's Gate"), at=bears)
+    assert _w2g4_colours(game, bears) == ["W"]
+    assert (bears.effective_power, bears.effective_toughness) == (3, 3)
+
+    game.resolve_cleanup_step(0)
+    assert _w2g4_colours(game, bears) == ["G"]
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)

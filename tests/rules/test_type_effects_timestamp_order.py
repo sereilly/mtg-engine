@@ -1031,3 +1031,239 @@ def test_oi_a_land_type_static_is_stamped_by_its_permanent(catalog_by_name):
     game._recompute_continuous_effects()
     (change,) = land_type_changes(tundra, derived=True)
     assert change["timestamp"] == moon.timestamp
+
+
+# ---------------------------------------------------------------------------
+# An animation is stamped as it is created (CR 613.7b)
+# ---------------------------------------------------------------------------
+#
+# ``handlers/board_misc._animation_record`` is the one writer of an animation,
+# and it stamped only the records that *replace* the printed types (the Opal,
+# Hidden, Veiled and Lurking enchantments). An addition — Mishra's Factory, a
+# land Natural Affinity woke, Jade Statue — read as timestamp 0, on the
+# argument that additions commute. With each other they do; with an effect
+# that **sets** the card types they do not, and an addition older than
+# everything was applied before the set whichever came first.
+
+
+def _j6_animating_ability(perm):
+    """The index of *perm*'s ability whose instruction animates something."""
+    from engine.oracle import compile_card_oracle
+
+    program = compile_card_oracle(perm.effective_card)
+    return next(
+        index for index, ability in enumerate(program.activated_abilities)
+        if ability.instruction is not None
+        and any(
+            step.kind.startswith("animate_")
+            for step in _j6_steps(ability.instruction)
+        )
+    )
+
+
+def _j6_steps(instruction):
+    yield instruction
+    for value in (instruction.payload or {}).values():
+        nested = value if isinstance(value, (list, tuple)) else (value,)
+        for item in nested:
+            if hasattr(item, "kind") and hasattr(item, "payload"):
+                yield from _j6_steps(item)
+
+
+def _j6_factory(b):
+    factory = b.enter("Mishra's Factory")
+    b.activate(factory, _j6_animating_ability(factory))
+    return factory, "animate_until_end_of_turn"
+
+
+def _j6_stones(b):
+    stones = b.enter("Stalking Stones")
+    b.activate(stones, _j6_animating_ability(stones))
+    return stones, "animate_indefinitely"
+
+
+def _j6_statue(b):
+    statue = b.enter("Jade Statue")
+    game = b.game
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()  # beginning of combat: "activate only during combat"
+    b.activate(statue, _j6_animating_ability(statue))
+    return statue, "animate_until_end_of_combat"
+
+
+def _j6_animate_land(b):
+    forest = b.enter("Forest")
+    b.cast("Animate Land", at=forest)
+    return forest, "animate_until_end_of_turn"
+
+
+def _j6_druid(b):
+    druid, forest = b.enter("Quirion Druid"), b.enter("Forest")
+    b.activate(druid, _j6_animating_ability(druid), at=forest)
+    return forest, "animate_indefinitely"
+
+
+def _j6_affinity(b):
+    forest = b.enter("Forest")
+    b.cast("Natural Affinity")
+    return forest, "animate_until_end_of_turn"
+
+
+#: Every instruction kind that writes an animation record, with the card that
+#: makes one here. (``animate_all_lands`` is a static — Kormus Bell — and is
+#: placed by the board-wide pass, not recorded.)
+_J6_ANIMATIONS = {
+    "animate_self_until_eot": _j6_factory,
+    "animate_self_indefinitely": _j6_stones,
+    "animate_self_until_end_of_combat": _j6_statue,
+    "animate_target_until_eot": _j6_animate_land,
+    "animate_target_indefinitely": _j6_druid,
+    "animate_matching_until_eot": _j6_affinity,
+}
+
+
+@pytest.mark.cr("613.7b")
+@pytest.mark.parametrize("kind", sorted(_J6_ANIMATIONS))
+def test_j6_an_animation_is_stamped_as_it_is_created(catalog_by_name, set_pool, kind):
+    """Each kind of animation, made through the engine: the record carries the
+    clock's stamp for the moment it resolved, and the layer-4 effect the
+    collector builds from it is ordered by that stamp."""
+    from engine.continuous import next_timestamp
+    from engine.layer_bridge import collect_own_type_effects
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    before = next_timestamp()
+    subject, key = _J6_ANIMATIONS[kind](b)
+    after = next_timestamp()
+
+    assert subject.is_creature
+    record = subject.metadata[key]
+    assert not record.get("replaces_types"), "an addition"
+    assert before < record["timestamp"] < after
+    (effect,) = [
+        effect for effect in collect_own_type_effects(subject, id(subject))
+        if effect.label == f"animated ({key})"
+    ]
+    assert effect.timestamp == record["timestamp"]
+
+
+@pytest.mark.cr("613.7b")
+def test_j6_every_animation_writing_kind_in_the_pool_is_stamped_here():
+    """The floor on the other axis: a seventh kind of animation the pool
+    compiles and no row above makes would be a record nothing has watched
+    being stamped."""
+    import dataclasses
+
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.handlers.registry import EFFECT_HANDLERS
+    from engine.oracle import compiled_units
+    from engine.oracle_types import OracleInstruction
+
+    def walk(value, seen):
+        if id(value) in seen:
+            return
+        seen.add(id(value))
+        if isinstance(value, OracleInstruction):
+            yield value
+            yield from walk(value.payload, seen)
+        elif isinstance(value, dict):
+            for item in value.values():
+                yield from walk(item, seen)
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            for item in value:
+                yield from walk(item, seen)
+        elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+            for field in dataclasses.fields(value):
+                yield from walk(getattr(value, field.name), seen)
+
+    pool = {}
+    for path in manifest_set_paths(include_measured=True):
+        for card in load_cards(path):
+            pool.setdefault(card.name, card)
+    found = {}
+    for card, program in compiled_units(pool.values()):
+        for instruction in walk(program, set()):
+            kind = instruction.kind
+            if kind.startswith("animate_") and kind in EFFECT_HANDLERS:
+                found.setdefault(kind, set()).add(card.name)
+    assert set(found) == set(_J6_ANIMATIONS), sorted(set(found) ^ set(_J6_ANIMATIONS))
+    assert len(pool) >= 4700, len(pool)
+    assert sum(len(cards) for cards in found.values()) >= 40, {
+        kind: len(cards) for kind, cards in found.items()
+    }
+
+
+@pytest.mark.cr("613.7", "613.7b", "205.1a", "205.1b")
+def test_j6_an_addition_made_after_a_card_type_set_is_applied_after_it(
+    catalog_by_name, set_pool,
+):
+    """Soul Sculptor makes a Grizzly Bears an enchantment and nothing else
+    (CR 205.1a); an animation created *afterwards* adds "creature" on top of
+    that (CR 205.1b), because it is the later effect (CR 613.7).
+
+    No two cards in the pool can arrange it — what animates is aimed at a land
+    or an artifact, and the Sculptor's permanent is neither — so the second
+    effect is written by the animation's own writer rather than by a card.
+    The other order is a row of the census above ("karn>soul_sculptor" and its
+    three neighbours), driven by cards: the set is later and the permanent is
+    an enchantment only."""
+    from engine.handlers.board_misc import ANIMATE_UNTIL_EOT, _animation_record
+
+    b = _W2G4Board(catalog_by_name, set_pool)
+    sculptor, bears = b.enter("Soul Sculptor"), b.enter("Grizzly Bears")
+    b.activate(sculptor, 0, at=bears)
+    assert _w2g4_types(bears)[0] == ["enchantment"]
+
+    bears.metadata[ANIMATE_UNTIL_EOT] = _animation_record({"subtypes": ["ape"]})
+    b.game._recompute_continuous_effects()
+    # (The set took the Bears' subtypes with its card types; "bear" is gone.)
+    assert _w2g4_types(bears)[:2] == (["creature", "enchantment"], ["ape"])
+
+    b.game.resolve_cleanup_step(0)
+    assert _w2g4_types(bears)[0] == ["enchantment"]
+
+
+def _j6_clay_and_conspiracy(conspiracy_first):
+    """Primal Clay entering as "a 1/6 **Wall** artifact creature with
+    defender", beside a Conspiracy naming Elf. What an "as this enters" choice
+    made the Clay is part of its copiable values (CR 613.2a, CR 707.2), where
+    layer 4 starts — so "Creatures you control are the chosen type" replaces
+    the Wall with the rest of its creature types whichever arrived first."""
+    def case(b):
+        def clay():
+            perm = Permanent(card=b.card("Primal Clay"))
+            b.game._put_permanent_onto_battlefield(0, perm, None)
+            (prompt,) = [c for c in b.game.pending_choices if c.kind == "body_choice"]
+            wall = next(
+                index for index, option in enumerate(prompt.data["options"])
+                if "wall" in [word.lower() for word in option.get("subtypes") or ()]
+            )
+            assert b.game.confirm_enter_body_choice(0, wall)
+            return perm
+
+        if conspiracy_first:
+            b.cast("Conspiracy", creature_type="elf")
+            subject = clay()
+        else:
+            subject = clay()
+            assert "wall" in _w2g4_types(subject)[1]
+            b.cast("Conspiracy", creature_type="elf")
+        assert (subject.effective_power, subject.effective_toughness) == (1, 6)
+        return (["artifact", "creature"], ["elf"]), _w2g4_types(subject)[:2]
+    return case
+
+
+_J6_CASES = {
+    "conspiracy>primal_clay": _j6_clay_and_conspiracy(True),
+    "primal_clay>conspiracy": _j6_clay_and_conspiracy(False),
+}
+
+
+@pytest.mark.cr("613.2a", "613.2c", "707.2", "613.8a")
+@pytest.mark.parametrize("name", sorted(_J6_CASES))
+def test_j6_type_effects_meet_in_the_order_the_rules_give(
+    catalog_by_name, set_pool, name,
+):
+    want, got = _J6_CASES[name](_W2G4Board(catalog_by_name, set_pool))
+    assert got == want, name

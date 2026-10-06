@@ -2437,6 +2437,30 @@ class PermanentStateMixin:
                     applied is found for applied in reach.get(id(found.payload), ())
                 ))
         self._refresh_land_animation(all_permanents, reach)
+        # **Layer 5 before a scope that asks about colour.** "**Green**
+        # creatures have …" (Breath of Dreams) reads what colour a permanent
+        # is, and part of that answer is the list this loop writes: "All
+        # creatures are black" (Darkest Hour) is on a creature as a source
+        # recorded here. Judged in the one loop, the colour scope read the
+        # list the *previous* refresh had left — so a Bears a Darkest Hour had
+        # just stopped reaching was still black to the Breath for a pass, and
+        # went without its upkeep.
+        #
+        # Not a dependency: CR 613.8a holds one only between two effects "in
+        # the same layer", and the granted ability is layer 6 reading a layer
+        # 5 that is finished by then. It is the order the refresh writes in.
+        # So the statics whose scope asks about colour are judged in a second
+        # walk, after the first has recorded every static that *sets* one —
+        # none of which has a colour scope of its own (held to the pool by
+        # ``tests/rules/test_color_effects_timestamp_order.py``), so one
+        # deferral is the whole order.
+        def asks_colour(static) -> bool:
+            return bool(static.colors) and not changes_types(static)
+
+        colour_scoped = any(asks_colour(static) for _source, static in sources)
+        colour_scoped_on_stack = any(
+            asks_colour(static) for _item, static in stack_sources
+        )
         for perm in all_permanents:
             reached_by = reach.get(id(perm), ())
             # **A static's own source is not exempt.** The scope is whatever
@@ -2457,7 +2481,8 @@ class PermanentStateMixin:
             applying = [
                 source
                 for source, static in sources
-                if (
+                if not asks_colour(static)
+                and (
                     # A type-changing static applies to exactly what the
                     # layer-4 pass found it reaching (CR 613.6)…
                     any(found is type_static_of.get(id(source)) for found in reached_by)
@@ -2485,12 +2510,50 @@ class PermanentStateMixin:
             applying_from_stack = [
                 static
                 for _item, static in stack_sources
-                if self._global_static_applies(static, perm, None, self)
+                if not asks_colour(static)
+                and self._global_static_applies(static, perm, None, self)
             ]
             if applying_from_stack:
                 perm.metadata[STACK_STATICS_KEY] = applying_from_stack
             else:
                 perm.metadata.pop(STACK_STATICS_KEY, None)
+        # The second walk: every colour-setting static is on the permanents it
+        # reaches, so layer 5 is this pass's and a colour scope can be asked.
+        # Each list is rebuilt in the sources' own order rather than appended
+        # to, so which static is recorded first does not come to depend on
+        # which walk judged it.
+        if colour_scoped:
+            for perm in all_permanents:
+                recorded = perm.metadata.get("global_static_sources") or ()
+                applying = [
+                    source
+                    for source, static in sources
+                    if (
+                        self._global_static_applies(static, perm, source, self)
+                        if asks_colour(static)
+                        else any(source is held for held in recorded)
+                    )
+                ]
+                if applying:
+                    perm.metadata["global_static_sources"] = applying
+                else:
+                    perm.metadata.pop("global_static_sources", None)
+        if colour_scoped_on_stack:
+            for perm in all_permanents:
+                recorded = perm.metadata.get(STACK_STATICS_KEY) or ()
+                applying_from_stack = [
+                    static
+                    for _item, static in stack_sources
+                    if (
+                        self._global_static_applies(static, perm, None, self)
+                        if asks_colour(static)
+                        else any(static is held for held in recorded)
+                    )
+                ]
+                if applying_from_stack:
+                    perm.metadata[STACK_STATICS_KEY] = applying_from_stack
+                else:
+                    perm.metadata.pop(STACK_STATICS_KEY, None)
 
     #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
     #: every filter payload in the engine spells a colour with. One map rather
