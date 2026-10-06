@@ -438,7 +438,14 @@ def test_w1g5_every_reader_of_what_the_crater_makes_agrees(set_pool):
     bare, crater = _w1g5_crater(set_pool, mine=["Sol Ring"], costs=True)
     assert _offered_mana(bare, crater) == ()
     assert _w1g5_ai_unplannable(bare, crater)
-    assert _w1g5_ai_tap_plan(bare, bare.players[0], {"generic": 1}) is None
+    # The Sol Ring beside it is a mana source of its own to the AI's plan since
+    # PLS W2G5 (it was no plan at all while only lands were counted); what
+    # must stay out of the plan is the Crater.
+    plan = _w1g5_ai_tap_plan(bare, bare.players[0], {"generic": 1})
+    assert plan is not None
+    assert all(bare.permanent_at(0, slot) is not crater for slot in plan[0])
+    alone, crater = _w1g5_crater(set_pool, mine=[], costs=True)
+    assert _w1g5_ai_tap_plan(alone, alone.players[0], {"generic": 1}) is None
 
 
 def test_w1g5_meteor_crater_pays_for_a_real_spell(set_pool):

@@ -45,10 +45,23 @@ def _w2g6_sanctuary_run():
     # now and the games go differently. The property (every skip armed is
     # spent) held at 5 of 5; the sample is what had shrunk. Six games offer
     # it 32 times on that tree.
-    return run_ai_simulation(
-        _w2g6_path("INV"), games=6, seed=4242, max_turns=20,
-        required_cards=["Elfhame Sanctuary"],
-    )
+    # **With the offer taken at every upkeep**, which is what makes the
+    # Sanctuary a probe: each acceptance arms a skip of that turn's draw step,
+    # and a skip armed and never spent is the defect. Taking it every turn was
+    # the headless default until PLS W2G5 made that default weigh the trade
+    # (`ai_policy.offer_trade_is_worth_taking`: a land for a draw only while
+    # short of lands) — right for a seat and useless for an instrument, which
+    # then saw three offers taken in six games. The old default is put back
+    # for this run alone.
+    with pytest.MonkeyPatch.context() as patched:
+        patched.setattr(
+            "engine.ai_policy.offer_trade_is_worth_taking",
+            lambda game, player_index, entry: True,
+        )
+        return run_ai_simulation(
+            _w2g6_path("INV"), games=6, seed=4242, max_turns=20,
+            required_cards=["Elfhame Sanctuary"],
+        )
 
 
 def _w2g6_armed_and_spent(report) -> tuple[int, int]:

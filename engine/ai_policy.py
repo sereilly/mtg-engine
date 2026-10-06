@@ -34,7 +34,10 @@ from .ai_valuation import (
     is_mana_ability,
     mana_ability_amount,
     mana_ability_symbols,
+    offer_trade,
+    planned_mana_yield,
     returns_creature_to_hand,
+    role_target_sides,
     several_target_slot_sides,
     source_becomes_an_aura,
     source_toughness_change,
@@ -229,16 +232,21 @@ def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
 
 
 def tap_planned_lands(game: Game, seat: int, action) -> None:
-    """Tap the lands *action*'s plan names into *seat*'s pool, each for the
-    colour the plan counted on and through the mana ability that makes it.
+    """Tap the mana sources *action*'s plan names into *seat*'s pool, each for
+    the colour the plan counted on and through the mana ability that makes it.
 
     **The AI's payment**, shared by every executor — the simulator's and the
     web app's AI seat — so the two pay the same way: the policy plans the taps
-    (`_plan_land_taps`), this fills the pool through the engine's one tap
-    seam, and the cast or activation that follows spends it (CR 601.2g-h).
-    Every slot is resolved to its permanent before the first tap and tapped
-    **by id**, so a tap that moved anything cannot shift a later slot onto a
-    different land.
+    (`_plan_land_taps`), this fills the pool, and the cast or activation that
+    follows spends it (CR 601.2g-h). Every slot is resolved to its permanent
+    before the first tap and tapped **by id**, so a tap that moved anything
+    cannot shift a later slot onto a different permanent.
+
+    A **land** goes through the engine's tap seam. A **non-land** source the
+    plan counted (`_nonland_mana_source`: Sol Ring, a Mox, Llanowar Elves) has
+    no seam — CR 605.1a makes its "{T}: Add …" an activated ability like any
+    other — so it is activated, which for a mana ability resolves inline
+    (CR 605.3b) and leaves the mana in the pool exactly as a land's tap does.
     """
     planned = [game.permanent_at(seat, index) for index in action.land_tap_indices]
     for position, land in enumerate(planned):
@@ -246,12 +254,131 @@ def tap_planned_lands(game: Game, seat: int, action) -> None:
         if permanent_id is None:
             continue
         color = planned_tap_color(action, position)
+        source = _nonland_mana_source(game, seat, land)
+        if source is not None:
+            slot = next(
+                (
+                    index for index, permanent in enumerate(game.controlled_by(seat))
+                    if permanent is land
+                ),
+                None,
+            )
+            if slot is None:
+                continue
+            game.activate_permanent_ability(
+                seat, land.card.name,
+                permanent_index=slot,
+                ability_index=source.ability_index,
+                # "Any color" is one of the five (CR 105.1): a source asked for
+                # the {C} a generic cost was planned at names no colour, and
+                # the ability's own default answers.
+                mana_color=color if color in ("W", "U", "B", "R", "G") else None,
+            )
+            continue
         game.tap_land_for_mana(
             seat, land.card.name,
             chosen_color=color,
             permanent_id=permanent_id,
             ability_index=planned_tap_ability(game, land, color),
         )
+
+
+@dataclass(frozen=True)
+class _NonlandManaSource:
+    """One non-land permanent's mana ability as the payment plan counts it."""
+
+    #: Which of the permanent's usable abilities — the index the activation
+    #: path addresses one by.
+    ability_index: int
+    #: Every symbol one activation may be asked for, the unasked one first.
+    symbols: tuple[str, ...]
+    #: How many mana of the asked symbol.
+    amount: int
+    #: A fixed run of different symbols, or None (`_land_mixed_run`'s shape).
+    run: "dict[str, int] | None" = None
+
+
+def _nonland_mana_source(
+    game: Game, seat: int, permanent: "Permanent | None"
+) -> "_NonlandManaSource | None":
+    """The mana ability of a **non-land** permanent *seat* controls that its
+    payment plan may count right now, or None.
+
+    **The AI never tapped anything but a land for mana.** `_plan_land_taps`
+    asked the tap seam's gate of every permanent, and that gate's first line
+    refuses a non-land — so the Moxen, Sol Ring, Llanowar Elves, Birds of
+    Paradise and the rest were cast (`mana_ability_amount` scores them) and
+    then sat untapped for the whole game: 64 "{T}: Add …" abilities on 63
+    permanents across both manifest roles, 62 of them shipped, and in ten
+    seeded Alpha games nineteen such permanents entered the battlefield and
+    none made a mana.
+
+    **Only an ability whose whole cost is {T}** (`is_tap_alone_mana_ability`,
+    the tap seam's own predicate — which also excludes a printed "Activate
+    only …" and an ability that asks another player something). A mana ability
+    with a further cost is not free mana: "{1}, {T}: Add one mana of any
+    color" (Mana Cylix) spends one to make one, "{T}, Sacrifice this artifact"
+    (Black Lotus) and "Sacrifice this creature" (Morgue Toad) spend the
+    permanent, and a plan that counted those would sacrifice a creature to
+    cast a one-drop. They stay out until a policy prices them.
+
+    **And only one the activation path will accept**, the non-land twin of
+    `land_mana_tap_refusal`: untapped; not a summoning-sick creature (CR 302.6
+    — a {T} ability is a {T} ability); not under a ban on its activated
+    abilities (Interdict, Null Rod, Cursed Totem, Volrath's Curse) or a
+    permission that closes it to this seat. Those are the gates
+    `choose_activation_action` asks of the tables the engine enforces; asked
+    here for the same reason — a source counted and then refused is a cast
+    refused for insufficient mana, the same spell every turn.
+
+    What the activation makes is `ai_valuation.planned_mana_yield`, with the
+    two answers only the game has: which colours a "could produce" clause
+    offers on this board (none is no source at all), and the colour a source
+    chose as it entered.
+    """
+    from .mana_could_produce import ability_colors_on_offer
+    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .spell_prohibitions import permanent_activations_forbidden
+
+    if permanent is None or permanent.tapped:
+        return None
+    if game.land_mana_tap_refusal(permanent) != "not_an_untapped_land":
+        # A land (the seam's own reading of which permanents are its) — the
+        # land half of the plan answers for it, whatever it answers.
+        return None
+    if game._is_summoning_sick(permanent):
+        return None
+    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(permanent)))
+    for index, ability in enumerate(usable):
+        if not is_tap_alone_mana_ability(ability):
+            continue
+        produced = planned_mana_yield(ability.instruction)
+        if produced is None:
+            continue
+        symbols = produced.symbols
+        if produced.board_narrowed:
+            symbols = tuple(ability_colors_on_offer(game, permanent, ability.instruction) or ())
+        elif produced.from_chosen_color:
+            chosen = (permanent.metadata or {}).get("chosen_color")
+            symbols = (chosen,) if chosen in _MANA_SYMBOLS else ()
+        if not symbols:
+            continue
+        line = ability.source_line or ""
+        if (
+            permanent_activations_forbidden(game, permanent)
+            or global_activation_ban(game, permanent) is not None
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+            or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
+        ):
+            return None
+        return _NonlandManaSource(
+            ability_index=index,
+            symbols=symbols,
+            amount=produced.amount,
+            run=dict(produced.run) if produced.run else None,
+        )
+    return None
 
 
 def choose_attack_target(game: Game, player_index: int) -> int:
@@ -1449,7 +1576,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         tap_colors: tuple[str, ...] = ()
         required = dict(ability.cost.mana)
         if game.enforce_mana_costs and any(required.values()):
-            plan = _plan_land_taps(game, player, required)
+            plan = _plan_land_taps(game, player, required, paying_for=permanent)
             if plan is None:
                 continue
             land_taps, tap_colors = plan
@@ -2668,6 +2795,41 @@ def choose_search_cards(
     return picks
 
 
+#: How many cards a seat nobody asks exiles into a pile that returns **one card
+#: per activation** (`ai_valuation.exiled_search_pile_comes_back_one_at_a_time`).
+#: A weight: one activation a turn is the most such a pile gives back, and three
+#: is about what the rest of a game has turns for.
+SLOW_RETURN_PILE_SIZE = 3
+
+
+def slow_pile_picks(game: Game, player_index: int, picks: list[dict]) -> list[dict]:
+    """The picks a headless seat keeps of *picks* — every card an "any number"
+    exile-search matched, as ``{"zone", "index"}`` — when the pile is bought
+    back a card at a time: the `SLOW_RETURN_PILE_SIZE` it would most want to
+    tutor for (`_score_tutor_choice`), in the order it was offered between
+    equals.
+
+    For ``_default_search_exile``. Skyship Weatherlight's default exiled every
+    artifact and creature in the seat's library and then returned them at
+    random for {4} each, which over a game is most of a deck's threats gone
+    for good.
+    """
+    player = game.players[player_index]
+
+    def card_at(pick: dict) -> CardDefinition:
+        zone = player.library if pick.get("zone") == "library" else player.graveyard
+        return zone[pick["index"]]
+
+    ranked = sorted(
+        enumerate(picks),
+        key=lambda entry: (
+            -_score_tutor_choice(game, player_index, card_at(entry[1])), entry[0],
+        ),
+    )
+    kept = sorted(position for position, _pick in ranked[:SLOW_RETURN_PILE_SIZE])
+    return [picks[position] for position in kept]
+
+
 def choose_search_library_index(game: Game, player_index: int, card_type: str = "any") -> int | None:
     """Pick the library index of the best card to tutor for (e.g. Demonic Tutor).
 
@@ -3385,16 +3547,31 @@ def _choose_role_targets(
     """Pick one target per **role** for a spell naming several kinds of target.
 
     ``None`` when *card* names no roles at all — every other spell in the pool —
-    and ``()`` when it names them and no legal chain exists, which is a refusal
-    rather than an absence: CR 601.2c fills every role or the spell is not cast.
+    and ``()`` when it names them and no chain this seat would announce exists,
+    which is a refusal rather than an absence: CR 601.2c fills every role or
+    the spell is not cast.
 
     The chain comes from ``cast_target_spec``, the same walk the browser's
     picker is handed, so the AI and a human seat are offered exactly the same
-    choices. Taking the first option at each level is the whole policy, and it
-    is safe *because* of what that walk already did: a first choice leaving a
-    later role with nothing is not in the list. A card that ever wants a better
-    chain wants a valuation in ``engine/ai_valuation.py``, derived from its
-    compiled program, not a branch here.
+    choices — a first choice leaving a later role with nothing is not in the
+    list.
+
+    **Which of a role's legal answers is a valuation, per role**
+    (``ai_valuation.role_target_sides``). Taking the first option at each level
+    was the whole policy, and the first option is the first board in seat
+    order: Withdraw returned two of its caster's own creatures, Fumarole
+    destroyed its caster's creature and land, Lunge burned its caster's
+    creature — fifteen spells across both manifest roles, measured on a
+    mirrored board. Each role is now answered from the side the step that
+    spends it wants, and a role with no legal answer on that side is no chain
+    at all: the alternative is a denial aimed at the caster's own board or a
+    gift at an opponent's, the single-target chooser's rule
+    (`_choose_single_object_target`) and for its reason.
+
+    The walk backtracks, because a side makes a first pick able to strand a
+    later role the unfiltered walk had an answer for ("another target
+    creature" with the only other opposing creature already taken is still
+    answered by the *other* order).
     """
     if not spec_roles(_cast_spec(card, compile_card_oracle(card))):
         return None
@@ -3402,14 +3579,13 @@ def _choose_role_targets(
     # kicked Falling Timber names two creatures and an unkicked one names one,
     # and a chain walked off the other cast's spec is a list of the wrong
     # length — proposed, refused, and proposed again next turn.
+    offers = _OFFERS_ANNOUNCED.get()
     options = game.cast_target_spec(
-        caster_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        caster_index, card, optional_cost_payments=offers,
     ).get("valid_targets") or []
-    picks: list[dict] = []
-    while options:
-        pick = _preferred_role_option(options, caster_index, card, game)
-        picks.append(pick)
-        options = pick.get("next") or []
+    picks = _role_chain(
+        options, role_target_sides(card, offers), 0, caster_index, card, game,
+    )
     if not picks:
         return ()
     # A **player** role's answer is the seat itself (Donate's "target player"),
@@ -3452,6 +3628,40 @@ def _names_x_targets(card: CardDefinition) -> bool:
         return False
     described = (slot[1].payload or {}).get("targets")
     return isinstance(described, dict) and described.get("quantifier") == "exactly"
+
+
+def _role_chain(
+    options: list[dict], sides, level: int, caster_index: int,
+    card: CardDefinition, game: Game,
+) -> "list[dict] | None":
+    """One pick per role from *options* down, each on the side its role wants
+    (``sides[level]``) — or None when no such chain exists.
+
+    Depth-first over the engine's own tree, so every chain it can return is one
+    the cast gate accepts. A level offering seats is answered by
+    `_preferred_role_option` alone, as it always was; a level offering
+    permanents tries each on the wanted side in the enumeration's order.
+    """
+    if not options:
+        return []
+    want = sides[level] if level < len(sides) else None
+    if options[0].get("kind") == "player":
+        candidates = [_preferred_role_option(options, caster_index, card, game)]
+    elif want in ("you", "opponent"):
+        candidates = [
+            option for option in options
+            if option.get("kind") != "permanent"
+            or (option.get("seat") == caster_index) == (want == "you")
+        ]
+    else:
+        candidates = options
+    for pick in candidates:
+        rest = _role_chain(
+            pick.get("next") or [], sides, level + 1, caster_index, card, game,
+        )
+        if rest is not None:
+            return [pick, *rest]
+    return None
 
 
 def _choose_several_targets(
@@ -3594,10 +3804,20 @@ def _choose_several_targets(
     # from the card's name. A card whose slots all want the same thing — every
     # one printed before Rookie Mistake — takes the single-seat path below
     # unchanged, so this is byte-identical for Basri's Acolyte and Basri's Aegis.
-    sides = several_target_slot_sides(program)
+    sides = several_target_slot_sides(
+        program, instructions_as_announced(card, program, _OFFERS_ANNOUNCED.get() or {})
+    )
     if sides and len(set(sides)) > 1:
         picks: list[tuple[int, int]] = []
-        for index in range(maximum):
+        # Slots that name a side first, so a slot with no preference cannot
+        # take the one permanent a later slot needed (Deadshot's "another
+        # target creature" with a single opposing creature on the table).
+        slot_order = sorted(
+            range(maximum),
+            key=lambda index: (index >= len(sides) or sides[index] is None, index),
+        )
+        placed: dict[int, tuple[int, int]] = {}
+        for index in slot_order:
             want = sides[index] if index < len(sides) else None
             if want == "you":
                 order = [caster_index]
@@ -3610,14 +3830,22 @@ def _choose_several_targets(
                     (seat, slot)
                     for seat in order
                     for slot in by_seat.get(seat, [])
-                    if (seat, slot) not in picks
+                    if (seat, slot) not in placed.values()
                 ),
                 None,
             )
             if chosen is not None:
-                picks.append(chosen)
-        if exact and len(picks) < maximum:
-            # A printed count the two boards cannot fill between them.
+                placed[index] = chosen
+        picks = [placed[index] for index in sorted(placed)]
+        if len(picks) < maximum and (
+            exact or sorted(placed) != list(range(len(placed)))
+        ):
+            # A slot whose side holds nothing legal. The slots of such a spell
+            # are different effects ("target creature gets +0/+2 and another
+            # target creature gets -2/-0"), so leaving one out from the middle
+            # shifts each later effect onto the wrong slot — not proposed. A
+            # trailing "up to one" left empty (Primal Might with no opposing
+            # creature) is still an announcement the card prints.
             return ()
         if picks:
             ids = []
@@ -3646,10 +3874,16 @@ def _choose_several_targets(
                 # tries the next smaller one.
                 return ()
             return opponents[0], by_seat[opponents[0]][:maximum], None
-        if exact:
-            # Every slot wants an opponent's permanent and no opponent has
-            # one. The fallback below would aim them at the caster's own.
-            return ()
+        # Every slot wants an opponent's permanent and no opponent has one. The
+        # fallback below would aim them at the caster's own, which for an
+        # "up to" denial (Panic Attack, Tidal Surge) is a spell spent on
+        # hampering the seat that cast it.
+        return ()
+    if sides and set(sides) == {"you"} and caster_index not in by_seat:
+        # …and the gift the other way round: every slot wants the caster's own
+        # permanent and the caster has none, so the fallback below would put
+        # Basri's Aegis' counters on an opponent's creatures.
+        return ()
 
     # One seat's worth: the index list is positional on a single battlefield
     # (`target_player_index` names whose), so a cross-seat spread needs the ids
@@ -3864,7 +4098,24 @@ def _entry_gate_gives_back_more_than_it_brings(
     ]
     if not others:
         return True
-    return _given_back_loss(given_back_first(others, None)[0]) > float(card.cmc)
+    given = given_back_first(others, None)[0]
+    loss = _given_back_loss(given)
+    if loss != float(card.cmc):
+        return loss > float(card.cmc)
+    # An even swap, which is a cast only when it is not half of a loop: the
+    # permanent given back is itself a gate whose noun admits *card*, so
+    # recasting it gives *card* back, and the seat spends every turn's mana
+    # exchanging one for the other. Measured in six seeded Planeshift games
+    # with Sawtooth Loon and Doomsday Specter pinned (both four mana, each a
+    # blue creature the other's gate admits): Loon returned Specter, Specter
+    # returned Loon, Loon returned Specter — the "A returns B, B returns A" of
+    # the paragraph above, with nothing dearer on either side for the
+    # comparison to catch. An even swap for anything else develops the board a
+    # turn later and is left alone.
+    answering = entry_self_return_gate(given.effective_card)
+    return answering is not None and _card_matches_filter(
+        card, dict(answering.get("filter") or {}), game=game, owner=player
+    )
 
 
 def _given_back_loss(permanent: Permanent) -> float:
@@ -4391,6 +4642,45 @@ def choose_target_change(game: Game, seat: int, item, slots) -> "list | None":
     return None
 
 
+#: Lands — on the battlefield and in hand — below which a seat gives up its
+#: draw step for a land card (`offer_trade_is_worth_taking`). The number the
+#: tutor score already uses for "mana-screwed" is three; one more, because the
+#: card bought here costs a draw rather than a tutor.
+LAND_FOR_DRAW_FLOOR = 4
+def offer_trade_is_worth_taking(
+    game: Game, player_index: int, entry: dict
+) -> "bool | None":
+    """Whether a seat nobody asks takes a "you may A. If you do, B." offer
+    whose two halves are a price and a purchase (`ai_valuation.offer_trade`) —
+    True, False, or None when the offer is not one this can weigh and the
+    standing policy answers.
+
+    * **A draw step for a land card** (Elfhame Sanctuary): only while the seat
+      is short of lands (`LAND_FOR_DRAW_FLOOR`). Taken every turn it is a seat
+      that never draws a spell again.
+    * **A card from hand for the source untapped** (Forsaken City): not taken.
+      One mana is worth less than a card to a seat that can use its cards, and
+      the case where it is not — a card the seat would discard at cleanup
+      anyway — did not arise once in six simulated games. It is also not yet
+      *payable* by a seat nobody asks: the pick behind the offer defaults to
+      no card, and "If you do, untap this land" then untaps it regardless, so
+      taking the offer here would be a free untap rather than a trade.
+    """
+    trade = offer_trade(entry.get("_on_accept") or ())
+    if trade is None:
+        return None
+    player = game.players[player_index]
+    if (trade.price, trade.purchase) == ("draw", "land_card"):
+        lands = sum(
+            1 for permanent in game.controlled_by(player_index)
+            if permanent.has_type("land")
+        ) + sum(1 for card in player.hand if card.primary_type == "land")
+        return lands < LAND_FOR_DRAW_FLOOR
+    if (trade.price, trade.purchase) == ("card", "untap_source"):
+        return False
+    return None
+
+
 def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     """Whether a seat nobody asked declines one link of an "unless **any
     player** pays" chain (`handlers/control_flow.unless_player_pays`).
@@ -4684,6 +4974,12 @@ def _cost_for(
     )
 
 
+#: Life a seat keeps back when the X it announces is paid in life ("As an
+#: additional cost to cast this spell, pay X life") — the reserve the buyback
+#: and foreign-activation prices keep, for the same reason.
+X_LIFE_RESERVE = 10
+
+
 def _pick_x_value(
     game: Game, player: PlayerState, card: CardDefinition,
     extra_generic: int = 0, hand_index: int | None = None,
@@ -4722,7 +5018,19 @@ def _pick_x_value(
         bound = game._additional_cost_x_ceiling(
             seat, card, from_zone="hand", spell_hand_index=hand_index,
         )
-        return None if bound is None else bound
+        if bound is None:
+            return None
+        # **The ceiling is what the cast will accept, not what a seat should
+        # pay.** For "pay X life" it is the seat's whole life total (CR 119.4
+        # lets a player pay all of it), so the announcement was X = 20 at 20
+        # life: Fire Covenant and Hatred each paid their caster down to zero,
+        # and the game was lost to the state-based check behind the spell
+        # (CR 704.5a). The same reserve every other life price in this policy
+        # keeps (`BUYBACK_LIFE_RESERVE`); with nothing above it the X is 0 and
+        # the caller does not propose the cast.
+        if any(cost.pay_life_x for cost in additional_costs(card)):
+            bound = min(bound, max(0, player.life - X_LIFE_RESERVE))
+        return bound
 
     max_x = _max_affordable_x(game, player, card, extra_generic)
     return max_x
@@ -4743,7 +5051,8 @@ def _max_affordable_x(
 
 
 def _plan_land_taps(
-    game: Game, player: PlayerState, required: dict[str, int]
+    game: Game, player: PlayerState, required: dict[str, int],
+    *, paying_for: "Permanent | None" = None,
 ) -> tuple[tuple[int, ...], tuple[str, ...]] | None:
     """Which untapped lands to tap for *required*, and **which colour to ask
     each one for**: ``(slots, colours)`` in tap order, or None when the board
@@ -4800,6 +5109,28 @@ def _plan_land_taps(
         if game.land_mana_tap_refusal(permanent) is None
         and not _land_mana_is_unplannable(game, permanent)
     ]
+    # **And the non-land sources, after every land** (`_nonland_mana_source`:
+    # the Moxen, Sol Ring, Llanowar Elves). After, because the greedy below
+    # takes its matches in this list's order and a land is the source that
+    # costs nothing to tap: a Mana Vault stays tapped, an Elves of Deep Shadow
+    # deals its controller a damage, and a creature tapped for mana does not
+    # attack. So a board whose lands pay is planned exactly as it always was,
+    # and the rest is what a seat reaches for when they do not.
+    #
+    # Never the permanent whose own ability is being paid for (*paying_for*):
+    # its {T} may be that ability's cost, and one tap cannot pay both.
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), None)
+    nonland_runs: dict[int, dict[str, int]] = {}
+    if seat is not None:
+        for index, permanent in enumerate(game.controlled_by(player)):
+            if permanent is paying_for:
+                continue
+            source = _nonland_mana_source(game, seat, permanent)
+            if source is None:
+                continue
+            untapped_lands.append((index, source.symbols, source.amount))
+            if source.run is not None:
+                nonland_runs[index] = source.run
     # **What a tap of a mixed land really makes.** "{T}: Add {C}{U}." (Coral
     # Atoll and the rest of the Karoo cycle, Soldevi Excavations, Balduvian
     # Trading Post) is two mana of two *different* symbols, and `take` below
@@ -4812,6 +5143,7 @@ def _plan_land_taps(
         for index, permanent in enumerate(game.controlled_by(player))
         if (run := _land_mixed_run(game, permanent)) is not None
     }
+    mixed_runs.update(nonland_runs)
 
     if _can_pay_cost(pool, required, player):
         return (), ()
@@ -4989,13 +5321,19 @@ def _land_mana_amount(game: Game, permanent: Permanent) -> int:
     return 1
 
 
-#: Payload keys on a land's add-mana step that make what one tap produces a
-#: fact about the rest of the board rather than about the land: "{G} for each
-#: creature you control" (Gaea's Cradle), "{C} for each storage counter on this
-#: land" (City of Shadows), "one mana of any type that a land you control could
-#: produce" (Reflecting Pool). The planner counts a tap as its printed pips, so
-#: these read as one mana each — on an empty board, zero.
-_BOARD_DEPENDENT_MANA_KEYS = ("per_each", "per_each_counter_on_source", "any_type_from_lands")
+#: Payload keys on a land's add-mana step that make **how much** one tap
+#: produces a fact about the rest of the board rather than about the land:
+#: "{G} for each creature you control" (Gaea's Cradle), "{C} for each storage
+#: counter on this land" (City of Shadows). The planner counts a tap as its
+#: printed pips, so these read as one mana each — on an empty board, zero.
+#:
+#: ``any_type_from_lands`` ("one mana of any type that a land you control could
+#: produce", Reflecting Pool) was a third entry here and is not one: its amount
+#: is the printed one, and *which* type is `Game.narrowed_land_mana_colors`'
+#: exact answer since PLS wave 1 — the same reader that makes Meteor Crater
+#: plannable below. Listed here it stayed out of every plan, so a seat with a
+#: Swamp and a Reflecting Pool could not cast a two-mana spell.
+_BOARD_DEPENDENT_MANA_KEYS = ("per_each", "per_each_counter_on_source")
 
 
 def _land_mana_is_unplannable(game: Game, land: Permanent) -> bool:

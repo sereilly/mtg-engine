@@ -132,14 +132,20 @@ def test_w1g8_skyship_weatherlight_links_what_its_entry_exiled(set_pool):
     ship = _w1g8a_launch(game)
 
     exiled = sorted(card.name for card in game.players[0].exile)
-    assert exiled == ["Grizzly Bears", "Hill Giant", "Juggernaut", "Sol Ring"]
+    eligible = ["Grizzly Bears", "Hill Giant", "Juggernaut", "Sol Ring"]
+    # A seat nobody asks keeps the three it most wants, not all four (PLS
+    # W2G5, `ai_policy.SLOW_RETURN_PILE_SIZE`): the pile comes back one card
+    # per {4}, {T}. Which three is the policy's; that they are artifacts and
+    # creatures, linked to the ship, is the card's.
+    assert len(exiled) == 3 and set(exiled) <= set(eligible)
     assert sorted(entry["card"].name for entry in _w1g8a_linked(ship)) == exiled
     assert not any(entry.get("face_down") for entry in _w1g8a_linked(ship)), (
         "the cards are exiled face up"
     )
-    assert sorted(card.name for card in game.players[0].library) == [
-        "Island", "Island", "Lightning Bolt",
-    ]
+    assert sorted(card.name for card in game.players[0].library) == sorted(
+        ["Island", "Island", "Lightning Bolt"]
+        + [name for name in eligible if name not in exiled]
+    )
 
 
 def test_w1g8_skyship_weatherlight_any_number_is_the_searchers_choice(set_pool):
@@ -176,8 +182,8 @@ def test_w1g8_skyship_weatherlight_any_number_is_the_searchers_choice(set_pool):
 
 def test_w1g8_skyship_weatherlight_returns_one_card_at_random_each_time(set_pool):
     """One card per activation, out of the linked pile and into its owner's
-    hand; the rest stay exiled with the ship. Four activations empty the pile
-    and a fifth finds nothing."""
+    hand; the rest stay exiled with the ship. One activation per card empties
+    the pile and one more finds nothing."""
     lea = _w1g8a_lea()
     game = _w1g8a_game(
         [set_pool("PLS")["Skyship Weatherlight"]], _w1g8a_library(lea)
@@ -185,7 +191,8 @@ def test_w1g8_skyship_weatherlight_returns_one_card_at_random_each_time(set_pool
     ship = _w1g8a_launch(game)
     pile = sorted(card.name for card in game.players[0].exile)
 
-    for expected_left in (3, 2, 1, 0):
+    assert pile, "the entry search exiled something"
+    for expected_left in range(len(pile) - 1, -1, -1):
         _w1g8a_activate(game, ship)
         assert len(_w1g8a_linked(ship)) == expected_left
         assert len(game.players[0].exile) == expected_left
@@ -193,7 +200,7 @@ def test_w1g8_skyship_weatherlight_returns_one_card_at_random_each_time(set_pool
     assert ship.tapped, "{T} is part of the cost"
 
     _w1g8a_activate(game, ship)
-    assert len(game.players[0].hand) == 4
+    assert len(game.players[0].hand) == len(pile)
     assert "nothing is exiled with Skyship Weatherlight" in game.log[-2]
 
 
