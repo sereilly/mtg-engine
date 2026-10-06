@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2722 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2732 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -752,7 +752,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **610.1** A one-shot effect does something just once and doesn’t have a duration. Examples include dealing ... *(10 tests)*
 - [ ] **610.2** Some one-shot effects create a delayed triggered ability, which instructs a player to do somethin...
-- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(6 tests, subrules cd)*
+- [x] **610.3** Some one-shot effects cause an object to change zones “until” a specified event occurs. A second ... *(16 tests, subrules bcd)*
 - [ ] **610.4** Some one-shot effects cause a permanent to phase out “until” a specified event occurs. A second o...
 - [ ] **610.5** Some static abilities create one-shot effects that cause spells a player casts to gain an ability...
 
@@ -863,7 +863,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.17** Mill *(6 tests, subrules a)*
 - [x] **701.18** Play *(6 tests, subrules ab)*
 - [x] **701.19** Regenerate *(29 tests, subrules abc)*
-- [x] **701.20** Reveal *(8 tests, subrules ab)*
+- [x] **701.20** Reveal *(9 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(16 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
 - [x] **701.23** Search *(4 tests, subrules ad)*
@@ -895,7 +895,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.23** Rampage *(6 tests, subrules abc)*
 - [x] **702.24** Cumulative Upkeep *(31 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
-- [x] **702.26** Phasing *(16 tests, subrules adfgim)*
+- [x] **702.26** Phasing *(19 tests, subrules adfgim)*
 - [x] **702.27** Buyback *(7 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(15 tests, subrules abef)*

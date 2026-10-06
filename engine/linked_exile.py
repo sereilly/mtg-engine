@@ -50,6 +50,57 @@ LEAVES = "leaves_battlefield"
 UNTAPPED = "untapped"
 
 
+def until_leaves_has_ended(game, source: "Permanent | None") -> bool:
+    """Whether an effect that lasts "until [this] leaves the battlefield" is
+    already over before it began, because *source* has left (CR 610.3a/b).
+
+    "If a resolving triggered ability creates the initial one-shot effect that
+    causes the object to change zones, and the specified event has already
+    occurred before that one-shot effect would occur but after that ability
+    triggered, the object doesn't move." Each handler that moves something
+    until its source leaves asks this **before it moves anything**: once the
+    source is gone there is no event left to end the effect, so a card exiled
+    then is exiled for good and a creature phased out then never phases in.
+
+    Unreachable while a permanent's entry trigger was resolved inline, as the
+    permanent entered; reachable from the day it became a stack object, since
+    the source can be destroyed in response. ROADMAP had said so in advance,
+    naming Idol of Endurance, and the first drive after that change found it on
+    all three cards the pool prints the phrase on.
+
+    **A phased-out source has not left.** CR 702.26d: "the phasing event
+    doesn't actually cause a permanent to change zones", and Reality Ripple,
+    Vodalian Illusionist, Sapphire Charm and Vision Charm can each phase one of
+    these sources out in response to its own trigger. This engine takes a
+    phased-out permanent off the battlefield lists, so ``is_on_battlefield``
+    alone would call that source gone and the effect would be skipped for a
+    permanent that is coming back next untap step.
+    """
+    if source is None:
+        return True
+    return not (game.is_on_battlefield(source) or source.metadata.get("phased_out"))
+
+
+def until_leaves_source(game, permanent_id) -> "Permanent | None":
+    """The permanent an "until this leaves the battlefield" effect is tied to,
+    by id: on the battlefield, **or phased out** (CR 702.26d - see
+    :func:`until_leaves_has_ended`). None once it has really left.
+
+    ``Game.permanent_by_id`` answers for the battlefield alone, which is right
+    for a target (CR 702.26b: a phased-out permanent is treated as though it
+    does not exist) and wrong for a duration, which asks only whether the
+    leaving has happened.
+    """
+    found = game.permanent_by_id(permanent_id)
+    if found is not None or permanent_id is None:
+        return found
+    for player in game.players:
+        for permanent in player.phased_out:
+            if permanent.permanent_id == permanent_id:
+                return permanent
+    return None
+
+
 def link_exiled_card(
     source: "Permanent",
     card: "CardDefinition",

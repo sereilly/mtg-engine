@@ -2628,7 +2628,7 @@ class PendingChoicesMixin:
         only here — Duress discards it, and the exile ending arrives with the
         card that needs it."""
         from ...handlers.zones import _resolve_one_discard
-        from ...linked_exile import LEAVES, link_exiled_card
+        from ...linked_exile import LEAVES, link_exiled_card, until_leaves_source
 
         fate = str(choice.data.get("fate", "discard"))
         if fate == "name":
@@ -2685,10 +2685,21 @@ class PendingChoicesMixin:
         # permanent is a record that goes wherever the permanent does — the
         # linked-exile shape CR 400.7 needs, since the returning card is a new
         # object and nothing may hold a stale reference to it.
-        source = self.permanent_by_id(choice.data.get("source_id"))
+        source = until_leaves_source(self, choice.data.get("source_id"))
         victim = self.players[victim_index]
-        if source is None or not 0 <= hand_index < len(victim.hand):
+        if not 0 <= hand_index < len(victim.hand):
             return False
+        if source is None:
+            # CR 610.3b, behind the handler's own check, which declines to arm
+            # this pick at all once the source has left. Should one be owed
+            # anyway, the answer is taken and nothing is exiled - refusing it
+            # would leave a prompt nobody can ever satisfy, which is a game
+            # that waits for ever.
+            self.log.append(
+                f"{choice.data.get('card_name', 'The source')} has left the "
+                "battlefield, so no card is exiled"
+            )
+            return True
         card = victim.hand.pop(hand_index)
         victim.exile.append(card)
         link_exiled_card(

@@ -9,7 +9,8 @@ from ..faces import has_name
 from ..exiled_records import (record_exiled_card, records_for_cards,
                               source_object)
 from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card, linked_entries,
-                            take_linked_entries, take_linked_entry_at)
+                            take_linked_entries, take_linked_entry_at,
+                            until_leaves_has_ended)
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
@@ -4205,6 +4206,21 @@ def reveal_hand_and_choose(game: Game, instruction: OracleInstruction, context: 
         )
         + f" to {card.name}"
     )
+    if (
+        str(instruction.payload.get("fate", "discard")) == "exile_until_source_leaves"
+        and until_leaves_has_ended(game, context.source_permanent)
+    ):
+        # Kitesail Freebooter's ruling (2020-06-23), which is CR 610.3b: "If
+        # Kitesail Freebooter leaves the battlefield before its
+        # enters-the-battlefield ability resolves, the opponent will reveal
+        # their hand, but no card will be exiled." So the hand is shown, above,
+        # and no pick is armed - an armed one could never be answered, since
+        # the answer needs the permanent that would hold the card.
+        game.log.append(
+            f"{card.name} left the battlefield before its ability resolved, "
+            "so no card is exiled"
+        )
+        return True, "resolved"
     if not legal:
         game.log.append(f"{card.name}: no card in that hand can be chosen")
         return True, "resolved"
@@ -4799,6 +4815,15 @@ def phase_out_target_creature_until_source_leaves(game: Game, instruction: Oracl
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
+    if until_leaves_has_ended(game, source_permanent):
+        # Oubliette's ruling (2020-08-07), which is CR 610.3b's rule applied to
+        # phasing: "If Oubliette leaves the battlefield before its triggered
+        # ability resolves, the target creature won't be phased out or tapped."
+        game.log.append(
+            f"{card.name} left the battlefield before its ability resolved, "
+            "so nothing phases out"
+        )
+        return True, "resolved"
     target_perm = resolve_target_permanent(game, context, predicate=lambda p: p.is_creature)
     if target_perm is None:
         game.log.append(f"{card.name}: no valid creature target")
@@ -7584,6 +7609,15 @@ def exile_graveyard_until_leaves(game: Game, instruction: OracleInstruction, con
     source = context.source_permanent
     if source is None:
         game.log.append("the linked exile has no permanent to be linked to")
+        return True, "resolved"
+    if until_leaves_has_ended(game, source):
+        # CR 610.3b: the Idol left after its ability triggered and before it
+        # resolved, so the cards do not move - there would be nothing left to
+        # send them back.
+        game.log.append(
+            f"{context.card.name} left the battlefield before its ability "
+            "resolved, so no card is exiled"
+        )
         return True, "resolved"
     caster = context.caster
     owner_index = game.players.index(caster)
