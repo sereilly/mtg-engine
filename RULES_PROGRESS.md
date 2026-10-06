@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2703 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2707 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -451,7 +451,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 305. Lands
 
-- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(5 tests)*
+- [x] **305.1** A player who has priority may play a land card from their hand during a main phase of their turn ... *(8 tests)*
 - [x] **305.2** A player can normally play one land during their turn; however, continuous effects may increase t... *(23 tests, subrules ab)*
 - [ ] **305.3** A player can’t play a land, for any reason, if it isn’t their turn. Ignore any part of an effect ...
 - [ ] **305.4** Effects may also allow players to “put” lands onto the battlefield. This isn’t the same as “playi...
@@ -668,7 +668,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(297 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(26 tests, subrules a)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(29 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
