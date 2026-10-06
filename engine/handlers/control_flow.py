@@ -2387,7 +2387,11 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
     seat has one.** One ``secret_number`` prompt per seat, armed together in
     turn order (CR 101.4); the prompt's resolver writes
     ``SECRET_NUMBERS_BY_SEAT`` and says nothing, and the answer that completes
-    the map is what logs the reveal — one line, every number at once.
+    the map is what logs the reveal — one line, every number at once. CR 101.4b
+    is the default this card's words set aside: ordinarily "a player knows the
+    choices made by the previous players when making their choice", and
+    "hides … reveal them simultaneously" is the sentence saying these are not
+    known.
 
     Nothing is stamped before the prompts are armed, which is the opposite of
     the discipline ``choose_number`` states and for a reason: a provisional
@@ -2401,9 +2405,8 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
     suspends, so the losses run once and against the whole map (CR 608.2).
     """
     low = max(0, int(instruction.payload.get("minimum", 0)))
-    seats = _offered_seats(
-        game, str(instruction.payload.get("who", "each_player")), context
-    )
+    who = str(instruction.payload.get("who", "each_player"))
+    seats = _offered_seats(game, who, context)
     card_name = context.card.name if context.card is not None else "Effect"
     # A fresh map per resolution: a copy of the spell, or the same ability
     # resolving twice, must not complete itself on the last one's answers.
@@ -2411,7 +2414,8 @@ def secretly_choose_numbers(game: Game, instruction: OracleInstruction, context:
     if not seats:
         return True, "resolved"
     game.log.append(
-        f"{card_name}: each player secretly chooses a number of at least {low}"
+        f"{card_name}: each {'opponent' if who == 'each_opponent' else 'player'} "
+        f"secretly chooses a number of at least {low}"
     )
     for seat in seats:
         game.arm_pending_choice(
