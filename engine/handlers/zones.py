@@ -2955,10 +2955,22 @@ def bounce_target_creature(game: Game, instruction: OracleInstruction, context: 
         from ..subject_filters import subject_matches
 
         observer = game.players.index(context.caster)
+        # "…return target creature **that player** controls" (Sigil of Sleep).
+        # The seat is the firing event's, frozen in the trigger's context, and
+        # the matcher cannot answer the phrase without it — it fails closed. So
+        # the trigger chose a legal target as it went on the stack, this
+        # re-check then refused that same target, and the card returned
+        # nothing. ``scripts/unasked_narrowings.py`` had the entry
+        # (``bounce_target_creature needs that_player=``); driving the card
+        # through a real damage event is what showed it was not one of the
+        # entries a handler answers some other way. None for every bounce
+        # that prints no such phrase, which is what was passed before.
+        that_player = frozen_that_player_seat(game, context)
 
         def _legal(perm) -> bool:
             return subject_matches(
-                game, perm, bounce_filter, observer=observer, source=source
+                game, perm, bounce_filter, observer=observer, source=source,
+                that_player=that_player,
             )
 
         perm = resolve_target_permanent(
