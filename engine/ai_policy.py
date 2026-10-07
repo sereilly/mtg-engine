@@ -2251,7 +2251,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # one, so naming one is a turn spent on a refusal, every turn.
         if game.lost_abilities_refusal(permanent) is not None:
             continue
-        program = compile_card_oracle(permanent.card)
+        # **What the permanent has, not what its card prints** — the engine's
+        # own list (`Game.usable_abilities_of`), which is the one the
+        # activation path indexes into and the browser shows a person. It
+        # compiles the permanent's *effective* card: CR 613's layer 1 gives a
+        # copy the copied object's abilities and layer 6 gives an enchanted
+        # permanent the ones its Aura quotes. This compiled ``permanent.card``,
+        # so a Clone of a Prodigal Sorcerer never pinged in an AI's hands and
+        # a creature wearing Hermetic Study was a creature wearing nothing
+        # (`tests/ai/test_ai_activation_effective_card_census.py`: of 931
+        # cards whose printed self the seat activates, a copy of none).
+        #
         # The shared reader, not a third copy of its predicate: it carries
         # CR 113.6's zone read, so a cycling creature's "{2}, Discard this card:
         # Draw a card." is not on this list at all. Open-coded, the policy
@@ -2259,7 +2269,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # draw for a card that was never discarded, on eight of Urza's Saga's
         # creatures. It is also the list `activation_target_spec` narrows by,
         # which the `ability_index=0` below already assumes.
-        ability = next(iter(usable_activated_abilities(program)), None)
+        ability = next(iter(game.usable_abilities_of(permanent)), None)
         if ability is None or ability.instruction is None:
             continue
 
