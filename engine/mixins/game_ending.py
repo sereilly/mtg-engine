@@ -1083,7 +1083,7 @@ class GameEndingMixin:
 
             # 704.5y: Role rule — per creature per controller, keep only the most recent Role
             for perm in self.all_permanents():
-                if perm.card.primary_type != "creature":
+                if not perm.is_creature:
                     continue
                 # Find all Roles attached to this creature, grouped by controller.
                 # The seam yields each seat's permanents in battlefield order, so

@@ -77,7 +77,7 @@ def untap_target_land(game: Game, instruction: OracleInstruction, context: Oracl
     perm = resolve_target_permanent(
         game,
         context,
-        predicate=lambda p: p.card.primary_type == "land",
+        predicate=lambda p: p.has_type("land"),
         fallback_on_invalid_choice=False,
     )
     if perm is not None:
@@ -1045,7 +1045,7 @@ def tap_target_player_lands_and_drain_mana(game: Game, instruction: OracleInstru
     target = context.target
     card = context.card
     for perm in game.controlled_by(target):
-        if perm.card.primary_type == "land":
+        if perm.has_type("land"):
             game.become_tapped(perm)
     for sym in ("W", "U", "B", "R", "G", "C"):
         target.mana_pool[sym] = 0

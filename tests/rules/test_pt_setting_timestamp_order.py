@@ -798,3 +798,39 @@ def test_set_effects_apply_in_timestamp_order_whatever_they_overwrite():
     assert after(four_old, one, power_only) == (7, 1)
     # …and 7c still applies over all of it, once, whichever came first.
     assert after(modify_pt(only, 1, 1, timestamp=0), four_old, one) == (2, 2)
+
+
+@pytest.mark.cr("613.7m", "613.4b")
+@pytest.mark.parametrize("first, second, humility_is", [
+    ("Humility", "Opalescence", (4, 4)),
+    ("Opalescence", "Humility", (1, 1)),
+])
+def test_replenish_orders_two_size_setters_as_the_graveyard_has_them(
+    _by_name, first, second, humility_is,
+):
+    """The half of CR 613.7m that is **not** done, in the layer this file
+    orders: objects that enter together under one player get their relative
+    timestamps "in the order of that player's choice". Replenish returns a
+    Humility and an Opalescence together, and which is the later decides
+    whether the Humility is a 1/1 or a 4/4 — the player's to choose. The
+    engine enters them in graveyard order and asks nobody: a legal order,
+    picked for the player.
+
+    Pinned beside ``test_j6_replenish_orders_one_players_enchantments_as_the_
+    graveyard_has_them`` (the layer-5 half), so the day the choice is asked
+    both fail and are rewritten. Now that layer 7b is ordered by timestamp
+    the unasked order is observable through eight more sources (the board-
+    wide statics that set a size), beside the layer-4 and layer-5 ones that
+    test counts. What asking takes is a new prompt kind — its client half
+    included, without which a human seat is held on a prompt it cannot
+    answer — and is the parts list that test's docstring gives."""
+    game = _new_game(_by_name)
+    game.players[0].graveyard += [_by_name[first], _by_name[second]]
+    assert _cast(game, _by_name, "Replenish")
+
+    placed = {
+        permanent.card.name: permanent for permanent in game.controlled_by(0)
+    }
+    assert placed[first].timestamp < placed[second].timestamp
+    assert placed["Humility"].is_creature
+    assert _size(game, placed["Humility"]) == humility_is

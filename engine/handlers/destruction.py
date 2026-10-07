@@ -601,7 +601,7 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
     ) if instruction.payload.get("except_recorded") else frozenset()
 
     def _matches(perm: Permanent) -> bool:
-        if perm.card.primary_type != "land":
+        if not perm.has_type("land"):
             return False
         if perm.permanent_id in spared:
             return False
@@ -1825,7 +1825,7 @@ def destroy_tapped_land_and_reoffer_aura(
     # default (the first land it controls) at once; that is the same split the
     # caller's old ``defer_choice`` flag hand-computed, asked of the registry
     # instead so a new seat kind needs no new argument.
-    if any(perm.card.primary_type == "land" for perm in game.controlled_by(controller_index)):
+    if any(perm.has_type("land") for perm in game.controlled_by(controller_index)):
         game.arm_pending_choice("kudzu_reattach", controller_index, aura=aura)
     return True, "resolved"
 

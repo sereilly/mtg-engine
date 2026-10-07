@@ -394,8 +394,11 @@ class PermanentStateMixin:
         # part of entering, not a triggered ability. Unconditional for the card
         # type: the ability is not printed text, so there is no phrase in
         # engine/enter_effects.py to probe for.
-        if permanent.card.primary_type == "planeswalker":
-            printed = permanent.card.loyalty
+        # (Of the permanent as it enters — its copiable values, CR 707.2 —
+        # and not of the card it is printed on: a copy enters with the
+        # copied planeswalker's loyalty.)
+        if permanent.has_type("planeswalker"):
+            printed = permanent.effective_card.loyalty
             if printed is not None and printed.strip().lstrip("-").isdigit():
                 permanent.metadata["loyalty_counters"] = int(printed)
 
@@ -1893,12 +1896,12 @@ class PermanentStateMixin:
                 if land_type not in BASIC_LAND_WORDS:
                     continue
                 creature = aura.metadata.get("attached_to")
-                if creature is None or creature.card.primary_type != "creature":
+                if creature is None or not creature.is_creature:
                     continue
                 lands = sum(
                     1
                     for perm in controlled
-                    if perm.card.primary_type == "land" and perm.has_type(land_type)
+                    if perm.has_type("land") and perm.has_type(land_type)
                 )
                 _add_static_pt(creature, lands // 2, (lands + 1) // 2)
 
@@ -2185,7 +2188,7 @@ class PermanentStateMixin:
             if land_bonus_instr is not None:
                 land_type = land_bonus_instr.payload["land_type"]
                 has_land = any(
-                    perm.card.primary_type == "land" and perm.has_type(land_type)
+                    perm.has_type("land") and perm.has_type(land_type)
                     for perm in self.controlled_by(seat)
                 )
                 _apply_conditional_bonus(

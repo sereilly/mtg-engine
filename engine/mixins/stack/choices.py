@@ -3079,7 +3079,7 @@ class PendingChoicesMixin:
         source = f"{choice.data.get('duration', 'until_end_of_turn')}:{next_timestamp()}"
         swapped = []
         for land in self.permanents_matching(
-            lambda perm: perm.card.primary_type == "land" and perm.has_type(first)
+            lambda perm: perm.has_type("land") and perm.has_type(first)
         ):
             change_land_type(land, second, source=source, label=choice.data["card_name"])
             swapped.append(land)
@@ -7037,7 +7037,7 @@ class PendingChoicesMixin:
         if not (0 <= land_index < len(player.battlefield)):
             return False
         new_land = player.battlefield[land_index]
-        if new_land.card.primary_type != "land":
+        if not new_land.has_type("land"):
             return False
         attach_aura(choice.data["aura"], new_land)
         self.log.append(f"Kudzu attached to {new_land.card.name}")
@@ -7048,7 +7048,7 @@ class PendingChoicesMixin:
         """Re-attach to the first land the controller has, deterministically."""
         player = self.players[choice.player_index]
         index = next(
-            (i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"),
+            (i for i, p in enumerate(player.battlefield) if p.has_type("land")),
             None,
         )
         if index is None or not self._resolve_kudzu_reattach(choice, index):
@@ -7720,10 +7720,10 @@ class PendingChoicesMixin:
             return False
         # Validate the chosen battlefield indices are the right card type.
         for i in lands:
-            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "land":
+            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].has_type("land"):
                 return False
         for i in creatures:
-            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "creature":
+            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].is_creature:
                 return False
         for i in hand:
             if not (0 <= i < len(player.hand)):
@@ -7749,8 +7749,8 @@ class PendingChoicesMixin:
         """Keep the lowest-index permanents and cards."""
         plan = choice.data["plan"]
         player = self.players[choice.player_index]
-        land_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"][-plan["lands"]:] if plan["lands"] else []
-        creature_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "creature"][-plan["creatures"]:] if plan["creatures"] else []
+        land_idx = [i for i, p in enumerate(player.battlefield) if p.has_type("land")][-plan["lands"]:] if plan["lands"] else []
+        creature_idx = [i for i, p in enumerate(player.battlefield) if p.is_creature][-plan["creatures"]:] if plan["creatures"] else []
         hand_idx = list(range(len(player.hand)))[-plan["hand"]:] if plan["hand"] else []
         if not self._resolve_balance(choice, land_idx, creature_idx, hand_idx):
             self.discard_pending_choice(choice)

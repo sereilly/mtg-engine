@@ -591,7 +591,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # of your upkeep, you may pay {N}. If you do, you gain X life.'" The enchanted
         # land's controller (player_index) may pay for the life.
         for permanent in self.all_permanents():
-            if permanent.card.primary_type != "enchantment":
+            if not permanent.has_type("enchantment"):
                 continue
             attached = permanent.metadata.get("attached_to")
             if attached is None or not self.controls(controller, attached):
@@ -949,7 +949,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         headless play, or an effect where another player does the choosing — the
         first land is taken, the deterministic forced-sacrifice fallback."""
         for idx, land in enumerate(controller.battlefield):
-            if land.card.primary_type != "land":
+            if not land.has_type("land"):
                 continue
             if chosen is not None and land is not chosen:
                 continue
@@ -1354,7 +1354,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
 
         # Handle enchant-land auras with optional upkeep life gain (e.g. Farmstead)
         for permanent in self.all_permanents():
-            if permanent.card.primary_type != "enchantment":
+            if not permanent.has_type("enchantment"):
                 continue
             prog = compile_card_oracle(permanent.effective_card)
             text = prog.normalized_text

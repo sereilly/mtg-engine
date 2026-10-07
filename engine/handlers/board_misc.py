@@ -469,7 +469,14 @@ def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, 
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     def _count(player, kind):
-        return sum(1 for perm in game.controlled_by(player) if perm.card.primary_type == kind)
+        # What each permanent **is** (CR 613 layer 4) — the same two
+        # questions the prompt that takes the answer asks of each slot
+        # (``_resolve_balance``): a Mishra's Factory that is animated is a
+        # land *and* a creature, an Opalescence's enchantment is a creature.
+        return sum(
+            1 for perm in game.controlled_by(player)
+            if (perm.has_type("land") if kind == "land" else perm.is_creature)
+        )
 
     min_lands = min(_count(p, "land") for p in game.players)
     min_creatures = min(_count(p, "creature") for p in game.players)
@@ -946,7 +953,7 @@ def change_target_land_type(game: Game, instruction: OracleInstruction, context:
     # Honor a specifically chosen land (e.g. a player selected the target land
     # in the UI). Fall back to the first land the target player controls.
     target_land = resolve_target_permanent(
-        game, context, predicate=lambda p: p.card.primary_type == "land"
+        game, context, predicate=lambda p: p.has_type("land")
     )
     if target_land is not None:
         land_type = str(instruction.payload.get("land_type", "forest"))
@@ -986,7 +993,7 @@ def add_mire_counter_to_target_land(game: Game, instruction: OracleInstruction, 
     """
     # Honor the explicitly chosen land when one was targeted.
     target_land = resolve_target_permanent(
-        game, context, predicate=lambda p: p.card.primary_type == "land" and not _is_swamp(p)
+        game, context, predicate=lambda p: p.has_type("land") and not _is_swamp(p)
     )
     if target_land is None:
         game.log.append("No valid non-Swamp land for mire counter")
@@ -3525,7 +3532,7 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
     counts = [
         sum(
             1 for perm in game.controlled_by(seat)
-            if perm.card.primary_type == "land"
+            if perm.has_type("land")
         )
         for seat in range(len(game.players))
     ]
@@ -3724,7 +3731,7 @@ def _default_land_type_swap(
     theirs = [
         perm for other in range(len(game.players)) if other != seat
         for perm in game.controlled_by(other)
-        if perm.card.primary_type == "land"
+        if perm.has_type("land")
     ]
     counts = {word: sum(1 for land in theirs if land.has_type(word)) for word in first_pool}
     chosen_from = max(first_pool, key=lambda word: (counts.get(word, 0), -first_pool.index(word)))

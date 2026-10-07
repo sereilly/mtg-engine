@@ -74,7 +74,7 @@ def activate_each_lands_mana_ability(
         land_ids = [
             game.permanent_id_of(perm)
             for perm in game.controlled_by(seat)
-            if perm.card.primary_type == "land" and not perm.tapped
+            if perm.has_type("land") and not perm.tapped
         ]
         tapped = 0
         for land_id in land_ids:
