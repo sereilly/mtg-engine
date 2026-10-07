@@ -15,6 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
+from engine.board_payment import tap_alone_symbols
 from engine.color_changes import spell_color_override
 from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
@@ -288,6 +289,20 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
         payable = tuple(game._land_payment_colors(perm))
         if len(payable) > 1 and set(payable) != set(own):
             return payable
+        # …and a land with mana abilities of its own is offered as what **a
+        # tap alone** makes of it (CR 605: each mana ability is its own). The
+        # summary lists every symbol any ability of the land makes: a School
+        # of the Unseen ("{T}: Add {C}." / "{2}, {T}: Add one mana of any
+        # color.") was shown as five colours, the click that named one made
+        # {C}, and the client's own auto-tap planned it for a pip it could
+        # not pay. The priced ability is still on the land's ability list, to
+        # be activated for what it costs. In the summary's own order, so a
+        # land every one of whose abilities is the tap alone (a painland) is
+        # shown exactly as it was.
+        tapped_for = tap_alone_symbols(game, perm)
+        if tapped_for:
+            kept = tuple(symbol for symbol in own if symbol in tapped_for)
+            return kept + tuple(symbol for symbol in tapped_for if symbol not in kept)
     return own
 
 

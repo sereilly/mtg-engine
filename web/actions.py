@@ -325,7 +325,10 @@ def _action_tap(session, req, seat_type):
         tapped = session.game.tap_land_for_mana(
             req.seat,
             permanent.card.name,
-            chosen_color=req.mana_color or "G",
+            # What the client asked for, or nothing: a colour named picks the
+            # mana ability that makes it (a painland's coloured one), and a
+            # click that names none must not be read as asking for green.
+            chosen_color=req.mana_color,
             permanent_index=permanent_index,
         )
     else:
@@ -452,7 +455,7 @@ def _action_activate(session, req, seat_type):
         tapped = session.game.tap_land_for_mana(
             req.seat,
             permanent.card.name,
-            chosen_color=req.mana_color or "G",
+            chosen_color=req.mana_color,
             permanent_index=permanent_index,
             ability_index=seam_ability_index,
         )

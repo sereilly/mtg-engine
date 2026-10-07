@@ -4761,6 +4761,26 @@ class PendingChoicesMixin:
             free, _priced = self._land_mana_abilities(land)
             if free is not None and (free.payload or {}).get("any_color"):
                 return land_mana_swaps.COLORS
+        # **Per ability, not per land** (CR 605: each mana ability is its
+        # own). ``own`` is the printed summary — every symbol *any* ability
+        # of the land makes, whatever that ability costs — and this hook is
+        # asked what **a tap** would add. So a land with compiled tap-alone
+        # abilities answers with what those make
+        # (``board_payment.tap_alone_symbols``): a School of the Unseen is
+        # {C}, not five colours behind a {2} nobody is paying, and a Tinder
+        # Farm is {G}, not the {R}{W} of a sacrifice. A painland still
+        # answers both its colours, because both its abilities are the tap
+        # alone — and the seam runs the one that makes the colour asked for
+        # (``tap_land_for_mana``), which is what keeps this answer true.
+        #
+        # A land with no compiled tap-alone ability is the summary path's (a
+        # basic, a dual), and one whose ability's shape is not read keeps the
+        # summary too: both come back None.
+        from ...board_payment import tap_alone_symbols
+
+        tapped_for = tap_alone_symbols(self, land)
+        if tapped_for is not None:
+            return tapped_for
         return own
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:

@@ -68,9 +68,13 @@ def test_the_colour_asked_for_is_still_the_colour_the_aura_makes(catalog_by_name
 
 
 def test_a_word_that_is_no_mana_symbol_is_still_refused(catalog_by_name):
-    """…and a value that is neither a colour nor {C} is still an error: the
-    normalizer is there because the colour arrives off the wire."""
-    game, _land = _board(catalog_by_name, "Forest")
+    """…and a value that is neither a colour nor {C} is still refused — by
+    the seam, with nothing tapped and nothing added. This expected the
+    ``ValueError`` the colour normalizer raised from inside the Aura's arm,
+    which is the same exception out of the same route the test above was
+    written to stop: a refusal is a False, never a raise."""
+    game, land = _board(catalog_by_name, "Forest")
 
-    with pytest.raises(ValueError):
-        game.tap_land_for_mana(0, "Forest", chosen_color="purple")
+    assert game.tap_land_for_mana(0, "Forest", chosen_color="purple") is False
+    assert not land.tapped
+    assert _pool(game) == {}
