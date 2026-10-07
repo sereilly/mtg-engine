@@ -35,6 +35,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from web.app import app, store
@@ -83,7 +84,10 @@ def _hand_cards() -> list[str]:
     """One card per distinct mana cost of mana value five or less: creatures
     and artifacts that announce nothing as they are cast."""
     seen: dict[str, str] = {}
-    for card in _CARDS.values():
+    # By compilation unit, the pool-loop convention: a split card's halves
+    # are read as the spells they are (and, being instants and sorceries,
+    # are none of these).
+    for card in compilation_units(_CARDS.values()):
         cost = (card.mana_cost or "").strip()
         if not cost or "X" in cost.upper() or "/" in cost or card.cmc > 5:
             continue

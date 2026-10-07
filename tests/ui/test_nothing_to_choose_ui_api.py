@@ -30,6 +30,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.legality import activation_target_obligation
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -99,7 +100,7 @@ def _candidates():
     question, asked of the compiled program so the wire is built only for
     these."""
     found = []
-    for card in _POOL:
+    for card in compilation_units(_POOL):
         if card.primary_type in ("instant", "sorcery"):
             continue
         usable = usable_activated_abilities(compile_card_oracle(card))
