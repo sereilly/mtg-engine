@@ -2287,86 +2287,105 @@ function getMaxAffordableX(manaPool, manaCost, card = null) {
   return 0;
 }
 
-function inferLandProducedMana(perm) {
-  if (Array.isArray(perm.produced_mana) && perm.produced_mana.length > 0) {
-    return perm.produced_mana.map((s) => s.toUpperCase());
-  }
-  const type = (perm.type || "").toLowerCase();
-  const symbols = [];
-  if (type.includes("plains")) symbols.push("W");
-  if (type.includes("island")) symbols.push("U");
-  if (type.includes("swamp")) symbols.push("B");
-  if (type.includes("mountain")) symbols.push("R");
-  if (type.includes("forest")) symbols.push("G");
-  return symbols;
+// --- auto-tap: the server's plan, rendered ---------------------------------
+//
+// A card glows when its seat *could* pay for it (the server's
+// `playable_hand_indices`: the pool plus what a tap would add — lands, a Sol
+// Ring, a Llanowar Elves). Clicking one sends the cast; a pool that cannot pay
+// is refused "insufficient mana" and this dialog offers to do the tapping.
+//
+// It used to plan that tapping itself: lands only, one mana a land, the colour
+// read off `produced_mana`, the printed cost — so a card that glowed on a Sol
+// Ring opened this dialog with the button disabled, a Mana Flare's second mana
+// was never counted, and a painland asked for its colour made {C}. Every one
+// of those is a question the engine answers.
+//
+// Now the server is asked (`POST …/payment_plan` with the very action that
+// was refused): it runs that action on a copy of the table, taps what its own
+// planner says, and reports what it tapped and whether the action then went
+// through (web/payment_plan.py). The dialog shows that; the button sends the
+// same action with `auto_tap: true`, and the server makes those taps — a land
+// through the tap seam, a creature through its own mana ability — and the
+// cast in one request. Nothing here adds mana, picks a land or reads a cost.
+
+// What the plan depends on that this client can watch change: the pool, what
+// is tapped, and the log (anything else that happened).
+function autoTapStateKey(state = currentState) {
+  const me = getCurrentPlayerState(state);
+  return JSON.stringify([
+    Array.isArray(state?.log) ? state.log.length : 0,
+    me?.mana_pool || null,
+    (me?.battlefield || []).map((perm) => [perm?.id ?? null, !!perm?.tapped]),
+  ]);
 }
 
-// One planner behind both auto-tap questions ("can it pay?" and "tap what?"),
-// so the button's promise and the taps it fires can't disagree. Each tap
-// carries the COLOR the land was assigned to produce: a multi-color land
-// (City of Brass) tapped without one defaults server-side to whatever it
-// defaults to, which is how auto-tap used to pay {1}{W} with two green.
-function computeAutoTapPlan(manaCost, currentManaPool, battlefield) {
-  const required = parseManaCostSymbols(manaCost || "");
-  const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
-  const taps = [];
-
-  const untapped = [];
-  for (let i = 0; i < (battlefield || []).length; i++) {
-    const perm = battlefield[i];
-    if (!(perm.type || "").toLowerCase().includes("land")) continue;
-    if (perm.tapped) continue;
-    // A land the server's tap seam refuses (Rhystic Cave: its mana needs
-    // priority and can be denied; a depletion land: its mana costs a counter)
-    // is activated, never auto-tapped — a "tap" sent for it is a 400 that
-    // aborts the whole payment. `=== false` so a payload without the field
-    // plans as it always did.
-    if (perm.taps_for_mana === false) continue;
-    const produces = inferLandProducedMana(perm);
-    if (produces.length > 0) untapped.push({ index: i, produces, used: false });
-  }
-  // Constrained lands first for the colored pips: spending the Forest on {G}
-  // before City of Brass keeps the any-color land free for the pip only it
-  // can pay (and for generic, where its color doesn't matter).
-  const byFlexibility = [...untapped].sort((a, b) => a.produces.length - b.produces.length);
-
-  let ok = true;
-  for (const color of ["W", "U", "B", "R", "G", "C"]) {
-    let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
-    for (const land of byFlexibility) {
-      if (deficit <= 0) break;
-      if (land.used || !land.produces.includes(color)) continue;
-      land.used = true;
-      taps.push({ index: land.index, color });
-      pool[color] = (pool[color] || 0) + 1;
-      deficit--;
-    }
-    if (deficit > 0) ok = false;
-  }
-
-  // Generic is paid by whatever is left; any color works, so a mono-color
-  // land names its own and a multi-color land is left to the server default.
-  const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
-  const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
-  let genericDeficit = Math.max(0, totalRequired - totalPool);
-  for (const land of untapped) {
-    if (genericDeficit <= 0) break;
-    if (land.used) continue;
-    land.used = true;
-    taps.push({ index: land.index, color: land.produces.length === 1 ? land.produces[0] : null });
-    genericDeficit--;
-  }
-  if (genericDeficit > 0) ok = false;
-
-  return { taps, ok };
+// The action a pending auto-tap is about, as `sendAction` would send it: the
+// announcement so far (mode, zone, cost already named) rides module state, so
+// the preview has to carry it too or it would be planning a different cast.
+function autoTapActionBody(pending) {
+  return carryCastZoneAndCost(carryCastMode({ ...pending.actionBody }));
 }
 
-function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
-  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).taps;
+// Ask the server what it would tap for the pending action. Called from the
+// dialog's own renderer, so the plan follows the board: a land tapped by hand
+// while the dialog is open is a new state key and a new plan.
+function refreshAutoTapPlan() {
+  const pending = pendingAutoTap;
+  if (!pending || !sessionId) return;
+  const key = autoTapStateKey();
+  if (pending.planKey === key) return;
+  pending.planKey = key;
+  pending.plan = null;
+  postJson(`/api/sessions/${sessionId}/payment_plan`, autoTapActionBody(pending))
+    .then((plan) => plan, (e) => ({ payable: false, taps: [], reason: e.message }))
+    .then((plan) => {
+      if (pendingAutoTap !== pending || pending.planKey !== key) return;
+      pending.plan = plan;
+      renderActivationPrompt();
+    });
 }
 
-function canAutoTapSatisfyCost(manaCost, currentManaPool, battlefield) {
-  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).ok;
+// Whether the Auto-Tap button may be pressed: the server ran the action on a
+// copy with its own taps and it went through. Unknown (still asking) is no.
+function autoTapIsPayable(pending) {
+  return !!(pending && pending.plan && pending.plan.payable === true);
+}
+
+// One line per permanent the plan taps, in tap order, with what it is asked
+// for. A source the server did not ask for a colour names none.
+function autoTapPlanLines(plan) {
+  const taps = Array.isArray(plan?.taps) ? plan.taps : [];
+  return taps.map((tap) => {
+    const color = typeof tap.mana_color === "string" && tap.mana_color ? ` for {${tap.mana_color}}` : "";
+    return `${tap.name || "a permanent"}${color}`;
+  });
+}
+
+// The cost the engine actually asked the pool for — taxes, reductions, a
+// kicker and an announced X included — as the server reports it, or null
+// while it is unknown (then the printed cost is all the dialog can show).
+function autoTapChargedCost(plan) {
+  const cost = plan && plan.cost && typeof plan.cost === "object" ? plan.cost : null;
+  if (!cost) return null;
+  const tokens = [];
+  if (Number(cost.generic || 0) > 0) tokens.push(`{${Number(cost.generic)}}`);
+  for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
+    for (let n = 0; n < Number(cost[symbol] || 0); n += 1) tokens.push(`{${symbol}}`);
+  }
+  return tokens.length ? tokens.join("") : "{0}";
+}
+
+// What the dialog says under its title, for the three things a plan can be.
+function autoTapPromptText(pending) {
+  const plan = pending.plan;
+  if (!plan) return `Asking what could pay for ${pending.cardName}…`;
+  if (plan.payable) {
+    const count = Array.isArray(plan.taps) ? plan.taps.length : 0;
+    return count > 0
+      ? `Your mana pool can't pay for ${pending.cardName}. Auto-Tap will tap ${count} permanent${count === 1 ? "" : "s"} to pay the cost, or cancel.`
+      : `Your mana pool can pay for ${pending.cardName} now. Press Auto-Tap to go ahead, or cancel.`;
+  }
+  return `Nothing you could tap pays for ${pending.cardName}${plan.reason ? ` (${plan.reason})` : ""}. Add mana yourself, or cancel.`;
 }
 
 async function performAutoTap() {
@@ -2376,31 +2395,23 @@ async function performAutoTap() {
   renderActivationPrompt();
 
   try {
-    const me = getCurrentPlayerState();
-    if (!me) throw new Error("Cannot read player state.");
-
-    const taps = computeAutoTapLands(pendingAutoTapCost(pending), me.mana_pool, me.battlefield);
-    if (taps.length > 0) {
-      updateActionHint(`Auto-tapping ${taps.length} land(s)...`);
-      for (const tap of taps) {
-        const body = withPermanentId(
-          { seat, action: "tap", permanent_index: tap.index },
-          "permanent_id", seat, tap.index,
-        );
-        // The color this land was assigned to pay. Without it the server
-        // picks for a multi-color land, and its pick owes nothing to the cost.
-        if (tap.color) body.mana_color = tap.color;
-        await sendAction(body);
-      }
-    }
-
-    await sendAction(pending.actionBody);
-    updateActionHint(`Cast ${pending.cardName}.`);
+    updateActionHint(`Paying for ${pending.cardName}...`);
+    // One request: the server taps what its plan names and takes the action.
+    await sendAction({ seat, ...pending.actionBody, auto_tap: true });
+    updateActionHint(`Paid for ${pending.cardName}.`);
   } catch (e) {
     updateActionHint(e.message, true);
   } finally {
     clearPendingHandCast();
   }
+}
+
+// A refusal that is about mana and nothing else, in either of the engine's
+// two wordings: a cast and a permanent's ability say "insufficient mana …",
+// an ability activated from a hand says "… cannot pay for …'s ability".
+function isManaRefusal(message) {
+  const text = String(message || "").toLowerCase();
+  return text.startsWith("insufficient mana") || /cannot pay for .*'s ability/.test(text);
 }
 
 function formatManaSymbols(counts) {
@@ -10676,23 +10687,26 @@ function renderActivationPrompt() {
 
   if (pendingAutoTap) {
     panel.classList.remove("hidden");
+    // The plan is the server's (see `refreshAutoTapPlan`): asked for when the
+    // dialog opens and again whenever the board under it moves.
+    refreshAutoTapPlan();
+    const plan = pendingAutoTap.plan;
     if (autoTapBtn) {
       autoTapBtn.classList.remove("hidden");
-      const canSatisfy = !!me && canAutoTapSatisfyCost(
-        pendingAutoTapCost(pendingAutoTap),
-        me.mana_pool,
-        me.battlefield
-      );
-      autoTapBtn.disabled = !canSatisfy;
+      autoTapBtn.disabled = !autoTapIsPayable(pendingAutoTap);
     }
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Insufficient mana`;
-    body.textContent = `You don't have enough mana to cast ${pendingAutoTap.cardName}. Auto-tap lands to pay the cost, or cancel.`;
+    body.textContent = autoTapPromptText(pendingAutoTap);
+    const planLines = autoTapPlanLines(plan);
     steps.innerHTML = [
       `<div>Card: ${escapeHtml(pendingAutoTap.cardName)}</div>`,
-      `<div>Cost: ${renderSymbolsInline(pendingAutoTapCost(pendingAutoTap) || "none")}</div>`,
+      `<div>Cost: ${renderSymbolsInline(autoTapChargedCost(plan) || pendingAutoTapCost(pendingAutoTap) || "none")}</div>`,
       `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+      plan && plan.payable && planLines.length
+        ? `<div id="autoTapPlan">Auto-Tap: ${planLines.map((line) => renderSymbolsInline(escapeHtml(line))).join(", ")}</div>`
+        : "",
     ].join("");
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -16592,14 +16606,13 @@ function createCardElement(card, options = {}) {
       // Second click on the card while the insufficient-mana prompt is open
       // performs the auto-tap, same as pressing the Auto-Tap button.
       if (pendingAutoTap && isPendingHandCastCard(card, handIndex)) {
-        const me = getCurrentPlayerState();
-        const canSatisfy = !!me && canAutoTapSatisfyCost(
-          pendingAutoTapCost(pendingAutoTap),
-          me.mana_pool,
-          me.battlefield
-        );
-        if (!canSatisfy) {
-          updateActionHint("Not enough untapped lands to auto-tap for this cost.", true);
+        if (!autoTapIsPayable(pendingAutoTap)) {
+          updateActionHint(
+            pendingAutoTap.plan
+              ? "Nothing you could tap pays for this cost."
+              : "Still asking what could pay for this — try again in a moment.",
+            true,
+          );
           return;
         }
         await performAutoTap();
@@ -21077,16 +21090,64 @@ function renderHandAbilities(state, hasPriority) {
       // same immutable definition, so the name alone would activate whichever
       // came first. `seat` is required of every action — the omission that
       // made every CR 116 special action answer a click with a silent 422.
-      sendAction({
+      const actionBody = {
         seat,
         action: "activate_hand",
         card_name: entry.name,
         hand_index: entry.hand_index,
         ability_index: entry.ability_index,
+      };
+      // `payable` is "the pool plus what you could tap", so the click is
+      // refused whenever the mana is still on the board — and that refusal
+      // used to be the end of it (the button did nothing until the lands were
+      // tapped by hand). It opens the auto-tap dialog a cast opens.
+      sendAction(actionBody).catch((e) => {
+        if (isManaRefusal(e.message)) {
+          pendingAutoTap = {
+            card: { name: entry.name, mana_cost: "" },
+            cardName: `${entry.name} (${entry.cost_text || "ability"})`,
+            cost: entry.cost_text || "",
+            actionBody,
+          };
+          renderActivationPrompt();
+          return;
+        }
+        updateActionHint(e.message, true);
       });
     });
     host.appendChild(button);
   }
+}
+
+// The parts of a cast's announcement that ride module state rather than the
+// body a prompt built — named, because two senders need them: `sendAction`,
+// and the auto-tap preview, which must ask about the cast that will be sent.
+//
+// The chosen mode of a "Choose one —" modal spell, through whichever cast path
+// fires (direct, targeted, X, auto-tap retry) without threading it manually.
+function carryCastMode(body) {
+  if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
+    body.mode_index = pendingCastModeIndex;
+  }
+  return body;
+}
+
+// A cast permission's zone — whichever cast path fires, the engine learns
+// which zone the card leaves — and a printed additional cost already paid:
+// CR 601.2b's announcement happens a prompt before CR 601.2c's, so the payment
+// has to survive whichever targeting path finally sends the cast. Never
+// overwrites a field the caller set — the single-prompt cost flows put it on
+// the body themselves.
+function carryCastZoneAndCost(body) {
+  if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
+    body.from_zone = pendingCastFromZone;
+  }
+  if (_CAST_ACTIONS.has(body.action) && pendingCastCost) {
+    for (const [field, value] of Object.entries(pendingCastCost)) {
+      if (body[field] == null) body[field] = value;
+    }
+  }
+  return body;
 }
 
 async function sendAction(actionBody) {
@@ -21094,16 +21155,16 @@ async function sendAction(actionBody) {
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
   const body = { stop_steps: opponentStopSteps(), self_stop_steps: selfStopSteps(), ...actionBody };
-  // Carry the chosen mode for a "Choose one —" modal spell through whichever cast
-  // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
-  if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
-    body.mode_index = pendingCastModeIndex;
-  }
+  carryCastMode(body);
   // Phyrexian Splicer's chosen ability, carried the same way and for the same
   // reason: it is part of the announcement (CR 601.2b), and the activate body
   // is built in a dozen places while this is the one they all pass through.
+  // Written onto the caller's body too, like the cost just below: an
+  // "insufficient mana" retry resends that body after the word is spent here,
+  // and without it the retry announced an activation that chose nothing.
   if (body.action === "activate" && body.chosen_keyword == null && pendingChosenAbilityWord) {
     body.chosen_keyword = pendingChosenAbilityWord;
+    actionBody.chosen_keyword = pendingChosenAbilityWord;
     pendingChosenAbilityWord = null;
   }
   // And the cost the activation announced before its X and its targets were
@@ -21147,20 +21208,7 @@ async function sendAction(actionBody) {
     promptNextModeTarget();
     return;
   }
-  // Same trick for a cast permission's zone: whichever cast path fires, the
-  // engine learns which zone the card leaves.
-  if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
-    body.from_zone = pendingCastFromZone;
-  }
-  // And for a printed additional cost already paid: CR 601.2b's announcement
-  // happens a prompt before CR 601.2c's, so the payment has to survive whichever
-  // targeting path finally sends the cast. Never overwrites a field the caller
-  // set — the single-prompt cost flows put it on the body themselves.
-  if (_CAST_ACTIONS.has(body.action) && pendingCastCost) {
-    for (const [field, value] of Object.entries(pendingCastCost)) {
-      if (body[field] == null) body[field] = value;
-    }
-  }
+  carryCastZoneAndCost(body);
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
 }

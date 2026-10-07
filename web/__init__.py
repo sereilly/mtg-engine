@@ -48,6 +48,8 @@ LAYERS = (
     "state_view",
     # Debug-menu board manipulation and raw-state injection.
     "debug_actions",
+    # The auto-tap: which permanents pay for an action, planned and tapped here.
+    "payment_plan",
     # The cast plumbing the normal cast and the debug free-casts share.
     "action_helpers",
     # One module of registered handlers per group of ActionKinds.

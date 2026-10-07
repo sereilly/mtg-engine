@@ -9,10 +9,11 @@ nonland_sources=True)``. The census is
 boards, each driven through the activation the glow promises and then the
 cast.
 
-What this file does **not** drive is the client: its auto-tap plans lands
-alone (``computeAutoTapPlan`` in ``web/static/app.js``), so a card that glows
-on the strength of a Sol Ring opens the "insufficient mana" prompt with the
-auto-tap button disabled until the Ring is tapped by hand.
+What this file does **not** drive is the auto-tap. The client planned that
+itself when this was written, lands alone, so a card that glowed on the
+strength of a Sol Ring opened the "insufficient mana" prompt with the button
+disabled; the plan is the server's now, and
+``tests/ui/test_auto_tap_plan_census.py`` holds it to this glow.
 """
 from __future__ import annotations
 
