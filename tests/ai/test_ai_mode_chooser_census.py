@@ -19,29 +19,41 @@ bullet had nothing to point at.
   opponent's; the others have no legal target, or only the caster's own
   things";
 * the **proposal** is ``choose_cast_action`` in the seat's own main phase, or
-  ``choose_combat_instant_cast_action`` in the two windows the web AI answers
-  in — a spell on the stack, and the declare-blockers step;
+  ``choose_combat_instant_cast_action`` in the windows the web AI answers
+  in — a spell on the stack, an opponent's attack, and the seat's own attack
+  once blocks are declared (the one board on which "attacking creatures get
+  +1/+0" is a cast);
 * the **executor** is ``ai_simulator._play_one_cast``, the real one, with a
   spy on ``Game._cast_onto_stack`` reading the mode the cast was announced
   with. A proposal naming no mode is mode 0: that is what the engine resolves
   a cast naming none as, so on the tree before the chooser this census reads
   **0 modes other than the first reached**, and 30 of 87.
 
-Two legs per mode:
+Three legs per mode:
 
 ``natural``
     the chooser, unaided, on the mode's own board. Where the board makes this
     the **only** mode worth casting (41 of them) it must be the one proposed.
     Where it cannot — a sibling needs no target, or targets a player, or may
     name the very same permanent — the sibling may win, and which one did is
-    pinned in ``SHADOWED`` below: that list is this policy's *valuation*,
-    written down.
+    pinned in ``SHADOWED`` below, each with the reason it loses.
 ``forced``
     the same board with ``Game.announceable_modes`` answering only this mode:
     "were this the one mode on offer, is it proposed, is the cast accepted in
     that mode, and does the resolution do anything?" Every mode but one has a
     board, and all 87 pass — which is the claim that no bullet in the pool is
-    out of an AI seat's reach.
+    out of an AI seat's reach. A seat no longer casts a spell that changes
+    nothing, so a mode's board is one it has something to act on.
+``measured``
+    **is the cast the larger one?** For the mode and every sibling its board
+    leaves worth casting, each is cast *by hand* at every target the engine's
+    picker offers, and each cast is priced with ``ai_valuation``'s one
+    definition of "larger": the swing in each seat's standing, as the board
+    stood and again once the turn had run out. The policy's own cast, made
+    through the real executor and priced the same way, must measure as much
+    as the best of them (``SMALLER``, empty). The policy predicts with that
+    definition by rehearsing a cast on a copy of the game; this measures with
+    it on boards of its own, never through the rehearsal.
 
 Run it as a module (``python -m tests.ai.test_ai_mode_chooser_census``) for the
 whole table.
@@ -50,6 +62,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from dataclasses import replace
 from unittest import mock
 
 import pytest
@@ -58,7 +71,8 @@ from engine import Game, PlayerState
 from engine import ai_simulator
 from engine.ai_policy import (choose_cast_action,
                               choose_combat_instant_cast_action)
-from engine.ai_valuation import instruction_target_side
+from engine.ai_valuation import (CARD_WORTH, instruction_target_side,
+                                 standing_swing, standings, swing_worth)
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -114,9 +128,16 @@ ZOO = {
     "green creature": _creature("Bait Green", ("G",), 4, 4),
     "wall": _creature("Bait Wall", (), 0, 4, "Defender", "Creature - Wall"),
     "artifact creature": _creature("Bait Golem", (), 3, 3, "", "Artifact Creature - Golem"),
+    # Placed tapped (`place`): "Untap target permanent" has nothing to do to
+    # one that is not.
+    "tapped creature": _creature("Bait Tapped", ("G",), 2, 3),
     "artifact": _mk_card(name="Bait Artifact", type_line="Artifact"),
     "enchantment": _mk_card(name="Bait Enchantment", type_line="Enchantment", colors=("W",)),
     "nonbasic land": _mk_card(name="Bait Nonbasic", type_line="Land"),
+    "planeswalker": replace(
+        _mk_card(name="Bait Walker", type_line="Legendary Planeswalker - Bait", colors=("B",)),
+        loyalty="4",
+    ),
     "plains": POOL["Plains"], "island": POOL["Island"], "swamp": POOL["Swamp"],
     "mountain": POOL["Mountain"], "forest": POOL["Forest"],
     # An Aura is placed with the creature it enchants (`place`).
@@ -161,6 +182,7 @@ def place(game, seat: int, key: str) -> Permanent:
     permanent = Permanent(card=ZOO[key])
     game._put_permanent_onto_battlefield(seat, permanent, seat)
     permanent.metadata["summoning_sickness_turn"] = -99
+    permanent.tapped = key == "tapped creature"
     return permanent
 
 
@@ -169,7 +191,8 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
     *placements* (``(seat, zoo key)``).
 
     *window* is None for seat 0's own main phase, ``"combat"`` for seat 1's
-    declare-blockers step (seat 1's creatures attacking seat 0), ``"stack"``
+    declare-blockers step (seat 1's creatures attacking seat 0), ``"attack"``
+    for seat 0's own (its creatures attacking, no block declared), ``"stack"``
     for seat 1's main phase with *stack* (a ``SPELLS`` key) cast and waiting.
     Seat 0 pays out of a mana pool, so the board holds no land the census did
     not put there.
@@ -194,9 +217,28 @@ def board(card, placements=(), *, window=None, grave=(), stack=None):
         assert game.current_step == "declare_attackers", game.current_step
         attackers = [
             index for index, perm in enumerate(game.players[OPP].battlefield)
-            if perm.is_creature and "Defender" not in (perm.card.oracle_text or "")
+            if perm.is_creature and not perm.tapped
+            and "Defender" not in (perm.card.oracle_text or "")
         ]
         game.declare_attackers(OPP, attackers, defending_player_index=ME)
+    elif window == "attack":
+        game.start_turn(ME)
+        game._close_current_priority_step()
+        game.advance_combat_phase()
+        game.advance_combat_phase()
+        assert game.current_step == "declare_attackers", game.current_step
+        attackers = [
+            index for index, perm in enumerate(game.players[ME].battlefield)
+            if perm.is_creature and not perm.tapped
+            and "Defender" not in (perm.card.oracle_text or "")
+        ]
+        game.declare_attackers(ME, attackers, defending_player_index=OPP)
+        game.advance_combat_phase()
+        assert game.current_step == "declare_blockers", game.current_step
+        game.declare_blockers(OPP, {})
+        # The turn's draw is not part of the board: one card in hand, as on
+        # every other.
+        game.players[ME].hand[:] = [card]
     elif window == "stack":
         game.start_turn(OPP)
         game._close_current_priority_step()
@@ -385,6 +427,209 @@ def mode_acts_on(card, index, candidate) -> bool:
     return signature(game, card) != before
 
 
+# -- measuring a cast -----------------------------------------------------------
+#
+# The second half of the census: not "is the mode reached" but "is the cast
+# the larger one". Every cast here is made **by the engine, on a census
+# board** — never by ``ai_valuation.rehearse`` — and priced with the one
+# definition of "larger" (``ai_valuation.swing_worth`` over the standing of
+# each seat). The policy predicts with that definition; this measures with
+# it; a census that asked the scorer whether the scorer was right would
+# measure nothing.
+
+#: The game's own fields a cast writes whatever it does (the table is read
+#: separately): left out of `table_state`, as `_BOOKKEEPING` is left out of
+#: `signature`.
+_GAME_BOOKKEEPING = frozenset({
+    "players", "log", "stack", "priority_player_index", "priority_pass_count",
+    "pending_choices", "damage_ledger",
+})
+def table_state(game, spell) -> str:
+    """`signature` and the game's own records beside it — the Fog a turn is
+    under, the extra turn it has been given, the ban a seat is under. For a
+    cast compared with the same game a moment earlier."""
+    records = sorted(
+        (key, repr(value)) for key, value in vars(game).items()
+        if key not in _GAME_BOOKKEEPING and repr(value) not in _EMPTY_READINGS
+    )
+    damage = repr(getattr(getattr(game, "damage_ledger", None), "entries", None))
+    # Every field of every permanent, by name: a dataclass's own repr leaves
+    # out the ones declared ``repr=False``, and a redirect armed on a creature
+    # (Sivvi's Valor) is one of those.
+    fields = sorted(
+        (perm.permanent_id, sorted(
+            (key, repr(value)) for key, value in vars(perm).items() if key != "card"
+        ))
+        for perm in game.all_permanents()
+    )
+    return signature(game, spell) + repr(records) + damage + repr(fields)
+
+
+def pools(game) -> list:
+    return [dict(player.mana_pool) for player in game.players]
+
+
+def mana_made(before: list, game) -> bool:
+    """Whether some pool holds more of some mana than it did in *before*
+    (`pools`). `table_state` leaves the pools out, because paying for the
+    cast empties them whatever the cast does — but paying only ever takes
+    mana away, so mana that is *there* afterwards is mana the spell made, and
+    a ritual moved something."""
+    return any(
+        int(now.get(symbol, 0) or 0) > int(was.get(symbol, 0) or 0)
+        for was, now in zip(before, pools(game))
+        for symbol in now
+    )
+
+
+def fresh(card, built):
+    return board(
+        card, built["placements"], window=built["window"], grave=built["grave"],
+        stack=built["stack"],
+    )
+
+
+def settle(game) -> None:
+    """Everything a cast leaves owed: the stack resolved, the prompts it armed
+    answered by default, and state-based actions checked (CR 704.3) — a
+    creature dealt lethal damage is still on the battlefield until they are,
+    and a measure taken before would count it as alive."""
+    for _ in range(6):
+        resolve_stack(game)
+        game.auto_resolve_pending_choices()
+        game.check_state_based_actions()
+        if not game.stack and not game.pending_choices:
+            return
+
+
+def run_out(game) -> None:
+    """CR 514 on the spot: "until end of turn" ends and marked damage goes.
+    Nothing is declared on the way, so what is read afterwards is what the
+    cast left and not what a policy then did with it."""
+    settle(game)
+    game.resolve_cleanup_step(game.active_player_index)
+    settle(game)
+
+
+_BASELINES: dict = {}
+
+
+def baseline(card, built) -> dict:
+    """The board with nothing cast: what is on the stack resolves, the turn
+    runs out. Each seat's standing at both moments."""
+    key = (
+        card.name, repr(built["placements"]), built["window"],
+        repr(built["grave"]), built["stack"],
+    )
+    if key not in _BASELINES:
+        game, _ = fresh(card, built)
+        settle(game)
+        now = standings(game)
+        run_out(game)
+        _BASELINES[key] = {"now": now, "lasting": standings(game, now=False)}
+    return _BASELINES[key]
+
+
+def measure(card, built, game) -> float:
+    """What the cast that has just resolved on *game* — a census board built
+    from *built* — was worth to seat 0: ``ai_valuation.swing_worth`` of its
+    standing swing now and once the turn has run out, against the same board
+    with nothing cast. The spell's own card is not part of it."""
+    untouched_board = baseline(card, built)
+    # The spell's own card is not part of what the cast did — unless it is
+    # back in the hand it left (buyback), and then nothing was spent.
+    spent = CARD_WORTH * (0 if card in game.players[ME].hand else 1)
+    now = standing_swing(untouched_board["now"], standings(game), ME) + spent
+    run_out(game)
+    lasting = standing_swing(
+        untouched_board["lasting"], standings(game, now=False), ME
+    ) + spent
+    return round(swing_worth(now, lasting), 3)
+
+
+def announcements(card, index, built, x_value) -> list:
+    """Every announcement mode *index* may make on *built*'s board, off the
+    engine's own picker and nothing else: each player, each permanent, the
+    spell on the stack, or nothing at all. Empty for a mode whose targets are
+    announced as a chain of roles — the census has no enumeration of those,
+    and the mode is measured as the policy announces it."""
+    game, _ = fresh(card, built)
+    shape = mode_shape(card, index)
+    named = {"mode_index": index, "x_value": x_value}
+    if shape == "untargeted":
+        return [{**named, "target_player_index": ME}]
+    if shape == "stack":
+        return [{**named, "target_stack_index": len(game.stack) - 1}]
+    if shape == "roles":
+        return []
+    listed = game.cast_target_spec(ME, card, mode_index=index).get("valid_targets") or []
+    found: list = []
+    seats: list = []
+    for entry in listed:
+        seat = entry.get("seat")
+        if entry.get("kind") == "permanent":
+            # By slot here and by id at the cast (`cast_by_hand`): every
+            # census board is built afresh, and an id is one board's.
+            found.append({**named, "bait": (seat, entry["index"])})
+        elif isinstance(seat, int) and seat not in seats:
+            seats.append(seat)
+    return [{**named, "target_player_index": seat} for seat in seats] + found
+
+
+def cast_by_hand(card, built, announcement) -> "dict | None":
+    """One announcement made on a fresh census board: what it measured and
+    whether it moved anything — or None when the engine refuses it."""
+    game, _ = fresh(card, built)
+    before = table_state(game, card)
+    keywords = dict(announcement)
+    if "bait" in keywords:
+        seat, slot = keywords.pop("bait")
+        keywords["target_player_index"] = seat
+        keywords["target_permanent_ids"] = [
+            game.permanent_id_of(game.permanent_at(seat, slot))
+        ]
+    try:
+        result = game.queue_from_hand(ME, card.name, **keywords)
+        if not result.supported:
+            return None
+        settle(game)
+    except Exception:
+        return None
+    moved = (
+        zones(game, card) != untouched(card, built) if built["window"] == "stack"
+        else table_state(game, card) != before
+    )
+    return {"swing": measure(card, built, game), "moved": moved, "named": announcement}
+
+
+def best_announcement(card, index, built, x_value) -> "dict | None":
+    """The most mode *index* can be measured to do on *built*'s board, over
+    every announcement the engine's picker offers it."""
+    best = None
+    for announcement in announcements(card, index, built, x_value):
+        got = cast_by_hand(card, built, announcement)
+        if got is not None and (best is None or got["swing"] > best["swing"]):
+            best = got
+    return best
+
+
+def does_something(card, index, candidate) -> "float | None":
+    """What an untargeted or player-aimed mode measures on the candidate
+    board when it has something to act on there — some announcement of it
+    moves the table and leaves its caster no worse off — and None when it has
+    not. The engine's answer, with no policy in it."""
+    x_value = 2 if "{X}" in (card.mana_cost or "").upper() else None
+    measures = [
+        got["swing"]
+        for got in (
+            cast_by_hand(card, candidate, announcement)
+            for announcement in announcements(card, index, candidate, x_value)
+        )
+        if got is not None and got["moved"] and got["swing"] >= 0
+    ]
+    return max(measures) if measures else None
+
+
 def plan(card, index) -> dict:
     """The board for one mode: ``placements``, ``window``, ``grave``, ``stack``
     -- or ``{"unbuildable": reason}``."""
@@ -396,7 +641,34 @@ def plan(card, index) -> dict:
     base = {"placements": [], "window": None, "grave": [], "stack": None}
 
     if shape in ("untargeted", "player"):
+        # The empty board, when the mode does anything there (three damage to
+        # a player, three cards drawn) — and otherwise the first board with
+        # one census permanent on it where it does: "All creatures get -1/-1"
+        # wants a creature to shrink, and one that is not its caster's. A
+        # seat does not cast a spell that changes nothing, so a board on
+        # which the mode has nothing to act on is not a board for it.
         candidates = [dict(base)]
+        if does_something(card, index, candidates[0]) is None:
+            candidates = [
+                {**base, "placements": [(holder, key)], "window": window}
+                for window in ((None, "combat", "attack") if instant else (None,))
+                for holder in (
+                    (OPP,) if window == "combat" else (ME,) if window == "attack"
+                    else (OPP, ME)
+                )
+                for key in ZOO
+            ] + [
+                {**base, "grave": [(holder, key)]}
+                for holder in (OPP, ME) for key in GRAVE
+            ]
+            measured = [(does_something(card, index, c), c) for c in candidates]
+            # The boards it does its caster some good on, when there are any:
+            # "All creatures get -2/-0" moves a Wall's power from nought to
+            # nought, and that is not the board to judge the bullet on.
+            helped = [c for swing, c in measured if swing is not None and swing > 0]
+            candidates = helped or [c for swing, c in measured if swing is not None]
+            if not candidates:
+                return {"unbuildable": "it has nothing to act on on any census board"}
     elif shape == "stack":
         if not instant:
             return {"unbuildable": "a sorcery cannot be cast with a spell on the stack"}
@@ -497,7 +769,16 @@ def plan(card, index) -> dict:
             if (wrong, key) in chosen["placements"]:
                 break
             trial = {**chosen, "placements": [*chosen["placements"], (wrong, key)]}
-            if shadows(trial) == before and announceable(trial):
+            if (
+                shadows(trial) == before and announceable(trial)
+                # ...and while it leaves this mode something to do: a decoy
+                # that turns "all creatures get -2/-0" on its own caster has
+                # changed the question.
+                and (
+                    shape not in ("untargeted", "player")
+                    or does_something(card, index, trial) is not None
+                )
+            ):
                 chosen = trial
                 break
     chosen["shadowed_by"] = before
@@ -517,6 +798,10 @@ _BOOKKEEPING = frozenset({
 })
 
 
+#: How a field nothing has used reads once something has emptied it.
+_EMPTY_READINGS = frozenset({"None", "False", "0", "''", "[]", "()", "{}", "set()"})
+
+
 def signature(game, spell) -> str:
     """Everything a resolution could have changed, with the spell's own trip
     from hand to graveyard taken out."""
@@ -528,9 +813,13 @@ def signature(game, spell) -> str:
             for pile in (hand, yard):
                 if spell.name in pile:
                     pile.remove(spell.name)
+        # Less the bookkeeping, and less every field that reads as empty: a
+        # record the engine creates on first use (`_land_mana_swaps`, made
+        # by the tap planner) is otherwise a "change" every cast makes, and
+        # a resolution that did nothing read as one that did.
         rest = {
             key: value for key, value in vars(player).items()
-            if key not in _BOOKKEEPING
+            if key not in _BOOKKEEPING and repr(value) not in _EMPTY_READINGS
         }
         parts.append((hand, yard, len(player.library), repr(sorted(rest.items(), key=lambda kv: kv[0]))))
         parts.append(sorted(
@@ -567,15 +856,15 @@ def run(card, index, built, *, forced: bool) -> dict:
             stack=built["stack"],
         )
         # "Untap target permanent" (Emerald Charm's first bullet) has to find
-        # something tapped, or it resolves changing nothing. It used to read
-        # as a change anyway: the old tap planner read every permanent's mana
-        # swaps before looking at the pool, which wrote an empty
-        # `_land_mana_swaps` record onto the seat — and `signature` saw the new
-        # key. The planner no longer touches a board it has no need of, so the
-        # bait is tapped and the untap is the change.
-        if compile_card_oracle(card).modes[index].instruction.kind == "untap_target_permanent":
-            for permanent in placed.values():
-                permanent.tapped = True
+        # something tapped, or it resolves changing nothing — and the board
+        # already holds it: the plan places a **tapped** bait (`place`), which
+        # is the one every other reader of this board (`baseline`,
+        # `cast_by_hand`) measures against. Two rounds each gave the bullet its
+        # tapped permanent on the same day; the other one tapped *every* bait
+        # here, in this leg alone, so the policy's cast was priced on a board
+        # two tapped permanents poorer than the one its rivals were cast on
+        # and read as the smaller cast (0.275 beside 1.525, for the same untap
+        # of the same permanent). One board, built one way.
         return game, placed
 
     def only_this_mode(self, caster_index, asked, **kwargs):
@@ -614,8 +903,10 @@ def run(card, index, built, *, forced: bool) -> dict:
         outcome["score"] = None if action is None else round(action.score, 3)
         if action is None:
             return outcome
+        outcome["x_value"] = action.x_value
         game, _ = fresh()
         before = signature(game, card)
+        state_before = table_state(game, card)
         if window is None:
             report = ai_simulator.SimulationReport(
                 games_requested=1, games_completed=0, interaction_count=0,
@@ -658,18 +949,21 @@ def run(card, index, built, *, forced: bool) -> dict:
             zones(game, card) != untouched(card, built) if window == "stack"
             else signature(game, card) != before
         )
+        if outcome["accepted"]:
+            # ...and what the cast was worth, and whether it moved anything
+            # at all — the game's own records counted (`table_state`).
+            settle(game)
+            outcome["moved"] = (
+                outcome["changed"] if window == "stack"
+                else table_state(game, card) != state_before
+            )
+            outcome["swing"] = measure(card, built, game)
     except Exception as exc:  # a crash is a finding, not a pass
         outcome["error"] = f"EXC {type(exc).__name__}: {exc}"
     finally:
         for patch in patches:
             patch.stop()
     return outcome
-
-
-#: Modes whose whole effect is over a board the census leaves empty (or over a
-#: later moment), so a resolution that changed nothing is not a finding.
-def may_change_nothing(card, index) -> bool:
-    return mode_shape(card, index) == "untargeted"
 
 
 def census() -> dict:
@@ -697,17 +991,82 @@ def census() -> dict:
             )
             row["natural"] = run(card, index, built, forced=False)
             row["forced"] = run(card, index, built, forced=True)
+            row["bests"] = bests(card, index, built, row)
     return {"rows": rows}
+
+
+def bests(card, index, built, row) -> dict:
+    """For this mode and every sibling its board leaves worth casting: the
+    most each can be measured to do there (`best_announcement`), or None for
+    a mode the census cannot enumerate (a chain of roles) — which, when it is
+    the row's own, is measured as the forced leg cast it."""
+    x_value = next(
+        (
+            row[leg].get("x_value") for leg in ("natural", "forced")
+            if row[leg].get("x_value") is not None
+        ),
+        2 if "{X}" in (card.mana_cost or "").upper() else None,
+    )
+    found: dict = {}
+    for mode in sorted({index, *built["shadowed_by"]}):
+        best = best_announcement(card, mode, built, x_value)
+        if best is None and mode == index and row["forced"].get("swing") is not None:
+            best = {
+                "swing": row["forced"]["swing"],
+                "moved": bool(row["forced"].get("moved")),
+                "named": "as the policy announces it",
+            }
+        found[mode] = best
+    return found
+
+
+#: Two measures this close are the same measure.
+EPSILON = 0.01
+
+
+def larger(row: dict) -> "str | None":
+    """Why the cast the policy made on this row's board is **not** the larger
+    one, or None when it is: some bullet, at some target the engine's picker
+    offers, measures more than what was cast — or the seat cast nothing while
+    a bullet measured more than nothing."""
+    moving = {
+        mode: best for mode, best in row["bests"].items()
+        if best is not None and best["moved"]
+    }
+    if not moving:
+        return None
+    top_mode = max(moving, key=lambda mode: (moving[mode]["swing"], -mode))
+    top = moving[top_mode]
+    got = row["natural"]
+    if got["proposed"] is None:
+        if top["swing"] > EPSILON:
+            return f"nothing cast; mode {top_mode} measures {top['swing']}"
+        return None
+    if not got.get("accepted") or got.get("swing") is None:
+        return None
+    if got["swing"] + EPSILON < top["swing"]:
+        return (
+            f"cast mode {got['proposed']} for {got['swing']}; mode {top_mode} "
+            f"measures {top['swing']} ({top['named']})"
+        )
+    if not got.get("moved"):
+        return f"cast mode {got['proposed']}, which moved nothing; mode {top_mode} does"
+    return None
 
 
 def findings(result: dict) -> dict:
     """The census read as failures, by leg."""
-    out: dict = {"unbuildable": [], "natural": [], "forced": [], "shadowed": []}
+    out: dict = {
+        "unbuildable": [], "natural": [], "forced": [], "shadowed": [], "smaller": [],
+    }
     for row in result["rows"]:
         tag = f"{row['card']} [{row['mode']}] {row['label'][:48]!r}"
         if "unbuildable" in row:
             out["unbuildable"].append((tag, row["unbuildable"]))
             continue
+        why = larger(row)
+        if why is not None:
+            out["smaller"].append((tag, why))
         for leg in ("natural", "forced"):
             got = row[leg]
             exclusive = leg == "forced" or not row["shadowed_by"]
@@ -723,8 +1082,8 @@ def findings(result: dict) -> dict:
                     problems.append(f"the cast announced {got['announced']}")
                 if not got["accepted"]:
                     problems.append("the cast was refused")
-                elif not got["changed"] and not may_change_nothing(POOL[row["card"]], row["mode"]):
-                    problems.append("the resolution changed nothing")
+                elif not got.get("moved"):
+                    problems.append("the resolution moved nothing")
             if named is not None and not exclusive:
                 strays = [m for m in named if m != row["mode"] and m not in row["shadowed_by"]]
                 if strays:
@@ -732,11 +1091,15 @@ def findings(result: dict) -> dict:
                         f"proposed {named}: {strays} the board does not make worth casting"
                     )
                 elif row["mode"] not in named:
+                    measured = {
+                        m: best and best["swing"] for m, best in row["bests"].items()
+                    }
                     out["shadowed"].append((tag, "; ".join(
                         f"mode {m} proposed ({row['shadowed_by'][m]})" for m in named
-                    ) + f" at {got.get('score')}; forced {row['forced'].get('score')}"))
-            if named is None and not exclusive:
-                problems.append("nothing proposed")
+                    ) + f", measuring {got.get('swing')}; the modes measure {measured}"))
+            # A shadowed board on which nothing is cast is `larger`'s to
+            # judge: holding the card is right when no bullet measures more
+            # than nothing.
             if problems:
                 out[leg].append((tag, "; ".join(problems)))
     return out
@@ -803,51 +1166,51 @@ UNBUILDABLE = {
 }
 
 #: Modes whose own board leaves a sibling worth casting too, and the sibling
-#: the policy takes there: ``(card, mode) -> the modes proposed instead``.
+#: the policy takes there: ``(card, mode) -> (the modes proposed instead,
+#: why)``.
 #:
-#: **This is the policy's valuation, pinned**, not a list of defects: on each
-#: of these boards two bullets are legal and aimed at the side they want, and
-#: the score picks. Most are right or arguable (three damage to a face over a
-#: Giant Growth; three cards over a bounce). Six are the scorer's crude probes
-#: showing through, named in ROADMAP-style rather than hidden:
+#: **Every one of these loses to a bullet that measures at least as much** —
+#: `test_the_cast_made_is_never_the_smaller_one` is what holds that, on the
+#: engine's own casts — and the reason beside each is that measurement in a
+#: line. Two are ties, which printed order breaks.
 #:
-#: * Crosis's Charm bounces a creature it could destroy — the bounce weight
-#:   counts the creature's power, the destroy weight does not;
-#: * Treva's Charm loots rather than destroy an enchantment or exile an
-#:   attacker — "draw" in the bullet's text scores as a card gained;
-#: * Dromar's Charm gains five life at twenty rather than give -2/-2, Hearth
-#:   Charm pumps attackers that are not attacking and Ivory Charm shrinks
-#:   creatures in its own main phase — each a tie at the unread-effect floor,
-#:   which printed order breaks.
+#: This table was 25 entries pinned without reasons, six of them the scorer's
+#: text probes showing through: Crosis's Charm bounced a creature it could
+#: destroy, Treva's Charm looted rather than destroy an enchantment or exile
+#: an attacker ("draw" in a bullet's text scored as a card gained), Dromar's
+#: Charm gained five life at twenty rather than give -2/-2, Hearth Charm
+#: pumped attackers that were not attacking and Ivory Charm shrank creatures
+#: in its own main phase. The policy now measures a cast before it proposes
+#: one (``ai_valuation.rehearse``); those six are gone, and so are Thunderbolt
+#: and Sapphire Charm's two, which were never named and lost the same way.
 #:
-#: A change to a weight moves an entry here, and moving it is the review.
+#: A change to a weight in ``ai_valuation`` moves an entry here, and moving
+#: it is the review.
 SHADOWED = {
-    ("Alabaster Potion", 1): [0],
-    ("Crosis's Charm", 1): [0],
-    ("Darigaaz's Charm", 0): [1],
-    ("Darigaaz's Charm", 2): [1],
-    ("Dromar's Charm", 2): [0],
-    ("Ebony Charm", 1): [0],
-    ("Ebony Charm", 2): [0],
-    ("Energy Bolt", 1): [0],
-    ("Funeral Charm", 1): [0],
-    ("Funeral Charm", 2): [0],
-    ("Healing Salve", 1): [0],
-    ("Hearth Charm", 2): [1],
-    ("Ivory Charm", 1): [0],
-    ("Ivory Charm", 2): [0],
-    ("Parch", 1): [0],
-    ("Pestilent Haze", 1): [0],
-    ("Read the Tides", 1): [0],
-    ("Rith's Charm", 2): [1],
-    ("Sapphire Charm", 1): [0],
-    ("Sapphire Charm", 2): [0],
-    ("Thunderbolt", 1): [0],
-    ("Treva's Charm", 0): [2],
-    ("Treva's Charm", 1): [2],
-    ("Vision Charm", 1): [0],
-    ("Vision Charm", 2): [0],
+    ("Alabaster Potion", 1): ([0], "X life lasts; a shield with no damage coming measures nothing"),
+    ("Darigaaz's Charm", 0): ([1], "three damage kills the 2/2 across the table: a creature against a card back"),
+    ("Darigaaz's Charm", 2): ([1], "three damage lasts; +3/+3 until end of turn is a quarter of itself"),
+    ("Ebony Charm", 1): ([0], "a life drained each way; cards exiled from a graveyard are nothing the standing counts"),
+    ("Ebony Charm", 2): ([0], "a life drained each way against fear for a turn"),
+    ("Energy Bolt", 1): ([0], "X damage to the opponent against X life at twenty"),
+    ("Funeral Charm", 1): ([0], "a card out of the opposing hand against +2/-1 for a turn"),
+    ("Funeral Charm", 2): ([0], "a card out of the opposing hand against swampwalk for a turn"),
+    ("Healing Salve", 1): ([0], "three life lasts; a shield with no damage coming measures nothing"),
+    ("Hope Charm", 0): ([1], "two life against first strike for a turn"),
+    ("Ivory Charm", 0): ([1], "a tap takes the opposing creature's whole body for the turn, -2/-0 its power"),
+    ("Parch", 1): ([0], "a tie: either bullet kills the 1/1, and printed order breaks it"),
+    ("Read the Tides", 1): ([0], "three cards against one creature back in a hand"),
+    ("Rith's Charm", 0): ([1], "three Saprolings against one land"),
+    ("Rith's Charm", 2): ([1], "three Saprolings against a shield with no damage coming"),
+    ("Seedling Charm", 1): ([2], "trample is on the creature now; a regeneration shield with nothing to survive is not"),
+    ("Vision Charm", 1): ([0], "a tie at nothing the standing counts: four cards milled, land types swapped for a turn"),
 }
+
+#: Boards on which the cast the policy made measures **less** than some
+#: bullet, at some target, that the engine's picker offers — or on which it
+#: cast nothing while a bullet measured more than nothing. Each with why it
+#: stands. Empty: on the tree before the policy measured a cast it was 19.
+SMALLER: dict = {}
 
 
 @pytest.fixture(scope="module")
@@ -862,6 +1225,14 @@ def test_the_census_examined_the_pool(result):
     assert counted["modes"] >= 88
     assert counted["boards_built"] >= 87
     assert counted["exclusive_boards"] >= 41
+    # ...and that the measuring leg measured: every board has a best cast to
+    # compare with, and the sibling of every shadowed mode was cast by hand.
+    built = [row for row in result["rows"] if "unbuildable" not in row]
+    assert all(row["bests"].get(row["mode"]) is not None for row in built)
+    measured = sum(
+        1 for row in built for best in row["bests"].values() if best is not None
+    )
+    assert measured >= 135, measured
 
 
 def test_the_modes_with_no_board_are_the_named_ones(result):
@@ -911,7 +1282,36 @@ def test_where_a_sibling_wins_it_is_the_pinned_one(result):
         named = row["natural"]["proposed"]
         if named is not None and row["mode"] not in named:
             shadowed[(row["card"], row["mode"])] = named
-    assert shadowed == SHADOWED
+    assert shadowed == {key: named for key, (named, _why) in SHADOWED.items()}
+    assert all(why for _named, why in SHADOWED.values()), "a pin is a reason"
+
+
+def test_the_cast_made_is_never_the_smaller_one(result):
+    """**Which bullet, and at which target.** On every board the census
+    builds, every bullet worth casting is cast by hand at every target the
+    engine's picker offers it, and each cast is priced with the one
+    definition of "larger" (``ai_valuation.swing_worth`` over each seat's
+    standing, read as the board stood and again once the turn had run out).
+    The cast the policy makes — through the simulator's own executor — must
+    measure as much as the best of them, and must move something if any of
+    them does.
+
+    Validated backwards: on the tree before the policy measured a cast, 19
+    boards fail it, the six named above among them (Crosis's Charm cast for
+    5.0 where its second bullet measures 9.0; Treva's Charm for nothing where
+    its first measures 4.0 and its second 9.0; Hearth Charm "cast mode [1],
+    which moved nothing").
+    """
+    found = dict(findings(result)["smaller"])
+    labels = {(row["card"], row["mode"]): row["label"] for row in result["rows"]}
+    pinned = {
+        f"{card} [{mode}] {labels[(card, mode)][:48]!r}": why
+        for (card, mode), why in SMALLER.items()
+    }
+    assert set(found) == set(pinned), "\n".join(
+        f"{tag}: {what}" for tag, what in sorted(found.items())
+        if tag not in pinned
+    )
 
 
 if __name__ == "__main__":
@@ -928,10 +1328,12 @@ if __name__ == "__main__":
             f"shadow={row['shadowed_by']} | natural: mode={natural['proposed']} score={natural.get('score')} "
             f"ann={natural['announced']} ok={natural['accepted']} chg={natural['changed']} err={natural['error']} "
             f"| forced: mode={forced['proposed']} score={forced.get('score')} ann={forced['announced']} "
-            f"ok={forced['accepted']} chg={forced['changed']} err={forced['error']}"
+            f"ok={forced['accepted']} chg={forced['changed']} err={forced['error']} "
+            f"| measured: natural={natural.get('swing')} forced={forced.get('swing')} "
+            f"bests={ {m: b and (b['swing'], b['moved']) for m, b in row['bests'].items()} }"
         )
     found = findings(result)
-    for leg in ("unbuildable", "natural", "forced", "shadowed"):
+    for leg in ("unbuildable", "natural", "forced", "shadowed", "smaller"):
         print(f"== {leg}: {len(found[leg])}")
         for tag, what in found[leg]:
             print(f"   {tag}: {what}")

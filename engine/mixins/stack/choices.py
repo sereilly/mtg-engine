@@ -8850,8 +8850,22 @@ class PendingChoicesMixin:
         It was plain printed order, which is a policy nobody chose for the one
         card in the pool where the alternatives are not alike — see
         ``_first_unpriced_mode``.
+
+        **A modal triggered ability's mode is weighed** (CR 700.2b: Relic
+        Bind, Elder Gargaroth, Trufflesnout — the prompts that carry the
+        ability, ``_trigger_item``). The stated answer above is what
+        ``ai_policy.choose_trigger_mode`` starts from and falls back to; where
+        another offered mode is measured to do more, that one is taken. The
+        valuation is the policy's and so are its weights; that it is consulted
+        here is the registry's decision, as it is for every default that asks
+        the policy something.
         """
-        return self._resolve_mode_choice(choice, self._first_unpriced_mode(choice))
+        from ...ai_policy import choose_trigger_mode
+
+        stated = self._first_unpriced_mode(choice)
+        return self._resolve_mode_choice(
+            choice, choose_trigger_mode(self, choice, stated)
+        )
 
     def _apply_optional_pay_decline(self, player_index: int, entry: dict) -> None:
         """The consequence of NOT paying an optional-pay prompt. Plain "may pay"

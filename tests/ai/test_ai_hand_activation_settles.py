@@ -80,7 +80,9 @@ def test_no_urzas_block_simulation_leaves_a_cycle_on_the_stack(code):
     )
 
     cycled = sum("from hand" in line for line in report.log_lines)
-    assert cycled >= 3, f"only {cycled} hand activation(s): the run did not exercise the keyword"
+    # Two, where it was three: the seed's run moved when the cast policy began
+    # measuring a cast before proposing it, and Urza's Destiny now cycles twice.
+    assert cycled >= 2, f"only {cycled} hand activation(s): the run did not exercise the keyword"
     assert report.steps_left_owing == Counter(), dict(report.steps_left_owing)
 
 

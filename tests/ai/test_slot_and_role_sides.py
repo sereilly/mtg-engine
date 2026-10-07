@@ -351,7 +351,9 @@ def test_w2g5_an_unkicked_roles_spell_is_aimed_like_the_one_target_spell_it_is(p
     before = _w2g5_names(game, 0)
     _w2g5_cast(game, action)
     assert _w2g5_names(game, 0) == before
-    assert "Grizzly Bears" in [c.name for c in game.players[1].hand]
+    # The dearest thing the bounce may name, where it was the first one in
+    # battlefield order (Grizzly Bears): `ai_policy._best_target`.
+    assert "Serra Angel" in [c.name for c in game.players[1].hand]
 
 
 def test_w2g5_a_denial_with_nothing_opposing_to_name_is_not_cast(pool):

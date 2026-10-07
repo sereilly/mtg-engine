@@ -29,6 +29,12 @@ Before: 227 of 1,414 pairs declined, over 51 ``(card, mode)``s — 66 of them
 over fifteen spells that print no mode. After: 29, over the three cards named
 in ``DECLINED``, each one declined on purpose.
 
+**A pair is now also one the engine does not measure as a loss** (`acts_on`):
+1,395 of them, 9 declined over the two cards in ``DECLINED``. The 19 pairs
+that left were casts this sweep had been asking for and should not have — a
+power/toughness switch on the caster's own 0/4 Wall, +1/-1 on its own 1/1 —
+which the policy made until it measured a cast before proposing one.
+
 Run it as a module (``python -m tests.ai.test_ai_one_target_cast_census``) for
 the table.
 """
@@ -41,7 +47,8 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_policy import choose_cast_action
-from engine.ai_valuation import instruction_target_side
+from engine.ai_valuation import (CARD_WORTH, instruction_target_side,
+                                 standing_swing, standings, swing_worth)
 from engine.auras import attach_aura
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import compilation_units
@@ -49,6 +56,7 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle
 from engine.targeting import (announced_mode_instructions, derive_cast_spec,
                               spec_roles)
+from tests.ai import test_ai_mode_chooser_census as modes
 from tests.helpers import _mk_card, resolve_stack
 
 OBJECT_KINDS = {"creature", "artifact", "land", "permanent", "enchantment", "planeswalker"}
@@ -110,6 +118,10 @@ _BOOKKEEPING = frozenset({
 })
 
 
+#: How a field nothing has used reads once something has emptied it.
+_EMPTY_READINGS = frozenset({"None", "False", "0", "''", "[]", "()", "{}", "set()"})
+
+
 def signature(game, spell) -> str:
     """Everything a resolution could have changed, with the spell's own trip
     from hand to graveyard taken out."""
@@ -121,9 +133,13 @@ def signature(game, spell) -> str:
             for pile in (hand, yard):
                 if spell.name in pile:
                     pile.remove(spell.name)
+        # Less the bookkeeping, and less every field that reads as empty: a
+        # record the engine creates on first use (`_land_mana_swaps`, made
+        # by the tap planner) is otherwise a "change" every cast makes, and
+        # a resolution that did nothing read as one that did.
         rest = {
             key: value for key, value in vars(player).items()
-            if key not in _BOOKKEEPING
+            if key not in _BOOKKEEPING and repr(value) not in _EMPTY_READINGS
         }
         parts.append((hand, yard, len(player.library), repr(sorted(rest.items(), key=lambda kv: kv[0]))))
         parts.append(sorted(
@@ -134,13 +150,39 @@ def signature(game, spell) -> str:
     return repr(parts)
 
 
+#: A cast is a loss when it leaves its caster this much worse off — the
+#: idle-cast census's line, a hair under the policy's own floor.
+LOSS = -0.51
+
+_UNTOUCHED: dict = {}
+
+
+def untouched(seat, key) -> tuple:
+    """Each seat's standing on this bait's board once the turn has run out
+    with nothing cast."""
+    if (seat, key) not in _UNTOUCHED:
+        game, _bait = board(POOL["Forest"], seat, key)
+        modes.run_out(game)
+        _UNTOUCHED[(seat, key)] = standings(game, now=False)
+    return _UNTOUCHED[(seat, key)]
+
+
 def acts_on(card, mode, seat, key) -> bool:
     """Whether *card* (in *mode*), cast by hand at the lone bait, resolves
-    doing anything — the engine's answer, with no policy in it. "Destroy
-    target permanent if it's blue" may name any permanent and touches only a
-    blue one; a pair the spell does nothing to is not one a seat should cast."""
+    doing anything **its caster is not the worse for** — the engine's answer,
+    with no policy in it. "Destroy target permanent if it's blue" may name any
+    permanent and touches only a blue one; a pair the spell does nothing to is
+    not one a seat should cast.
+
+    Nor is one the engine measures as a loss (``ai_valuation``'s standing,
+    read before the cast and once the turn has run out): "Switch target
+    creature's power and toughness" is a gift the caster aims at its own
+    board, and aimed at its own 0/4 Wall it is a dead Wall. This sweep counted
+    that pair as one to cast until the policy measured a cast for itself.
+    """
     game, bait = board(card, seat, key)
     before = signature(game, card)
+    before_now = standings(game)
     x_value = 2 if "{X}" in (card.mana_cost or "").upper() else None
     try:
         result = game.queue_from_hand(
@@ -149,10 +191,16 @@ def acts_on(card, mode, seat, key) -> bool:
         )
         if not result.supported:
             return False
-        resolve_stack(game)
+        modes.settle(game)
+        if signature(game, card) == before:
+            return False
+        spent = CARD_WORTH * (0 if any(held is card for held in game.players[ME].hand) else 1)
+        now = standing_swing(before_now, standings(game), ME) + spent
+        modes.run_out(game)
+        lasting = standing_swing(untouched(seat, key), standings(game, now=False), ME) + spent
     except Exception:
         return False
-    return signature(game, card) != before
+    return swing_worth(now, lasting) >= LOSS
 
 
 def steps_side(instructions):
@@ -240,9 +288,16 @@ def census():
 #: at the caster's **own** permanent (`ai_valuation.spell_denies_its_own
 #: _target`) is a price or a rescue this policy has no way to time.
 DECLINED = {
-    "Energy Tap": "taps the caster's own creature",
-    "Liberate": "exiles the caster's own creature",
+    # At a permanent that cost nothing, where the return measures as nothing
+    # either way. Energy Tap and Liberate, which stood beside it, are no
+    # longer pairs at all: tapping or exiling the caster's own creature is a
+    # loss by the engine's measure (`acts_on`), not a cast to ask for.
     "Rescue": "returns the caster's own permanent",
+    # "As an additional cost, pay X life. Target creature gets +X/+0 until
+    # end of turn." Swept at an X of nought, where it costs nothing and does
+    # nothing; the policy sizes a real X, and a price in life for a pump that
+    # ends with the turn measures as a loss at every one (`_worth_proposing`).
+    "Hatred": "pays life for a pump that is gone by the end of the turn",
 }
 
 

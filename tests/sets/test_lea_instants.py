@@ -48,7 +48,10 @@ def test_choose_cast_action_targets_self_for_ancestral_recall(all_cards):
         library=[island, island, island, island, island],
         mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0},
     )
-    p2 = PlayerState(name="P2")
+    # ...and the opponent a library of their own: with none, three cards
+    # drawn from it is the game (CR 704.5b), and the opponent is the right
+    # player to name.
+    p2 = PlayerState(name="P2", library=[island, island, island, island, island])
     game = Game(players=[p1, p2], enforce_mana_costs=True)
 
     action = choose_cast_action(game, 0)
@@ -56,6 +59,18 @@ def test_choose_cast_action_targets_self_for_ancestral_recall(all_cards):
     assert action is not None
     assert action.card_name == "Ancestral Recall"
     assert action.target_player_index == 0
+
+    decked = Game(
+        players=[
+            PlayerState(
+                name="P1", hand=[recall], library=[island] * 5,
+                mana_pool={"W": 0, "U": 1, "B": 0, "R": 0, "G": 0, "C": 0},
+            ),
+            PlayerState(name="P2"),
+        ],
+        enforce_mana_costs=True,
+    )
+    assert choose_cast_action(decked, 0).target_player_index == 1
 
 
 def test_choose_cast_action_finds_lethal_lightning_bolt(all_cards):

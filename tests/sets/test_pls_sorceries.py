@@ -616,7 +616,15 @@ def test_w1g1_the_ai_casts_diabolic_intent_without_naming_its_payer_a_target(set
     game.players[0].mana_pool.clear()
     for _ in range(2):
         _w1g1_put(game, 0, lea["Swamp"])
-    _w1g1_put(game, 0, lea["Grizzly Bears"])
+    # A creature worth giving up to turn this card into another: a 1/1
+    # token. With Grizzly Bears as the only one to sacrifice the cast measures
+    # as a loss — a card and a creature for one card, whichever card it is —
+    # and is held, which is a question about the trade and not the one this
+    # test asks.
+    from engine.tokens import make_token_card
+
+    fodder = _w1g1_put(game, 0, make_token_card("Fodder", 1, 1, "Token Creature - Goblin"))
+    fodder.metadata["is_token"] = True
     game.active_player_index = 0
     game.current_phase = "main"
 

@@ -2674,9 +2674,20 @@ def choose_color(game: Game, instruction: OracleInstruction, context: OracleExec
                 f"{card_name}: {game.players[seat].name} chose {offered[0]}"
             )
             return True, "resolved"
-    from ..ai_valuation import threatening_color
+    from ..ai_valuation import color_most_worth_sweeping, threatening_color
 
-    default_color = None if offered is not None else threatening_color(game, seat)
+    default_color = None
+    if offered is None:
+        # "Destroy all enchantments **of the color of your choice**" (Root
+        # Greevil; Wash Out; Dromar, the Banisher): the colour is for the
+        # sweep behind this step, so the default is the colour that sweep is
+        # worth most in — what it would take from the other seats, less what
+        # it would take from this one. The board-wide count below named the
+        # colour of an opposing army and destroyed no enchantment.
+        source = context.source_permanent
+        default_color = color_most_worth_sweeping(
+            game, seat, getattr(source, "effective_card", None) or context.card
+        ) or threatening_color(game, seat)
     if offered is not None:
         # The first colour on offer, in WUBRG order: a deterministic member of
         # the set, where the unnarrowed default below is a colour the

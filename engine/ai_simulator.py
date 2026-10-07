@@ -560,8 +560,13 @@ def _assert_expected(
     after: tuple[PlayerState, PlayerState],
     caster_index: int,
     target_index: int,
+    named_a_permanent: bool = False,
 ) -> str | None:
     """What each card of the decklist above is expected to have done.
+
+    *named_a_permanent* is whether the cast named an object rather than a
+    seat. "Any target" is a player **or** a permanent, and the Bolt's check
+    below is about the player: aimed at a creature it deals that player none.
 
     **These card names stay.** The engine's standing rule is that names live only
     in ``card_hooks.py``, and ``ai_policy``'s valuations were derived out for
@@ -597,7 +602,10 @@ def _assert_expected(
         base_damage = 3
         if before_target.combat_damage_cap_one_charges > 0 and base_damage > 1:
             base_damage = 1
-        expected_damage = max(0, base_damage - before_target.damage_prevention_pool)
+        expected_damage = (
+            0 if named_a_permanent
+            else max(0, base_damage - before_target.damage_prevention_pool)
+        )
         actual_damage = (
             after_target.damage_taken_this_turn - before_target.damage_taken_this_turn
         )
@@ -611,7 +619,7 @@ def _assert_expected(
         if drawn != min(3, len(before_target.library)):
             return "Ancestral Recall did not draw expected cards"
 
-    if card.name == "Healing Salve":
+    if card.name == "Healing Salve" and not named_a_permanent:
         life_gain = after_target.life_gained_this_turn - before_target.life_gained_this_turn
         prevention_gain = after_target.damage_prevention_pool - before_target.damage_prevention_pool
         if life_gain < 3 and prevention_gain != 3:
@@ -862,6 +870,7 @@ def _play_one_cast(
         return False
     expectation_error = _assert_expected(
         card_to_cast, before, after, active, cast_action.target_player_index,
+        named_a_permanent=bool(cast_action.target_permanent_ids),
     )
     if expectation_error:
         report.issues.append(InteractionIssue(game_index, turn, expectation_error))

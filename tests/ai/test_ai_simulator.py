@@ -7,6 +7,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.ai_simulator import build_limited_deck, run_ai_simulation
+from engine.ai_valuation import rehearsing
 from engine.models import Permanent
 from tests.helpers import LEA_PATH
 
@@ -415,6 +416,11 @@ def test_the_simulator_plays_an_ending_phase_and_until_end_of_turn_ends(
         return original_end(self, *args, **kwargs)
 
     def cleanup(self, *args, **kwargs):
+        # A step taken on a scratch copy of the game — the cast policy
+        # rehearsing a spell (`ai_valuation.rehearse`) — is not a step of the
+        # simulated game. The spy is on the class, so it sees both.
+        if rehearsing():
+            return original_cleanup(self, *args, **kwargs)
         seen["cleanups"] += 1
         if _w2g3_until_eot_state(self):
             seen["cleanups_with_something_to_end"] += 1
@@ -524,6 +530,10 @@ def _w3g4_paid_run():
     original = Game.cast_from_hand
 
     def cast(self, seat, name, *args, **kwargs):
+        # Not a cast of the simulated game: the policy rehearsing one on a
+        # scratch copy (`ai_valuation.rehearse`), where mana is not asked for.
+        if rehearsing():
+            return original(self, seat, name, *args, **kwargs)
         player = self.players[seat]
         card = next((c for c in player.hand if c.name == name), None)
         is_land = card is not None and card_has_type(card, "land")

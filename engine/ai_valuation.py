@@ -31,6 +31,14 @@ weights stay in ``ai_policy``. Heuristics are tuning, and a tuning constant is
 not a correctness claim — but *which cards a constant applies to* is, and that
 is what lives here.
 
+**One measure does live here**, at the bottom of the module: what a seat's
+position is worth (``seat_standing``, ``permanent_worth``) and what one cast
+does to it, found by carrying the cast out on a scratch copy of the game
+(``rehearse``). It is here and not beside the weights because two readers have
+to agree on it — the cast policy, which predicts with it, and the mode census,
+which measures with it — and because it is the same move as everything above:
+the compiled program read for what it does, this time by running it.
+
 The same split is why ``offered_action_is_a_payment`` is here rather than in
 ``engine/mixins/stack/choices.py`` beside the default that reads it. "This
 offer's price comes out of the taker's own permanents, hand, library or life"
@@ -156,10 +164,10 @@ def spell_text(card: CardDefinition) -> str:
     """The lower-cased words *card* resolves as: the bullet being weighed for
     a modal spell (:func:`considering_mode`), its whole text otherwise.
 
-    For the weights in ``ai_policy`` that are still text probes ("draw",
-    "gain … life", "target opponent"). Asked of the whole card, a Charm
-    printing "gains" in one bullet and "life" in another scored as a life-gain
-    spell in every mode.
+    For the one weight in ``ai_policy`` that still probes a text — the
+    tutor's reading of printed damage, `_extract_damage`. The cast scorer's
+    probes ("draw", "gain … life", "target opponent"), which this was written
+    for, are gone: a cast is scored by what a rehearsal of it measures.
     """
     mode_index = mode_considered(card)
     if mode_index is not None:
@@ -210,30 +218,6 @@ def cards_drawn_by_target(card: CardDefinition, x_value: int | None = None) -> i
     if str(amount).lower() == "x":
         return x_value
     return None
-
-
-def spell_makes_its_target_lose_life(card: CardDefinition) -> bool:
-    """Whether resolving *card* makes its **target player** lose life.
-
-    "Target player loses 4 life and you gain 4 life." (Soul Feast.) The spell
-    scorer's text probes saw "gain … life" and nothing that read "loses", so the
-    caster's own seat won the score and the AI drained itself — a wash on its
-    own life total and a card spent. Read off the compiled program, wrappers
-    opened (Rhystic Syphon's loss sits on a toll's declined branch), and only
-    where the loss lands on the target rather than on a named seat.
-    """
-    def walk(instructions) -> bool:
-        for instruction in instructions:
-            payload = getattr(instruction, "payload", None) or {}
-            if instruction.kind == "target_loses_life" and payload.get("recipient") is None:
-                return True
-            for key in ("steps", "then", "else", "action", "otherwise", "unpaid"):
-                nested = payload.get(key)
-                if isinstance(nested, (list, tuple)) and walk(nested):
-                    return True
-        return False
-
-    return walk(_spell_instructions(card))
 
 
 def cards_drawn_by_controller(instruction: OracleInstruction) -> int | None:
@@ -590,6 +574,44 @@ def spell_target_side(card: CardDefinition) -> str | None:
     if "you" in sides:
         return "you"
     return None
+
+
+#: Kinds that are a gift to the **player** they name and whose category says
+#: otherwise: an untap of everything a player controls is filed under
+#: ``tapping``, which reads as a denial. Held to live handler kinds by
+#: ``tests/ai/test_ai_rehearsed_casts.py``.
+_SEAT_GIFT_KINDS = frozenset({"untap_all_matching", "untap_up_to_matching"})
+
+
+def spell_seat_side(card: CardDefinition) -> str:
+    """Whose seat a spell that names a **player** is aimed at when nothing
+    measures a difference between them — "you" or "opponent".
+
+    The tie-break under ``ai_policy._choose_target_for_spell``, which weighs
+    each seat by rehearsing the cast at it. Most of what such a spell does
+    shows in a standing (cards drawn or discarded, life, damage); what does
+    not is nearly always done *to* somebody — a hand looked at, a library
+    milled, lands tapped, a step skipped, a turn's casts forbidden — so the
+    answer is the opponent, unless a step is a gift by its family (a shield,
+    a regeneration) or by its kind (``_SEAT_GIFT_KINDS``). Tied at the
+    caster's own seat, "tap all lands target player controls" tapped the
+    caster's.
+    """
+    def walk(instructions):
+        for instruction in instructions:
+            yield instruction
+            for key in ("steps", "then", "else", "action", "otherwise", "unpaid"):
+                nested = (instruction.payload or {}).get(key)
+                if isinstance(nested, (list, tuple)):
+                    yield from walk(nested)
+
+    for step in walk(_spell_instructions(card)):
+        if step.kind in _SEAT_GIFT_KINDS or (
+            step.kind not in _SEAT_DENIAL_KINDS
+            and activation_target_side(step) == "you"
+        ):
+            return "you"
+    return "opponent"
 
 
 def entry_trigger_target_side(card: CardDefinition) -> str | None:
@@ -1247,6 +1269,81 @@ def threatening_color(game, seat: int) -> str | None:
             if color in colors:
                 return color
     return None
+
+
+#: Board sweeps that read "the chosen color" off the resolution's scratchpad,
+#: and where each keeps the noun phrase it sweeps: ``destroy_all_matching``
+#: carries it as its own payload keys, ``return_all_matching`` under
+#: ``filter``. Held to live handler kinds by ``tests/ai/test_ai_valuation.py``.
+_COLOR_SWEEP_KINDS = {"destroy_all_matching": None, "return_all_matching": "filter"}
+#: Payload keys of a sweep that are not part of the noun phrase.
+_SWEEP_RIDERS = frozenset({"color_filter_from", "bypass_regeneration", "targets"})
+
+
+def chosen_color_sweeps(card: CardDefinition) -> tuple[dict, ...]:
+    """The noun phrase of every board sweep on *card* that is narrowed by "the
+    color of your choice" — "Destroy all **enchantments** of the color of your
+    choice" (Root Greevil), "Return all **permanents** of the color of your
+    choice to their owners' hands" (Wash Out), "…all **creatures** of that
+    color" (Dromar, the Banisher) — as the filter the sweep's own matcher
+    reads, less the colour.
+
+    What the choice is *for*, read off the step that spends it. The default
+    colour was the one the opponents held most of among every permanent, so
+    Root Greevil named the colour of an opposing army and destroyed no
+    enchantment.
+    """
+    from .oracle_types import CHOSEN_COLOR_THIS_WAY
+
+    sweeps: list[dict] = []
+    for step in _walk_program(compile_card_oracle(card)):
+        payload = step.payload or {}
+        if (
+            step.kind not in _COLOR_SWEEP_KINDS
+            or payload.get("color_filter_from") != CHOSEN_COLOR_THIS_WAY
+        ):
+            continue
+        nested = _COLOR_SWEEP_KINDS[step.kind]
+        described = dict((payload.get(nested) if nested else {
+            key: value for key, value in payload.items() if key not in _SWEEP_RIDERS
+        }) or {})
+        # Once each: a permanent's activated ability is on the program twice,
+        # as the ability and mirrored into ``instructions``.
+        if described not in sweeps:
+            sweeps.append(described)
+    return tuple(sweeps)
+
+
+def color_most_worth_sweeping(game, seat: int, card: CardDefinition) -> str | None:
+    """The colour *seat* should name for *card*'s "…of the color of your
+    choice" sweep (:func:`chosen_color_sweeps`): the one whose sweep takes
+    most from the other seats and least from its own, by
+    :func:`permanent_worth` — or None when the card prints no such sweep, or
+    no colour's sweep is worth more than nothing.
+
+    Through ``subject_matches``, the matcher the sweep itself asks, with the
+    colour read through CR 613's layer 5.
+    """
+    from .subject_filters import subject_matches
+
+    sweeps = chosen_color_sweeps(card)
+    if not sweeps:
+        return None
+    best, best_worth = None, 0.0
+    for color in ("W", "U", "B", "R", "G"):
+        worth = 0.0
+        for controller, permanent in game.permanents_with_controller():
+            if any(
+                subject_matches(
+                    game, permanent, {**described, "color_filter": color},
+                    observer=seat,
+                )
+                for described in sweeps
+            ):
+                worth += permanent_worth(permanent) * (-1.0 if controller == seat else 1.0)
+        if worth > best_worth + 1e-9:
+            best, best_worth = color, worth
+    return best
 
 
 @dataclass(frozen=True)
@@ -2670,6 +2767,743 @@ def cast_offers(card: CardDefinition) -> tuple[CastOffer, ...]:
     return tuple(offers)
 
 
+# --- The measure: what a seat's position is worth -----------------------------
+#
+# **"Larger" is said here, once.** Which of two castable bullets takes the
+# larger thing off the opposing board or adds the larger thing to its caster's
+# own, which of two legal targets is the better one, whether a cast does
+# anything at all — each is a comparison of two positions, and a comparison
+# needs one unit. The unit is the life-equivalent the toll prices already use
+# (``ai_policy._toll_loss_price``): a point of life near twenty is worth one.
+# (Those prices are an older list in the same unit and put a card at two; the
+# two lists answer different questions and nothing here reconciles them.)
+#
+# Two readers ask it, and that is why it lives in this module rather than
+# beside the weights in ``ai_policy``: the policy, which *rehearses* a cast
+# (:func:`rehearse`) and prices what it changed; and the mode census
+# (``tests/ai/test_ai_mode_chooser_census.py``), which makes the cast for real
+# on a board of its own and prices what that changed. Two prices from two
+# functions would be a census asking the scorer whether the scorer is right.
+#
+# What it reads is the board as the layers compute it — never a card's text.
+
+#: A card in hand: about four life. The old cast weight said the same thing in
+#: another place ("worth exactly 4.0 per net card", `_score_cast`).
+CARD_WORTH = 4.0
+#: What any permanent is worth just by being one, before its stats and its
+#: cost are added: the card it is. **Never less than that card in a hand**,
+#: or returning a permanent to its owner's hand would measure as a gift to
+#: its owner — which is what a floor of two and a half made of every bounce
+#: aimed at something that had cost nothing. A Mox is worth a card.
+PERMANENT_WORTH = CARD_WORTH
+#: The same floor for a token, which is not a card: nothing was spent from a
+#: hand to make it and nothing comes back if it leaves (CR 111.7). So a 2/2
+#: destroyed outweighs a 2/2 token made, by the card that was under it.
+TOKEN_WORTH = 1.5
+#: A land on top of that: the card and the land drop it took.
+LAND_WORTH = 1.5
+#: How many lands a seat is counted as needing, and what one beyond them is
+#: worth: half a life. The same six ``ai_policy.BUYBACK_PERMANENTS_KEPT``
+#: keeps before a seat pays a buyback in lands — a seventh land is the one a
+#: seat gives up for a card, and the one a Stone Rain is wasted on.
+LANDS_WORTH_KEEPING = 6
+SPARE_LAND_WORTH = 0.5
+#: A creature's body, per point.
+POWER_WORTH = 1.4
+TOUGHNESS_WORTH = 1.1
+#: An evasion ability, per point of the power it carries past a blocker.
+EVASION_WORTH = 0.5
+#: Any other combat keyword, flat.
+COMBAT_KEYWORD_WORTH = 1.0
+#: How much of a creature's body is missing while it is tapped: all of it —
+#: it neither attacks nor blocks until it untaps, which is what a body is
+#: for. A reading of the board **now** only; the card under it is still
+#: there, and so is whatever it does without tapping.
+TAPPED_SHARE = 1.0
+#: How much a change that is gone by the end of the turn counts for against
+#: one that is still there: a +3/+3 until end of turn is a quarter of a
+#: +3/+3 counter, a creature phased out a quarter of a creature destroyed.
+TEMPORARY_SHARE = 0.25
+#: A seat that has lost, or will at its next draw.
+LOST = 1000.0
+
+_EVASION_KEYWORDS = frozenset({
+    "flying", "fear", "shadow", "horsemanship", "menace", "landwalk",
+    "swampwalk", "forestwalk", "islandwalk", "mountainwalk", "plainswalk",
+    "desertwalk",
+})
+_COMBAT_KEYWORDS = frozenset({
+    "first strike", "double strike", "trample", "vigilance", "lifelink",
+    "deathtouch", "indestructible", "reach", "protection", "hexproof",
+    "shroud", "banding", "flanking", "rampage",
+})
+
+#: Life is worth more the less of it there is: ``(up to this total, each
+#: point)``, and the last rate for everything above the last tier. Three
+#: damage is three at twenty life and six at five; five life gained at twenty
+#: is two and a half, which is why it loses to a dead creature.
+_LIFE_TIERS = ((5, 2.0), (10, 1.5), (20, 1.0))
+_LIFE_ABOVE = 0.5
+
+
+def life_worth(life: int) -> float:
+    """What a life total is worth: concave, and ``-LOST`` at zero or less."""
+    if life <= 0:
+        return -LOST
+    worth, floor = 0.0, 0
+    for ceiling, rate in _LIFE_TIERS:
+        if life <= floor:
+            break
+        worth += (min(life, ceiling) - floor) * rate
+        floor = ceiling
+    if life > floor:
+        worth += (life - floor) * _LIFE_ABOVE
+    return worth
+
+
+def permanent_worth(permanent, *, now: bool = True) -> float:
+    """What *permanent* is worth to whoever controls it.
+
+    The floor every permanent has, what it cost, and for a creature its body
+    and its keywords — all read through CR 613's accessors, so a creature
+    under a +3/+3 is worth the 5/5 it currently is and one that lost flying
+    is worth what is left.
+
+    *now* is the board as it stands this instant: a tapped creature counts
+    for less (``TAPPED_SHARE``). ``now=False`` is the reading for what will
+    still be true once the turn's temporary effects are over, where a tap is
+    not a difference.
+    """
+    from .layer_bridge import computed_abilities
+
+    # What it cost, read as CR 613 reads it: a Clone is worth the mana value
+    # of what it copies (CR 707.2).
+    worth = (
+        TOKEN_WORTH if permanent.metadata.get("is_token") else PERMANENT_WORTH
+    ) + float(permanent.effective_card.cmc or 0)
+    if permanent.has_type("land"):
+        worth += LAND_WORTH
+    if not permanent.is_creature:
+        return worth
+    power = max(0, permanent.effective_power)
+    body = power * POWER_WORTH + max(0, permanent.effective_toughness) * TOUGHNESS_WORTH
+    abilities = computed_abilities(permanent)
+    body += power * EVASION_WORTH * len(_EVASION_KEYWORDS & abilities)
+    body += COMBAT_KEYWORD_WORTH * len(_COMBAT_KEYWORDS & abilities)
+    if now and permanent.tapped and not permanent.attacking:
+        # An attacker is tapped because it is fighting: its body is in use,
+        # not missing.
+        body *= 1.0 - TAPPED_SHARE
+    return worth + body
+
+
+def seat_standing(game, seat: int, *, now: bool = True) -> float:
+    """What *seat*'s position is worth: its life, the cards in its hand and
+    the permanents it controls (:func:`permanent_worth`).
+
+    A seat that has lost is ``-LOST``, and so — less by half, so that a real
+    loss still ranks below it — is one with no library left to draw from
+    (CR 704.5b on its next draw). ``now=False`` also counts what has phased
+    out: CR 702.26 brings it back.
+    """
+    player = game.players[seat]
+    if player.lost or player.life <= 0:
+        return -LOST
+    worth = life_worth(player.life) + CARD_WORTH * len(player.hand)
+    if not player.library:
+        worth -= LOST / 2
+    lands = 0
+    for permanent in game.controlled_by(seat):
+        worth += permanent_worth(permanent, now=now)
+        lands += bool(permanent.has_type("land"))
+    if not now:
+        for permanent in player.phased_out:
+            worth += permanent_worth(permanent, now=False)
+    # Each land beyond the ones a seat needs is worth `SPARE_LAND_WORTH`, not
+    # a card and a land drop.
+    worth -= max(0, lands - LANDS_WORTH_KEEPING) * (
+        PERMANENT_WORTH + LAND_WORTH - SPARE_LAND_WORTH
+    )
+    return worth
+
+
+def standing_swing(before: tuple, after: tuple, seat: int) -> float:
+    """How far *seat* moved against the rest of the table between two
+    readings (one standing per seat): its own change less every other
+    seat's."""
+    return sum(
+        (after[index] - before[index]) * (1.0 if index == seat else -1.0)
+        for index in range(len(before))
+    )
+
+
+def swing_worth(now: float, lasting: float) -> float:
+    """One number for a change measured twice — as the board stood right
+    after it (*now*) and with the turn's temporary effects over (*lasting*).
+
+    What lasts counts in full; what is there now and gone by then counts for
+    ``TEMPORARY_SHARE`` of itself. **This is what "larger" means**, for the
+    policy choosing between two casts and for the census judging the choice.
+    """
+    return lasting + TEMPORARY_SHARE * (now - lasting)
+
+
+def standings(game, *, now: bool = True) -> tuple:
+    """:func:`seat_standing` for every seat, in seat order."""
+    return tuple(
+        seat_standing(game, seat, now=now) for seat in range(len(game.players))
+    )
+
+
+# --- Rehearsal: what a cast would do, asked of the engine ---------------------
+
+#: What every cast changes whatever it does — the zones the spell itself moves
+#: through (read separately), the mana that paid for it, the turn's count of
+#: spells. Left in, a resolution that did nothing still reads as a change.
+#: Mana the spell *makes* is read where it can be told from mana the spell
+#: cost: across its resolution (:func:`_rehearse`).
+_PLAYER_BOOKKEEPING = frozenset({
+    "hand", "graveyard", "library", "mana_pool", "battlefield",
+    "spells_cast_this_turn",
+})
+#: The same for the game's own fields: the table itself (read separately),
+#: the log, the stack and who has priority, and the per-turn ledgers a cast
+#: writes whether or not it does anything.
+_GAME_BOOKKEEPING = frozenset({
+    "players", "log", "stack", "priority_player_index", "priority_pass_count",
+    "prompt_driver", "interactive_seats", "enforce_mana_costs",
+    "resolving_seats", "resolving_stack_item", "pending_choices",
+    "current_phase", "current_turn_phase", "current_step",
+})
+
+_REHEARSING: ContextVar[bool] = ContextVar("ai_rehearsing", default=False)
+_DELIBERATION: ContextVar["dict | None"] = ContextVar("ai_deliberation", default=None)
+
+#: How many passes the rehearsal gives a stack to empty and a combat to end.
+_REHEARSAL_PASSES = 8
+
+
+@dataclass(frozen=True)
+class Rehearsal:
+    """What one cast did, carried out on a scratch copy of the game.
+
+    ``accepted``
+        the engine took the cast (False: it was refused, and ``refusal`` says
+        why — a cast this policy must not propose);
+    ``changed``
+        the resolution changed anything at all on the table or in the turn's
+        records, beyond the spell's own trip from hand to graveyard;
+    ``now`` / ``lasting``
+        the caster's :func:`standing_swing` against the same table with
+        nothing cast — as the board stood right after the resolution, and
+        with the turn's temporary effects over;
+    ``swing``
+        :func:`swing_worth` of the two.
+    """
+
+    accepted: bool
+    changed: bool = False
+    now: float = 0.0
+    lasting: float = 0.0
+    refusal: str = ""
+
+    @property
+    def swing(self) -> float:
+        return swing_worth(self.now, self.lasting)
+
+
+def rehearsing() -> bool:
+    """Whether the code asking is running **inside** a rehearsal — on a
+    scratch copy whose every prompt is being answered by default. A chooser
+    reached from there (a default that asks the policy) must not rehearse
+    again."""
+    return _REHEARSING.get()
+
+
+@contextmanager
+def deliberating():
+    """One decision's worth of rehearsals.
+
+    Every candidate a chooser weighs is measured against the same table with
+    nothing cast, and that reading costs a copy of the game — so it is taken
+    once per decision and kept for the length of this block. Outside one,
+    each rehearsal takes its own.
+    """
+    if _DELIBERATION.get() is not None:
+        yield
+        return
+    token = _DELIBERATION.set({})
+    try:
+        yield
+    finally:
+        _DELIBERATION.reset(token)
+
+
+def _every_card(game):
+    """Every card object a zone of *game* holds. A `CardDefinition` is
+    immutable and shared — a deck is one object per printing, repeated — so a
+    scratch copy shares them too rather than copying a library card by card."""
+    for player in game.players:
+        for zone in (
+            player.hand, player.library, player.graveyard, player.exile,
+            getattr(player, "command_zone", ()) or (),
+        ):
+            yield from zone
+        for permanent in player.phased_out:
+            yield permanent.card
+    for permanent in game.all_permanents():
+        yield permanent.card
+    for item in game.stack:
+        card = getattr(item, "card", None)
+        if card is not None:
+            yield card
+
+
+def mid_resolution(game) -> bool:
+    """Whether *game* is part-way through carrying something out — an object
+    resolving, a loop with steps still owed (``resume_stack``), a resolution
+    held for an answer, a CR 616.1 choice outstanding.
+
+    Such a table is not copied as it stands. What it owes is recorded as
+    continuations — closures over the game they were made on — and a copy of
+    one would run its remaining steps on the **original**. A policy asked in
+    that moment gets no rehearsal and falls back to its stated default,
+    unless what it is asking can be answered on a copy cut loose from the
+    resolution (:func:`_detach`).
+    """
+    return bool(
+        game.resume_stack
+        or game.resolving_stack_item is not None
+        or game.resolving_seats
+        or held_for_an_answer(game)
+    )
+
+
+def held_for_an_answer(game) -> bool:
+    """The part of :func:`mid_resolution` no copy can be cut loose from: a
+    resolution **waiting on somebody** — a CR 616.1 choice outstanding, an
+    object held on the stack for an interactive seat, a queued prompt that
+    carries its own continuation. Each of those is a closure the copy would
+    still be holding."""
+    return bool(
+        game.pending_replacement_choices
+        or any(
+            getattr(item, "finish_resolution", None) is not None
+            or getattr(item, "resolution_held", False)
+            for item in game.stack
+        )
+        or any(
+            callable(value)
+            for choice in game.pending_choices
+            for value in choice.data.values()
+        )
+    )
+
+
+def _detach(game, *, owing_nothing: bool = False) -> None:
+    """Cut a scratch copy loose from the resolution its original is in the
+    middle of: nothing is resolving on the copy and no loop has steps owed.
+
+    For a question whose answer is its own stack object — the mode of a
+    triggered ability, chosen as the ability is put on the stack (CR 603.3c)
+    while the spell that caused it is still resolving. The copy never finishes
+    that spell; what it carries out is the ability, in each mode, and the
+    modes are compared with each other.
+
+    *owing_nothing* goes further, for a question about **a card in the
+    abstract** — what is this one worth to hold, asked by a search part-way
+    through its own resolution: every prompt the copy was owed and every
+    object held on its stack for an answer is dropped unanswered. Those are
+    the continuations :func:`held_for_an_answer` refuses a copy over, and
+    with nothing left to invoke them they are never run.
+    """
+    game.resolving_stack_item = None
+    game.resolving_seats = []
+    game.resume_stack = []
+    if owing_nothing:
+        game.pending_choices = []
+        game.pending_replacement_choices = []
+        game.stack = [
+            item for item in game.stack
+            if getattr(item, "finish_resolution", None) is None
+            and not getattr(item, "resolution_held", False)
+        ]
+
+
+def scratch_copy(game):
+    """A copy of *game* a cast can be carried out on with nothing reaching
+    the original: every seat non-interactive, so each prompt takes its kind's
+    default, as it does for a seat the engine plays.
+
+    **When** a prompt is answered is the game's own arrangement and is left
+    as it is: a table with a `prompt_driver` (the simulator's) answers each
+    one as it is armed, a table without (a web game) once the stack has
+    emptied — and a spell whose steps ask two things in a row comes out
+    differently under the two. A copy that answered on a schedule of its own
+    rehearsed a different cast from the one the executor then made.
+
+    Mana is enforced on the copy exactly as it is on the game. What the
+    rehearsed cast itself costs is the planner's question and whoever
+    rehearses it supplies that mana (``ai_policy._rehearse_announcement``);
+    everything else that is paid for on the way — "counter that spell unless
+    its controller pays {3}", "that player may pay {2}{U}" — is paid out of
+    what each seat really has, or the tax every such spell levies would be
+    one anybody could afford and the spell would measure as nothing.
+
+    The copy is `copy.deepcopy`, the one `engine/game_history.py` already
+    takes for the web app's undo, with the card objects shared
+    (:func:`_every_card`).
+    """
+    return scratch_copy_with(game, None)[0]
+
+
+def scratch_copy_with(game, carried):
+    """:func:`scratch_copy`, and *carried* copied **with** it: an object that
+    refers into the game (a prompt holding its stack object) comes back
+    referring into the copy."""
+    import copy
+
+    memo = {id(card): card for card in _every_card(game)}
+    clone, carried = copy.deepcopy((game, carried), memo)
+    clone.interactive_seats = set()
+    return clone, carried
+
+
+def _settle_scratch(game) -> None:
+    """Empty the stack of a scratch copy, answering what each object asks —
+    and check state-based actions (CR 704.3) once it is empty: a creature
+    dealt lethal damage is on the battlefield until they are, and a reading
+    taken before would count it as alive."""
+    for _ in range(_REHEARSAL_PASSES):
+        game._resolve_priority_window()
+        game.auto_resolve_pending_choices()
+        game.check_state_based_actions()
+        if not game.stack and not game.pending_choices:
+            return
+
+
+def _run_out_the_turn(game) -> None:
+    """Take a scratch copy to the end of its turn: a combat whose blocks are
+    already declared deals its damage, then CR 514's cleanup ends every
+    "until end of turn" effect and removes marked damage.
+
+    Nothing is *decided* on the way — no attack is declared, no block made —
+    so what is read afterwards is what the cast left, and not what a policy
+    then did with it.
+    """
+    for _ in range(_REHEARSAL_PASSES):
+        if game.current_turn_phase != "combat" or game.is_game_over():
+            break
+        step = game.current_step
+        game.advance_combat_phase()
+        game.auto_resolve_pending_choices()
+        if game.current_step == step:
+            break
+    if game.is_game_over():
+        return
+    game.resolve_cleanup_step(game.active_player_index)
+    _settle_scratch(game)
+
+
+def position_digest(game) -> dict:
+    """Everything a resolution could have changed on *game*, in comparable
+    pieces: per seat its hand and graveyard (by name), the size of its
+    library, every other field it carries and each permanent it controls;
+    then the game's own fields. The bookkeeping every cast writes is left
+    out. Two tables built the same way (two scratch copies of one game)
+    digest alike exactly when nothing a player could point at differs —
+    see :func:`same_position` for the comparison across one cast.
+    """
+    seats = []
+    for seat, player in enumerate(game.players):
+        seats.append({
+            "hand": sorted(card.name for card in player.hand),
+            "graveyard": sorted(card.name for card in player.graveyard),
+            # In order: a tutor that puts its find on top, or a spell that
+            # arranges the next three draws, has changed something.
+            "library": [card.name for card in player.library],
+            "fields": {
+                key: repr(value) for key, value in vars(player).items()
+                if key not in _PLAYER_BOOKKEEPING
+            },
+            "battlefield": sorted(
+                (
+                    permanent.permanent_id, permanent.card.name,
+                    repr(sorted(
+                        (key, repr(value))
+                        for key, value in vars(permanent).items() if key != "card"
+                    )),
+                    permanent.is_creature and permanent.effective_power,
+                    permanent.is_creature and permanent.effective_toughness,
+                )
+                for permanent in game.controlled_by(seat)
+            ),
+        })
+    return {
+        "seats": seats,
+        "game": {
+            key: repr(_ledger_entries(value) if key == "damage_ledger" else value)
+            for key, value in vars(game).items()
+            if key not in _GAME_BOOKKEEPING
+        },
+    }
+
+
+def _ledger_entries(ledger):
+    """The damage a turn's ledger records, without the list of spells cast
+    beside it — which every cast adds to whatever it does."""
+    return getattr(ledger, "entries", ledger)
+
+
+def same_position(
+    untouched: dict, after: dict, *, spell_name: str | None = None,
+    caster: int | None = None,
+) -> bool:
+    """Whether *after* — a :func:`position_digest` taken once *caster* has
+    cast *spell_name* and it has resolved — is *untouched* with nothing but
+    the spell's own trip from hand to graveyard in between."""
+    if not _same_fields(untouched["game"], after["game"]):
+        return False
+    for seat, (was, now) in enumerate(zip(untouched["seats"], after["seats"])):
+        hand, yard = list(now["hand"]), list(now["graveyard"])
+        if seat == caster and spell_name is not None:
+            # Put the spell back where it started: out of the graveyard if it
+            # went there, into the hand if it left it — which a spell bought
+            # back (CR 702.27a) did not.
+            spent = was["hand"].count(spell_name) - hand.count(spell_name)
+            if spent > 0:
+                hand = sorted([*hand, *[spell_name] * spent])
+                if spell_name in yard:
+                    yard.remove(spell_name)
+        if (
+            hand != was["hand"]
+            or yard != was["graveyard"]
+            or now["library"] != was["library"]
+            or not _same_fields(was["fields"], now["fields"])
+            or now["battlefield"] != was["battlefield"]
+        ):
+            return False
+    return True
+
+
+#: How an attribute nothing has written yet reads once something has cleared
+#: it: a record the engine creates on first use and empties afterwards is not
+#: a difference between a table that used it and one that never did.
+_EMPTY_READINGS = frozenset({
+    "None", "False", "0", "0.0", "''", "[]", "()", "{}", "set()", "frozenset()",
+})
+
+
+def _same_fields(was: dict, now: dict) -> bool:
+    """Whether two ``{field: repr}`` readings agree, a field only one of them
+    has counting as empty on the other."""
+    for key in was.keys() | now.keys():
+        if was.get(key, None) == now.get(key, None):
+            continue
+        if key in was and key in now:
+            return False
+        if (was.get(key) or now.get(key)) not in _EMPTY_READINGS:
+            return False
+    return True
+
+
+def _measured(game) -> dict:
+    """A scratch copy read twice: as it stands, then run out to the end of
+    its turn."""
+    reading = {
+        "digest": position_digest(game),
+        "now": standings(game, now=True),
+    }
+    _run_out_the_turn(game)
+    reading["lasting"] = standings(game, now=False)
+    return reading
+
+
+def _rehearsal_seed(game) -> int:
+    """The seed a rehearsal's own randomness runs on: a function of the
+    position, so a seed still reproduces a run, and nothing to do with the
+    game's real sequence — a coin flipped in a rehearsal is a sample, never a
+    look at the flip to come."""
+    return 7919 * int(getattr(game, "turn", 0) or 0) + len(game.log)
+
+
+def _scratch(game, carried, detach):
+    """One scratch copy set up for a rehearsal: detached if asked (``True``,
+    or ``"abstract"`` for :func:`_detach`'s *owing_nothing*), its libraries
+    shuffled and its randomness on the rehearsal's own seed."""
+    import random
+
+    clone, carried = scratch_copy_with(game, carried)
+    if detach:
+        _detach(clone, owing_nothing=detach == "abstract")
+    random.seed(_rehearsal_seed(game))
+    for player in clone.players:
+        random.shuffle(player.library)
+    return clone, carried
+
+
+def _untouched(
+    game, *, carried=None, detach: bool = False, without=None, without_key=None,
+) -> dict:
+    """The table with nothing cast: whatever is on the stack resolves, and
+    the turn runs out. What every candidate of one decision is measured
+    against (:func:`deliberating`).
+
+    *without* prepares that table when "nothing" has to be arranged, and
+    *without_key* says which arrangement it is, for the reading to be kept
+    under: a triggered ability whose mode is the question is taken off the
+    copy's stack, since an ability with no mode chosen never resolves
+    (CR 700.2b); a cast paid for by tapping lands is compared with a table on
+    which those lands are tapped too, so that the payment is not mistaken for
+    something the spell did.
+    """
+    cache = _DELIBERATION.get()
+    slot = ("untouched", id(carried), detach, without_key)
+    if cache is not None and slot in cache:
+        return cache[slot]
+    clone, carried = _scratch(game, carried, detach)
+    if without is not None:
+        without(clone, carried)
+    _settle_scratch(clone)
+    reading = _measured(clone)
+    if cache is not None:
+        cache[slot] = reading
+    return reading
+
+
+def rehearse(
+    game, seat: int, perform, *, spell_name: str | None = None,
+    leaves_hand: bool = True, key=None, carried=None, detach: bool = False,
+    without=None, without_key=None,
+) -> "Rehearsal | None":
+    """Carry *perform* out on a scratch copy of *game* and report what it did
+    to *seat*'s position — or None when no rehearsal could be run.
+
+    *perform* takes the copy and makes one cast on it exactly as an executor
+    would (``ai_policy`` hands the announcement it is about to propose),
+    returning the engine's result. The copy then resolves its stack with
+    every prompt on its default, is read (:func:`position_digest`,
+    :func:`standings`), is run out to the end of its turn and is read again.
+    The same two readings of the table **with nothing cast** are what it is
+    compared with.
+
+    **Why a rehearsal and not a table of effect families.** The valuation
+    this replaced was a set of probes on a card's text, and the obvious next
+    step — a value per instruction kind — is the same list one layer down:
+    the pool's instants and sorceries resolve 265 kinds, and a kind with no
+    entry would score the flat number an unread word did. Carrying the
+    compiled program out is the one reading that covers every kind there is
+    and every kind still to come: a -2/-2 is weighed against its target's
+    toughness because the engine applies it and the creature dies or does
+    not; a destroy counts what it removes because that permanent is gone from
+    the standing; a discard at an empty hand is worth nothing because nothing
+    moved.
+
+    **What it must not do is look ahead.** The copy's libraries are shuffled
+    and its randomness reseeded (:func:`_rehearsal_seed`), so a draw, a
+    search's shuffle or a coin flip in a rehearsal says what such a cast is
+    *like*, never what the real one will turn up; the real game's random
+    sequence is put back exactly as it was. What a rehearsal does see is what
+    the engine's own defaults see — the opposing hand's size and, for an
+    effect that reads it, its contents.
+
+    None rather than a guess when it cannot run: from inside another
+    rehearsal (:func:`rehearsing`), on a table that is part-way through a
+    resolution (:func:`mid_resolution`), or when the copy raises — a crash
+    in a rehearsal is not a crash in the game.
+
+    *carried* is an object copied with the game and handed to *perform*
+    beside the copy — the prompt being answered, which holds its own stack
+    object. *detach* rehearses on a copy cut loose from a resolution the
+    original is in the middle of (:func:`_detach`), for an answer that is its
+    own stack object — or, as ``"abstract"``, on one that owes nothing at
+    all, for a question about a card rather than about this moment; and
+    *without* arranges the table "with nothing done" where that takes
+    arranging (:func:`_untouched`).
+
+    Asked once per *key* in a deliberation (:func:`deliberating`): a chooser
+    that weighs a target and then builds the cast that names it is asking the
+    same question twice, and a rehearsal costs a cast.
+    """
+    asked = dict(
+        spell_name=spell_name, leaves_hand=leaves_hand, carried=carried,
+        detach=detach, without=without, without_key=without_key,
+    )
+    cache = _DELIBERATION.get()
+    if cache is None or key is None:
+        return _rehearse(game, seat, perform, **asked)
+    slot = ("rehearsal", key)
+    if slot not in cache:
+        cache[slot] = _rehearse(game, seat, perform, **asked)
+    return cache[slot]
+
+
+def _rehearse(
+    game, seat: int, perform, *, spell_name: str | None = None,
+    leaves_hand: bool = True, carried=None, detach: bool = False, without=None,
+    without_key=None,
+) -> "Rehearsal | None":
+    """:func:`rehearse`, uncached."""
+    import random
+
+    if _REHEARSING.get():
+        return None
+    if held_for_an_answer(game) and detach != "abstract":
+        return None
+    if mid_resolution(game) and not detach:
+        return None
+    token = _REHEARSING.set(True)
+    real_sequence = random.getstate()
+    try:
+        untouched = _untouched(
+            game, carried=carried, detach=detach, without=without,
+            without_key=without_key,
+        )
+        clone, copied = _scratch(game, carried, detach)
+        result = perform(clone) if carried is None else perform(clone, copied)
+        # Paid for, and not yet resolved: what is in each pool now is what
+        # the cost left there. Mana that **appears** after this is the
+        # spell's doing (a ritual is a cast), which the digest cannot say —
+        # it leaves the pools out, since paying moves them too. Mana that
+        # goes is not: "unless they pay {1}", paid, is a spell that did
+        # nothing and cost a mana more.
+        pools = [dict(player.mana_pool) for player in clone.players]
+        if not getattr(result, "supported", False):
+            return Rehearsal(
+                accepted=False, refusal=str(getattr(result, "details", "") or ""),
+            )
+        _settle_scratch(clone)
+        made_mana = any(
+            int(amount or 0) > int(was.get(symbol, 0) or 0)
+            for was, player in zip(pools, clone.players)
+            for symbol, amount in player.mana_pool.items()
+        )
+        reading = _measured(clone)
+        now = standing_swing(untouched["now"], reading["now"], seat)
+        lasting = standing_swing(untouched["lasting"], reading["lasting"], seat)
+        # Whether anything changed is read off the table, with the spell's own
+        # trip taken out (`same_position`) — and before the card is accounted
+        # for below, or a spell bought back with nothing else done would read
+        # as a change worth a card.
+        changed = made_mana or not same_position(
+            untouched["digest"], reading["digest"],
+            spell_name=spell_name if leaves_hand else None, caster=seat,
+        )
+        if leaves_hand:
+            # The card a cast is made with is spent by every cast, so it is
+            # not part of what this one did: it is given back. A spell that
+            # comes back to the hand by itself (buyback, CR 702.27a) is then a
+            # card to the good, which is what its price is weighed against.
+            now += CARD_WORTH
+            lasting += CARD_WORTH
+        return Rehearsal(accepted=True, changed=changed, now=now, lasting=lasting)
+    except Exception:
+        return None
+    finally:
+        random.setstate(real_sequence)
+        _REHEARSING.reset(token)
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -2690,7 +3524,9 @@ def _walk_program(program):
 
 
 __all__ = [
+    "CARD_WORTH",
     "MANA_ABILITY_KINDS",
+    "Rehearsal",
     "SELF_PAYMENT_KINDS",
     "SOURCE_HAMPER_KINDS",
     "SOURCE_REMOVAL_KINDS",
@@ -2706,7 +3542,9 @@ __all__ = [
     "cards_drawn_by_target",
     "caster_sacrifice_steps",
     "castable_commanders",
+    "chosen_color_sweeps",
     "chosen_creature_type_side",
+    "color_most_worth_sweeping",
     "counters_a_spell",
     "denies_its_target",
     "destroyed_permanent_filter",
@@ -2722,6 +3560,13 @@ __all__ = [
     "instruction_target_side",
     "offer_trade",
     "offered_action_is_a_payment",
+    "permanent_worth",
+    "rehearse",
+    "rehearsing",
+    "seat_standing",
+    "standing_swing",
+    "standings",
+    "swing_worth",
     "pick_is_tested_for_a_shared_color",
     "planned_mana_yield",
     "returns_creature_to_hand",
