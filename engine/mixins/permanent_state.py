@@ -109,7 +109,8 @@ from ..search_filters import name_key
 from ..subject_filters import subject_matches
 from ..models import CardDefinition, Permanent, PlayerState
 from ..oracle import _COLOR_WORD_TO_SYMBOL, compile_card_oracle, expand_card_lines
-from ..pt import add_pt_counters, clear_base_pt, pt_counter_deltas, set_base_pt
+from ..pt import (add_pt_counters, clear_cda_pt, pt_counter_deltas, set_base_pt,
+                  set_cda_pt)
 from ..static_bonuses import (
     BASIC_LAND_WORDS,
     condition_is_per_recipient,
@@ -2063,6 +2064,11 @@ class PermanentStateMixin:
             dynamic_pt = next(
                 (i for i in prog.instructions if i.kind == "dynamic_pt_count"), None
             )
+            # A derived channel, cleared here and rebuilt just below: a
+            # creature that no longer has the ability (a Nightmare under
+            # Humility — ``prog`` is the effective card's) has no 7a value,
+            # where the count it was last given used to stand for ever.
+            clear_cda_pt(permanent)
             if dynamic_pt is not None:
                 spec = dynamic_pt.payload.get("count_spec")
                 # A CDA counting *cards in a zone* asks the shared evaluator, not
@@ -2089,7 +2095,7 @@ class PermanentStateMixin:
                     else _count_dynamic_pt(self, player, permanent, dynamic_pt.payload)
                 )
                 # "…**power** is equal to" leaves the printed toughness alone
-                # (Kinetic Augur is */4). ``set_base_pt`` takes None for "leave
+                # (Kinetic Augur is */4). ``set_cda_pt`` takes None for "leave
                 # this one tracking whatever else applies", which is exactly the
                 # difference and is why it is not two instruction kinds.
                 # "…and its toughness is equal to 7 minus that number"
@@ -2104,12 +2110,12 @@ class PermanentStateMixin:
                 toughness_count = dynamic_pt.payload.get("toughness_count")
                 complement = dynamic_pt.payload.get("complement")
                 if toughness_count is not None:
-                    set_base_pt(permanent, value, _count_dynamic_pt(
+                    set_cda_pt(permanent, value, _count_dynamic_pt(
                         self, player, permanent,
                         {**dynamic_pt.payload, "count": toughness_count},
                     ))
                 elif complement is not None:
-                    set_base_pt(permanent, value, max(0, int(complement) - value))
+                    set_cda_pt(permanent, value, max(0, int(complement) - value))
                 elif dynamic_pt.payload.get("defines") == "power":
                     # "…and its toughness is equal to **that number plus 1**"
                     # (Lhurgoyf, printed */1+*). Derived from the same value
@@ -2119,7 +2125,7 @@ class PermanentStateMixin:
                     # payload. Absent, the printed toughness stands (Kinetic
                     # Augur is */4), which is what the None says.
                     bonus = dynamic_pt.payload.get("toughness_plus")
-                    set_base_pt(
+                    set_cda_pt(
                         permanent,
                         value,
                         None if bonus is None else value + int(bonus),
@@ -2129,9 +2135,9 @@ class PermanentStateMixin:
                     # control" (People of the Woods, a 0/*). The mirror of the
                     # branch above and the same None: the printed power keeps
                     # tracking whatever else applies to it.
-                    set_base_pt(permanent, None, value)
+                    set_cda_pt(permanent, None, value)
                 else:
-                    set_base_pt(permanent, value, value)
+                    set_cda_pt(permanent, value, value)
 
             # A layer-7c bonus whose *size* is computed (Carrion Grub). The
             # spec is the one every reader of a computed amount shares, so the
@@ -2258,9 +2264,17 @@ class PermanentStateMixin:
     def _apply_chosen_body(self, permanent: Permanent, body: dict) -> None:
         """Set a "your choice of" creature's P/T, granted keyword and subtypes.
 
-        Base P/T through engine/pt.py (layer 7b) and the keyword through the
-        layer-6 grant API, so the body is the object's characteristics rather
-        than a rewritten card — the mistake Animate Artifact used to make.
+        Base P/T through engine/pt.py and the keyword through the layer-6
+        grant API, so the body is the object's characteristics rather than a
+        rewritten card — the mistake Animate Artifact used to make.
+
+        **The size is a copiable value, not a layer-7b effect with a place in
+        the timestamp order.** CR 613.2a: "'As … enters' … abilities generate
+        copiable effects if they set power and toughness" — layer 1, where
+        every later layer starts (CR 613.2c). So it is written at
+        ``layer_bridge.COPIABLE_VALUE``, ahead of every effect the clock has
+        stamped: a Primal Clay that chose 3/3 is 1/1 under a Humility that was
+        there first, where a write stamped "now" would have beaten it.
 
         The **subtypes** are neither: they are layer 4, and layer 4 is derived
         on every recompute rather than written. So the chosen body is recorded
@@ -2273,7 +2287,12 @@ class PermanentStateMixin:
         for option in permanent.metadata.get("body_options") or ():
             if option.get("keyword"):
                 remove_keyword(permanent, option["keyword"])
-        set_base_pt(permanent, int(body["power"]), int(body["toughness"]))
+        from ..layer_bridge import COPIABLE_VALUE
+
+        set_base_pt(
+            permanent, int(body["power"]), int(body["toughness"]),
+            timestamp=COPIABLE_VALUE,
+        )
         if body.get("keyword"):
             grant_keyword(permanent, body["keyword"])
         permanent.metadata["chosen_body"] = dict(body)
@@ -2446,7 +2465,8 @@ class PermanentStateMixin:
         wait behind the effect that made a land a creature.
         """
         from ..global_statics import (STACK_STATICS_KEY, changes_types,
-                                      global_static_sources)
+                                      global_static_sources,
+                                      record_stack_statics)
         from ..stack_statics import stack_static_grant_sources
 
         # Both derived layer-4 channels are cleared before anything is judged,
@@ -2585,16 +2605,16 @@ class PermanentStateMixin:
             # stack is not a permanent to compare seats with. That scope is
             # refused where the clause is read (`stack_statics._global_static`),
             # so nothing reaching here needs it.
-            applying_from_stack = [
-                static
-                for _item, static in stack_sources
+            #
+            # Each with the stack object's own timestamp (CR 613.7a, 613.7d —
+            # ``StackItem.timestamp``), which is what a reader that orders
+            # the granted ability against a loss of all abilities compares.
+            record_stack_statics(perm, [
+                (static, getattr(item, "timestamp", None) or 0)
+                for item, static in stack_sources
                 if not asks_colour(static)
                 and self._global_static_applies(static, perm, None, self)
-            ]
-            if applying_from_stack:
-                perm.metadata[STACK_STATICS_KEY] = applying_from_stack
-            else:
-                perm.metadata.pop(STACK_STATICS_KEY, None)
+            ])
         # **Layer 6 before a static that is all layer 6 or later.** The walk
         # above has recorded which permanents "All creatures lose all
         # abilities" reaches, so whether a *source* still has the ability that
@@ -2667,19 +2687,15 @@ class PermanentStateMixin:
         if colour_scoped_on_stack:
             for perm in all_permanents:
                 recorded = perm.metadata.get(STACK_STATICS_KEY) or ()
-                applying_from_stack = [
-                    static
-                    for _item, static in stack_sources
+                record_stack_statics(perm, [
+                    (static, getattr(item, "timestamp", None) or 0)
+                    for item, static in stack_sources
                     if (
                         self._global_static_applies(static, perm, None, self)
                         if asks_colour(static)
                         else any(static is held for held in recorded)
                     )
-                ]
-                if applying_from_stack:
-                    perm.metadata[STACK_STATICS_KEY] = applying_from_stack
-                else:
-                    perm.metadata.pop(STACK_STATICS_KEY, None)
+                ])
 
     #: The printed colour word a ``GlobalStatic``'s scope carries, as the symbol
     #: every filter payload in the engine spells a colour with. One map rather
@@ -2879,10 +2895,15 @@ class PermanentStateMixin:
         and its reach is a question about the layer's intermediate state —
         which is why this method no longer asks it of the finished layer after
         the fact. What is written here is everything an animation says that is
-        *not* its place in layer 4: the flag the collector reads, the size
-        (layer 7b) and the colour (layer 5). Nothing here knows which cards
-        the animators are: Kormus Bell's colour and Living Lands' silence
-        about colour are both payload (engine/land_animation.py).
+        *not* its place in layer 4: the flag the collector reads, the record
+        of which animators reached the land, and the colour (layer 5). **The
+        size (layer 7b) is not written at all**: ``layer_bridge
+        .collect_pt_effects`` reads it off that record, one effect per
+        animator at the animator's own timestamp (CR 613.7a), so it is ordered
+        against a Humility, a Humble or a second animator by when each
+        arrived. Nothing here knows which cards the animators are: Kormus
+        Bell's colour and Living Lands' silence about colour are both payload
+        (engine/land_animation.py).
 
         Its own pass, ahead of everything that asks "is this a creature?".
         This ran inside the same per-permanent loop as the layer-7a
@@ -2914,9 +2935,10 @@ class PermanentStateMixin:
             else:
                 permanent.metadata.pop(LAND_ANIMATIONS_REACHING, None)
             # The first animator, in battlefield order, of those the pass found
-            # reaching this land: its size and colour are the ones written.
-            # (Two animators reaching one land both make it a creature; whose
-            # size it then has is layer 7b's question and is unchanged here.)
+            # reaching this land: its colour is the one written. (Two
+            # animators reaching one land both make it a creature; whose size
+            # it then has is layer 7b's question, answered by timestamp in
+            # ``layer_bridge.collect_pt_effects``.)
             animator, animation = min(
                 reaching,
                 key=lambda pair: position.get(id(pair[0]), len(position)),
@@ -2932,7 +2954,6 @@ class PermanentStateMixin:
             clear_derived_color_changes(permanent)
             if animation is not None:
                 permanent.metadata["land_animated"] = True
-                set_base_pt(permanent, animation.power, animation.toughness)
                 if animation.color:
                     add_derived_color_change(
                         permanent, animation.color,
@@ -2940,9 +2961,13 @@ class PermanentStateMixin:
                         label=f"animated ({animator.card.name})",
                     )
             elif permanent.metadata.get("land_animated"):
-                # The animating source is gone: the land is no longer a creature.
+                # The animating source is gone: the land is no longer a
+                # creature. Its size went with the record above — and nothing
+                # else is cleared, because nothing else was this method's: the
+                # persistent 7b slot it used to wipe here could by then hold a
+                # resolved effect's write ("becomes 0/2 until your next
+                # upkeep"), which outlives the animator.
                 permanent.metadata.pop("land_animated", None)
-                clear_base_pt(permanent)
 
     def _has_keyword(self, permanent: Permanent, keyword: str) -> bool:
         """Whether *permanent* currently has a keyword ability.
@@ -4377,12 +4402,18 @@ class PermanentStateMixin:
         # may no longer describe. So a land cannot have the keyword without
         # being one the animator made a creature, by construction.
         for target_perm in all_perms:
-            for _source_perm, animation in (
+            for animator, animation in (
                 target_perm.metadata.get(LAND_ANIMATIONS_REACHING) or ()
             ):
                 for keyword in animation.keywords:
+                    # The **animator's** timestamp (CR 613.7a). This read
+                    # ``source_perm`` — a name left over from the loops above,
+                    # holding whichever permanent they happened to visit last
+                    # — so a Natural Emergence older than a Humility kept its
+                    # lands' first strike whenever a newer permanent was last
+                    # in that walk.
                     add_derived_grant(
-                        target_perm, keyword, timestamp=source_perm.timestamp
+                        target_perm, keyword, timestamp=animator.timestamp
                     )
 
         # Step 4: an ability an **Aura** grants its host in quotes *while the

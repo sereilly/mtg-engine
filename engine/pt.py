@@ -8,11 +8,26 @@ helpers change.
 
 Channel → sublayer mapping:
 
-- 7a (characteristic-defining) and 7b (set to N): ``absolute_power`` /
-  ``absolute_toughness`` metadata; the ``_until_eot`` variants take priority
-  and are cleared in the cleanup step (see ``_EOT_METADATA_KEYS`` in
-  engine/mixins/_constants.py). Competing setters resolve last-write-wins on
-  the metadata key, which IS timestamp order for stack-resolved effects.
+- 7a (characteristic-defining): ``cda_power`` / ``cda_toughness``, a
+  **derived** channel — :func:`set_cda_pt` writes it and the refresh that
+  counts the ability clears and rebuilds it on every recompute, so a creature
+  that has lost the ability has no value here at all (CR 604.3, CR 613.4a).
+  It shared 7b's slot, which made a Nightmare older than a Humility a 3/3:
+  the count was written where "set to 1/1" is read, and whichever was written
+  last won a contest CR 613.4 never holds — 7a is applied before 7b whatever
+  the timestamps say.
+- 7b (set to N): ``absolute_power`` / ``absolute_toughness`` metadata, and the
+  ``_until_eot`` variants cleared in the cleanup step (see
+  ``_EOT_METADATA_KEYS`` in engine/mixins/_constants.py). **Each slot carries
+  the timestamp it was written at** (:data:`BASE_PT_TIMESTAMP_KEY`, CR 613.7b:
+  an effect a resolution creates is stamped as it is created), put there by
+  :func:`set_base_pt` itself — the stamp is inside the write, as it is for a
+  colour (``color_changes.change_color``) and a type (``type_changes``). So
+  the two slots, an Aura's size, a board-wide static's and a land animator's
+  are ordered against each other by CR 613.7 rather than by which channel
+  each happened to be read from: a Humble older than a Humility loses to it.
+  Two writers of *one* slot still resolve last-write-wins, which is timestamp
+  order for effects a resolution creates.
 - 7c (modify by +X/+Y) splits by *lifetime*, which is what keeps it correct:
 
   - ``power_bonus`` / ``toughness_bonus`` are **persistent** — counters and
@@ -37,6 +52,8 @@ from __future__ import annotations
 import re
 
 from typing import TYPE_CHECKING
+
+from .continuous import next_timestamp
 
 if TYPE_CHECKING:
     from .models import Permanent
@@ -70,6 +87,18 @@ BASE_PT_UPKEEP_START_REVERT_KEY = "base_pt_reverts_at_upkeep"
 #: Both scheduled reverts, for the writers that supersede whichever is standing.
 _BASE_PT_REVERT_KEYS = (BASE_PT_REVERT_KEY, BASE_PT_UPKEEP_START_REVERT_KEY)
 
+#: When a 7b slot was written (CR 613.7b) — this key for the persistent slot,
+#: and with ``_until_eot`` appended for the one the cleanup step clears.
+#: ``layer_bridge.collect_pt_effects`` had read this key since the layer
+#: system was written and nothing had ever written it, so both slots sat at
+#: two constants (1 and 2) and every *derived* 7b effect at 0: a board-wide
+#: static never beat a slot, and a slot never lost to anything.
+BASE_PT_TIMESTAMP_KEY = "absolute_pt_timestamp"
+
+#: Layer 7a's channel (:func:`set_cda_pt`).
+CDA_POWER_KEY = "cda_power"
+CDA_TOUGHNESS_KEY = "cda_toughness"
+
 
 def set_base_pt(
     perm: Permanent,
@@ -79,12 +108,22 @@ def set_base_pt(
     until_eot: bool = False,
     reverts_at_next_upkeep_of: int | None = None,
     turn: int | None = None,
+    timestamp: int | None = None,
 ) -> None:
-    """Layer 7a/7b: set base power and/or toughness ("becomes 0/2", CDAs,
-    animation). Pass None for a stat to leave it untouched — Singing Tree's
-    "has base power 0 until end of turn" sets only power, letting toughness
-    keep tracking whatever else applies. 7c modifications still apply on top
-    of the new base.
+    """Layer 7b: set base power and/or toughness ("becomes 0/2", an
+    animation's size). Pass None for a stat to leave it untouched — Singing
+    Tree's "has base power 0 until end of turn" sets only power, letting
+    toughness keep tracking whatever else applies. 7c modifications still
+    apply on top of the new base.
+
+    *timestamp* is where the write sorts in layer 7b (CR 613.7). Omitted, it
+    is **now** — CR 613.7b, the stamp of an effect a resolving spell or
+    ability creates, which is every caller but one. The one is the body an
+    "as this enters" choice gives (Primal Clay): CR 613.2a makes that a
+    copiable value, where every later layer starts, so it passes
+    ``layer_bridge.COPIABLE_VALUE`` and loses to a Humility however old.
+    A characteristic-defining ability is not written here at all
+    (:func:`set_cda_pt`).
 
     *reverts_at_next_upkeep_of* is the seat whose next upkeep ends this write
     ("until your next upkeep"), with *turn* the turn it was made on — the pair
@@ -99,6 +138,10 @@ def set_base_pt(
         perm.metadata[f"absolute_power{suffix}"] = int(power)
     if toughness is not None:
         perm.metadata[f"absolute_toughness{suffix}"] = int(toughness)
+    if power is not None or toughness is not None:
+        perm.metadata[f"{BASE_PT_TIMESTAMP_KEY}{suffix}"] = (
+            next_timestamp() if timestamp is None else int(timestamp)
+        )
     if not until_eot:
         # A newer persistent write supersedes a scheduled revert: reverting
         # would clear the metadata key the newer effect just wrote, taking the
@@ -115,15 +158,55 @@ def set_base_pt(
 
 
 def clear_base_pt(perm: Permanent, *, until_eot: bool = False) -> None:
-    """Remove a 7a/7b base override, restoring the printed base."""
+    """Remove a 7b base override, restoring the printed base."""
     if until_eot:
         perm.metadata.pop("absolute_power_until_eot", None)
         perm.metadata.pop("absolute_toughness_until_eot", None)
+        perm.metadata.pop(f"{BASE_PT_TIMESTAMP_KEY}_until_eot", None)
     else:
         perm.metadata.pop("absolute_power", None)
         perm.metadata.pop("absolute_toughness", None)
+        perm.metadata.pop(BASE_PT_TIMESTAMP_KEY, None)
         for key in _BASE_PT_REVERT_KEYS:
             perm.metadata.pop(key, None)
+
+
+def set_cda_pt(
+    perm: Permanent, power: int | None, toughness: int | None
+) -> None:
+    """Layer 7a: what a characteristic-defining ability makes this permanent's
+    power and/or toughness (CR 604.3, CR 613.4a) — Nightmare's Swamps, Plague
+    Rats' Rats. None leaves a stat to its printed value (Kinetic Augur is */4).
+
+    A **derived** channel: the pass that counts the ability calls
+    :func:`clear_cda_pt` on every permanent and writes again only where the
+    ability is still there, so nothing has to notice a creature losing it. No
+    timestamp, because the sublayer needs none — CR 613.4 applies 7a before
+    7b, and a permanent has one such ability.
+    """
+    if power is not None:
+        perm.metadata[CDA_POWER_KEY] = int(power)
+    if toughness is not None:
+        perm.metadata[CDA_TOUGHNESS_KEY] = int(toughness)
+
+
+def clear_cda_pt(perm: Permanent) -> None:
+    """Forget the 7a value, ahead of the pass that rebuilds it."""
+    perm.metadata.pop(CDA_POWER_KEY, None)
+    perm.metadata.pop(CDA_TOUGHNESS_KEY, None)
+
+
+def toughness_has_been_set(perm: Permanent) -> bool:
+    """Whether anything has given *perm* a toughness its printed "*" lacks —
+    a counted characteristic-defining ability, or a persistent 7b write.
+
+    The one question CR 704.5f's sweep asks of this module: a creature printed
+    with a variable toughness is not at 0 until its ability has been counted
+    once. Here so the sweep names no channel of its own.
+    """
+    return (
+        CDA_TOUGHNESS_KEY in perm.metadata or "absolute_toughness" in perm.metadata
+    )
 
 
 #: Where a *temporary* layer-7c modification records itself, one metadata pair

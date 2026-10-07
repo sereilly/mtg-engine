@@ -39,9 +39,10 @@ from .color_changes import color_changes
 from .named_counters import counters_on
 from .control import control_changes, has_control_change
 from .enter_effects import CHOSEN_COLOR_KEY, own_chosen_color
-from .global_statics import (STACK_STATICS_KEY, changes_types,
-                             global_static_sources, global_statics_applying_to,
-                             removes_all_abilities)
+from .global_statics import (changes_types, global_static_sources,
+                             removes_all_abilities, stack_statics_applying_to)
+from .land_animation import LAND_ANIMATIONS_REACHING
+from .pt import BASE_PT_TIMESTAMP_KEY, CDA_POWER_KEY, CDA_TOUGHNESS_KEY
 from .continuous import (
     Characteristics,
     ContinuousEffect,
@@ -404,9 +405,25 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
     effects: list[ContinuousEffect] = []
     meta = perm.metadata
 
-    # 7b — set to a value. The until-end-of-turn variant is stamped later than
-    # the permanent one so the layer engine reproduces the precedence the old
-    # hand-written property had, but now as a timestamp rather than an `elif`.
+    # 7a — a characteristic-defining ability's value (CR 604.3, CR 613.4a):
+    # Nightmare's Swamps. Its own sublayer, applied before every 7b effect
+    # whatever either's timestamp — which is the whole of why it has a channel
+    # of its own (``pt.set_cda_pt``). It was written into 7b's slot, so a
+    # Nightmare that met a Humility kept the count it had been given last.
+    cda_power, cda_toughness = meta.get(CDA_POWER_KEY), meta.get(CDA_TOUGHNESS_KEY)
+    if cda_power is not None or cda_toughness is not None:
+        effects.append(set_pt(
+            only,
+            int(cda_power) if cda_power is not None else None,
+            int(cda_toughness) if cda_toughness is not None else None,
+            timestamp=perm.timestamp, from_cda=True,
+            label="characteristic-defining",
+        ))
+
+    # 7b — set to a value, each slot at the timestamp it was written with
+    # (CR 613.7b, ``pt.set_base_pt``). A slot with no stamp is a board built
+    # by hand; it keeps the two constants every slot used to sit at, the
+    # until-end-of-turn one later so that it still wins against its twin.
     for suffix, stamp in (("", 1), ("_until_eot", 2)):
         power = meta.get(f"absolute_power{suffix}")
         toughness = meta.get(f"absolute_toughness{suffix}")
@@ -417,10 +434,29 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
                 only,
                 int(power) if power is not None else None,
                 int(toughness) if toughness is not None else None,
-                timestamp=int(meta.get(f"absolute_pt_timestamp{suffix}", stamp)),
+                timestamp=int(meta.get(f"{BASE_PT_TIMESTAMP_KEY}{suffix}", stamp)),
                 label=f"set{suffix}",
             )
         )
+
+    # 7b — "Lands you control are **2/2** creatures…" (Natural Emergence,
+    # Living Lands, Kormus Bell.) Read off the record the board-wide layer-4
+    # pass left on this land — every animator that reached it (CR 613.6: "the
+    # same set of objects in each other applicable layer") — and stamped with
+    # the animator's own timestamp (CR 613.7a), one effect per animator.
+    #
+    # The refresh used to *write* the size of the first animator in
+    # battlefield order into the persistent slot above. Two things followed.
+    # The slot sat at a constant later than every derived effect, so a land
+    # under Natural Emergence stayed 2/2 beneath a Humility that arrived
+    # afterwards; and of two animators the one that happened to be listed
+    # first decided the size, where CR 613.7 gives it to the newer.
+    for animator, animation in meta.get(LAND_ANIMATIONS_REACHING) or ():
+        effects.append(set_pt(
+            only, int(animation.power), int(animation.toughness),
+            timestamp=animator.timestamp,
+            label=f"land animation ({animator.card.name})",
+        ))
 
     # 7c — modifications. Counters and one-shot boosts live on the permanent;
     # the buff channels are rebuilt from the board each recompute.
@@ -510,15 +546,34 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
             value = int(perm.effective_card.cmc)
             effects.append(set_pt(
                 only, value, value,
-                timestamp=_DERIVED_TIMESTAMP,
+                # The moment the effect that made it a creature resolved
+                # (CR 613.7b) — the stamp its type half already sorts by.
+                timestamp=int(gained.get("timestamp") or _DERIVED_TIMESTAMP),
                 label=f"gained-pt:{gained.get('source', 'effect')}",
             ))
 
-    for static in global_statics_applying_to(perm):
+    # The board-wide statics, each **with the timestamp of the object it is
+    # on** (CR 613.7a) — a source on the battlefield, or a spell on the stack
+    # (CR 113.6b), whose stamp is the moment it was put there (CR 613.7d).
+    # Every one of these sat at the constant 0, so "All creatures … have base
+    # power and toughness 1/1" lost to every other 7b effect on the board
+    # whenever it had arrived: the two statics among themselves came out
+    # right only where the order the battlefields are walked in happened to
+    # be the order the sources entered, which across two seats it is not.
+    board_statics = [
+        (static, source.timestamp, source)
+        for source, static in global_static_sources(
+            meta.get("global_static_sources") or ()
+        )
+    ] + [
+        (static, stamp, None)
+        for static, stamp in stack_statics_applying_to(perm)
+    ]
+    for static, stamp, _source in board_statics:
         if static.pt_from_mana_value:
             value = int(perm.effective_card.cmc)
             effects.append(
-                set_pt(only, value, value, timestamp=_DERIVED_TIMESTAMP, label=static.name)
+                set_pt(only, value, value, timestamp=stamp, label=static.name)
             )
         # "…and have base power and toughness 1/1." (Humility.) CR 613.4b, the
         # same sublayer as the mana-value setting beside it and read off the
@@ -528,8 +583,7 @@ def collect_pt_effects(perm: Permanent, oid: int) -> list[ContinuousEffect]:
         if static.sets_base_pt:
             power, toughness = static.sets_base_pt
             effects.append(
-                set_pt(only, power, toughness,
-                       timestamp=_DERIVED_TIMESTAMP, label=static.name)
+                set_pt(only, power, toughness, timestamp=stamp, label=static.name)
             )
 
     # 7c — Auras. Derived from each attached Aura's own text on every
@@ -1086,9 +1140,9 @@ def collect_static_type_effects(perm: Permanent, oid: int) -> list[ContinuousEff
     # …and the same from a spell on the stack (CR 113.6b). No stack static in
     # the pool has a layer-4 part; read so that one printed tomorrow is not a
     # type change the collector silently never applies.
-    for static in meta.get(STACK_STATICS_KEY) or ():
+    for static, stamp in stack_statics_applying_to(perm):
         if changes_types(static):
-            effect = global_static_type_effect(oid, None, static, timestamp=0)
+            effect = global_static_type_effect(oid, None, static, timestamp=stamp)
             if effect is not None:
                 effects.append(effect)
 

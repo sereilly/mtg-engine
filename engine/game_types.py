@@ -362,6 +362,15 @@ class StackItem:
     # ``legality.vanished_graveyard_target_refusal`` — the one clause of
     # CR 608.2b a trigger is held to so far.
     target_chosen: bool = False
+    # CR 613.7d: when this object was put on the stack — the timestamp of the
+    # continuous effect of any static ability it has that functions there
+    # (CR 113.6b, CR 613.7a; ``engine/stack_statics.py``). Stamped by
+    # ``Game._stack_push`` for an object that prints such an ability and left
+    # None for every other one, because nothing else on the stack is ordered
+    # by a timestamp. Without it the ability Torrent of Lava grants every
+    # creature had no place in layer 6, and survived a loss of all abilities
+    # that was newer than the spell.
+    timestamp: int | None = None
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

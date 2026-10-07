@@ -212,7 +212,11 @@ def _action(
     A number contributes both its new value and its delta, because a sublayer
     that *sets* is state-independent in the first and one that *modifies* is
     state-independent in the second, and there is no third reading that leaves
-    an unchanged action looking unchanged for both.
+    an unchanged action looking unchanged for both. **Which of the two is the
+    action is not known here**, so two readings of a number are the same
+    action when *either* half agrees (:func:`_same_action`) — comparing the
+    pair whole made every set look dependent on whatever changed the value it
+    overwrote.
     """
     parts: list[object] = [_set_action(effect, before)]
     for name in ("power", "toughness"):
@@ -230,6 +234,51 @@ def _action(
     parts.append(after.controller_index)
     parts.append(after.switched)
     return tuple(parts)
+
+
+def _same_number(first: tuple, second: tuple) -> bool:
+    """Whether one number's ``(new value, delta)`` is the same action twice.
+
+    A *set* does the same thing when it leaves the same value, whatever it
+    overwrote; a *modify* when it adds the same amount, whatever it added to.
+    So either half agreeing is "what it does" unchanged (CR 613.8a), and only
+    both moving is a different action.
+
+    The pair used to be compared whole, which is neither reading. A set's
+    delta moves with the value underneath it, so every set looked dependent on
+    every effect that changed that value — *unless* the other effect happened
+    to change nothing on the board as it stood. That asymmetry is what broke
+    timestamp order: with two effects setting 4/4 and a newer one setting 1/1
+    (two Opalescences and a Humility, Humility last), the first 4/4 applied,
+    the second then looked like it depended on the 1/1 while the 1/1 depended
+    on nothing, so the 1/1 was applied *before* the remaining 4/4 and the
+    permanent ended 4/4 — the opposite of CR 613.7 and of the card's ruling.
+    """
+    return first[0] == second[0] or (
+        first[1] is not None and first[1] == second[1]
+    )
+
+
+def _same_action(first: tuple, second: tuple) -> bool:
+    """Whether two :func:`_action` readings are one action (see
+    :func:`_same_number` for the two numbers; everything else is exact)."""
+    return (
+        first[0] == second[0]
+        and _same_number(first[1], second[1])
+        and _same_number(first[2], second[2])
+        and first[3:] == second[3:]
+    )
+
+
+def _same_signature(first: tuple, second: tuple) -> bool:
+    """Whether two :func:`_signature` readings describe one effect: the same
+    objects, and the same action on each."""
+    targets, actions = first
+    other_targets, other_actions = second
+    return targets == other_targets and all(
+        _same_action(action, other)
+        for action, other in zip(actions, other_actions)
+    )
 
 
 def _signature(effect: ContinuousEffect, state: State) -> tuple:
@@ -262,7 +311,7 @@ def _depends_on(
     before = _signature(first, state)
     trial = {oid: char.copy() for oid, char in state.items()}
     _apply_one(second, trial)
-    return _signature(first, trial) != before
+    return not _same_signature(_signature(first, trial), before)
 
 
 def _apply_group(effects: Sequence[ContinuousEffect], state: State) -> None:

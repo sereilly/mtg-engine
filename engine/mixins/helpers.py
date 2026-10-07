@@ -2905,6 +2905,12 @@ class GameHelpersMixin:
         from ..stack_statics import grants_stack_static
 
         if item is not None and grants_stack_static(getattr(item, "card", None)):
+            # …and it starts **now**: the object's timestamp is the moment it
+            # entered this zone (CR 613.7d), which is its static ability's
+            # effect's (CR 613.7a) — what orders the ability it grants against
+            # a "loses all abilities" that arrives while it is still here.
+            if getattr(item, "timestamp", None) is None:
+                item.timestamp = next_timestamp()
             self._recompute_continuous_effects()
         # "Whenever a player chooses one or more targets" (CR 601.2c / 602.2b /
         # 603.3d). Last, because this is the first moment the announcement is

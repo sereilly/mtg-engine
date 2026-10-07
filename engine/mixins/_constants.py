@@ -118,6 +118,9 @@ _EOT_METADATA_KEYS = (
     # Layer 7b temporary set effects (613.4b)
     "absolute_power_until_eot",
     "absolute_toughness_until_eot",
+    # …and when that slot was written (CR 613.7b, ``pt.set_base_pt``): the
+    # stamp ends with the effect it ordered.
+    "absolute_pt_timestamp_until_eot",
     # Layer 7d power/toughness switch (613.4d)
     "pt_switched",
     # CR 609.4 combat permission: "…can attack this turn as though it didn't

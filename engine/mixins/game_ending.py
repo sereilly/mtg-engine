@@ -14,6 +14,7 @@ from ..auras import aura_grants_control, auras_attached_to
 from ..equipment import is_equipment, unattach_illegal_equipment
 from ..models import Permanent, PlayerState
 from ..oracle import compile_card_oracle
+from ..pt import toughness_has_been_set
 from ..trigger_utils import matching_triggers
 from .stack import aura_enchant_noun, enchant_noun_seat, enchant_seat_satisfied
 from ..target_immunity import cannot_be_enchanted
@@ -706,7 +707,13 @@ class GameEndingMixin:
                 # the animated-Mox sweep had.
                 raw_t = str(perm.effective_card.raw.get("toughness", "0"))
                 has_fixed_toughness = raw_t.lstrip("-").isdigit()
-                has_dynamic_toughness = not has_fixed_toughness and "absolute_toughness" not in perm.metadata
+                # (Asked of ``engine/pt.py``, which owns the channels: a
+                # characteristic-defining ability's count is 7a's and a
+                # persistent set is 7b's, and this read the one key both used
+                # to be written under.)
+                has_dynamic_toughness = (
+                    not has_fixed_toughness and not toughness_has_been_set(perm)
+                )
                 # is_creature (CR 613 layer 4), not the printed type line: an
                 # artifact animated by Animate Artifact, or a land animated by
                 # Kormus Bell, is a creature and CR 704.5f applies to it. Reading
