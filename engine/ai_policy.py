@@ -743,6 +743,23 @@ def spell_being_cast(zone, action: "CastAction") -> CardDefinition:
 
 
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
+    """The cast this seat makes now, out of everything it may cast — its hand,
+    its commander, and whatever an effect has opened to it — or None.
+
+    **One deliberation for the whole decision** (``ai_valuation.deliberating``).
+    Every card weighed here is weighed against the same table with nothing
+    cast, and reading that table costs a copy of the game run out to the end of
+    its turn; each card took its own (`_cast_candidate`), so a hand of seven
+    read the one table seven times. Nothing is decided differently: the reading
+    is a function of the game, which no chooser moves, and a rehearsal is kept
+    under everything that tells two of them apart (`_rehearse_announcement`).
+    """
+    with deliberating():
+        return _choose_cast_action(game, player_index)
+
+
+def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
+    """`choose_cast_action`, inside its deliberation."""
     best: CastAction | None = None
     player = game.players[player_index]
     for hand_index, card in hand_spells(player):
@@ -1450,8 +1467,16 @@ def _rehearse_announcement(
     return rehearse(
         game, seat, perform, spell_name=zone_name,
         leaves_hand=from_hand and held,
+        # Everything that tells two rehearsals of one decision apart: the
+        # announcement, and — once there is one — the plan that pays for it.
+        # One card priced twice (a free cast that takes a kicker is priced
+        # again as an ordinary one, `_priced_candidate`) announces the same
+        # thing over two different payments, and the lands left untapped are
+        # part of what the resolution has to spend.
         key=(
-            seat, card.name, held, planned is not None,
+            seat, card.name, held,
+            (planned.land_tap_indices, planned.land_tap_colors)
+            if planned is not None else None,
             repr(sorted(announcement.items())),
         ),
         without=paid_for if taps else None,
