@@ -4364,9 +4364,10 @@ class LegalityMixin:
         )
 
     def vanished_graveyard_target_refusal(self, item) -> str | None:
-        """CR 608.2b for **an ability whose every target was a card in a
-        graveyard that is no longer there** — an activated ability, or a
-        triggered one that chose its target — and for nothing else.
+        """CR 608.2b for **an object whose every target was a card in a
+        graveyard that is no longer there** — an activated ability, a
+        triggered one that chose its target, or an Aura spell whose enchant
+        target was the card (see the bound below) — and for nothing else.
 
         "A target that's no longer in the zone it was in when it was targeted
         is illegal. … If all its targets … are now illegal, the spell or
@@ -4411,8 +4412,34 @@ class LegalityMixin:
         one named for it as it was announced, so it carries a stamp like any
         other and is judged like any other.
         """
+        # **…and an Aura spell**, which is the fourth object this rule is about
+        # and the one that fell between the gates. "Enchant creature card in a
+        # graveyard" (Animate Dead, Dance of the Dead) is a target a player
+        # chose as the spell was cast (CR 115.1b, CR 601.2c) — none of the
+        # trigger's "a slot nobody chose" applies — but
+        # :meth:`illegal_targets_refusal` answers for instants and sorceries
+        # only, on the reasoning that an Aura whose host has left "enters
+        # attached to nothing and is binned by CR 704.5m one sweep later — the
+        # same destination by a different rule". True of an Aura that enchants
+        # a permanent. Not of these two: their attach reads a vanished card as
+        # *no card was named* and goes looking, so with the Grizzly Bears it
+        # named exiled in response, Animate Dead returned the Craw Wurm in its
+        # caster's own graveyard.
+        #
+        # Bounded to a **permanent** spell so that nothing this method says
+        # about an instant or sorcery changes: those are judged one gate up,
+        # including the shapes that gate declines on purpose. A permanent
+        # spell that is not an Aura targets nothing (``chosen_targets`` is
+        # empty for it), so in practice this is the Auras.
+        aura_spell = (
+            item.ability_instruction is None
+            and not getattr(item, "is_ability", False)
+            and item.card.primary_type not in ("instant", "sorcery")
+        )
         if not (
-            getattr(item, "activated", False) or getattr(item, "target_chosen", False)
+            getattr(item, "activated", False)
+            or getattr(item, "target_chosen", False)
+            or aura_spell
         ):
             return None
         if resolves_with_illegal_targets(item.card, item.ability_text):
@@ -4426,6 +4453,11 @@ class LegalityMixin:
             return None
         if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
             return None
+        if aura_spell:
+            return (
+                f"{item.card.name} was removed from the stack: its target "
+                "is no longer in the graveyard (608.2b)"
+            )
         return (
             f"{item.card.name} ability was removed from the stack: its target "
             "is no longer in the graveyard (608.2b)"
