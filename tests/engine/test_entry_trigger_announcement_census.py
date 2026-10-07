@@ -69,8 +69,10 @@ from .test_entry_trigger_stack_census import _pool
 # trigger makes its own choice on the stack for 44 of them (October 2026).
 _MIN_ANNOUNCING = 55
 _MIN_JUDGED = 40
-_MIN_ILLEGAL_NAMINGS = 150
-_MIN_SET_ASIDE = 90
+# 256 and 168 with a Shroud and a Hexproof guard that have shroud and
+# hexproof; 199 and 111 while they were plain creatures.
+_MIN_ILLEGAL_NAMINGS = 215
+_MIN_SET_ASIDE = 135
 _MIN_DEPARTURES = 28
 _MIN_MASKED = 8
 _MIN_PROMPTS = 20
@@ -87,7 +89,13 @@ def _guard(label: str, text: str) -> CardDefinition:
     kind = "Creature — Golem"
     return CardDefinition(
         name=f"Census {label}", mana_cost="{3}", cmc=3.0, type_line=kind,
-        oracle_text=text, colors=(), color_identity=(), keywords=(), produced_mana=(),
+        oracle_text=text, colors=(), color_identity=(),
+        # ``keywords`` is what layer 6 reads a printed keyword off; a
+        # protection is read off the text. This said ``()`` for every guard,
+        # so "Census Shroud" and "Census Hexproof" were two more plain 3/3s
+        # and no cast in this file had ever named a shrouded or hexproof
+        # creature — see ``test_the_guards_carry_what_their_names_say``.
+        keywords=(text,) if text in ("Shroud", "Hexproof") else (), produced_mana=(),
         raw={"name": f"Census {label}", "type_line": kind, "power": "3", "toughness": "3"},
     )
 
@@ -247,6 +255,39 @@ def _illegal_carried(game, card) -> list[str]:
 
 def _set_aside(game) -> bool:
     return any("chooses again (603.3d)" in line for line in game.log)
+
+
+def test_the_guards_carry_what_their_names_say():
+    """The fixture, asked. Two of these guards were built with ``keywords=()``
+    and this engine reads a printed keyword off that field, so the Shroud and
+    Hexproof guards had neither: the trigger's own list offered them, nothing
+    named them as illegal, and the sweep was 57 namings short of what its
+    docstring describes. A sweep whose bait is not bait passes."""
+    game = _table(_pool()["Man-o'-War"])
+    theirs = {p.card.name: p for p in game.controlled_by(1)}
+    assert game._has_keyword(theirs["Census Shroud"], "shroud")
+    assert game._has_keyword(theirs["Census Hexproof"], "hexproof")
+    assert not game._has_keyword(theirs["Census Plain"], "shroud")
+    for label, quality in (
+        ("White", ("color", "W")), ("Blue", ("color", "U")), ("Black", ("color", "B")),
+        ("Red", ("color", "R")), ("Green", ("color", "G")),
+        ("Creatures", ("card_type", "creature")), ("Artifacts", ("card_type", "artifact")),
+    ):
+        assert quality in game._protection_qualities(theirs[f"Census Pro {label}"]), label
+
+    # …and the list a Man-o'-War's trigger offers leaves out the shrouded one
+    # on both seats, the opponent's hexproof one, and — it is a creature's
+    # ability — both "protection from creatures" ones.
+    offered = {
+        (entry["seat"], game.permanent_at(entry["seat"], entry["index"]).card.name)
+        for entry in game.cast_target_spec(0, _pool()["Man-o'-War"]).get("valid_targets") or ()
+        if entry.get("kind") == "permanent"
+    }
+    assert {(0, "Census Plain"), (1, "Census Plain"), (0, "Census Hexproof")} <= offered
+    assert not {
+        (0, "Census Shroud"), (1, "Census Shroud"), (1, "Census Hexproof"),
+        (0, "Census Pro Creatures"), (1, "Census Pro Creatures"),
+    } & offered
 
 
 def test_h1_the_cast_picker_is_the_entry_triggers_own_list():

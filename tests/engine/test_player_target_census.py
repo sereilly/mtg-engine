@@ -63,7 +63,9 @@ _LIBRARY = (
 _MIN_ANNOUNCEMENTS = 190
 _MIN_UNOFFERED_SEATS = 720
 _MIN_OFFERED_SEATS = 940
-_MIN_UNOFFERED_ENTRIES = 1150
+# 1,413 unoffered and 1,086 offered with a Shroud guard that has shroud;
+# 1,233 and 1,266 while it was a plain 3/3 counted on the control arm.
+_MIN_UNOFFERED_ENTRIES = 1320
 _MIN_OFFERED_ENTRIES = 1000
 _MIN_ABILITIES = 170
 _MIN_UNOFFERED_ABILITY_SEATS = 640
@@ -82,7 +84,12 @@ def _guard(name: str, text: str) -> CardDefinition:
     kind = "Artifact Creature — Golem"
     return CardDefinition(
         name=name, mana_cost="{3}", cmc=3.0, type_line=kind, oracle_text=text,
-        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        colors=(), color_identity=(),
+        # ``keywords`` is what layer 6 reads a printed keyword off; a
+        # protection is read off the text. This said ``()`` for every guard,
+        # so "Census Shroud" had no shroud and the division sweep had never
+        # named a shrouded permanent — see the test at the foot of this file.
+        keywords=(text,) if text == "Shroud" else (), produced_mana=(),
         raw={"name": name, "type_line": kind, "power": "3", "toughness": "3"},
     )
 
@@ -353,3 +360,33 @@ def test_h1_no_activation_accepts_a_seat_its_picker_does_not_offer():
     assert unoffered >= _MIN_UNOFFERED_ABILITY_SEATS, unoffered
     assert offered >= _MIN_OFFERED_ABILITY_SEATS, offered
     assert not accepted_illegal, (len(accepted_illegal), accepted_illegal[:20])
+
+
+def test_the_guards_carry_what_their_names_say():
+    """The fixture, asked. "Census Shroud" was built with ``keywords=()`` and
+    this engine reads a printed keyword off that field, so the one permanent
+    the division sweep was meant to be refused at for **shroud** was an
+    ordinary 3/3 — offered, accepted, and counted on the control arm. A sweep
+    whose bait is not bait passes."""
+    game = table("plain", guarded=True)
+    guards = {
+        permanent.card.name: permanent
+        for permanent in game.controlled_by(1) if permanent.card.name.startswith("Census ")
+    }
+    assert len(guards) == len(_GUARDED)
+    assert game._has_keyword(guards["Census Shroud"], "shroud")
+    for label, symbol in (
+        ("White", "W"), ("Blue", "U"), ("Black", "B"), ("Red", "R"), ("Green", "G"),
+    ):
+        assert game._protection_colors(guards[f"Census Pro {label}"]) == {symbol}, label
+
+    # …and the picker in front of a division does not offer the shrouded one.
+    fireball = pool()["Fireball"]
+    probe = table("plain", fireball, guarded=True)
+    offered = {
+        probe.permanent_at(entry["seat"], entry["index"]).card.name
+        for entry in probe.cast_target_spec(0, fireball).get("valid_targets") or ()
+        if entry.get("kind") == "permanent"
+    }
+    assert "Census Shroud" not in offered
+    assert {"Census Pro White", "Grizzly Bears"} <= offered
