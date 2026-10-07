@@ -2261,7 +2261,23 @@ def redirect_damage_until_eot(
             game.log.append(f"{card_name}: its target is gone, nothing is redirected")
             return True, "resolved"
     else:
-        moved_source = context.choices.get("chosen_source")
+        # "A source of your choice", through the one reader every card that
+        # prints the phrase uses — which knows the choice can arrive on either
+        # of two channels. This read ``choices["chosen_source"]`` alone, the
+        # channel a card uses when its *target* is something else (General's
+        # Regalia: the creature that takes the damage is the target, so the
+        # source rides beside it). Nova Pentacle's taker is an opponent's
+        # choice, not a target, so its picker **is** the source picker and its
+        # answer arrives as the ability's named permanent or spell: unread
+        # here, the record was armed against no source at all and moved the
+        # next damage from anything.
+        #
+        # The target channel is not the source's where the target is the
+        # taker, which is what ``from_target_channel`` is for.
+        moved_source = chosen_shield_source(
+            game, context,
+            from_target_channel=payload.get("new_recipient") != "target",
+        )
 
     add_redirect(
         caster,

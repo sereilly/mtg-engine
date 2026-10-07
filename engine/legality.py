@@ -861,6 +861,22 @@ _UNOBLIGED_ACTIVATION_KINDS = frozenset({"none", "modal", "hand_card", "divided"
 _CHOSEN_NOT_TARGETED_FLAGS = ("source_of_choice", "also_stack", "optional")
 
 
+def spec_chooses_a_source(spec: dict | None) -> bool:
+    """Whether *spec*'s picker is CR 609.7a's **"a source of your choice"**:
+    the flag itself, or ``also_stack``, which only a chosen source carries
+    (the colour Circles carry it and no ``source_of_choice``).
+
+    One reader for the two places that have to agree about it, because they
+    disagreed in opposite directions: the **picker** treated a chosen source
+    as a target and withheld one with shroud, hexproof or protection from the
+    choosing card (Circle of Protection: Black, a white enchantment, was not
+    offered a Black Knight), while the **gate** did not look at a named
+    source at all. ``optional`` is not this — Clone's copy is a different
+    choice, made on the cast side.
+    """
+    return bool(spec) and bool(spec.get("source_of_choice") or spec.get("also_stack"))
+
+
 def activation_target_obligation(ability, *, x_value: int | None = None) -> dict | None:
     """The spec of the target an activated ability **must** announce as it is
     activated (CR 602.2b, through CR 601.2c), or None when it may be activated
@@ -2570,8 +2586,36 @@ class LegalityMixin:
         # creature**", Jade Monolith, Charm Peddler), so the spec it rides is a
         # real target's and the creature was never checked at all. The source
         # half has its own list (``source_targets``) and is not asked here.
-        if spec_is_a_cost(spec) or spec.get("also_stack"):
+        #
+        # **A chosen source used to return here too** (``also_stack``), which
+        # was half right. It owes no target, so an empty board does not make
+        # the ability unactivatable and a bare activation is still accepted —
+        # ``activation_target_obligation`` answers None for it and the
+        # nothing-owed-nothing-named return below is where that happens. But
+        # the return was above everything, so a source that **was named** was
+        # never compared with the list its own picker offers: a Grizzly Bears
+        # was accepted as Circle of Protection: Red's "red source of your
+        # choice", a green spell was, and so were two sources at once. A named
+        # source falls through to the comparison every named object gets.
+        if spec_is_a_cost(spec):
             return None
+        if spec_chooses_a_source(spec):
+            # "…**a** source of your choice": one. Counted here because the
+            # ceiling below reads ``max_targets``, which a choice does not
+            # carry, and because a permanent and a spell named together reach
+            # two different branches of the comparison.
+            named_sources = len([
+                pid for pid in (target_permanent_ids or ()) if pid is not None
+            ]) or len([
+                idx for idx in (
+                    target_permanent_index
+                    if isinstance(target_permanent_index, list)
+                    else [target_permanent_index]
+                )
+                if idx is not None
+            ])
+            if named_sources + (target_stack_item is not None) > 1:
+                return f"{card.name} chooses one source, not several"
         instruction = getattr(ability, "instruction", None)
         if kind == ROLES_TARGET_KIND:
             # An ability naming several targets of *different* kinds, chosen in
@@ -4699,6 +4743,9 @@ class LegalityMixin:
         # (``spec_is_a_cost``): untapping an opponent's shrouded land to pay
         # Benthic Explorers' cost targets it no more than tapping one would.
         paying_a_cost = spec_is_a_cost(spec)
+        # …and neither is a chosen **source** (CR 609.7a), for the same reason
+        # one layer over: see :func:`spec_chooses_a_source` and the gate below.
+        choosing_a_source = spec_chooses_a_source(spec)
         for seat, player in enumerate(self.players):
             # A sacrifice cost (Sacrifice) only offers the caster's own creatures.
             if spec.get("own_only") and seat != caster_index:
@@ -4810,7 +4857,17 @@ class LegalityMixin:
                         # one ability announced, which is what Wall of Shadows'
                         # "abilities that can target only Walls" asks about and
                         # which the source object alone cannot answer.
-                        if not self._can_be_targeted(
+                        #
+                        # **Not asked of "a source of your choice".** A source
+                        # is chosen, not targeted (CR 609.7a; CR 115.1 lists
+                        # what targets), so shroud, hexproof and protection —
+                        # each a statement about being *targeted* — have no
+                        # bearing on whether it may be chosen. Asked anyway, a
+                        # warded permanent was treated differently from its
+                        # plain twin 390 times in 1,400, over the 28 abilities
+                        # in the pool that choose a source
+                        # (tests/engine/test_chosen_source_census.py).
+                        if not choosing_a_source and not self._can_be_targeted(
                             perm, card, caster_index=caster_index,
                             ability_source=ability_source, source_spec=spec,
                         ):

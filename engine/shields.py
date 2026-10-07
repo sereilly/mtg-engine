@@ -850,7 +850,8 @@ def make_half_charge(rounding: str, source_name: str | None = None) -> Shield:
 
 
 def make_color_shield(
-    colors, source_name: str | None = None, *, any_recipient: bool = False
+    colors, source_name: str | None = None, *, any_recipient: bool = False,
+    source=None,
 ) -> Shield:
     """A Circle of Protection's shield, against one colour or several.
 
@@ -867,8 +868,17 @@ def make_color_shield(
     """
     if isinstance(colors, str):
         colors = (colors,)
+    # *source* is the object "a <colour> source **of your choice**" named
+    # (CR 609.7a), where the activation named one. CR 615.8: the shield
+    # prevents "the next instance of damage from **that source**" — and CR
+    # 615.9 still rechecks the colour when it would deal it, which is why the
+    # two are separate fields ``prevention._source_matches`` asks in turn. It
+    # was not recorded at all ("matching is by color"), so a Circle that named
+    # the Hill Giant spent itself on the Goblin beside it. None is the
+    # announcement that named nothing (an AI seat, a headless caller): the
+    # sourceless form every chosen-source shield has, answering the colour.
     return Shield(
-        kind=PREVENT_FROM_COLOR, uses=1, colors=tuple(colors),
+        kind=PREVENT_FROM_COLOR, uses=1, colors=tuple(colors), source=source,
         source_name=source_name, any_recipient=any_recipient,
     )
 
@@ -933,7 +943,8 @@ def make_recipient_class_shield(
 
 
 def make_source_subject_shield(
-    source_filter: dict, seat: int | None = None, source_name: str | None = None
+    source_filter: dict, seat: int | None = None, source_name: str | None = None,
+    *, source=None,
 ) -> Shield:
     """A Circle of Protection keyed on a printed **noun phrase**.
 
@@ -953,6 +964,7 @@ def make_source_subject_shield(
     return Shield(
         kind=PREVENT_FROM_COLOR,
         uses=1,
+        source=source,
         source_filter=dict(source_filter),
         filter_seat=seat,
         source_name=source_name,
@@ -977,7 +989,9 @@ def make_targeting_source_shield(source_name: str | None = None) -> Shield:
     )
 
 
-def make_source_type_shield(card_type: str, source_name: str | None = None) -> Shield:
+def make_source_type_shield(
+    card_type: str, source_name: str | None = None, *, source=None,
+) -> Shield:
     """A Circle of Protection keyed on a card type rather than a colour.
 
     The same `kind`, so it sits in the same band, is spent by the same
@@ -985,5 +999,6 @@ def make_source_type_shield(card_type: str, source_name: str | None = None) -> S
     to differs.
     """
     return Shield(
-        kind=PREVENT_FROM_COLOR, uses=1, source_type=card_type, source_name=source_name
+        kind=PREVENT_FROM_COLOR, uses=1, source_type=card_type, source=source,
+        source_name=source_name,
     )
