@@ -20,7 +20,7 @@ from engine.cost_modifiers import spell_cost_tax
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
-from engine.legality import cast_target_kind
+from engine.legality import activation_target_obligation, cast_target_kind
 from engine.models import Permanent, PlayerState
 from engine.layer_bridge import displayed_type_line
 from engine.library_top import top_is_public
@@ -30,7 +30,8 @@ from engine.activation_prohibitions import activation_prohibition
 from engine.keywords import abilities_lost_at, derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import derive_cast_spec, usable_activated_abilities
+from engine.targeting import (derive_cast_spec, spec_is_a_cost,
+                              usable_activated_abilities)
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -664,6 +665,75 @@ def _serialize_modes(card, game: Game | None = None, caster_index: int | None = 
     return modes
 
 
+#: Spec kinds that are not a pick of one object or player, so "naming nothing"
+#: is not a question about them.
+_NOT_A_SINGLE_PICK = frozenset({
+    "none", "modal", "faces", "hand_card", "divided", "roles",
+})
+
+
+def _may_name_nothing(spec: dict, ability) -> bool:
+    """Whether an activation of *ability* may be announced naming **nothing**
+    from the picker *spec* describes.
+
+    The engine's own answer — ``legality.activation_target_obligation``, the
+    one definition of "this ability owes a target" the activation gate and the
+    wire's bare-activation refusal read. None there is a picker that is a
+    *choice*: "an artifact source **of your choice**" (CR 609.7a: a source is
+    chosen, not targeted), "up to one target creature".
+
+    Only for a picker of one object or player: a cost, a division, a walk of
+    roles and a counted or X-sized list each have a prompt of their own.
+    """
+    if ability is None or not isinstance(spec, dict):
+        return False
+    if spec.get("kind") in _NOT_A_SINGLE_PICK or spec_is_a_cost(spec):
+        return False
+    if spec.get("max_targets") or spec.get("x_targets"):
+        return False
+    return activation_target_obligation(ability) is None
+
+
+def _mark_pickers_that_owe_nothing(perm_dict: dict, usable: list) -> None:
+    """Write ``may_name_nothing`` onto the activation specs of one permanent
+    whose ability owes no target (:func:`_may_name_nothing`).
+
+    ``requires_target`` goes false beside it, on the wire's copy: the engine
+    writes that field as "there is a picker" (``kind != "none"``), which for
+    these is the opposite of what the words say.
+
+    **Why the client is told.** The browser's activation cascade refuses an
+    empty picker — "No valid artifact targets in
+    play" — for every kind alike. So a Circle of Protection: Artifacts on a
+    table with no artifact could not be activated by a person at all, where
+    the engine accepts the activation from every other caller: nothing is
+    targeted, so nothing is owed (CR 609.7), and a source-less Circle arms its
+    shield against the next source of its printed kind. The same refusal met
+    a planeswalker's "+1: … up to one target creature" on a board with no
+    creature. Absent wherever a target is owed, which is nearly every spec.
+
+    Each per-ability spec is marked by its own ability. The permanent's
+    top-level spec describes "the first ability that chooses anything": the
+    one ability of a single-ability permanent, and otherwise the first whose
+    own spec is a picker.
+    """
+    per_ability = perm_dict.get("ability_target_specs")
+    described = None
+    if isinstance(per_ability, list):
+        for spec, ability in zip(per_ability, usable):
+            if _may_name_nothing(spec, ability):
+                spec["may_name_nothing"] = True
+                spec["requires_target"] = False
+            if described is None and spec.get("kind") not in (None, "none"):
+                described = ability
+    elif len(usable) == 1:
+        described = usable[0]
+    top = perm_dict.get("target_spec")
+    if _may_name_nothing(top, described):
+        top["may_name_nothing"] = True
+        top["requires_target"] = False
+
+
 def _apply_generic_tax_to_cost(cost_text: str, tax: int) -> str:
     """Fold ``tax`` extra generic mana into a printed cost string (e.g. Gloom's
     +{3} on white spells: '{W}' -> '{3}{W}', '{3}{R}' -> '{6}{R}')."""
@@ -1161,6 +1231,7 @@ def _serialize_player(
                     game.activation_target_spec(seat, idx, ability_index=k)
                     for k in range(len(usable))
                 ]
+            _mark_pickers_that_owe_nothing(perm_dict, usable)
             # CR 602.5: why each usable ability may not be activated **now**,
             # in the engine's own words, or None — indexed like the
             # ``ability_index`` the activate action takes. One predicate

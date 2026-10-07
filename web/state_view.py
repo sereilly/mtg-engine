@@ -64,7 +64,7 @@ from engine.targeting import (derive_cast_spec, spec_roles,
                               usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
-from .prompts import PromptContext, render_prompts
+from .prompts import PromptContext, blocking_prompt, render_prompts
 from .session_store import Session
 
 from .presence import seat_is_connected
@@ -442,6 +442,83 @@ def _card_castable_now(
     return True
 
 
+def _band_forms(game) -> list[dict]:
+    """CR 702.22c's two ways a set of the active player's attackers may be
+    declared as one band, as facts about *this* board.
+
+    One entry per form that some creature there can lead, each
+    ``{"members", "needs", "extras"}`` over the active player's battlefield
+    slots: a set of attackers is a legal band of that form when it lies inside
+    ``members``, holds at least one creature of ``needs``, and has no more
+    than ``extras`` others (None: any number).
+
+    * the plain form — "one or more attacking creatures with banding and up to
+      one attacking creature without banding": every creature is a member,
+      the ones with banding are needed, one other may join;
+    * a "bands with other [quality]" form — "one or more attacking [quality]
+      creatures with 'bands with other [quality]' and any number of other
+      [quality] creatures": the [quality] creatures are the members, the ones
+      holding the ability are needed, and the rest are unbounded.
+
+    Both read through the predicates the declaration itself is validated by
+    (``Game._creature_has_banding``, layer 6; ``engine/banding.py``'s quality
+    filter), because who may band is not a fact about a card: Helm of Chatzuk
+    grants banding, Humility takes it, Cathedral of Serra hands a band to a
+    colour of legendary creatures.
+
+    The browser counted the word "banding" on each selected card and applied
+    the plain form's arithmetic. The word it had right — the payload's keyword
+    strip is layer 6's — and the rule it had half of: measured over every set
+    of two or more creatures on six boards, 12 of 60 answers were wrong, every
+    one a legal "bands with other" band the button was never offered for.
+    """
+    from engine.banding import (abilities_of, band_quality, band_quality_filter,
+                                computed_abilities_of)
+    from engine.subject_filters import subject_matches
+
+    creatures = [
+        (slot, permanent)
+        for slot, permanent in enumerate(game.controlled_by(game.active_player_index))
+        if permanent.is_creature
+    ]
+    forms: list[dict] = []
+    banders = [slot for slot, permanent in creatures if game._creature_has_banding(permanent)]
+    if banders:
+        forms.append({
+            "members": [slot for slot, _permanent in creatures],
+            "needs": banders,
+            "extras": 1,
+        })
+    held = {
+        slot: {
+            band_quality(ability)
+            for ability in abilities_of(computed_abilities_of(permanent))
+        }
+        for slot, permanent in creatures
+    }
+    for quality in sorted({q for qualities in held.values() for q in qualities if q}):
+        described = band_quality_filter(quality)
+        if described is None:
+            continue
+        members = [
+            slot for slot, permanent in creatures
+            if subject_matches(game, permanent, described)
+        ]
+        needs = [slot for slot in members if quality in held[slot]]
+        if needs and len(members) >= 2:
+            forms.append({"members": members, "needs": needs, "extras": None})
+    return forms
+
+
+def _priority_blocked(session: Session, viewer_seat: int | None) -> str | None:
+    """Why a ``pass_priority`` from *viewer_seat* would be refused by a pending
+    prompt, or None. See the ``priority_blocked`` field of the state."""
+    if viewer_seat is None:
+        return None
+    blocking = blocking_prompt(session.game, viewer_seat, "pass_priority", frozenset())
+    return blocking[0].blocked_detail if blocking is not None else None
+
+
 def _compute_playable_hand_indices(session: Session, player_index: int) -> list[int]:
     """Return hand indices the player can legally cast right now (considering timing,
     mana already in pool plus potential mana from untapped lands, and restrictions)."""
@@ -808,8 +885,12 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     game = session.game
     if game.current_turn_phase == "combat" and game.current_step == "declare_attackers":
         combat_state["legal_attacker_indices"] = game.legal_attacker_indices(game.active_player_index)
+        # CR 702.22c: which sets of the active player's creatures may be
+        # declared as one band. See ``_band_forms``.
+        combat_state["band_forms"] = _band_forms(game)
     else:
         combat_state["legal_attacker_indices"] = []
+        combat_state["band_forms"] = []
     # CR 802.4: aggregate legal blocker assignments across every defending
     # player this combat (2+ in FFA), not just a single pre-picked one. Blocker
     # indices are only unambiguous within one defender's battlefield, so tag
@@ -928,6 +1009,17 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         "island_sanctuary_pending": session.island_sanctuary_pending and viewer_seat == session.current_turn,
         "time_vault": time_vault_info,
         "pregame": _build_pregame_info(session, viewer_seat),
+        # The prompt that would refuse a ``pass_priority`` from this viewer
+        # right now, as the refusal the action endpoint would give — or None.
+        # The registry's own answer (``prompts.blocking_prompt``, the loop
+        # ``do_action`` refuses with), so it covers every prompt kind,
+        # another seat's included where that kind holds the whole table.
+        #
+        # The client passes priority for its player in three situations, and
+        # it decided whether a prompt was in the way from a hand-kept list of
+        # the prompts it knew: a trigger choosing its target (CR 603.3d) was
+        # not on it, so the pass was sent into the prompt and answered 400.
+        "priority_blocked": _priority_blocked(session, viewer_seat),
         # CR 601.3 permissions: what the viewer may currently cast or play from
         # their graveyard or exile (engine/cast_permissions.py). Empty for a
         # spectator — a permission belongs to a seat.
