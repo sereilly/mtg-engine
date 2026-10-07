@@ -68,9 +68,9 @@ class _Counted:
             self.tally["copies"] += 1
             return real_copy(game, carried)
 
-        def untouched(game, **asked):
+        def untouched(*args, **asked):
             before = self.tally["copies"]
-            reading = real_untouched(game, **asked)
+            reading = real_untouched(*args, **asked)
             self.tally["baselines"] += self.tally["copies"] - before
             return reading
 

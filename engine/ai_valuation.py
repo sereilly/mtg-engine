@@ -3327,23 +3327,102 @@ def _rehearsal_seed(game) -> int:
     return 7919 * int(getattr(game, "turn", 0) or 0) + len(game.log)
 
 
-def _scratch(game, carried, detach):
-    """One scratch copy set up for a rehearsal: detached if asked (``True``,
-    or ``"abstract"`` for :func:`_detach`'s *owing_nothing*), its libraries
-    shuffled and its randomness on the rehearsal's own seed."""
+def _card_order(card) -> tuple:
+    """Where a card sorts among the cards of a hidden zone: by what it is,
+    never by where it was. Two cards that sort alike are the same card to
+    anything a rehearsal reads (a deck is one object per printing, repeated)."""
+    return (card.name, str(getattr(card, "oracle_id", "") or ""))
+
+
+def conceal_from(game, seat: int) -> None:
+    """Replace what *seat* cannot see on *game* — a scratch copy — with
+    something it **could** be (CR 400.2: a library and a hand are hidden
+    zones).
+
+    A rehearsal carries a cast out, and a copy of the game is a copy of
+    everything in it: the next card of every library, and every card in every
+    other player's hand. Read as they stand, a rehearsed Duress knows whether
+    there is a card for it to take and a rehearsed Brainstorm knows what it
+    will draw — a decision made on what the seat was never shown.
+
+    So, on the copy and before anything is cast on it:
+
+    * **every library is put in a random order** — the seat's own included,
+      since it knows what is in it and not where;
+    * **each other player's hand is dealt again**, out of that player's hand
+      and library pooled: the same number of cards, drawn from everything the
+      seat cannot tell apart.
+
+    Each pool is sorted by what the cards are (:func:`_card_order`) before it
+    is shuffled, and the shuffle runs on the rehearsal's own seed
+    (:func:`_rehearsal_seed`). That is what makes this **exactly** blind
+    rather than roughly so: the redeal is a function of *which* cards are
+    hidden and of nothing about *where* they are, so two games that differ
+    only in which of them an opponent is holding rehearse the same cast the
+    same way (``tests/ai/test_ai_hidden_information_census.py``). Shuffled
+    from the order they stood in, a fixed permutation of the real hand and
+    library would still have dealt the real hand back some of the time.
+
+    **What the seat may see is left where it is**, through the two seams that
+    say so for a viewer in the browser: a hand a standing effect reveals to
+    it (``revealed_hands.hand_revealed_to`` — Telepathy, Revelation), and the
+    top card of a library that is played revealed or that its owner may look
+    at (``library_top.top_is_public`` / ``top_is_visible``).
+
+    What this does not know is what the seat has *been shown and remembers*:
+    a card it looked at with a Duress of its own two turns ago, one it
+    bounced to that hand, the three it put back with a Brainstorm. Nothing in
+    the engine keeps that record — a reveal is an event (``record_reveal``),
+    not a standing fact about a card — so every such card is dealt back into
+    the unknown. A seat holding a prompt keeps its hand as it is: the prompt
+    may name cards in it by position.
+    """
+    import random
+
+    from .library_top import top_is_public, top_is_visible
+    from .revealed_hands import hand_revealed_to
+
+    owing = {choice.player_index for choice in game.pending_choices}
+    for index, player in enumerate(game.players):
+        library = player.library
+        seen_on_top = library[:1] if (
+            top_is_visible(game, index) if index == seat else top_is_public(game, index)
+        ) else []
+        hidden = library[len(seen_on_top):]
+        deals_hand = (
+            index != seat
+            and index not in owing
+            and not hand_revealed_to(game, index, seat)
+        )
+        if deals_hand:
+            hidden = [*player.hand, *hidden]
+        hidden.sort(key=_card_order)
+        random.shuffle(hidden)
+        if deals_hand:
+            held = len(player.hand)
+            player.hand[:] = hidden[:held]
+            hidden = hidden[held:]
+        library[:] = [*seen_on_top, *hidden]
+
+
+def _scratch(game, carried, detach, seat):
+    """One scratch copy set up for *seat*'s rehearsal: detached if asked
+    (``True``, or ``"abstract"`` for :func:`_detach`'s *owing_nothing*), its
+    randomness on the rehearsal's own seed and everything *seat* cannot see
+    dealt again (:func:`conceal_from`)."""
     import random
 
     clone, carried = scratch_copy_with(game, carried)
     if detach:
         _detach(clone, owing_nothing=detach == "abstract")
     random.seed(_rehearsal_seed(game))
-    for player in clone.players:
-        random.shuffle(player.library)
+    conceal_from(clone, seat)
     return clone, carried
 
 
 def _untouched(
-    game, *, carried=None, detach: bool = False, without=None, without_key=None,
+    game, seat: int, *, carried=None, detach: bool = False, without=None,
+    without_key=None,
 ) -> dict:
     """The table with nothing cast: whatever is on the stack resolves, and
     the turn runs out. What every candidate of one decision is measured
@@ -3358,10 +3437,12 @@ def _untouched(
     something the spell did.
     """
     cache = _DELIBERATION.get()
-    slot = ("untouched", id(carried), detach, without_key)
+    # Per seat: the table with nothing cast is the table as *seat* can know
+    # it, and two seats do not see the same one.
+    slot = ("untouched", seat, id(carried), detach, without_key)
     if cache is not None and slot in cache:
         return cache[slot]
-    clone, carried = _scratch(game, carried, detach)
+    clone, carried = _scratch(game, carried, detach, seat)
     if without is not None:
         without(clone, carried)
     _settle_scratch(clone)
@@ -3399,13 +3480,15 @@ def rehearse(
     the standing; a discard at an empty hand is worth nothing because nothing
     moved.
 
-    **What it must not do is look ahead.** The copy's libraries are shuffled
-    and its randomness reseeded (:func:`_rehearsal_seed`), so a draw, a
-    search's shuffle or a coin flip in a rehearsal says what such a cast is
-    *like*, never what the real one will turn up; the real game's random
-    sequence is put back exactly as it was. What a rehearsal does see is what
-    the engine's own defaults see — the opposing hand's size and, for an
-    effect that reads it, its contents.
+    **What it must not do is look ahead, or look at what is hidden.** On the
+    copy every library is in a random order and every other player's hand is
+    dealt again out of what *seat* cannot tell apart (:func:`conceal_from`),
+    and its randomness is reseeded (:func:`_rehearsal_seed`) — so a draw, a
+    discard that takes "a noncreature, nonland card", a search's shuffle or a
+    coin flip in a rehearsal says what such a cast is *like*, never what the
+    real one will turn up; the real game's random sequence is put back exactly
+    as it was. What a rehearsal does see is what the seat sees: the table,
+    its own hand, how many cards everybody else is holding.
 
     None rather than a guess when it cannot run: from inside another
     rehearsal (:func:`rehearsing`), on a table that is part-way through a
@@ -3456,10 +3539,10 @@ def _rehearse(
     real_sequence = random.getstate()
     try:
         untouched = _untouched(
-            game, carried=carried, detach=detach, without=without,
+            game, seat, carried=carried, detach=detach, without=without,
             without_key=without_key,
         )
-        clone, copied = _scratch(game, carried, detach)
+        clone, copied = _scratch(game, carried, detach, seat)
         result = perform(clone) if carried is None else perform(clone, copied)
         # Paid for, and not yet resolved: what is in each pool now is what
         # the cost left there. Mana that **appears** after this is the
@@ -3542,6 +3625,7 @@ __all__ = [
     "cards_drawn_by_target",
     "caster_sacrifice_steps",
     "castable_commanders",
+    "conceal_from",
     "chosen_color_sweeps",
     "chosen_creature_type_side",
     "color_most_worth_sweeping",
