@@ -1561,6 +1561,10 @@ def choose_trigger_mode(game: Game, choice, stated: int) -> int:
                     bool(table._resolve_mode_choice(prompt, index))
                 ),
                 leaves_hand=False, carried=choice, detach=True, without=without,
+                label=(
+                    f"{getattr(getattr(item, 'card', None), 'name', None) or 'a trigger'}"
+                    f" (its triggered ability's mode {index})"
+                ),
             )
             if rehearsal is None:
                 return stated

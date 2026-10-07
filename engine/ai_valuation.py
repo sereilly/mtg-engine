@@ -49,6 +49,7 @@ stays with the other stated policies in ``_default_optional_pay``.
 
 from __future__ import annotations
 
+from collections import Counter
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -576,11 +577,90 @@ def spell_target_side(card: CardDefinition) -> str | None:
     return None
 
 
-#: Kinds that are a gift to the **player** they name and whose category says
-#: otherwise: an untap of everything a player controls is filed under
-#: ``tapping``, which reads as a denial. Held to live handler kinds by
+#: Instruction kinds whose effect on the **player** they name is a gift, and
+#: whose category cannot say so: cards drawn and life gained are filed under
+#: ``zones`` and ``life`` beside the discards and the life lost, an untap of
+#: everything a player controls under ``tapping`` (which reads as a denial),
+#: and an extra turn under ``turns`` beside the steps a player is made to
+#: skip. A shield needs no entry — ``prevention`` is a family that answers
+#: (:func:`activation_target_side`). What the compiled program does rather
+#: than what a card is called, so every printing of "target player draws N
+#: cards" answers the same way. Held to live handler kinds by
 #: ``tests/ai/test_ai_rehearsed_casts.py``.
-_SEAT_GIFT_KINDS = frozenset({"untap_all_matching", "untap_up_to_matching"})
+#:
+#: **One set, where there were two.** ``engine/targeting.py`` kept draws,
+#: life and one shield for the web route's default seat; this module kept the
+#: two untaps for the AI's tie-break and read everything else off a family —
+#: so "untap all lands target player controls" (Early Harvest) was a gift to
+#: an AI seat and defaulted to the opponent for a person, and "target player
+#: draws" was a gift by list there and nobody's here
+#: (``tests/regressions/test_named_player_gift_readers.py``: 23 of 178).
+#: ``grant_extra_turn`` was in neither: "target player takes an extra turn
+#: after this one" (Time Warp) went to the opponent on both roads.
+_SEAT_GIFT_KINDS = frozenset({
+    "draw_target_cards", "target_gains_life",
+    "untap_all_matching", "untap_up_to_matching",
+    "grant_extra_turn",
+})
+
+#: Kinds a family reading must not answer for when the object is a **player**:
+#: "you and target player exchange control of the creature you each control
+#: with the highest mana value" (Juxtapose) opens on a choice made off the
+#: named player's board, which is filed with the attachments it was written
+#: for. A choice is not something done to the player; what is done with it is
+#: the next sentence's.
+_SEAT_NO_SIDE_KINDS = frozenset({"choose_permanent"})
+
+
+def _helps_the_player_it_names(instruction: OracleInstruction) -> bool:
+    """Whether *instruction* — the step a cast's player target is described
+    by — is a gift to that player: by its kind (``_SEAT_GIFT_KINDS``), or by
+    its family where the family can speak about a player at all."""
+    kind = instruction.kind
+    if kind in _SEAT_GIFT_KINDS:
+        return True
+    if kind in _SEAT_DENIAL_KINDS or kind in _SEAT_NO_SIDE_KINDS:
+        return False
+    return activation_target_side(instruction) == "you"
+
+
+def cast_helps_the_player_it_names(
+    card: CardDefinition, program=None, *, mode_index: "int | None" = None,
+) -> bool:
+    """Whether the player a cast of *card* announces (CR 601.2c) is one its
+    effect **helps** — "target player draws three cards", "target player gains
+    X life", "prevent the next 3 damage that would be dealt to any target",
+    "untap all lands target player controls".
+
+    **The one derivation, for the two callers that must aim a cast at a seat
+    with nothing else to go on**: the web route's default for a cast whose
+    announcement named none (``web/action_helpers._default_target``), and the
+    AI's tie-break between seats a rehearsal measures alike
+    (:func:`spell_seat_side`). They were two, in two modules, and could
+    disagree about the same card.
+
+    Read off the slot the cast's own picker is derived from
+    (``targeting._first_described_slot``, through the mode the cast names),
+    so the answer is about the target the announcement actually makes — one
+    step, not every step the spell goes on to carry out, some of which are
+    about somebody else ("…that player loses 5 life **and you gain 5
+    life**"). False where the card prints "target **opponent**" — the caster
+    is not a seat that phrase admits — where the first thing it describes is
+    not a player, and for a permanent spell, whose own cast names nobody.
+    """
+    from .targeting import _first_described_slot, announced_mode_instructions
+
+    if card.primary_type not in SPELL_TYPES:
+        return False
+    if program is None:
+        program = compile_card_oracle(card)
+    slot = _first_described_slot(announced_mode_instructions(program, mode_index))
+    if slot is None:
+        return False
+    spec, instruction = slot
+    if spec.get("kind") not in _SEAT_SPEC_KINDS or spec.get("opponents_only"):
+        return False
+    return _helps_the_player_it_names(instruction)
 
 
 def spell_seat_side(card: CardDefinition) -> str:
@@ -592,26 +672,16 @@ def spell_seat_side(card: CardDefinition) -> str:
     shows in a standing (cards drawn or discarded, life, damage); what does
     not is nearly always done *to* somebody — a hand looked at, a library
     milled, lands tapped, a step skipped, a turn's casts forbidden — so the
-    answer is the opponent, unless a step is a gift by its family (a shield,
-    a regeneration) or by its kind (``_SEAT_GIFT_KINDS``). Tied at the
-    caster's own seat, "tap all lands target player controls" tapped the
-    caster's.
+    answer is the opponent, unless the player named is one the effect helps
+    (:func:`cast_helps_the_player_it_names`, in the mode being weighed).
+    Tied at the caster's own seat, "tap all lands target player controls"
+    tapped the caster's; tied at the opponent's, "target player takes an
+    extra turn" gave one away.
     """
-    def walk(instructions):
-        for instruction in instructions:
-            yield instruction
-            for key in ("steps", "then", "else", "action", "otherwise", "unpaid"):
-                nested = (instruction.payload or {}).get(key)
-                if isinstance(nested, (list, tuple)):
-                    yield from walk(nested)
-
-    for step in walk(_spell_instructions(card)):
-        if step.kind in _SEAT_GIFT_KINDS or (
-            step.kind not in _SEAT_DENIAL_KINDS
-            and activation_target_side(step) == "you"
-        ):
-            return "you"
-    return "opponent"
+    return (
+        "you" if cast_helps_the_player_it_names(card, mode_index=mode_considered(card))
+        else "opponent"
+    )
 
 
 def entry_trigger_target_side(card: CardDefinition) -> str | None:
@@ -2976,6 +3046,39 @@ _GAME_BOOKKEEPING = frozenset({
     "current_phase", "current_turn_phase", "current_step",
 })
 
+#: Rehearsals that **raised**, by what was being rehearsed and what the
+#: engine raised: ``"Lightning Bolt: KeyError: 'amount' (damage.py:212 in
+#: deal_damage)"`` -> how many times.
+#:
+#: A rehearsal that raises answers None, and a policy reads None as "this
+#: could not be weighed" — which is right for a game somebody is playing (a
+#: crash in a copy is not a crash in the game) and is also a **silence**:
+#: before a cast was rehearsed, the same exception was raised by the real
+#: cast and stopped a simulated run on the spot, which is how a
+#: crash-on-cast card used to be found. So each one is written down here,
+#: process-wide, and the simulator reads what its own run added
+#: (``SimulationReport.rehearsals_raised``): a raised rehearsal is a crash
+#: the game was spared, not a quiet "no". Nothing in the engine reads this
+#: to decide anything.
+REHEARSALS_RAISED: Counter = Counter()
+
+
+def _note_raised(what: "str | None", raised: BaseException) -> None:
+    """Write one raised rehearsal into ``REHEARSALS_RAISED``: what was being
+    carried out, the exception, and the innermost frame it came from."""
+    import os
+    import traceback
+
+    frames = traceback.extract_tb(raised.__traceback__)
+    where = ""
+    if frames:
+        last = frames[-1]
+        where = f" ({os.path.basename(last.filename)}:{last.lineno} in {last.name})"
+    REHEARSALS_RAISED[
+        f"{what or 'a rehearsal'}: {type(raised).__name__}: {raised}{where}"
+    ] += 1
+
+
 _REHEARSING: ContextVar[bool] = ContextVar("ai_rehearsing", default=False)
 _DELIBERATION: ContextVar["dict | None"] = ContextVar("ai_deliberation", default=None)
 
@@ -3455,7 +3558,7 @@ def _untouched(
 def rehearse(
     game, seat: int, perform, *, spell_name: str | None = None,
     leaves_hand: bool = True, key=None, carried=None, detach: bool = False,
-    without=None, without_key=None,
+    without=None, without_key=None, label: str | None = None,
 ) -> "Rehearsal | None":
     """Carry *perform* out on a scratch copy of *game* and report what it did
     to *seat*'s position — or None when no rehearsal could be run.
@@ -3493,7 +3596,10 @@ def rehearse(
     None rather than a guess when it cannot run: from inside another
     rehearsal (:func:`rehearsing`), on a table that is part-way through a
     resolution (:func:`mid_resolution`), or when the copy raises — a crash
-    in a rehearsal is not a crash in the game.
+    in a rehearsal is not a crash in the game, and is not nothing either:
+    it is written into ``REHEARSALS_RAISED`` under *spell_name* (or *label*,
+    for an answer that is not a cast), which a simulated run reports and
+    fails on.
 
     *carried* is an object copied with the game and handed to *perform*
     beside the copy — the prompt being answered, which holds its own stack
@@ -3510,7 +3616,7 @@ def rehearse(
     """
     asked = dict(
         spell_name=spell_name, leaves_hand=leaves_hand, carried=carried,
-        detach=detach, without=without, without_key=without_key,
+        detach=detach, without=without, without_key=without_key, label=label,
     )
     cache = _DELIBERATION.get()
     if cache is None or key is None:
@@ -3524,7 +3630,7 @@ def rehearse(
 def _rehearse(
     game, seat: int, perform, *, spell_name: str | None = None,
     leaves_hand: bool = True, carried=None, detach: bool = False, without=None,
-    without_key=None,
+    without_key=None, label: str | None = None,
 ) -> "Rehearsal | None":
     """:func:`rehearse`, uncached."""
     import random
@@ -3580,7 +3686,8 @@ def _rehearse(
             now += CARD_WORTH
             lasting += CARD_WORTH
         return Rehearsal(accepted=True, changed=changed, now=now, lasting=lasting)
-    except Exception:
+    except Exception as raised:
+        _note_raised(label or spell_name, raised)
         return None
     finally:
         random.setstate(real_sequence)
@@ -3609,6 +3716,7 @@ def _walk_program(program):
 __all__ = [
     "CARD_WORTH",
     "MANA_ABILITY_KINDS",
+    "REHEARSALS_RAISED",
     "Rehearsal",
     "SELF_PAYMENT_KINDS",
     "SOURCE_HAMPER_KINDS",
@@ -3624,6 +3732,7 @@ __all__ = [
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
     "caster_sacrifice_steps",
+    "cast_helps_the_player_it_names",
     "castable_commanders",
     "conceal_from",
     "chosen_color_sweeps",
