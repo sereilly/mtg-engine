@@ -47,7 +47,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PLS | 143 | 255 | 91.0% | 90.6% | 67.8% | 126 |
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| APC *(measured)* | 143 | 240 | 71.2% | 67.5% | 52.5% | 93 |
+| APC *(measured)* | 143 | 240 | 74.2% | 70.4% | 55.4% | 97 |
 | **All (shipped)** | **7263** | **10637** | **90.6%** | **90.0%** | **61.5%** | **5567** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -68,8 +68,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 29 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
-| 13 | 9 | expected 'card' |  |
 | 7 | 1 | no lowering for RawEffect |  |
+| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -1075,6 +1075,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature is dealt damage, it deals that much damage to target opponent.`
   - `{2}{R}, {T}: This creature fights another target creature.`
 - **Brass Herald**
+  - `When this creature enters, reveal the top four cards of your library. Put all creature cards of the chosen type revealed this way into your hand and the rest on the bottom of your library in any order.`
   - `Creatures of the chosen type get +1/+1.`
 - **Brass Man**
   - `At the beginning of your upkeep, you may pay {1}. If you do, untap this creature.`
@@ -2814,6 +2815,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Enlightened Tutor**
   - `Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.`
   - `Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.`
+- **Enlistment Officer**
+  - `When this creature enters, reveal the top four cards of your library. Put all Soldier cards revealed this way into your hand and the rest on the bottom of your library in any order.`
 - **Enraging Licid**
   - `{R}, {T}: This creature loses this ability and becomes an Aura enchantment with enchant creature. Attach it to target creature. You may pay {R} to end this effect.`
 - **Enslaved Horror**
@@ -3754,6 +3757,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Goblin Recruiter**
   - `When this creature enters, search your library for any number of Goblin cards, reveal them, then shuffle and put those cards on top in any order.`
   - `When this creature enters, search your library for any number of Goblin cards, reveal them, then shuffle and put those cards on top in any order.`
+- **Goblin Ringleader**
+  - `When this creature enters, reveal the top four cards of your library. Put all Goblin cards revealed this way into your hand and the rest on the bottom of your library in any order.`
 - **Goblin Rock Sled**
   - `This creature can't attack unless defending player controls a Mountain.`
   - `This creature can't attack unless defending player controls a Mountain.`
@@ -3846,6 +3851,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Grasslands**
   - `{T}, Sacrifice this land: Search your library for a Forest or Plains card, put it onto the battlefield, then shuffle.`
 - **Grave Defiler**
+  - `When this creature enters, reveal the top four cards of your library. Put all Zombie cards revealed this way into your hand and the rest on the bottom of your library in any order.`
   - `{1}{B}: Regenerate this creature.`
 - **Grave Pact**
   - `Whenever a creature you control dies, each other player sacrifices a creature of their choice.`
@@ -4790,6 +4796,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Kavu Glider**
   - `{W}: This creature gets +0/+1 until end of turn.`
   - `{U}: This creature gains flying until end of turn.`
+- **Kavu Howler**
+  - `When this creature enters, reveal the top four cards of your library. Put all Kavu cards revealed this way into your hand and the rest on the bottom of your library in any order.`
 - **Kavu Lair**
   - `Whenever a creature with power 4 or greater enters, its controller draws a card.`
 - **Kavu Mauler**
@@ -9152,6 +9160,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`
   - `At the beginning of your draw step, you may draw two additional cards. If you do, choose two cards in your hand drawn this turn. For each of those cards, pay 4 life or put the card on top of your library.`
+- **Sylvan Messenger**
+  - `When this creature enters, reveal the top four cards of your library. Put all Elf cards revealed this way into your hand and the rest on the bottom of your library in any order.`
 - **Sylvan Paradise**
   - `One or more target creatures become green until end of turn.`
 - **Symbiosis**
@@ -9522,6 +9532,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tidal Control**
   - `Pay 2 life or {2}: Counter target red or green spell. Any player may activate this ability.`
 - **Tidal Courier**
+  - `When this creature enters, reveal the top four cards of your library. Put all Merfolk cards revealed this way into your hand and the rest on the bottom of your library in any order.`
   - `{3}{U}: This creature gains flying until end of turn.`
 - **Tidal Flats**
   - `{U}{U}: For each attacking creature without flying, its controller may pay {1}. If that player doesn't, creatures you control blocking that creature gain first strike until end of turn.`

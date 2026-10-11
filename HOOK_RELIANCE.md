@@ -51,7 +51,7 @@ Held at this rate, supporting the 26,113-card release line would need about **31
 | PLS | 143 | 143 (100.0%) | 0 (0.0%) | 255 | 0 (0.0%) | 0 | 0.0 |
 | 7ED | 335 | 335 (100.0%) | 0 (0.0%) | 385 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| APC *(measured)* | 143 | 94 (65.7%) | 0 (0.0%) | 154 | 0 (0.0%) | 0 | 0.0 |
+| APC *(measured)* | 143 | 101 (70.6%) | 0 (0.0%) | 168 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **4781** | **4781 (100.0%)** | **52 (1.1%)** | **7415** | **48 (0.6%)** | **58** | **1.2** |
 
 *(measured)* — APC are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
