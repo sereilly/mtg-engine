@@ -431,7 +431,9 @@ def test_every_cast_is_held_to_a_flagbearer_on_the_other_side(pool, by_name):
     # the gate cannot pass.
     assert counts["one slot: bound"] > 430, dict(counts)
     assert counts["one slot: another target refused"] > 400, dict(counts)
-    assert counts["one slot: nothing named refused"] > 400, dict(counts)
+    # The instants and sorceries alone: an Aura cast naming nothing is refused
+    # a gate earlier, for want of anything to enchant.
+    assert counts["one slot: nothing named refused"] > 200, dict(counts)
     assert counts["one slot, the Flagbearer: accepted"] > 400, dict(counts)
     assert counts["unbound"] > 250, dict(counts)
     assert counts["several slots: bound"] > 40, dict(counts)
