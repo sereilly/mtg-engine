@@ -2783,8 +2783,6 @@ def redirect_next_damage_between_targets_until_eot(
     arms nothing rather than a record that can move nothing and would sit on
     its recipient until the cleanup step.
     """
-    from ..divided_damage import DIVIDED_TARGETS, divided_entry
-
     card_name = getattr(context.card, "name", "")
     entries = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
     if len(entries) != 2:
