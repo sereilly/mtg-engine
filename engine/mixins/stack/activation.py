@@ -1003,6 +1003,7 @@ class AbilityActivationMixin:
         ):
             sole = self.sole_legal_activation_target(
                 controller_index, permanent, ability, x_value=int(x_value or 0),
+                named_seat=target_player_index,
             )
             if sole is not None and sole.get("kind") == "player":
                 if target_player_index is None:
@@ -1041,6 +1042,29 @@ class AbilityActivationMixin:
         # slid into it — which is nothing at all when it was the last — and the
         # shield went to the player alone with the card reporting success.
         divided_targets = _stamped_divided_targets(self, divided_targets)
+
+        # CR 602.2b under a requirement an *opponent's permanent* prints about
+        # this announcement: "While an opponent is choosing targets as part of
+        # … activating an ability they control, that player must choose at
+        # least one Flagbearer on the battlefield if able." (Standard Bearer.)
+        # The whole announcement — ids, roles and the division together — after
+        # the gate above has said each named target is legal and after the
+        # one-legal-target default has named what it can, and before any cost
+        # is paid. Free on every board with no such permanent on it.
+        required_refusal = self.activation_target_requirement_refusal(
+            controller_index, permanent, ability,
+            target_player_index=target_player_index,
+            target_permanent_index=target_permanent_index,
+            target_permanent_ids=target_permanent_ids,
+            target_role_refs=target_role_refs,
+            divided_targets=divided_targets,
+            x_value=int(x_value or 0),
+        )
+        if required_refusal is not None:
+            self.log.append(required_refusal)
+            return SimulationResult(
+                permanent.card.name, False, "unsupported", required_refusal
+            )
 
         # CR 601.2d itself, asked of an **ability** — the twin of the gate
         # ``queue_from_hand`` makes one file over, and it was missing here

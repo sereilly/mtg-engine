@@ -648,7 +648,21 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                     f"{card.name}: the spell it would counter is no longer on the stack"
                 )
                 return True, "resolved"
-        target = chosen if (chosen is not None and chosen in game.stack) else game.stack[-1]
+        if chosen is not None and not any(item is chosen for item in game.stack):
+            # CR 608.2b for every object that **named** a spell: the target has
+            # left the stack, so nothing is countered. The fallback below is
+            # the headless convention for a caller that named *none*; taken for
+            # one that named a spell which is gone, it counters a bystander. A
+            # counterspell never reached here that way (the stack removes a
+            # spell whose every target is illegal before its instructions run),
+            # but an ability did: Mystic Snake's trigger, its named Shock
+            # countered in response, countered the Lightning Bolt under it. By
+            # identity, for the reason the branch above gives.
+            game.log.append(
+                f"{card.name}: the spell it would counter is no longer on the stack"
+            )
+            return True, "resolved"
+        target = chosen if chosen is not None else game.stack[-1]
         # **The one place this engine decides which kind of object it
         # countered.** CR 701.6a counters a spell and an ability alike, and
         # CR 113.7a is the entire difference between them: a countered spell's

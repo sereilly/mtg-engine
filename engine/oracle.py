@@ -5517,6 +5517,18 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if landwalk_per_type_spec(normalized) is not None:
         return True
+    # "While an opponent is choosing targets as part of casting a spell they
+    # control or activating an ability they control, that player must choose at
+    # least one Flagbearer on the battlefield if able." (Standard Bearer,
+    # Coalition Honor Guard.) A requirement on somebody else's announcement
+    # (CR 601.2c), enforced off the board at the cast and activation paths —
+    # no instruction, and a creature is refused for any line nothing reads.
+    # Asked of the reader those paths enforce through, so a noun it cannot test
+    # stays a refused card rather than a requirement that demands nothing.
+    from .target_requirements import must_choose_claims_line
+
+    if must_choose_claims_line(normalized):
+        return True
     # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
     # permanent's own controller, enforced off the board at every cast — so
     # like every table above it produces no instruction, and a creature whose
@@ -7060,6 +7072,17 @@ def _derived_static_claims(
     # reports unsupported however well the protection works.
     if any(immunity_claims_line(line) for line in oracle_text.splitlines()):
         claims.append(TARGET_IMMUNITY_CLAIM)
+    # "…that player must choose at least one Flagbearer on the battlefield if
+    # able." (Standard Bearer, Coalition Flag.) The mirror of the line above —
+    # a permanent's text about what somebody else's announcement must include
+    # rather than what it may not — read off the board by the cast and
+    # activation paths (engine/target_requirements.py), so there is no
+    # instruction and the claim asks the reader that enforces it.
+    from .target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
+    from .target_requirements import must_choose_claims_line
+
+    if any(must_choose_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(TARGET_REQUIREMENTS_CLAIM)
     # "Players play with their hands revealed." (Revelation.) The per-seat
     # state payload derives who may see whose hand from the permanent's own
     # text (engine/revealed_hands.py), so there is no instruction — and on an

@@ -2492,6 +2492,13 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # same two-halves payload; without the row the ability announced no seat
     # and its picker offered only the discard cost.
     "animate_matching_until_eot": _sweep_controller_spec,
+    # "Creatures **target player** controls get +1/+1 until end of turn."
+    # (Day.) The pump sweep's turn at the same two-halves payload, and the one
+    # finding `picker_sweep.py` had in Apocalypse: with no row the half derived
+    # no picker, so a client sent a bare cast. ``_matching_sweep_spec`` so a
+    # payload that reaches the picker through the ordinary ``targets`` key
+    # keeps the prompt it had.
+    "buff_creatures_global": _matching_sweep_spec,
     # "Draw a card for each tapped creature **target opponent** controls."
     # (Theft of Dreams.) The seat is inside the counted amount rather than
     # inside a noun phrase, which is the only thing that separates this row
@@ -4904,6 +4911,16 @@ _CANT_BE_TARGETED = re.compile(r"can't be the targets? of[^.;]*")
 _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 
 
+# **Somebody else's announcement, described** — "While an opponent **is
+# choosing targets** as part of casting a spell they control…, that player
+# must choose at least one Flagbearer" (Standard Bearer). The word is about the
+# targets an *opponent's* spell chooses, so the creature printing it raises no
+# picker of its own: `picker_sweep.py` reported both Flagbearers as the Roots
+# class the day they compiled. Erased, for `_CANT_BE_TARGETED`'s reason — the
+# clause is one part of a sentence, and ends at its comma.
+_OTHERS_CHOOSING_TARGETS = re.compile(r"(?:is|are) choosing targets[^,.;]*")
+
+
 def line_names_a_cast_target(line: str) -> bool:
     """Whether *line* names a target the caster chooses as the spell is cast.
 
@@ -4928,6 +4945,7 @@ def line_names_a_cast_target(line: str) -> bool:
     # and the quoted grant do not cover still has to name a target for this to
     # be one.
     remaining = _QUOTED_ABILITY.sub("", _CANT_BE_TARGETED.sub("", line))
+    remaining = _OTHERS_CHOOSING_TARGETS.sub("", remaining)
     return bool(_TARGET_WORD.search(remaining))
 
 

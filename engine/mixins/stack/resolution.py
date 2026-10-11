@@ -312,6 +312,11 @@ class StackResolutionMixin:
         # trigger's source was cast as, not chosen for this object -- see
         # ``_stack_push``.
         announced_at_cast: bool = False,
+        # …and the one such announcement that is not a permanent or a player:
+        # the **spell** a permanent spell named for its entry trigger ("When
+        # this creature enters, counter target spell", Mystic Snake). By
+        # identity, as ``StackItem.target_stack_item`` always is.
+        target_stack_item: StackItem | None = None,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -342,6 +347,7 @@ class StackResolutionMixin:
                 hook_event=hook_event,
                 x_value=x_value,
                 announced_at_cast=announced_at_cast,
+                target_stack_item=target_stack_item,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -366,6 +372,7 @@ class StackResolutionMixin:
                     target_player_index=target_player_index,
                     target_permanent_index=target_permanent_index,
                     target_permanent_id=target_permanent_id,
+                    target_stack_item=target_stack_item,
                     x_value=x_value,
                     ability_instruction=instruction,
                     ability_effect_kind=effect_kind,
@@ -555,6 +562,18 @@ class StackResolutionMixin:
         "player", "player_or_planeswalker", "any",
     })
 
+    #: ...and a **spell on the stack**. "When this creature enters, counter
+    #: target spell" (Mystic Snake) is the pool's first trigger to print one,
+    #: and the note two sets above — "a spell on the stack … reach[es] the
+    #: resolution through [its] own path" — was true of every *counterspell*
+    #: and of no trigger: this one reached the stack naming nothing, and its
+    #: handler countered whatever was on top, the Snake's own controller's
+    #: spell included. Chosen as it is put on the stack like every other
+    #: target (CR 603.3d), out of ``_enumerate_stack_targets``, the list the
+    #: cast picker and ``cast_stack_target_refusal`` read; with no spell to
+    #: name, the ability is removed.
+    _CHOOSABLE_TRIGGER_STACK_KINDS = frozenset({"stack"})
+
     def _choose_trigger_targets(self, item: StackItem) -> None:
         """Choose *item*'s target as it goes on the stack (CR 603.3d/601.2c).
 
@@ -640,6 +659,18 @@ class StackResolutionMixin:
         if offer is None:
             return None
         spec, _chooser, candidates = offer
+        if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
+            # A spell, named by identity. Still one the trigger could choose —
+            # it may have been countered, or have stopped answering the printed
+            # phrase, while the permanent spell waited above it.
+            if item.target_stack_item is None:
+                return "unnamed"
+            if any(
+                offered is item.target_stack_item
+                for offered in self._stack_objects_offered(candidates)
+            ):
+                return None
+            return "illegal"
         ids = item.target_permanent_id
         named = [
             permanent_id
@@ -698,7 +729,7 @@ class StackResolutionMixin:
         instruction = item.ability_instruction
         if instruction is None or modal_trigger_modes(instruction):
             return
-        if item.target_stack_item is not None:
+        if not announced and item.target_stack_item is not None:
             return
         # A stamped target means the event made the choice — **unless what the
         # fire site stamped is the ability's own source**. The two combat fire
@@ -732,11 +763,38 @@ class StackResolutionMixin:
         if spec is None:
             return
         picks_a_player = spec.get("kind") in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
+        picks_a_spell = spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS
         if (
             not picks_a_player
+            and not picks_a_spell
             and spec.get("kind") not in self._CHOOSABLE_TRIGGER_TARGET_KINDS
         ):
             return
+        if picks_a_spell:
+            # The printed line has to have said "target", for the player
+            # half's reason below: "Whenever a player casts a spell, counter
+            # **it**" (Nether Void) derives the same stack spec for a spell the
+            # *event* named, and that is bound, not chosen.
+            if not announces_a_target(instruction):
+                return
+            # A printed controller reaches a stack spec as ``stack_controller``
+            # ("…spell an opponent controls"); one that did not is a phrase the
+            # stack enumerator would ignore, and this declines for the reason
+            # the board half does a few lines down.
+            if (
+                _target_filter_controller(getattr(instruction, "payload", None))
+                is not None
+                and spec.get("stack_controller") is None
+            ):
+                return
+            candidates = self._enumerate_targets(
+                item.caster_index, item.card, dict(spec), for_cast=False,
+                ability_instruction=instruction,
+                source_permanent=item.source_permanent,
+                ability_source=item.source_permanent,
+                triggered=True,
+            )
+            return dict(spec), item.caster_index, candidates
         if picks_a_player:
             # The printed line has to have said "target". See
             # :func:`announces_a_target`: the spec's "player" may be a kind
@@ -825,6 +883,9 @@ class StackResolutionMixin:
         The prompt half of :meth:`_choose_trigger_targets`.
         """
         instruction = item.ability_instruction
+        if spec.get("kind") in self._CHOOSABLE_TRIGGER_STACK_KINDS:
+            self._choose_trigger_stack_target(item, chooser_index, candidates)
+            return
         offered = []
         for candidate in candidates:
             if candidate.get("kind") == "player":
@@ -885,6 +946,64 @@ class StackResolutionMixin:
             _trigger_item=item,
             **several,
         )
+
+    def _stack_objects_offered(self, candidates) -> list:
+        """The stack objects a list of ``_enumerate_stack_targets`` entries
+        names. The entries count from the **top** (the picker's convention);
+        the engine's list is bottom-first."""
+        depth = len(self.stack)
+        found = []
+        for candidate in candidates or ():
+            index = candidate.get("stack_index")
+            if candidate.get("kind") != "stack" or not isinstance(index, int):
+                continue
+            position = depth - 1 - index
+            if 0 <= position < depth:
+                found.append(self.stack[position])
+        return found
+
+    def _choose_trigger_stack_target(
+        self, item: StackItem, chooser_index: int, candidates: list,
+    ) -> None:
+        """CR 603.3d for a trigger whose target is a **spell**: name one of
+        *candidates* on *item*, or take the ability off the stack when there is
+        none.
+
+        **Every seat takes the stated default, and that is a decline with its
+        part named rather than a policy.** The ``trigger_target`` prompt this
+        would otherwise arm carries permanents and players; the client renders
+        nothing for a stack object, so a prompt holding only those would be one
+        a human seat could not answer — the soft-lock ``ENTRY_CHOICES`` already
+        cost 28 cards. A human names the spell the ordinary way, as the
+        permanent is **cast** (the cast picker is a stack picker, and the
+        announcement rides to here); this default is what stands behind a cast
+        that named nothing, an entry nothing cast, and a named spell that left.
+
+        The default is the topmost spell on the side the effect wants
+        (``_default_trigger_target_side``: a counter is aimed at an opponent's
+        spell), and the topmost offered when that side has none — the target
+        is mandatory, so a Snake entering over nothing but its controller's
+        own spell counters it.
+        """
+        offered = self._stack_objects_offered(candidates)
+        if not offered:
+            if _target_is_up_to(getattr(item.ability_instruction, "payload", None)):
+                return
+            self.stack = [existing for existing in self.stack if existing is not item]
+            self.log.append(
+                f"{item.card.name}'s triggered ability was removed from the stack: "
+                "it has no legal target (603.3d)"
+            )
+            return
+        wanted = self._default_trigger_target_side(item, chooser_index)
+        order = {id(existing): position for position, existing in enumerate(self.stack)}
+        offered.sort(key=lambda existing: order[id(existing)], reverse=True)
+        chosen = next(
+            (existing for existing in offered if existing.caster_index in wanted),
+            offered[0],
+        )
+        item.target_stack_item = chosen
+        self.log.append(f"{item.card.name}: targets {chosen.card.name}")
 
     def _trigger_chooser_seat(self, item: StackItem, chooser: str) -> int | None:
         """Which seat announces *item*'s target when the card names one, or
@@ -1598,13 +1717,18 @@ class StackResolutionMixin:
                     value is not None
                     for value in (
                         target_player_index, target_permanent_index,
-                        target_permanent_id,
+                        target_permanent_id, stack_target,
                     )
                 )
                 self._apply_self_enters_battlefield_triggers(
                     caster_index, permanent, target_player_index,
                     target_permanent_index, target_permanent_id,
                     targets_announced=announced,
+                    # "When this creature enters, counter target spell" (Mystic
+                    # Snake): the spell the cast named. It was dropped here, so
+                    # the trigger named nothing and countered the top of the
+                    # stack whichever spell the caster had picked.
+                    target_stack_item=stack_target,
                 )
             ran_entry_text = self._apply_aura_effect(
                 caster_index,
@@ -1867,6 +1991,7 @@ class StackResolutionMixin:
         target_permanent_id: int | list[int | None] | None = None,
         *,
         targets_announced: bool = True,
+        target_stack_item: StackItem | None = None,
     ) -> None:
         """Put a just-entered permanent's own "when this enters" triggered
         abilities on the stack (CR 603.6a, CR 603.3).
@@ -1977,6 +2102,7 @@ class StackResolutionMixin:
             value is not None
             for value in (
                 target_player_index, target_permanent_index, target_permanent_id,
+                target_stack_item,
             )
         )
         announcement_spent = False
@@ -2012,6 +2138,8 @@ class StackResolutionMixin:
                     target_permanent_id=target_permanent_id,
                     announced_at_cast=True,
                 )
+                if target_stack_item is not None:
+                    event["target_stack_item"] = target_stack_item
             # CR 603.4: an ability whose "if" is false as the event occurs does
             # not trigger at all. Asked here as well as at the push, because
             # only a trigger that *fired* spends the announcement: one whose
@@ -2074,8 +2202,8 @@ class StackResolutionMixin:
             return True
         return (
             kind in self._CHOOSABLE_TRIGGER_PLAYER_KINDS
-            and announces_a_target(instruction)
-        )
+            or kind in self._CHOOSABLE_TRIGGER_STACK_KINDS
+        ) and announces_a_target(instruction)
 
     def _select_executable_instruction(
         self, card: CardDefinition, mode_index: int | None = None

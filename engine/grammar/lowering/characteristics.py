@@ -555,6 +555,22 @@ def _lower_pump(
         if filt.excluded_types:
             payload["exclude_types"] = list(filt.excluded_types)
         payload["all"] = filt.controller != "you"
+        # "Creatures **target player** controls get +1/+1 until end of turn."
+        # (Day.) A seat the announcement chooses (CR 601.2c), and the one
+        # controller word `all` cannot say: it means "every player's", so the
+        # sentence pumped the whole table and derived no picker at all. The
+        # word travels as payload — `targeting._sweep_controller_spec` reads it
+        # for the picker and the handler narrows by it through
+        # ``subject_matches``, the arrangement the tap, destroy and animation
+        # sweeps over the same printed phrase already have. Any other seat
+        # word (one the firing event would have to name) is refused rather
+        # than widened to everybody.
+        if filt.controller in ("target_player", "target_opponent"):
+            payload["controller"] = filt.controller
+        elif filt.controller not in (None, "you", "opponent"):
+            raise LoweringError(
+                f"the global buff cannot scope to {filt.controller}", node=node
+            )
         # "**Other** creatures you control get +1/+0" (Bolt Hound). Dropped, the
         # Hound buffed itself as well: a strictly better card than the one
         # printed. Emitted only when set, so every payload written before this

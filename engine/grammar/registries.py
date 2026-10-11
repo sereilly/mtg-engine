@@ -74,6 +74,8 @@ from ..prevention import prevention_claims_line
 from ..regeneration import denies_regeneration_line, self_regeneration_line
 from ..replacements import replacement_claims_line
 from ..revealed_hands import revealed_hands_line
+from ..target_requirements import CLAIM as TARGET_REQUIREMENTS_CLAIM
+from ..target_requirements import must_choose_claims_line
 from ..targeting import enchant_line_subject
 from ..untap_restrictions import self_untap_line, untap_restriction_for
 
@@ -475,6 +477,17 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # never frozen. The claim asks the reader that pass grants through.
     if landwalk_per_type_spec(line) is not None:
         return "landwalk"
+
+    # engine/target_requirements.py — "While an opponent is choosing targets as
+    # part of casting a spell they control or activating an ability they
+    # control, that player must choose at least one Flagbearer on the
+    # battlefield if able." (Standard Bearer.) A rule about somebody else's
+    # announcement (CR 601.2c), asked off the board at the two announcement
+    # paths and by the pickers in front of them, so there is nothing to lower.
+    # The claim asks the reader those paths enforce through: a noun it cannot
+    # test leaves the line unclaimed rather than admitted and demanding nothing.
+    if must_choose_claims_line(line):
+        return TARGET_REQUIREMENTS_CLAIM
 
     return None
 
