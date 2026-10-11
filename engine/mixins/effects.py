@@ -1194,20 +1194,49 @@ class EffectsMixin:
         then make any draws that were queued behind the replaced one."""
         return self.resolve_replacement_choice(player_index, chosen_index, kind="lamp_draw")
 
-    def _discard_card(self, player: PlayerState, card) -> None:
+    def discard_cause_seat(self, cause_seat: int | None = None) -> int | None:
+        """Which seat's spell or ability is causing a discard happening *now*
+        (CR 109.5), or None when nothing is — a cleanup-step discard, a cost
+        the player chose to pay.
+
+        One reader, because two cards ask and must agree: Psychic Purge's
+        "**when** a spell or ability an opponent controls causes you to discard
+        this card" is a trigger and Dodecapod's "**if** …, put it onto the
+        battlefield … instead" is a replacement, on the same condition.
+
+        *cause_seat* is the seat a **prompt** recorded when it was armed
+        (``arm_pending_choice``'s ``_cause_seat``): by the time a seat answers,
+        the resolution that asked has returned and ``resolving_seats`` is
+        empty, which would read as "nothing caused this".
+        """
+        if isinstance(cause_seat, int):
+            return cause_seat if 0 <= cause_seat < len(self.players) else None
+        return self.resolving_seats[-1] if self.resolving_seats else None
+
+    def _discard_card(
+        self, player: PlayerState, card, *, cause_seat: int | None = None
+    ) -> None:
         """Move a discarded card to the graveyard, or let a discard replacement
-        take it instead (Library of Leng, CR 701.9c).
+        take it instead (Library of Leng, CR 701.9c; Dodecapod, onto the
+        battlefield).
 
         Use for random/forced discards (combat damage, "discards X cards at
         random", cleanup) where the player can't pick the card but a
         replacement may still redirect it.
+
+        The event carries **who caused it** (``discard_cause_seat``), because a
+        replacement may turn on that and the card itself cannot say: it is the
+        seat resolving right now, or *cause_seat* when the caller is finishing
+        a discard some earlier resolution armed.
         """
+        cause = self.discard_cause_seat(cause_seat)
         consumed, _ = apply_replacements(
-            self, "discard", {"player": player, "card": card}
+            self, "discard",
+            {"player": player, "card": card, "cause_seat": cause},
         )
         if not consumed:
             self.put_card_into_graveyard(player, card)
-        self._announce_discard_triggers(player, card)
+        self._announce_discard_triggers(player, card, cause_seat=cause_seat)
         self.announce_discard(player, card)
 
     def announce_discard(self, player: PlayerState, card) -> None:
@@ -1301,10 +1330,8 @@ class EffectsMixin:
         `resolving_seats` is empty by then and the caller passes the seat it
         read off the choice's own stack item instead.
         """
-        causer = cause_seat
+        causer = self.discard_cause_seat(cause_seat)
         if causer is None:
-            causer = self.resolving_seats[-1] if self.resolving_seats else None
-        if not isinstance(causer, int) or not (0 <= causer < len(self.players)):
             return
         # By identity, not `players.index`: PlayerState is a value-compared
         # dataclass, so two seats holding the same cards match each other.

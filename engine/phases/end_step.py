@@ -110,6 +110,14 @@ class EndStepMixin:
         # "At the beginning of **your** next end step, …" (Necropotence). The
         # controller's own, so this one is seated where the line above is not.
         fire_delayed_triggers(self, "controllers_next_end_step", seat=player_index)
+        # "At the beginning of the end step of **that player's next turn**, …"
+        # (Suppress.) Seated by the player the creating effect named rather
+        # than by the ability's controller (`EVENTS_SEATED_BY_BOUND_PLAYER`),
+        # and an entry armed during this very turn waits for the next one
+        # (`EVENTS_AFTER_THIS_TURN`).
+        fire_delayed_triggers(
+            self, "bound_players_next_turns_end_step", seat=player_index
+        )
         # "At the beginning of **that turn's** end step, you lose the game."
         # (Final Fortune.) The end step of the extra turn the creating spell
         # queued, so it is announced only on an extra turn and only for the

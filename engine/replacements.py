@@ -241,6 +241,9 @@ EXILE_INSTEAD_OF_LEAVING = 10  # Dreams of the Dead
 RETURN_TO_HAND_INSTEAD_OF_DYING = 20  # Firestorm Phoenix
 LIBRARY_TOP_INSTEAD_OF_DYING = 30  # Gravebane Zombie
 DISCARD_DESTINATION = 10  # Library of Leng
+# Before the Library's offer: both replace where a discarded card goes, and
+# CR 616.1's default for a seat nobody asks is the battlefield.
+DISCARD_TO_BATTLEFIELD = 5  # Dodecapod
 # Before the two draw replacements that *consume* the event, and for the
 # player's benefit: a doubler applied first turns one draw into two, and the
 # Lamp then replaces one of them, so the player gets both effects. The other
@@ -2996,6 +2999,138 @@ def _resolve_leng_discard(game, choice: ReplacementChoice, option_index: int) ->
     return 0
 
 
+# ---------------------------------------------------------------------------
+# A discard that lands on the battlefield (CR 614.1a, CR 701.9a)
+# ---------------------------------------------------------------------------
+
+#: "If a spell or ability an opponent controls causes you to discard this card,
+#: put it onto the battlefield **with two +1/+1 counters on it** instead of
+#: putting it into your graveyard." (Dodecapod.) The counters are optional in
+#: the *template* — the sentence without them is a card Magic also prints
+#: (Loxodon Smiter, Wilt-Leaf Liege, Obstinate Baloth) — and what they are is
+#: read by the entry reader that already knows the phrase, so a number word or
+#: a counter kind that reader refuses leaves the whole line unclaimed.
+_DISCARD_TO_BATTLEFIELD_RE = re.compile(
+    r"^if a spell or ability an opponent controls causes you to discard this "
+    r"card, put it onto the battlefield(?: (?P<counters>with [a-z]+ "
+    r"\S+ counters? on it))? instead of putting it into your graveyard$"
+)
+
+
+def discard_to_battlefield(line: str) -> dict | None:
+    """``{"counters": {kind: count}}`` for the Dodecapod sentence, or None.
+
+    Read by the interceptor below and by ``replacement_claims_line``, so what
+    is implemented and what is claimed cannot drift.
+    """
+    match = _DISCARD_TO_BATTLEFIELD_RE.match(line.strip().lower().rstrip("."))
+    if match is None:
+        return None
+    counters: dict[str, int] = {}
+    if match.group("counters"):
+        from .enter_effects import enters_with_pt_counters
+
+        placement = enters_with_pt_counters(
+            f"this creature enters {match.group('counters')}"
+        )
+        if placement is None:
+            return None
+        counters[placement[1]] = placement[0]
+    return {"counters": counters}
+
+
+def _discard_battlefield_entry(game, player, card, cause_seat) -> dict | None:
+    """The Dodecapod reading of this discard, or None when it is an ordinary
+    one — the applicability predicate, pure.
+
+    Three questions, and each is half of the printed condition. **This card**:
+    the sentence is the discarded card's own, functioning from the hand because
+    that is the only zone its condition can be met in (the reason
+    ``_announce_discard_triggers`` gives for Psychic Purge's trigger). **A
+    spell or ability causes**: there is a causing seat at all — a cleanup-step
+    discard and a cost the player paid have none. **An opponent controls**: and
+    that seat is not the discarding player's own (CR 109.5).
+    """
+    if not isinstance(cause_seat, int) or card is None:
+        return None
+    seat = next(
+        (i for i, seated in enumerate(game.players) if seated is player), None
+    )
+    if seat is None or cause_seat == seat:
+        return None
+    if getattr(card, "primary_type", None) in ("instant", "sorcery"):
+        # CR 304.4 / 307.4: an instant or sorcery can't enter the battlefield,
+        # so the event is not replaced and the card goes where a discard goes.
+        return None
+    for line in (getattr(card, "oracle_text", "") or "").splitlines():
+        spec = discard_to_battlefield(line)
+        if spec is not None:
+            return spec
+    return None
+
+
+def discarded_onto_battlefield(game, player, card, cause_seat) -> bool:
+    """Put *card* onto the battlefield instead of into *player*'s graveyard, if
+    its own text says a discard caused by *cause_seat* does that. Returns
+    whether it did; False means the caller's default move still has to happen.
+
+    The whole effect in one place, because a card is discarded through two
+    seams and both must agree: ``Game._discard_card`` reaches this through the
+    ``discard`` event below, and the chosen-discard seam
+    (``handlers/zones._resolve_one_discard``) calls it directly, since that one
+    offers Library of Leng's destination itself and never raises the event.
+
+    The card has **still been discarded** (the card's ruling of 2022-12-08):
+    the caller announces the discard exactly as it would have, and a sentence
+    reading "the discarded card" reads this one.
+
+    The counters go on through the placement seams as the permanent arrives —
+    the arrangement ``return_self_from_graveyard`` has for Sand Golem.
+    """
+    spec = _discard_battlefield_entry(game, player, card, cause_seat)
+    if spec is None:
+        return False
+    seat = next(i for i, seated in enumerate(game.players) if seated is player)
+    arrival = Permanent(card=card)
+    game._put_permanent_onto_battlefield(seat, arrival, None, from_zone="hand")
+    game.log.append(
+        f"{player.name} discarded {card.name}, which was put onto the "
+        "battlefield instead of into their graveyard"
+    )
+    if game.is_on_battlefield(arrival):
+        for kind, count in spec["counters"].items():
+            if kind == "+1/+1":
+                game.place_plus1_counters(arrival, int(count))
+            else:
+                game.place_pt_counters(arrival, kind, int(count))
+            game.log.append(f"{card.name} enters with {count} {kind} counter(s)")
+    return True
+
+
+def _applies_discard_to_battlefield(game, payload: dict) -> bool:
+    return _discard_battlefield_entry(
+        game, payload.get("player"), payload.get("card"),
+        payload.get("cause_seat"),
+    ) is not None
+
+
+@replacement_effect(
+    "discard", DISCARD_TO_BATTLEFIELD, applies=_applies_discard_to_battlefield
+)
+def _battlefield_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Dodecapod: "If a spell or ability an opponent controls causes you to
+    discard this card, put it onto the battlefield with two +1/+1 counters on
+    it instead of putting it into your graveyard."
+
+    Ordered ahead of Library of Leng's offer, which is CR 616.1's default for
+    a seat nobody asks: both replace where the card goes, and a creature on the
+    battlefield is the choice that leaves nothing on the table."""
+    discarded_onto_battlefield(
+        game, payload["player"], payload["card"], payload.get("cause_seat")
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 def _doubled_draw_count(game, payload: dict) -> int:
     """How many cards this draw event should take, once the doublers have had
     it — the same number back when none apply.
@@ -4200,6 +4335,10 @@ def _revealed_draw_taxed(game, payload: dict) -> ReplacementOutcome | None:
             source_name=source.card.name,
             queued_draws=queued,
             queued_exclude_sources=queued_excludes,
+            # CR 109.5: the discard is this permanent's ability's doing, so
+            # its controller is who "causes" it — an opponent's Crypt puts a
+            # Dodecapod onto the battlefield and your own does not.
+            cause_seat=game.controller_index_of(source),
         )
         payload["drawn"] = drawn
         return ReplacementOutcome(replaced=True)
@@ -4626,6 +4765,13 @@ def replacement_claims_line(line: str) -> bool:
     # the interceptor uses, so a scope word it cannot answer leaves the line
     # unclaimed rather than admitted with nothing exiled.
     if graveyard_exile_scope(normalized) is not None:
+        return True
+    # "If a spell or ability an opponent controls causes you to discard this
+    # card, put it onto the battlefield with two +1/+1 counters on it instead of
+    # putting it into your graveyard." (Dodecapod.) Matched by shape because
+    # the counters are payload — and absent on the cards that print the
+    # sentence without them — through the reader the interceptor itself asks.
+    if discard_to_battlefield(normalized) is not None:
         return True
     from .land_mana_swaps import substitution_line
 

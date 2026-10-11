@@ -492,9 +492,9 @@ def lower_record_condition(
     if isinstance(condition, ast.DiscardedThisWay) and condition.filter is not None:
         # "If you discard a **creature** card this way" (Aether Rift). What
         # went rather than whether anything did, so it reads the cards and not
-        # the count — and demands the step that records them, which today is
-        # the random discard alone: a chosen discard writes only its number,
-        # and against that producer the branch would never run.
+        # the count — and demands a step that records them. The random discard
+        # always did; the chosen discards write the list when their prompt is
+        # answered, since Gerrard's Verdict counted land cards off it.
         if DISCARDED_THIS_WAY not in produced:
             raise LoweringError(
                 "'discard a <type> card this way' with no discard before it "

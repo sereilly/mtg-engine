@@ -144,6 +144,12 @@ def _lower_exile_hand_pile(
         who = "you"
     elif actor == "each_player" and owner in ("owner", "each_player"):
         who = "each_player"
+    elif actor in ("target_player", "target_opponent") and owner == "owner":
+        # "**Target player** exiles all cards from **their** hand face down."
+        # (Suppress.) One chosen seat's hand, the same pairing checked the same
+        # way; which seats the picker offers is the ``targets`` description
+        # stamped below.
+        who = "target_player"
     else:
         raise LoweringError("the hand exile reads your own hand", node=node)
     if node.duration.kind is not None or node.counters:
@@ -182,6 +188,8 @@ def _lower_exile_hand_pile(
         # Scroll Rack's payloads stay byte-identical and no behaviour signature
         # moves.
         payload["who"] = who
+        if who == "target_player":
+            _describe_targets(payload, node.actor)
     if described:
         payload["card_filter"] = described
     if node.face_down:

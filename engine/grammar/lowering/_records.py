@@ -275,7 +275,11 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # many were actually discarded when it is answered, which is the only place
     # the number exists — the hand the step was handed is not the hand the
     # player chose from.
-    "discard_controller_cards": "discarded_count",
+    #
+    # …and *which* cards, beside it ("for each **land card** discarded this
+    # way", Gerrard's Verdict): the prompt's answer writes both. The count
+    # stays the primary, so "if you do" asks what it has always asked.
+    "discard_controller_cards": ("discarded_count", DISCARDED_THIS_WAY),
     # "Discard a card **at random**. If you discard a creature card this way,
     # return it from your graveyard to the battlefield …" (Aether Rift.) The
     # sample takes its cards inline, so this step knows *which* went as well as
@@ -313,7 +317,12 @@ _PRODUCES: dict[str, str | tuple[str, ...]] = {
     # name and the draw refuses (idiom 7), which is the honest failure; with it
     # the count is the one the player actually gave rather than the printed
     # two, and an empty hand draws none.
-    "discard_target_cards": "discarded_count",
+    #
+    # "Target player discards two cards. You gain 3 life for each **land card
+    # discarded this way**." (Gerrard's Verdict.) The same answer also records
+    # *which* cards went — see ``oracle_types.DISCARDED_THIS_WAY``. The count
+    # stays the primary, for the reason it does on the random discard above.
+    "discard_target_cards": ("discarded_count", DISCARDED_THIS_WAY),
     # "Choose two cards in your hand … **For each of those cards**, …"
     # (Sylvan Library.) The pick records what it chose, which is the only
     # place the next sentence can read that set from: nothing about a hand

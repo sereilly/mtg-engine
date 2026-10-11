@@ -283,6 +283,10 @@ _SEAT_RECORDS: dict[str, str] = {
     # Ertai's Meddling: the controller of the spell an earlier step of this same
     # resolution exiled, written to the scratchpad by that step.
     "bound_players_upkeep": "exiled_spell_controller",
+    # Suppress: the player the creating spell **targeted** — "that player's
+    # next turn" behind "target player exiles …". Read off the resolution's own
+    # target, so no step has to have written anything.
+    "bound_players_next_turns_end_step": "target_player",
 }
 
 

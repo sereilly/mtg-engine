@@ -370,6 +370,17 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             # answers it, and the handler layer does not import from the
             # grammar's lowering package.
             recorded = (context.results or {}).get("exiled_spell_controller")
+        elif binds_player == "target_player":
+            # "…the end step of **that player's** next turn" behind "target
+            # player exiles …" (Suppress). A fourth record and the plainest:
+            # the seat this resolution itself targeted. By identity, because a
+            # `PlayerState` compares by value and two seats holding the same
+            # cards match each other.
+            recorded = next(
+                (i for i, seated in enumerate(game.players)
+                 if seated is context.target),
+                None,
+            )
         else:
             recorded = (context.results or {}).get("chosen_player")
         if not isinstance(recorded, int) or not (0 <= recorded < len(game.players)):
