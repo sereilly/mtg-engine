@@ -12,6 +12,30 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **581**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**5 unclaimed sentence(s) across 3 supported card(s).**
+
+- **False Dawn**
+  - `until end of turn, spells and abilities you control that would add colored mana instead add that much white mana`
+  - `until end of turn, you may spend white mana as though it were mana of any color`
+- **Legacy Weapon**
+  - `if legacy weapon would be put into a graveyard from anywhere, reveal legacy weapon and shuffle it into its owner's library instead`
+- **Quicksilver Dagger**
+  - `enchanted creature has "{t}: this creature deals 1 damage to target player or planeswalker`
+  - `you draw a card."`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |
