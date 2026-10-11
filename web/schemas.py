@@ -309,6 +309,12 @@ class TargetRoleRef(BaseModel):
     # address is one: a hole in a positional id list cannot say whether the
     # slot is a player or a permanent that has left.
     seat: int | None = Field(default=None, ge=0)
+    # …or the chosen **spell on the stack**: "Counter **target spell** and
+    # Suffocating Blast deals 3 damage to target creature." Top-first into the
+    # serialized stack, exactly as ``GameActionRequest.target_stack_index`` is
+    # and as the picker's own ``stack_index`` is — the fourth alternative, for
+    # the reason the seat is the third.
+    stack_index: int | None = Field(default=None, ge=0)
 
 
 class SearchPickRef(BaseModel):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..color_changes import change_color
+from ..color_changes import change_color, recolor_spell
 from ..continuous import next_timestamp
 from ..delayed_triggers import (END_OF_TURN, DelayedTrigger,
                                 arm_delayed_trigger)
@@ -15,6 +15,7 @@ from ..models import CardDefinition, Permanent
 from ..oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_TARGET_PERMANENTS,
                             COUNTERS_REMOVED,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
+                            SPELL_OR_OBJECT_TARGET,
                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                             OracleInstruction)
 from ..exiled_records import source_object
@@ -623,19 +624,6 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
-def recolor_spell(item, symbol: str) -> None:
-    """Make the spell *item* the colour *symbol* for as long as it is that
-    spell (CR 105.3: the new colour replaces the ones it had).
-
-    **The one write of a stack object's colour record**, the key
-    ``Game._stack_item_colors`` reads. The Lace cycle's spell half wrote it in
-    place and Vodalian Mystic's chosen colour would have been a second
-    spelling; a record with two writers is one a third forgets to stamp the
-    same way.
-    """
-    item.choices["color_override"] = symbol
-
-
 @effect_handler("recolor_target_from_text")
 def recolor_target_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     symbol = str(instruction.payload.get("target_color", ""))
@@ -719,7 +707,20 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
         # battlefield, so it is the half of the context a counter reads — and
         # only that half: falling back to a permanent would recolour whatever
         # the resolver could reach for an ability that named a spell.
-        return _recolor_stack_target_chosen_color(game, described, context)
+        return _recolor_stack_target_chosen_color(game, instruction, context)
+    if (
+        described.get("kind") == SPELL_OR_OBJECT_TARGET
+        and context.stack_target is not None
+    ):
+        # "Target **spell or permanent** becomes the color of your choice until
+        # end of turn." (Illusion, Blind Seer.) One target in one of two zones,
+        # and which one is what the announcement named: a stack object in the
+        # context is the answer "a spell", and it is the whole answer — a spell
+        # that has since left is CR 608.2b's illegal target, never a reason to
+        # go looking on the battlefield. That scan is what this card did while
+        # the union was unread: named a Lightning Bolt, recoloured the Grizzly
+        # Bears beside it.
+        return _recolor_stack_target_chosen_color(game, instruction, context)
     filters = described.get("filter") or {}
     observer = game.players.index(context.caster)
     target = resolve_target_permanent(
@@ -778,7 +779,9 @@ def stack_target_still_described(game: Game, described: dict, item) -> bool:
     ``_spell_is_one_of``, the reader the stack picker offered it with, so the
     announcement and the resolution cannot name different sets.
     """
-    if item is None or item not in game.stack:
+    # By identity: ``StackItem`` compares by value, and two casts of one card
+    # at one target are equal.
+    if item is None or not any(obj is item for obj in game.stack):
         return False
     if getattr(item, "ability_instruction", None) is not None or item.card is None:
         return False
@@ -791,24 +794,27 @@ def stack_target_still_described(game: Game, described: dict, item) -> bool:
 
 
 def _recolor_stack_target_chosen_color(
-    game: Game, described: dict, context: OracleExecutionContext
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
 ) -> tuple[bool, str]:
     """The spell half of ``recolor_target_chosen_color``.
 
     The colour is the one the ``choose_color`` step in front recorded while
     this ability resolved (CR 608.2d), and it is written to the spell's own
-    colour record — ``StackItem.choices["color_override"]``, the key the Lace
-    cycle writes and ``_stack_item_colors`` reads. One record, so a spell this
-    made blue is blue to Blue Elemental Blast, to protection, to Jaded
-    Response's "shares a color" and to the cast triggers that ask a colour.
+    colour record — the one the Lace cycle writes and ``_stack_item_colors``
+    reads (``color_changes.recolor_spell``). One record, so a spell this made
+    blue is blue to Blue Elemental Blast, to protection, to Jaded Response's
+    "shares a color" and to the cast triggers that ask a colour.
 
     A replacement, not an addition (CR 105.3): the spell is the chosen colour
-    and no other. It lasts while the object is that spell — a stack item that
-    resolves or is countered takes the record with it (CR 400.7).
+    and no other. With no printed duration it lasts indefinitely (CR 611.2a),
+    on the spell and on the permanent the spell becomes (CR 400.7a); with
+    "until end of turn" (Illusion, Blind Seer) it ends at cleanup, which a
+    spell never sees and the permanent it became does.
 
     An unanswered choice recolours nothing, for the permanent half's reason: a
     spell that became a colour nobody picked is the wrong colour.
     """
+    described = instruction.payload.get("targets") or {}
     item = context.stack_target
     name = context.card.name
     if not stack_target_still_described(game, described, item):
@@ -818,8 +824,13 @@ def _recolor_stack_target_chosen_color(
     if symbol is None:
         game.log.append(f"{name}: no colour was chosen, so nothing is recoloured")
         return True, "resolved"
-    recolor_spell(item, symbol)
-    game.log.append(f"{item.card.name} (on the stack) became {symbol} ({name})")
+    until_eot = bool(instruction.payload.get("until_eot"))
+    recolor_spell(item, symbol, until_eot=until_eot)
+    game.log.append(
+        f"{item.card.name} (on the stack) became {symbol}"
+        + (" until end of turn" if until_eot else "")
+        + f" ({name})"
+    )
     return True, "resolved"
 
 

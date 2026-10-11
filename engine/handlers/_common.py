@@ -2639,6 +2639,22 @@ def roles_still_legal(
                 return False
             resolved.append(game.players[seat])
             continue
+        # …and it may be a **spell** ("Counter target spell and … deals 3
+        # damage to target creature", Suffocating Blast). What CR 608.2b asks
+        # of one is whether it is still on the stack and still a spell the
+        # printed phrase admits — the stack picker's own list, asked again for
+        # this slot, by identity.
+        if role.get("kind") == "spell":
+            from ..targeting import _from_targets_payload
+
+            named = context.stack_target
+            admitted = game._offered_stack_targets(
+                observer, context.card, _from_targets_payload(role) or {}
+            )
+            if named is None or not any(obj is named for obj in admitted or ()):
+                return False
+            resolved.append(named)
+            continue
         perm = resolve_role_permanent(game, context, payload, role.get("role"))
         if perm is None or not game.is_on_battlefield(perm):
             return False

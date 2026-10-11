@@ -747,6 +747,19 @@ def _lower_change_text(node: ast.ChangeText) -> tuple[OracleInstruction, ...]:
             )
         payload["duration"] = "until_end_of_turn"
     assert isinstance(node.subject, ast.TargetSpec)
-    if _filter_payload(node.subject.filter):
-        _describe_targets(payload, node.subject)
+    # "…target **spell or permanent**" (Sleight of Mind, Magical Hack, Crystal
+    # Spray). The noun records the union now (``ObjectFilter.also_spell``), and
+    # this lowering carries it **without acting on the spell half** — stated
+    # here rather than left to the kind's fixed ``permanent`` row, because a
+    # union a lowering consumes in silence is how the half went unnoticed.
+    # What it would take is a text channel on a stack object: a spell's text
+    # is its ``StackItem.card``, every stack reader reads that field, and the
+    # card it holds is also the card that goes to the graveyard — so a changed
+    # spell needs an effective card beside its printed one (and CR 400.7a's
+    # carry to the permanent it becomes, as ``color_changes`` does for a
+    # colour). Until then the three offer a permanent and change a permanent,
+    # exactly as before the field existed; no compiled program moves.
+    union = frozenset({"also_spell"})
+    if _filter_payload(node.subject.filter, carried_separately=union):
+        _describe_targets(payload, node.subject, carried_separately=union)
     return (OracleInstruction("mark_text_modified", "", payload),)

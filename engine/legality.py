@@ -70,8 +70,10 @@ from .targeting import (
     derive_activation_spec,
     derive_cast_spec,
     derive_instruction_spec,
+    role_is_stack,
     role_relation_holds,
     spec_is_a_cost,
+    spec_names_the_stack,
     spec_offers_a_player,
     spec_roles,
     usable_activated_abilities,
@@ -998,6 +1000,13 @@ def _role_object_key(obj) -> tuple:
     # and needed a key built by hand.
     if isinstance(obj, PlayerState):
         return ("player", id(obj))
+    # A **stack** role's object is a spell or ability there (Suffocating
+    # Blast's "target spell"). Identity again, and it has to be: ``StackItem``
+    # compares by value, and two casts of one card at one target are equal.
+    from .game_types import StackItem
+
+    if isinstance(obj, StackItem):
+        return ("stack", id(obj))
     return ("graveyard", obj.seat, id(obj.card), obj.ordinal)
 
 
@@ -1937,8 +1946,20 @@ class LegalityMixin:
         return 0
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
-    def named_role_objects(self, target_permanent_ids, target_role_refs) -> list:
+    def named_role_objects(
+        self, target_permanent_ids, target_role_refs, *,
+        roles=(), target_stack_item=None,
+    ) -> list:
         """The objects an activator named for a roles announcement, in role order.
+
+        **A stack role is filled from the stack channel** (*target_stack_item*,
+        which an activation has carried since Deathgrip), for the reason a
+        cast's player role is filled from ``target_player_index``
+        (``casting._named_role_targets``): the announcement already has a field
+        meaning exactly that, and a second arity beside it is a second answer
+        to one question. Which slot is the stack one comes from *roles*, so an
+        id list positional in role order carries ``None`` there, and a role ref
+        marks the slot ``{"stack": True}``.
 
         **Two spellings of one announcement, and only one of them can say
         "graveyard".** ``target_permanent_ids`` is what every roles ability
@@ -1958,6 +1979,9 @@ class LegalityMixin:
         :meth:`_role_targets_legal` already refuses — an announcement with a
         hole in it is not one.
         """
+        stack_slots = {
+            index for index, role in enumerate(roles) if role_is_stack(role)
+        }
         if target_role_refs:
             named = []
             for ref in target_role_refs:
@@ -1965,6 +1989,9 @@ class LegalityMixin:
                 permanent_id = ref.get("permanent_id")
                 if isinstance(permanent_id, int):
                     named.append(self.permanent_by_id(permanent_id))
+                    continue
+                if ref.get("stack"):
+                    named.append(target_stack_item)
                     continue
                 # …or a **seat**, for a role whose object is a player (Donate).
                 # A third shape rather than a third list, for the reason the
@@ -1984,6 +2011,14 @@ class LegalityMixin:
                     )
                 )
             return named
+        if stack_slots:
+            # Positional, holes kept: with a slot that is not a permanent the
+            # list cannot be compacted without losing which id is whose.
+            return [
+                target_stack_item if index in stack_slots
+                else (self.permanent_by_id(pid) if isinstance(pid, int) else None)
+                for index, pid in enumerate(target_permanent_ids or [])
+            ]
         return [
             self.permanent_by_id(pid)
             for pid in (target_permanent_ids or [])
@@ -2021,6 +2056,18 @@ class LegalityMixin:
             if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
                 return None
             return self.players[seat]
+        # …nor always in a zone a board or a pile is. "Counter **target spell**
+        # and … deals 3 damage to target creature" (Suffocating Blast) announces
+        # an object on the stack in slot 0, which ``_enumerate_stack_targets``
+        # already emits for every stack spec — top-first, the convention the
+        # client and the wire use, so it is turned back into the engine's
+        # bottom-first list here and nowhere else in the walk.
+        if candidate.get("kind") == "stack":
+            index = candidate.get("stack_index")
+            depth = len(self.stack)
+            if not isinstance(index, int) or not (0 <= depth - 1 - index < depth):
+                return None
+            return self.stack[depth - 1 - index]
         return self.permanent_at(candidate.get("seat"), candidate.get("index"))
 
     def role_target_options(
@@ -2796,6 +2843,17 @@ class LegalityMixin:
             return announced
         spec, _ = _activation_spec([ability])
         kind = spec.get("kind")
+        # Above every early return below, because the two shapes that accepted
+        # a stray stack object are the two that return first.
+        stray = self.stray_activation_stack_target_refusal(
+            card, spec, target_stack_item,
+            names_a_permanent=(
+                target_permanent_index is not None
+                or any(isinstance(pid, int) for pid in target_permanent_ids or ())
+            ),
+        )
+        if stray is not None:
+            return stray
         if kind in _UNOBLIGED_ACTIVATION_KINDS:
             return None
         # A cost payment (Sacrifice) and a chosen *source* (Circle of
@@ -2827,7 +2885,8 @@ class LegalityMixin:
             ability_instruction = targeting_instruction(instruction)
             refused = f"no valid target for {card.name}"
             named = self.named_role_objects(
-                target_permanent_ids, target_role_refs
+                target_permanent_ids, target_role_refs,
+                roles=spec_roles(spec), target_stack_item=target_stack_item,
             )
             if named:
                 legal = self._role_targets_legal(
@@ -2837,6 +2896,22 @@ class LegalityMixin:
                     ability_source=source,
                 )
                 return None if legal else refused
+            if target_stack_item is not None or any(
+                role_is_stack(role) for role in spec_roles(spec)
+            ):
+                # A stack object named with no slot list beside it is half an
+                # announcement, and there is no reading of it as "nothing
+                # named": the spell would ride the stack item into a
+                # resolution whose other role nobody chose.
+                #
+                # …and with a stack role, nothing named at all is refused too,
+                # as a roles *cast* naming nothing is ("requires 2 targets").
+                # The bare activation every other roles ability is allowed is
+                # the headless convention of letting the resolution pick; a
+                # role-scoped step picks nothing (``_role_scoped`` skips it),
+                # so here the cost would be paid for an effect that cannot
+                # happen.
+                return refused
             # Nothing named: CR 602.2b's half of the question — could the whole
             # announcement be made at all? An empty walk means no, and the cost
             # is never paid.
@@ -3845,9 +3920,17 @@ class LegalityMixin:
         nothing else on the stack, and the enumeration already says so — an
         ability is not a spell (CR 113.7a). Its permanent half is
         :meth:`cast_target_refusal`'s.
+
+        A **roles** spec with a stack role (Suffocating Blast's "target spell"
+        beside its "target creature") answers for that role — the role is the
+        description of its slot, so it is the spec to enumerate.
         """
         if spec.get("kind") not in _STACK_TARGET_KINDS:
-            return None
+            spec = next(
+                (role for role in spec_roles(spec) if role_is_stack(role)), None
+            )
+            if spec is None:
+                return None
         depth = len(self.stack)
         chosen: set[int] = set()
         for entry in self._enumerate_stack_targets(caster_index, card, spec):
@@ -3952,6 +4035,107 @@ class LegalityMixin:
             return None if offered else refused
         if not any(item is target_stack_item for item in offered):
             return refused
+        return None
+
+    def stray_stack_target_refusal(
+        self, caster_index: int, card: CardDefinition, target_stack_item, *,
+        from_zone: str = "hand", mode_index: int | None = None,
+        optional_cost_payments: dict | None = None,
+        names_a_permanent: bool = False,
+    ) -> str | None:
+        """CR 601.2c from the other side: an announcement chooses "an
+        appropriate object or player **for each target the spell requires**" —
+        and a stack object named for a spell that requires none there is not a
+        choice the rule has a place for. Returns the refusal, or None.
+
+        :meth:`cast_stack_target_refusal` asks whether the spell that was named
+        is one the printed phrase admits, and returns None for every spell with
+        no stack target to ask about — which is how a ``target_stack_index`` on
+        a Lightning Bolt, a Terror or a Wrath of God came to be accepted,
+        recorded on the stack item and ignored: 888 of 888 casts in a census of
+        the pool's instants and sorceries. No client sends one and nothing was
+        countered by it, but the record is not inert — CR 608.2b counts a
+        recorded stack object as one of the spell's targets
+        (:meth:`_announcement_target_legality`), so a Terror whose creature had
+        left stayed "partly legal" for as long as the stray spell was on the
+        stack.
+
+        A stack object is announceable where the derived spec says the stack is
+        where a target (or CR 609.7a's chosen source, ``also_stack``) may be:
+        :func:`spec_names_the_stack`. For "target spell **or** permanent" it is
+        one target in one of two zones, so naming a permanent beside it
+        (*names_a_permanent*) is two answers to one question and is refused
+        too.
+
+        Asked of every card type, because the spec is: a permanent spell's is
+        its entry trigger's, and the engine names that trigger's target as the
+        permanent is cast — Mystic Snake's "counter target spell" takes a stack
+        index and a Grizzly Bears does not. Where **an opponent** chooses the
+        mode (CR 700.2e) the caster names no target at all as it casts, so the
+        question is asked of every mode at once: a stack object is stray unless
+        some mode could have named one.
+        """
+        if target_stack_item is None:
+            return None
+        program = compile_card_oracle(card)
+        if program.modes and program.mode_chooser is not None:
+            specs = [
+                derive_cast_spec(
+                    card, program, from_zone=from_zone,
+                    optional_cost_payments=optional_cost_payments,
+                    mode_index=index,
+                )
+                for index in range(len(program.modes))
+            ]
+            if any(spec_names_the_stack(spec) for spec in specs):
+                return None
+            spec = None
+        else:
+            spec = derive_cast_spec(
+                card, program, from_zone=from_zone,
+                optional_cost_payments=optional_cost_payments,
+                mode_index=mode_index,
+            )
+        if not spec_names_the_stack(spec):
+            return (
+                f"{card.name} targets nothing on the stack, so it cannot name "
+                "a spell there (CR 601.2c)"
+            )
+        if names_a_permanent and spec.get("kind") == "spell_or_permanent":
+            return (
+                f"{card.name} has one target: a spell or a permanent, not one "
+                "of each (CR 601.2c)"
+            )
+        return None
+
+    def stray_activation_stack_target_refusal(
+        self, card: CardDefinition, spec: dict, target_stack_item, *,
+        names_a_permanent: bool = False,
+    ) -> str | None:
+        """:meth:`stray_stack_target_refusal` for an **activation** (CR 602.2b
+        sends it through CR 601.2c): a stack object named for an ability whose
+        announcement has no target there, or beside a permanent for "target
+        spell **or** permanent" (Blind Seer). Returns the refusal, or None.
+
+        *spec* is the ability's own derived spec, which the activation gate
+        already holds. The two shapes that accepted one were an ability that
+        targets nothing at all — 881 in a census of the pool's abilities, the
+        gate returning before it looked — and one whose permanent target was
+        named beside it (429), where the ids were checked and the stack object
+        was recorded unread: 1,311 of 1,458 activations examined.
+        """
+        if target_stack_item is None:
+            return None
+        if not spec_names_the_stack(spec):
+            return (
+                f"{card.name}'s ability targets nothing on the stack, so it "
+                "cannot name a spell there (CR 602.2b)"
+            )
+        if names_a_permanent and spec.get("kind") == "spell_or_permanent":
+            return (
+                f"{card.name}'s ability has one target: a spell or a "
+                "permanent, not one of each (CR 602.2b)"
+            )
         return None
 
     def default_stack_target(
@@ -4305,7 +4489,9 @@ class LegalityMixin:
             legality.append(self.graveyard_index_of(stamp) is not None)
         stack_target = getattr(holder, "target_stack_item", None)
         if stack_target is not None and (
-            not program.modes or spec.get("kind") in _STACK_TARGET_KINDS
+            not program.modes
+            or spec.get("kind") in _STACK_TARGET_KINDS
+            or any(role_is_stack(role) for role in spec_roles(spec))
         ):
             # A countered or already-resolved spell has left the zone it was
             # targeted in, which is CR 608.2b's first sentence.

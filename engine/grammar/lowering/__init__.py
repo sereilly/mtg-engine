@@ -127,9 +127,9 @@ from .characteristics import (
     _lower_pump,
     _lower_change_text,
 )
+from .colors import _lower_become_color
 from .types import (
     _lower_land_type_swap,
-    _lower_become_color,
     _lower_become_copy,
     _lower_become_creature,
     _lower_change_land_type,

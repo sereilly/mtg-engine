@@ -166,6 +166,27 @@ def _role_scoped(
         announced.target, announced.target_permanent_id,
         announced.target_permanent_index,
     )
+    if entry.get("kind") == "spell":
+        # "Counter **target spell** and Suffocating Blast deals 3 damage to
+        # target creature." A role whose object is on the stack, which is the
+        # one channel the three saved above do not carry — a counter has read
+        # ``context.stack_target`` since Counterspell, and no scope here ever
+        # narrows it. So this scope takes the *neighbour's* permanent out of
+        # the other channels and leaves the spell where it was.
+        #
+        # A spell that has left the stack is CR 608.2b's illegal target: the
+        # step is skipped and the half beside it still happens. Asked here
+        # rather than left to the handler, whose own answer for "nothing
+        # named" is the top of the stack — right for a caller that named
+        # nothing and wrong for an announcement whose spell is gone. By
+        # identity, because ``StackItem`` compares by value.
+        named = context.stack_target
+        if named is None or not any(obj is named for obj in game.stack):
+            return context if wrapper else None
+        return dataclasses.replace(
+            context, target_permanent_index=None, target_permanent_id=None,
+            announced_targets=remembered,
+        )
     if role_is_seat(entry):
         seat = resolve_role_player(game, announced, payload, role)
         if seat is None or game.players[seat].lost:

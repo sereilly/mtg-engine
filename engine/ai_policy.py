@@ -1207,6 +1207,9 @@ def _cast_candidate_announcing(
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
     divided_targets: list[tuple] | None = None
+    # The spell a **stack role** names (see `_choose_role_targets`); None for
+    # every cast whose announcement has no such role.
+    role_stack_index: int | None = None
     if aura_enchant_noun(card) is not None:
         aura_choice = _choose_aura_target(game, player_index, card)
         if aura_choice is None:
@@ -1234,7 +1237,10 @@ def _cast_candidate_announcing(
                 # the cast gate would refuse it — an AI turn spent on an
                 # action the game then rejects.
                 return None
-            target, target_permanent_index, target_permanent_ids = roles
+            (
+                target, target_permanent_index, target_permanent_ids,
+                role_stack_index,
+            ) = roles
         else:
             several = _choose_several_targets(
                 game, player_index, card, x_value=x_value, preferred_seat=target,
@@ -1423,6 +1429,7 @@ def _cast_candidate_announcing(
         land_tap_colors=tap_colors,
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
+        target_stack_index=role_stack_index,
     )
 
 
@@ -3122,7 +3129,22 @@ def _combat_instant_candidate(
     # cast, and a spell that sacrifices what its caster lacks is not cast.
     target_permanent_index: int | None = None
     target_permanent_ids: list[int] | None = None
-    if divided is None:
+    # A spell naming several **roles** is answered role by role, as the
+    # main-phase chooser answers it (`_choose_role_targets`). This chooser asked
+    # only the one-object question, which a roles spell answers "not mine" —
+    # so an instant with two differently-restricted targets (Shower of Sparks,
+    # Fiery Justice's kin) was proposed here naming neither, refused by the
+    # cast gate for "requires 2 targets", and proposed again at the next
+    # window. With a role on the stack (Suffocating Blast) this is also the
+    # only chooser that ever sees a spell to name.
+    roles = _choose_role_targets(game, player_index, card) if divided is None else None
+    if roles is not None:
+        if roles == ():
+            return None
+        target, target_permanent_index, target_permanent_ids, role_stack = roles
+        if role_stack is not None:
+            stack_target = role_stack
+    elif divided is None:
         single = _choose_single_object_target(game, player_index, card, target)
         if single == ():
             return None
@@ -4097,26 +4119,40 @@ def _choose_role_targets(
     # field every cast already carries, which is what the resolution reads back.
     # Held as ``None`` in both lists rather than dropped, because those lists
     # are positional in role order and a short one shifts every slot after it.
+    #
+    # A **stack** role's answer ("Counter target spell and … deals 3 damage to
+    # target creature", Suffocating Blast) is held the same way and for the
+    # same reason: the spell travels on ``target_stack_index``, the one field
+    # a cast names a stack object on.
+    off_board = ("player", "stack")
     ids = [
-        None if pick.get("kind") == "player"
+        None if pick.get("kind") in off_board
         else game.permanent_id_of(game.permanent_at(pick["seat"], pick["index"]))
         for pick in picks
     ]
     if not all(value is None or isinstance(value, int) for value in ids):
         return ()
     seats = [pick["seat"] for pick in picks if pick.get("kind") == "player"]
-    if len(seats) > 1:
+    spells = [
+        len(game.stack) - 1 - pick["stack_index"]
+        for pick in picks if pick.get("kind") == "stack"
+    ]
+    if len(seats) > 1 or len(spells) > 1:
         # Two player roles would be one seat sent twice, which the resolution
-        # refuses on the other side of the same fact. Skipped rather than cast.
+        # refuses on the other side of the same fact — and two stack roles one
+        # spell. Skipped rather than cast.
         return ()
     # The seat is still sent for every other roles spell too, because every cast
     # carries one; the *ids* are what address the two boards a roles spell may
     # span (CR 400.7).
-    seat = seats[0] if seats else picks[0]["seat"]
+    seat = seats[0] if seats else next(
+        (pick["seat"] for pick in picks if pick.get("kind") not in off_board),
+        caster_index,
+    )
     indices = [
-        None if pick.get("kind") == "player" else pick["index"] for pick in picks
+        None if pick.get("kind") in off_board else pick["index"] for pick in picks
     ]
-    return seat, indices, ids
+    return seat, indices, ids, (spells[0] if spells else None)
 
 
 def _names_x_targets(card: CardDefinition) -> bool:
@@ -4152,6 +4188,18 @@ def _role_chain(
     want = sides[level] if level < len(sides) else None
     if options[0].get("kind") == "player":
         candidates = [_preferred_role_option(options, caster_index, card, game)]
+    elif options[0].get("kind") == "stack":
+        # A spell role is answered with a spell somebody else controls: every
+        # step in the pool that spends one counters it, and a seat that
+        # countered its own spell to deal the damage beside it has paid for
+        # two cards to get half of one. Topmost first, the engine's own order.
+        depth = len(game.stack)
+        candidates = [
+            option for option in options
+            if 0 <= depth - 1 - option["stack_index"] < depth
+            and game.stack[depth - 1 - option["stack_index"]].caster_index
+            != caster_index
+        ]
     elif want in ("you", "opponent"):
         candidates = [
             option for option in options

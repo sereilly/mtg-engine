@@ -53,15 +53,17 @@ _PRIVATE_KEYS = (
 #: permanent's slot. Each module that spells the word is listed with how many
 #: times and why, held in both directions: one more is a new use to justify,
 #: one fewer is a stale allowance.
+#:
+#: **The spell's record has one writer and one reader too, and they are in the
+#: write API** (``recolor_spell`` / ``spell_color_change`` /
+#: ``carry_spell_color_change``). A handler wrote the key and
+#: ``_stack_item_colors`` read it back raw until CR 400.7a needed the effect to
+#: reach the permanent the spell becomes with a duration and a stamp — two
+#: allowances that are gone, so a second writer of the spell's record fails
+#: here exactly as a ninth writer of a permanent's slot does.
 _SHARED_WORD_USES = {
     "engine/game_types.py": (
-        1, "the StackItem.choices keys a copy of a spell does not inherit",
-    ),
-    "engine/handlers/board_misc.py": (
-        1, "recolor_target_from_text writes the stack item's own key",
-    ),
-    "engine/mixins/helpers.py": (
-        1, "_stack_item_colors reads the stack item's own key",
+        1, "CHOICE_KEYS declares the StackItem.choices key",
     ),
     "web/serialization.py": (
         5,

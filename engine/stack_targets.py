@@ -403,7 +403,7 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
     """
     from .targeting import (
         GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
-        role_is_seat, spec_roles,
+        role_is_seat, role_is_stack, spec_roles,
     )
 
     spec, holder, mode = announcement.spec, announcement.holder, announcement.mode
@@ -420,6 +420,15 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
                 seat = _seat(game, holder)
                 if seat is not None:
                     found.append(ChosenTarget("player", seat=seat, channel="role", position=position, mode=mode))
+                continue
+            if role_is_stack(role):
+                # …and a **stack** role with the one stack object the holder
+                # carries ("Counter target spell and … deals 3 damage to target
+                # creature", Suffocating Blast) — the scalar beside the lists,
+                # exactly as a seat is, and for its reason.
+                named = getattr(holder, "target_stack_item", None)
+                if named is not None:
+                    found.append(ChosenTarget("stack", stack_item=named, channel="role", position=position, mode=mode))
                 continue
             if position < len(ids) and isinstance(ids[position], int):
                 found.append(ChosenTarget(

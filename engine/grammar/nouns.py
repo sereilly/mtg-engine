@@ -749,9 +749,13 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 d.is_card = True
             # "target spell or permanent" (the Lace cycle) unions two *generic*
             # nouns. Neither contributes a card type, so the union restricts
-            # nothing and the filter is unchanged — but the tokens still have to
-            # be consumed, or the line fails the full-consumption invariant and
-            # the card reports unsupported naming the clause.
+            # nothing about the *permanent* — but it is not nothing: it names a
+            # second zone, and that is recorded (``also_spell``) so the phrase
+            # stops being byte-identical to "target permanent". Consumed and
+            # dropped, it left Illusion and Blind Seer ("Target spell or
+            # permanent becomes the color of your choice") with a permanent
+            # picker and a spell half nobody could reach.
+            unioned = {singular}
             while True:
                 probe = stream.mark()
                 if not stream.accept_word("or", "and"):
@@ -766,7 +770,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                 # union with another *spell* word leaves it standing.
                 if _singular(following) != "spell":
                     bare_spell = False
+                unioned.add(_singular(following))
                 stream.advance()
+            # The one cross-zone union the pool prints, in either order. Any
+            # other pairing of generic nouns keeps the reading it had.
+            if unioned == {"spell", "permanent"}:
+                d.also_spell = True
             # "counter target spell **or ability** that targets a creature"
             # (Diplomatic Escort). Not part of the union loop above, because
             # "ability" is deliberately not a generic noun — an ability on the
