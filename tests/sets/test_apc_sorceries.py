@@ -1808,6 +1808,158 @@ def test_vindicate_has_to_be_spent_on_a_flagbearer(set_pool):
 
 # ==== W2G4 ============================================================
 # W2G4's tests go between this line and the "end W2G4" line.
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import _nosick as _w2g4_nosick
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_card(set_pool, name):
+    """*name* out of Apocalypse, else out of the sets its neighbours are in."""
+    for code in ("APC", "LEA", "INV", "PLS", "7ED"):
+        if name in set_pool(code):
+            return set_pool(code)[name]
+    raise KeyError(name)
+
+
+def _w2g4_table(set_pool, mine, theirs=(), *, hand, library=("Forest",) * 6):
+    """Seat 0 at its main phase holding *hand*, each side's permanents in the
+    order named, mana costs not enforced. Returns ``(game, mine, theirs)`` with
+    the permanents as objects, in that order."""
+    ours = [_w2g4_nosick(_w2g4_Permanent(card=_w2g4_card(set_pool, name))) for name in mine]
+    far = [_w2g4_nosick(_w2g4_Permanent(card=_w2g4_card(set_pool, name))) for name in theirs]
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(
+            name="Caster", hand=[_w2g4_card(set_pool, name) for name in hand],
+            battlefield=ours, library=[_w2g4_card(set_pool, name) for name in library],
+        ),
+        _w2g4_PlayerState(
+            name="Other", battlefield=far,
+            library=[_w2g4_card(set_pool, name) for name in library],
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+    game._settle()
+    return game, ours, far
+
+
+# -- item 1: a named cast-cost payer pays, or the cast is refused -------------
+
+_W2G4_BALANCE_LIBRARY = ("Plains", "Island", "Swamp", "Mountain", "Forest", "Grizzly Bears")
+
+
+def test_w2g4_gaeas_balance_named_four_lands_is_not_cast(set_pool):
+    """"As an additional cost to cast this spell, sacrifice five lands."
+
+    The repro W1G4 left: four lands named used to be topped up with a fifth
+    the caster had not named, and four lands and a creature used to sacrifice
+    five lands. CR 601.2h allows no partial payment and no unpayable one, so
+    both are refused with the board whole and the card in hand.
+    """
+    game, mine, _ = _w2g4_table(
+        set_pool, ["Forest"] * 4 + ["Island", "Island", "Grizzly Bears"],
+        hand=["Gaea's Balance"], library=_W2G4_BALANCE_LIBRARY,
+    )
+    lands, bears = mine[:6], mine[6]
+
+    short = game.queue_from_hand(
+        0, "Gaea's Balance", cost_permanent_ids=[p.permanent_id for p in lands[:4]],
+    )
+    assert not short.supported
+    assert short.details == (
+        "Gaea's Balance can't be cast: its additional cost takes 5 permanent(s) "
+        "to sacrifice and 4 were named (CR 601.2h)"
+    )
+    wrong = game.queue_from_hand(
+        0, "Gaea's Balance",
+        cost_permanent_ids=[p.permanent_id for p in lands[:4]] + [bears.permanent_id],
+    )
+    assert not wrong.supported
+    assert "Grizzly Bears cannot pay its additional cost" in wrong.details
+
+    assert all(game.is_on_battlefield(permanent) for permanent in mine)
+    assert [card.name for card in game.players[0].hand] == ["Gaea's Balance"]
+    assert not game.stack and game.players[0].graveyard == []
+    assert [short.details, wrong.details] == game.log[-2:]
+
+
+def test_w2g4_gaeas_balance_pays_the_five_named_and_keeps_the_sixth(set_pool):
+    """The same cast named in full: the five named lands are the five
+    sacrificed — the sixth, which the default would have taken first, stays —
+    and the spell then fetches one land of each basic type."""
+    game, mine, _ = _w2g4_table(
+        set_pool, ["Forest"] * 4 + ["Island", "Island", "Grizzly Bears"],
+        hand=["Gaea's Balance"], library=_W2G4_BALANCE_LIBRARY,
+    )
+    kept, named = mine[0], mine[1:6]
+    assert game.default_sacrifice_pick(mine[:6]) is kept
+
+    result = game.queue_from_hand(
+        0, "Gaea's Balance", cost_permanent_ids=[p.permanent_id for p in named],
+    )
+    assert result.supported, result.details
+    assert game.is_on_battlefield(kept) and game.is_on_battlefield(mine[6])
+    assert not any(game.is_on_battlefield(land) for land in named)
+    _w2g4_resolve_stack(game)
+    assert game.confirm_search_library_picks(
+        0, [{"zone": "library", "index": index} for index in range(5)],
+    )
+    _w2g4_resolve_stack(game)
+
+    assert sorted(perm.card.name for perm in game.controlled_by(0)) == [
+        "Forest", "Forest", "Grizzly Bears", "Island", "Mountain", "Plains", "Swamp",
+    ]
+    assert sorted(card.name for card in game.players[0].graveyard) == [
+        "Forest", "Forest", "Forest", "Gaea's Balance", "Island", "Island",
+    ]
+
+
+def test_w2g4_dwarven_landslide_kicker_is_paid_with_the_land_named_or_not_at_all(set_pool):
+    """"Kicker—{2}{R}, Sacrifice a land." The optional half of the census: a
+    kicked cast naming a creature for the sacrifice is refused (it used to
+    sacrifice a land the caster had not chosen), one naming a land sacrifices
+    that land, and an unkicked cast charges nothing whatever it names."""
+    kicker = {"pay {2}{r}, sacrifice a land": 1}
+    game, mine, theirs = _w2g4_table(
+        set_pool, ["Mountain", "Plains", "Grizzly Bears"], ["Forest", "Island"],
+        hand=["Dwarven Landslide", "Dwarven Landslide"],
+    )
+    mountain, plains, bears = mine
+    forest, island = theirs
+    both = [forest.permanent_id, island.permanent_id]
+
+    refused = game.queue_from_hand(
+        0, "Dwarven Landslide", target_permanent_ids=both,
+        optional_cost_payments=kicker, cost_permanent_ids=[bears.permanent_id],
+    )
+    assert not refused.supported
+    assert "Grizzly Bears cannot pay its additional cost" in refused.details
+    assert all(game.is_on_battlefield(p) for p in mine + theirs)
+    assert len(game.players[0].hand) == 2 and not game.stack
+
+    unkicked = game.queue_from_hand(
+        0, "Dwarven Landslide", target_permanent_ids=[forest.permanent_id],
+        cost_permanent_ids=[plains.permanent_id],
+    )
+    assert unkicked.supported, unkicked.details
+    _w2g4_resolve_stack(game)
+    assert game.is_on_battlefield(plains) and game.is_on_battlefield(mountain)
+    assert not game.is_on_battlefield(forest) and game.is_on_battlefield(island)
+
+    swamp = _w2g4_nosick(_w2g4_Permanent(card=_w2g4_card(set_pool, "Swamp")))
+    game._put_permanent_onto_battlefield(1, swamp, 1)
+    kicked = game.queue_from_hand(
+        0, "Dwarven Landslide",
+        target_permanent_ids=[island.permanent_id, swamp.permanent_id],
+        optional_cost_payments=kicker, cost_permanent_ids=[plains.permanent_id],
+    )
+    assert kicked.supported, kicked.details
+    assert "Caster sacrificed Plains to cast Dwarven Landslide" in game.log
+    assert game.is_on_battlefield(mountain) and not game.is_on_battlefield(plains)
+    _w2g4_resolve_stack(game)
+    assert not game.is_on_battlefield(island) and not game.is_on_battlefield(swamp)
 
 # ==== end W2G4 ========================================================
 
