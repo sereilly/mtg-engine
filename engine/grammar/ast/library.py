@@ -677,6 +677,12 @@ class RevealTopSortingByFilter:
     cards revealed this way onto the battlefield **tapped**". Carried rather
     than dropped for the reason every rider here is — a land that arrives
     untapped is a strictly better card than the one printed.
+
+    ``rest_zone`` is a zone word ("graveyard", "exile") or the one *position*
+    the pool prints: ``"library_bottom"``, "and the rest on the bottom of your
+    library in any order" (Goblin Ringleader). The order is the owner's by
+    CR 401.4 and the node carries none — a printing that stated one is a
+    sentence the parse refuses.
     """
 
     count: Amount

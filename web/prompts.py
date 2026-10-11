@@ -700,7 +700,16 @@ def _reorder_library(ctx: PromptContext, choices: list) -> dict:
         # stops the UI offering a rearrangement that will not happen.
         "may_reorder": bool(choice.data.get("may_reorder", True)),
         "target_name": target.name,
-        "cards": [ctx.serialize_card(card) for card in target.library[:top_count]],
+        # Which end of the library the pile is: "top" for every look-and-put-
+        # back, "bottom" for "…and the rest on the bottom of your library in
+        # any order" (Goblin Ringleader, CR 401.4). The cards come from the
+        # engine's own reader of the pile, so what is drawn here and what an
+        # answer permutes cannot be different ends of the deck.
+        "position": str(choice.data.get("position", "top")),
+        "cards": [
+            ctx.serialize_card(card)
+            for card in ctx.game.reorder_library_pile(choice)
+        ],
     }
 
 

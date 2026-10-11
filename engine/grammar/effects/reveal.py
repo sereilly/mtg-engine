@@ -205,6 +205,35 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
 _SORTED_MATCH_ZONES: tuple[str, ...] = ("hand", "battlefield")
 _SORTED_REST_ZONES: tuple[str, ...] = ("graveyard", "exile")
 
+#: "…and the rest **on the bottom of your library in any order**." (Goblin
+#: Ringleader and Apocalypse's six other recruiters.) The third place the rest
+#: of a sorted pile may go, and not a word in the list above because it is not
+#: printed as one: the two zones there follow "into your", and this one is a
+#: *position* in a zone — every word of which is required, "in any order"
+#: included. CR 401.4 makes that order the owner's to choose, so a printing
+#: that stated one ("in a random order") is a different instruction the handler
+#: does not perform, and a printing that named the *top* is a different card.
+_SORTED_REST_BOTTOM: tuple[str, ...] = (
+    "on", "the", "bottom", "of", "your", "library", "in", "any", "order",
+)
+
+
+def _accept_sorted_rest(stream: TokenStream) -> "str | None":
+    """Where "the rest" of a sorted reveal goes, at the cursor — the words
+    after "and the rest" — or None when they name nowhere this reads.
+
+    The caller holds the mark and resets on None; this consumes what it reads.
+    """
+    if stream.accept_phrase(*_SORTED_REST_BOTTOM):
+        return "library_bottom"
+    if not stream.accept_phrase("into", "your"):
+        return None
+    rest_zone = stream.peek_word()
+    if rest_zone not in _SORTED_REST_ZONES:
+        return None
+    stream.advance()
+    return rest_zone
+
 
 def _accept_counted_reveal_sorting_by_name(
     stream: TokenStream,
@@ -294,6 +323,13 @@ def _accept_counted_reveal_sorting_by_filter(
     Both destinations are read and checked against the same closed lists the
     named sort uses, so a printing that sorted somewhere the handler cannot
     reach refuses here rather than lowering onto a zone nothing moves to.
+
+    "…and the rest **on the bottom of your library in any order**." (Goblin
+    Ringleader; Apocalypse prints the sentence on seven cards with seven
+    different filters.) The rest's third destination, read by
+    :func:`_accept_sorted_rest` — and the filter in front of it is the ordinary
+    noun phrase, so "all **Goblin** cards" and "all creature cards **of the
+    chosen type**" (Brass Herald) are this production with nothing added.
     """
     mark = stream.mark()
     try:
@@ -333,14 +369,13 @@ def _accept_counted_reveal_sorting_by_filter(
         stream.reset(mark)
         return None
     stream.advance()
-    if not stream.accept_phrase("and", "the", "rest", "into", "your"):
+    if not stream.accept_phrase("and", "the", "rest"):
         stream.reset(mark)
         return None
-    rest_zone = stream.peek_word()
-    if rest_zone not in _SORTED_REST_ZONES:
+    rest_zone = _accept_sorted_rest(stream)
+    if rest_zone is None:
         stream.reset(mark)
         return None
-    stream.advance()
     return ast.RevealTopSortingByFilter(
         count, filt, match_zone=match_zone, rest_zone=rest_zone,
     )

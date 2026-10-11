@@ -1032,6 +1032,13 @@ TRIGGERED_LABELS: dict[str, str] = {
     "tap_any_number_then_pump_self": "triggered_pump",
     # Looking at cards and choosing among them.
     "look_top_pick_to_hand": "triggered_look",
+    # Goblin Ringleader and Apocalypse's six other recruiters: "reveal the top
+    # four cards of your library. Put all Goblin cards revealed this way into
+    # your hand and the rest on the bottom of your library in any order." The
+    # kind is Mulch's, which no trigger had produced; its bucket is Raven
+    # Familiar's one row up — a pile off the top, part of it kept, the rest
+    # bottomed — with the pick made by a printed filter instead of the player.
+    "reveal_top_sorting_by_filter": "triggered_look",
     "reveal_hand_and_choose": "triggered_look",
     "scry": "triggered_look",
     "mill_target_player": "triggered_mill",
