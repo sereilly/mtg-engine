@@ -341,6 +341,18 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
             stream.advance()
             continue
 
+        # "a **multicolored** creature card" (Dragon Arch). CR 105.2b's
+        # adjective: two or more colours, whichever they are — so it is a flag
+        # of its own and not an entry in ``colors``, which is a union and is
+        # satisfied by one. Read here, among the leading adjectives, because
+        # that is where it is printed; a noun phrase the word *heads* ("protection
+        # from multicolored", "multicolored spells cost…") never reaches this
+        # loop with it, so those lines keep the readers they have.
+        if word == "multicolored":
+            d.multicolored = True
+            stream.advance()
+            continue
+
         if word in COLOR_WORDS:
             # "a **green or white** creature" (Abomination) — a union of colour
             # adjectives, read as one the way "attacking or blocking" below is.

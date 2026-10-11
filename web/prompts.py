@@ -33,7 +33,7 @@ from engine.grammar.vocabulary import (CREATURE_TYPES, LAND_TYPES,
 from engine.mana_payment import mana_cost_label
 from engine.oracle_types import CLAIMABLE_EXILED_CARDS
 from engine.pending_choices import CHOICE_SPECS, public_data
-from engine.search_filters import search_matches, searched_seat
+from engine.search_filters import search_matches, search_slots, searched_seat
 
 
 @dataclass(frozen=True)
@@ -239,6 +239,16 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         payload["destinations"] = destinations
         payload["tapped"] = list(choice.data.get("tapped") or ())
         payload["up_to"] = bool(choice.data.get("up_to"))
+    # "a land card **of each basic land type**" (Gaea's Balance); "a creature
+    # card, a land card, and a noncreature, nonland card" (Guided Passage). One
+    # find per printed description. `legal_indices` is the union of them, which
+    # is all a card-at-a-time list can say — two creatures are each legal and
+    # together are not an answer — so the descriptions ride beside it, in the
+    # engine's own words, for a dialog to label its picks with. Additive like
+    # everything else here: the engine checks the answer whole either way.
+    described = search_slots(choice.data)
+    if described:
+        payload["one_of_each"] = [dict(slot) for slot in described]
     if "graveyard" in zones:
         payload["graveyard_cards"] = [
             ctx.serialize_card(card) for card in caster.graveyard

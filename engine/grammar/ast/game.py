@@ -313,6 +313,27 @@ class FlipCoin:
 
 
 @dataclass(frozen=True)
+class FlipCoinsUntilLoss:
+    """``Flip a coin that many times or until you lose a flip, whichever comes
+    first. If you win all the flips, draw two cards for each flip.`` (Squee's
+    Revenge.)
+
+    A **run** of flips rather than one, and both sentences of it: "the flips"
+    and "each flip" name the run the first sentence made, so parsed apart the
+    second has nothing to count. Each flip is still CR 705.1's flip, won or
+    lost by the player who flipped (CR 705.2); what the node adds is the two
+    bounds — a number and the first loss — and that the number of flips *made*
+    is a quantity the reward reads.
+    """
+    #: How many flips at most. "That many" is a back-reference to the number
+    #: the sentence in front chose, which the lowering resolves or refuses.
+    times: "Amount"
+    #: "…draw **two** cards for each flip" — what winning every flip pays, per
+    #: flip made.
+    draw_per_flip: "Amount"
+
+
+@dataclass(frozen=True)
 class ChooseNumber:
     """``Choose a number between 0 and 7.`` (Shapeshifter.)
 

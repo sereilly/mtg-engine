@@ -701,6 +701,11 @@ ACTIVATED_LABELS: dict[str, str] = {
     # not what the ability does, and the library is still the object it acts on.
     "shuffle_hand_cards_into_library": "activated_library",
     "reorder_own_library_top": "activated_library",
+    # Whirlpool Warrior: "{R}, Sacrifice this creature: Each player shuffles
+    # the cards from their hand into their library, then draws that many
+    # cards." The whole-hand spelling of Credit Voucher's row two up, and in
+    # its bucket for that row's reason: the library is the object it acts on.
+    "shuffle_hand_into_library": "activated_library",
     # Rishadan Pawnshop shuffles a permanent into its owner's library — the
     # same destination, reached from the battlefield instead, and beside
     # `put_target_on_library_top` for that row's reason.
@@ -1168,6 +1173,14 @@ TRIGGERED_LABELS: dict[str, str] = {
     # (Alabaster Dragon.) The card goes from one zone to another, which is what
     # every self-move in these tables reports.
     "shuffle_source_card_into_library": "triggered_library",
+    # "When this creature enters, shuffle the cards from your hand into your
+    # library, then draw that many cards." (Whirlpool Rider; the Drake prints
+    # it on dying too.) The same effect as the Warrior's row in the other
+    # table, in the position that makes it a trigger — and it needs the row for
+    # more than a bucket: without one it kept the `spell_pattern` marker, and
+    # the `triggered_` prefix is what the web layer serializes a stack item's
+    # `is_triggered` from.
+    "shuffle_hand_into_library": "triggered_library",
     "add_named_counter_to_target": "triggered_counter",
     "prevent_damage_to_target_until_eot": "triggered_prevention",
     "exile_target_permanent": "triggered_exile",

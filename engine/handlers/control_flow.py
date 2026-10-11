@@ -32,6 +32,7 @@ from ..named_counters import counters_on
 from ..oracle_types import (BIDDING_WINNER,
                             CHOSEN_CARD_TYPE_THIS_WAY, CHOSEN_COLOR_THIS_WAY,
                             CHOSEN_NUMBER_THIS_WAY, CLAIMABLE_EXILED_CARDS,
+                            COIN_FLIPS_MADE,
                             EXILED_THIS_WAY_OBJECTS, MANA_PAID_BY_SEAT,
                             SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
@@ -2303,6 +2304,49 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     return True, "resolved"
 
 
+@effect_handler("flip_coins_until_loss")
+def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Flip a coin that many times or until you lose a flip, whichever comes
+    first." (Squee's Revenge.)
+
+    ``flip_coin`` in a loop with the two bounds the sentence prints: the number
+    an earlier step of this resolution recorded, and the first loss. Each flip
+    is CR 705.1's own — one draw from the seeded RNG, logged in the words the
+    single flip logs, so a run reads as that many flips rather than as one
+    event — and CR 705.2's: the resolving player's, won or lost by nobody else.
+
+    Two records for the two questions the sentence behind it asks. ``coin_flip``
+    is whether the run **lost no flip**, which is what "if you win all the
+    flips" means and why the ordinary flip conditional can read it; a run of
+    zero flips lost none (and pays for none). ``COIN_FLIPS_MADE`` is how many
+    coins were actually flipped — a loss ends the run, so it can be fewer than
+    the number chosen, and "for each flip" counts these.
+
+    The loop is bounded by its own arithmetic and not by the number: a seat may
+    name any number at all (CR 107.1), and the run still ends at the first
+    loss.
+    """
+    limit = max(
+        0, int(context.results.get(str(instruction.payload.get("amount_from")), 0) or 0)
+    )
+    card_name = getattr(context.card, "name", "an effect")
+    made = 0
+    clean = True
+    while made < limit and clean:
+        clean = flip_coin()
+        made += 1
+        game.log.append(
+            f"{card_name}: {'won' if clean else 'lost'} the coin flip"
+        )
+    context.results["coin_flip"] = clean
+    context.results[COIN_FLIPS_MADE] = made
+    game.log.append(
+        f"{card_name}: {made} of {limit} flip(s) made, "
+        + ("every one won" if clean else "the last one lost")
+    )
+    return True, "resolved"
+
+
 @effect_handler("coin_flip_stakes_loop")
 def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """Game of Chaos: one round of the flip, and the offer that buys the next.
@@ -2433,6 +2477,18 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
             return True, "resolved"
         seat = game.players.index(context.caster)
         default = _most_telling_mana_value(game, seat, low, high)
+        # …unless the number is not a mana value at all. "Flip a coin **that
+        # many times** or until you lose a flip" (Squee's Revenge): what the
+        # value is for is the sentence behind the choice, read off the compiled
+        # program where every such question is, and the length a seat nobody
+        # asks takes is a weight beside it.
+        from ..ai_valuation import (FLIP_RUN_LENGTH,
+                                    chosen_number_bounds_flip_run)
+
+        if context.card is not None and chosen_number_bounds_flip_run(
+            context.card, instruction
+        ):
+            default = max(low, FLIP_RUN_LENGTH if high is None else min(high, FLIP_RUN_LENGTH))
         context.results[CHOSEN_NUMBER_THIS_WAY] = default
         game.arm_pending_choice(
             "number_choice", seat,

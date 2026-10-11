@@ -55,6 +55,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # going back to the library it came off — and a zone move for its reason.
     "put_revealed_top_cards_onto_battlefield": "zones",
     "reveal_top_opponent_chooses": "zones",
+    # "Reveal the cards in your library. An opponent chooses from among them a
+    # creature card, a land card, and a noncreature, nonland card. …" (Guided
+    # Passage.) The same family's pick over the whole pile, one card per
+    # printed description.
+    "reveal_library_opponent_chooses": "zones",
     # Wood Sage's sorted reveal, beside the pick above: what it touches is a
     # library and two zones the pile is split between.
     "reveal_top_sorting_by_chosen_name": "zones",
@@ -141,6 +146,11 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # so the same family.
     "reorder_target_library_top": "zones",
     "reorder_own_library_top": "zones",
+    # "**That player** looks at the top three cards of your library, then puts
+    # them back in any order." (Tahngarth's Glare.) The same prompt with the
+    # seats the other way round — the chosen player looks, the controller's
+    # pile is rearranged.
+    "target_reorders_caster_library_top": "zones",
     "shuffle_source_card_into_library": "zones",
     "shuffle_target_permanent_into_library": "zones",
     # A library search moves a card between hidden zones — same module, same

@@ -104,6 +104,13 @@ def _parse_reveal_top(stream: TokenStream) -> ast.Statement:
     counted_pick = _accept_reveal_number_from_top_pick(stream)
     if counted_pick is not None:
         return counted_pick
+    # "Reveal **the cards in your library**. An opponent chooses from among
+    # them a creature card, a land card, and a noncreature, nonland card. …"
+    # (Guided Passage.) The whole pile rather than its top, so it is tried in
+    # front of the literal "the top" and declines without consuming.
+    whole = _accept_reveal_library_opponent_chooses(stream)
+    if whole is not None:
+        return whole
     stream.expect_word("the")
     stream.expect_word("top")
     # "Reveal the top **three cards** of your library. Target opponent chooses
@@ -233,6 +240,58 @@ def _accept_sorted_rest(stream: TokenStream) -> "str | None":
         return None
     stream.advance()
     return rest_zone
+
+
+def _accept_reveal_library_opponent_chooses(
+    stream: TokenStream,
+) -> "ast.RevealLibraryOpponentChooses | None":
+    """``the cards in your library. An opponent chooses from among them
+    <a described card>, …, and <a described card>. You put the chosen cards
+    into your hand. Then shuffle.`` at the cursor, or None with the cursor
+    where it was. (Guided Passage.)
+
+    All four sentences, interior full stops included, for
+    :class:`ast.RevealLibraryOpponentChooses`' reason. The descriptions are read
+    by the ordinary noun parser, one per article, so "a noncreature, nonland
+    card" keeps its own comma and a fourth description is this production with
+    a longer list. Past the first sentence nothing declines: the pile is this
+    card's, and a tail that is not this one is a broken sentence rather than
+    somebody else's.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("the", "cards", "in", "your", "library"):
+        stream.reset(mark)
+        return None
+    if not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    for word in ("an", "opponent", "chooses", "from", "among", "them"):
+        stream.expect_word(word)
+    described: list[ast.ObjectFilter] = []
+    while True:
+        stream.expect_word("a", "an")
+        described.append(parse_object_filter(stream))
+        # ", a land card" / ", and a …" / " and a …": the list goes on only
+        # where another article follows, so the sentence's own full stop ends
+        # it and a pair joined by a bare "and" is the same list.
+        joined = stream.mark()
+        stream.accept_punct(",")
+        stream.accept_word("and")
+        if not stream.at_word("a", "an"):
+            stream.reset(joined)
+            break
+    if not stream.accept_punct("."):
+        raise stream.error("expected where the chosen cards go")
+    for word in ("you", "put", "the", "chosen", "cards", "into", "your", "hand"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected the shuffle after the chosen cards")
+    # "**Then shuffle.**" The pile was every card in the library, so nothing is
+    # left in an order anybody did not see; required, so deleting it fails the
+    # line. The final full stop is the sequence parser's.
+    stream.expect_word("then")
+    stream.expect_word("shuffle")
+    return ast.RevealLibraryOpponentChooses(tuple(described))
 
 
 def _accept_counted_reveal_sorting_by_name(

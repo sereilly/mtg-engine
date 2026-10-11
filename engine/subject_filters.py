@@ -64,6 +64,11 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # narrowed line on, and without the word the cost was refused outright and
     # the card was unsupported.
     "any_classes",
+    # "a **multicolored** creature" (Dragon Arch's adjective). CR 105.2b: two
+    # or more colours, which no colour *list* can say — ``any_colors`` is
+    # satisfied by one. Tested by ``permanent_matches_filter`` off the computed
+    # colours, in the delegated half, for ``any_classes``' reason.
+    "multicolored",
     "exclude_colors", "exclude_types", "exclude_subtypes",
     "tapped_only", "untapped_only",
     "mana_value", "power", "toughness", "with_plus1_counter",
@@ -601,7 +606,12 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # card: a subtype and a card type are printed on the type line and a
      # colour on the mana cost, so every alternative is testable off the face
      # for the reason its single-axis key above is.
-     "any_classes"}
+     "any_classes",
+     # "You may put a **multicolored** creature card from your hand onto the
+     # battlefield." (Dragon Arch.) CR 105.2b's two-or-more, counted off the
+     # same printed colours ``color_filter`` reads (CR 202.2) — so it is
+     # testable here for exactly the reason the single colour is.
+     "multicolored"}
 )
 
 

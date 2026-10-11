@@ -64,6 +64,7 @@ between the two registries raises at import.
 
 from __future__ import annotations
 
+import random
 import re
 
 from dataclasses import dataclass
@@ -362,6 +363,13 @@ LAND_MANA_SUBSTITUTION = 10  # Ritual of Subdual, Infernal Darkness, Deep Water
 #: graveyard and says nothing about a discard, a mill or a spell finishing on
 #: the stack.
 EXILE_INSTEAD_OF_GRAVEYARD = 10  # Forbidden Crypt
+# "If Legacy Weapon would be put into a graveyard from anywhere, reveal Legacy
+# Weapon and shuffle it into its owner's library instead." Behind the exile only
+# as CR 616.1e's default for a seat that is not asked — the two are one
+# contention set and the affected player chooses between them (the CR's own
+# example under 616.1f is this pair) — and the exile is the default because it
+# is the one a *different* permanent's controller put there on purpose.
+SHUFFLE_INSTEAD_OF_GRAVEYARD = 20  # Legacy Weapon
 
 # Set on the event once an interceptor consumes it. It lives on the payload
 # because the payload is the one piece of state the 616.1 loop threads through
@@ -4569,6 +4577,100 @@ def _exile_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | Non
     return ReplacementOutcome(replaced=True)
 
 
+#: "If <this> would be put into a graveyard from anywhere, reveal <this> and
+#: shuffle it into its owner's library instead." (Legacy Weapon; Darksteel
+#: Colossus, Progenitus and Blightsteel Colossus print the sentence word for
+#: word.) Matched by shape because the subject is the card's own name or a
+#: "this <noun>", and held to **one** subject: the back-reference makes a line
+#: naming two different things refuse.
+_GRAVEYARD_TO_LIBRARY = re.compile(
+    r"^if (?P<subject>.+?) would be put into a graveyard from anywhere, "
+    r"reveal (?P=subject) and shuffle it into its owner's library instead$"
+)
+
+
+def graveyard_shuffle_subject(line: str) -> str | None:
+    """The subject of a printed "…would be put into a graveyard from anywhere,
+    reveal … and shuffle it into its owner's library instead", or None.
+
+    One matcher, asked by the interceptor below and by
+    :func:`replacement_claims_line`, so what is shuffled away and what is
+    claimed cannot drift.
+    """
+    match = _GRAVEYARD_TO_LIBRARY.match(
+        " ".join((line or "").strip().lower().rstrip(".").split())
+    )
+    return None if match is None else match.group("subject")
+
+
+def _shuffles_itself_instead_of_graveyard(game, payload: dict) -> bool:
+    """Whether the object on its way to a graveyard prints the sentence
+    **about itself**.
+
+    The object as it last existed where it was (CR 113.6: the ability modifies
+    how *that particular object* changes zones, so it works from every zone it
+    could leave). Off the battlefield that is the permanent's computed text —
+    ``effective_card``, so a copy of Legacy Weapon has the sentence and one that
+    has lost its abilities does not — and everywhere else the card's own face,
+    which is all a card in a hand, a library or on the stack has (CR 613.1).
+
+    "Itself" is the card's own name or a ``this <noun>``; a line naming some
+    other object is a different effect and is left alone. Pure, like every
+    applicability predicate here.
+    """
+    permanent = payload.get("permanent")
+    described = (
+        permanent.effective_card if permanent is not None else payload.get("card")
+    )
+    if described is None:
+        return False
+    own_name = (getattr(described, "name", "") or "").strip().lower()
+    for line in (getattr(described, "oracle_text", "") or "").splitlines():
+        subject = graveyard_shuffle_subject(line)
+        if subject is not None and (
+            subject == own_name or subject.startswith("this ")
+        ):
+            return True
+    return False
+
+
+@replacement_effect(
+    "put_into_graveyard", SHUFFLE_INSTEAD_OF_GRAVEYARD,
+    applies=_shuffles_itself_instead_of_graveyard,
+)
+def _shuffle_into_library_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome | None:
+    """Legacy Weapon: "If Legacy Weapon would be put into a graveyard from
+    anywhere, reveal Legacy Weapon and shuffle it into its owner's library
+    instead."
+
+    On ``Game.put_card_into_graveyard`` — the one seam every road to a
+    graveyard passes through — because "from anywhere" is the whole sentence: a
+    destruction, a sacrifice, a discard, a mill and a countered spell are one
+    event here, and Forbidden Crypt's interceptor beside this one says why an
+    interceptor on any single road would be a card that works on Mondays.
+
+    The card never reaches the graveyard (CR 614.6), so nothing that watches an
+    arrival there sees one and — from the battlefield — nothing died. It goes
+    to its **owner's** library (CR 400.3), which is the seat the seam was
+    already handed, through ``put_card_into_library`` for CR 903.9b's reason;
+    the leave-the-battlefield replacements had their look at this move one
+    step up (``_permanent_to_graveyard``) and CR 614.5 gives them no second,
+    so the permanent is not handed on again.
+
+    The library is shuffled whether or not the card arrived (CR 701.24c).
+    """
+    player = payload["player"]
+    card = payload["card"]
+    game.record_reveal(game.players.index(player), [card.name])
+    game.put_card_into_library(player, card)
+    random.shuffle(player.library)
+    game.log.append(
+        f"{card.name} was revealed and shuffled into {player.name}'s library "
+        "instead of going to a graveyard"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 #: Each entry is ``(the phrase an interceptor above self-selects on, the
 #: trailing clause that same interceptor also performs)``. The tail is spelled
 #: out in full rather than left as an open-ended "and whatever follows" — it is
@@ -4772,6 +4874,12 @@ def replacement_claims_line(line: str) -> bool:
     # the counters are payload — and absent on the cards that print the
     # sentence without them — through the reader the interceptor itself asks.
     if discard_to_battlefield(normalized) is not None:
+        return True
+    # "If Legacy Weapon would be put into a graveyard from anywhere, reveal
+    # Legacy Weapon and shuffle it into its owner's library instead." Matched by
+    # shape because the subject is the card's own name, asked of the reader the
+    # interceptor self-selects on.
+    if graveyard_shuffle_subject(normalized) is not None:
         return True
     from .land_mana_swaps import substitution_line
 

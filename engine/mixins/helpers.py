@@ -1004,7 +1004,9 @@ class GameHelpersMixin:
             library.append(card)
         return True
 
-    def put_card_into_graveyard(self, owner, card, *, from_zone=None) -> bool:
+    def put_card_into_graveyard(
+        self, owner, card, *, from_zone=None, from_battlefield=None
+    ) -> bool:
         """Put *card* into *owner*'s graveyard, unless something diverts it.
 
         *from_zone* is the zone it came out of, named only where a card says
@@ -1043,10 +1045,21 @@ class GameHelpersMixin:
         """
         seat = self._owner_seat(owner)
         card = whole_card(card)  # CR 709.4 — see ``put_card_into_hand``
+        # *from_battlefield* is the :class:`Permanent` this card is the card
+        # **of**, when it is arriving here by leaving the battlefield — the
+        # argument the hand and library seams already take, for the reason they
+        # give: the seam is handed a shared ``CardDefinition``, and an effect
+        # about *this object's own* move ("If Legacy Weapon would be put into a
+        # graveyard from anywhere…") has to read the object as it last existed
+        # (CR 613: a copy of it has the sentence, and one that lost its
+        # abilities does not). It rides the event; nothing here reads it.
         consumed, _ = apply_replacements(
             self,
             "put_into_graveyard",
-            {"player": self.players[seat], "card": card},
+            {
+                "player": self.players[seat], "card": card,
+                "from_zone": from_zone, "permanent": from_battlefield,
+            },
         )
         if consumed:
             return False
@@ -1172,7 +1185,8 @@ class GameHelpersMixin:
             # keeps a token's card out of the pile while leaving it something
             # that died.
             if not self.put_card_into_graveyard(
-                owner, permanent.card, from_zone="battlefield"
+                owner, permanent.card, from_zone="battlefield",
+                from_battlefield=permanent,
             ):
                 return
         # "Whenever a land is put into a graveyard from the battlefield…"

@@ -87,6 +87,7 @@ from .effects import (
     parse_graveyard_top_opponent_chooses,
     parse_player_chooses_permanent,
     parse_player_looks_at_own_library_top,
+    parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
 )
 
@@ -180,6 +181,16 @@ def parse_player_subject_verb(
         )
         if separated is not None:
             return separated
+        # "**That player** looks at the top three cards of your library, then
+        # puts them back in any order." (Tahngarth's Glare.) The third card on
+        # these four opening words, and the plainest: the same library as the
+        # Portal's and nothing done with it but a rearrangement. Last, and
+        # declining without consuming like the two above it.
+        reordered = parse_player_reorders_your_library_top(
+            stream, source_spec
+        )
+        if reordered is not None:
+            return reordered
     if token.text in ("skips", "skip") and isinstance(source_spec, ast.PlayerRef):
         return _parse_skip_step(stream, source_spec)
     # "**That player** exiles all cards from their library." (Thought

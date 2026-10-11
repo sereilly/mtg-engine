@@ -143,9 +143,38 @@ def _parse_flip_coin(stream: TokenStream) -> ast.Statement | None:
     # the two come to disagree about whose flip it is.
     stream.accept_word("you")
     if stream.accept_phrase("flip", "a", "coin"):
-        return ast.FlipCoin()
+        return _accept_flip_run_tail(stream) or ast.FlipCoin()
     stream.reset(mark)
     return None
+
+
+def _accept_flip_run_tail(stream: TokenStream) -> "ast.FlipCoinsUntilLoss | None":
+    """``that many times or until you lose a flip, whichever comes first. If
+    you win all the flips, draw <N> cards for each flip`` behind "flip a coin",
+    or None with nothing consumed. (Squee's Revenge.)
+
+    Both sentences, for :class:`ast.FlipCoinsUntilLoss`' reason. Past the first
+    clause every word is required: which bound ends the run and what a clean
+    run pays are the whole card.
+    """
+    if not stream.accept_phrase(
+        "that", "many", "times", "or", "until", "you", "lose", "a", "flip"
+    ):
+        return None
+    stream.accept_punct(",")
+    for word in ("whichever", "comes", "first"):
+        stream.expect_word(word)
+    if not stream.accept_punct("."):
+        raise stream.error("expected what winning every flip pays")
+    for word in ("if", "you", "win", "all", "the", "flips"):
+        stream.expect_word(word)
+    stream.accept_punct(",")
+    stream.expect_word("draw")
+    per_flip = parse_amount(stream)
+    stream.expect_word("cards", "card")
+    for word in ("for", "each", "flip"):
+        stream.expect_word(word)
+    return ast.FlipCoinsUntilLoss(ast.ThatMuch(None), per_flip)
 
 
 def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:

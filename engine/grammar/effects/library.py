@@ -214,6 +214,42 @@ def parse_player_looks_at_own_library_top(
     )
 
 
+def parse_player_reorders_your_library_top(
+    stream: TokenStream, subject: "ast.Recipient"
+) -> "ast.Statement | None":
+    """``<player> looks at the top N cards of your library, then puts them back
+    in any order.`` (Tahngarth's Glare's second sentence.)
+
+    Natural Selection's look with the seats the other way round — the *named*
+    player looks and orders, the pile is the controller's — so it is
+    :class:`ast.LookAtLibraryTop` with its ``looker`` printed. Declines without
+    consuming, as the two productions beside it do: all three open on the same
+    four words. Every word of the tail is required.
+    """
+    if not isinstance(subject, ast.PlayerRef):
+        return None
+    probe = stream.mark()
+    count = None
+    if stream.accept_word("looks", "look") and stream.accept_phrase("at", "the", "top"):
+        try:
+            count = parse_amount(stream)
+        except GrammarError:
+            count = None
+    if (
+        count is not None
+        and stream.accept_phrase("cards", "of", "your", "library")
+        and (stream.accept_punct(",") or True)
+        and stream.accept_word("then")
+        and stream.accept_word("puts", "put")
+        and stream.accept_phrase("them", "back", "in", "any", "order")
+    ):
+        return ast.LookAtLibraryTop(
+            count, ast.PlayerRef("you"), may_reorder=True, looker=subject,
+        )
+    stream.reset(probe)
+    return None
+
+
 def parse_player_separates_your_library_top(
     stream: TokenStream, subject: "ast.Recipient"
 ) -> "ast.Statement | None":

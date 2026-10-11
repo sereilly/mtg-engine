@@ -70,6 +70,12 @@ _REJECTIONS: tuple[tuple[str, dict, str], ...] = (
         "Grizzly Bears",
     ),
     ("exclude_colors", {"exclude_colors": ["G"]}, "Grizzly Bears"),
+    # "a **multicolored** creature" (Dragon Arch's adjective, CR 105.2b).
+    # Grizzly Bears is one colour, so a matcher ignoring the key would admit
+    # it; the positive half — that a two-colour creature *is* matched, and that
+    # a painted one is what the layers say — is demonstrated below, because a
+    # matcher that always answered False also passes this row.
+    ("multicolored", {"multicolored": True}, "Grizzly Bears"),
     ("exclude_types", {"exclude_types": ["creature"]}, "Grizzly Bears"),
     ("exclude_subtypes", {"exclude_subtypes": ["bear"]}, "Grizzly Bears"),
     ("tapped_only", {"tapped_only": True}, "Grizzly Bears"),
@@ -249,6 +255,41 @@ def test_a_class_union_matches_on_either_axis(pool):
 
     assert subject_matches(game, black, described), "black, and no artifact"
     assert subject_matches(game, artifact, described), "an artifact, and colourless"
+
+
+def test_multicolored_is_two_or_more_of_the_computed_colours(pool):
+    """The positive half of ``multicolored`` (CR 105.2b), on a permanent and on
+    a card.
+
+    Shivan Wurm is red and green and matches; a colourless artifact creature
+    does not, and neither does a mono-coloured one — the rejection row above.
+    The count is taken off the **computed** colours (layer 5), so a Grizzly
+    Bears painted red-and-green by an effect is multicoloured for as long as
+    the effect says so, and the card matcher answers the same word off the
+    printed colours for a card in a zone (CR 202.2).
+    """
+    from engine.color_changes import change_color
+    from engine.handlers._common import _card_matches_filter
+
+    described = {"type_filter": "creature", "multicolored": True}
+    wurm = Permanent(card=pool["Shivan Wurm"])
+    bears = Permanent(card=pool["Grizzly Bears"])
+    thopter = Permanent(card=pool["Ornithopter"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[wurm, bears, thopter]),
+        PlayerState(name="P2"),
+    ])
+
+    assert subject_matches(game, wurm, described), "red and green"
+    assert not subject_matches(game, bears, described), "green alone"
+    assert not subject_matches(game, thopter, described), "no colour at all"
+
+    change_color(bears, ("R", "G"))
+    assert subject_matches(game, bears, described), "two colours once painted"
+
+    assert _card_matches_filter(pool["Shivan Wurm"], described)
+    assert not _card_matches_filter(pool["Grizzly Bears"], described)
+    assert not _card_matches_filter(pool["Ornithopter"], described)
 
 
 def test_untapped_only_rejects_a_tapped_permanent(pool):
