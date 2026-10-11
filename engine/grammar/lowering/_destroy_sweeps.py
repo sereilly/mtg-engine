@@ -80,6 +80,63 @@ _DESTROY_ALL_KINDS: dict[tuple[str, ...], str] = {
 }
 
 
+#: The same table read the other way: what each by-type kind sweeps, as the
+#: filtered sweep spells its ``type_filter`` — a word for one type, a list for
+#: a union, which is the shape ``_filter_payload`` produces and
+#: ``permanent_matches_filter`` reads.
+_BY_TYPE_SWEEP_FILTERS: dict[str, object] = {
+    kind: types[0] if len(types) == 1 else list(types)
+    for types, kind in _DESTROY_ALL_KINDS.items()
+}
+
+
+def one_sweep_kind(
+    then: tuple[OracleInstruction, ...], otherwise: tuple[OracleInstruction, ...]
+) -> tuple[tuple[OracleInstruction, ...], tuple[OracleInstruction, ...]]:
+    """The two arms of one conditional, with a by-type sweep respelt as the
+    filtered sweep when the *other* arm is one.
+
+    "Destroy all lands you control. If it was kicked, destroy all lands
+    instead." (Desolation Angel.) One action printed twice, of which exactly
+    one runs (``conditional_instead``) — and the narrowed arm is
+    ``destroy_all_matching`` while the bare one would be ``destroy_all_lands``,
+    because the by-type kinds are older than the filtered sweep and
+    ``lower_destroy_sweep`` keeps them for a sentence that names only a type.
+    That is two handlers behind one printed verb, and the day this was written
+    they *disagreed*: the by-type land sweep skipped regeneration shields and
+    the filtered one honoured them, so a regenerating land creature survived
+    the unkicked Angel and died to the kicked one, on a card that says nothing
+    about regeneration either way.
+
+    So inside a pair the general spelling wins and both arms go through one
+    handler, where the only thing that can differ between them is the payload
+    the card printed. Outside a pair nothing moves: a lone "Destroy all lands."
+    (Armageddon) keeps the kind the compiler, the behaviour snapshots and the
+    AI's valuation all key on.
+
+    Anything else — arms of several steps, arms that are not both whole-board
+    destroys, two by-type arms — is returned as it came.
+    """
+    if len(then) != 1 or len(otherwise) != 1:
+        return then, otherwise
+    kinds = {then[0].kind, otherwise[0].kind}
+    if len(kinds) != 2 or "destroy_all_matching" not in kinds:
+        return then, otherwise
+    (other_kind,) = kinds - {"destroy_all_matching"}
+    if other_kind not in _BY_TYPE_SWEEP_FILTERS:
+        return then, otherwise
+
+    def filtered(step: OracleInstruction) -> OracleInstruction:
+        if step.kind == "destroy_all_matching":
+            return step
+        return OracleInstruction(
+            "destroy_all_matching", step.value,
+            {"type_filter": _BY_TYPE_SWEEP_FILTERS[step.kind], **step.payload},
+        )
+
+    return (filtered(then[0]),), (filtered(otherwise[0]),)  # one_sweep_kind
+
+
 _BASIC_LAND_TYPES = frozenset({"plains", "island", "swamp", "mountain", "forest"})
 
 

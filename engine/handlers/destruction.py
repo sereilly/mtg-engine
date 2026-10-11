@@ -39,12 +39,25 @@ if TYPE_CHECKING:
 # Types are read through has_type/is_creature (CR 613 layer 4), so a Copy
 # Artifact copy counts as both its types and an animated land counts as a
 # creature.
+#
+# **Regeneration is allowed for all five**, and the column is kept only so the
+# table still says so out loud. Lands and enchantments read ``False`` here from
+# the consolidation onward — inherited from two Alpha-era handlers written when
+# "regenerate" was a thing creatures did. CR 701.19a makes it a replacement on
+# *a permanent's* destruction, and a land or an enchantment is often a creature
+# too: a Spawning Pool or a Mishra's Factory animated in response to
+# Armageddon, an enchantment under Opalescence wearing a Regeneration. Each was
+# destroyed through its shield, on four cards that say nothing about
+# regeneration (Armageddon, Impending Disaster, Tranquility and its kin), and
+# Desolation Angel's two arms — one this sweep, one the filtered one below —
+# disagreed about the same land. "They can't be regenerated" is the card's to
+# say, and it arrives as ``bypass_regeneration`` (Catastrophe).
 _SWEEP_TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     # kind -> (types any of which qualifies, regeneration allowed)
     "destroy_all_creatures": (("creature",), True),
     "destroy_all_artifacts": (("artifact",), True),
-    "destroy_all_enchantments": (("enchantment",), False),
-    "destroy_all_lands": (("land",), False),
+    "destroy_all_enchantments": (("enchantment",), True),
+    "destroy_all_lands": (("land",), True),
     "destroy_all_artifacts_creatures_enchantments": (
         ("artifact", "creature", "enchantment"),
         True,
