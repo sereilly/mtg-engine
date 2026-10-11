@@ -219,7 +219,13 @@ def test_w1g4_legacy_weapon_discarded_is_shuffled_into_its_owners_library(set_po
 
 def test_w1g4_legacy_weapon_milled_is_shuffled_back_into_its_library(set_pool):
     """From a library: milled. The card beside it is put into the graveyard and
-    the Weapon is somewhere in what is left."""
+    the Weapon is somewhere in what is left.
+
+    CR 701.17a: a mill of two is the top two cards *as the mill begins*. The
+    Weapon is shuffled back in while the second card is still to be put away,
+    and that second card is the Forest that was under it — not whatever the
+    shuffle left on top, which was the Weapon again or the Island as often as
+    not when the mill took its cards one pop at a time."""
     game, _, _ = _w1g4a_table(
         set_pool, theirs=["Millstone"], lib0=["Legacy Weapon", "Forest", "Island"],
     )

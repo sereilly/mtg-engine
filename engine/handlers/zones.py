@@ -5171,15 +5171,21 @@ def mill_target_player(game: Game, instruction: OracleInstruction, context: Orac
     # that graveyard **this way**" is one question.
     put_there = context.results.setdefault(MILLED_THIS_WAY, [])
     for victim in victims:
-        milled = 0
-        for _ in range(amount):
-            if not victim.library:
-                break
-            card = victim.library.pop(0)
+        # CR 701.17a: "that player puts **that many cards from the top** of
+        # their library into their graveyard" — the cards are the top N as the
+        # mill begins, so they come off the library together and are then put
+        # where they go one by one. It popped a card per iteration, which read
+        # the same until something on the way to the graveyard touched the
+        # library: Legacy Weapon milled first is shuffled back in, and the
+        # *next* pop then took whatever the shuffle left on top — the Weapon
+        # again as often as not — where the card under it is the one this
+        # mill named.
+        taken = victim.library[:max(0, int(amount))]
+        del victim.library[:len(taken)]
+        for card in taken:
             game.put_card_into_graveyard(victim, card, from_zone="library")
             put_there.append(card)
-            milled += 1
-        game.log.append(f"{victim.name} milled {milled} card(s)")
+        game.log.append(f"{victim.name} milled {len(taken)} card(s)")
     return True, "resolved"
 
 
