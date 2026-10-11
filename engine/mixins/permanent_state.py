@@ -47,7 +47,7 @@ from ..auras import (AMONG_CONTROLLED_PROTECTION_COLORS,
 from .. import copies
 from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
-from ..cast_costs import KICKED
+from ..cast_costs import KICKED, KICKED_WITH
 from ..color_changes import add_derived_color_change, clear_derived_color_changes
 from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
@@ -1121,14 +1121,35 @@ class PermanentStateMixin:
         # What follows "and with" is something the permanent **has** from here
         # on, with no duration (CR 611.2a), so it goes through the two layer-6
         # grant channels with ``duration=None`` -- the value that has always
-        # meant "no sweep takes this away". A granted keyword is therefore
-        # removable (Humility takes Kavu Titan's trample and leaves the
-        # counters), which is what makes it an ability and not a rewrite of the
-        # card.
+        # meant "no sweep takes this away". A granted keyword is therefore an
+        # ability on the grant channel and not a rewrite of the card: a later
+        # effect that takes that word away takes it and leaves the counters.
+        #
+        # (This said "Humility takes Kavu Titan's trample" until it was driven:
+        # it does not. The *blanket* removal is struck before every grant
+        # whatever their timestamps -- ``Permanent.effective_card`` says why
+        # that is right for a grant made after it -- so a Humility that
+        # arrives *later* leaves a kicked creature its keyword and its quoted
+        # triggered ability, where CR 613.7 would take both. The activation
+        # gate does refuse the quoted activated one. Measured at Apocalypse
+        # and left: it is every grant channel against four cards, not this
+        # loop.)
+        #
+        # "If this creature was kicked **with its {1}{U} kicker**, …" (the five
+        # Volvers, CR 702.33f). The same loop asked of one kicker cost rather
+        # than of any: the entry applies only when the key the sentence names
+        # is among those the cast recorded paying (``KICKED_WITH``, stamped
+        # beside the flag). A card prints one such line per kicker, so a Volver
+        # kicked with both passes this loop twice and enters with three
+        # counters and both abilities -- two entry replacements, not one with
+        # a choice in it.
         if permanent.metadata.get(KICKED):
+            paid_kickers = tuple(permanent.metadata.get(KICKED_WITH) or ())
             for raw_line in entry_lines:
                 entry = kicked_entry(raw_line, permanent.effective_card.name)
                 if entry is None:
+                    continue
+                if entry["kicker"] is not None and entry["kicker"] not in paid_kickers:
                     continue
                 count, kind = entry["counters"]
                 # "…with X +1/+1 counters on it, where X is the discarded

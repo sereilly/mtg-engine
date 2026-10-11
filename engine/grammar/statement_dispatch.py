@@ -71,6 +71,7 @@ from .lowering.control_flow import (
     _lower_may, _lower_one_of, _lower_unless_player_pays,
 )
 from .lowering._chosen_members import _lower_exile_one_of_chosen
+from .lowering._destroy_sweeps import one_sweep_kind
 from .lowering.sequences import _lower_steps
 from .lowering.loops import (
     _lower_for_each,
@@ -797,6 +798,10 @@ def lower_statement(
             lower_statement(statement.otherwise, produced, event=event, event_subject=event_subject, whole_effect=False)
             if statement.otherwise else ()
         )
+        # "Destroy all lands you control. If it was kicked, destroy all lands
+        # instead." (Desolation Angel.) Two arms of one printed verb go through
+        # one handler — see ``_destroy_sweeps.one_sweep_kind``.
+        then, otherwise = one_sweep_kind(then, otherwise)
         if statement.negated:
             # "<body> **unless** <condition>" (Antagonism). The body is what
             # happens when the condition does *not* hold, which is exactly the

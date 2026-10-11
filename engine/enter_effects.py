@@ -700,10 +700,44 @@ def enters_with_pt_counters(line: str, card_name: str | None = None) -> tuple[in
 #: Barricade). Both are layer-6 grants through ``engine/keywords.py``'s two
 #: channels with no duration, which is what "no sweep takes this away" has
 #: always meant there.
+#:
+#: "If this creature was kicked **with its {1}{U} kicker**, it enters with …"
+#: (the five Apocalypse Volvers.) CR 702.33f: on a card printing two kicker
+#: costs (CR 702.33b) an ability may be linked to one of them, and then the
+#: sentence asks which was paid rather than whether any was. The printed cost
+#: is a capture, so it is data: :func:`kicked_entry` reports it as the
+#: canonical key the payment was recorded under and the entry state reads it
+#: back off ``cast_costs.KICKED_WITH``. A card prints one such sentence per
+#: kicker and **both may apply** -- they are two entry replacements, each
+#: placing its own counters and granting its own ability.
 KICKED_ENTRY = re.compile(
-    r"^if this [a-z]+ was kicked, it (?P<entry>enters with .+? on it)"
+    r"^if this [a-z]+ was kicked"
+    r"(?: with its (?P<kicker>(?:\{[^{}]+\})+) kicker)?"
+    r", it (?P<entry>enters with .+? on it)"
     r"(?: and with (?P<grant>.+))?$"
 )
+
+#: "If this creature was kicked, it enters with **X** +1/+1 counters on it."
+#: (Emblazoned Golem, "Kicker {X}".) :data:`KICKED_ENTRY`'s sentence with the
+#: count announced instead of printed: CR 107.3a's X in an additional cost,
+#: which the resolving spell stamps on the permanent as ``cast_x_value`` -- the
+#: same record :data:`ENTERS_WITH_X_PT_COUNTERS` reads for an X in the mana
+#: cost, because an announcement has one X wherever the card printed it.
+#:
+#: Its own pattern for that pattern's reason: the count is read from a
+#: different place at a different time. No "and with" tail -- no card prints
+#: one, and admitting a tail nothing has exercised is a claim without a card.
+KICKED_ENTRY_SIZED_BY_X = re.compile(
+    r"^if this [a-z]+ was kicked, it enters with x "
+    r"(?P<counter>\+1/\+1|\+1/\+0|\+0/\+1) counters on it$"
+)
+
+#: The permanent-metadata key the announced X of the cast that became this
+#: permanent is stamped under (``resolution._resolve_card``). Spelled here for
+#: the reason :data:`LIFE_PAID_AS_ENTERED` is: the entry state reads it for
+#: three sentences now, and a channel spelled at each end is one that can be
+#: renamed at one.
+CAST_X_VALUE = "cast_x_value"
 
 #: "If this creature was kicked, it enters with **flying and with X +1/+1
 #: counters on it, where X is the discarded card's mana value**." (Dralnu's
@@ -749,6 +783,7 @@ def _kicked_entry_sized_by_discard(normalized: str) -> "dict | None":
         "counters_from": CAST_COST_DISCARD_MANA_VALUE,
         "keywords": (grant,),
         "ability_lines": (),
+        "kicker": None,
     }
 
 
@@ -756,9 +791,16 @@ def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
     """What a **kicked** permanent enters with, or None when *line* is not that
     sentence or says something this cannot carry out.
 
-    ``{"counters": (count, kind), "keywords": (...), "ability_lines": (...)}``.
-    Read by the entry state and by the support gate, like every reader in this
-    file, so what is placed and what is claimed cannot drift.
+    ``{"counters": (count, kind), "keywords": (...), "ability_lines": (...),
+    "kicker": key | None}``. Read by the entry state and by the support gate,
+    like every reader in this file, so what is placed and what is claimed
+    cannot drift.
+
+    ``kicker`` is CR 702.33f's "kicked **with its {1}{U} kicker**": the
+    canonical key of the one kicker cost this sentence is linked to, or None
+    for the sentence that asks only whether the spell was kicked at all. The
+    entry state applies a keyed entry only to a permanent whose
+    ``cast_costs.KICKED_WITH`` record holds that key.
 
     Every part must be read or the whole line refuses. A keyword the engine has
     no behaviour for, or a quoted ability the compiler cannot read on a card
@@ -775,9 +817,34 @@ def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
     sized = _kicked_entry_sized_by_discard(normalized)
     if sized is not None:
         return sized
+    # "…it enters with X +1/+1 counters on it." (Emblazoned Golem.) Asked
+    # before the printed-count pattern for the same reason: that one takes
+    # these words and refuses them at the count.
+    by_x = KICKED_ENTRY_SIZED_BY_X.match(normalized)
+    if by_x is not None:
+        return {
+            "counters": (0, by_x.group("counter")),
+            "counters_from": CAST_X_VALUE,
+            "keywords": (),
+            "ability_lines": (),
+            "kicker": None,
+        }
     match = KICKED_ENTRY.match(normalized)
     if match is None:
         return None
+    # "…kicked **with its {1}{U} kicker**" (CR 702.33f). The canonical key, so
+    # the sentence that asks and the payment that answers name one string --
+    # through the two functions ``cast_costs`` spells its offers with. A run no
+    # payment can spend ({X}, a hybrid) has no key and refuses the line: a
+    # condition nothing can make true is a card that paid and got nothing.
+    kicker: str | None = None
+    if match.group("kicker") is not None:
+        from .mana_payment import mana_cost_from_symbols, mana_cost_label
+
+        symbols = mana_cost_from_symbols(match.group("kicker"))
+        if not symbols:
+            return None
+        kicker = mana_cost_label(symbols)
     placement = enters_with_pt_counters(f"this creature {match.group('entry')}")
     if placement is None:
         return None
@@ -809,6 +876,7 @@ def kicked_entry(line: str, card_name: str | None = None) -> "dict | None":
         "counters": placement,
         "keywords": keywords,
         "ability_lines": ability_lines,
+        "kicker": kicker,
     }
 
 
@@ -2105,6 +2173,7 @@ __all__ = [
     "enters_with_pt_counters",
     "KICKED_ENTRY",
     "KICKED_ENTRY_SIZED_BY_DISCARD",
+    "KICKED_ENTRY_SIZED_BY_X",
     "kicked_entry",
     "enters_with_named_counter",
     "ENTERS_WITH_X_PT_COUNTERS",

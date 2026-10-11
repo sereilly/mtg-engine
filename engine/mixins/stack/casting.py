@@ -1321,8 +1321,38 @@ class SpellCastingMixin:
                 x_value = max(0, int(x_value or 0))
             else:
                 x_value = None
+        # "Spend only colored mana on X. No more than one mana of each color
+        # may be spent this way." (Emblazoned Golem's "Kicker {X}".) The X of
+        # such an offer is not generic mana: it is one unit of each of X
+        # colours, and *which* colours is the payer's CR 601.2h choice. So the
+        # offer contributes only its non-X part to the taxes below, and the
+        # candidate colourings travel to the payment, which takes the first
+        # the pool can pay with real units of those colours.
+        #
+        # ``((),)`` -- one choice, of nothing -- for every other cast, so the
+        # payment below makes exactly one pass and sets nothing aside.
+        offer_x_colorings: tuple[tuple[str, ...], ...] = ((),)
         for offer, times in _optional_cost_totals(cast_costs, optional_paid):
-            charged = offer.cost_at(x_value)
+            colorings = offer.x_colorings(x_value)
+            if colorings is None:
+                charged = offer.cost_at(x_value)
+            elif not colorings:
+                # There are five colours, so no X above five can be paid one
+                # mana of each. Refused here -- before any cost is paid, and
+                # whether or not this game charges mana -- because the sentence
+                # bounds the announcement itself: an X the cost cannot be paid
+                # at is not one the caster may name (CR 601.2h, CR 601.2e).
+                refusal = (
+                    f"{card.name}: X can't be {x_value} -- no more than one "
+                    f"mana of each color may be spent on X"
+                )
+                self.log.append(refusal)
+                return SimulationResult(
+                    card.name, False, classification.effect_kind, refusal,
+                )
+            else:
+                charged = offer.cost_at(0)
+                offer_x_colorings = colorings
             if buyback_off and offer.symbols == buyback_key:
                 # Through ``reduce_cost``, the one place CR 118.7's arithmetic
                 # lives: a generic reduction touches only the generic component
@@ -1949,10 +1979,17 @@ class SpellCastingMixin:
                 caster, card, resolved_x_value, x_colors,
                 extra_generic=extra_generic_tax, reduction=cost_reduction,
                 extra_pips=extra_pip_tax,
+                offer_x_colorings=offer_x_colorings,
             )
             if x_mana_spent is None:
                 details = f"insufficient mana for {card.name}"
-                if x_colors:
+                if offer_x_colorings != ((),):
+                    details = (
+                        f"insufficient mana for {card.name} "
+                        f"(X={len(offer_x_colorings[0])} is paid with one "
+                        f"mana of each of that many colors)"
+                    )
+                elif x_colors:
                     spelling = " and/or ".join(f"{{{sym}}}" for sym in x_colors)
                     details = (
                         f"insufficient mana for {card.name} "
@@ -4817,6 +4854,7 @@ class SpellCastingMixin:
         x_colors: tuple[str, ...], *, extra_generic: int,
         reduction: CostReduction | None,
         extra_pips: dict[str, int] | None = None,
+        offer_x_colorings: tuple[tuple[str, ...], ...] = ((),),
     ) -> dict[str, int] | None:
         """Pay *card*'s mana cost, and report what X was paid with.
 
@@ -4824,21 +4862,84 @@ class SpellCastingMixin:
         nothing has been spent: ``_pay_mana_cost`` leaves the pool untouched on
         failure, so walking the candidate splits costs the caster nothing and
         the first one that pays is the payment that happened.
+
+        *offer_x_colorings* is the other X a cast can owe: the X of an optional
+        cost that must be paid "only [with] colored mana … no more than one
+        mana of each color" (Emblazoned Golem's kicker,
+        ``OptionalManaCost.x_colorings``). Each entry is one choice of colours;
+        the first whose units the pool really holds *and* whose remainder the
+        pool then pays is the payment that happened. The default is the one
+        choice of nothing, which is every other cast.
+
+        **Those units are taken out of the pool, not asked for as pips.** A
+        coloured pip is "something that may be spent as this colour", and under
+        a CR 609.4b permission that is not the same question: Celestial Dawn
+        lets white mana pay a green pip, and "it doesn't change what mana was
+        actually spent to pay that cost" -- so five Plains would pay a pip
+        apiece and the card would count five colours where one was spent. The
+        restriction is about the mana, so the mana is what is set aside
+        (``_set_aside_one_of_each``) and the rest of the cost is then paid the
+        ordinary way from what is left.
         """
-        for allocation in self._x_color_allocations(x_colors, max(0, x_value or 0)):
-            cost = reduce_cost(
-                self._parse_mana_cost(
-                    card.mana_cost, x_value=x_value,
-                    extra_generic=extra_generic, x_allocation=allocation,
-                    extra_pips=extra_pips,
-                ),
-                reduction or CostReduction(),
-            )
-            if self._pay_mana_cost(
-                caster, cost, purpose=PaymentPurpose(CAST, card=card)
+        purpose = PaymentPurpose(CAST, card=card)
+        for coloring in offer_x_colorings:
+            give_back = self._set_aside_one_of_each(caster, coloring, purpose)
+            if give_back is None:
+                continue
+            for allocation in self._x_color_allocations(
+                x_colors, max(0, x_value or 0)
             ):
-                return _x_mana_actually_spent(allocation, cost)
+                cost = reduce_cost(
+                    self._parse_mana_cost(
+                        card.mana_cost, x_value=x_value,
+                        extra_generic=extra_generic, x_allocation=allocation,
+                        extra_pips=extra_pips,
+                    ),
+                    reduction or CostReduction(),
+                )
+                if self._pay_mana_cost(caster, cost, purpose=purpose):
+                    return _x_mana_actually_spent(allocation, cost)
+            give_back()
         return None
+
+    @staticmethod
+    def _set_aside_one_of_each(caster: PlayerState, colors, purpose):
+        """Spend one unit of *caster*'s mana of each colour in *colors*, by the
+        mana's **actual** colour, and return the thunk that puts them back --
+        or None, with nothing spent, when the pool does not hold them all.
+
+        A restricted bucket *purpose* admits is spent first, for the reason
+        ``_pay_mana_cost_directly`` attributes to one first: its units are lost
+        otherwise. The undo restores both stores, because the caller tries the
+        rest of the cost afterwards and a remainder the pool cannot pay must
+        leave the caster exactly where they stood (CR 601.2e).
+        """
+        from ...restricted_mana import (debit_restricted_mana,
+                                        spendable_restricted_mana)
+
+        if not colors:
+            return lambda: None
+        pool_before = dict(caster.mana_pool)
+        buckets = getattr(caster, "restricted_mana", None) or {}
+        buckets_before = {key: dict(bucket) for key, bucket in buckets.items()}
+
+        def give_back() -> None:
+            caster.mana_pool = dict(pool_before)
+            for key, bucket in buckets_before.items():
+                buckets[key].clear()
+                buckets[key].update(bucket)
+
+        restricted = dict(spendable_restricted_mana(caster, purpose))
+        for symbol in colors:
+            if restricted.get(symbol, 0) > 0:
+                debit_restricted_mana(caster, purpose, symbol, 1)
+                restricted[symbol] -= 1
+            elif caster.mana_pool.get(symbol, 0) > 0:
+                caster.mana_pool[symbol] = caster.mana_pool[symbol] - 1
+            else:
+                give_back()
+                return None
+        return give_back  # _set_aside_one_of_each
     def _pay_mana_cost(
         self, player: PlayerState, required: dict[str, int], *, purpose=None
     ) -> bool:

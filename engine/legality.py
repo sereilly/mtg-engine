@@ -1781,6 +1781,12 @@ class LegalityMixin:
         Read against the printed cost for ``cast_cost_offers``' reason: a
         CR 601.2f increase in force makes the number optimistic, and an
         optimistic announcement is refused by the payment with nothing spent.
+
+        Through ``payments_at``, every way the offer may be paid at that X:
+        "no more than one mana of each color may be spent" on Emblazoned
+        Golem's X makes the ceiling a count of the *colours* the board can
+        reach rather than of its mana, and an X no choice of colours pays is
+        not offered.
         """
         caster = self.players[caster_index]
         pool = dict(caster.mana_pool)
@@ -1788,11 +1794,12 @@ class LegalityMixin:
         printed = mana_cost_from_symbols(card.mana_cost or "") or {}
         reachable = sum(pool.values()) + len(lands)
         for x_value in range(reachable, -1, -1):
-            required = dict(printed)
-            for symbol, amount in offer.cost_at(x_value).items():
-                required[symbol] = required.get(symbol, 0) + amount
-            if plan_payment(pool, lands, required) is not None:
-                return x_value
+            for payment in offer.payments_at(x_value):
+                required = dict(printed)
+                for symbol, amount in payment.items():
+                    required[symbol] = required.get(symbol, 0) + amount
+                if plan_payment(pool, lands, required) is not None:
+                    return x_value
         return 0
 
     # -- Several targets of different kinds (CR 601.2c) ---------------------
