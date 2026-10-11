@@ -215,6 +215,43 @@ def spend_under_permissions(
     return after
 
 
+def pips_payable_by(
+    player, symbols: "frozenset[str]", *, as_any_type: bool = False,
+    as_any_color: bool = False,
+) -> "frozenset[str]":
+    """The pips one unit of mana that may be any of *symbols* can pay for
+    *player* — coloured pips and ``{C}``; every unit also pays generic.
+
+    The payment's own cascade (``_pay_mana_cost_directly``), asked per unit:
+    CR 106.6 permissions through :func:`may_pay_pip`, Chromatic Orrery's "as
+    though it were mana of any color" (every unit pays a coloured pip, and
+    ``{C}`` still wants colourless), Sunglasses of Urza's white-as-red.
+
+    One reading for the two functions that plan a payment a unit at a time —
+    the castable highlight's (``board_payment``, where this was written) and
+    :func:`plan_payment`'s, which matched a pip to a land that *produces* its
+    colour and so never asked what the seat may spend that mana as.
+    """
+    if as_any_type:
+        return frozenset(PIP_SYMBOLS) | {"C"}
+    pays: set[str] = set()
+    if "C" in symbols:
+        pays.add("C")
+    if as_any_color or player.spends_mana_as_any_color:
+        return frozenset(pays | set(PIP_SYMBOLS))
+    if player.mana_spending_is_general:
+        permissions = player.mana_spending_permissions
+        pays.update(
+            pip for pip in PIP_SYMBOLS
+            if any(may_pay_pip(permissions, symbol, pip) for symbol in symbols)
+        )
+        return frozenset(pays)
+    pays.update(symbol for symbol in symbols if symbol in PIP_SYMBOLS)
+    if player.can_spend_white_as_red and "W" in symbols:
+        pays.add("R")
+    return frozenset(pays)
+
+
 def _normalized(required: dict[str, int]) -> dict[str, int]:
     return {
         **{symbol: int(required.get(symbol, 0)) for symbol in COLOR_SYMBOLS},
@@ -251,11 +288,77 @@ def _match_colored(
     return {land: pips[pip] for land, pip in holder.items()}
 
 
+def _plan_under_permissions(
+    pool: dict[str, int],
+    lands: Sequence["Permanent"],
+    want: dict[str, int],
+    produced: "Sequence[frozenset[str]]",
+    payer,
+) -> ManaPayment | None:
+    """:func:`plan_payment` for a seat holding a CR 106.6 spending permission.
+
+    With a permission in force "which land produces this pip's colour" is the
+    wrong question twice over: a unit may pay a pip it is not the colour of
+    (white as any colour, Celestial Dawn), and may **not** pay the pip it is
+    the colour of ("other mana only as though it were colorless mana" — a
+    floating {B} is no payment for a {B} pip there). So the pool is not spent
+    ahead of the matching the way the ordinary path spends it; every floating
+    unit and every land is one source carrying what :func:`pips_payable_by`
+    says it pays, and one matching places the pips over all of them.
+
+    Floating mana is listed first, which is the ordinary path's preference
+    ("a land kept untapped is worth more than one that is not") expressed as
+    the order the matching tries sources in.
+    """
+    units: list[str] = [
+        str(symbol) for symbol, amount in pool.items()
+        for _ in range(max(0, int(amount)))
+    ]
+    floating = len(units)
+    sources: list[tuple[int, frozenset[str]]] = [
+        (index, pips_payable_by(payer, frozenset({symbol})))
+        for index, symbol in enumerate(units)
+    ]
+    sources += [
+        (floating + index, pips_payable_by(payer, made) if made else frozenset())
+        for index, made in enumerate(produced)
+    ]
+    pips = [symbol for symbol in COLOR_SYMBOLS for _ in range(want[symbol])]
+    assignment = _match_colored(pips, sources) if pips else {}
+    if assignment is None:
+        return None
+
+    from_pool: dict[str, int] = {}
+    for index in assignment:
+        if index < floating:
+            from_pool[units[index]] = from_pool.get(units[index], 0) + 1
+    generic = want["generic"]
+    for index, symbol in enumerate(units):
+        if generic <= 0:
+            break
+        if index not in assignment:
+            from_pool[symbol] = from_pool.get(symbol, 0) + 1
+            generic -= 1
+    spare = [
+        index for index, made in enumerate(produced)
+        if floating + index not in assignment and made
+    ]
+    if generic > len(spare):
+        return None
+    tapped = sorted(
+        [index - floating for index in assignment if index >= floating]
+        + spare[:max(0, generic)]
+    )
+    return ManaPayment(from_pool=from_pool, tapped=tuple(lands[i] for i in tapped))
+
+
 def plan_payment(
     pool: dict[str, int],
     lands: Sequence["Permanent"],
     required: dict[str, int],
     produces: "Callable[[Permanent], Sequence[str]] | None" = None,
+    *,
+    payer=None,
 ) -> ManaPayment | None:
     """How *required* can be paid from *pool* plus tapping *lands*, or None.
 
@@ -273,8 +376,28 @@ def plan_payment(
     cost can be paid from is arithmetic, and the caller owns the board. A caller
     that omits it gets the permanent's own answer, which is what every caller
     got before the override existed.
+
+    *payer* is the seat paying (a ``PlayerState``), for what it may spend its
+    mana **as** (CR 609.4b, CR 106.6): "you may spend white mana as though it
+    were mana of any color" (Celestial Dawn, False Dawn), "…as though it were
+    red mana" (Sunglasses of Urza), "…mana as though it were mana of any
+    color" (Chromatic Orrery). The permissions are the seat's derived list, so
+    this stays arithmetic — and a seat holding none takes the path below
+    exactly as it always has, which is every board but the ones those cards
+    are on. Without it an effect-priced coloured cost could not be paid under
+    Celestial Dawn at all, where every land is a Plains and no land "produces"
+    the pip.
     """
     want = _normalized(required)
+    if payer is not None and getattr(payer, "mana_spending_permissions", ()):
+        return _plan_under_permissions(
+            pool, lands, want,
+            [
+                frozenset(produces(land) if produces else (land.effective_produced_mana or ()))
+                for land in lands
+            ],
+            payer,
+        )
     from_pool: dict[str, int] = {}
     left = dict(pool)
 

@@ -223,7 +223,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             self._upkeep_pool(player, purpose),
             untapped_mana_lands(self.controlled_by(player)),
             mana,
-            produces=self._land_payment_colors,
+            produces=self._land_payment_colors, payer=player,
         )
 
     def _upkeep_pool(self, player, purpose) -> dict[str, int]:

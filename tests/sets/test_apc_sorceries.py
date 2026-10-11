@@ -1961,6 +1961,67 @@ def test_w2g4_dwarven_landslide_kicker_is_paid_with_the_land_named_or_not_at_all
     _w2g4_resolve_stack(game)
     assert not game.is_on_battlefield(island) and not game.is_on_battlefield(swamp)
 
+
+# -- item 3: an effect's cost is paid with what the payer may spend -----------
+
+
+def test_w2g4_false_dawn_pays_an_effects_red_price_with_white_mana(set_pool):
+    """"Until end of turn, spells and abilities you control that would add
+    colored mana instead add that much white mana. Until end of turn, you may
+    spend white mana as though it were mana of any color."
+
+    The first sentence makes the Forest's mana white; the second is what lets
+    that mana pay anything. A *cast* asked the permission and an effect's price
+    did not: Ice Cave's "any other player may pay that spell's mana cost"
+    offered {R} for the opponent's Lightning Bolt and the Forest could not pay
+    it. It can — the Forest is tapped, the Bolt is countered, nobody takes 3.
+    """
+    game, mine, _ = _w2g4_table(
+        set_pool, ["Ice Cave", "Forest"], hand=["False Dawn"],
+        library=["Swamp", "Swamp", "Swamp"],
+    )
+    forest = mine[1]
+    game.interactive_seats = {0}
+    assert game.queue_from_hand(0, "False Dawn").supported
+    # The Cave offers False Dawn itself to the other seat, which has no land.
+    game.resolve_top_of_stack()
+    game.auto_resolve_pending_choices()
+    _w2g4_resolve_stack(game)
+    assert game.pending_choices == []
+    assert "False Dawn: Caster may spend {W} as though it were mana of any color this turn" in game.log
+    assert [card.name for card in game.players[0].hand] == ["Swamp"], "it drew"
+
+    game.players[1].hand.append(_w2g4_card(set_pool, "Lightning Bolt"))
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    game.enforce_mana_costs = True
+    game.resolve_top_of_stack(pause_for_choices=True)
+    (asked,) = [choice for choice in game.pending_choices if choice.kind == "optional_pay"]
+    assert asked.player_index == 0
+    assert asked.data["prompt"] == "Pay {R} (Lightning Bolt's mana cost)?"
+    assert game._player_can_pay_optional(game.players[0], asked.data)
+    assert game.confirm_optional_pay(0, accept=True) is True
+
+    assert forest.tapped
+    assert not game.stack and game.players[0].life == 20
+    assert "Lightning Bolt was countered by Ice Cave and moved to graveyard" in game.log
+
+
+def test_w2g4_without_false_dawn_the_same_forest_cannot_pay_the_red_price(set_pool):
+    """The control: no False Dawn, so the Forest makes green and green is not
+    red. A yes buys nothing, the Forest stays untapped and the Bolt lands."""
+    game, mine, _ = _w2g4_table(set_pool, ["Ice Cave", "Forest"], hand=[])
+    game.interactive_seats = {0}
+    game.players[1].hand.append(_w2g4_card(set_pool, "Lightning Bolt"))
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    game.enforce_mana_costs = True
+    game.resolve_top_of_stack(pause_for_choices=True)
+    game.confirm_optional_pay(0, accept=True)
+    game.enforce_mana_costs = False
+    _w2g4_resolve_stack(game)
+
+    assert not mine[1].tapped
+    assert game.players[0].life == 17
+
 # ==== end W2G4 ========================================================
 
 # ==== W2G5 ============================================================

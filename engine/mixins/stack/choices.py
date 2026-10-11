@@ -2026,7 +2026,7 @@ class PendingChoicesMixin:
             affordable = 0
             while affordable < min(amount, len(own)):
                 total = {s: c * (affordable + 1) for s, c in cost_each.items()}
-                if plan_payment(payer.mana_pool, (), total) is None:
+                if plan_payment(payer.mana_pool, (), total, payer=payer) is None:
                     break
                 affordable += 1
             amount = affordable
@@ -3623,7 +3623,7 @@ class PendingChoicesMixin:
                 player.mana_pool,
                 untapped_mana_lands(self.controlled_by(seat)),
                 generic_cost(value),
-                produces=self._land_payment_colors,
+                produces=self._land_payment_colors, payer=player,
             )
             if value else None
         )
@@ -4930,7 +4930,7 @@ class PendingChoicesMixin:
         """
         return plan_payment(
             player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost,
-            produces=self._land_payment_colors,
+            produces=self._land_payment_colors, payer=player,
         )
 
     def narrowed_land_mana_colors(self, land) -> "tuple[str, ...] | None":
@@ -7918,6 +7918,10 @@ class PendingChoicesMixin:
             plan = plan_payment(
                 player.mana_pool, lands, cost,
                 produces=self._land_payment_colors,
+                # What the payer may spend that mana *as* (CR 609.4b): white as
+                # any colour under Celestial Dawn or False Dawn, where no land
+                # "produces" the pip an effect is charging.
+                payer=player,
             )
             if plan is not None:
                 return plan
@@ -9119,7 +9123,7 @@ class PendingChoicesMixin:
         may_tap: list[bool] = []  # asked once, and only when the pool falls short
 
         def payable(cost) -> bool:
-            if plan_payment(player.mana_pool, (), cost) is not None:
+            if plan_payment(player.mana_pool, (), cost, payer=player) is not None:
                 return True
             if not may_tap:
                 may_tap.append(
@@ -9127,7 +9131,7 @@ class PendingChoicesMixin:
                 )
             return may_tap[0] and plan_payment(
                 player.mana_pool, untapped_mana_lands(self.controlled_by(player)),
-                cost, produces=self._land_payment_colors,
+                cost, produces=self._land_payment_colors, payer=player,
             ) is not None
 
         # A life cost has no "already floating" reading — nothing is held in

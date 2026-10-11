@@ -434,7 +434,7 @@ def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
         game.players[seat].mana_pool,
         untapped_mana_lands(game.controlled_by(seat)),
         cost,
-        produces=game._land_payment_colors,
+        produces=game._land_payment_colors, payer=game.players[seat],
     )
 
 
