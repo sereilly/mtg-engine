@@ -1294,6 +1294,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                         # then acted on whichever bystander it scanned first.
                         # Set aside instead: the trigger goes on the stack
                         # with nothing announced and chooses for itself.
+                        picked_from_its_list = False
                         if picked is not None:
                             legal = self._upkeep_trigger_legal_targets(
                                 permanent, controller_seat, trig
@@ -1303,6 +1304,14 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                                 named is allowed for allowed in legal
                             ):
                                 picked = None
+                            else:
+                                # A pick the ability's own list accepted is a
+                                # target chosen for it (CR 603.3d), and says so
+                                # on the stack object — which is what lets CR
+                                # 608.2b be asked of it as it resolves. Where
+                                # the picker has no list the pick rides
+                                # unjudged, here and there alike.
+                                picked_from_its_list = legal is not None
                         upkeep_events.append({
                             "controller_index": controller_seat,
                             "source_permanent": permanent,
@@ -1322,6 +1331,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                                 else None
                             ),
                             "target_permanent_index": picked[1] if picked else None,
+                            "targets_chosen": picked_from_its_list,
                             "instruction": trig.instruction,
                             "effect_kind": triggered_label(kind, cond),
                             "ability_text": trig.source_line or None,

@@ -8488,6 +8488,8 @@ class PendingChoicesMixin:
         item.target_permanent_id = named
         item.target_permanent_index = None
         item.target_player_index = self.announced_target_seat(named)
+        # CR 603.3d's choice, made — see ``StackItem.targets_chosen``.
+        item.targets_chosen = True
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets "
             + ", ".join(permanent.card.name for permanent in permanents)
@@ -8534,6 +8536,8 @@ class PendingChoicesMixin:
             item.target_player_index = seat
             item.target_permanent_index = None
             item.target_permanent_id = None
+            # CR 603.3d's choice, made — see ``StackItem.targets_chosen``.
+            item.targets_chosen = True
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
             self._announce_answered_targets(item, choice, queued)
             return True
@@ -8555,6 +8559,8 @@ class PendingChoicesMixin:
         item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
+        # CR 603.3d's choice, made — see ``StackItem.targets_chosen``.
+        item.targets_chosen = True
         self.log.append(f"{card_name}: targets {perm.card.name}")
         self._announce_answered_targets(item, choice, queued)
         return True

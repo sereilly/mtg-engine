@@ -317,6 +317,12 @@ class StackResolutionMixin:
         # this creature enters, counter target spell", Mystic Snake). By
         # identity, as ``StackItem.target_stack_item`` always is.
         target_stack_item: StackItem | None = None,
+        # The target fields above are a **choice** its controller made out of
+        # the ability's own list before the object existed — the upkeep step's
+        # target prompt, answered ahead of ``resolve_upkeep`` and held there to
+        # ``_upkeep_trigger_legal_targets``. See ``StackItem.targets_chosen``;
+        # False for every fire site that stamps what its event was about.
+        targets_chosen: bool = False,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -348,6 +354,7 @@ class StackResolutionMixin:
                 x_value=x_value,
                 announced_at_cast=announced_at_cast,
                 target_stack_item=target_stack_item,
+                targets_chosen=targets_chosen,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -382,6 +389,7 @@ class StackResolutionMixin:
                     captured_results=dict(captured_results or {}),
                     hook_key=hook_key,
                     hook_event=hook_event,
+                    targets_chosen=targets_chosen,
                 ),
                 announced_at_cast=announced_at_cast,
             )
@@ -1447,6 +1455,15 @@ class StackResolutionMixin:
                     verb="was countered by the rules",
                 )
             return
+        # …and the rule's last sentences, for the object that does resolve:
+        # "Illegal targets, if any, won't be affected by parts of a resolving
+        # spell's effect for which they're illegal." Asked of the announcement,
+        # once, here — each slot the gate above judged illegal is rewritten to
+        # name nothing before any instruction runs, so every handler meets it
+        # as the departed target it already knows how to leave alone, and none
+        # of them has to re-ask whether a permanent it found can still be
+        # *targeted* (which none of them did).
+        self.blank_illegal_resolution_targets(item)
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:
