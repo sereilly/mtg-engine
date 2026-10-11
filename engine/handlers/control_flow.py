@@ -47,7 +47,8 @@ from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
                       defending_player_seat, flip_coin,
-                      permanent_matches_filter, permanent_state_holds)
+                      permanent_matches_filter, permanent_state_holds,
+                      triggering_spell)
 from .registry import effect_handler
 from ..mana_payment import mana_cost_label
 
@@ -4193,19 +4194,17 @@ def _event_spell_and_cost(game: Game, context: OracleExecutionContext):
     """``(stack item, cost)`` for "that spell's mana cost" under a cast
     trigger, or ``(None, None)`` when there is nothing payable to read.
 
-    The spell is the one the trigger fired on, found on the stack by the card
-    the event recorded — the lookup "counter it" one handler over makes
-    (``handlers/stack.counter_top_stack_spell``), so the price and the counter
-    behind it are read off one object. The cost is
+    The spell is the one the trigger fired on, found on the stack by the
+    object the event recorded — the lookup "counter it" one handler over makes
+    (``_common.triggering_spell``), so the price and the counter behind it are
+    read off one object, and off *that* object: two Fireballs cast for
+    different X are one card and two prices. The cost is
     ``mana_payment.spell_mana_cost``: printed symbols, the announced X, None
     for a spell with no mana cost.
     """
     from ..mana_payment import spell_mana_cost
 
-    cast_card = (context.trigger_context or {}).get("cast_card")
-    if cast_card is None:
-        return None, None
-    spell = next((item for item in game.stack if item.card is cast_card), None)
+    spell = triggering_spell(game, context)
     if spell is None:
         return None, None
     cost = spell_mana_cost(spell)

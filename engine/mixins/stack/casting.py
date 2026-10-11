@@ -2285,7 +2285,7 @@ class SpellCastingMixin:
             self._apply_spell_cast_any_triggers(
                 caster_index, card, from_zone, item=spell_item
             )
-            self._apply_cast_triggers(caster_index, card)
+            self._apply_cast_triggers(caster_index, card, item=spell_item)
             # "An opponent chooses one —" (CR 700.2e): the other player chooses
             # "when the spell's controller normally would", which is CR 601.2b.
             # Armed here rather than earlier because CR 601.2i finishes the
