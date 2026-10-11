@@ -465,8 +465,9 @@ def _lower_put_exiled_this_way(
     actor = node.actor.kind if node.actor is not None else "you"
     # "…**that player** returns those cards to their hand." (Suppress.) One
     # named seat's pile, given back to that seat: the handler reads the seat
-    # the resolution was handed (a delayed ability's bound player, CR 603.7c),
-    # and a seat nobody recorded returns nothing rather than the caster's.
+    # off the per-seat record itself — the one player the exiling step wrote a
+    # pile for — so the sentence means the same thing behind any delay, and a
+    # record naming nobody returns nothing rather than the caster's.
     if actor not in ("each_player", "you", "that_player"):
         raise LoweringError(
             f"no handler gives a per-seat exile pile back to {actor!r}",

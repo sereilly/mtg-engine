@@ -4697,14 +4697,31 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
         seats = list(range(len(game.players)))
     elif who == "that_player":
         # "…**that player** returns those cards to their hand." (Suppress.) The
-        # seat the resolution was handed — for a delayed ability, the player
-        # its creating effect bound (CR 603.7c), carried on the stack item's
-        # own target. By identity, and nobody's pile when no seat was recorded:
-        # falling back to the caster would hand the spell's controller a hand
-        # the card took from somebody else.
-        seats = [
-            i for i, seated in enumerate(game.players) if seated is context.target
-        ][:1]
+        # seat is read off the **record**, which is keyed by who exiled: one
+        # named player emptied a hand, so the map holds one seat and that is
+        # the player the words name. It is deliberately not the seat this
+        # resolution happens to be carrying — that is the delay's own business
+        # (*when* it fires), and a delay that binds no player hands over
+        # whichever seat a targetless resolution defaults to. Read that way,
+        # the same sentence behind "at the beginning of the next end step"
+        # compiled and never gave back a hand its caster had aimed at
+        # themselves.
+        #
+        # A record holding several seats is not one "that player"; the seat the
+        # resolution was handed breaks the tie if it is among them, and
+        # otherwise nobody's pile moves — falling back to the caster would hand
+        # the spell's controller a hand the card took from somebody else.
+        recorded = [
+            seat for seat in by_seat
+            if isinstance(seat, int) and 0 <= seat < len(game.players)
+        ]
+        if len(recorded) == 1:
+            seats = recorded
+        else:
+            seats = [
+                i for i, seated in enumerate(game.players)
+                if seated is context.target and i in recorded
+            ][:1]
     else:
         seats = [game.players.index(context.caster)]
     described = dict(payload.get("filter") or {})

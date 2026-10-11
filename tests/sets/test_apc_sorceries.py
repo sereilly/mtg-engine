@@ -455,6 +455,40 @@ def test_w1g8_suppress_returns_only_what_is_still_exiled(set_pool):
     assert any("no exiled cards to put back" in line for line in game.log)
 
 
+@_w1g8_pytest.mark.parametrize("target", [0, 1])
+def test_w1g8_that_player_returns_those_cards_names_whoever_exiled_them(set_pool, target):
+    """The return reads its seat off the per-seat record, not off whichever
+    seat the delay happens to hand it — so the same sentence behind a delay
+    that binds no player ("the next end step") still gives the hand back to
+    the player who lost it. Read off the resolution's target instead, this
+    compiled and a caster who aimed it at themselves never saw the cards
+    again."""
+    probe = _w1g8_mk_card(
+        name="Probe", mana_cost="{1}", type_line="Sorcery",
+        oracle_text=(
+            "Target player exiles all cards from their hand face down. At the "
+            "beginning of the next end step, that player returns those cards "
+            "to their hand."
+        ),
+    )
+    assert _w1g8_compile(probe).supported
+    game = _w1g8_duel(set_pool, hand=["Terror"], opp_hand=["Counterspell"])
+    game.players[0].hand.insert(0, probe)
+    _w1g8_suppress_turn(game)
+
+    assert game.queue_from_hand(0, "Probe", target_player_index=target).supported
+    _w1g8_settle(game)
+    assert game.players[target].hand == []
+    assert len(game.players[target].exile) == 1
+
+    game.resolve_end_step(0)
+    _w1g8_settle(game)
+
+    assert _w1g8_names(game.players[0].hand) == ["Terror"], game.log
+    assert _w1g8_names(game.players[1].hand) == ["Counterspell"]
+    assert game.players[0].exile == [] and game.players[1].exile == []
+
+
 @_w1g8_pytest.mark.parametrize("text", [
     # "Those cards" with no step in front that exiled a pile names nothing.
     "At the beginning of the end step of that player's next turn, that player "
