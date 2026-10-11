@@ -14,16 +14,27 @@ one-slot announcements could have named the Flagbearer — 267 instants and
 sorceries, 265 Auras, 413 activated abilities — and **877 of them accepted a
 target that was not one** (of the other 68, 66 were refused for reasons of
 their own and two had nothing else to name); 74 more had several slots, a
-division or roles and were not probed. The
-same sweep is the test below, and its invariants are the rule:
+division or roles and were not probed.
+
+**And after**: 532 one-slot casts and 405 one-slot activations are bound (the
+eight activations that left the count were never targets — a Circle's chosen
+source, an "X target" at an X of zero), none accepts another target (526 and
+403 refusals by the requirement, the rest having nothing else to name), and
+523 and 350 announcements naming the Flagbearer are accepted. Of 68 + 13
+announcements with several slots, 72 with no Flagbearer in them are refused
+and 68 naming it beside something else are accepted. The same sweep is the
+test below, and its invariants are the rule:
 
 1. **Nothing the picker does not offer was bound.** Where the Flagbearer is
    not among an announcement's legal targets (the wrong type, a player-only
    spell, a card in a graveyard, a spell on the stack) the picker's list is the
    list it was — "if able".
 2. **One slot: the list is the Flagbearers in it**, an announcement naming
-   anything else — or nothing — is refused with nothing spent, and naming the
-   Flagbearer is accepted and reads back as the target.
+   anything else is refused with nothing spent — and so is a *cast* naming
+   nothing, which would otherwise resolve on a handler's pick — and naming the
+   Flagbearer is accepted and reads back as the target. (An *activation*
+   naming nothing has one legal form where one Flagbearer is legal, and the
+   engine makes it: ``sole_legal_activation_target``.)
 3. **Several slots, a division, roles: the list stays whole** and carries
    ``required_targets``; an announcement with no Flagbearer in it is refused,
    and one that names the Flagbearer *beside something else* is accepted.
@@ -186,10 +197,14 @@ class _Census:
         self.counts: Counter = Counter()
         self.wrong: list[str] = []
 
-    def judge(self, label, game, legal, offered, announce, source=None) -> None:
+    def judge(
+        self, label, game, legal, offered, announce, source=None,
+        bare_is_refused: bool = False,
+    ) -> None:
         """One announcement. *legal* is the un-narrowed offer, *offered* the
         picker's, *announce* queues it with the given target keywords and
-        returns ``(accepted, details, stack item)``."""
+        returns ``(accepted, details, stack item)``. *bare_is_refused* is the
+        cast side's extra probe: an announcement naming nothing at all."""
         counts, wrong = self.counts, self.wrong
         entries = legal.get("valid_targets") or []
         if (
@@ -267,6 +282,11 @@ class _Census:
                 if answer is None:
                     return
                 counts["one slot: another target refused"] += answer
+            if bare_is_refused:
+                answer = refused({}, "an announcement naming nothing")
+                if answer is None:
+                    return
+                counts["one slot: nothing named refused"] += answer
             obeyed(_names(game, bearers[0]), "one slot, the Flagbearer")
             return
 
@@ -356,7 +376,7 @@ def _sweep_casts(pool, by_name, only=None) -> _Census:
                     accepted = bool(result.supported and len(game.stack) > before)
                     return accepted, result.details, game.stack[before] if accepted else None
 
-                census.judge(label, game, legal, offered, announce)
+                census.judge(label, game, legal, offered, announce, bare_is_refused=True)
     return census
 
 
@@ -411,6 +431,7 @@ def test_every_cast_is_held_to_a_flagbearer_on_the_other_side(pool, by_name):
     # the gate cannot pass.
     assert counts["one slot: bound"] > 430, dict(counts)
     assert counts["one slot: another target refused"] > 400, dict(counts)
+    assert counts["one slot: nothing named refused"] > 400, dict(counts)
     assert counts["one slot, the Flagbearer: accepted"] > 400, dict(counts)
     assert counts["unbound"] > 250, dict(counts)
     assert counts["several slots: bound"] > 40, dict(counts)

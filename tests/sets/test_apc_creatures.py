@@ -333,6 +333,28 @@ def test_the_snake_chooses_again_when_the_spell_it_named_has_gone(set_pool):
     _w1g5_resolve_stack(game)
     assert game.players[0].life == 20
 
+
+def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
+    """CR 608.2b at the other end: the trigger is on the stack naming the
+    Shock, and the Shock leaves in response. The trigger's only target is gone,
+    so it counters nothing — it used to fall back to the top of the stack and
+    counter the Lightning Bolt nobody had named, which here resolves."""
+    apc, lea, sth = set_pool("APC"), set_pool("LEA"), set_pool("STH")
+    game, _mine, _theirs = _w1g5_duel(
+        hand0=[apc["Mystic Snake"]], hand1=[lea["Lightning Bolt"], sth["Shock"]], active=1,
+    )
+    game.queue_from_hand(1, "Lightning Bolt", target_player_index=0)
+    game.queue_from_hand(1, "Shock", target_player_index=0)
+    _bolt, shock = game.stack
+    assert game.queue_from_hand(0, "Mystic Snake", target_stack_index=1).supported
+    game.resolve_top_of_stack()
+    assert game.stack[-1].target_stack_item is shock
+    game.counter_stack_object(shock)
+    _w1g5_resolve_stack(game)
+    assert "Mystic Snake: the spell it would counter is no longer on the stack" in game.log
+    assert not any("was countered by Mystic Snake" in line for line in game.log)
+    assert game.players[0].life == 17   # the Bolt was never the Snake's target
+
 # ==== end W1G5 ========================================================
 
 
