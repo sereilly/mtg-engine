@@ -21,6 +21,13 @@ Found driving Apocalypse's Mask of Intolerance, which is the tenth card of the
 second kind. Both are declined by the registry now and resolve through the
 ordinary trigger path, where CR 603.3d chooses the target and the gate is
 re-asked.
+
+Honouring Spiteful Bully's target exposed the prompt that supplies it: the
+upkeep step's own target prompt listed what the noun phrase *describes* and
+not what the ability may *target*, so a creature with shroud was offered
+(Erhnam Djinn too), and the answer was stamped on the stack object unchecked.
+The prompt is held to the trigger's own legal list, and a pick outside it is
+set aside for the trigger to choose again.
 """
 
 from __future__ import annotations
@@ -31,7 +38,7 @@ from engine import Game, PlayerState
 from engine.models import Permanent
 from tests.helpers import resolve_stack
 
-_SETS = ("TMP", "NEM", "MIR", "ULG", "WTH", "LEA")
+_SETS = ("TMP", "NEM", "MIR", "ULG", "WTH", "HML", "ARN", "LEA")
 
 
 def _find(set_pool, name):
@@ -122,6 +129,51 @@ def test_spiteful_bully_hits_a_creature_its_controller_controls(set_pool):
     assert wurm.damage_marked == 3
     assert bully.damage_marked == 0 and theirs[0].damage_marked == 0
     assert [player.life for player in game.players] == [20, 20]
+
+
+def test_the_upkeep_target_prompt_offers_only_what_the_trigger_may_target(set_pool):
+    """The prompt listed everything the noun phrase *describes*, and shroud is
+    not a description (CR 702.18a): Autumn Willow was offered to Spiteful Bully
+    and to Erhnam Djinn. It is held to the list the trigger would choose from
+    for itself — the one the stack-time picker offers."""
+    game, _mine, _theirs = _table(set_pool, mine=["Spiteful Bully", "Autumn Willow"])
+    (prompt,) = game.get_upkeep_target_triggers(0)
+    assert [t["name"] for t in prompt["valid_targets"]] == ["Spiteful Bully"]
+
+    game, _mine, _theirs = _table(
+        set_pool, mine=["Erhnam Djinn"], theirs=["Autumn Willow", "Grizzly Bears"],
+    )
+    (prompt,) = game.get_upkeep_target_triggers(0)
+    assert [t["name"] for t in prompt["valid_targets"]] == ["Grizzly Bears"]
+
+
+def test_an_upkeep_pick_the_trigger_could_not_choose_is_set_aside(set_pool):
+    """The answer to that prompt is stamped on the stack object as its target,
+    and nothing re-checked it. One the ability cannot target is set aside and
+    the trigger chooses for itself (CR 603.3d): a seat that is asked gets the
+    legal list, and a seat that is not takes a legal default — the shrouded
+    creature is never the one damaged."""
+    game, mine, _theirs = _table(
+        set_pool, mine=["Spiteful Bully", "Autumn Willow", "Craw Wurm"], interactive=True,
+    )
+    bully, willow, wurm = mine
+    illegal = {bully.permanent_id: (0, game.battlefield_index_of(willow))}
+
+    assert _upkeep(game, trigger_targets=illegal) == ["Spiteful Bully"]
+    (prompt,) = game.pending_choices
+    assert [entry["name"] for entry in prompt.data["targets"]] == [
+        "Spiteful Bully", "Craw Wurm",
+    ]
+    assert game.confirm_trigger_target(0, permanent_id=wurm.permanent_id)
+    resolve_stack(game)
+    assert (bully.damage_marked, willow.damage_marked, wurm.damage_marked) == (0, 0, 3)
+
+    game, mine, _theirs = _table(set_pool, mine=["Spiteful Bully", "Autumn Willow", "Craw Wurm"])
+    bully, willow, wurm = mine
+    _upkeep(game, trigger_targets={bully.permanent_id: (0, game.battlefield_index_of(willow))})
+    resolve_stack(game)
+    assert willow.damage_marked == 0
+    assert bully.damage_marked + wurm.damage_marked == 3
 
 
 def test_spiteful_bully_alone_is_its_own_only_target(set_pool):

@@ -249,6 +249,38 @@ def test_w1g6_ana_sanctuary_does_nothing_if_its_condition_is_gone(set_pool):
     assert "Ana Sanctuary ability did nothing: its condition is no longer true" in game.log
 
 
+def test_w1g6_ana_sanctuary_never_pumps_a_bystander_for_an_illegal_pick(set_pool):
+    """The upkeep step also takes a target as an answer in hand
+    (``trigger_targets``). A pick the trigger could not have chosen — a land —
+    used to be stamped on the stack object anyway, and the pump handler's
+    fallback then took the first creature on *that seat's* battlefield: the
+    opponent's Hill Giant, which nobody named. It is set aside and the trigger
+    chooses for itself, from its own legal list."""
+    game, mine, theirs = _w1g6_table(
+        set_pool, mine=["Ana Sanctuary", "Prodigal Sorcerer"], theirs=["Forest", "Hill Giant"],
+    )
+    sanctuary, sorcerer = mine
+    giant = theirs[1]
+
+    game.resolve_upkeep(
+        0, defer_priority=True, trigger_targets={sanctuary.permanent_id: (1, 0)},
+    )
+    _w1g6_resolve_stack(game)
+
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+    assert (sorcerer.effective_power, sorcerer.effective_toughness) == (2, 2)
+
+    # …and a pick it could have chosen is the creature pumped.
+    game, mine, theirs = _w1g6_table(
+        set_pool, mine=["Ana Sanctuary", "Prodigal Sorcerer"], theirs=["Forest", "Hill Giant"],
+    )
+    game.resolve_upkeep(
+        0, defer_priority=True, trigger_targets={mine[0].permanent_id: (1, 1)},
+    )
+    _w1g6_resolve_stack(game)
+    assert (theirs[1].effective_power, theirs[1].effective_toughness) == (4, 4)
+
+
 def test_w1g6_ana_sanctuary_with_no_creature_to_target_leaves_the_stack(set_pool):
     """The condition holds (Undertow is a blue permanent) and there is no
     creature anywhere: CR 603.3d removes a trigger that cannot choose its
