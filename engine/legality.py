@@ -69,6 +69,7 @@ from .targeting import (
     derive_cast_spec,
     derive_instruction_spec,
     role_relation_holds,
+    slot_list_is_exact,
     spec_is_a_cost,
     spec_offers_a_player,
     spec_roles,
@@ -800,7 +801,20 @@ def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> i
     if spec.get("kind") == "divided" or spec.get("division"):
         return None
     described = (getattr(instruction, "payload", None) or {}).get("targets")
-    if not isinstance(described, dict) or described.get("quantifier") != "exactly":
+    if not isinstance(described, dict):
+        return None
+    # "Target creature gets +2/+2 until end of turn. **Another** target
+    # creature gets -2/-2 until end of turn." (Consume Strength, Steal
+    # Strength, Rookie Mistake; Deadshot prints it over a tap and a bite.) Two
+    # printed instances of the bare word "target", so two targets — as exact a
+    # number as "two target creatures", spelled a different way. This asked
+    # only for the quantifier ``exactly``, a slot list carries ``target``, and
+    # its slots were a ceiling the announcement could fall short of: each of
+    # those four was castable naming one creature, which made the drawback half
+    # of the card optional. ``targeting.slot_list_is_exact`` is the question the
+    # picker's ``exact_targets`` flag asks too; a list with an "up to one" slot
+    # in it (Primal Might) may legally name fewer and answers False to both.
+    if described.get("quantifier") != "exactly" and not slot_list_is_exact(described):
         return None
     count = described.get("count")
     if isinstance(count, bool):

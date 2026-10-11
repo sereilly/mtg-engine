@@ -631,7 +631,18 @@ def _characteristic_of_object(
             game, context, predicate=lambda p: True, fallback_on_invalid_choice=False
         )
         if perm is None:
-            return 0
+            # CR 608.2h: an object the effect itself has moved answers with its
+            # last known information. "Destroy target artifact. … where X is
+            # that artifact's mana value" (Artifact Mutation) asked the
+            # battlefield for an artifact its own first sentence had just
+            # destroyed, read zero and made no tokens. The record is the one
+            # the lowering found a step of this same effect writing
+            # (``where_x._last_known_record``); a target that was gone before
+            # the effect began wrote nothing, and still answers zero.
+            recorded = (context.results or {}).get(str(spec.get("last_known") or ""))
+            if recorded is None or isinstance(recorded, bool):
+                return 0
+            return max(0, int(recorded) + offset)
     if name == "power":
         value = int(perm.effective_power)
     elif name == "toughness":

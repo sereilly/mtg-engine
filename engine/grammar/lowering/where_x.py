@@ -660,7 +660,35 @@ def _lower_where_x_characteristic(
         # common shape — and *present* whenever the sentence named more than
         # one, because "the target" is not an answer then.
         described["role"] = role
+    elif not names_a_spell:
+        # CR 608.2h: an object the effect itself has moved answers with its
+        # last known information. "Destroy target artifact. … Create X …
+        # tokens, where X is **that artifact's** mana value" (Artifact
+        # Mutation) is asked of a card in a graveyard, so the clause names the
+        # record the step in front of it wrote down — and names one only where
+        # a step of this effect really writes it (*produced*), the producer
+        # discipline every back-reference follows. The four Mutations asked the
+        # battlefield instead, read zero, and made no tokens.
+        last_known = next(
+            (
+                key
+                for key in _LAST_KNOWN_RECORDS.get(node.definition.characteristic, ())
+                if key in produced
+            ),
+            None,
+        )
+        if last_known is not None:
+            described["last_known"] = last_known
     return _stamp_x_from_count(inner, {"object_characteristic": described})
+
+
+#: The record a step leaves of a characteristic of **the object it moved**, by
+#: characteristic — a destroy's and a bounce's, the two the pool prints.
+_LAST_KNOWN_RECORDS: dict[str, tuple[str, ...]] = {
+    "mana_value": ("its_mana_value", "returned_mana_value"),
+    "power": ("its_power",),
+    "toughness": ("its_toughness",),
+}
 
 
 #: What a role's own key licenses a printed back-reference to call it. "that
