@@ -1951,6 +1951,19 @@ class AbilityActivationMixin:
                 )
             sacrifice_attached_permanent = host
 
+        # What "**the sacrificed creature**" names once the cost is paid
+        # (CR 608.2h). The permanent the payer chose, or — when the cost names
+        # no choice at all — the host an Aura ate: "{R}, Sacrifice enchanted
+        # creature: This Aura deals damage equal to **the sacrificed creature's
+        # power** to each creature." (Bloodfire Infusion.) The host was paid
+        # and never recorded, so the effect read an empty channel and dealt 0
+        # with the card reporting supported. One record, because one phrase
+        # reads it; a card printing both sacrifices would name the chosen one.
+        sacrificed_for_cost = (
+            sacrifice_cost_permanent if sacrifice_cost_permanent is not None
+            else sacrifice_attached_permanent
+        )
+
         # "Tap two untapped Spirits you control" (Shacklegeist). Chosen by the
         # payer through `cost_permanent_ids`, and defaulted deterministically for
         # a seat that names none — the same arrangement the sacrifice cost above
@@ -3076,7 +3089,7 @@ class AbilityActivationMixin:
                         "counters_removed_for_cost": counters_removed_for_cost,
                         "mana_spent_for_cost": mana_spent_for_cost,
                         "sacrificed_set_for_cost": list(sacrifice_cost_set),
-                        "sacrificed_for_cost": sacrifice_cost_permanent,
+                        "sacrificed_for_cost": sacrificed_for_cost,
                         "untapped_for_cost": untap_cost_permanent,
                         "tapped_for_cost": (
                             tap_cost_permanents[0] if tap_cost_permanents else None
@@ -3192,7 +3205,7 @@ class AbilityActivationMixin:
                     # (Sword of the Ages), whose total power the effect reads
                     # back once they are cards in a graveyard.
                     "sacrificed_set_for_cost": list(sacrifice_cost_set),
-                    "sacrificed_for_cost": sacrifice_cost_permanent,
+                    "sacrificed_for_cost": sacrificed_for_cost,
                     # …and the land an **untap** cost paid with (Benthic
                     # Explorers), whose mana types the effect reads back. It is
                     # still on the battlefield, unlike every other record on

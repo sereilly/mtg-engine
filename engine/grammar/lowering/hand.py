@@ -45,11 +45,11 @@ import dataclasses
 
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_CREATURE_TYPE_THIS_WAY,
                              CHOSEN_NUMBER_THIS_WAY,
-                             X_FROM_COUNT_PER_RECIPIENT,
+                             X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import halved_count_spec
+from ._amounts import count_spec, halved_count_spec
 from ._common import (_amount_payload, _describe_targets, _is_you,
                       chargeable_card_filter)
 from ._events import (_DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS,
@@ -580,7 +580,15 @@ def _lower_discard(
             return (
                 OracleInstruction("discard_controller_cards", "", payload),
             )
-        amount = _amount_payload(node.count)
+        # "…discard a card **for each Island you control**" — the number Last
+        # Stand's "then discard that many cards" names. Counted at resolution on
+        # the channel the draw beside it travels (``lowering/cards``), so the
+        # two halves of that sentence are sized by one spec. Chosen, never "at
+        # random": the sampling handler below reads no count spec.
+        counted: dict[str, object] = {}
+        if isinstance(node.count, ast.CountOf) and not node.at_random:
+            counted = {X_FROM_COUNT: count_spec(node.count.filter, node)}
+        amount = "x" if counted else _amount_payload(node.count)
         # "Discard **X** cards, then …" (Recall). The count may be the cast's X:
         # `discard_controller_cards` sizes its prompt through `resolve_amount`,
         # which reads `"x"` off the context, so the variable form is the same
@@ -622,7 +630,7 @@ def _lower_discard(
             raise LoweringError(
                 "the controller discard is chosen, and counted or X", node=node
             )
-        payload: dict[str, object] = {"amount": amount}
+        payload: dict[str, object] = {"amount": amount, **counted}
         # "Discard a **creature** card" (Crypt Lurker). Gated by the same reader
         # the discard *cost* is (round 87): the prompt and its re-check ask
         # ``_card_matches_filter``, so a phrase reaching past what that can

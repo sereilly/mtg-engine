@@ -71,6 +71,7 @@ from .targeting import (
     derive_cast_spec,
     derive_instruction_spec,
     role_relation_holds,
+    slot_list_is_exact,
     spec_is_a_cost,
     spec_offers_a_player,
     spec_roles,
@@ -835,7 +836,20 @@ def exact_target_count(spec: dict | None, instruction, x_value: int | None) -> i
     if spec.get("kind") == "divided" or spec.get("division"):
         return None
     described = (getattr(instruction, "payload", None) or {}).get("targets")
-    if not isinstance(described, dict) or described.get("quantifier") != "exactly":
+    if not isinstance(described, dict):
+        return None
+    # "Target creature gets +2/+2 until end of turn. **Another** target
+    # creature gets -2/-2 until end of turn." (Consume Strength, Steal
+    # Strength, Rookie Mistake; Deadshot prints it over a tap and a bite.) Two
+    # printed instances of the bare word "target", so two targets — as exact a
+    # number as "two target creatures", spelled a different way. This asked
+    # only for the quantifier ``exactly``, a slot list carries ``target``, and
+    # its slots were a ceiling the announcement could fall short of: each of
+    # those four was castable naming one creature, which made the drawback half
+    # of the card optional. ``targeting.slot_list_is_exact`` is the question the
+    # picker's ``exact_targets`` flag asks too; a list with an "up to one" slot
+    # in it (Primal Might) may legally name fewer and answers False to both.
+    if described.get("quantifier") != "exactly" and not slot_list_is_exact(described):
         return None
     count = described.get("count")
     if isinstance(count, bool):
@@ -4112,6 +4126,37 @@ class LegalityMixin:
         if not legality or any(legality):
             return None
         return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
+
+    def resolving_targets_all_legal(self) -> bool:
+        """Whether **every** target the spell now resolving announced is still
+        legal (CR 608.2b), by the per-target verdicts
+        :meth:`illegal_targets_refusal` takes its all-or-nothing answer from.
+
+        For the one kind of sentence that needs them one at a time: an effect
+        that reads information **about** its targets. CR 608.2b's last line —
+        "If part of the effect requires information about an illegal target, it
+        fails to determine any such information" — means a comparison between
+        two targets ("unless either one is a color the other isn't", Dead
+        Ringers) has no answer once either is illegal, even though the other
+        is still there to be read; a target given protection in response is
+        the ordinary way to get there.
+
+        True where the question is not asked: nothing resolving, an ability
+        (declined for the reason ``illegal_targets_refusal`` gives), or an
+        announcement that gate cannot judge. A reader then falls back on what
+        it can see for itself, which is no worse than it had.
+        """
+        item = self.resolving_items[-1] if self.resolving_items else None
+        if item is None or item.ability_instruction is not None:
+            return True
+        program = compile_card_oracle(item.card)
+        for spec, holder, mode_index in self._resolving_announcements(item, program):
+            verdict = self._announcement_target_legality(
+                item, program, spec, holder, mode_index
+            )
+            if verdict is not None and not all(verdict):
+                return False
+        return True
 
     def _resolving_announcements(self, item, program) -> list[tuple]:
         """``(spec, holder, mode_index)`` for every announcement the spell

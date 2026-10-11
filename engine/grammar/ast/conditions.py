@@ -618,6 +618,23 @@ class SharesColorWithMatching:
 
 
 @dataclass(frozen=True)
+class TargetsDifferInColor:
+    """"Destroy two target nonblack creatures **unless either one is a color
+    the other isn't**." (Dead Ringers.)
+
+    CR 105.2's relation between the two targets the guarded effect announced:
+    true when their colour *sets* are not the same set. Not "they share no
+    color" — a white-blue creature and a blue one share blue and still differ
+    — and two colourless creatures do not differ at all (CR 105.2c), which the
+    card's ruling states outright.
+
+    No field, for :class:`SharesColorWithChosenPermanent`'s reason: "either
+    one" and "the other" are the pair beside the clause, and only the lowering
+    sees whether the effect it guards really announced exactly two.
+    """
+
+
+@dataclass(frozen=True)
 class TurnIsYours:
     """"**During your turn**, creatures you control get +2/+0." / "**During
     turns other than yours**, creatures you control get -0/-2." (Vibrating
@@ -735,6 +752,7 @@ Condition = Union[
     SharesMostCommonColor,
     SharesColorWithChosenPermanent,
     SharesColorWithMatching,
+    TargetsDifferInColor,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,

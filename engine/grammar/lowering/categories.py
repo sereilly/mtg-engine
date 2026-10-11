@@ -453,6 +453,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "redirect_next_damage_to_source_until_eot": "damage",
     # Zhalfirin Crusader: the same sentence with its two ends swapped.
     "redirect_next_damage_from_source_until_eot": "damage",
+    # Captain's Maneuver: the same point pool with **both** ends announced —
+    # the source is neither, which is what lets a spell print it.
+    "redirect_next_damage_between_targets_until_eot": "damage",
     # Shaman en-Kor: CR 615.8's chosen source over a **targeted** protected
     # creature. Same family: what moves is still the recipient of one damage
     # event, and which end of it the sentence announces is payload.

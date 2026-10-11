@@ -290,6 +290,31 @@ def _cannot_be_one_permanent(first: dict, second: dict) -> bool:
     }) in _CONTRADICTORY_CONTROLLERS
 
 
+def _names_different_nouns(first: dict, second: dict) -> bool:
+    """Whether the two slots' noun phrases have different **heads**.
+
+    "Destroy target **artifact or enchantment**. If this spell was kicked, it
+    deals damage … to target **creature**." (Orim's Thunder.) The third way a
+    line can prove it named two targets rather than one twice, and it is about
+    the copy rather than about the board: a back-reference is lowered to a copy
+    of its antecedent, and a copy may *lose* a narrowing on the way (Jabari's
+    Influence's "it" drops "that attacked you this turn") but never changes
+    what kind of thing the phrase names. So two slots whose printed nouns
+    differ have no antecedent either could be a copy of.
+
+    Weaker than :func:`_cannot_be_one_permanent` in one respect, which is why
+    it is its own predicate: an artifact creature answers both of Orim's
+    Thunder's phrases, and CR 115.3 lets one object be chosen once for each
+    instance of the word "target". The roles walk refuses the repeat
+    (``legality.role_target_options``), as it does for every roles spell.
+    """
+    nouns = [
+        (described.get("filter") or {}).get("type_filter")
+        for described in (first, second)
+    ]
+    return all(isinstance(noun, str) for noun in nouns) and nouns[0] != nouns[1]
+
+
 #: Where, below a line's own steps, an announced target can be printed.
 #:
 #: CR 601.2c is about the **printed instance of the word "target"** and says
@@ -492,7 +517,12 @@ def describe_sequence_target_roles(
         (seats == 1 and objects == 1)
         or (
             objects == 2
-            and _cannot_be_one_permanent(announced[0][1], announced[1][1])
+            and (
+                _cannot_be_one_permanent(announced[0][1], announced[1][1])
+                # …or **two objects named by different nouns** (Orim's
+                # Thunder), the copy's own evidence rather than the board's.
+                or _names_different_nouns(announced[0][1], announced[1][1])
+            )
         )
     ):
         return instructions

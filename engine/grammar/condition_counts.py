@@ -207,6 +207,15 @@ def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None
     the tail is what the card says about a level board; a reader that stopped
     at the superlative would be picking one of those for the card.
     """
+    # "…unless **either one is a color the other isn't**." (Dead Ringers.) The
+    # relation with a target on *both* sides — the pair the guarded effect
+    # announced — so it names neither and the lowering checks there are two.
+    # Whole or not at all: every word is the clause, and the phrase opens on a
+    # word no other condition here reads.
+    if stream.accept_phrase(
+        "either", "one", "is", "a", "color", "the", "other", "isn't",
+    ):
+        return ast.TargetsDifferInColor()
     mark = stream.mark()
     colour = stream.peek_word()
     if colour in COLOR_WORDS and stream.peek_word(1) == "is":

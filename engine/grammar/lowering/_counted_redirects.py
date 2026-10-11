@@ -78,6 +78,16 @@ def _lower_next_damage_redirect(
         )
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError("a recorded redirect lasts exactly this turn", node=node)
+    if not _is_source(node.new_recipient) and not _is_source(node.to):
+        # "The next X damage that would be dealt to **target creature,
+        # planeswalker, or player** this turn is dealt to **another target
+        # creature, planeswalker, or player** instead." (Captain's Maneuver.)
+        # Neither end is the source: both are announced. Read ahead of the
+        # branch below, which was reached by every sentence whose *taker* was
+        # not the source and never asked what its protected end was — so this
+        # one lowered as "the next X damage dealt to **this creature**", armed
+        # on a spell's absent permanent, with one target of its two.
+        return _lower_next_damage_redirect_between_targets(node)
     if not _is_source(node.new_recipient):
         # "{1}{W}: **The next 1 damage that would be dealt to this creature**
         # this turn **is dealt to any target instead**." (Zhalfirin Crusader.)
@@ -122,6 +132,67 @@ def _lower_next_damage_redirect(
     _describe_targets(payload, spec)
     return (
         OracleInstruction("redirect_next_damage_to_source_until_eot", "", payload),
+    )
+
+
+def _lower_next_damage_redirect_between_targets(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """"The next X damage that would be dealt to target creature, planeswalker,
+    or player this turn is dealt to another target creature, planeswalker, or
+    player instead." (Captain's Maneuver.)
+
+    The point pool of the two lowerings beside this one with **both** ends
+    announced: the record hangs off the first target and points at the second,
+    and the ability's own source is neither — which is what lets a spell print
+    it, a spell having no permanent to be an end.
+
+    Two instances of CR 115.4's union, so either end may be a player's face or
+    a permanent on either battlefield. That is a cross-seat list of chosen
+    targets, and ``divided_targets`` is the engine's one channel for one
+    (``_targets.card_divided_target_description``): the card prints the count,
+    two, nothing is divided — every entry carries the whole pool, which is
+    :data:`~engine.divided_damage.EACH` — and the order they are announced in
+    is the order the sentence names them, the protected end first. The printed
+    "another" is that channel's own rule: no entry may repeat (CR 601.2c).
+
+    Refuses what it would otherwise widen: a narrowed end ("target white
+    creature" beside "another target …") has a noun this channel's picker
+    cannot ask per slot, and a second end not printed as "another" could be the
+    first one named twice — a redirect from a creature to itself.
+    """
+    from ...divided_damage import EACH
+    from ._targets import card_divided_target_description
+
+    for end in (node.to, node.new_recipient):
+        if not (
+            isinstance(end, ast.TargetSpec)
+            and end.quantifier == "any_target"
+            and end.targeted
+            and not _names_several_targets(end)
+            and end.filter == ast.ObjectFilter()
+        ):
+            raise LoweringError(
+                "a counted redirect between two announced targets names "
+                "\"any target\" at both ends",
+                node=node,
+            )
+    if node.to.distinct_from_prior or not node.new_recipient.distinct_from_prior:
+        raise LoweringError(
+            "a counted redirect between two announced targets moves the "
+            "damage to *another* target",
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "redirect_next_damage_between_targets_until_eot", "",
+            {
+                "amount": _amount_payload(node.amount),
+                "targets": card_divided_target_description(
+                    division=EACH, count=2,
+                ),
+            },
+        ),
     )
 
 

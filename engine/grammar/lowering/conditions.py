@@ -68,6 +68,26 @@ def pronoun_target_referent(instructions) -> str | None:
     return _PRONOUN_REFERENTS.get(described.get("kind"))
 
 
+def announces_target_pair(instructions) -> bool:
+    """Whether the effect a clause guards announced **exactly two** permanents
+    (CR 601.2c) — what "either one" and "the other" name between them.
+
+    :func:`pronoun_target_referent`'s question for the other pronoun, and as
+    strict for its reason: one instruction, one list of exactly two objects.
+    "Destroy **two target** nonblack creatures unless either one is a color the
+    other isn't." (Dead Ringers.) Asked separately rather than as a third
+    referent word, so every clause written for "it" keeps the answer it had.
+    """
+    if len(instructions) != 1:
+        return False
+    described = instructions[0].payload.get("targets") or {}
+    return (
+        described.get("kind") == "object"
+        and described.get("quantifier") == "exactly"
+        and described.get("count") == 2
+    )
+
+
 def _condition_seat(condition, player, event, what: str) -> str:
     """Which seat a condition's player reference names, as a payload word.
 
@@ -129,6 +149,8 @@ def _lower_condition(
     event: str | None = None,
     referent: str | None = None,
     event_subject=None,
+    *,
+    target_pair: bool = False,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
@@ -151,6 +173,10 @@ def _lower_condition(
     is the event's subject rather than the ability's source. Only
     :func:`lower.lower_ability` holds both, so every other caller leaves it None
     and the word keeps its source reading.
+
+    *target_pair* is :func:`announces_target_pair`'s answer for that same
+    guarded effect — whether "either one" and "the other" have two announced
+    permanents to name. Supplied where *referent* is and by nobody else.
     """
     if isinstance(condition, ast.SelfInGraveyardWithCardsAbove):
         # CR 113.6b and CR 404.3 in one payload. ``functions_from`` is the same
@@ -318,6 +344,20 @@ def _lower_condition(
                 node=condition,
             ),
         }
+    if isinstance(condition, ast.TargetsDifferInColor):
+        # "…unless **either one is a color the other isn't**." (Dead Ringers.)
+        # The two targets of the effect this guards, and admitted only where
+        # that effect really announced two: beside one target, or a sweep, the
+        # words name a pair nobody chose and the evaluator would answer the
+        # same way for ever on a card reporting supported. Under a trigger the
+        # pair is refused for ``ItIsColor``'s reason one clause up.
+        if event is not None or not target_pair:
+            raise LoweringError(
+                "'either one' and 'the other' name the two targets of the "
+                "effect beside them, and this effect announces no such pair",
+                node=condition,
+            )
+        return {"kind": "targets_differ_in_color"}
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an

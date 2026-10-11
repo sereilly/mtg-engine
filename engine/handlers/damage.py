@@ -2752,6 +2752,91 @@ def redirect_next_damage_from_source_until_eot(
     return True, "resolved"
 
 
+@effect_handler("redirect_next_damage_between_targets_until_eot")
+def redirect_next_damage_between_targets_until_eot(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """Captain's Maneuver: "The next X damage that would be dealt to target
+    creature, planeswalker, or player this turn is dealt to another target
+    creature, planeswalker, or player instead."
+
+    The point pool of the two handlers above with **both** ends announced. The
+    record hangs off the first target, where one always hangs
+    (``engine/damage_redirects.py``), and points at the second; the spell is
+    neither end, and has left the stack long before any damage is dealt.
+
+    The two targets arrive on ``divided_targets`` — the one channel that
+    carries a list of targets spanning both battlefields and the players' faces
+    — in the order the sentence names them, each resolved by the id the cast
+    path stamped (``divided_target_permanent``), never by slot. Read
+    **positionally and never compacted**: entry 1 sliding into entry 0's place
+    would arm the redirect on the creature that was meant to take the damage.
+
+    CR 608.2b at resolution, one end at a time. With the protected end gone
+    there is nothing to watch, and with the taker gone there is nowhere to send
+    it — CR 614.9's "the effect does nothing" arrived early, which the card's
+    own rulings state for both ends. A taker that leaves *after* this resolves
+    is CR 614.9 proper, and ``applicable_redirect`` answers it when the damage
+    would be dealt.
+
+    X is the number announced as the spell was cast (CR 601.2b); an X of 0
+    arms nothing rather than a record that can move nothing and would sit on
+    its recipient until the cleanup step.
+    """
+    card_name = getattr(context.card, "name", "")
+    entries = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
+    if len(entries) != 2:
+        game.log.append(f"{card_name}: its two targets were not announced")
+        return True, "resolved"
+    ends: list = []
+    for entry in entries:
+        seat, index, _share = divided_entry(entry)
+        if not (isinstance(seat, int) and 0 <= seat < len(game.players)):
+            ends.append(None)
+        elif index is None:
+            player = game.players[seat]
+            ends.append(None if getattr(player, "lost", False) else player)
+        else:
+            permanent = divided_target_permanent(game, entry)
+            ends.append(
+                permanent
+                if permanent is not None and game.is_on_battlefield(permanent)
+                # CR 115.4: "any target" is a creature, a planeswalker or a
+                # battle. One that stopped being any of them while the spell
+                # waited is an illegal target (CR 608.2b).
+                and (
+                    permanent.is_creature
+                    or permanent.has_type("planeswalker")
+                    or permanent.has_type("battle")
+                )
+                else None
+            )
+    protected, taker = ends
+    if protected is None or taker is None or protected is taker:
+        game.log.append(f"{card_name}: one of its targets is gone, nothing is redirected")
+        return True, "resolved"
+    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
+    if amount <= 0:
+        game.log.append(f"{card_name}: no damage to move")
+        return True, "resolved"
+    add_redirect(
+        protected,
+        DamageRedirect(
+            new_recipient=taker,
+            amount=amount,
+            uses=None,
+            source_name=card_name or None,
+        ),
+    )
+    protected_name = getattr(protected, "name", None) or protected.card.name
+    taker_name = getattr(taker, "name", None) or taker.card.name
+    game.log.append(
+        f"{card_name}: the next {amount} damage that would be dealt to "
+        f"{protected_name} this turn is dealt to {taker_name} instead"
+    )
+    return True, "resolved"
+
+
 @effect_handler("redirect_matching_damage_to_you_until_eot")
 def redirect_matching_damage_to_you_until_eot(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext

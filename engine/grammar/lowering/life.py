@@ -45,7 +45,8 @@ from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, LAST_TARGET_CONTROLLER,
 from .. import ast
 from ..errors import LoweringError
 from ._seats import _player_recipient
-from ._amounts import halved_count_spec, seat_scoped_count_spec, x_offset_amount
+from ._amounts import (count_spec, halved_count_spec, seat_scoped_count_spec,
+                       x_offset_amount)
 from ._common import (
     _amount_payload,
     _describe_targets,
@@ -404,9 +405,28 @@ def _lower_lose_life(
                     "recipient": node.player.kind,
                 }),
             )
+    # "Target opponent loses 2 life **for each Swamp you control**." (Last
+    # Stand.) The count is the effect's controller's own board — one number
+    # whoever loses the life, so it is the shared ``x_from_count`` channel with
+    # the printed rate as its multiplier and the recipient stays whatever the
+    # branches below make of the subject. Only "you control": a phrase naming
+    # the *losing* seat is the per-recipient reading above, and one naming no
+    # seat at all is a count nothing here scopes.
+    if (
+        isinstance(node.per_each, ast.ObjectFilter)
+        and node.per_each.zone == "battlefield"
+        and node.per_each.controller == "you"
+        and isinstance(node.amount, ast.Fixed)
+    ):
+        payload = {
+            "amount": "x",
+            X_FROM_COUNT: count_spec(
+                node.per_each, node, multiplier=node.amount.value
+            ),
+        }
     # "…for each creature card in their graveyard" (Liliana, Death Mage) — the
     # loss is multiplied by a zone count of the losing player's.
-    if node.per_each is not None:
+    elif node.per_each is not None:
         filt = node.per_each
         if node.player.kind != "target_opponent" or filt.zone != "graveyard":
             raise LoweringError(

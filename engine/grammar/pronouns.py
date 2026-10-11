@@ -41,6 +41,7 @@ from .effects import (_parse_create_token, _parse_gains, _parse_gets,
                       _parse_loses, _parse_put_counter)
 from .effects.characteristics import _parse_quoted_abilities
 from .phrases import _accept_self_reference
+from .references import parse_recipient
 from .rebinding import statement_bound_target as _statement_bound_target
 from .rebinding import (statement_bound_several_targets
                         as _statement_bound_several_targets)
@@ -246,6 +247,80 @@ def _parse_conditional_set_pump_rider(
         return None
     try:
         pump = _parse_gets(stream, bound)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(pump, ast.Pump):
+        stream.reset(mark)
+        return None
+    return ast.Conditional(condition, pump)
+
+
+def _narrows_filter(wider: ast.ObjectFilter, narrower: ast.ObjectFilter) -> bool:
+    """Whether every restriction *wider* prints, *narrower* prints too.
+
+    Field by field: a field *wider* leaves at its default restricts nothing,
+    and one it sets must be set to the same value on *narrower* — so
+    "creatures you control" is wider than "Zombie creatures you control" and
+    not than "Zombie creatures", which may be an opponent's.
+    """
+    return all(
+        getattr(wider, field.name) in (field.default, getattr(narrower, field.name))
+        for field in dataclasses.fields(wider)
+    )
+
+
+def _parse_conditional_additional_pump_rider(
+    stream: TokenStream, steps: list[ast.Statement]
+) -> ast.Statement | None:
+    """``If <condition>, <a narrower set> get an additional +N/+N [duration].``
+
+    "Creatures you control get +1/+1 until end of turn. **If this spell was
+    kicked, Zombie creatures you control get an additional +2/+2 until end of
+    turn.**" (Strength of Night.) :func:`_parse_conditional_set_pump_rider`
+    with the set *named* instead of referred to: no pronoun to bind, so the
+    subject is read by the ordinary reader, and what this rider adds is the
+    licence for "an additional" — which ``_parse_gets`` hands only to a caller
+    that has checked a pump of the same creatures came first.
+
+    Here that check is containment rather than identity. The sweep in front
+    must be a pump and every restriction it prints must be printed again on
+    this one (:func:`_narrows_filter`), so each creature the second pump
+    reaches was reached by the first and "additional" is true of all of them.
+    A set the first sweep did not cover refuses: for those creatures the word
+    would be false, and the sentence is one no card prints.
+
+    The word is required, not merely admitted — without it the sentence is an
+    ordinary conditional sweep the statement grammar already reads.
+    """
+    last = steps[-1] if steps else None
+    if not isinstance(last, ast.Pump):
+        return None
+    bound = last.subject
+    if not (
+        isinstance(bound, ast.TargetSpec)
+        and bound.quantifier in ("all", "each")
+        and not bound.targeted
+    ):
+        return None
+    mark = stream.mark()
+    if not stream.accept_word("if"):
+        return None
+    try:
+        condition = _parse_condition(stream)
+        if not stream.accept_punct(","):
+            raise stream.error("expected ',' after the condition")
+        subject = parse_recipient(stream)
+        if not (
+            isinstance(subject, ast.TargetSpec)
+            and subject.quantifier in ("all", "each")
+            and not subject.targeted
+            and _narrows_filter(bound.filter, subject.filter)
+            and stream.at_word("gets", "get")
+            and stream.words_from(1)[:2] == ("an", "additional")
+        ):
+            raise stream.error("not an additional pump of a covered set")
+        pump = _parse_gets(stream, subject, additional=True)
     except GrammarError:
         stream.reset(mark)
         return None

@@ -882,7 +882,13 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
 #: (Reanimate). Same referent, same record, one more word — and its absence
 #: refused the whole line rather than narrowing anything, because a card type is
 #: what the *previous* zone happened to be called.
-_POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES | {"card"}
+#:
+#: **"permanent" for the reason "card" is**, one zone over: CR 110.1's word for
+#: anything on the battlefield, which a sentence prints when the step in front
+#: of it named a *union* of types and so has no one type to repeat — "Destroy
+#: target artifact or enchantment. … damage equal to **that permanent's** mana
+#: value" (Orim's Thunder).
+_POSSESSIVE_NOUNS = CARD_TYPES | ALL_SUBTYPES | {"card", "permanent"}
 
 #: Nouns a "…counter on **that** <noun>" phrase may name — the same set, and
 #: for the same reason: the word agrees with whatever the trigger's condition

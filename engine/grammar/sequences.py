@@ -68,6 +68,7 @@ from .pronouns import (_RIDER_FOLDED, _attach_returned_text_change,
                        _parse_its_controller_creates_rider,
                        _parse_pronoun_counter_rider,
                        _parse_plural_pronoun_pump_rider,
+                       _parse_conditional_additional_pump_rider,
                        _parse_conditional_set_pump_rider,
                        _parse_pronoun_grant_rider, _parse_pronoun_verb_rider,
                        _parse_that_controller_reveals_rider)
@@ -595,6 +596,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             set_pump = _parse_conditional_set_pump_rider(stream, steps)
             if set_pump is not None:
                 steps.append(set_pump)
+                continue
+            # "…**If this spell was kicked, Zombie creatures you control get
+            # an additional +2/+2 until end of turn.**" (Strength of Night.)
+            # The same second effect with its set named rather than referred
+            # to; the pump in front is what licenses "an additional".
+            additional_pump = _parse_conditional_additional_pump_rider(stream, steps)
+            if additional_pump is not None:
+                steps.append(additional_pump)
                 continue
             # "…and put a -1/-0 counter on **it**." (Jabari's Influence.) The
             # counter's own pronoun, beside the imperative one above: parsed

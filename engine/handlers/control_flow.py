@@ -1672,6 +1672,36 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             )
         )
 
+    if kind == "targets_differ_in_color":
+        # "…unless **either one is a color the other isn't**." (Dead Ringers.)
+        # CR 105.2 over the two targets' colour *sets*, read now, while the
+        # instruction is followed (CR 608.2h) and through layer 5: equal sets
+        # are the only way not to differ, so two colourless creatures do not
+        # (CR 105.2c — the card's ruling says so) and a white-blue creature
+        # beside a blue one does.
+        #
+        # **A pair this cannot read differs.** CR 608.2b: "If part of the
+        # effect requires information about an illegal target, it fails to
+        # determine any such information" — so with one target gone, or made
+        # illegal in response (protection from black is the ordinary way), the
+        # comparison has no answer, and the sentence that needs one does not
+        # happen. The clause is printed behind "unless", where "they differ" is
+        # the answer under which nothing is destroyed — the survivor is not
+        # destroyed alone on the strength of a comparison nobody could make.
+        from ._common import resolve_target_slots
+
+        first, second = resolve_target_slots(game, context, 2)
+        if (
+            first is None or second is None or first is second
+            or not game.is_on_battlefield(first)
+            or not game.is_on_battlefield(second)
+            or not game.resolving_targets_all_legal()
+        ):
+            return True
+        return frozenset(game._effective_colors(first)) != frozenset(
+            game._effective_colors(second)
+        )
+
     if kind == "color_is_most_common":
         # "…white is the most common color among all permanents or is tied for
         # most common." The Djinns print it on a static, where

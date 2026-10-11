@@ -2133,9 +2133,15 @@ def test_115_3_the_printed_another_forbids_the_repeat_two_instances_allow(
     dropped it, so the gate had nothing to read and the announcement naming one
     creature twice was legal. It tapped that creature and had it bite itself for
     its own power, which the handler scored as no damage at all.
+
+    A second creature is on the table so that the repeat is the *only* thing
+    wrong with the announcement. With one creature there is no legal
+    announcement at all — two printed targets are two targets (CR 601.2c, the
+    test above this one, which Deadshot's slot list is now held to as well) —
+    and that refusal arrives first and says something else.
     """
-    game, _p1, p2, (only,) = _cr115_3_pool(
-        catalog_by_name, "Deadshot", "Grizzly Bears"
+    game, _p1, p2, (only, _other) = _cr115_3_pool(
+        catalog_by_name, "Deadshot", "Grizzly Bears", "Hill Giant"
     )
 
     result = game.cast_from_hand(

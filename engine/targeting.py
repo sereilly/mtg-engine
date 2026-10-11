@@ -3828,6 +3828,30 @@ def _carry_player_comparison(spec: dict, targets: dict) -> None:
         spec["chooser"] = chooser
 
 
+def slot_list_is_exact(targets: dict) -> bool:
+    """Whether a ``targets`` description is a slot list that must be named in
+    full — one mandatory target per printed instance of the word (CR 601.2c).
+
+    "Target creature gets +2/+2 … **Another** target creature gets -2/-2"
+    (Consume Strength). The several-slot shape with the bare quantifier
+    ``target`` and no slot the card lets the caster leave empty
+    (``optional_slots``, Primal Might's "up to one"). One predicate for the two
+    readers that have to agree about it: the picker's ``exact_targets`` flag
+    just below, and ``legality.exact_target_count``, which the cast gate counts
+    an announcement against. Asked of one and not the other it is a confirm
+    button that waits for two targets in front of an engine that takes one.
+    """
+    slots = targets.get("filters")
+    count = targets.get("count")
+    return (
+        targets.get("quantifier") == "target"
+        and isinstance(slots, list) and len(slots) > 1
+        and isinstance(count, int) and not isinstance(count, bool)
+        and count == len(slots)
+        and not targets.get("optional_slots")
+    )
+
+
 def _slot_roles_spec(targets: dict, slot_filters: list) -> dict | None:
     """A roles spec for a multi-slot description whose slots differ, or None.
 
@@ -4097,7 +4121,7 @@ def _from_targets_payload(targets) -> dict | None:
         # apart since it parsed them — `quantifier` is "exactly" or "up_to".
         # The spec dropped the distinction and reported both as a maximum, so
         # the picker offered "up to 2" for a card that prints a number.
-        if targets.get("quantifier") == "exactly":
+        if targets.get("quantifier") == "exactly" or slot_list_is_exact(targets):
             flags = {**flags, "exact_targets": True}
         if targets.get("same_controller"):
             # "Choose two target creatures **controlled by the same

@@ -37,6 +37,8 @@ sentence it folds, so both pairs are reunited.
 
 from __future__ import annotations
 
+import dataclasses
+
 from ...oracle_types import (COST_TARGET_BASE, COST_TARGET_PER,
                              OracleInstruction)
 from .. import ast
@@ -309,6 +311,19 @@ def _lower_steps(
             # printed pair above, and clearing the record here is what used to
             # make "If they don't" a branch with no condition to test.
             continue
+        # "Draw a card for each Island you control, then discard **that many**
+        # cards." (Last Stand.) A bare "that many" behind a draw by the same
+        # seat names the number the draw was sized by, and CR 608.2h determines
+        # that number once — so the discard is handed the draw's own quantity
+        # rather than a record: it is counted off the same board in the same
+        # resolution, and a draw that came up short does not shrink it.
+        if (
+            isinstance(step, ast.Discard)
+            and isinstance(previous, ast.Draw)
+            and step.count == ast.ThatMuch()
+            and step.player == previous.player
+        ):
+            step = dataclasses.replace(step, count=previous.count)
         lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
         # A step reading a record only an earlier offer's branch writes belongs
         # *inside* that offer — see ``_fold_into_offer``.
