@@ -176,18 +176,19 @@ def spending_permission_line(oracle_text: str) -> str | None:
     return None
 
 
-#: Where a seat's **turn-long** permissions hang — "Until end of turn, you may
-#: spend white mana as though it were mana of any color" (False Dawn). An
-#: attribute rather than a ``PlayerState`` field, for the reason
-#: ``engine/land_mana_swaps.py`` and ``engine/shields.py`` use one: the seat
-#: carries the list without learning what a permission is, and the cleanup
-#: step's one call expires it.
-_TURN_PERMISSIONS_ATTR = "_turn_mana_spending"
-
-
 def turn_permissions_on(player) -> tuple[ManaSpending, ...]:
-    """The permissions a resolved effect granted *player* for this turn."""
-    return tuple(getattr(player, _TURN_PERMISSIONS_ATTR, None) or ())
+    """The permissions a resolved effect granted *player* for this turn —
+    "Until end of turn, you may spend white mana as though it were mana of any
+    color" (False Dawn).
+
+    They hang off the seat as an attribute rather than a ``PlayerState``
+    field, for the reason ``engine/land_mana_swaps.py`` and
+    ``engine/shields.py`` hang theirs: the seat carries the list without
+    learning what a permission is, and the cleanup step's one call expires it.
+    Written by name (``_turn_mana_spending``) in the two functions below and
+    nowhere else.
+    """
+    return tuple(getattr(player, "_turn_mana_spending", None) or ())
 
 
 def grant_turn_permission(player, permission: ManaSpending) -> ManaSpending:
@@ -197,10 +198,7 @@ def grant_turn_permission(player, permission: ManaSpending) -> ManaSpending:
     list is rebuilt (``Game._refresh_mana_spending``), which the caller does —
     every payment site reads the derived list, never this one.
     """
-    setattr(
-        player, _TURN_PERMISSIONS_ATTR,
-        [*turn_permissions_on(player), permission],
-    )
+    player._turn_mana_spending = [*turn_permissions_on(player), permission]
     return permission
 
 
@@ -208,7 +206,7 @@ def clear_turn_permissions(player) -> bool:
     """End every turn-long permission on *player*; True when one was held."""
     held = bool(turn_permissions_on(player))
     if held:
-        setattr(player, _TURN_PERMISSIONS_ATTR, [])
+        player._turn_mana_spending = []
     return held
 
 

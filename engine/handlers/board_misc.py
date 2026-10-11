@@ -601,6 +601,19 @@ def mark_text_modified(game: Game, instruction: OracleInstruction, context: Orac
     return True, "resolved"
 
 
+def recolor_spell(item, symbol: str) -> None:
+    """Make the spell *item* the colour *symbol* for as long as it is that
+    spell (CR 105.3: the new colour replaces the ones it had).
+
+    **The one write of a stack object's colour record**, the key
+    ``Game._stack_item_colors`` reads. The Lace cycle's spell half wrote it in
+    place and Vodalian Mystic's chosen colour would have been a second
+    spelling; a record with two writers is one a third forgets to stamp the
+    same way.
+    """
+    item.choices["color_override"] = symbol
+
+
 @effect_handler("recolor_target_from_text")
 def recolor_target_from_text(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     symbol = str(instruction.payload.get("target_color", ""))
@@ -620,7 +633,7 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
         ):
             game.log.append(f"{context.card.name}: no valid spell to recolour")
             return True, "resolved"
-        context.stack_target.choices["color_override"] = symbol
+        recolor_spell(context.stack_target, symbol)
         game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
         return True, "resolved"
     # "…that creature becomes green" on a block trigger (Aisling Leprechaun):
@@ -783,7 +796,7 @@ def _recolor_stack_target_chosen_color(
     if symbol is None:
         game.log.append(f"{name}: no colour was chosen, so nothing is recoloured")
         return True, "resolved"
-    item.choices["color_override"] = symbol
+    recolor_spell(item, symbol)
     game.log.append(f"{item.card.name} (on the stack) became {symbol} ({name})")
     return True, "resolved"
 
