@@ -955,6 +955,16 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             per_recorded = instruction.payload.get("unless_pays_per_recorded")
             if per_recorded is not None:
                 cost *= count_from_payload(game, context, per_recorded)
+            # "…pays {1} **for each basic land type among lands you control**."
+            # (Evasive Action.) The rate over a count of the board, taken now
+            # (CR 608.2h) through the evaluator every counted amount shares —
+            # "you" is this counter's controller, whose lands they are, and a
+            # land that changed type in response is counted as it stands. No
+            # basic land type at all is a price of {0}: nothing is countered,
+            # which is what a domain of zero says.
+            per_counted = instruction.payload.get("unless_pays_per")
+            if per_counted is not None:
+                cost *= max(0, count_from_payload(game, context, dict(per_counted)))
             # "…and 1 life" (Mundungu). The life half of one offer, sent on
             # the same prompt: what the payer decides is whether to pay the
             # whole price, so a second prompt would be a second decision and a

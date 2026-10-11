@@ -39,6 +39,8 @@ from ..oracle_types import (BIDDING_WINNER,
                             PER_OBJECT_SEAT_RECORDS,
                             OracleInstruction)
 from ..oracle_types import SECRET_NUMBERS_BY_SEAT
+from ..oracle_types import (EVENT_SPELL_MANA_COST,
+                            OTHER_THAN_EVENT_SUBJECT_PLAYER)
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
@@ -1627,6 +1629,49 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             game._effective_colors(target), game._effective_colors(chosen)
         )
 
+    if kind == "target_shares_color_with_matching":
+        # "Counter target spell **if it shares a color with a creature you
+        # control**." (Jaded Response.) CR 105.2's relation between the spell
+        # this effect targets and every permanent the printed phrase admits —
+        # both read now, while the instruction is followed (CR 608.2c): a
+        # creature that entered, left or was recoloured in response is judged
+        # as it stands, and so is a spell a Lace or a Vodalian Mystic changed.
+        #
+        # The picker offers every spell: the clause is a condition on the
+        # *effect*, not a targeting restriction ("target spell" is the whole of
+        # the printed target phrase, CR 608.2b), so a spell that fails it is a
+        # legal target the counter does nothing to.
+        #
+        # The spell's colours through ``_stack_item_colors`` — the one reader
+        # of what colour a stack object is — and each permanent's through layer
+        # 5. ``share_a_color`` is the one reading of the relation: a colourless
+        # object on either side shares nothing (CR 105.2c), and a spell that
+        # has left the stack answers no, like every clause beside this one.
+        from ..object_colors import share_a_color
+        from ..subject_filters import subject_matches
+
+        chosen = context.stack_target
+        if (
+            payload.get("target") != "spell"
+            or chosen is None
+            or chosen not in game.stack
+            or context.caster not in game.players
+        ):
+            return False
+        colors = game._stack_item_colors(chosen)
+        if not colors:
+            return False
+        described = dict(payload.get("filter") or {})
+        observer = game.players.index(context.caster)
+        return any(
+            share_a_color(colors, game._effective_colors(permanent))
+            for permanent in game.all_permanents()
+            if subject_matches(
+                game, permanent, described, observer=observer,
+                source=context.source_permanent,
+            )
+        )
+
     if kind == "color_is_most_common":
         # "…white is the most common color among all permanents or is tied for
         # most common." The Djinns print it on a static, where
@@ -2772,17 +2817,32 @@ def choose_creature_type(game: Game, instruction: OracleInstruction, context: Or
         game.log.append(f"{card_name}: nobody to choose a creature type")
         return True, "resolved"
     seat = game.players.index(context.caster)
-    default = _best_creature_type_to_sweep(game, seat)
+    # "Choose a creature type **other than Wall**." (Unnatural Selection.) The
+    # printed exclusion, applied to all three places a type can come from: the
+    # default stamped here, the list the prompt offers and the answer the
+    # resolver accepts (``arm_creature_type_choice`` carries it to the last
+    # two). Absent for every other card, whose default and prompt are
+    # byte-identical to what they were.
+    excluded = tuple(
+        str(word).strip().lower()
+        for word in (instruction.payload.get("excluded") or ())
+    )
+    default = _best_creature_type_to_sweep(game, seat, excluded=excluded)
     context.results[key] = default
     game.arm_creature_type_choice(
         seat, card_name=card_name, result_key=key, context=context,
-        default=default,
+        default=default, excluded=excluded,
     )
-    game.log.append(f"{card_name}: {game.players[seat].name} chooses a creature type")
+    game.log.append(
+        f"{card_name}: {game.players[seat].name} chooses a creature type"
+        + (f" other than {', '.join(word.title() for word in excluded)}" if excluded else "")
+    )
     return True, "resolved"
 
 
-def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
+def _best_creature_type_to_sweep(
+    game: Game, seat: int, excluded: tuple[str, ...] = (),
+) -> str | None:
     """The creature type a sweep would most like to name, from *seat*'s side.
 
     The type maximising (opponents' creatures of it − own creatures of it), ties
@@ -2796,7 +2856,13 @@ def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
 
     The subtypes are read through the CR 613 accessor, so a creature Artificial
     Evolution or an animated land has become a Zombie counts as one.
+
+    *excluded* is a printed "other than <type>": a word in it is never the
+    answer, so the default is one the resolver would accept. Only **creature**
+    types are scored — an animated Forest's "forest" is a subtype of the
+    permanent and no answer to "choose a creature type".
     """
+    from ..grammar.vocabulary import CREATURE_TYPES
     from ..layer_bridge import computed_types
 
     scores: dict[str, int] = {}
@@ -2805,6 +2871,8 @@ def _best_creature_type_to_sweep(game: Game, seat: int) -> str | None:
             continue
         for subtype in computed_types(perm)[1]:
             word = str(subtype).lower()
+            if word in excluded or word not in CREATURE_TYPES:
+                continue
             scores[word] = scores.get(word, 0) + (-1 if owner == seat else 1)
     if not scores:
         return None
@@ -3926,12 +3994,28 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     payload = dict(instruction.payload)
     unpaid = tuple(payload.get("unpaid") or ())
     paid = tuple(payload.get("paid") or ())
-    # "…unless any player pays {X}" (Soul Strings): the announced X, read now.
-    cost = _resolved_cost(payload.get("cost"), context, game)
     caster = context.caster
     if caster is None or caster not in game.players:
         return True, "resolved"
     caster_index = game.players.index(caster)
+    priced_spell = None
+    if dict(payload.get("cost") or {}).get("cost_from") == EVENT_SPELL_MANA_COST:
+        # "…may pay **that spell's mana cost**." (Ice Cave.) Read off the spell
+        # the trigger fired on, now — and on every link of the chain, since
+        # each is this handler again and the spell can leave between two
+        # answers. No spell left, or one with no mana cost (CR 118.6: an
+        # unpayable cost), is a price nobody can pay: the chain ends as though
+        # every seat had declined, which is what CR 118.6 makes of an offer no
+        # player may take.
+        priced_spell, cost = _event_spell_and_cost(game, context)
+        if cost is None:
+            for step in unpaid:
+                game._execute_oracle_instruction(step, context)
+            return True, "resolved"
+    else:
+        # "…unless any player pays {X}" (Soul Strings): the announced X, read
+        # now.
+        cost = _resolved_cost(payload.get("cost"), context, game)
     # Every seat the printed reference names, in the order they are asked. CR
     # 101.4 orders a multi-seat offer from the active player, so the chain
     # starts there rather than at seat 0 — the same order ``_offered_seats``
@@ -3942,15 +4026,29 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
     # them. That is the only difference between the two, which is why it is a
     # payload key and not a second handler. A player who has left the game is
     # nobody (CR 800.4a), read off the engine's own state-based-action flag.
+    #
+    # "**Any other player** may pay …" (Ice Cave) is the third set: everyone
+    # but the seat the firing event froze — the player who cast the spell —
+    # which includes this ability's own controller whenever somebody else
+    # cast. With no seat recorded the words are measured from nobody, and
+    # nobody is asked.
     count = len(game.players)
     active = game.active_player_index or 0
+    payer = payload.get("payer")
+    excluded_seat = caster_index
+    if payer == OTHER_THAN_EVENT_SUBJECT_PLAYER:
+        excluded_seat = (context.trigger_context or {}).get("event_subject_player")
     seats = [
         index
         for index in sorted(
             range(count), key=lambda i: ((i - active) % count, i)
         )
         if not getattr(game.players[index], "lost", False)
-        and (payload.get("payer") == "any_player" or index != caster_index)
+        and (payer == "any_player" or index != excluded_seat)
+        and not (
+            payer == OTHER_THAN_EVENT_SUBJECT_PLAYER
+            and not isinstance(excluded_seat, int)
+        )
     ]
     asked = int(payload.get("asked_seats", 0))
     if asked >= len(seats):
@@ -3987,12 +4085,45 @@ def unless_player_pays(game: Game, instruction: OracleInstruction, context: Orac
         ),
         _on_reflexive=(),
         _context=context,
+        # The spell a derived price was read off. An answer that arrives after
+        # it has left the stack buys nothing, so it must charge nothing: the
+        # offer is then one no player may take (``_optional_action_still_
+        # takeable``), and its decline moves the chain on to find that out.
+        **({"_priced_spell": priced_spell} if priced_spell is not None else {}),
         prompt=(
-            f"Pay {mana_cost_label(cost)}?" if cost
+            # The derived price names the spell it was read off, so the seat
+            # being asked can see what the payment is for — and a spell that
+            # costs {0} is still a question ("Pay {0}?"), not a blank one.
+            f"Pay {mana_cost_label(cost)} ({priced_spell.card.name}'s mana cost)?"
+            if priced_spell is not None
+            else f"Pay {mana_cost_label(cost)}?" if cost
             else f"Pay {life_price} life?" if life_price else "Pay?"
         ),
     )
     return True, "resolved"
+
+
+def _event_spell_and_cost(game: Game, context: OracleExecutionContext):
+    """``(stack item, cost)`` for "that spell's mana cost" under a cast
+    trigger, or ``(None, None)`` when there is nothing payable to read.
+
+    The spell is the one the trigger fired on, found on the stack by the card
+    the event recorded — the lookup "counter it" one handler over makes
+    (``handlers/stack.counter_top_stack_spell``), so the price and the counter
+    behind it are read off one object. The cost is
+    ``mana_payment.spell_mana_cost``: printed symbols, the announced X, None
+    for a spell with no mana cost.
+    """
+    from ..mana_payment import spell_mana_cost
+
+    cast_card = (context.trigger_context or {}).get("cast_card")
+    if cast_card is None:
+        return None, None
+    spell = next((item for item in game.stack if item.card is cast_card), None)
+    if spell is None:
+        return None, None
+    cost = spell_mana_cost(spell)
+    return (None, None) if cost is None else (spell, cost)
 
 
 #: The last item :func:`repeat_offer_round` walks: the end of one round, where

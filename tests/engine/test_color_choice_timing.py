@@ -24,6 +24,7 @@ census added; run on the tree before the fix, the guard named all eleven
 
 from __future__ import annotations
 
+import functools
 import re
 
 import pytest
@@ -117,6 +118,13 @@ def _w3g2_table(catalog):
     return game, mine
 
 
+@functools.lru_cache(maxsize=1)
+def _w3g2_instant():
+    """A spell for a stack-targeting line to name: an instant any seat can put
+    on the stack with nothing else on the table."""
+    return _w3g2_catalog()["Lightning Bolt"]
+
+
 def _w3g2_announce(game, card, ability_index, mine):
     """Put the line on the stack with red announced; the first legal shape."""
     if ability_index is None:
@@ -139,6 +147,21 @@ def _w3g2_announce(game, card, ability_index, mine):
         {"target_player_index": 0, "target_permanent_ids": [mine.permanent_id]},
         {},
     )
+    # "{T}: Target instant or sorcery **spell** becomes the color of your
+    # choice." (Vodalian Mystic.) A line whose target is an object on the
+    # stack has nothing to name on this table, so the opponent casts an
+    # instant first — asked of the engine's own picker rather than of the
+    # card, and the shape is whatever that picker then offers (top-first on
+    # the wire, bottom-first to the engine).
+    slot = len(game.players[0].battlefield) - 1
+    if game.activation_target_spec(0, slot, ability_index).get("kind") == "stack":
+        game.players[1].hand.append(_w3g2_instant())
+        assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+        offered = game.activation_target_spec(0, slot, ability_index)["valid_targets"]
+        shapes = tuple(
+            {"target_stack_index": len(game.stack) - 1 - entry["stack_index"]}
+            for entry in offered
+        ) + shapes
     for shape in shapes:
         queued = game.queue_permanent_ability(
             0, card.name, ability_index=ability_index, mana_color="R", **shape

@@ -23,7 +23,8 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..durations import _parse_duration
-from ..vocabulary import ALL_SUBTYPES, CARD_TYPES, NUMBER_WORDS, singular
+from ..vocabulary import (ALL_SUBTYPES, CARD_TYPES, CREATURE_TYPES,
+                          NUMBER_WORDS, SUBTYPE_INDEX, match_longest, singular)
 
 
 def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -393,10 +394,20 @@ def _parse_choose_creature_type(stream: TokenStream) -> ast.Statement | None:
     other "choose" sentence.
     """
     mark = stream.mark()
-    if stream.accept_phrase("choose", "a", "creature", "type") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        return ast.ChooseCreatureType()
+    if stream.accept_phrase("choose", "a", "creature", "type"):
+        if stream.exhausted or stream.at_punct(".", ","):
+            return ast.ChooseCreatureType()
+        # "Choose a creature type **other than Wall**." (Unnatural Selection.)
+        # The one narrowing of the catalog a card prints, read against the
+        # vocabulary (CR 205.3m) so a multiword type is one word here, and
+        # carried on the node: an exclusion read and dropped is a choice the
+        # card forbids, made anyway.
+        if stream.accept_phrase("other", "than"):
+            matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
+            if matched is not None and matched[0] in CREATURE_TYPES:
+                stream.advance(matched[1])
+                if stream.exhausted or stream.at_punct(".", ","):
+                    return ast.ChooseCreatureType(excluded=(matched[0],))
     stream.reset(mark)
     return None
 

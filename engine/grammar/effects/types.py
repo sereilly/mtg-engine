@@ -61,6 +61,13 @@ def _parse_becomes(stream: TokenStream, subject: ast.Recipient) -> ast.Statement
         return ast.BecomeColor(subject, ast.CHOSEN_COLORS, _parse_duration(stream))
     if stream.accept_phrase("the", "color", "of", "your", "choice"):
         return ast.BecomeColor(subject, ast.CHOSEN_COLOR, _parse_duration(stream))
+    # "…becomes **that type** until end of turn." (Unnatural Selection.) The
+    # type a "Choose a creature type …" sentence in front of this one named.
+    # Read before the colour and body branches, which would refuse on "that" —
+    # and it is the whole of the predicate: which set of types "that type"
+    # belongs to is the lowering's question, asked of what the effect produced.
+    if stream.accept_phrase("that", "type"):
+        return ast.BecomeThatType(subject, _parse_duration(stream))
     token = stream.peek()
     word = str(token.text).lower() if token is not None else ""
     # "…becomes **colorless** until end of turn." (Raging Spirit, Ersatz
@@ -256,6 +263,33 @@ def _parse_becomes_land_type(
         stream.reset(mark)
         return None
     stream.advance()
+    # "…becomes a Plains **or an Island** until end of turn." (Tundra Kavu.)
+    # "The basic land type of your choice" with the list printed instead of the
+    # adjective: CR 608.2d's choice among the named types, made while the
+    # ability resolves. The same node and the same sentinel, with what may be
+    # answered carried beside it — a reader that stopped at the first type
+    # would leave "or an Island" unconsumed, which is the refusal this card met,
+    # and one that skipped it would make every such land a Plains.
+    #
+    # Each alternative takes its own article and must be a land type; a
+    # disjunction that opens anything else ("…a Plains or loses all abilities")
+    # is a sentence this has not read, and the whole branch resets.
+    options = [word]
+    while stream.accept_word("or"):
+        if not (stream.accept_word("a") or stream.accept_word("an")):
+            stream.reset(mark)
+            return None
+        other = stream.peek_word()
+        if other is None or other not in LAND_TYPES or other in options:
+            stream.reset(mark)
+            return None
+        stream.advance()
+        options.append(other)
+    if len(options) > 1:
+        return ast.ChangeLandType(
+            subject, ast.CHOSEN_LAND_TYPE, _parse_duration(stream),
+            options=tuple(options),
+        )
     return ast.ChangeLandType(subject, word, _parse_duration(stream))
 
 

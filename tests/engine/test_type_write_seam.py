@@ -70,7 +70,10 @@ _NAME_IMPORTERS = {
 _WRITER_USES = {
     "engine/handlers/board_misc.py": {
         "gain_types": (
-            3, "become_aura_with_enchant, gain_type, change_supertype's gaining half",
+            4,
+            "become_aura_with_enchant, gain_type, change_supertype's gaining "
+            "half, set_target_creature_type (Unnatural Selection's CR 205.1a "
+            "creature-type set)",
         ),
         "lose_types": (
             2, "become_aura_with_enchant's replaced types, change_supertype's losing half",

@@ -7,7 +7,8 @@ from ..auras import AURA_ANY_COLOR_MANA, aura_additional_mana_on_tap
 from ..delayed_triggers import matching_delayed_triggers
 from ..cast_permissions import expire_at_turn_start as expire_turn_permissions
 from ..hand_locks import expire_hand_locks
-from ..land_mana_swaps import production_snapshot, substitute_production
+from ..land_mana_swaps import (production_snapshot, source_wide_swap,
+                               substitute_production)
 from ..mana_payment import answer_color_choices
 from ..land_play_allowance import clear_turn_land_play_effects
 from ..spell_prohibitions import clear_turn_spell_prohibitions
@@ -926,6 +927,20 @@ class TurnManagementMixin:
                         None if asked == "C"
                         else self._normalize_mana_color(chosen_color)
                     ) or "G"
+                # "…spells and abilities **you control** that would add colored
+                # mana instead add that much white mana." (False Dawn.) This
+                # triggered mana ability is the *Aura's* controller's, and it is
+                # the one production here that is written inline rather than
+                # through an instruction — so the seat's source-wide swap is
+                # asked for it by name, where every other ability meets it at
+                # the dispatch seam (``Game._execute_oracle_instruction``).
+                aura_seat = self.controller_index_of(attached_aura)
+                wide = (
+                    source_wide_swap(self.players[aura_seat])
+                    if aura_seat is not None else None
+                )
+                if wide is not None and (extra != "C" or not wide.colors_only):
+                    extra = wide.symbol()
                 player.mana_pool[extra] = player.mana_pool.get(extra, 0) + 1
                 self.log.append(f"{attached_aura.card.name}: {player.name} added an additional {{{extra}}}")
 

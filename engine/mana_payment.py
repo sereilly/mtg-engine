@@ -593,6 +593,54 @@ def permanent_mana_cost(permanent) -> dict[str, int] | None:
     return {symbol: amount for symbol, amount in cost.items() if amount}
 
 
+def spell_mana_cost(item) -> dict[str, int] | None:
+    """The mana cost of the spell *item* (a stack object) as a payable symbol
+    dict, or None when it has none.
+
+    "…may pay **that spell's mana cost**." (Ice Cave.) :func:`permanent_mana_cost`
+    one zone over, and the zone is the whole difference: CR 107.3h — "if an
+    effect instructs a player to pay an object's mana cost that includes {X},
+    the value of X is treated as 0 unless the object is a spell on the stack.
+    In that case, the value of X is the value chosen or determined for it as
+    the spell was cast." So each ``{X}`` is that many generic mana here, where
+    the permanent reader drops it.
+
+    The **printed** cost, coloured symbols and all (CR 202.1a — "mana cost
+    includes color", as the card's own reminder says): never what was actually
+    paid, so a cost increase, a reduction or an alternative cost changes
+    nothing (the card's ruling: "the mana cost does not include cost increases
+    or reductions").
+
+    **None is "unpayable", not "free"** (CR 118.6, CR 202.1b), for
+    :func:`permanent_mana_cost`'s reason: ``{0}`` is a mana cost and comes back
+    as an empty requirement any player can meet, while a spell with no mana
+    cost comes back None and may not be paid for at all. A symbol this engine
+    cannot spend — hybrid, Phyrexian — is None too: refusing the payment is the
+    conservative answer to a cost it would otherwise under-charge.
+
+    The card is the stack item's own, so a split card's cost is the cast
+    half's (CR 709.3b) with no branch here.
+    """
+    card = getattr(item, "card", None)
+    symbols = _PRINTED_SYMBOL.findall(getattr(card, "mana_cost", "") or "")
+    if not symbols:
+        return None
+    announced = max(0, int(getattr(item, "x_value", 0) or 0))
+    spendable = "".join(
+        "{" + symbol + "}" for symbol in symbols if symbol.upper() != "X"
+    )
+    cost: dict[str, int] = {}
+    if spendable:
+        printed = mana_cost_from_symbols(spendable)
+        if printed is None:
+            return None
+        cost = dict(printed)
+    variable = sum(1 for symbol in symbols if symbol.upper() == "X")
+    if variable:
+        cost["generic"] = int(cost.get("generic", 0)) + variable * announced
+    return {symbol: amount for symbol, amount in cost.items() if amount}
+
+
 def total_pips(required: dict[str, int]) -> int:
     """How many mana the cost is, all told — for a log line or a prompt label,
     never for deciding whether it can be paid."""

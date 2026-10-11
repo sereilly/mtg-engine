@@ -282,6 +282,42 @@ def _lower_condition(
             "target": referent,
             "permanent_from": CHOSEN_PERMANENT,
         }
+    if isinstance(condition, ast.SharesColorWithMatching):
+        # "Counter target spell **if it shares a color with a creature you
+        # control**." (Jaded Response.) "It" is the target of the effect this
+        # guards — :class:`ItIsColor`'s referent, refused for that clause's two
+        # reasons — and the far side is every permanent the printed phrase
+        # admits, re-read as the instruction is followed (CR 608.2c).
+        #
+        # A **spell** only. The question about a targeted *permanent* is not
+        # one this can settle: "destroy target creature if it shares a color
+        # with a creature you control", aimed at the controller's own
+        # creature, turns on whether an object is one of the things it is
+        # compared with, and no card prints the sentence to rule on. A spell is
+        # never a permanent, so there the clause has one reading.
+        if event is not None:
+            raise LoweringError(
+                "'it' names no chosen target under this trigger", node=condition
+            )
+        if referent != "spell":
+            raise LoweringError(
+                "a colour shared with a described permanent is asked of a "
+                "targeted spell, and this effect names none",
+                node=condition,
+            )
+        return {
+            "kind": "target_shares_color_with_matching",
+            "target": referent,
+            # Every key the phrase produces must be one ``subject_matches``
+            # tests: a narrowing nothing can ask ("a creature you control" read
+            # as "a creature") widens the set the spell is compared with, and
+            # a wider set counters spells the card does not name.
+            "filter": testable_filter_payload(
+                condition.filter,
+                refusal="nothing tests the permanents this colour is shared with",
+                node=condition,
+            ),
+        }
     if isinstance(condition, ast.ObjectHasKeyword):
         # "If **it** doesn't have rampage" (Rapid Fire). The pronoun names the
         # object the sentence in front of it chose — which for a spell or an

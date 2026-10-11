@@ -31,15 +31,18 @@ for", which was true of a near-empty file and stopped being true when
 about a size and the size changed.
 """
 
-from ...oracle_types import CHOSEN_COLOR_THIS_WAY, OracleInstruction
+from ...oracle_types import (CHOSEN_COLOR_THIS_WAY,
+                             CHOSEN_CREATURE_TYPE_THIS_WAY, OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ...subject_filters import untestable_filter_keys
 from ...oracle_types import BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER
 from ._common import (_check_grantable, _describe_several_targets,
                       _describe_targets, _filter_payload, _is_enchanted,
-                      _is_source, _is_target, _names_several_targets)
+                      _is_source, _is_target, _names_several_targets,
+                      _restrictions_beyond)
 from ._events import _EVENT_SUBJECT_OBJECTS, binds_block_pair
+from ..vocabulary import BASIC_LAND_WORDS
 
 
 def _lower_become_creature(
@@ -461,11 +464,90 @@ def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction
     }
     if not named:
         payload["choose_land_type"] = True
+    if node.options:
+        # "…becomes **a Plains or an Island**" (Tundra Kavu). The choice above
+        # with the list the sentence narrows it to, carried so the prompt
+        # offers exactly these and the resolver refuses any other (CR 608.2d).
+        # Emitted only when the card prints alternatives, so every "the basic
+        # land type of your choice" keeps a byte-identical payload.
+        #
+        # Basic land types only: the answer travels on the prompt Jinx's
+        # choice uses, whose wire field is CR 305.6's five, so a printed
+        # alternative outside them is one no seat could name — refused here
+        # rather than offered and then unanswerable.
+        if not named and all(option in BASIC_LAND_WORDS for option in node.options):
+            payload["land_type_options"] = list(node.options)
+        else:
+            raise LoweringError(
+                "a choice between printed land types is among basic land types",
+                node=node,
+            )
     if several:
         _describe_several_targets(payload, node.subject)
     else:
         _describe_targets(payload, node.subject)
     return (OracleInstruction("change_land_type_until", "", payload),)
+
+
+def _lower_become_that_type(
+    node: ast.BecomeThatType, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"Choose a creature type other than Wall. **Target creature becomes that
+    type until end of turn.**" (Unnatural Selection.)
+
+    CR 205.1a's subtype *set*: the chosen creature type replaces the creature
+    types the permanent had, and leaves every other subtype alone (an animated
+    Forest made a Goblin is still a Forest) — a layer-4 record with a
+    timestamp, written by ``type_changes.gain_types``.
+
+    Three refusals, each a way the sentence would otherwise mean something it
+    does not say:
+
+    * **"that type" needs a producer.** The words name whatever a "Choose a
+      creature type" step of this same effect recorded; with none the handler
+      would read an empty record for ever on a card reporting supported.
+    * **one targeted creature.** The noun phrase is what the picker offers and
+      the handler re-asks, so it is described; a set ("all creatures become
+      that type") is a different write nothing here performs.
+    * **until end of turn.** The only window with a sweep behind this record
+      (the cleanup step ends a gained type by its ``duration``); any other,
+      and the absent one, would be a creature type that never comes off.
+    """
+    if CHOSEN_CREATURE_TYPE_THIS_WAY not in produced:
+        raise LoweringError(
+            "'that type' names a type no step of this effect chose", node=node
+        )
+    if not _is_target(node.subject):
+        raise LoweringError(
+            "a chosen creature type is set on one target creature", node=node
+        )
+    if node.duration.kind not in ("until_end_of_turn", "this_turn"):
+        raise LoweringError(
+            "no sweep ends a creature-type change at "
+            f"{node.duration.kind or 'no duration'}",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "subtype_from": CHOSEN_CREATURE_TYPE_THIS_WAY,
+        "duration": "until_end_of_turn",
+    }
+    _describe_targets(payload, node.subject)
+    described = (payload.get("targets") or {}).get("filter") or {}
+    if described.get("type_filter") != "creature":
+        # The record replaces *creature* types, so the phrase has to name a
+        # creature: "target permanent becomes that type" would hand a land a
+        # creature type and take nothing a land has away.
+        raise LoweringError(
+            "a creature type is set on a creature", node=node
+        )
+    untestable = untestable_filter_keys(described)
+    if untestable:
+        raise LoweringError(
+            "nothing tests this narrowing of the creature: "
+            + ", ".join(sorted(untestable)),
+            node=node,
+        )
+    return (OracleInstruction("set_target_creature_type", "", payload),)
 
 
 def _lower_become_copy(
@@ -508,6 +590,39 @@ def _lower_become_copy(
         # have had without this field.
         payload["keeps_own_ability"] = True
     return (OracleInstruction("become_copy_of_bound_permanent", "", payload),)
+
+
+#: What a recolour can be told about the **spell** it targets, and the whole of
+#: it: that it is a spell (``zone``) and which card types it may be. Both are
+#: carried on the description, which is what the stack picker offers from and
+#: what the handler re-asks at resolution. Any other word in the phrase — a
+#: colour, a controller, a mana value — is a narrowing neither of them tests,
+#: so it refuses rather than aiming the ability at spells the card never named.
+_RECOLOURED_SPELL_FIELDS = frozenset({"zone", "card_types"})
+
+
+def _spell_target_description(subject: ast.TargetSpec, node) -> dict[str, object]:
+    """The ``targets`` description of "target [<types>] **spell**".
+
+    ``{"quantifier": "target", "kind": "spell"}`` is the spelling every lowering
+    that names a spell already emits (the counter, ``exile_target_spell``); this
+    adds the printed card types beside it — "target **instant or sorcery**
+    spell" (Vodalian Mystic) — under the key ``targeting._from_targets_payload``
+    hands the stack enumeration, so the picker offers exactly the spells the
+    phrase names. Absent when the phrase names no type, which keeps the bare
+    description byte-identical to what it was.
+    """
+    filt = subject.filter
+    beyond = _restrictions_beyond(filt, _RECOLOURED_SPELL_FIELDS)
+    if beyond:
+        raise LoweringError(
+            "no recolour tests this narrowing of a spell: " + ", ".join(beyond),
+            node=node,
+        )
+    described: dict[str, object] = {"quantifier": "target", "kind": "spell"}
+    if filt.card_types:
+        described["card_types"] = list(filt.card_types)
+    return described
 
 
 def _lower_become_color(
@@ -612,6 +727,37 @@ def _lower_become_color(
         # and keeps the write it had. A missing duration must stay the
         # indefinite write and not become a turn-long one, which is why the flag
         # is set from the printed kind rather than defaulted either way.
+        if node.subject.filter.zone == "stack":
+            # "{T}: Target instant or sorcery **spell** becomes the color of
+            # your choice." (Vodalian Mystic.) The same offer made of an object
+            # on the stack (CR 613.1 is about objects, not permanents): one
+            # colour, named by the step in front as the ability resolves
+            # (CR 608.2d), written to the spell's own colour record — the one
+            # ``_stack_item_colors`` reads, so every "counter target <colour>
+            # spell", every protection and every colour condition sees it.
+            #
+            # No duration and no set: the change lasts for as long as the
+            # object is that spell (CR 400.7), which nothing sweeps and nothing
+            # needs to, and the colour-set prompt writes a permanent's channel.
+            # Neither is printed; both refuse rather than recolour for a window
+            # or with a prompt the stack record has no place for.
+            if (
+                several
+                or node.duration.kind is not None
+                or _names_several_targets(node.subject)
+                or node.subject.filter.also_ability
+            ):
+                raise LoweringError(
+                    "one spell takes one chosen colour for as long as it is "
+                    "that spell", node=node,
+                )
+            return (
+                OracleInstruction("choose_color", "", {"chooser": "you"}),
+                OracleInstruction(
+                    "recolor_target_chosen_color", "",
+                    {"targets": _spell_target_description(node.subject, node)},
+                ),
+            )
         until_eot = node.duration.kind in ("until_end_of_turn", "this_turn")
         if node.duration.kind is not None and not until_eot:
             raise LoweringError(
@@ -755,7 +901,12 @@ def _lower_become_color(
         # permanent the card does not name — an illegal announcement under
         # CR 601.2c that the gate could not catch, because the gate reads the
         # same over-wide list the picker offers.
-        payload["targets"] = {"quantifier": "target", "kind": "spell"}
+        #
+        # Through ``_spell_target_description``, so a typed phrase ("target
+        # **instant** spell becomes colorless") carries its type to the picker
+        # or refuses — it used to lower to this bare description with the word
+        # dropped. No card prints one; Ersatz Gnomes' payload is unchanged.
+        payload["targets"] = _spell_target_description(node.subject, node)
     # Otherwise deliberately *not* described. The Lace cycle targets "spell or
     # permanent" — a union of a stack object and a battlefield object that the
     # `targets` vocabulary cannot express. Emitting the generic object shape

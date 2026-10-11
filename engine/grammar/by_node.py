@@ -45,7 +45,9 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_bid_life_for_control, _lower_become_blocked,
                        _lower_bid_life_contest,
                        _lower_produces_mana_instead, _lower_spend_mana_as_though,
+                       _lower_added_mana_becomes, _lower_grant_mana_spending,
                        _lower_change_land_type, _lower_change_supertype,
+                       _lower_become_that_type,
                        _lower_become_aura, _lower_untap_chosen_by_paying,
                        _lower_reveal_hand_and_choose, _lower_look_top_pick,
                        _lower_player_gets_counters,
@@ -262,6 +264,8 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.Scry: _lower_scry,
     ast.ProducesManaInstead: _lower_produces_mana_instead,
     ast.SpendManaAsThough: _lower_spend_mana_as_though,
+    ast.AddedManaBecomes: _lower_added_mana_becomes,
+    ast.GrantManaSpending: _lower_grant_mana_spending,
     ast.CreateEmblem: _lower_create_emblem,
     ast.DestroyEachUnlessPaid: _lower_destroy_each_unless_paid,
     ast.BecomeCreature: _lower_become_creature,
@@ -567,6 +571,11 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
 #: consulted first.
 _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     ast.Attach: _lower_attach,
+    # "Target creature becomes **that type** until end of turn." (Unnatural
+    # Selection.) Here for ``ast.Attach``'s reason: the two words name what a
+    # "Choose a creature type" step recorded, and with no such step they name
+    # nothing.
+    ast.BecomeThatType: _lower_become_that_type,
     # "…change **the target or targets**." (Psychic Battle.) A back-reference
     # to what the firing event froze, so it is here for ``ast.Attach``'s
     # reason: with no such record the five words name nothing.

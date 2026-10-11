@@ -598,6 +598,26 @@ class SharesColorWithChosenPermanent:
 
 
 @dataclass(frozen=True)
+class SharesColorWithMatching:
+    """"Counter target spell **if it shares a color with a creature you
+    control**." (Jaded Response.)
+
+    CR 105.2's relation again, with a *described set* on the far side instead
+    of the census (:class:`SharesMostCommonColor`) or one chosen permanent
+    (:class:`SharesColorWithChosenPermanent`): the object is "it" — the target
+    the guarded effect announced, carried no more than those nodes carry it —
+    and the clause holds when **any** permanent the noun phrase admits shares a
+    colour with it.
+
+    ``filter`` is the printed noun phrase after the article, payload the whole
+    way down: "a creature you control" here, and "an artifact an opponent
+    controls" is this node with other words.
+    """
+
+    filter: "ObjectFilter"
+
+
+@dataclass(frozen=True)
 class TurnIsYours:
     """"**During your turn**, creatures you control get +2/+0." / "**During
     turns other than yours**, creatures you control get -0/-2." (Vibrating
@@ -714,6 +734,7 @@ Condition = Union[
     SelfIsOnlyCardOfTypeInGraveyard,
     SharesMostCommonColor,
     SharesColorWithChosenPermanent,
+    SharesColorWithMatching,
     AttachedCounterCount,
     SourceCounterCount,
     SourceExiled,

@@ -18,7 +18,7 @@ from ...oracle_types import (BIDDING_WINNER, COUNTERED_ABILITY_SOURCE,
 from ...subject_filters import CARD_ONLY_FILTER_KEYS
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import recorded_count_spec
+from ._amounts import count_spec, recorded_count_spec
 from .conditions import _lower_condition
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _restrictions_beyond, is_mana_value_x,
@@ -456,6 +456,24 @@ def _lower_counter_spell(
                     node=node,
                 )
             payload["unless_pays_per_recorded"] = spec
+        if node.unless_pays_per_each is not None:
+            # "…pays {1} **for each basic land type among lands you control**."
+            # (Evasive Action.) The rate again, over a count of the board: the
+            # spec ``count_from_payload`` takes at resolution, built by the one
+            # function that builds it for every counted amount — so "lands you
+            # control" means here what it means behind Planar Despair's -1/-1,
+            # and a narrowing the evaluator cannot test refuses there.
+            #
+            # Only the bare generic cost, for the reason the recorded rate
+            # above gives: a coloured or chosen-X price times a count is
+            # arithmetic the payment prompt does not do, and dropping the
+            # multiplier would charge one land type's worth whatever the board.
+            if "unless_pays_amount" not in payload:
+                raise LoweringError(
+                    "only a printed generic cost is paid per counted object",
+                    node=node,
+                )
+            payload["unless_pays_per"] = count_spec(node.unless_pays_per_each, node)
     if node.unpaid_penalty is not None:
         if node.unless_pays is None:
             raise LoweringError("a decline penalty with no cost to decline", node=node)

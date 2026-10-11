@@ -122,10 +122,22 @@ def test_every_table_entry_is_still_reached(measured_grammar_abilities):
     )
 
 
-def test_the_by_condition_table_only_holds_genuine_ambiguities(grammar_abilities):
+def test_the_by_condition_table_only_holds_genuine_ambiguities(
+    measured_grammar_abilities,
+):
     """An entry there that the kind alone would answer is a special case pretending
-    to be one — and the next reader would copy the pattern."""
-    _activated, triggered = grammar_abilities
+    to be one — and the next reader would copy the pattern.
+
+    Asked of shipped **and** measured sets, for the reason
+    ``test_every_table_entry_is_still_reached`` beside it is: what makes a kind
+    ambiguous is a second card reaching it under another condition, and that
+    card lands with its label while its set is still under ``measured``. Asked
+    of the shipped pool alone this demanded the opposite of what that test
+    demands — the entry a measured card needs was "needless" until promotion,
+    and the kind's one shipped label was the wrong one for it in the meantime
+    (Ice Cave's cast trigger read ``upkeep_effect``).
+    """
+    _activated, triggered = measured_grammar_abilities
     labels_by_kind: dict[str, set[str]] = {}
     for _name, _condition, kind, label in triggered:
         labels_by_kind.setdefault(kind, set()).add(label)

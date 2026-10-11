@@ -451,6 +451,36 @@ def describe_sequence_target_roles(
     if len(slots) != 2 or len(announced) != 2:
         return instructions
     kinds = [described.get("kind") for _position, described in announced]
+    if kinds.count("spell") == 1:
+        # "Counter **target spell** and Suffocating Blast deals 3 damage to
+        # **target creature**." A spell on the stack beside something that is
+        # not one: provably two targets, by this function's own argument — a
+        # back-reference can never change what kind of thing it points at — so
+        # CR 601.2c announces both. And no announcement here can: a roles walk
+        # enumerates battlefield, seat and graveyard slots
+        # (``legality.role_target_options``) and has no stack slot, so the line
+        # was left with its *first* description alone. Driven, that was a
+        # picker offering the spell and nothing else, the cast accepted with no
+        # creature on any battlefield, a named artifact dealt the damage, and
+        # an unnamed creature slot answered by whichever creature the
+        # resolver's scan met first.
+        #
+        # Refused rather than handed back, because handed back is exactly that
+        # card. What the sentence needs is the stack slot: a ``spell`` role
+        # kind in the roles description, ``role_target_options`` enumerating
+        # it off ``_enumerate_stack_targets``, the announcement carrying a
+        # stack index beside the permanent ids (the two channels a
+        # ``StackItem`` already has), ``roles_still_legal`` re-asking both at
+        # resolution (CR 608.2b: an illegal target is skipped, the other still
+        # happens), and a picker in the client that asks for a spell and then
+        # a permanent.
+        other = next(kind for kind in kinds if kind != "spell")
+        raise LoweringError(
+            "a line targeting a spell and "
+            + ("a player" if other in SEAT_ROLE_KINDS else "a permanent")
+            + " announces both (CR 601.2c), and no announcement carries a "
+            "stack slot beside another"
+        )
     seats = len([kind for kind in kinds if kind in SEAT_ROLE_KINDS])
     objects = len([kind for kind in kinds if kind == "object"])
     # One seat beside one object, or **two objects no one permanent could

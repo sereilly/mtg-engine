@@ -549,6 +549,14 @@ def parse_player_subject_verb(
         if stream.at_word("pay"):
             mark_pay = stream.mark()
             stream.advance()
+            # "…may pay **that spell's mana cost**." (Ice Cave.) A price no
+            # symbol run can print: the mana cost of the spell the trigger's
+            # condition named. Read before the symbol reader, which raises on
+            # "that" — and every other "pay that …" is rewound to it.
+            if stream.accept_phrase("that", "spell", "'s", "mana", "cost"):
+                return ast.May(source_spec, cost=ast.EventSpellManaCost())
+            stream.reset(mark_pay)
+            stream.advance()
             try:
                 cost = _parse_mana_payment(stream, allow_variable=True)
                 # "…may pay {1} **or {2}**" (Winter's Chill): CR 118.8's

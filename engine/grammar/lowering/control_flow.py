@@ -27,7 +27,9 @@ time: what differs between the callers is only which parser they already hold.
 
 from __future__ import annotations
 
-from ...oracle_types import OracleInstruction, REVEALED_TOP_CARDS_BY_SEAT
+from ...oracle_types import (EVENT_SPELL_MANA_COST, OracleInstruction,
+                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
+                             REVEALED_TOP_CARDS_BY_SEAT)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -165,7 +167,14 @@ _OPPONENT_PAYERS = frozenset({"target_opponent", "each_opponent", "opponent"})
 _ENUMERATED_PAYERS: dict[str, str] = {
     **{kind: "opponent" for kind in _OPPONENT_PAYERS},
     "each_player": "any_player",
+    # "**Any other player** may pay …" (Ice Cave): every seat but the one the
+    # firing event froze — admitted only under an event that froze one.
+    "any_other_player": OTHER_THAN_EVENT_SUBJECT_PLAYER,
 }
+
+#: The events whose fire site records the spell cast (``cast_card``), so "that
+#: spell's mana cost" names an object.
+_CAST_SPELL_EVENTS = frozenset({"spell_cast", "opponent_casts_spell"})
 
 
 def _lower_unless_player_pays(
@@ -191,6 +200,24 @@ def _lower_unless_player_pays(
       behind it is a payment charged for no reason.
     """
     payer = _ENUMERATED_PAYERS.get(node.payer.kind)
+    if (
+        payer == OTHER_THAN_EVENT_SUBJECT_PLAYER
+        and event not in _EVENT_SUBJECT_PLAYERS
+    ):
+        raise LoweringError(
+            "\"any other player\" is measured from a seat this event did not "
+            "record", node=node,
+        )
+    derived_cost = isinstance(node.cost, ast.EventSpellManaCost)
+    if derived_cost and (payer is None or event not in _CAST_SPELL_EVENTS):
+        # Read off the spell the trigger fired on, by the chain's handler.
+        # With none recorded — or one seat, the ``May`` below, which has no
+        # reader for it — the words name a cost of nothing, which every board
+        # can pay.
+        raise LoweringError(
+            "\"that spell's mana cost\" is offered to a set of seats under a "
+            "cast trigger", node=node,
+        )
     if payer is None and node.life:
         # The parser builds a life price only over a set of seats; one seat's
         # is the ``May`` whose *action* is the payment.
@@ -233,7 +260,12 @@ def _lower_unless_player_pays(
         # ``{X}`` stays variable ("…unless any player pays {X}", Soul Strings):
         # the same conversion the single-seat offer uses, so the two cannot
         # disagree about what a printed X costs.
-        "cost": variable_mana_payload(node.cost, what="a toll", node=node),
+        "cost": (
+            # "…that spell's mana cost" (Ice Cave), in the ``cost_from`` slot a
+            # derived cost has used since Flash.
+            {"cost_from": EVENT_SPELL_MANA_COST} if derived_cost
+            else variable_mana_payload(node.cost, what="a toll", node=node)
+        ),
     }
     if node.life:
         # "…unless any player pays **5 life**." (Aether Rift.) Beside the
@@ -469,6 +501,27 @@ def _lower_may(
     decision per player; the actor is carried as payload and
     ``handlers/control_flow.may`` arms one prompt for each named seat.
     """
+    if node.actor.kind == "any_other_player":
+        # "…**any other player** may pay that spell's mana cost. **If a player
+        # does**, counter the spell." (Ice Cave.) CR 118.12's offer to a *set*
+        # of seats with what paying buys behind it — the ``unless_player_pays``
+        # chain with its polarity reversed (Rhystic Scrying): each seat asked in
+        # turn (CR 101.4), the first payment ending it. One prompt per seat
+        # instead would let two players both pay for one counter. A bare price
+        # and its branches only; anything else the chain does not describe.
+        if node != ast.May(
+            node.actor, cost=node.cost, then=node.then, otherwise=node.otherwise
+        ) or node.cost is None:
+            raise LoweringError(
+                "an offer to any other player is a price and what paying it "
+                "buys", node=node,
+            )
+        return _lower_unless_player_pays(
+            ast.UnlessPlayerPays(
+                node.actor, node.cost, node.otherwise, paid=node.then
+            ),
+            produced, event, event_subject, lower_statement=lower_statement,
+        )
     # "Target opponent may **draw a card**": the bare imperative's subject is
     # the seat the offer names, not the ability's controller.
     node = offered_seat_performs(node)

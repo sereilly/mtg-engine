@@ -107,6 +107,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "sacrifice_expansion_permanents": "destruction",
     "become_aura_with_enchant": "characteristics",
     "gain_type": "characteristics",
+    # "Target creature becomes that type until end of turn." (Unnatural
+    # Selection.) The same layer-4 family — CR 205.1a's subtype set where the
+    # gain above is CR 205.1b's card-type addition.
+    "set_target_creature_type": "characteristics",
     # "{0}: This permanent becomes an enchantment." (Opal Acrolith.) The same
     # layer-4 family as the gain above it — CR 205.1a replacing rather than
     # CR 205.1b joining — so the same category.
@@ -756,6 +760,11 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # production of mana — the same category because what it is about is how
     # mana pays, and nothing else in the engine asks that.
     "grant_spend_mana_as_though": "mana",
+    # False Dawn's two sentences: the controller-wide swap over every spell
+    # and ability, and CR 609.4b's permission for the turn. The same family as
+    # the land swap and North Star's grant two rows up.
+    "swap_controller_added_mana_until_eot": "mana",
+    "grant_mana_spending_until_eot": "mana",
     "create_token": "tokens",
     "create_copy_token": "tokens",
     # Flipping a coin (CR 705). Its own category rather than sharing one with

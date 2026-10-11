@@ -1300,6 +1300,11 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # narrows the trigger, not what the ability is about.
     ("creature_you_control_dies", "may"): "triggered_death",
     ("spell_cast", "if_then"): "triggered_counterspells",
+    # Ice Cave: "Whenever a player casts a spell, any other player may pay that
+    # spell's mana cost. If a player does, counter the spell." The chain kind
+    # says only that a price is offered round the table; the condition is what
+    # says this is a counterspell, the bucket the conditional one above takes.
+    ("spell_cast", "unless_player_pays"): "triggered_counterspells",
     ("creature_dies", "may"): "spell_pattern",
     ("enchantment_cast", "may"): "triggered_draw",
     ("spell_cast", "may"): "spell_pattern",

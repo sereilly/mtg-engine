@@ -20,6 +20,8 @@ from ..mixins.stack import aura_enchant_noun, permanent_matches_enchant_noun
 from ..oracle import OracleInstruction, compile_card_oracle
 from ..keywords import remove_keyword
 from ..land_animation import LAND_ANIMATION_KIND
+from ..land_mana_swaps import (apply_source_wide_swap, production_snapshot,
+                               source_wide_swap)
 from ..land_types import change_land_type
 from ..lord_buffs import LORD_BUFF_KIND
 from ..pt import add_pt_modifier
@@ -107,9 +109,36 @@ class OracleInstructionsMixin:
                 if identity is not None
             )
         )
+        # "Until end of turn, **spells and abilities you control** that would
+        # add colored mana instead add that much white mana." (False Dawn.) A
+        # CR 614.1a replacement over what this instruction *produces*, asked at
+        # the one dispatch point for the reason the seat above is recorded
+        # here: every spell's and every ability's effect comes through it, so a
+        # creature's mana ability, a ritual and a triggered mana ability are
+        # one seam instead of a list of the handlers that add mana. None on
+        # every seat no such effect has armed, which is every seat in every
+        # game but that turn's — and then nothing is copied.
+        #
+        # The controller's own pool: that is where a spell or ability its
+        # controller controls adds mana in every printing the pool has, and a
+        # snapshot of every seat's would also catch mana *another* player's
+        # lands made while paying inside this resolution, which is theirs.
+        swap = source_wide_swap(context.caster)
+        mana_before = production_snapshot(context.caster) if swap is not None else None
         try:
             return handler(self, instruction, context)
         finally:
+            if mana_before is not None and apply_source_wide_swap(
+                context.caster, swap, mana_before
+            ):
+                # Said out loud, because the handler has just logged what the
+                # card *prints* ("Dark Ritual produced {B}{B}{B}") and the pool
+                # holds something else.
+                self.log.append(
+                    f"{getattr(context.card, 'name', 'An effect')} added "
+                    f"{{{swap.symbol()}}} instead"
+                    + (f" ({swap.source_name})" if swap.source_name else "")
+                )
             self.resolving_seats.pop()
             self.resolving_targets.pop()
 
