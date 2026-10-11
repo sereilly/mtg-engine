@@ -182,6 +182,31 @@ def _parse_cast_event(
                     subject=ast.ObjectFilter(colors=colours),
                 )
         stream.reset(mark)
+    # "…you cast a **nonred** spell" (Dwarven Patrol), and "…you cast a
+    # **red** spell" beside it. The third scope of the colour narrowing, read
+    # apart from the loop above because it is held to what `engine/oracle.py`'s
+    # table carries on this scope: one colour word or one negated one, never
+    # the union ("you cast a green or white spell" has no row, and a line read
+    # here that the table reads differently is a trigger watching a set the
+    # card does not print). The negation is the noun parser's own spelling —
+    # ``non`` + a colour word — so "noncreature" is left for the type reader
+    # below and "nonsense" refuses.
+    mark = stream.mark()
+    if stream.accept_phrase("you", "cast", "a"):
+        word = stream.peek_word() or ""
+        negated = word.startswith("non") and word[3:] in COLOR_WORDS
+        if negated or word in COLOR_WORDS:
+            stream.advance()
+            if stream.accept_word("spell"):
+                symbol = COLOR_WORDS[word[3:] if negated else word]
+                return ast.TriggerEvent(
+                    "you_cast_spell", trigger_word,
+                    subject=(
+                        ast.ObjectFilter(excluded_colors=(symbol,)) if negated
+                        else ast.ObjectFilter(colors=(symbol,))
+                    ),
+                )
+    stream.reset(mark)
     # "…casts a **multicolored** spell" (Rewards of Diversity). The word sits
     # where a colour does and is not one (CR 105.4), so it is read beside the
     # colour loop above rather than inside it — and all three printed scopes

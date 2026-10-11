@@ -633,6 +633,13 @@ def _lower_damage_shape(
             return (OracleInstruction(sweep, "", dict(back_reference)),)
         return (OracleInstruction(sweep, "", {"amount": amount}),)
 
+    if not node.recipients:
+        # "…deals 3 damage" with nobody named. The split below lowers one
+        # instruction per recipient, so none lowered to *nothing* and the
+        # clause reported supported while dealing no damage (Raka Sanctuary's
+        # "deals 3 damage instead", before the rider gave it the replaced
+        # sentence's recipient).
+        raise LoweringError("a damage clause names no recipient", node=node)
     if len(node.recipients) != 1:
         return lower_split_recipients(
             node, event, produced, event_subject, _lower_damage

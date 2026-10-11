@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec
+from ._amounts import count_filter_on_frozen_seat, count_spec
 from ._common import _is_enchanted, testable_filter_payload
 from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_OBJECTS,
@@ -392,6 +392,29 @@ def _lower_condition(
             "kind": "same_named_object",
             "zone": condition.zone,
             "nontoken": bool(condition.nontoken),
+        }
+    if isinstance(condition, ast.OnBattlefield) and condition.filter.distinct:
+        # "if there are four or more **basic land types among** lands that
+        # player controls" (Mask of Intolerance). Not a count of permanents but
+        # of the distinct values among them, so it is ``count_spec``'s -- the
+        # reader every "for each basic land type among" amount goes through --
+        # and the one evaluator behind it (``count_from_payload``) answers the
+        # threshold exactly as it answers the number. A kind of its own rather
+        # than an ``on_battlefield`` with a key: that evaluator counts objects
+        # through ``subject_matches`` and would read the key as nothing, which
+        # is four *lands* where the card says four *types*.
+        #
+        # "That player controls" is moved onto the count's seat by the same
+        # floor function the amounts use, which refuses under an event that
+        # froze no seat -- there the words name nobody.
+        return {
+            "kind": "distinct_among",
+            "count": count_spec(
+                count_filter_on_frozen_seat(condition.filter, event, condition),
+                condition,
+            ),
+            "op": condition.comparison.op,
+            "value": condition.comparison.value.value,
         }
     if isinstance(condition, ast.OnBattlefield):
         # No seat travels down: the payload names the zone and the noun phrase,

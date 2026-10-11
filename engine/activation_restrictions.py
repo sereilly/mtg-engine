@@ -1652,8 +1652,14 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         # are not: that one asks what step the game is in, this asks what the
         # source is *doing*. The printed roles are payload, so the one-role
         # spelling every set prints is this row rather than a second one.
+        #
+        # ``this [a-z]+`` rather than "this creature", for `_SELF_SUBJECT`'s
+        # reason: "Activate only if **Gerrard Capashen** is attacking" reaches
+        # here with the card's own name collapsed to that generic noun
+        # (CR 201.5), and a row spelled round one noun read the clause as
+        # unknown and took the whole ability with it.
         re.compile(
-            r"^activate only if this creature is "
+            r"^activate only if this [a-z]+ is "
             r"(?P<roles>attacking(?: or blocking)?|blocking(?: or attacking)?"
             r"|blocked)$"
         ),

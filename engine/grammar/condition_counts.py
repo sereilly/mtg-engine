@@ -51,7 +51,7 @@ from . import ast
 from .amounts import parse_amount
 from .bounds import parse_comparison
 from .errors import GrammarError
-from .distinct import accept_one_of_each
+from .distinct import accept_one_of_each, parse_counted_objects
 from .nouns import parse_object_filter
 from .references import parse_player_ref
 from .seat_comparisons import accept_margin
@@ -759,6 +759,24 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             there_quantifier = "no" if stream.accept_word("no") else (
                 "a" if stream.accept_word("a", "an") else None
             )
+        if there_comparison is not None:
+            # "if there are four or more **basic land types among** lands that
+            # player controls" (Mask of Intolerance). Domain (CR 207.2c) held
+            # to a threshold rather than spent as a number: the same count
+            # every "for each basic land type among" sentence takes, read by
+            # the one reader of that phrase and carried the way they carry it
+            # (``ObjectFilter.distinct``), so the lowering hands it to the one
+            # evaluator a count has. Only behind a printed number -- "there is
+            # a basic land type among" is not a sentence -- and it rewinds
+            # for any other noun phrase, which the reader below owns.
+            counted_mark = stream.mark()
+            try:
+                counted = parse_counted_objects(stream)
+            except GrammarError:
+                counted = None
+            if counted is not None and counted.distinct is not None:
+                return ast.OnBattlefield(counted, there_comparison)
+            stream.reset(counted_mark)
         if there_comparison is not None or there_quantifier is not None:
             try:
                 there_filter = parse_object_filter(stream)
