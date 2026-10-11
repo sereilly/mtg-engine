@@ -3046,3 +3046,28 @@ def test_w1g9_the_two_pumps_cost_what_they_print(set_pool, name, pool, grown):
     assert (creature.effective_power, creature.effective_toughness) == printed
 
 # ==== end W1G9 ========================================================
+
+# ==== W2G1 ============================================================
+# W2G1's tests go between this line and the "end W2G1" line.
+
+# ==== end W2G1 ========================================================
+
+# ==== W2G2 ============================================================
+# W2G2's tests go between this line and the "end W2G2" line.
+
+# ==== end W2G2 ========================================================
+
+# ==== W2G3 ============================================================
+# W2G3's tests go between this line and the "end W2G3" line.
+
+# ==== end W2G3 ========================================================
+
+# ==== W2G4 ============================================================
+# W2G4's tests go between this line and the "end W2G4" line.
+
+# ==== end W2G4 ========================================================
+
+# ==== W2G5 ============================================================
+# W2G5's tests go between this line and the "end W2G5" line.
+
+# ==== end W2G5 ========================================================
