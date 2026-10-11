@@ -3845,6 +3845,37 @@ class LegalityMixin:
             return None
         return f"{card.name} was removed from the stack: every target is illegal (608.2b)"
 
+    def resolving_targets_all_legal(self) -> bool:
+        """Whether **every** target the spell now resolving announced is still
+        legal (CR 608.2b), by the per-target verdicts
+        :meth:`illegal_targets_refusal` takes its all-or-nothing answer from.
+
+        For the one kind of sentence that needs them one at a time: an effect
+        that reads information **about** its targets. CR 608.2b's last line —
+        "If part of the effect requires information about an illegal target, it
+        fails to determine any such information" — means a comparison between
+        two targets ("unless either one is a color the other isn't", Dead
+        Ringers) has no answer once either is illegal, even though the other
+        is still there to be read; a target given protection in response is
+        the ordinary way to get there.
+
+        True where the question is not asked: nothing resolving, an ability
+        (declined for the reason ``illegal_targets_refusal`` gives), or an
+        announcement that gate cannot judge. A reader then falls back on what
+        it can see for itself, which is no worse than it had.
+        """
+        item = self.resolving_items[-1] if self.resolving_items else None
+        if item is None or item.ability_instruction is not None:
+            return True
+        program = compile_card_oracle(item.card)
+        for spec, holder, mode_index in self._resolving_announcements(item, program):
+            verdict = self._announcement_target_legality(
+                item, program, spec, holder, mode_index
+            )
+            if verdict is not None and not all(verdict):
+                return False
+        return True
+
     def _resolving_announcements(self, item, program) -> list[tuple]:
         """``(spec, holder, mode_index)`` for every announcement the spell
         *item* made: one for an ordinary spell, one **per chosen mode** for a

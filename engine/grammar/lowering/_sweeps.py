@@ -194,7 +194,8 @@ def lower_each_matching_damage(
 
 
 def lower_counted_sweep_damage(
-    node: ast.DealDamage, recipient: ast.TargetSpec, *, multiplier: int = 1
+    node: ast.DealDamage, recipient: ast.TargetSpec, *, multiplier: int = 1,
+    count: dict | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"…it deals damage to **each nonblue creature without flying** equal to
     half the number of Islands you control, rounded down." (Floodgate.)
@@ -216,8 +217,16 @@ def lower_counted_sweep_damage(
     (CR 120.1a — damage marked on anything else is never read), and every key of
     the printed noun phrase testable by ``subject_matches``, because a narrowing
     the matcher drops burns a strictly larger board than the card prints.
+
+    *count* is the spec when the number is not a board count at all: "…deals
+    damage equal to **the sacrificed creature's power** to each creature"
+    (Bloodfire Infusion) is the same sweep sized by what the ability's own cost
+    ate, and ``_counted_damage._payment_channel_damage`` hands its channel's
+    spec down here rather than building a second sweep. One number for the
+    whole resolution either way, which is the only thing this function needs
+    of it.
     """
-    assert isinstance(node.amount, ast.CountOf)
+    assert count is not None or isinstance(node.amount, ast.CountOf)
     if node.per_each is not None or node.riders != ast.DamageRiders():
         raise LoweringError(
             "a counted sweep carries no multiplier and no riders", node=node
@@ -241,7 +250,7 @@ def lower_counted_sweep_damage(
             {
                 "amount": "x",
                 "filter": described,
-                X_FROM_COUNT: count_spec(
+                X_FROM_COUNT: count if count is not None else count_spec(
                     node.amount.filter, node, multiplier=multiplier
                 ),
             },

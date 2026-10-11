@@ -46,6 +46,7 @@ from ._amounts import TARGET_OPPONENT_SCOPE, count_spec, seat_scoped_count_spec
 from ._cost_records import COST_RECORD_CHANNELS
 from ._common import _describe_targets, _is_target
 from ._filters import dropped_narrowings, split_bound_card_type
+from ._sweeps import lower_counted_sweep_damage
 from ._events import (CHOSEN_CAST_DAMAGE, CHOSEN_PLAYER,
                       EVENT_SUBJECT_PLAYER, _DAMAGED_PLAYER_EVENTS,
                       _EVENT_SUBJECT_PLAYERS)
@@ -162,6 +163,18 @@ def _payment_channel_damage(
     if len(node.recipients) != 1:
         raise LoweringError("a counted damage reaches one recipient", node=node)
     recipient = node.recipients[0]
+    # "…deals damage equal to the sacrificed creature's power **to each
+    # creature**." (Bloodfire Infusion.) A described set (CR 611.2c) rather
+    # than a chosen recipient, so it is the sweep family's sentence with this
+    # channel's number — the hand-over ``damage._lower_deal_damage`` makes for
+    # a board count (Floodgate), made here for a payment's. The sweep keeps its
+    # own refusals: creatures only, and a noun phrase the matcher can test.
+    if (
+        isinstance(recipient, ast.TargetSpec)
+        and recipient.quantifier in ("each", "all")
+        and not recipient.targeted
+    ):
+        return lower_counted_sweep_damage(node, recipient, count=count)
     payload: dict[str, object] = {"amount": "x", X_FROM_COUNT: count}
     if isinstance(recipient, ast.PlayerRef):
         if recipient.kind not in ("target_player", "target_opponent", "you"):

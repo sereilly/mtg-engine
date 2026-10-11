@@ -142,6 +142,7 @@ from .lowering import (
     _lower_graveyard_pick_onto_battlefield,
     _lower_untap_restriction,
     _lower_condition,
+    announces_target_pair,
     pronoun_target_referent,
 )
 from .statement_dispatch_naming import lower_naming_statement
@@ -789,6 +790,13 @@ def lower_statement(
 
     if isinstance(statement, ast.Conditional):
         then = lower_statement(statement.then, produced, event=event, event_subject=event_subject, whole_effect=False)
+        # The printed body, held before the "unless" swap below moves it to the
+        # false branch: a pronoun in the condition names what the *body*
+        # announced whichever branch it ends up on, and read after the swap an
+        # "unless" clause was handed an empty arm — so it had no referent, and
+        # "…unless either one is a color the other isn't" (Dead Ringers) could
+        # not see the pair it is about.
+        body = then
         if not statement.negated and _guard_is_the_arms_own_precondition(
             statement.condition, then
         ):
@@ -824,7 +832,8 @@ def lower_statement(
                     # refuses rather than answering about nothing.
                     "condition": _lower_condition(
                         statement.condition, produced, event,
-                        referent=pronoun_target_referent(then),
+                        referent=pronoun_target_referent(body),
+                        target_pair=announces_target_pair(body),
                     ),
                     "then": then,
                     "else": otherwise,

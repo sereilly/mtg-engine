@@ -117,7 +117,15 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
     # ordinary punctuation on dozens of cards ("Destroy target creature, then
     # …"), so a partial match rewinds and the noun parser sees the stream it
     # would have seen.
+    #
+    # "…is dealt to **another** target creature, planeswalker, or player
+    # instead." (Captain's Maneuver.) The union's second instance in one
+    # sentence, and "another" is CR 601.2c's printed way of saying it may not
+    # be the first — ``distinct_from_prior``, exactly as the noun-phrase reader
+    # below records the word. Read only in front of the long form: before a
+    # bare noun the ordinary reader already has it.
     long_union = stream.mark()
+    another = stream.accept_word("another")
     if (
         stream.accept_word("target")
         and stream.accept_word("creature")
@@ -128,7 +136,8 @@ def parse_target_spec(stream: TokenStream) -> ast.TargetSpec | None:
         and stream.accept_word("player")
     ):
         return ast.TargetSpec(
-            "any_target", _any_target_chooser(stream), targeted=True
+            "any_target", _any_target_chooser(stream), targeted=True,
+            distinct_from_prior=another,
         )
     stream.reset(long_union)
 
