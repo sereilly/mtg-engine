@@ -23,7 +23,8 @@ reported supported.
 from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, COUNTERED_SPELL_NAME,
                              LAST_TARGET_CONTROLLER, LAST_TARGET_NAME,
                              REVEALED_HAND_CARDS, OracleInstruction)
-from ...search_filters import SEARCH_COMPARISONS, SEARCH_RESTRICTIONS
+from ...search_filters import (ONE_OF_EACH, SEARCH_COMPARISONS,
+                               SEARCH_RESTRICTIONS)
 from ._deaths import BOUND_CARD_EVENTS
 from .. import ast
 from ..errors import LoweringError
@@ -32,6 +33,7 @@ from ._common import (
     _amount_payload,
     _describe_targets,
     _restrictions_beyond,
+    search_slot,
 )
 from ._events import _back_reference_payload
 
@@ -269,6 +271,21 @@ def _lower_search_library(
         # engine. Spelling it the same way is what stops one field meaning
         # "or" to the battlefield and "and" to a library.
         restrictions["any_colors"] = list(filt.colors)
+    if node.one_of_each:
+        # "…a land card **of each basic land type**" (Gaea's Balance). One
+        # description per find, each in the predicate's own vocabulary, under
+        # the one key the picker's union, the resolver's assignment and the
+        # AI's pick all read. The production sized the destinations to match,
+        # which is checked rather than trusted: a description with nowhere to
+        # land is a find the flow would drop.
+        if len(node.one_of_each) != 1 + len(node.extra_destinations):
+            raise LoweringError(
+                "a search for one card per description names a place for each",
+                node=node,
+            )
+        restrictions[ONE_OF_EACH] = [
+            search_slot(described, node) for described in node.one_of_each
+        ]
     # One entry per find, in the printed order: how many are found and where each
     # goes are the same fact, so a card that names two destinations cannot lower
     # to a search that finds one.

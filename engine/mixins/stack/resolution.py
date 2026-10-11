@@ -234,9 +234,14 @@ class StackResolutionMixin:
         if exile_instead:
             owner.exile.append(leaving)
             self.log.append(f"{card.name} {verb} and was exiled instead of going to the graveyard")
-        else:
-            self.put_card_into_graveyard(owner, leaving)
+        elif self.put_card_into_graveyard(owner, leaving):
             self.log.append(f"{card.name} {verb} and moved to graveyard")
+        else:
+            # A CR 614 replacement sent it somewhere else (Forbidden Crypt's
+            # exile, Legacy Weapon's shuffle) and has said where. The seam's
+            # False is "the card did not arrive", and this line used to
+            # announce an arrival regardless.
+            self.log.append(f"{card.name} {verb}")
 
     def _default_opposing_seat(self, caster_index: int) -> int:
         """The seat a triggered ability affects when nothing chose one.

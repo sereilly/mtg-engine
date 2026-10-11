@@ -192,6 +192,7 @@ from .library import (
     _parse_look_at_hand,
     parse_player_looks_at_own_library_top,
     parse_graveyard_top_to_library,
+    parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
 )
 # CR 700.3's two piles — the split and the choice, whatever is separated.
@@ -426,6 +427,7 @@ __all__ = [
     "parse_reveal_any_number_from_hand",
     "_parse_search_library",
     "parse_player_looks_at_own_library_top",
+    "parse_player_reorders_your_library_top",
     "parse_player_separates_your_library_top",
     "parse_each_player_separates",
     "parse_reveal_top_and_separate",

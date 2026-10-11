@@ -8,7 +8,9 @@ through when this module crossed a thousand lines, exactly as
 ``lowering/tokens.py`` left through one set earlier.
 """
 
-from ...oracle_types import COUNTERED_ABILITY_SOURCE, OracleInstruction
+from ...oracle_types import (CHOSEN_NUMBER_THIS_WAY, COIN_FLIPS_MADE,
+                             COUNTERED_ABILITY_SOURCE, X_FROM_COUNT,
+                             OracleInstruction)
 from .. import ast
 from ..errors import LoweringError
 from ._common import (RESTRICTION_TURNS, _REST_OF_TURN, _amount_payload,
@@ -179,6 +181,60 @@ def _lower_coin_flip_stakes_loop(
                     "quantifier": "target", "kind": "player",
                     "opponents_only": True,
                 },
+            },
+        ),
+    )
+
+
+def _lower_flip_coins_until_loss(
+    node: ast.FlipCoinsUntilLoss, produced: frozenset[str] = frozenset(),
+) -> tuple[OracleInstruction, ...]:
+    """"Flip a coin that many times or until you lose a flip, whichever comes
+    first. If you win all the flips, draw two cards for each flip." (Squee's
+    Revenge.)
+
+    Two instructions out of pieces that already compose. The run is its own
+    kind, because one ``flip_coin`` is one flip and this is a loop with two
+    bounds; what it leaves behind is the record every flip leaves (``coin_flip``
+    — here, whether the run was clean) and how long the run was. The reward is
+    then the ordinary conditional on that record over the ordinary draw, sized
+    by the ordinary counted X: the printed number is one flip's worth and the
+    count is the flips made.
+
+    "That many" names its producer or refuses. With no number chosen in front
+    of it the words bound nothing, and a run that read zero would compile
+    supported and never flip.
+    """
+    if (
+        not isinstance(node.times, ast.ThatMuch)
+        or node.times.source is not None
+        or CHOSEN_NUMBER_THIS_WAY not in produced
+    ):
+        raise LoweringError(
+            "'that many' flips with no number chosen before them in this effect",
+            node=node,
+        )
+    per_flip = _amount_payload(node.draw_per_flip)
+    if not isinstance(per_flip, int) or per_flip <= 0:
+        raise LoweringError("a flip's reward is a printed number of cards", node=node)
+    return (
+        OracleInstruction(
+            "flip_coins_until_loss", "", {"amount_from": CHOSEN_NUMBER_THIS_WAY},
+        ),
+        OracleInstruction(
+            "if_then", "",
+            {
+                "condition": {"kind": "coin_flip", "won": True},
+                "then": (
+                    OracleInstruction(
+                        "draw_controller_cards", "",
+                        {
+                            "amount": {"times_x": per_flip},
+                            X_FROM_COUNT: {"back_reference": COIN_FLIPS_MADE},
+                        },
+                    ),
+                ),
+                "else": (),
             },
         ),
     )

@@ -62,6 +62,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_create_emblem, _lower_create_copy_token,
                        _lower_damage_dealt_riders, _lower_coin_flip_damage_loop,
                        _lower_coin_flip_stakes_loop, _lower_damage_this_game_history,
+                       _lower_flip_coins_until_loss,
                        _lower_repeat_process_request,
                        _lower_put_source_into_zone,
                        _lower_return_self_instead_of_untapping, _lower_extra_turn,
@@ -121,6 +122,7 @@ from .lowering import (_lower_play_with_hand_revealed, _lower_keep_chosen_discar
                        _lower_look_top_exile_random, _lower_search_and_exile,
                        _lower_put_exiled_pile_on_library,
                        _lower_graveyard_top_opponent_chooses,
+                       _lower_reveal_library_opponent_chooses,
                        _lower_reveal_top_opponent_chooses,
                        _lower_search_reveal_opponent_chooses,
                        _lower_strip_cards_with_chosen_name,
@@ -316,6 +318,9 @@ _BY_NODE_TYPE: dict[type, object] = {
     ast.RandomGraveyardCardFate: _lower_random_graveyard_card_fate,
     ast.LookTopExileRandom: _lower_look_top_exile_random,
     ast.RevealTopOpponentChooses: _lower_reveal_top_opponent_chooses,
+    # The whole library revealed and one card picked per printed description
+    # (Guided Passage) — a different pile and a different pick, so its own row.
+    ast.RevealLibraryOpponentChooses: _lower_reveal_library_opponent_chooses,
     ast.RevealTopSortingByFilter: _lower_reveal_top_sorting_by_filter,
     # The same pick over a pile a **search** found (Intuition), which is
     # why it is a row of its own rather than a field on that node: a search
@@ -671,4 +676,8 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # "one of the exiled cards" names what a step of this same effect exiled,
     # which is a reading only the producer set can admit.
     ast.EachPlayerClaimsExiledCard: _lower_each_player_claims_exiled_card,
+    # "Flip a coin **that many** times …" (Squee's Revenge): the bound is the
+    # number a step in front of it chose, so only the producer set can say
+    # whether the words name anything.
+    ast.FlipCoinsUntilLoss: _lower_flip_coins_until_loss,
 }

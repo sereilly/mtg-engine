@@ -3046,7 +3046,8 @@ def choose_search_cards(
     resolver will consume it — an AI that kept offering a used name would
     submit an answer the engine then refuses, which is the fail-to-find.
     """
-    from .search_filters import name_key
+    from .search_filters import (landing_seat, name_key, search_slots,
+                                 slot_assignment)
 
     # The zone the search looks in, which is not always the chooser's own —
     # see `searched_seat`. An AI reading its own graveyard for a card the
@@ -3056,6 +3057,51 @@ def choose_search_cards(
     working = dict(data)
     picks: list[dict] = []
     taken: set[tuple[str, int]] = set()
+    # **Whose hand the finds are for.** A seat choosing cards that go to
+    # somebody else's hand (Guided Passage: "an opponent chooses … you put the
+    # chosen cards into your hand"; Jester's Mask's refilled hand) is choosing
+    # what its opponent gets, and wants the *least* of what the phrase admits.
+    # Read off the prompt's own seats rather than off a card: the finds land
+    # where `landing_seat` says, and that is the whole of the question. A find
+    # taken out of another seat's library for any other place — exile (Jester's
+    # Cap), the chooser's own battlefield (Bribery) — is still the best card.
+    destinations = list(working.get("destinations") or ()) or [
+        working.get("destination", "hand")
+    ]
+    handing_over = (
+        landing_seat(working, player_index) != player_index
+        and all(place == "hand" for place in destinations)
+    )
+    sign = -1.0 if handing_over else 1.0
+    if search_slots(working):
+        # "a land card **of each basic land type**" (Gaea's Balance): one find
+        # per printed description. Best card first, each kept only while the
+        # cards kept so far can still all be given a description of their own
+        # — `slot_assignment`, the resolver's own question, so this is an
+        # answer it admits. Taking the best that still fits is exact here (the
+        # sets that can be assigned are a matroid), so it is also as many
+        # finds as the zones allow, which is what a floor asks for.
+        entries = [
+            (zone, index, card)
+            for zone in tuple(working.get("zones", ("library",)))
+            for index, card in enumerate(
+                player.library if zone == "library" else player.graveyard
+            )
+            if search_matches(card, working)
+        ]
+        entries.sort(
+            key=lambda entry: -sign * _score_tutor_choice(game, player_index, entry[2])
+        )
+        kept: list[tuple] = []
+        for entry in entries:
+            if len(kept) >= count:
+                break
+            trial = kept + [entry]
+            if None not in slot_assignment(
+                [card for _zone, _index, card in trial], working
+            ):
+                kept = trial
+        return [{"zone": zone, "index": index} for zone, index, _card in kept]
     for _ in range(count):
         best: tuple[str, int] | None = None
         best_score = float("-inf")
@@ -3064,7 +3110,7 @@ def choose_search_cards(
             for index, card in enumerate(cards):
                 if (zone, index) in taken or not search_matches(card, working):
                     continue
-                score = _score_tutor_choice(game, player_index, card)
+                score = sign * _score_tutor_choice(game, player_index, card)
                 if best is None or score > best_score:
                     best = (zone, index)
                     best_score = score

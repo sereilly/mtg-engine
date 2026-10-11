@@ -763,6 +763,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # keeps the category of whatever that branch does — a coin flip over a
     # damage effect must not be able to turn "damage" on.
     "flip_coin": "coin_flips",
+    # "Flip a coin that many times or until you lose a flip, whichever comes
+    # first." (Squee's Revenge.) A run of the flip above, with two bounds.
+    "flip_coins_until_loss": "coin_flips",
     "coin_flip_stakes_loop": "coin_flips",
     # "…unless you pay {3} **and repeat this process**." (Crooked Scales.) The
     # loop the line is wrapped in, and the record one round writes to ask for

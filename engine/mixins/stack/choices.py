@@ -56,7 +56,8 @@ from ...oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
 # (Planar Overlay's "return those lands"); on a line of its own so the import
 # above, which every round appends to, cannot collide with it.
 from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
-from ...search_filters import landing_seat, search_matches, searched_seat
+from ...search_filters import (landing_seat, search_matches, search_slots,
+                               searched_seat, slot_assignment)
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
 from ...subject_filters import subject_matches
@@ -959,6 +960,17 @@ class PendingChoicesMixin:
                     ],
                 }
             found.append((zone, index, card))
+        # "a land card **of each basic land type**" (Gaea's Balance): every
+        # find fills a printed description of its own. Asked of the answer as a
+        # whole, after each card has passed the union above — a Tropical Island
+        # beside a basic Forest is legal only with the dual read as the Island,
+        # which no card-at-a-time test can decide — and before anything moves,
+        # for this resolver's standing reason.
+        if search_slots(choice.data) and None in slot_assignment(
+            [card for _zone, _index, card in found], choice.data,
+            game=self, owner=choice.player_index,
+        ):
+            return False
         # Highest index first so the earlier picks still address the cards
         # they named (the two zones do not renumber each other).
         for zone, index, _card in sorted(found, key=lambda entry: entry[1], reverse=True):
@@ -970,9 +982,16 @@ class PendingChoicesMixin:
         # lands is still being asked.
         if choice.data.get("reveal"):
             choice.data["revealed_names"] = [card.name for card in cards]
+        # **Who searched** is the seat that answered, which is not always the
+        # seat whose zones were opened (Jester's Cap; Guided Passage's opponent
+        # choosing out of the caster's library) — the single-find path has said
+        # so since Bribery, and this one named the zone's owner for both. Where
+        # they are the same seat the sentence is byte-identical.
+        searcher = self.players[choice.player_index]
+        whose = "" if searcher is caster else f"{caster.name}'s "
         self.log.append(
-            f"{caster.name} searched " + " and ".join(zones) + " and found "
-            + ", ".join(card.name for card in cards)
+            f"{searcher.name} searched {whose}" + " and ".join(zones)
+            + " and found " + ", ".join(card.name for card in cards)
         )
         # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
@@ -998,6 +1017,20 @@ class PendingChoicesMixin:
         """
         searched = self.players[searched_seat(choice.data, choice.player_index)]
         picks: list[dict] = []
+        if search_slots(choice.data):
+            # One find per printed description: the cards a largest assignment
+            # gave a slot, which is by construction an answer the picks
+            # resolver admits and one that meets its floor.
+            findable = self._search_findable_entries(choice)
+            assigned = slot_assignment(
+                [card for _zone, _index, card in findable], choice.data,
+                game=self, owner=choice.player_index,
+            )
+            return [
+                {"zone": zone, "index": index}
+                for (zone, index, _card), slot in zip(findable, assigned)
+                if slot is not None
+            ][:limit]
         for zone in tuple(choice.data.get("zones", ("library",))):
             cards = searched.library if zone == "library" else searched.graveyard
             for index, card in enumerate(cards):
@@ -1008,6 +1041,22 @@ class PendingChoicesMixin:
                 ):
                     picks.append({"zone": zone, "index": index})
         return picks
+
+    def _search_findable_entries(self, choice: PendingChoice) -> list[tuple]:
+        """Every ``(zone, index, card)`` in the searched zones the phrase
+        admits, in zone order — the population the slot assignment is taken
+        over, read through the one predicate every other reader asks."""
+        searched = self.players[searched_seat(choice.data, choice.player_index)]
+        return [
+            (zone, index, card)
+            for zone in tuple(choice.data.get("zones", ("library",)))
+            for index, card in enumerate(
+                searched.library if zone == "library" else searched.graveyard
+            )
+            if search_matches(
+                card, choice.data, game=self, owner=choice.player_index
+            )
+        ]
 
     def _search_floor(self, choice: PendingChoice) -> int:
         """How many cards this search **must** find (CR 701.23d), or 0.
@@ -1040,7 +1089,20 @@ class PendingChoicesMixin:
         web picker all answer with: a second count written here would be a
         second reading of the restriction, and the two would disagree the first
         time a narrowing was added to either.
+
+        A search that finds **one card per printed description** (Guided
+        Passage's "a creature card, a land card, and a noncreature, nonland
+        card") can find no more than a largest assignment of cards to
+        descriptions: three creatures in a library answer one slot, not three.
         """
+        if search_slots(choice.data):
+            return sum(
+                slot is not None
+                for slot in slot_assignment(
+                    [card for _z, _i, card in self._search_findable_entries(choice)],
+                    choice.data, game=self, owner=choice.player_index,
+                )
+            )
         searched = self.players[searched_seat(choice.data, choice.player_index)]
         zones = tuple(choice.data.get("zones", ("library",)))
         return sum(

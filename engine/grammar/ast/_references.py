@@ -533,6 +533,13 @@ class ObjectFilter:
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False
+    # "a **multicolored** creature card" (Dragon Arch). CR 105.2b: an object
+    # with two or more colours. Its own field rather than a value of ``colors``
+    # because that field is a *union* — "green or white" is satisfied by one of
+    # them — and no list of colours says "any two". Emitted as the payload key
+    # of the same name, which both matchers answer: a permanent's off its
+    # computed colours (layer 5) and a card's off its printed ones (CR 202.2).
+    multicolored: bool = False
     # "…that isn't the target of an ability from another creature named ~"
     # (Goblin Artisans). A restriction on the object's *situation* rather than
     # on the object: it asks what else on the stack is pointing at it. The

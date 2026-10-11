@@ -266,6 +266,37 @@ def _lower_look_at_library_top(
     # printing it: a *targeted* look is a spell's choice and this one is a fact
     # about a combat, and the handler reads them from different places.
     defending = node.player.kind == "defending_player"
+    # "**That player** looks at the top three cards of your library, then puts
+    # them back in any order." (Tahngarth's Glare.) Somebody else rearranging
+    # the controller's pile, which neither kind below can say: the own-library
+    # one makes the looker the owner by construction, and the targeted one puts
+    # the *library* on the target.
+    #
+    # Only "that player" has a seat to read — the player the sentence in front
+    # chose, which the handler takes off the resolution's own target exactly as
+    # "that player loses 2 life" does. A looker this sentence would have to
+    # *choose* is a target of its own, with a picker and both legality gates
+    # behind it, and no card prints one; it refuses by name rather than lowering
+    # to a look nobody was asked to make.
+    if node.looker is not None:
+        if (
+            node.looker.kind != "that_player"
+            or node.player.kind != "you"
+            or not node.may_reorder
+            or node.may_shuffle
+            or node.may_bottom
+        ):
+            raise LoweringError(
+                "only \"that player\" rearranging your library has a handler: "
+                f"{node.looker.kind!r} looking at {node.player.kind!r}'s",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "target_reorders_caster_library_top", "",
+                {"amount": _amount_payload(node.count)},
+            ),
+        )
     # "Look at the top four cards of **your** library, then put them back in
     # any order." (Sage Owl.) The looker's own pile, which is its own kind and
     # not this one with a seat swapped: `reorder_target_library_top` is

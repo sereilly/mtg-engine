@@ -65,8 +65,10 @@ from ._common import (
     _restrictions_beyond,
     _targets_only,
     dropped_narrowings,
+    search_slot,
 )
 from ._filters import chargeable_card_filter
+from ._record_keys import CHOSEN_PLAYER
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
@@ -260,6 +262,62 @@ def _lower_graveyard_top_opponent_chooses(
     _describe_targets(payload, node.chooser)
     return (
         OracleInstruction("reveal_top_opponent_chooses", "", payload),
+    )
+
+
+def _lower_reveal_library_opponent_chooses(
+    node: ast.RevealLibraryOpponentChooses,
+) -> tuple[OracleInstruction, ...]:
+    """"Reveal the cards in your library. An opponent chooses from among them a
+    creature card, a land card, and a noncreature, nonland card. You put the
+    chosen cards into your hand. Then shuffle." (Guided Passage.)
+
+    Two instructions. "An opponent" is CR 608.2d's unnamed seat, picked by the
+    controller as the effect is applied — the ``choose_opponent`` step every
+    "an opponent …" sentence in this grammar puts in front of itself, writing
+    the key the reveal then reads. The reveal, the pick, the hand and the
+    shuffle are one step because they are one pile.
+
+    Each description becomes a slot in the search predicate's own vocabulary
+    (``_filters.search_slot``, which refuses a narrowing that predicate cannot
+    test), because the pick is asked through the search prompt: a seat choosing
+    cards out of a library, one per description, is what that prompt already
+    is, and a second picker would be a second reading of the same phrases.
+    """
+    if node.chooser != "an_opponent":
+        raise LoweringError(
+            f"no flow lets {node.chooser!r} choose from a revealed library",
+            node=node,
+        )
+    if len(node.described) < 2:
+        raise LoweringError(
+            "a pick of one card per description names at least two", node=node
+        )
+    return (
+        OracleInstruction(
+            "sequence", "",
+            {
+                "steps": (
+                    OracleInstruction(
+                        "choose_opponent", "",
+                        {
+                            "result_key": CHOSEN_PLAYER,
+                            "prompt": "Choose an opponent to choose from your library.",
+                        },
+                    ),
+                    OracleInstruction(
+                        "reveal_library_opponent_chooses", "",
+                        {
+                            "one_of_each": [
+                                search_slot(described, node)
+                                for described in node.described
+                            ],
+                            "destination": "hand",
+                        },
+                    ),
+                ),
+            },
+        ),
     )
 
 

@@ -19,6 +19,7 @@ from ..layer_bridge import printed_shape, printed_supertypes
 from ..oracle_types import (BLOCK_PAIR_SUBJECT, SACRIFICED_CARDS_BY_SEAT,
                            SUBJECT_FROM_TRIGGER)
 from ..models import Permanent, PlayerState
+from ..object_colors import is_multicolored
 from ..search_filters import card_has_type, name_key
 
 
@@ -1480,6 +1481,13 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
     excluded_colors = filt.get("exclude_colors") or ()
     if excluded_colors and any(color in colors for color in excluded_colors):
         return False
+    # "a **multicolored** creature card" (Dragon Arch). CR 105.2b: two or more
+    # colours, off the same colours every test above reads — the printed ones
+    # (CR 202.2) unless a seat-wide static says otherwise — and through the one
+    # definition of the word, so a card in a hand and a permanent on the
+    # battlefield cannot be multicoloured by two different counts.
+    if filt.get("multicolored") and not is_multicolored(colors):
+        return False
     # "…for each **Mountain and red** card in it" (Baleful Stare). A union
     # across two *axes* — CR 205.3 subtype against CR 105 colour — which the
     # keys above cannot say because they are AND'd: ``subtype_filter`` plus
@@ -2302,6 +2310,14 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     if any_colors and not any(color in colors for color in any_colors):
         return False
     if exclude_colors and any(c in colors for c in exclude_colors):
+        return False
+    # "a **multicolored** creature" (Dragon Arch's phrase, asked of a
+    # permanent). CR 105.2b: two or more colours, counted off the *computed*
+    # set like every colour test above — a Lace-painted creature is exactly as
+    # multicoloured as layer 5 says it is. Through the one definition
+    # (``object_colors.is_multicolored``) the cost tax, the cast trigger and
+    # protection already ask.
+    if payload.get("multicolored") and not is_multicolored(colors):
         return False
     if exclude_types and any(perm.has_type(t) for t in exclude_types):
         return False

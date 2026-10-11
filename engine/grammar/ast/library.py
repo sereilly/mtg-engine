@@ -240,6 +240,13 @@ class SearchLibrary:
     #: production.
     discard_after: int = 0
     discard_after_at_random: bool = False
+    #: "…for a land card **of each basic land type**" (Gaea's Balance). One
+    #: description per find, in the printed order — the phrase read as what it
+    #: abbreviates ("a Plains card, an Island card, …"), each entry the
+    #: ``filter`` above narrowed by one value. Beside ``named_alternatives``
+    #: and for its reason: the filter says what *one* find may be, and this is
+    #: a list of them, each filled by at most one card.
+    one_of_each: tuple[ObjectFilter, ...] = ()
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:
@@ -269,6 +276,12 @@ class LookAtLibraryTop:
     #: are three different things to be allowed to do with what you saw, and a
     #: card that only looks must never be handed one of the others.
     may_bottom: bool = False
+    #: "**That player** looks at the top three cards of your library, then puts
+    #: them back in any order." (Tahngarth's Glare.) Who looks, when the
+    #: sentence prints somebody other than the ability's controller — the one
+    #: thing ``player`` cannot say, because that field is whose *library* it is.
+    #: ``None`` is the imperative, which CR 608.2c gives to the controller.
+    looker: "PlayerRef | None" = None
 
 @dataclass(frozen=True)
 class LookTopPickToHand:
@@ -444,6 +457,32 @@ class StripCardsWithChosenName:
     #: counter leaves behind, and a node that named a scratchpad key would be
     #: the grammar reaching across the pipeline for it.
     name_of: str | None = None
+
+
+@dataclass(frozen=True)
+class RevealLibraryOpponentChooses:
+    """``Reveal the cards in your library. An opponent chooses from among them
+    a creature card, a land card, and a noncreature, nonland card. You put the
+    chosen cards into your hand. Then shuffle.`` (Guided Passage.)
+
+    All four sentences, for :class:`RevealTopOpponentChooses`' reason: "them",
+    "the chosen cards" and the shuffle all name the one pile the first sentence
+    turned face up. What is new is the *pick*: not one card out of a pile but
+    **one card per printed description**, each description filled by at most
+    one card (the card's ruling: a description the library cannot answer is
+    simply skipped).
+
+    Not a search — CR 701.23 never applies, because the pile is revealed and
+    the picker is not its owner — so nothing here is optional: every
+    description the library can answer is answered, which is the floor the
+    lowering leaves switched on.
+    """
+    #: One entry per printed description, in the printed order.
+    described: tuple[ObjectFilter, ...]
+    #: Who chooses, as the printed word. Only "an opponent" has a printing —
+    #: CR 608.2d's unnamed opponent, whom the controller picks at a table of
+    #: more than two.
+    chooser: str = "an_opponent"
 
 
 @dataclass(frozen=True)

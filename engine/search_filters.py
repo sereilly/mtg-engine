@@ -260,7 +260,76 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
         compare = _COMPARE.get(mana_value["op"])
         if compare is None or not compare(card.cmc, mana_value["value"]):
             return False
+    # "a land card **of each basic land type**" (Gaea's Balance); "a creature
+    # card, a land card, and a noncreature, nonland card" (Guided Passage). One
+    # find per printed description. This is the union the *picker* offers —
+    # ``named_among``'s reading two tests up, for descriptions rather than
+    # names — and which description each find fills is settled across the
+    # whole answer by :func:`slot_assignment`, because one card can answer two
+    # of them and a per-card test cannot know which it will be asked to be.
+    slots = restrictions.get(ONE_OF_EACH)
+    if slots and not any(
+        search_matches(card, slot, game=game, owner=owner) for slot in slots
+    ):
+        return False
     return True
+
+
+#: The restriction key of a search that finds **one card per printed
+#: description**: a list of slot dicts, each in this predicate's own vocabulary
+#: (``card_type`` / ``exclude_types`` / ``restrictions``), each filled by at
+#: most one find.
+ONE_OF_EACH = "one_of_each"
+
+
+def search_slots(data: dict) -> tuple[dict, ...]:
+    """The per-find descriptions a search was armed with, or ``()``."""
+    return tuple((data.get("restrictions") or {}).get(ONE_OF_EACH) or ())
+
+
+def slot_assignment(cards, data: dict, *, game=None, owner=None) -> list[int | None]:
+    """Which printed description each of *cards* fills, in a **largest**
+    assignment — a slot index per card, ``None`` for one left over.
+
+    The whole of what "one of each" asks of an answer. A Tropical Island is a
+    Forest card and an Island card, so whether it and a basic Forest are a
+    legal pair of finds depends on reading the Island slot for the dual; a
+    greedy first-fit would spend the Forest slot on it and refuse an answer the
+    card allows. So the question is a bipartite matching, answered exactly (an
+    augmenting path per card — ``mana_payment.plan_payment``'s method, for its
+    reason: a greedy pick under-reports what is possible).
+
+    Three callers and one answer: the resolver checks that every picked card
+    got a slot, the CR 701.23d floor is the size of the assignment over
+    everything findable, and the default answer is the cards it assigned.
+    """
+    slots = search_slots(data)
+    cards = list(cards)
+    fits = [
+        [
+            index for index, slot in enumerate(slots)
+            if search_matches(card, slot, game=game, owner=owner)
+        ]
+        for card in cards
+    ]
+    holder: dict[int, int] = {}
+
+    def _place(card_index: int, seen: set[int]) -> bool:
+        for slot_index in fits[card_index]:
+            if slot_index in seen:
+                continue
+            seen.add(slot_index)
+            if slot_index not in holder or _place(holder[slot_index], seen):
+                holder[slot_index] = card_index
+                return True
+        return False
+
+    for card_index in range(len(cards)):
+        _place(card_index, set())
+    assigned: list[int | None] = [None] * len(cards)
+    for slot_index, card_index in holder.items():
+        assigned[card_index] = slot_index
+    return assigned
 
 
 def searched_seat(data: dict, chooser_seat: int) -> int:

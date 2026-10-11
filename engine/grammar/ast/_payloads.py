@@ -342,6 +342,10 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         }
     if self.colored:
         payload["colored_only"] = True
+    # "a **multicolored** creature card" (Dragon Arch). Emitted only when set,
+    # so every payload written before this key existed is byte-identical.
+    if self.multicolored:
+        payload["multicolored"] = True
     # "with a +1/+1 counter on it" (Tempered Veteran). Emitted only when
     # set, so every payload written before this key existed is
     # byte-identical.

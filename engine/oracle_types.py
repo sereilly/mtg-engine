@@ -1259,6 +1259,15 @@ CHOSEN_COLOR_THIS_WAY = "chosen_color_this_way"
 #: numbers and each reader would take whichever its author remembered.
 CHOSEN_NUMBER_THIS_WAY = "chosen_number_this_way"
 
+#: How many coins a **run** of flips actually flipped: "Flip a coin that many
+#: times or until you lose a flip, whichever comes first. If you win all the
+#: flips, draw two cards **for each flip**." (Squee's Revenge.) Written by
+#: ``flip_coins_until_loss`` beside the ``coin_flip`` record every flip writes,
+#: and separate from it because they answer different questions: that one says
+#: whether the run was clean, this one how long it was — and a run the first
+#: loss cut short is shorter than the number that was chosen.
+COIN_FLIPS_MADE = "coin_flips_made"
+
 #: ``{seat: number}`` for a number **every player names at once, in secret**:
 #: "Each player hides at least one item, then all players reveal them
 #: simultaneously. Each player loses life equal to **the number of items they

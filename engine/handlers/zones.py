@@ -12,7 +12,7 @@ from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card, linked_entries,
                             take_linked_entries, take_linked_entry_at,
                             until_leaves_has_ended)
 from ..keywords import grant_keyword
-from ..models import Permanent
+from ..models import Permanent, PlayerState
 from ._common import (
     _card_matches_filter,
     _resolve_chosen_subtype,
@@ -712,7 +712,12 @@ def reorder_target_library_top(game: Game, instruction: OracleInstruction, conte
     target = context.target
     caster_index = game.players.index(caster)
     target_index = game.players.index(target)
-    top_count = min(3, len(target.library))
+    # The printed number, which the lowering has always carried and this read
+    # as a literal 3 — true of both cards that printed the sentence (Natural
+    # Selection, Portent) and of the third (Tahngarth's Glare), so no game has
+    # played differently; a fourth card printing "the top five" would have
+    # looked at three.
+    top_count = min(int(instruction.payload.get("amount", 3)), len(target.library))
     # "You may have that player shuffle" (Natural Selection) lets the caster
     # optionally shuffle the target's library after reordering. Read off the
     # instruction, not the card: a handler that re-reads oracle text is a second
@@ -760,6 +765,55 @@ def reorder_own_library_top(game: Game, instruction: OracleInstruction, context:
     )
     game.log.append(
         f"{caster.name} is looking at the top {top_count} cards of their library"
+    )
+    return True, "pending_reorder_library"
+
+
+@effect_handler("target_reorders_caster_library_top")
+def target_reorders_caster_library_top(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"**That player** looks at the top three cards of your library, then puts
+    them back in any order." (Tahngarth's Glare.)
+
+    ``reorder_target_library_top`` with both seats the other way round: the
+    player the sentence in front chose **answers**, and the pile rearranged is
+    the resolving player's own. Two questions the prompt already keeps apart —
+    who is asked (``player_index``) and whose library (``target_index``) — so
+    it is that prompt with its seats swapped and not a second one.
+
+    The looker is the resolution's own target, read where "that player loses 2
+    life" reads it. With none there — the target gone illegal is caught above
+    every instruction (CR 608.2b), so this is a line with no player in front of
+    it — nobody looks, which is the direction that hands no one a look the card
+    did not give them.
+
+    Short libraries and the no-order-left case are ``reorder_own_library_top``'s:
+    CR 609.3's "as many as you can", and with fewer than two cards there is
+    nothing to ask.
+    """
+    looker = context.target
+    owner = context.caster
+    if not isinstance(looker, PlayerState):
+        game.log.append(
+            f"{context.card.name}: no player was chosen to look"
+        )
+        return True, "resolved"
+    top_count = min(
+        resolve_amount(instruction.payload.get("amount", 0), context.x_value),
+        len(owner.library),
+    )
+    if top_count < 2:
+        game.log.append(
+            f"{looker.name} has no order left to choose ({context.card.name})"
+        )
+        return True, "resolved"
+    owner_index = game.players.index(owner)
+    game.arm_pending_choice(
+        "reorder_library", game.players.index(looker),
+        target_index=owner_index, top_count=top_count, may_shuffle=False,
+    )
+    game.log.append(
+        f"{looker.name} is looking at the top {top_count} cards of "
+        f"{owner.name}'s library"
     )
     return True, "pending_reorder_library"
 
@@ -965,6 +1019,69 @@ def reveal_top_opponent_chooses(game: Game, instruction: OracleInstruction, cont
         _cards=revealed,
     )
     return True, "resolved"
+
+
+@effect_handler("reveal_library_opponent_chooses")
+def reveal_library_opponent_chooses(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Reveal the cards in your library. An opponent chooses from among them a
+    creature card, a land card, and a noncreature, nonland card. You put the
+    chosen cards into your hand. Then shuffle." (Guided Passage.)
+
+    The pick is asked through the **search prompt**, on the opponent's seat
+    over the revealer's library: one seat choosing cards out of another's
+    library, one per printed description, is exactly what that prompt carries
+    (``zone_seat`` for whose pile, ``one_of_each`` for the descriptions), and
+    its resolver already validates the answer whole, shuffles as the picks
+    leave (the printed "Then shuffle") and lands each card in the pile's
+    owner's hand. A second picker would be a second reading of the same three
+    phrases.
+
+    It is not a search, and the two differences are both data. Nothing is
+    hidden — CR 701.20a shows every card to every player, recorded here — and
+    nothing is optional: no ``up_to`` is armed, so the resolver's floor makes
+    the opponent choose a card for every description the library can answer
+    (the card's ruling: a description it cannot answer is simply skipped).
+
+    "An opponent" is the seat ``choose_opponent`` wrote one step up (CR 608.2d).
+    With none recorded there is nobody to choose and nothing is put anywhere —
+    but the library was still revealed, and is still shuffled.
+    """
+    from ..search_filters import ONE_OF_EACH
+
+    caster = context.caster
+    caster_index = game.players.index(caster)
+    card_name = context.card.name if context.card is not None else ""
+    names = [card.name for card in caster.library]
+    if names:
+        game.record_reveal(caster_index, names)
+    game.log.append(
+        f"{caster.name} revealed their library ({len(names)} card(s)) — {card_name}"
+    )
+    chooser = context.results.get("chosen_player")
+    if not isinstance(chooser, int) or not names:
+        if names:
+            game.log.append(f"{card_name}: no opponent to choose")
+        random.shuffle(caster.library)
+        return True, "resolved"
+    slots = [dict(slot) for slot in instruction.payload.get(ONE_OF_EACH) or ()]
+    destination = str(instruction.payload.get("destination", "hand"))
+    game.arm_pending_choice(
+        "search_library", chooser,
+        zone_seat=caster_index,
+        count=len(slots),
+        card_type="any",
+        zones=("library",),
+        restrictions={ONE_OF_EACH: slots},
+        destination=destination,
+        destinations=[destination] * len(slots),
+        tapped=[False] * len(slots),
+        card_name=card_name,
+        record=context.results,
+    )
+    game.log.append(
+        f"{game.players[chooser].name} is choosing from {caster.name}'s library"
+    )
+    return True, "pending_search_library"
 
 
 @effect_handler("reveal_top_sorting_by_chosen_name")

@@ -2486,6 +2486,55 @@ _OWN_ZONE_NAME_READERS = {
 }
 
 
+#: How many flips a seat nobody asks takes when a chosen number is the length
+#: of a run that stops at the first loss (Squee's Revenge: two cards for each
+#: flip, if every flip is won). A weight. The expected draw is ``2n / 2**n`` —
+#: one card at one flip *and* at two, less from three on — and two is the
+#: larger prize at the same expectation.
+FLIP_RUN_LENGTH = 2
+
+
+def chosen_number_bounds_flip_run(card: CardDefinition, instruction) -> bool:
+    """Whether the number *instruction* chooses is the length of a run of coin
+    flips — "Choose a number. Flip a coin **that many times** or until you lose
+    a flip…" (Squee's Revenge).
+
+    Read off the steps **behind** the choice in the sequence that holds it, for
+    ``chosen_name_own_zone``'s reason directly below: the choice is a step that
+    produces a value, and what the value is for is the next sentence. The
+    default every other chosen number takes counts mana values on the board
+    (``_most_telling_mana_value``, Void's question), which for this card names
+    zero flips on an empty board and a dozen on a full one.
+    """
+    program = compile_card_oracle(card)
+
+    def follows(step) -> bool:
+        payload = getattr(step, "payload", None) or {}
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            for position, inner in enumerate(nested):
+                if inner is instruction:
+                    return any(
+                        later.kind == "flip_coins_until_loss"
+                        for later in nested[position + 1:]
+                    )
+                if follows(inner):
+                    return True
+        return False
+
+    return any(
+        follows(root)
+        for root in (
+            *program.instructions,
+            *(ability.instruction for ability in program.activated_abilities),
+            *(ability.instruction for ability in program.triggered_abilities),
+        )
+        if root is not None
+    )
+
+
 def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
     """The chooser's own zone *instruction*'s "choose a card name" is then
     looked for in — ``"library"``, ``"hand"`` — or None when it is looked for

@@ -36,7 +36,7 @@ from ._filters import (_PAYLOAD_HONOURED_FILTER_FIELDS, _filter_payload,
                        _restrictions_beyond, chargeable_card_filter,
                        chargeable_tap_filter, dropped_narrowings,
                        graveyard_position_payload, is_mana_value_x,
-                       refuse_untestable, testable_filter_payload)
+                       refuse_untestable, search_slot, testable_filter_payload)
 # Re-exported for the families that read them; `_targets` holds the definitions.
 # Two of its names are deliberately *not* here — `_targeted_specs` and
 # `card_divided_target_description` have no reader outside that module, and a

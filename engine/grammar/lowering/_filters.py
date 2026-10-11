@@ -146,6 +146,11 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "named", "their_choice", "mana_value", "power", "toughness",
     "colored", "with_plus1_counter", "with_named_counter",
     "with_nonmana_activated_ability",
+    # "a **multicolored** creature card" (Dragon Arch). ``to_payload`` emits it
+    # whenever it is set and both matchers test it — ``permanent_matches_filter``
+    # off the computed colours, ``_card_matches_filter`` off the printed ones —
+    # so it is honoured in exactly the sense ``colors`` above is.
+    "multicolored",
     "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
@@ -502,6 +507,58 @@ def _restrictions_beyond(
         if field.name not in honoured
         and getattr(filt, field.name) != getattr(default, field.name)
     )
+
+
+#: What one printed description of a per-find pick may say — the
+#: ``ObjectFilter`` fields ``search_filters.search_matches`` can test off a
+#: card's face (CR 613.1 leaves a card in a library nothing else).
+_SEARCH_SLOT_FILTER_FIELDS = frozenset({
+    "card_types", "is_card", "supertypes", "subtypes", "excluded_types", "colors",
+})
+
+
+def search_slot(filt: ast.ObjectFilter, node=None) -> dict[str, object]:
+    """One printed description of a search that finds **one card per
+    description**, in ``search_matches``' own vocabulary.
+
+    "a land card **of each basic land type**" (Gaea's Balance) is five of
+    these and "a creature card, a land card, and a noncreature, nonland card"
+    (Guided Passage) three. Each becomes a dict that predicate reads exactly as
+    it reads a whole search's data — ``card_type`` / ``exclude_types`` /
+    ``restrictions`` — so the picker's union, the resolver's assignment and the
+    AI's pick are one reading of the phrase.
+
+    A floor rather than a line of either lowering, because the two cards sit in
+    different families (a search and a reveal) and a family may not import
+    another. A field outside the set above refuses by name: a description that
+    dropped a narrowing is a slot any card can fill.
+    """
+    if not filt.is_card:
+        raise LoweringError("a library holds cards, not permanents", node=node)
+    leftover = _restrictions_beyond(filt, _SEARCH_SLOT_FILTER_FIELDS)
+    if leftover:
+        raise LoweringError(
+            "the search picker cannot test this restriction: " + ", ".join(leftover),
+            node=node,
+        )
+    slot: dict[str, object] = {}
+    if filt.card_types:
+        slot["card_type"] = (
+            tuple(filt.card_types) if len(filt.card_types) > 1
+            else filt.card_types[0]
+        )
+    if filt.excluded_types:
+        slot["exclude_types"] = list(filt.excluded_types)
+    restrictions: dict[str, object] = {}
+    if filt.supertypes:
+        restrictions["supertypes"] = list(filt.supertypes)
+    if filt.subtypes:
+        restrictions["subtypes"] = list(filt.subtypes)
+    if filt.colors:
+        restrictions["any_colors"] = list(filt.colors)
+    if restrictions:
+        slot["restrictions"] = restrictions
+    return slot
 
 
 def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:

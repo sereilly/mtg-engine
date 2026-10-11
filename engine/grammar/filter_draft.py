@@ -171,6 +171,9 @@ class _FilterDraft:
     # local is dropped before it even gets that far, so the guard on this
     # mirror could not see it either.
     colored: bool = False
+    # "a **multicolored** creature card" (Dragon Arch) — see the field of the
+    # same name on ``ast.ObjectFilter``.
+    multicolored: bool = False
     # "permanents **of the chosen color**" (Psychic Allergy) — see
     # ``ast.ObjectFilter.chosen_color``.
     chosen_color: bool = False
@@ -338,6 +341,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         with_nonmana_activated_ability=d.with_nonmana_activated_ability,
         nontoken=d.nontoken,
         colored=d.colored,
+        multicolored=d.multicolored,
         chosen_color=d.chosen_color,
         chosen_keyword=d.chosen_keyword,
         chosen_creature_type=d.chosen_creature_type,
