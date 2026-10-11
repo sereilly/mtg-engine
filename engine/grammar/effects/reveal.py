@@ -242,9 +242,15 @@ def _accept_reveal_library_opponent_chooses(
     while True:
         stream.expect_word("a", "an")
         described.append(parse_object_filter(stream))
-        if not stream.accept_punct(","):
-            break
+        # ", a land card" / ", and a …" / " and a …": the list goes on only
+        # where another article follows, so the sentence's own full stop ends
+        # it and a pair joined by a bare "and" is the same list.
+        joined = stream.mark()
+        stream.accept_punct(",")
         stream.accept_word("and")
+        if not stream.at_word("a", "an"):
+            stream.reset(joined)
+            break
     if not stream.accept_punct("."):
         raise stream.error("expected where the chosen cards go")
     for word in ("you", "put", "the", "chosen", "cards", "into", "your", "hand"):
