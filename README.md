@@ -27,6 +27,24 @@ Supported patterns include:
 
 Cards whose text falls outside the recognized patterns degrade gracefully: they are classified unsupported with an explicit reason and never crash simulation.
 
+## Setup
+
+On a fresh clone (Windows), one command installs everything:
+
+```powershell
+.\setup.cmd
+```
+
+It installs Python (the version CI runs, per-user through `winget`) if it is missing, creates the `.venv` virtual environment, installs the pinned `requirements.txt`, and checks the result by importing the web app with the whole card pool loaded. It also installs Node.js and `playwright-cli`, which only the browser-driving `run-magic` skill needs — Node's installer asks for administrator permission, and `-SkipBrowserTools` leaves both out. It is safe to re-run; a second run is a verification pass.
+
+```powershell
+.\setup.cmd -SkipBrowserTools   # Python, .venv and packages only
+.\setup.cmd -RunTests           # finish with the full test suite
+.\setup.cmd -Recreate           # rebuild .venv from scratch
+```
+
+`setup.cmd` is a wrapper that runs `setup.ps1` whatever the machine's PowerShell execution policy is. On Linux or macOS the equivalent is `python3 -m venv .venv` and `.venv/bin/python -m pip install -r requirements.txt`.
+
 ## Run Tests
 
 With the workspace virtual environment activated:

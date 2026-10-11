@@ -10,7 +10,10 @@ engine (`engine/`) served behind a FastAPI web app (`web/app.py`) with a
 browser game UI (`web/static/`). The board is drawn on an HTML canvas
 (`web/static/battlefield-canvas.js`), so it is driven through a real browser.
 
-**Paths below are relative to the repo root** (`c:\Users\qwv48_66yef5i\Desktop\Magic`).
+**Paths below are relative to the repo root**, which is where the PowerShell
+tool starts — the snippets read it with `(Get-Location).Path` rather than
+spelling out one machine's clone. `.\setup.cmd` installs everything listed under
+Prerequisites.
 
 The browser is driven with **`playwright-cli`** (Microsoft's Playwright CLI) — see
 the [playwright-cli skill](../playwright-cli/SKILL.md) for the full command
@@ -45,7 +48,7 @@ that call returns. Launch it **detached** with `Start-Process` so it keeps
 running while you drive the browser in later calls:
 
 ```powershell
-$root = "c:\Users\qwv48_66yef5i\Desktop\Magic"
+$root = (Get-Location).Path   # the repo root
 if (-not (Test-Path "$root\logs")) { New-Item -ItemType Directory -Force "$root\logs" | Out-Null }
 $p = Start-Process -FilePath "$root\.venv\Scripts\python.exe" `
   -ArgumentList "-m","uvicorn","web.app:app","--host","127.0.0.1","--port","8010" `
@@ -65,7 +68,7 @@ a value out of the live page (prints just the result). The full menu→game flow
 
 ```powershell
 $pw = "playwright-cli"   # or "$env:APPDATA\npm\playwright-cli.cmd" if not on PATH
-$shots = "c:\Users\qwv48_66yef5i\Desktop\Magic\.claude\skills\run-magic\shots"
+$shots = "$((Get-Location).Path)\.claude\skills\run-magic\shots"
 
 & $pw open "http://127.0.0.1:8010/"
 & $pw --raw eval "document.title"                         # -> "MTG Simulacrum"
