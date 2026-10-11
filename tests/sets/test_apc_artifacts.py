@@ -195,7 +195,7 @@ def test_w1g4_legacy_weapon_destroyed_is_shuffled_into_its_owners_library(set_po
     _w1g4a_resolve_stack(game)
     game._settle()
 
-    assert game.controlled_by(0) == []
+    assert list(game.controlled_by(0)) == []
     assert len(game.players[0].library) == 5
     _w1g4a_weapon_is_back_in_its_library(game)
 
@@ -243,7 +243,7 @@ def test_w1g4_legacy_weapon_countered_is_shuffled_into_its_owners_library(set_po
     assert game.cast_from_hand(1, "Counterspell", target_stack_index=0).supported
     _w1g4a_resolve_stack(game)
 
-    assert game.controlled_by(0) == [] and game.players[0].hand == []
+    assert list(game.controlled_by(0)) == [] and game.players[0].hand == []
     assert _w1g4a_names(game.players[1].graveyard) == ["Counterspell"]
     assert len(game.players[0].library) == 4
     _w1g4a_weapon_is_back_in_its_library(game)

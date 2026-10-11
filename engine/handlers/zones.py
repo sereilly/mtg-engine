@@ -786,9 +786,13 @@ def target_reorders_caster_library_top(game: Game, instruction: OracleInstructio
     it — nobody looks, which is the direction that hands no one a look the card
     did not give them.
 
-    Short libraries and the no-order-left case are ``reorder_own_library_top``'s:
-    CR 609.3's "as many as you can", and with fewer than two cards there is
-    nothing to ask.
+    A short library is CR 609.3's "as many as you can" — and **one** card is
+    still a look. ``reorder_own_library_top`` asks nothing below two, because
+    there a player is looking at their own pile and only the order is at stake;
+    here the looker is somebody else, and what the top card *is* is information
+    the sentence gives them whether or not there is anything to rearrange. So
+    the prompt is raised for one card, as the targeted look beside this raises
+    it, and only an empty library shows nothing.
     """
     looker = context.target
     owner = context.caster
@@ -801,9 +805,10 @@ def target_reorders_caster_library_top(game: Game, instruction: OracleInstructio
         resolve_amount(instruction.payload.get("amount", 0), context.x_value),
         len(owner.library),
     )
-    if top_count < 2:
+    if top_count < 1:
         game.log.append(
-            f"{looker.name} has no order left to choose ({context.card.name})"
+            f"{owner.name} has no cards for {looker.name} to look at "
+            f"({context.card.name})"
         )
         return True, "resolved"
     owner_index = game.players.index(owner)

@@ -175,8 +175,8 @@ def test_w1g4_tahngarths_glare_targets_an_opponent_and_nobody_else(set_pool):
 
 def test_w1g4_tahngarths_glare_looks_at_what_a_short_library_holds(set_pool):
     """CR 609.3: as many as there are. A library of two is a choice between two
-    cards, and a library of one leaves no order to choose — so that seat is not
-    asked at all and the other look still happens."""
+    cards; a library of one has no order to choose and is still a *look* — the
+    seat is shown the card — and an empty one shows nothing and asks nobody."""
     game, _, _ = _w1g4s_table(
         set_pool, hand0=["Tahngarth's Glare"], lib0=["Forest", "Hill Giant"],
         lib1=["Island"], interactive=(0, 1),
@@ -184,13 +184,30 @@ def test_w1g4_tahngarths_glare_looks_at_what_a_short_library_holds(set_pool):
     assert game.queue_from_hand(0, "Tahngarth's Glare", target_player_index=1).supported
     game.resolve_top_of_stack()
 
-    only = game.pending_reorder_library
-    assert (only["caster_index"], only["target_index"], only["top_count"]) == (1, 0, 2)
+    one = game.pending_reorder_library
+    assert (one["caster_index"], one["target_index"], one["top_count"]) == (0, 1, 1)
+    assert game.confirm_reorder_library(0, [0])
+    two = game.pending_reorder_library
+    assert (two["caster_index"], two["target_index"], two["top_count"]) == (1, 0, 2)
     assert game.confirm_reorder_library(1, [1, 0])
     _w1g4s_resolve_stack(game)
 
     assert _w1g4s_names(game.players[0].library) == ["Hill Giant", "Forest"]
     assert _w1g4s_names(game.players[1].library) == ["Island"]
+
+    # The caster's own library empty: the first look happens, the second has
+    # nothing to show, and the spell finishes with no prompt left behind.
+    game, _, _ = _w1g4s_table(
+        set_pool, hand0=["Tahngarth's Glare"], lib1=["Island", "Swamp"],
+        interactive=(0, 1),
+    )
+    assert game.queue_from_hand(0, "Tahngarth's Glare", target_player_index=1).supported
+    game.resolve_top_of_stack()
+    assert game.confirm_reorder_library(0, [1, 0])
+    _w1g4s_resolve_stack(game)
+    assert game.pending_choices == []
+    assert _w1g4s_names(game.players[1].library) == ["Swamp", "Island"]
+    assert "P0 has no cards for P1 to look at (Tahngarth's Glare)" in game.log
 
 
 def test_w1g4_tahngarths_glare_default_seats_bury_and_surface(set_pool):
@@ -366,8 +383,12 @@ def test_w1g4_guided_passage_at_three_seats_the_caster_names_the_opponent(set_po
     the spell resolves. The seat named is then the only one asked."""
     game, _, _ = _w1g4s_table(
         set_pool, hand0=["Guided Passage"],
-        lib0=["Forest", "Hill Giant", "Sol Ring"], interactive=(0, 1, 2), seats=3,
+        # The Swamp is drawn on the way in: CR 103.8a skips the first draw
+        # step only at a table of two.
+        lib0=["Swamp", "Forest", "Hill Giant", "Sol Ring"],
+        interactive=(0, 1, 2), seats=3,
     )
+    assert _w1g4s_names(game.players[0].hand) == ["Guided Passage", "Swamp"]
     assert game.queue_from_hand(0, "Guided Passage").supported
     game.resolve_top_of_stack()
 
@@ -379,7 +400,10 @@ def test_w1g4_guided_passage_at_three_seats_the_caster_names_the_opponent(set_po
     assert not game.confirm_search_library_picks(1, _w1g4s_picks(0, 1, 2))
     assert game.confirm_search_library_picks(2, _w1g4s_picks(0, 1, 2))
     _w1g4s_resolve_stack(game)
-    assert sorted(_w1g4s_names(game.players[0].hand)) == ["Forest", "Hill Giant", "Sol Ring"]
+    assert sorted(_w1g4s_names(game.players[0].hand)) == [
+        "Forest", "Hill Giant", "Sol Ring", "Swamp",
+    ]
+    assert game.players[2].hand == [] and game.players[1].hand == []
 
 
 def test_w1g4_guided_passage_reads_all_four_sentences_or_refuses():
@@ -539,7 +563,7 @@ def test_w1g4_gaeas_balance_may_fail_to_find_any_or_all(set_pool):
     game.resolve_top_of_stack()
     assert game.decline_search_library(0)
     _w1g4s_resolve_stack(game)
-    assert game.controlled_by(0) == []
+    assert list(game.controlled_by(0)) == []
     assert len(game.players[0].library) == len(_W1G4S_BALANCE_LIBRARY)
     assert "P0 searched and found nothing more" in game.log
 
