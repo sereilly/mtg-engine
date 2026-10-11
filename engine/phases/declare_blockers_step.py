@@ -2718,7 +2718,7 @@ class DeclareBlockersStepMixin:
             # "Whenever a creature **attacks or blocks**" (Powerstone
             # Minefield) — the block half of the board-wide union
             # ``_fire_matching_creature_attacks_triggers`` announces the other
-            # half of. Here, in the bare announcement, because CR 509.3d is
+            # half of. Here, in the bare announcement, because CR 509.3a is
             # this loop's count: once for the creature that blocks, however
             # many attackers it is blocking.
             emit(

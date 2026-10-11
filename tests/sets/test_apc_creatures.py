@@ -219,6 +219,21 @@ def test_w1g9_cromat_is_offered_only_the_creature_blocking_it(set_pool):
     assert "Cromat destroyed Blocker" in game.log
 
 
+def test_w1g9_cromat_named_nothing_never_reaches_a_bystander(set_pool):
+    """The headless convention — an activation that names no target resolves
+    on the handler's pick — held to the printed phrase: the pick is the
+    creature blocking Cromat, never the identical one standing beside it."""
+    game, cromat, ally, blocker, bystander = _w1g9_cromat_blocked(set_pool)
+
+    result = game.activate_permanent_ability(
+        0, "Cromat", permanent_index=0, ability_index=0
+    )
+
+    assert result.supported, result.details
+    assert not game.is_on_battlefield(blocker)
+    assert game.is_on_battlefield(bystander) and game.is_on_battlefield(ally)
+
+
 def test_w1g9_cromat_blocking_destroys_the_attacker_it_blocked(set_pool):
     """The relation read from the other end: Cromat as the blocker, and the
     one legal target is the attacker it is blocking — not the attacker that got

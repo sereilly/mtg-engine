@@ -125,6 +125,11 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "matching_creature_becomes_blocked":
         "whenever a creature becomes blocked by a creature with lesser power",
     "creature_attacks_or_blocks": "whenever this creature attacks or blocks",
+    # The same union watched over the whole board (Powerstone Minefield): the
+    # subject is a printed noun phrase, and its row sits above the per-attacker
+    # one it would otherwise be read as a prefix of — which is what the
+    # shadowing guard below checks from both sides.
+    "matching_creature_attacks_or_blocks": "whenever a creature attacks or blocks",
     # Both printed spellings, because the narrowing is a named group on a second
     # pattern (Wall of Essence, Wall of Souls) — without the entry the shadowing
     # guard would only ever check the bare one, which is the lookup being by
