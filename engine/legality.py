@@ -57,6 +57,8 @@ from .resolution_overrides import resolves_with_illegal_targets
 from .static_bonuses import conditional_static_holds
 from .subject_filters import card_matches_any, subject_matches
 from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
+from .target_requirements import (announcement_refusal, cast_is_bound,
+                                  narrow_offer, requirements_binding)
 from .targeting import (
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
@@ -209,6 +211,39 @@ def _cant_be_enchanted_by_auras(perm) -> bool:
 # restriction than the kind alone (a tapped/coloured destroy, a non-Wall attack
 # mark). The enumerator gates candidates through these so an ability offers
 # exactly what it could legally affect, matching its resolution.
+def _cast_picker_is_a_target(card: CardDefinition, mode_index: int | None) -> bool:
+    """Whether the picker in front of casting *card* (in *mode_index*, for a
+    modal spell) chooses a **target** — the printed-word half of
+    ``stack_targets``' two-evidence rule, asked before a target requirement is
+    applied to it.
+
+    A derived spec alone over-answers: the Circles' "a source of your choice"
+    and two graveyard picks derive a picker with no ``source_of_choice`` flag,
+    and a requirement read off the spec would demand a Flagbearer be chosen as
+    a *source*. An Aura targets by CR 115.1b with no printed word at all; any
+    other permanent spell targets nothing (its picker is an entry trigger's).
+    """
+    from .stack_targets import _spell_names_a_target, names_a_target
+
+    if not cast_is_bound(card):
+        return False
+    if card.primary_type not in ("instant", "sorcery"):
+        return True
+    modes = compile_card_oracle(card).modes
+    if modes:
+        index = 0 if mode_index is None else mode_index
+        return 0 <= index < len(modes) and names_a_target(modes[index].label)
+    return _spell_names_a_target(card)
+
+
+def _ability_picker_is_a_target(ability) -> bool:
+    """The activation twin of :func:`_cast_picker_is_a_target`: whether
+    *ability*'s own printed line says "target" about a choice it makes."""
+    from .stack_targets import names_a_target
+
+    return names_a_target(getattr(ability, "source_line", None))
+
+
 def targeting_instruction(instruction):
     """The instruction inside *instruction* that actually names a target.
 
@@ -1158,6 +1193,7 @@ class LegalityMixin:
         spell_hand_index: int | None = None,
         optional_cost_payments: dict[str, int] | None = None,
         mode_index: int | None = None,
+        requirements: bool = True,
     ) -> dict:
         """Target spec for casting ``card`` from ``caster_index``'s *from_zone*:
         the target kind plus every legal target, enumerated and gated through the
@@ -1187,7 +1223,17 @@ class LegalityMixin:
         Justice destroys one artifact, plus another for each {1}{R} and each
         {1}{G} paid). ``spell_hand_index`` is which copy is being cast, needed
         for the same reason CR 601.2a is: a spell cannot be exiled to pay for
-        itself, and a second copy in hand can."""
+        itself, and a second copy in hand can.
+
+        **The list is what this caster may announce now**, so a requirement an
+        opponent's permanent prints about that announcement is already in it
+        ("…that player must choose at least one Flagbearer on the battlefield if
+        able", ``engine/target_requirements.py``): a one-target spell that
+        could name a Flagbearer is offered Flagbearers alone, and a spell with
+        several slots keeps its list and carries ``required_targets``.
+        ``requirements=False`` is the same spec without that — every *legal*
+        target — which is what the announcement gate measures "if able"
+        against (:meth:`cast_target_requirement_refusal`)."""
         # CR 709.3: a split card is not a spell until a half is chosen, and each
         # half has its own spec — asked of the half (`faces.face_cards`), which
         # is the card the cast path and the serializer both hand this method.
@@ -1346,7 +1392,9 @@ class LegalityMixin:
                     caster_index, card, cost_spec, for_cast=True,
                 )
                 spec["cost_spec"] = cost_spec
-            return spec
+            return self._under_target_requirements(
+                caster_index, card, spec, requirements, mode_index
+            )
         # **A permanent spell's picker is its entry trigger's own list.** The
         # target named here is the one the trigger will choose as it is put on
         # the stack (CR 603.3d), so what may be named is what that choice
@@ -1388,7 +1436,93 @@ class LegalityMixin:
         # source as well as a target, which is the activation path's Jade
         # Monolith shape one announcement step over.
         self._attach_chosen_source_targets(caster_index, card, spec)
-        return spec
+        return self._under_target_requirements(
+            caster_index, card, spec, requirements, mode_index
+        )
+
+    def _under_target_requirements(
+        self, caster_index: int, card: CardDefinition, spec: dict, wanted: bool,
+        mode_index: int | None,
+    ) -> dict:
+        """*spec* as the cast picker presents it under the target
+        requirements in force (``target_requirements.narrow_offer``).
+
+        Asked only of a spell that **targets as it is cast** — an instant, a
+        sorcery or an Aura (CR 115.1a/b). Any other permanent spell's picker
+        is its entry trigger's, and a triggered ability "doesn't have to
+        target a Flagbearer" (ruling, 2016-06-08).
+        """
+        if not wanted or not _cast_picker_is_a_target(card, mode_index):
+            return spec
+        return narrow_offer(self, caster_index, spec)
+
+    def cast_target_requirement_refusal(
+        self, caster_index: int, card: CardDefinition, *,
+        announcements, divided_targets=None, from_zone: str = "hand",
+        optional_cost_payments: dict | None = None,
+    ) -> str | None:
+        """CR 601.2c under a requirement an opponent's permanent prints: why
+        this cast's **whole announcement** is not one the caster may make, or
+        None.
+
+        "While an opponent is choosing targets as part of casting a spell they
+        control…, that player must choose at least one Flagbearer on the
+        battlefield if able." A rule about the announcement rather than about
+        any one target, which is why it is a gate of its own beside
+        :meth:`cast_target_refusal` and not a narrowing inside
+        ``_enumerate_targets``: that list is also what the resolution re-asks
+        (CR 608.2b) and what a retarget and a trigger choose from, none of
+        which the card binds.
+
+        *announcements* is ``casting._mode_announcements``' rows — one per
+        announced mode — and *divided_targets* CR 601.2d's list; between them
+        they are everything the cast named. "If able" is measured against the
+        picker's own un-narrowed list for each row, so a Flagbearer the spell
+        could not legally target binds nothing. An opponent-chosen mode
+        (CR 700.2e) names its targets after the cast and is not asked here.
+        """
+        if not cast_is_bound(card) or not requirements_binding(self, caster_index):
+            return None
+        program = compile_card_oracle(card)
+        if program.modes and program.mode_chooser is not None:
+            return None
+        specs: list[dict] = []
+        named: set = set()
+        for mode_index, seat, slot, ids, _stack_item in announcements:
+            if mode_index is None and program.modes:
+                # A cast naming no mode is the mode-0 cast it resolves as.
+                mode_index = 0
+            if not _cast_picker_is_a_target(card, mode_index):
+                continue
+            specs.append(self.cast_target_spec(
+                caster_index, card, from_zone=from_zone,
+                optional_cost_payments=optional_cost_payments,
+                mode_index=mode_index, requirements=False,
+            ))
+            listed = [pid for pid in (ids or ()) if isinstance(pid, int)]
+            if listed:
+                named.update(listed)
+                continue
+            # A slot beside a seat — the legacy spelling, and the only one a
+            # "choose one or more" mode has. With no seat the cast resolves on
+            # its default one, so that is the battlefield the slot counts into.
+            board = (
+                seat if isinstance(seat, int)
+                else self._spell_default_seat(caster_index)
+            )
+            for index in (slot if isinstance(slot, list) else [slot]):
+                if isinstance(index, int) and not isinstance(index, bool):
+                    permanent = self.permanent_at(board, index)
+                    if permanent is not None:
+                        named.add(permanent.permanent_id)
+        for entry in divided_targets or ():
+            seat, index, _share = divided_entry(entry)
+            if index is None:
+                continue
+            permanent = self.permanent_at(seat, index)
+            if permanent is not None:
+                named.add(permanent.permanent_id)
+        return announcement_refusal(self, caster_index, card.name, specs, named)
 
     def entry_trigger_cast_targets(
         self, caster_index: int, card: CardDefinition, *,
@@ -2369,6 +2503,8 @@ class LegalityMixin:
                 ability_instruction=ability_instruction,
                 ability_source=source_permanent,
             )
+            if _ability_picker_is_a_target(spec_ability):
+                narrow_offer(self, controller_index, spec)
             return spec
         spec["valid_targets"] = self._enumerate_targets(
             controller_index, card, spec, for_cast=False,
@@ -2399,7 +2535,115 @@ class LegalityMixin:
                 controller_index, card, spec, source_permanent
             )
         self._attach_chosen_source_targets(controller_index, card, spec)
+        # What this activator may announce *now* (CR 602.2b through
+        # CR 601.2c): a requirement an opponent's permanent prints about the
+        # announcement — "…must choose at least one Flagbearer … if able" —
+        # is in the list, exactly as on the cast picker.
+        if _ability_picker_is_a_target(spec_ability):
+            narrow_offer(self, controller_index, spec)
         return spec
+
+    def activation_offer(
+        self, controller_index: int, source_permanent, ability, *, x_value=None,
+    ) -> dict:
+        """*ability*'s target spec with **every legal target** enumerated —
+        the list :meth:`activation_target_refusal` checks a named target
+        against, as one value.
+
+        :meth:`activation_target_spec` without the board address (a permanent
+        slot and an ability index, which an ability activated from another
+        seat's permanent or out of a graveyard does not have) and without the
+        announcement requirements, which is what the requirement gate has to
+        measure "if able" against.
+        """
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        source = source_permanent if hasattr(
+            source_permanent, "permanent_id"
+        ) else None
+        spec, _ = _activation_spec([ability])
+        spec = dict(spec)
+        self._size_activation_x_targets(controller_index, spec, ability, source)
+        if spec.get("x_targets") and x_value is not None:
+            spec.pop("x_targets", None)
+            spec["max_targets"] = max(0, int(x_value))
+        instruction = targeting_instruction(getattr(ability, "instruction", None))
+        if spec.get("kind") == ROLES_TARGET_KIND:
+            spec["valid_targets"] = self._role_target_walk(
+                controller_index, card, spec, (), for_cast=False,
+                source_permanent=source,
+                ability_instruction=instruction,
+                ability_source=source,
+            )
+            return spec
+        spec["valid_targets"] = self._enumerate_targets(
+            controller_index, card, spec, for_cast=False,
+            ability_instruction=instruction,
+            source_permanent=source,
+            ability_source=source,
+        )
+        return spec
+
+    def activation_target_requirement_refusal(
+        self, controller_index: int, source_permanent, ability, *,
+        target_player_index=None, target_permanent_index=None,
+        target_permanent_ids=None, target_role_refs=None, divided_targets=None,
+        x_value=None,
+    ) -> str | None:
+        """CR 602.2b under a requirement an opponent's permanent prints: why
+        this activation's whole announcement is not one the activator may
+        make, or None. The activation twin of
+        :meth:`cast_target_requirement_refusal`, over
+        :meth:`activation_offer`.
+        """
+        if not requirements_binding(self, controller_index):
+            return None
+        if not _ability_picker_is_a_target(ability):
+            return None
+        spec = self.activation_offer(
+            controller_index, source_permanent, ability, x_value=x_value
+        )
+        if spec.get("kind") in _UNOBLIGED_ACTIVATION_KINDS or spec.get("also_stack"):
+            return None
+        named: set = set()
+        for ref in target_role_refs or ():
+            if isinstance(ref, dict) and isinstance(ref.get("permanent_id"), int):
+                named.add(ref["permanent_id"])
+        listed = [
+            pid for pid in (
+                target_permanent_ids
+                if isinstance(target_permanent_ids, (list, tuple))
+                else [target_permanent_ids]
+            )
+            if isinstance(pid, int) and not isinstance(pid, bool)
+        ]
+        named.update(listed)
+        if not listed and spec.get("kind") != GRAVEYARD_TARGET_KIND:
+            seats = (
+                [target_player_index] if isinstance(target_player_index, int)
+                else list(range(len(self.players)))
+            )
+            for index in (
+                target_permanent_index
+                if isinstance(target_permanent_index, list)
+                else [target_permanent_index]
+            ):
+                if not isinstance(index, int) or isinstance(index, bool):
+                    continue
+                for seat in seats:
+                    permanent = self.permanent_at(seat, index)
+                    if permanent is not None:
+                        named.add(permanent.permanent_id)
+        for entry in divided_targets or ():
+            seat, index, _share = divided_entry(entry)
+            if index is None:
+                continue
+            permanent = self.permanent_at(seat, index)
+            if permanent is not None:
+                named.add(permanent.permanent_id)
+        card = getattr(source_permanent, "effective_card", source_permanent)
+        return announcement_refusal(
+            self, controller_index, card.name, [spec], named
+        )
 
     def _attach_more_cost_targets(
         self, controller_index: int, card: CardDefinition, cost_spec: dict,
@@ -2830,6 +3074,7 @@ class LegalityMixin:
 
     def sole_legal_activation_target(
         self, controller_index: int, source_permanent, ability, *, x_value=None,
+        named_seat: int | None = None,
     ) -> dict | None:
         """The one target an activation that named none **can only mean**: the
         picker's single entry, when the ability owes a target and exactly one
@@ -2866,6 +3111,22 @@ class LegalityMixin:
             source_permanent=source,
             ability_source=source,
         )
+        # …out of what the activator may announce **now**: where an opponent's
+        # Flagbearer narrows a one-target ability's legal announcement to the
+        # Flagbearers it could name, one such Flagbearer is the single legal
+        # form this default exists to make.
+        #
+        # Not where the caller **named a player** for an ability a player may
+        # be the target of (*named_seat*): that is an announcement, and an
+        # announcement a requirement forbids is refused by
+        # :meth:`activation_target_requirement_refusal`, never re-aimed.
+        if _ability_picker_is_a_target(ability) and (
+            named_seat is None or spec.get("kind") not in _SEAT_TARGET_SPEC_KINDS
+        ):
+            offer = narrow_offer(
+                self, controller_index, {**spec, "valid_targets": valid}
+            )
+            valid = offer.get("valid_targets") or []
         return valid[0] if len(valid) == 1 else None
 
     def _announced_choice_refusal(

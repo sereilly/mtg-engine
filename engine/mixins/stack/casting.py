@@ -1566,6 +1566,31 @@ class SpellCastingMixin:
                 ))
             divided_targets = cleaned or None
 
+        # CR 601.2c under a requirement an *opponent's permanent* prints about
+        # this announcement: "While an opponent is choosing targets as part of
+        # casting a spell they control…, that player must choose at least one
+        # Flagbearer on the battlefield if able." (Standard Bearer.) Asked of
+        # the whole announcement — every mode's targets and the division
+        # together — because with more than one slot the rule is about the set
+        # and not about any one target, and asked here, after every gate above
+        # has said each named target is legal and before anything is paid.
+        # Free on every board with no such permanent on it.
+        required_refusal = self.cast_target_requirement_refusal(
+            caster_index, card,
+            announcements=_mode_announcements(
+                chosen_modes, mode_index, target_player_index,
+                target_permanent_index, target_permanent_ids, target_stack_item,
+            ),
+            divided_targets=divided_targets,
+            from_zone=from_zone,
+            optional_cost_payments=optional_paid,
+        )
+        if required_refusal is not None:
+            self.log.append(required_refusal)
+            return SimulationResult(
+                card.name, False, classification.effect_kind, required_refusal
+            )
+
         # "This spell costs {1} more to cast for each target beyond the first."
         # (Fireball) / "This spell costs 3 life more to cast for each target."
         # (Phyrexian Purge.) A spell's own increase, sized by how many targets it

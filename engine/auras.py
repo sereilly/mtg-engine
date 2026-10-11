@@ -161,6 +161,27 @@ def _build_type_addition_grant() -> re.Pattern[str]:
 
 _TYPE_ADDITION_GRANT = _LazyPattern(_build_type_addition_grant)
 
+
+def _build_creature_type_set() -> re.Pattern[str]:
+    from .grammar.vocabulary import CREATURE_TYPES
+
+    subtypes = "|".join(sorted(map(re.escape, CREATURE_TYPES), key=len, reverse=True))
+    return re.compile(rf"^{_ATTACHED} creature is an? (?P<subtype>{subtypes})$")
+
+
+#: "Enchanted creature **is a Flagbearer**." (Coalition Flag.) The sentence
+#: ``_TYPE_ADDITION_GRANT`` reads minus its rider, and the rider is the whole
+#: difference: CR 205.1b's "in addition to its other types" is what makes a
+#: type an addition, and a sentence printing none of 205.1b's phrases *sets*
+#: the subtype — CR 205.1a, "the new subtype(s) replaces any existing subtypes
+#: from the appropriate set (creature types, …)". So a Human Soldier under the
+#: Flag is a Flagbearer and nothing else, and stops being pumped by a Soldier
+#: lord. Anchored at both ends so the additive sentence, a P/T half or a
+#: condition never reads as this one; the type is held to CR 205.3m's list for
+#: ``_TYPE_ADDITION_GRANT``'s reason — a made-up word would be claimed here and
+#: then set nothing.
+_CREATURE_TYPE_SET = _LazyPattern(_build_creature_type_set)
+
 # Templates. Several of these genuinely repeat across the pool (the P/T
 # modifications, the keyword grants, the protection cycle, the upkeep damage
 # family), which is why they are written as patterns rather than listed.
@@ -1063,6 +1084,7 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
     from .cast_costs import cast_cost_claims_line
     from .cast_timing import cast_permission_line
     from .enter_effects import enter_effect_line
+    from .target_requirements import must_choose_claims_line
     from .target_restrictions import target_restriction_line
 
     return bool(
@@ -1094,6 +1116,14 @@ def _aura_line_claimed(line: str, card_name: str) -> bool:
         # matcher cannot answer leaves the line unclaimed and the card
         # unsupported rather than admitted with the restriction absent.
         or target_restriction_line(line)
+        # "While an opponent is choosing targets …, that player must choose at
+        # least one Flagbearer on the battlefield if able." (Coalition Flag.)
+        # Not an effect the Aura has *on what it enchants* — it is the Aura's
+        # own static ability about its controller's opponents, read off the
+        # board at every cast and activation — so it is claimed by the table
+        # that enforces it, like the restriction above, rather than by a
+        # continuous-effect template with nothing continuous behind it.
+        or must_choose_claims_line(line)
         # "You may cast this card from your graveyard by paying 3 life and
         # discarding a card in addition to paying its other costs." (Demonic
         # Embrace.) Not an effect the Aura has while attached and not a
@@ -2673,6 +2703,24 @@ def aura_type_grants(oracle_text: str) -> tuple[str, ...]:
     return tuple(granted)
 
 
+def aura_creature_type_sets(oracle_text: str) -> tuple[str, ...]:
+    """Creature types an Aura **sets** on what it enchants (CR 613 layer 4).
+
+    "Enchanted creature is a Flagbearer." (Coalition Flag.) :func:`aura_type_
+    grants`' other half, and separate because the layer contribution differs:
+    this one replaces the creature's other creature types (CR 205.1a) and
+    leaves every other subtype it has alone — an animated Forest under the
+    Flag is still a Forest — which is ``add_types(replaces_subtypes_from=)``
+    scoped to the creature types.
+    """
+    found: list[str] = []
+    for raw_line in oracle_text.split("\n"):
+        match = _CREATURE_TYPE_SET.match(_line_text(raw_line))
+        if match is not None:
+            found.append(match.group("subtype"))
+    return tuple(found)
+
+
 #: "Enchanted creature gets +3/-1 **and is black**." (Grave Servitude.) The
 #: colour half of the compound line, and the bare "…is black" beside it.
 #:
@@ -3339,6 +3387,8 @@ def aura_continuous_claim(line: str) -> str | None:
         return "protection grant — auras.aura_protection_colors"
     if _CARD_TYPE_ADDITION_GRANT.match(normalized):
         return "card-type addition (layer 4) — auras.aura_card_type_grants"
+    if _CREATURE_TYPE_SET.match(normalized):
+        return "creature type set (layer 4) — auras.aura_creature_type_sets"
     if _ATTACHED_CONTROL_CHANGE.match(normalized):
         return "control change (layer 2) — auras.aura_grants_control"
     if aura_animates_artifact(normalized):

@@ -2723,6 +2723,7 @@ class GameHelpersMixin:
             item.target_player_index = None
             item.target_permanent_index = None
             item.target_permanent_id = None
+            item.target_stack_item = None
             announced_at_cast = False
         self._stack_push_object(item, announce=not announced_at_cast)
         self._choose_trigger_mode(

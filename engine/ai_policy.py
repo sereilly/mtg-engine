@@ -1249,6 +1249,17 @@ def _cast_candidate_announcing(
                     return None
                 if single is not None:
                     target, target_permanent_index, target_permanent_ids = single
+    # "…that player must choose at least one Flagbearer on the battlefield if
+    # able" (Standard Bearer): the announcement chosen above, held to what an
+    # opponent's permanent demands of it — re-aimed where this seat can obey on
+    # the board it already chose, not proposed where it cannot.
+    aimed = _aimed_under_target_requirements(
+        game, player_index, card, from_zone,
+        target, target_permanent_index, target_permanent_ids, divided_targets,
+    )
+    if aimed is None:
+        return None
+    target, target_permanent_index, target_permanent_ids, divided_targets = aimed
     # "Destroy target artifact **with mana value X**" (Detonate): the target
     # fixes X, and the cast gate refuses an X that does not match it. X was
     # sized above as the most the lands could pay, before any target existed,
@@ -1382,6 +1393,89 @@ def _cast_candidate_announcing(
         land_tap_colors=tap_colors,
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
+    )
+
+
+def _aimed_under_target_requirements(
+    game: Game, player_index: int, card: CardDefinition, from_zone: str,
+    target, target_permanent_index, target_permanent_ids, divided_targets,
+):
+    """The announcement ``(seat, slot, ids, division)`` as the cast gate will
+    accept it under a requirement an opponent's permanent prints about it
+    ("…that player must choose at least one Flagbearer on the battlefield if
+    able", ``engine/target_requirements.py``) — unchanged where nothing binds
+    it or it already obeys, **re-aimed** where it can, None where this seat
+    should not make it at all.
+
+    Asked of the engine's own gate (`Game.cast_target_requirement_refusal`)
+    for the reason every gate in the candidate builders is: a cast the engine
+    will refuse costs nothing, and the seat re-proposes it every turn —
+    `refused_casts`, for as long as the Flagbearer lives.
+
+    The re-aim is onto a required permanent **on the board the policy already
+    chose**, which is what keeps it a decision about the rule and not about
+    the card: removal and burn pointed at the opponent land on the opponent's
+    Flagbearer, and a Giant Growth pointed at this seat's own creature is not
+    turned into a gift — with no Flagbearer of its own to put it on, the seat
+    holds the card. One slot, or the first entry of a division; an
+    announcement of several objects or of roles is not rebuilt here.
+    """
+    from .target_requirements import one_slot
+
+    mode_index = _announced_mode(card)
+    offers = _OFFERS_ANNOUNCED.get()
+    standing = (target, target_permanent_index, target_permanent_ids, divided_targets)
+    if game.cast_target_requirement_refusal(
+        player_index, card,
+        announcements=[
+            (mode_index, target, target_permanent_index, target_permanent_ids, None)
+        ],
+        divided_targets=divided_targets,
+        from_zone=from_zone,
+        optional_cost_payments=offers,
+    ) is None:
+        return standing
+    spec = game.cast_target_spec(
+        player_index, card, from_zone=from_zone,
+        optional_cost_payments=offers, mode_index=mode_index,
+    )
+    wanted = [
+        entry for entry in spec.get("required_targets") or ()
+        if entry.get("seat") == target
+    ]
+    if not wanted:
+        return None
+    pick = wanted[0]
+    if divided_targets:
+        first = tuple(divided_targets[0])
+        return (
+            target, target_permanent_index, target_permanent_ids,
+            [(pick["seat"], pick["index"], *first[2:]), *divided_targets[1:]],
+        )
+    if not one_slot(spec):
+        return None
+    return pick["seat"], pick["index"], [pick["id"]], None
+
+
+def _required_activation_target(
+    game: Game, player_index: int, permanent_index: int, target
+) -> int | None:
+    """The slot on seat *target* a one-target ability must be aimed at for
+    its activation to obey a target requirement in force, or None when there
+    is none there. `_aimed_under_target_requirements` for an activation: the
+    picker's own ``required_targets``, on the board the policy already chose.
+    """
+    from .target_requirements import one_slot
+
+    spec = game.activation_target_spec(player_index, permanent_index, ability_index=0)
+    if not one_slot(spec):
+        return None
+    return next(
+        (
+            entry["index"] for entry in spec.get("required_targets") or ()
+            if entry.get("seat") == target
+        ),
+        None,
     )
 
 
@@ -1813,6 +1907,24 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             target_role_refs=target_role_refs,
         ) is not None:
             continue
+        # …and what an opponent's Flagbearer demands of that announcement
+        # (`Game.activation_target_requirement_refusal`): a seat named alone
+        # for an "any target" ability is re-aimed at the Flagbearer on that
+        # seat, and anything else the gate would refuse is not proposed.
+        if game.activation_target_requirement_refusal(
+            player_index, permanent, ability,
+            target_player_index=target,
+            target_permanent_index=target_permanent_index,
+            target_role_refs=target_role_refs,
+        ) is not None:
+            required_slot = (
+                _required_activation_target(game, player_index, permanent_index, target)
+                if target_permanent_index is None and not target_role_refs
+                else None
+            )
+            if required_slot is None:
+                continue
+            target_permanent_index = required_slot
 
         land_taps: tuple[int, ...] = ()
         tap_colors: tuple[str, ...] = ()
@@ -2140,6 +2252,14 @@ def _foreign_activation_candidate(
         target_player_index=target,
         target_permanent_index=target_permanent_index,
     ) is not None:
+        return None
+    if game.activation_target_requirement_refusal(
+        player_index, permanent, ability,
+        target_player_index=target,
+        target_permanent_index=target_permanent_index,
+    ) is not None:
+        # An opponent's Flagbearer demands a target this announcement does not
+        # name. Not proposed: the gate would refuse it with nothing paid.
         return None
 
     land_taps: tuple[int, ...] = ()
@@ -2978,6 +3098,18 @@ def _combat_instant_candidate(
             return None
         if single is not None:
             target, target_permanent_index, target_permanent_ids = single
+    # The same hold the main-phase chooser applies (`_cast_candidate`): what an
+    # opponent's Flagbearer demands of this announcement.
+    aimed = _aimed_under_target_requirements(
+        game, player_index, card, "hand",
+        target, target_permanent_index, target_permanent_ids,
+        list(divided) if divided else None,
+    )
+    if aimed is None:
+        return None
+    target, target_permanent_index, target_permanent_ids, held_division = aimed
+    if divided:
+        divided = held_division
     if not _caster_can_make_its_sacrifices(game, player_index, card):
         return None
     tap_indices: tuple[int, ...] = ()
