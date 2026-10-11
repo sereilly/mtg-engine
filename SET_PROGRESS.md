@@ -42,7 +42,7 @@ Do not edit by hand — re-run the script instead.
 | 28 | Invasion | INV | 2000-10-02 | 335 | 310 | Complete (335/335 supported) |
 | 29 | Planeshift | PLS | 2001-02-05 | 143 | 143 | Complete (143/143 supported) |
 | 30 | Seventh Edition | 7ED | 2001-04-11 | 335 | 0 | Complete (335/335 supported) |
-| 31 | Apocalypse | APC | 2001-06-04 | 143 | 143 | Measured (101/143 supported, not shipped) |
+| 31 | Apocalypse | APC | 2001-06-04 | 143 | 143 | Measured (107/143 supported, not shipped) |
 | 32 | Odyssey | ODY | 2001-10-01 | 335 | 321 | Not Implemented |
 | 33 | Torment | TOR | 2002-02-04 | 143 | 142 | Not Implemented |
 | 34 | Judgment | JUD | 2002-05-27 | 143 | 141 | Not Implemented |
