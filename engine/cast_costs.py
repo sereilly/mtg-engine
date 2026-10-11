@@ -70,6 +70,68 @@ class OptionalManaCost:
     #: has to: a cost read with its X silently worth nothing is a spell cast for
     #: less than it prints.
     x_count: int = 0
+    #: "**Spend only colored mana on X. No more than one mana of each color may
+    #: be spent this way.**" (Emblazoned Golem, beside its "Kicker {X}".) A
+    #: restriction on how this offer's X may be *paid* (CR 601.2h), printed on
+    #: its own line and folded onto the offer it restricts by
+    #: :func:`_additional_costs_of_text` -- the line names "X" and the offer is
+    #: where this card's X lives.
+    #:
+    #: A flag on the offer rather than a table the cast path consults by card
+    #: text, because there are four readers of "what does this offer cost at
+    #: X?" (the payment, the picker's ceiling, the AI's sizing and the offer
+    #: prompt) and each already holds the offer: :meth:`x_colorings` is the one
+    #: answer they share, so a reader that prices the offer cannot do it
+    #: without the restriction.
+    x_one_of_each_color: bool = False
+
+    def x_colorings(self, x_value: int | None) -> "tuple[tuple[str, ...], ...] | None":
+        """Every set of colours the announced X may be paid with, or None when
+        this offer's X is unrestricted.
+
+        "No more than one mana of each color" over "only colored mana" is a
+        choice of *which* colours, one unit each -- the payer's (CR 601.2h),
+        and this engine has no channel to ask it, so every choice is returned
+        and the reader takes the first the pool can pay
+        (``casting._x_color_allocations`` is the same arrangement for "Spend
+        only black and/or red mana on X"). In WUBRG order, which is the only
+        order the card's text is neutral about.
+
+        **Empty when no choice exists**: there are five colours, so an X above
+        five has no payment at all, which is how the sentence bounds X without
+        ever saying so. ``((),)`` -- one choice, of nothing -- at X = 0.
+        """
+        if not (self.x_count and self.x_one_of_each_color):
+            return None
+        from itertools import combinations
+
+        from .mana_spending import COLOR_SYMBOLS as FIVE_COLORS
+
+        wanted = self.x_count * max(0, int(x_value or 0))
+        return tuple(combinations(FIVE_COLORS, wanted))
+
+    def payments_at(self, x_value: int | None) -> tuple[dict[str, int], ...]:
+        """Every way one payment of this offer may be made at the announced X,
+        as symbol dicts -- :meth:`cost_at` for an offer whose X any mana pays,
+        and one dict per :meth:`x_colorings` choice for one it does not, the X
+        written as the coloured pips that choice spends.
+
+        What a *planner* asks (the picker's ceiling, the AI's sizing): "is any
+        of these payable from this pool and these lands?" The payment itself
+        does not go through the pips -- see ``casting._pay_cast_cost`` for why
+        a pip is not quite "a unit of that colour" -- but it walks the same
+        choices in the same order.
+        """
+        colorings = self.x_colorings(x_value)
+        if colorings is None:
+            return (self.cost_at(x_value),)
+        payments = []
+        for coloring in colorings:
+            charged = dict(self.cost)
+            for symbol in coloring:
+                charged[symbol] = charged.get(symbol, 0) + 1
+            payments.append(charged)
+        return tuple(payments)
 
     @property
     def cost(self) -> dict[str, int]:
@@ -1867,11 +1929,110 @@ def _additional_costs_of_text(
     lines = expand_ability_lines(
         oracle_text or "", card_name=card_name or None, legendary=legendary
     ).splitlines()
-    return tuple(
+    costs = tuple(
         cost
         for line in lines
         if (cost := additional_cost_for_line(line)) is not None
     )
+    if any(x_one_of_each_color_line(line) for line in lines):
+        # "Spend only colored mana on X. No more than one mana of each color
+        # may be spent this way." A line of its own that restricts an X printed
+        # on another, so it is folded onto the offer here -- the one place
+        # every reader of this card's costs starts from.
+        costs = tuple(_with_restricted_x(cost) for cost in costs)
+    return costs
+
+
+#: "**Spend only colored mana on X. No more than one mana of each color may be
+#: spent this way.**" (Emblazoned Golem.) The whole line, both sentences: the
+#: second is not a second restriction but the half of the first that makes it
+#: one -- "only colored mana" alone is Drain Life's shape with every colour
+#: admitted, and it is the cap of one per colour that sizes X. So the pair is
+#: read together and a line carrying either alone refuses, for the reason
+#: ``mana_spending.mana_spending_for`` reads Celestial Dawn's pair together: a
+#: restriction half-read is a cost paid more easily than the card allows.
+_X_ONE_OF_EACH_COLOR_SENTENCES = (
+    "spend only colored mana on x",
+    "no more than one mana of each color may be spent this way",
+)
+_X_ONE_OF_EACH_COLOR_LINE = re.compile(
+    "^" + r"\. ".join(re.escape(part) for part in _X_ONE_OF_EACH_COLOR_SENTENCES) + "$"
+)
+
+
+def x_one_of_each_color_sentence(sentence: str) -> bool:
+    """Whether *sentence* is one of the two the restriction is printed as.
+
+    For ``scripts/parse_coverage.py`` alone, whose table is asked one sentence
+    at a time (the arrangement ``draw_step_modifiers.draw_step_skip_line`` has
+    for Fasting's pair). Nothing *enforces* off this: the pair is read together
+    by :func:`x_one_of_each_color_line` below, and a card printing only one of
+    them is refused by the support gate before coverage is ever asked.
+    """
+    normalized = " ".join((sentence or "").strip().lower().split()).rstrip(".")
+    return normalized in _X_ONE_OF_EACH_COLOR_SENTENCES
+
+
+def x_one_of_each_color_line(line: str) -> bool:
+    """Whether *line* is, in full, the "one mana of each color on X" restriction.
+
+    Asked by :func:`_additional_costs_of_text`, which enforces it by marking
+    the offer, by :func:`cast_cost_claims_line`, which claims it, and by
+    :func:`unenforced_x_spend_restriction`, which refuses a card that prints it
+    over no X this table charges -- one matcher, so what is claimed and what is
+    charged cannot drift.
+    """
+    normalized = " ".join((line or "").strip().lower().split()).rstrip(".")
+    return _X_ONE_OF_EACH_COLOR_LINE.match(normalized) is not None
+
+
+def _with_restricted_x(cost: AdditionalCost) -> AdditionalCost:
+    """*cost* with every offer that prints an {X} marked as payable only with
+    one mana of each of X colours. An offer with no X is untouched: the
+    sentence is about X and says nothing of a kicker that has none."""
+    import dataclasses
+
+    if not any(offer.x_count for offer in cost.optional_mana):
+        return cost
+    return dataclasses.replace(
+        cost,
+        optional_mana=tuple(
+            dataclasses.replace(offer, x_one_of_each_color=True)
+            if offer.x_count else offer
+            for offer in cost.optional_mana
+        ),
+    )
+
+
+def unenforced_x_spend_restriction(
+    oracle_text: str, card_name: str | None = None, legendary: bool = False
+) -> str | None:
+    """The "one mana of each color on X" line of *oracle_text* when **nothing
+    enforces it**, else None.
+
+    The restriction is enforced as a property of an optional X offer
+    (``OptionalManaCost.x_one_of_each_color``), which is the only place a card
+    in this pool prints it over. A card printing the sentence over any other X
+    -- one in its mana cost, or in "pay X life" -- would have the line claimed
+    by :func:`cast_cost_claims_line` and charged by nobody: the restriction
+    dropped in silence and in the caster's favour. Asked by the support gate in
+    ``engine/oracle.py`` beside the uncharged-cost gate, and refused there.
+    """
+    printed = next(
+        (line for line in (oracle_text or "").splitlines()
+         if x_one_of_each_color_line(line)),
+        None,
+    )
+    if printed is None:
+        return None
+    costs = _additional_costs_of_text(oracle_text or "", card_name or "", legendary)
+    if any(
+        offer.x_one_of_each_color
+        for cost in costs
+        for offer in cost.optional_mana
+    ):
+        return None
+    return printed.strip()
 
 
 def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
@@ -2031,7 +2192,7 @@ def cast_cost_claims_line(line: str) -> bool:
     engine implements and what it claims to have read cannot drift — the same
     seam ``enter_effects.enter_effect_line`` is.
     """
-    return additional_cost_for_line(line) is not None
+    return additional_cost_for_line(line) is not None or x_one_of_each_color_line(line)
 
 
 __all__ = [
@@ -2055,6 +2216,9 @@ __all__ = [
     "kicker_costs",
     "kickers_paid",
     "optional_x_offers",
+    "x_one_of_each_color_line",
+    "x_one_of_each_color_sentence",
+    "unenforced_x_spend_restriction",
     "read_return_clause",
     "read_sacrifice_all_clause",
     "read_sacrifice_clause",

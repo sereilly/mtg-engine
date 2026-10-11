@@ -62,7 +62,8 @@ from engine.oracle_types import (OracleInstruction,  # noqa: E402
                                  x_spend_colors_from_text)
 from engine.alternative_costs import (  # noqa: E402
     alternative_cost_claims_line, granted_alternative_cost_claims_line)
-from engine.cast_costs import cast_cost_claims_line  # noqa: E402
+from engine.cast_costs import (cast_cost_claims_line,  # noqa: E402
+                               x_one_of_each_color_sentence)
 from engine.activation_restrictions import (  # noqa: E402
     global_activation_ban_line)
 from engine.cast_permissions import (board_free_cast_line,  # noqa: E402
@@ -692,6 +693,14 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     ("x spend color (stack/activation)",
      lambda s: s.startswith("spend only") and s.endswith("mana on x")
      and bool(x_spend_colors_from_text(s))),
+    # "Spend only colored mana on X. No more than one mana of each color may be
+    # spent this way." (Emblazoned Golem.) Two sentences, claimed one at a time
+    # because this table is asked per sentence — the cost table reads them
+    # together (`cast_costs.x_one_of_each_color_line`), folds the pair onto the
+    # card's {X} offer and the payment sets the colours aside
+    # (`casting._pay_cast_cost`); a card printing either alone, or over an X no
+    # offer carries, is refused by the support gate and never reaches here.
+    ("x spend one of each color (cast_costs.py)", x_one_of_each_color_sentence),
     ("ante boilerplate (deck construction, not gameplay)", lambda s: s.startswith("remove this card from your deck before playing")),
 )
 

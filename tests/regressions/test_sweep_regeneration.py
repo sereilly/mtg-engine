@@ -7,8 +7,9 @@ handlers, and the by-type land sweep behind the kicked one skipped regeneration
 shields while the filtered sweep behind the unkicked one honoured them. The
 by-type table read "regeneration allowed: False" for lands and enchantments —
 inherited from two Alpha-era handlers written when "regenerate" was a thing
-creatures did — so four shipped cards that say nothing about regeneration
-destroyed a permanent through its shield.
+creatures did — so seven shipped cards that say nothing about regeneration
+(Armageddon, Impending Disaster; Tranquility, Hush, Essence Filter, Multani's
+Decree, Reverent Silence) destroyed a permanent through its shield.
 
 CR 701.19a makes regeneration a replacement of *a permanent's* destruction, and
 a land or an enchantment is often a creature too: a Spawning Pool animated in

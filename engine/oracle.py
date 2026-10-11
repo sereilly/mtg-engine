@@ -59,6 +59,7 @@ from .alternative_costs import (
     unread_granted_alternative_cost_sentence,
 )
 from .cast_costs import (cast_cost_claims_line, read_discard_clause,
+                         unenforced_x_spend_restriction,
                          unlinked_kicker_question, unread_cost_sentence)
 from .special_actions import special_action_line
 from .combat_restrictions import combat_restriction_for
@@ -7290,6 +7291,22 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"asks about a kicker cost this card does not print: {unlinked}",
+            normalized_text,
+        )
+
+    # "Spend only colored mana on X. No more than one mana of each color may be
+    # spent this way." printed over an X this engine does not charge that way.
+    # The sentence is enforced on an optional {X} offer (Emblazoned Golem's
+    # "Kicker {X}") and claimed by the cost table for every card type, so on a
+    # card whose X lives anywhere else it would be claimed and dropped -- the
+    # uncharged cost's twin again, a restriction nothing applies. Asked of the
+    # printed text, which the reader expands for itself.
+    unenforced = unenforced_x_spend_restriction(printed_text, name, legendary)
+    if unenforced is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"restricts an X nothing charges that way: {unenforced}",
             normalized_text,
         )
 

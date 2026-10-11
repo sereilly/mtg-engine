@@ -1095,6 +1095,21 @@ def _paid_for_trigger_has_nothing_to_hit(
     return False
 
 
+def _with_offer_payment(
+    total: dict[str, int], payment: dict[str, int], times: int
+) -> dict[str, int]:
+    """*total* plus one way of paying an optional cost, *times* over.
+
+    A copy, in *total*'s own key order with the payment's new symbols after
+    it: the tap planner walks the dict it is handed, and a simulated game has
+    to reproduce from its seed.
+    """
+    merged = dict(total)
+    for symbol, amount in payment.items():
+        merged[symbol] = merged.get(symbol, 0) + amount * times
+    return merged  # _with_offer_payment
+
+
 def _offers_taken(card: CardDefinition, offers: "dict[str, int] | None"):
     """``(offer, times)`` for every optional **mana** offer *offers* takes.
 
@@ -1328,13 +1343,28 @@ def _cast_candidate_announcing(
             # here, largest first, exactly as `_max_affordable_x` sizes a mana
             # cost's -- and an X of zero is not proposed, for the reason
             # `x_value == 0` is refused above: it is a price paid for nothing.
+            #
+            # Each offer through ``payments_at``, every way it may be paid at
+            # that X: Emblazoned Golem's X is one mana of each of X colours,
+            # so the plan has to be for coloured pips the lands can make, and
+            # an X no choice of colours pays is passed over for a smaller one.
             sized = None
             for offer_x in (range(15, 0, -1) if sized_offer is not None else (None,)):
-                total = dict(required)
+                totals = [dict(required)]
                 for offer, times in taken_offers:
-                    for symbol, amount in offer.cost_at(offer_x).items():
-                        total[symbol] = total.get(symbol, 0) + amount * times
-                if _plan_land_taps(game, player, total) is not None:
+                    totals = [
+                        _with_offer_payment(total, payment, times)
+                        for total in totals
+                        for payment in offer.payments_at(offer_x)
+                    ]
+                total = next(
+                    (
+                        candidate for candidate in totals
+                        if _plan_land_taps(game, player, candidate) is not None
+                    ),
+                    None,
+                )
+                if total is not None:
                     sized = (offer_x, total)
                     break
             if sized is None:

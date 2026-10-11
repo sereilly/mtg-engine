@@ -47,11 +47,12 @@ if TYPE_CHECKING:
 # *a permanent's* destruction, and a land or an enchantment is often a creature
 # too: a Spawning Pool or a Mishra's Factory animated in response to
 # Armageddon, an enchantment under Opalescence wearing a Regeneration. Each was
-# destroyed through its shield, on four cards that say nothing about
-# regeneration (Armageddon, Impending Disaster, Tranquility and its kin), and
-# Desolation Angel's two arms — one this sweep, one the filtered one below —
-# disagreed about the same land. "They can't be regenerated" is the card's to
-# say, and it arrives as ``bypass_regeneration`` (Catastrophe).
+# destroyed through its shield, on seven shipped cards that say nothing about
+# regeneration (Armageddon, Impending Disaster; Tranquility, Hush, Essence
+# Filter, Multani's Decree, Reverent Silence), and Desolation Angel's two arms
+# — one this sweep, one the filtered one below — disagreed about the same
+# land. "They can't be regenerated" is the card's to say, and it arrives as
+# ``bypass_regeneration`` (Catastrophe).
 _SWEEP_TYPES: dict[str, tuple[tuple[str, ...], bool]] = {
     # kind -> (types any of which qualifies, regeneration allowed)
     "destroy_all_creatures": (("creature",), True),
