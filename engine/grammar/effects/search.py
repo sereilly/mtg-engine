@@ -428,9 +428,9 @@ def _accept_search_one_of_each(
     found as one type or the other and never as both.
 
     The destination clause is the counted production's plural ("put those
-    cards …"), one zone for every find. CR 701.23b makes each find optional —
-    the library is hidden and every description states a quality — which is
-    what ``up_to`` records.
+    cards …"), one zone for every find. Each find of this search is optional
+    (CR 701.23b: the library is hidden and every description states a
+    quality), which is what ``up_to`` records.
     """
     mark = stream.mark()
     if not stream.accept_word("a", "an"):
