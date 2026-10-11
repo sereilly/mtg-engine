@@ -2715,6 +2715,18 @@ class DeclareBlockersStepMixin:
                 event_subject_controller=self.controller_index_of(blocker),
                 pair_announcement=False,
             )
+            # "Whenever a creature **attacks or blocks**" (Powerstone
+            # Minefield) — the block half of the board-wide union
+            # ``_fire_matching_creature_attacks_triggers`` announces the other
+            # half of. Here, in the bare announcement, because CR 509.3a is
+            # this loop's count: once for the creature that blocks, however
+            # many attackers it is blocking.
+            emit(
+                self, "matching_creature_attacks_or_blocks",
+                subject=blocker,
+                event_subject_permanent_id=blocker.permanent_id,
+                event_subject_controller=self.controller_index_of(blocker),
+            )
             for _attacker_idx, attacker in blocked:
                 found = blocked_by.setdefault(
                     attacker.permanent_id, (attacker, [])
@@ -2776,13 +2788,21 @@ class DeclareBlockersStepMixin:
             controller_index, assignments
         ):
             for _attacker_idx, attacker in blocked:
-                fire_delayed_triggers(
-                    self, "source_blocks_or_blocked_by",
-                    subject=attacker, agent=blocker,
-                    trigger_context={
-                        "blocked_permanent_ids": [blocker.permanent_id],
-                    },
-                )
+                # The joined event (Goblin Flotilla) and its attacking half on
+                # its own (Zombie Boa: "whenever this creature **becomes
+                # blocked by** a creature of that color this turn"). An entry
+                # is armed under exactly one of the two names, so announcing
+                # both wakes each ability once.
+                for event in (
+                    "source_blocks_or_blocked_by", "source_becomes_blocked_by",
+                ):
+                    fire_delayed_triggers(
+                        self, event,
+                        subject=attacker, agent=blocker,
+                        trigger_context={
+                            "blocked_permanent_ids": [blocker.permanent_id],
+                        },
+                    )
 
     # `_apply_temporary_buff` and `_apply_flanking` were here, and both are
     # gone for one reason. CR 702.25a defines flanking as a triggered ability,

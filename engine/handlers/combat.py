@@ -1395,6 +1395,34 @@ def target_cant_block_until_eot(game: Game, instruction: OracleInstruction, cont
     return True, "resolved"
 
 
+@effect_handler("attached_cant_block_until_eot")
+def attached_cant_block_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"{R}: **Enchanted creature** can't block this turn." (Manacles of Decay.)
+
+    ``target_cant_block_until_eot``'s mark on a creature nobody chose: the
+    permanent the ability's own source is attached to, read as the ability
+    resolves (CR 303.4) rather than at activation — an Aura moved in response
+    restricts the creature it is on now, which is what "enchanted creature"
+    means whenever it is read.
+
+    Last-known attachment when the Aura has left since (CR 608.2h): the ability
+    is independent of its source once on the stack (CR 113.7a), and the
+    creature it was on is still the creature the words named. With no host at
+    all there is nothing to mark, and the ability resolves to nothing.
+
+    Swept with the turn by ``_EOT_METADATA_KEYS`` and read by the blocker gate,
+    exactly as the targeted mark is — one key, so the two cannot disagree about
+    when it ends.
+    """
+    host = attached_host(game, context.source_permanent)
+    if host is None or not game.is_on_battlefield(host) or not host.is_creature:
+        game.log.append(f"{context.card.name}: no enchanted creature to stop blocking")
+        return True, "resolved"
+    host.metadata[CANT_BLOCK_UNTIL_EOT] = True
+    game.log.append(f"{host.card.name} can't block this turn")
+    return True, "resolved"
+
+
 @effect_handler("target_cant_attack_until_eot")
 def target_cant_attack_until_eot(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Target creature can't attack this turn." (Change of Heart.)

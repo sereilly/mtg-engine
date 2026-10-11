@@ -32,7 +32,7 @@ of a cut belongs on the floor rather than in one of the two families.
 import dataclasses
 
 from ...oracle_types import OracleInstruction
-from ...subject_filters import (object_only_filter,
+from ...subject_filters import (observer_source_filter,
                                 unimplemented_filter_keywords,
                                 untestable_filter_keys)
 from .. import ast
@@ -336,11 +336,18 @@ def _lower_pump(
                 node=node,
             )
         described = _filter_payload(node.subject.filter)
-        if object_only_filter(described) is None:
+        if observer_source_filter(described) is None:
             # The printed noun phrase restates the trigger's own narrowing, so
             # it is carried and re-checked rather than dropped — a word consumed
             # and never read is a word that could be deleted with no change to
             # what the card does.
+            #
+            # Held to what ``pump_event_subject`` can answer, which is more
+            # than the object alone: it hands the matcher the ability's
+            # controller and its source, so "a creature **you control**"
+            # (Fervent Charge) is a word it re-asks. A seat it has no argument
+            # for — "defending player controls" — still refuses here, because
+            # the matcher would answer no to it every time.
             raise LoweringError(
                 "the event subject's pump carries a restriction the resolution "
                 "cannot test", node=node,

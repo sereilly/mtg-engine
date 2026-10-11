@@ -735,6 +735,9 @@ _COVERED_ELSEWHERE = {
     # --- NEM W1G4 ---
     "superlative_among":
         "test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board",
+    # --- APC W1G9 ---
+    "in_combat_with_source":
+        "test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations",
 }
 
 
@@ -2414,3 +2417,92 @@ def test_nem_w1g4_superlative_among_reads_the_extreme_off_the_whole_board(pool):
     least = {"superlative_among": {**described["superlative_among"], "extreme": "least"}}
     assert subject_matches(game, big_mine, least)
     assert not subject_matches(game, small, least)
+
+
+def test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations(pool):
+    """"Destroy target creature **blocking or blocked by** Cromat."
+
+    The union of ``blocking_source`` and ``blocked_by_source``, and its own key
+    because no pair of keys can state a union — every matcher ANDs them. So it
+    is demonstrated from both ends in real combats: with the source attacking,
+    its blocker answers and the creature blocking somebody else does not; with
+    the source blocking, the attacker it blocked answers and the one that got
+    through does not. Nothing about any of those creatures tells them apart.
+
+    With no source the answer must be **no**, and the pure matcher must refuse
+    the key rather than ignore it: an in-combat relation dropped from a targeted
+    destroy is every creature on the board.
+    """
+    from engine.handlers._common import permanent_matches_filter
+
+    described = {"type_filter": "creature", "in_combat_with_source": True}
+
+    attacker = Permanent(card=pool["Grizzly Bears"])
+    other_attacker = Permanent(card=pool["Grizzly Bears"])
+    blocker = Permanent(card=pool["Grizzly Bears"])
+    elsewhere = Permanent(card=pool["Grizzly Bears"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[attacker, other_attacker]),
+        PlayerState(name="P2", battlefield=[blocker, elsewhere]),
+    ])
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.declare_attackers(0, [0, 1])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {0: 0, 1: 1})[0]
+
+    # The source attacking: its blocker, and nobody else's.
+    assert subject_matches(game, blocker, described, source=attacker)
+    assert not subject_matches(game, elsewhere, described, source=attacker)
+    assert not subject_matches(game, other_attacker, described, source=attacker)
+    assert not subject_matches(game, attacker, described, source=attacker), (
+        "a creature is not in combat with itself"
+    )
+    # The source blocking: the attacker it blocked, and not the other one.
+    assert subject_matches(game, attacker, described, source=blocker)
+    assert not subject_matches(game, other_attacker, described, source=blocker)
+
+    assert not subject_matches(game, blocker, described), (
+        "with no source there is no combat to read the relation off"
+    )
+    assert not permanent_matches_filter(blocker, described), (
+        "the pure half refuses the key rather than ignoring it"
+    )
+    assert object_only_filter(described) is None, (
+        "a caller with no source may not be handed the relation"
+    )
+
+
+def test_apc_w1g9_observer_source_filter_is_the_rung_between_the_two_gates():
+    """What a handler holding the ability's **controller and source** — and no
+    other seat — may be handed.
+
+    ``object_only_filter`` refuses "you control" (no observer) and the full key
+    set promises "defending player controls" (to a caller with CR 506.2's
+    seat). ``pump_event_subject`` holds exactly the two in between, and
+    Fervent Charge's "whenever a creature **you control** attacks, it gets
+    +2/+2" was refused by the narrower gate while the handler asked the wider
+    question. Both directions: what it admits, and what it must still refuse.
+    """
+    from engine.subject_filters import observer_source_filter
+
+    yours = {"type_filter": "creature", "controller": "you"}
+    assert object_only_filter(yours) is None
+    assert observer_source_filter(yours) == yours
+    assert observer_source_filter({"exclude_self": True}) == {"exclude_self": True}
+    assert observer_source_filter({"controller": "active_player"}) is not None
+    assert observer_source_filter(
+        {"power_greater_than_cards_in_hand": "you"}
+    ) is not None
+
+    for seat in ("defending_player", "that_player", "target_opponent", "target_player"):
+        assert observer_source_filter({"controller": seat}) is None, seat
+    assert observer_source_filter(
+        {"power_greater_than_cards_in_hand": "their"}
+    ) is None, "their hand is a seat the event named, not the observer's"
+    assert observer_source_filter({"no_such_key": True}) is None
+    assert observer_source_filter(
+        {"controller_controls": {"controller": "defending_player"}}
+    ) is None, "a nested phrase is asked the same question"

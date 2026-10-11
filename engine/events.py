@@ -1702,6 +1702,12 @@ def _attack_declaration_filter(
 # event, so the registration is a row rather than a predicate.
 _SUBJECT_LED_FILTER_KEYS: dict[str, str] = {
     "matching_creature_attacks": "attacker",
+    # "Whenever a creature attacks or blocks" (Powerstone Minefield). One noun
+    # phrase and no partner, so it is a row here rather than in the block
+    # pair's filter below: the subject is whichever creature was declared, as
+    # an attacker (CR 508.1) or as a blocker (CR 509.1), and the announcement
+    # at each of those two sites names it.
+    "matching_creature_attacks_or_blocks": "combatant",
     "matching_permanent_enters": "enterer",
     # "Whenever a nontoken creature leaves the battlefield" (Dual Nature). The
     # filter is asked while the subject is still on a battlefield — the fire

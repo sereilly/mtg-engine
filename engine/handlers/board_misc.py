@@ -25,8 +25,9 @@ from ..tokens import (CHOSEN_TOKEN_RECORDS, CREATED_TOKEN_RESULT_KEY,
                       CREATED_TOKENS_RESULT_KEY,
                      CREATED_WITH_PERMANENT_ID, default_token_name,
                      make_token_card, tokens_created_with)
-from ._common import (BLOCK_PAIR_SUBJECT, SUBJECT_FROM_TRIGGER,
-                      attached_host,
+from ._common import (BLOCK_PAIR_SUBJECT, COLOR_CHOSEN_THIS_WAY_KEY,
+                      SUBJECT_FROM_TRIGGER,
+                      attached_host, resolve_color_chosen_in_resolution,
                       block_pair_permanents, bound_permanent, evaluate_count,
                       one_recorded_permanent_id,
                       per_recipient_amount,
@@ -375,6 +376,27 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{context.card.name} had no player to watch")
             return True, "no player"
         bound_seat = recorded
+    # "Choose a color. Whenever this creature becomes blocked by a creature
+    # **of that color** this turn, …" (Zombie Boa.) CR 608.2d's choice, made by
+    # an earlier step of this resolution and spent **now** into the ordinary
+    # ``color_filter`` — the entry outlives the scratchpad the colour was
+    # written to, so a filter still carrying the phrase at fire time would be
+    # asked of a resolution that never chose anything. Through the one reader
+    # of that phrase, so "of that color" means here what it means in a count or
+    # a sweep.
+    #
+    # A phrase nothing answered arms **nothing**, for the reason an unbound
+    # object does one screen up: both matchers refuse the key outright, so the
+    # entry would wait all turn for a creature that cannot exist.
+    narrowings = {
+        key: resolve_color_chosen_in_resolution(
+            dict(payload.get(key) or {}), context
+        )
+        for key in ("subject_filter", "agent_filter")
+    }
+    if any(COLOR_CHOSEN_THIS_WAY_KEY in found for found in narrowings.values()):
+        game.log.append(f"{context.card.name} had no chosen color to watch for")
+        return True, "no color"
     arm_delayed_trigger(game, DelayedTrigger(
         bound_player_index=bound_seat,
         controller_index=seat,
@@ -395,8 +417,8 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
         # (Subira). The narrowing travels as the same filter payload every
         # other one does; the fire sites ask `subject_matches`, which has the
         # seat "you control" needs. Empty means no narrowing.
-        subject_filter=dict(payload.get("subject_filter") or {}),
-        agent_filter=dict(payload.get("agent_filter") or {}),
+        subject_filter=narrowings["subject_filter"],
+        agent_filter=narrowings["agent_filter"],
         once=bool(payload.get("once")),
         duration=payload.get("duration", END_OF_TURN),
         batch=bool(payload.get("batch")),

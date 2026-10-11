@@ -2061,6 +2061,13 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
     # the biggest. ``subject_matches`` holds the game and answers it.
     if payload.get("superlative_among"):
         return False
+    # "target creature **blocking or blocked by** Cromat". A relation to the
+    # ability's own source, which this pure half does not have; ignored, it
+    # would offer every creature on the table for a destroy that names the
+    # ones in one fight. ``subject_matches`` holds the source, answers it off
+    # the combat maps and strips the key before asking here.
+    if payload.get("in_combat_with_source"):
+        return False
     # "creatures that didn't attack this turn" / "…except for creatures that
     # couldn't attack" (Season of the Witch). Both are per-turn records stamped
     # on the permanent itself — the first by the declaration, the second by the

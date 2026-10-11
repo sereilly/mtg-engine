@@ -1256,7 +1256,14 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # slipped between them and was read as permanent. Two readers of one
         # clause, and the sentence only has to put a word between them to defeat
         # both.
-        if "until end of turn" in tail:
+        #
+        # **Outside any quoted ability**, which is a different ability's text:
+        # 'Enchanted creature gets -1/-1 and has "{T}: Target creature gets
+        # -1/-1 **until end of turn**."' (Foul Presence.) The duration there
+        # belongs to the ability the host is granted, and read as this grant's
+        # own it made the Aura's -1/-1 vanish — the card reported supported,
+        # the host kept its printed size, and a 1/1 it enchanted lived.
+        if "until end of turn" in tail.split('"', 1)[0]:
             continue
         # "…gets +2/+2 **as long as an opponent controls a black permanent**"
         # (Ice Age's five Scarabs), and "for as long as this artifact remains

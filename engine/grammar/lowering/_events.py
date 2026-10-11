@@ -111,6 +111,13 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # is game-wide and per object, and by resolution the creature may have been
     # removed from combat or destroyed.
     "matching_creature_attacks",
+    # "Whenever a creature attacks or blocks, this enchantment deals 2 damage
+    # to **it**." (Powerstone Minefield.) The declared attacker *or* the
+    # declared blocker, stamped by whichever of the union's two fire sites
+    # announced it (`_fire_matching_creature_attacks_triggers`,
+    # `declare_blockers_step._announce_bare_board_wide_blocks`). The event has
+    # one object — no partner is named — so the pronoun has one referent.
+    "matching_creature_attacks_or_blocks",
     # "Whenever a creature of the chosen color deals damage to you …, this
     # enchantment deals that much damage to **that creature**." (Mangara's
     # Equity.) CR 120.4b's event, whose one seam (`damage_events._announce`)
@@ -431,6 +438,9 @@ _BLOCK_PAIR_EVENTS = frozenset({
     # set that left it out would refuse the created ability while admitting the
     # printed one.
     "source_blocks_or_blocked_by",
+    # …and its attacking half alone (Zombie Boa), announced by the second of
+    # those two sites under the same key, so "that creature" is the blocker.
+    "source_becomes_blocked_by",
 })
 
 

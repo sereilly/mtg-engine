@@ -541,11 +541,28 @@ def _parse_targeted_damage_delay(
     return chosen, agent
 
 
+#: The two block events a delay may watch **about its own source**, by the
+#: words between the source and the partner's noun phrase.
+#:
+#: "…blocks or becomes blocked by" is the joined event (Goblin Flotilla) and
+#: "…becomes blocked by" its attacking half alone (Zombie Boa). Two events
+#: rather than one with the wider reading, because the difference is which
+#: declarations wake the entry: read as the joined event, an ability that says
+#: "becomes blocked" would also answer when its creature *blocks*. Longest
+#: first — the second row is the tail of the first.
+_SOURCE_BLOCK_PAIR_DELAYS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("blocks", "or", "becomes", "blocked", "by"), "source_blocks_or_blocked_by"),
+    (("becomes", "blocked", "by"), "source_becomes_blocked_by"),
+)
+
+
 def _parse_source_block_pair_delay(
     stream: TokenStream,
-) -> "tuple[ast.ObjectFilter, str] | None":
+) -> "tuple[str, ast.ObjectFilter, str] | None":
     """``this creature blocks or becomes blocked by <noun> this combat`` — the
-    delayed spelling of the joined block event (Goblin Flotilla).
+    delayed spelling of the joined block event (Goblin Flotilla) — and
+    ``this creature becomes blocked by <noun> this turn``, its attacking half
+    (Zombie Boa). Returns ``(event, partner phrase, duration)``.
 
     The printed static form of the same sentence is a trigger of the permanent
     (``engine/oracle.py``'s ``creature_blocks_or_blocked_by``); this is that
@@ -561,7 +578,14 @@ def _parse_source_block_pair_delay(
     if not accept_source_reference(stream):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("blocks", "or", "becomes", "blocked", "by"):
+    event = next(
+        (
+            kind for phrase, kind in _SOURCE_BLOCK_PAIR_DELAYS
+            if stream.accept_phrase(*phrase)
+        ),
+        None,
+    )
+    if event is None:
         stream.reset(mark)
         return None
     described = parse_subject_filter_at(stream)
@@ -571,7 +595,7 @@ def _parse_source_block_pair_delay(
     for phrase, duration in _BLOCK_PAIR_WINDOWS:
         window = stream.mark()
         if stream.accept_phrase(*phrase):
-            return described, duration
+            return event, described, duration
         stream.reset(window)
     # A window is required: CR 603.7b's "unless it has a stated duration" is
     # what makes this ability repeat, and one with no window is a static the

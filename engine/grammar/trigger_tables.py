@@ -431,6 +431,12 @@ _BARE_BOARD_WIDE_BLOCK_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 
 _SUBJECT_LED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
+    # "Whenever **a creature** attacks or blocks, …" (Powerstone Minefield).
+    # The board-wide union, under the kind `engine/oracle.py`'s table gives it
+    # and announced at both combat fire sites. First, because "attacks" below
+    # is its strict prefix: read there, "or blocks" is left on the stream and
+    # the line dies on the effect's subject.
+    (("attacks", "or", "blocks"), "matching_creature_attacks_or_blocks"),
     (("attacks",), "matching_creature_attacks"),
     (("enters", "the", "battlefield"), "matching_permanent_enters"),
     (("enters",), "matching_permanent_enters"),
