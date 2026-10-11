@@ -615,6 +615,23 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # player attacks somebody else's planeswalker and in a multiplayer game is
     # the whole restriction gone. The same silent widening the "and isn't
     # blocked" lookahead one line down exists to stop.
+    # "Whenever **a creature attacks or blocks**, this enchantment deals 2
+    # damage to it." (Powerstone Minefield.) CR 508.1 and CR 509.1 as one
+    # printed condition over the whole board — the union
+    # `creature_attacks_or_blocks` is for a source and its host, watched by a
+    # permanent that is neither. Its own kind for the reason those two give
+    # each other: one kind, announced at both combat fire sites, so the
+    # condition cannot be read as half of itself.
+    #
+    # Above the two per-attacker rows, which are strict prefixes of it and
+    # which claimed it: matched there, " or blocks" is left as the head of the
+    # *effect* and the trigger is an attack trigger that never sees a block.
+    # The trailing lookahead is the bare block row's — the condition ends at
+    # the comma, so "…attacks or blocks a Wall" is refused rather than read as
+    # this with its partner phrase dropped.
+    ("matching_creature_attacks_or_blocks",
+     r"whenever (?P<combatant_subject>(?:a|another) [^,]+?) attacks or blocks"
+     r"(?![^,])"),
     ("matching_creature_attacks",
      r"whenever (?P<attacker_subject>(?:a|another) [^,]+) attacks"
      r" (?P<attacker_attacking_you>)you(?![a-z])"),

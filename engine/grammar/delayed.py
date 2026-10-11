@@ -299,8 +299,12 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
                 # "by" describes the *other* half of the pair. Filed under the
                 # field that is tested against that half, so the narrowing is
                 # asked of the creature the card narrows.
-                agent, duration = pair
-                event, once, watches = "source_blocks_or_blocked_by", False, "source"
+                #
+                # Which of the two block events it is comes from the opener's
+                # own words ("…becomes blocked by a creature of that color
+                # this turn", Zombie Boa, is the attacking half alone).
+                event, agent, duration = pair
+                once, watches = False, "source"
         if event is None:
             # "…**whenever a player taps a Mountain for mana**, that player adds
             # an additional {R}." (Chaos Moon's odd branch.) The one opener here

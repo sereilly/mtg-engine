@@ -150,6 +150,15 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
     # written before this are byte-identical.
     if self.blocking_source:
         payload["blocking_source"] = True
+    # "target creature **blocking or blocked by** Cromat" — the union of the
+    # two keys above, which no pair of them can state (every matcher ANDs its
+    # keys, so both together name a creature on both sides of one block, a set
+    # that is always empty). Emitted for ``blocking_source``'s reason and on
+    # its footing: ``subject_matches`` takes the source the relation is to.
+    # The four lowerings written before this each strip the field and carry
+    # the relation themselves, so their payloads are byte-identical.
+    if self.in_combat_with_source:
+        payload["in_combat_with_source"] = True
     if self.blocking_attached_host:
         payload["blocking_attached_host"] = True
     if self.blocked_or_was_blocked_this_turn:

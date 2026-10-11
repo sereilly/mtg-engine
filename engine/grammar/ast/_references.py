@@ -607,9 +607,11 @@ class ObjectFilter:
     # "blocking or blocked by this creature" (Sentinel) — the object is in
     # combat with the ability's own source (CR 509). Relative, like
     # ``other_than_source``: no read of the object alone can answer it, so
-    # ``to_payload`` never emits it and ``permanent_matches_filter`` is never
-    # told about it — the one lowering that accepts it carries the relation as
-    # its own payload key and the handler that has the source tests it.
+    # ``permanent_matches_filter`` **refuses** it — and it is emitted, since
+    # Cromat ("Destroy target creature blocking or blocked by Cromat"), on
+    # ``blocking_source``'s footing below: ``subject_matches`` takes the source
+    # and answers it off the combat maps. The lowerings older than that each
+    # strip the field and carry the relation as their own payload key.
     in_combat_with_source: bool = False
     # "creatures that dealt damage to it this turn" (Brine Hag) — a *history*
     # relative to the source, read off the damage record the victim carries

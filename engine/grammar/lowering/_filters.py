@@ -185,6 +185,10 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     # emits it unconditionally and ``subject_matches`` tests it, exactly as it
     # does ``blocked_by_source`` — so it is honoured rather than relative.
     "banded_with_source",
+    # "target creature **blocking or blocked by** Cromat". ``to_payload`` emits
+    # it and ``subject_matches`` tests it off the combat maps, on
+    # ``banded_with_source``'s footing exactly.
+    "in_combat_with_source",
     # "target permanent you both **own** and control" (Obelisk of Undoing) /
     # "all Auras **you own** attached to permanents you control" (Remove
     # Enchantments). ``to_payload`` reads it unconditionally. It used to emit
@@ -270,12 +274,16 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     "power": "power",
     "toughness": "toughness",
     "supertypes": "supertypes",
-    # The two source-relative narrowings ``to_payload`` *never* emits
-    # ("blocking or blocked by this creature", "that dealt damage to it this
-    # turn"). Listing them here is what makes ``_filter_payload`` refuse the
-    # phrase by name everywhere except the one lowering written for it, which
-    # strips the field and carries the relation as its own payload key.
-    "in_combat_with_source": "in_combat_with_source",
+    # The source-relative narrowing ``to_payload`` *never* emits ("that dealt
+    # damage to it this turn"). Listing it here is what makes
+    # ``_filter_payload`` refuse the phrase by name everywhere except the one
+    # lowering written for it, which strips the field and carries the relation
+    # as its own payload key.
+    #
+    # "Blocking or blocked by this creature" sat beside it until Cromat
+    # printed the relation on a *destroy target*: it is emitted now, on
+    # ``blocking_source``'s footing two paragraphs down and for that
+    # paragraph's reason — ``subject_matches`` takes the source.
     "dealt_damage_to_source_this_turn": "dealt_damage_to_source_this_turn",
     # "blocking this creature" is **not** here any more. It was, on the
     # reading that no read of the blocker alone can answer the relation — which

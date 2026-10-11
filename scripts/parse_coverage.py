@@ -122,7 +122,9 @@ from engine.targeting import (  # noqa: E402
 from engine.lord_buffs import sacrifice_state_trigger  # noqa: E402
 from engine.auras import (  # noqa: E402
     aura_effect_claim,
+    aura_quoted_grants,
     aura_static_pt_grant,
+    quoted_grant_readable,
 )
 from engine.activation_restrictions import (  # noqa: E402
     activation_restriction_line,
@@ -1152,6 +1154,42 @@ def _delayed_trigger_rider_sentences(oracle_text: str) -> set[str]:
     return claimed
 
 
+def _quoted_grant_sentences(card) -> set[str]:
+    """The sentences of every line on which *card* grants its host a **quoted
+    ability of several sentences** the host can read.
+
+    'Enchanted creature has "{T}: This creature deals 1 damage to target player
+    or planeswalker. You draw a card."' (Quicksilver Dagger.) One printed line
+    and one granted ability, with a full stop *inside the quotes* — which is
+    where :func:`_sentences` cuts, so the grant arrived here as two fragments
+    that are each nothing: an opening quote with half an ability behind it, and
+    a bare "you draw a card" with a closing quote on the end.
+
+    The reader that carries the grant out never sees fragments.
+    ``auras.aura_quoted_grants`` matches the whole line and
+    ``quoted_grant_readable`` compiles the whole quote **on the host**, through
+    the ordinary ability parser — whose productions consume every token or
+    refuse — so "readable" already means both sentences were read. Asked of the
+    line and named for its sentences, which is the arrangement
+    ``_delayed_trigger_rider_sentences`` above has for the same reason.
+
+    Only a quote of two or more sentences is answered: a one-sentence grant
+    (Foul Presence) reaches ``aura_effect_claim`` whole through the ordinary
+    channel and needs nothing from here.
+    """
+    claimed: set[str] = set()
+    for raw_line in (card.oracle_text or "").splitlines():
+        quotes = aura_quoted_grants(raw_line)
+        if not quotes or not all(
+            quoted_grant_readable(quote, card.name) for quote in quotes
+        ):
+            continue
+        sentences = _sentences(normalize_creature_line(raw_line.strip()))
+        if len(sentences) > 1:
+            claimed.update(sentences)
+    return claimed
+
+
 CARD_CHANNELS: tuple[tuple[str, object], ...] = (
     (
         # "Players can't cast spells or play lands with a name originally
@@ -1317,6 +1355,7 @@ def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCovera
     # choice to somebody else (CR 700.2e). None for every other card, which is
     # what keeps every existing claim byte-identical.
     mode_event = OPPONENT_CHOSE_MODE if program.mode_chooser is not None else None
+    quoted_grant_sentences = _quoted_grant_sentences(card)
 
     def claim_sentence(
         sentence: str,
@@ -1356,6 +1395,15 @@ def analyze_card(card, hooked: HookClaims, run_probe: bool = True) -> CardCovera
         hook_claim = hooked.claim_for(card.name, sentence)
         if hook_claim is not None:
             coverage.claims.append((sentence, hook_claim))
+            return
+        # A quoted grant of several sentences (Quicksilver Dagger), claimed as
+        # the whole line it is — see :func:`_quoted_grant_sentences`. Asked
+        # *after* the hooks rather than among the channels above them: Farmstead
+        # prints the same shape and its line is compiled by a hook, and a claim
+        # is the more use for naming the reader that actually produced the
+        # card's instruction.
+        if sentence in quoted_grant_sentences:
+            coverage.claims.append((sentence, "auras.py (attached effect)"))
             return
         # The last question, and the strongest evidence there is: **did the
         # compiler build an ability out of this line?** Every channel above

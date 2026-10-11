@@ -88,6 +88,10 @@ ACTIVATED_LABELS: dict[str, str] = {
     # clause only became a grammar production in this set's second wave; before
     # that the kind existed and no activated ability reached it.
     "target_cant_block_until_eot": "activated_restriction",
+    # "{R}: Enchanted creature can't block this turn." (Manacles of Decay.)
+    # The row above with the Aura's host in place of a chosen creature, and
+    # the same bucket for the same reason.
+    "attached_cant_block_until_eot": "activated_restriction",
     # "{1}{R}: Target creature can't block this creature this turn."
     # (Duct Crawler.) The same denial as the row above, narrowed to one
     # named attacker, so it reads the same bucket: what the ability is for

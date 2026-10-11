@@ -14,7 +14,7 @@ from ..errors import LoweringError
 from ._record_keys import CHOSEN_PLAYER
 from ._common import (
     _describe_several_targets, _describe_targets, _filter_payload,
-    _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
+    _is_enchanted, _is_source, _REST_OF_TURN, RESTRICTION_TURNS,
     _names_several_targets, _restrictions_beyond, refuse_untestable,
 )
 from ._declaration_costs import lower_declaration_cost
@@ -528,6 +528,28 @@ def _lower_combat_restriction(
             raise LoweringError(
                 "the blanket can't-block reads a plural subject", node=node
             )
+        # "{R}: **Enchanted creature** can't block this turn." (Manacles of
+        # Decay.) The targeted mark below on a creature nobody chose: the
+        # Aura's own host, read off the attachment as the ability resolves
+        # (CR 303.4), which is why it is a third kind rather than a spelling
+        # of either neighbour — the targeted one resolves a pick the ability
+        # never offered, and the blanket arms a board-wide filter that on
+        # "creature" is every creature on the table.
+        #
+        # The phrase restates the attachment and narrows nothing further; a
+        # narrowing of its own would be a test the handler does not make, so
+        # it refuses rather than being consumed and dropped.
+        if _is_enchanted(node.subject):
+            extra = _restrictions_beyond(
+                node.subject.filter, frozenset({"card_types", "is_enchanted"})
+            )
+            if extra:
+                raise LoweringError(
+                    "the attached can't-block marks the host and tests "
+                    "nothing else: " + ", ".join(extra),
+                    node=node,
+                )
+            return (OracleInstruction("attached_cant_block_until_eot", "", {}),)
         # "**Target creature** can't block this turn." (Panic.) The same printed
         # sentence about one chosen creature rather than a described set, and a
         # different effect for it: the blanket arms a board-wide filter the

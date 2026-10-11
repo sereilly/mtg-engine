@@ -96,6 +96,17 @@ DELAYED_EVENTS: dict[str, str] = {
     # form uses — so "that creature" is one reader for both, and a card that
     # prints the sentence as a static needs nothing new.
     "source_blocks_or_blocked_by": "the declare blockers step",
+    # "Whenever this creature **becomes blocked by** a creature of that color
+    # this turn, destroy that creature." (Zombie Boa.) The attacking half of
+    # the row above on its own, and a separate event rather than that one
+    # narrowed: an entry armed under the joined name answers when its creature
+    # *blocks* as well, which this sentence does not say.
+    #
+    # Announced per pair by ``_fire_delayed_block_pair_triggers``, beside the
+    # joined event's becomes-blocked half and with the same
+    # ``blocked_permanent_ids`` key — CR 509.3d, once for each creature the
+    # printed phrase admits.
+    "source_becomes_blocked_by": "the declare blockers step",
     # Subira, Tulzidi Caravanner.
     "creature_deals_combat_damage_to_player": "the combat damage step",
     # "When that creature **becomes blocked** this turn, …" (Barreling Attack).

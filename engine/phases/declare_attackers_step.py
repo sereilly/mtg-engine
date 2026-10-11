@@ -1919,6 +1919,15 @@ class DeclareAttackersStepMixin:
                 # would find a look-alike.
                 event_subject_permanent_id=attacker.permanent_id,
             )
+            # "Whenever a creature attacks **or blocks**" (Powerstone
+            # Minefield) — the attack half of the board-wide union, whose
+            # block half ``_announce_bare_board_wide_blocks`` makes. One kind
+            # at two sites, as ``creature_attacks_or_blocks`` is for a source.
+            emit(
+                self, "matching_creature_attacks_or_blocks", subject=attacker,
+                event_subject_permanent_id=attacker.permanent_id,
+                event_subject_controller=self.controller_index_of(attacker),
+            )
 
     # ------------------------------------------------------------------
     # Banding declaration (CR 702.22)
