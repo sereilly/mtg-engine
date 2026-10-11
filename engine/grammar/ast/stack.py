@@ -226,6 +226,19 @@ class CounterSpell:
     # Appended, for the reason the two fields above state: these nodes are
     # built positionally as well as by keyword.
     countered_filter: "ObjectFilter | None" = None
+    # "…unless its controller pays {1} **for each basic land type among lands
+    # you control**." (Evasive Action, domain.) The printed cost as a rate over
+    # a *board* count, where ``unless_pays_per_recorded`` above is a rate over
+    # a record an earlier step wrote: two fields because they are two kinds of
+    # number — one is read off the battlefield as the counter resolves
+    # (CR 608.2h) and needs no producer, the other names a step that has to
+    # have run. The noun phrase travels as the filter ``phrases.
+    # _parse_per_each_objects`` returns, ``distinct`` and all, for
+    # ``lowering/_amounts.count_spec`` to turn into the spec every other
+    # counted amount is taken with.
+    #
+    # Appended, for the reason every field above states.
+    unless_pays_per_each: "ObjectFilter | None" = None
 
 
 @dataclass(frozen=True)

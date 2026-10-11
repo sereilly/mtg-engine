@@ -29,6 +29,7 @@ from ..type_changes import end_type_changes
 from ..mixins._constants import _EOT_METADATA_KEYS
 from ..damage_redirects import clear_redirects
 from ..land_mana_swaps import clear_swaps as clear_land_mana_swaps
+from ..mana_spending import clear_turn_permissions as clear_turn_mana_spending
 from ..library_top import clear_reveal_grants
 from ..shields import END_OF_TURN, clear_shields
 from ..text_changes import end_until_eot_text_changes
@@ -102,6 +103,7 @@ class CleanupStepMixin:
         active_player = self.players[player_index]
         cleanup_completed = True
         control_reverted = False
+        types_reverted = False
         # CR 402.2's seven, and the two printed lines that change it — asked of
         # `engine/hand_size.py`, which is also what the support gate and the
         # parse-coverage report ask. It was a literal here, so Cursed Rack's
@@ -215,6 +217,13 @@ class CleanupStepMixin:
             # expires with the turn, the same way an unused regeneration shield
             # below does.
             player.spend_mana_as_though_grants = []
+            # "**Until end of turn**, you may spend white mana as though it
+            # were mana of any color." (False Dawn.) A permission with a window
+            # (CR 611.2a), ended by the record leaving — and the seat's derived
+            # list is rebuilt at once, because every payment site reads that
+            # list and a permission left in it would outlive its turn.
+            if clear_turn_mana_spending(player):
+                self._refresh_mana_spending()
             player.prevent_one_damage_emblems = []
             for permanent in self.controlled_by(player):
                 permanent.damage_marked = 0
@@ -241,10 +250,18 @@ class CleanupStepMixin:
                 # with another duration are left alone: a permanent one
                 # (Ashnod's Transmogrant) outlives every turn boundary there is,
                 # which is why this cannot be a plain key in the sweep above.
-                end_type_changes(
+                #
+                # …and a type that ended is a permanent a type-scoped effect
+                # now reaches or no longer does. "Target creature becomes that
+                # type until end of turn" (Unnatural Selection) made a Bear a
+                # Goblin under a Goblin King: the lord's +1/+1 is a cached
+                # buff, so the record leaving has to re-derive it — the reason
+                # the text-change sweep below recomputes, one layer over.
+                if end_type_changes(
                     permanent,
                     lambda record: record.get("duration") == "until_end_of_turn",
-                )
+                ):
+                    types_reverted = True
                 # A granted "protection from <colour>" is one key per colour
                 # rather than a fixed name, so it is swept by prefix. Listing
                 # five keys would work today and be one entry short the day a
@@ -312,6 +329,8 @@ class CleanupStepMixin:
         # the same pair `change_control`'s callers run when one begins.
         if control_reverted:
             self._sync_control()
+            self._recompute_continuous_effects()
+        elif types_reverted:
             self._recompute_continuous_effects()
         # 610.3: return all creatures exiled "until end of turn" to their owners' battlefields
         returned_from_exile = list(self.exile_until_eot)

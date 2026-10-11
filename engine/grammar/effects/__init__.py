@@ -139,6 +139,7 @@ from .production_changes import (
     _parse_produces_instead,
     _parse_tapped_lands_produce_chosen,
     _parse_tapper_produces_instead,
+    parse_turn_mana_change,
 )
 from .exile import (
     _parse_exile_bound_card,
@@ -417,6 +418,7 @@ __all__ = [
     "_parse_produces_instead",
     "_parse_tapped_lands_produce_chosen",
     "_parse_tapper_produces_instead",
+    "parse_turn_mana_change",
     "_parse_spend_mana_as_though",
     "_parse_double",
     "_parse_switch_pt",

@@ -610,6 +610,16 @@ def recolor_target_from_text(game: Game, instruction: OracleInstruction, context
     # was announced with (a text change's word, a mana spell's colour), and one
     # key for both made every such spell the colour it announced.
     if context.stack_target is not None and symbol:
+        # A phrase that names a spell *and its types* ("target instant spell
+        # becomes colorless") is re-asked here (CR 608.2b), through the reader
+        # the picker offered it with. The undescribed Lace union and the bare
+        # "target spell" carry no type and are untouched.
+        described = instruction.payload.get("targets") or {}
+        if described.get("card_types") and not stack_target_still_described(
+            game, described, context.stack_target
+        ):
+            game.log.append(f"{context.card.name}: no valid spell to recolour")
+            return True, "resolved"
         context.stack_target.choices["color_override"] = symbol
         game.log.append(f"{context.stack_target.card.name} (on the stack) became {symbol}")
         return True, "resolved"
@@ -667,7 +677,15 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
     """
     from ..subject_filters import subject_matches
 
-    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    described = instruction.payload.get("targets") or {}
+    if described.get("kind") == "spell":
+        # "{T}: Target instant or sorcery **spell** becomes the color of your
+        # choice." (Vodalian Mystic.) An object on the stack rather than on the
+        # battlefield, so it is the half of the context a counter reads — and
+        # only that half: falling back to a permanent would recolour whatever
+        # the resolver could reach for an ability that named a spell.
+        return _recolor_stack_target_chosen_color(game, described, context)
+    filters = described.get("filter") or {}
     observer = game.players.index(context.caster)
     target = resolve_target_permanent(
         game, context,
@@ -713,6 +731,60 @@ def recolor_target_chosen_color(game: Game, instruction: OracleInstruction, cont
         + (" until end of turn" if instruction.payload.get("until_eot") else "")
         + f" ({context.card.name})"
     )
+    return True, "resolved"
+
+
+def stack_target_still_described(game: Game, described: dict, item) -> bool:
+    """Whether *item* is still a spell the printed phrase *described* names.
+
+    CR 608.2b at the one place a handler can ask it: the object must still be
+    on the stack, must be a spell (an ability has no card and no colour,
+    CR 113.7a) and must still be one of the printed card types — through
+    ``_spell_is_one_of``, the reader the stack picker offered it with, so the
+    announcement and the resolution cannot name different sets.
+    """
+    if item is None or item not in game.stack:
+        return False
+    if getattr(item, "ability_instruction", None) is not None or item.card is None:
+        return False
+    card_types = described.get("card_types")
+    if card_types:
+        from .stack import _spell_is_one_of
+
+        return _spell_is_one_of(item.card, card_types)
+    return True
+
+
+def _recolor_stack_target_chosen_color(
+    game: Game, described: dict, context: OracleExecutionContext
+) -> tuple[bool, str]:
+    """The spell half of ``recolor_target_chosen_color``.
+
+    The colour is the one the ``choose_color`` step in front recorded while
+    this ability resolved (CR 608.2d), and it is written to the spell's own
+    colour record — ``StackItem.choices["color_override"]``, the key the Lace
+    cycle writes and ``_stack_item_colors`` reads. One record, so a spell this
+    made blue is blue to Blue Elemental Blast, to protection, to Jaded
+    Response's "shares a color" and to the cast triggers that ask a colour.
+
+    A replacement, not an addition (CR 105.3): the spell is the chosen colour
+    and no other. It lasts while the object is that spell — a stack item that
+    resolves or is countered takes the record with it (CR 400.7).
+
+    An unanswered choice recolours nothing, for the permanent half's reason: a
+    spell that became a colour nobody picked is the wrong colour.
+    """
+    item = context.stack_target
+    name = context.card.name
+    if not stack_target_still_described(game, described, item):
+        game.log.append(f"{name}: no valid spell to recolour")
+        return True, "resolved"
+    symbol = game._normalize_mana_color(context.results.get(CHOSEN_COLOR_THIS_WAY))
+    if symbol is None:
+        game.log.append(f"{name}: no colour was chosen, so nothing is recoloured")
+        return True, "resolved"
+    item.choices["color_override"] = symbol
+    game.log.append(f"{item.card.name} (on the stack) became {symbol} ({name})")
     return True, "resolved"
 
 
@@ -1500,14 +1572,30 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
         # by the resolver rather than here. The land travels by
         # ``permanent_id``: an index renumbers when anything leaves, and the
         # answer arrives after this handler has returned.
+        # "…becomes **a Plains or an Island**" (Tundra Kavu). The same choice
+        # with the list the sentence printed: carried on the prompt, which is
+        # what the picker offers and what the resolver checks the answer
+        # against (idiom 9), so the narrowing is enforced where the type is
+        # named rather than trusted to whoever asks. Absent for "the basic land
+        # type of your choice", whose prompt data is byte-identical to before.
+        printed_options = [
+            str(option) for option in
+            (instruction.payload.get("land_type_options") or ())
+        ]
         game.arm_pending_choice(
             "land_type_choice", game.players.index(context.caster),
             card_name=context.card.name,
             land_permanent_id=target.permanent_id,
             land_type_source=source,
+            **({"options": printed_options} if printed_options else {}),
         )
         game.log.append(
-            f"{context.card.name}: choose a basic land type for {target.card.name}"
+            f"{context.card.name}: choose "
+            + (
+                " or ".join(option.title() for option in printed_options)
+                if printed_options else "a basic land type"
+            )
+            + f" for {target.card.name}"
         )
         return True, "resolved"
     change_land_type(target, land_type, source=source, label=context.card.name)
@@ -3274,6 +3362,71 @@ def gain_type(game: Game, instruction: OracleInstruction, context: OracleExecuti
     game.log.append(
         f"{context.card.name}: {target_perm.card.name} becomes "
         + " ".join(card_types)
+    )
+    return True, "resolved"
+
+
+@effect_handler("set_target_creature_type")
+def set_target_creature_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Choose a creature type other than Wall. **Target creature becomes that
+    type until end of turn.**" (Unnatural Selection.)
+
+    CR 205.1a's subtype set, as one layer-4 record: the chosen creature type
+    replaces the creature types the permanent has and no other subtype, and
+    the record carries its own timestamp (CR 613.7b) and its own duration, so
+    the cleanup step ends it by dropping it and whatever else says what the
+    creature is — a Conspiracy, an Aura's "is a Knight" — reasserts itself in
+    timestamp order rather than a printed line being put back.
+
+    The type is the one the choosing step in front recorded as this ability
+    resolved (CR 608.2d). An unanswered choice sets nothing: a creature that
+    became a type nobody picked is the wrong creature.
+
+    The printed noun phrase is re-asked here through ``subject_matches`` (CR
+    608.2b), with no fallback: a target that stopped being a creature in
+    response is not given a creature type, and no bystander is.
+    """
+    from ..grammar.vocabulary import CREATURE_TYPES
+    from ..subject_filters import subject_matches
+
+    name = context.card.name if context.card is not None else "Effect"
+    filters = (instruction.payload.get("targets") or {}).get("filter") or {}
+    observer = (
+        game.players.index(context.caster) if context.caster in game.players else None
+    )
+    target = resolve_target_permanent(
+        game, context,
+        predicate=lambda perm: subject_matches(
+            game, perm, filters, observer=observer, source=context.source_permanent
+        ),
+        fallback_players=(),
+        fallback_on_invalid_choice=False,
+    )
+    if target is None:
+        game.log.append(f"{name}: no valid creature to change the type of")
+        return True, "resolved"
+    chosen = context.results.get(str(instruction.payload.get("subtype_from") or ""))
+    word = str(chosen or "").strip().lower()
+    if word not in CREATURE_TYPES:
+        game.log.append(f"{name}: no creature type was chosen, so nothing changes")
+        return True, "resolved"
+    gain_types(
+        target,
+        subtypes=[word],
+        source=name,
+        duration=str(instruction.payload.get("duration") or "until_end_of_turn"),
+        # CR 205.1a: a subtype *set* replaces the subtypes "from the
+        # appropriate set" — the creature types, and nothing else the
+        # permanent is. Read by ``layer_bridge.collect_own_type_effects``.
+        replaces_creature_types=True,
+    )
+    # A creature that changed type is one a type-scoped static now reaches or
+    # no longer does ("Other Goblins get +1/+1", "All Zombies are …"), and
+    # where each applies is decided for the whole board (CR 613.8a).
+    game._refresh_dynamic_creatures()
+    game._recalculate_lord_buffs()
+    game.log.append(
+        f"{target.card.name} became a {word.title()} until end of turn ({name})"
     )
     return True, "resolved"
 

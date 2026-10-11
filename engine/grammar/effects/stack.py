@@ -26,8 +26,8 @@ from ..lexer import DASH, SELF, WORD
 from ..references import parse_player_ref, parse_target_spec
 from ..stream import TokenStream
 from ..phrases import (_accept_conjoined_life_cost, _accept_mana_alternatives,
-                       _parse_mana_payment, _parse_zone,
-                       accept_bidding_procedure)
+                       _parse_mana_payment, _parse_per_each_objects,
+                       _parse_zone, accept_bidding_procedure)
 from ..records import _parse_for_each_this_way
 from ..sacrifices import _parse_counted_sacrifice
 from ..vocabulary import NUMBER_WORDS
@@ -133,7 +133,13 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # sentence at all — so the replacement is now read off the word that
         # actually says it, "instead", and "that spell" means what "it" beside
         # it means.
-        if stream.accept_phrase("that", "spell"):
+        # "If a player does, counter **the spell**." (Ice Cave.) The definite
+        # article in place of the demonstrative: the one spell this ability is
+        # about, which is the one its trigger condition named. The same bound
+        # quantifier, for the reason the two words beside it share one.
+        if stream.accept_phrase("that", "spell") or stream.accept_phrase(
+            "the", "spell"
+        ):
             subject = ast.TargetSpec("that", ast.ObjectFilter())
         elif stream.accept_word("it"):
             # "Whenever a player casts a spell, **counter it**." (Nether Void,
@@ -204,6 +210,25 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         # reason the alternatives are read after it — the three clauses are
         # about different things and the card prints this one against the cost.
         per_recorded = _parse_for_each_this_way(stream)
+        # "…pays {1} **for each basic land type among lands you control**."
+        # (Evasive Action.) The same rate over a count of the *board* rather
+        # than of a record: read through the one reader every "for each
+        # <objects>" position uses, so what a counted phrase may say here is
+        # what it may say behind a pump or a toll. Tried only where the record
+        # reader declined — the two clauses open on the same two words and a
+        # card prints one.
+        #
+        # "…beyond the first" is a discount no counter prints and the flow
+        # does not take, so it refuses rather than charging the full count.
+        per_each = None
+        if per_recorded is None:
+            per_each_mark = stream.mark()
+            per_each, beyond_first = _parse_per_each_objects(stream)
+            if beyond_first:
+                stream.reset(per_each_mark)
+                raise stream.error(
+                    "no counter price discounts the first counted object"
+                )
         # "…pays {4} **instead**" (Lofty Denial). The word is the whole
         # difference between a second counter and a replacement amount for the
         # first, so it is what sets the flag. Refused on the chosen form:
@@ -225,6 +250,7 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
             # sentence named, and this offers a second way to cover *this* one.
             unless_pays_alternatives=_accept_mana_alternatives(stream),
             replaces_prior_amount=replaces_prior,
+            unless_pays_per_each=per_each,
         )
 
     # "**If that spell is countered this way, put it on top of its owner's

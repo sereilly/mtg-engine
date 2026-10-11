@@ -67,6 +67,16 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # handler would have to learn it.
     if stream.accept_phrase("any", "player"):
         return ast.PlayerRef("each_player")
+    # "…**any other player** may pay that spell's mana cost." (Ice Cave.) Not
+    # the alias "each other player" above is: there the antecedent is "you",
+    # and the set is the controller's opponents. Here the sentence in front has
+    # already named a player — the one who cast the spell — and "other" is
+    # measured from *that* seat, so the Cave's own controller is one of the
+    # players asked whenever somebody else cast. A referent of its own, which
+    # the lowering admits only under an event that froze the seat it is
+    # measured from.
+    if stream.accept_phrase("any", "other", "player"):
+        return ast.PlayerRef("any_other_player")
     if stream.accept_phrase("target", "player"):
         return ast.PlayerRef("target_player")
     if stream.accept_phrase("target", "opponent"):

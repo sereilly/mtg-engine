@@ -272,12 +272,16 @@ def lower_naming_statement(
         # sweep does.
         from ..oracle_types import CHOSEN_CREATURE_TYPE_THIS_WAY
 
-        return (
-            OracleInstruction(
-                "choose_creature_type", "",
-                {"result_key": CHOSEN_CREATURE_TYPE_THIS_WAY},
-            ),
-        )
+        chosen_type: dict[str, object] = {
+            "result_key": CHOSEN_CREATURE_TYPE_THIS_WAY
+        }
+        if statement.excluded:
+            # "…**other than Wall**." (Unnatural Selection.) Emitted only when
+            # printed, so every other creature-type choice keeps a
+            # byte-identical payload. The handler narrows the default, the
+            # prompt's list and the resolver's check by it.
+            chosen_type["excluded"] = list(statement.excluded)
+        return (OracleInstruction("choose_creature_type", "", chosen_type),)
 
     if isinstance(statement, ast.ChooseCardType):
         # The colour choice's sibling above, with the same two readings of who

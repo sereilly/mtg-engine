@@ -133,6 +133,7 @@ from .types import (
     _lower_become_copy,
     _lower_become_creature,
     _lower_change_land_type,
+    _lower_become_that_type,
     _lower_change_supertype,
     _lower_become_aura,
     _lower_gain_type,
@@ -308,6 +309,8 @@ from .mana import (
     _lower_lose_unspent_mana,
     _lower_produces_mana_instead,
     _lower_spend_mana_as_though,
+    _lower_added_mana_becomes,
+    _lower_grant_mana_spending,
 )
 from .library import (
     _lower_look_top_exile_random,
@@ -523,6 +526,7 @@ __all__ = [
     "_lower_become_color",
     "_lower_become_copy",
     "_lower_change_land_type",
+    "_lower_become_that_type",
     "_lower_change_supertype",
     "_lower_become_aura",
     "_lower_gain_type",
@@ -613,6 +617,8 @@ __all__ = [
     "_lower_lose_unspent_mana",
     "_lower_produces_mana_instead",
     "_lower_spend_mana_as_though",
+    "_lower_added_mana_becomes",
+    "_lower_grant_mana_spending",
     "_lower_double_power",
     "_lower_switch_pt",
     "_fused_prepare_then_interact",

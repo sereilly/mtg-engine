@@ -394,6 +394,54 @@ class SpendManaAsThough:
 
 
 @dataclass(frozen=True)
+class AddedManaBecomes:
+    """"Until end of turn, **spells and abilities you control that would add
+    colored mana instead add that much white mana**." (False Dawn.)
+
+    :class:`ProducesManaInstead`'s swap with the widest subject a card prints:
+    not one land and not a class of lands but *every* spell and ability its
+    controller controls — a land's mana ability, a creature's, a ritual, a
+    triggered "adds an additional {G}". So it names no object at all, which is
+    why it is its own node: there is no target to describe and no noun phrase
+    to test, only the seat.
+
+    A CR 614.1a replacement over the mana-production event, of the **colour**
+    alone: "colored mana" leaves {C} as it is (CR 106.1a/106.1b — five colors,
+    six types) and "that much" leaves the amount as it is.
+
+    ``produced`` is the colour symbol the mana becomes, payload: the same
+    sentence about blue is this node with one word changed. The window is
+    required — the record it arms hangs off a seat and only a sweep ends it.
+    """
+
+    produced: str
+    duration: "Duration"
+
+
+@dataclass(frozen=True)
+class GrantManaSpending:
+    """"Until end of turn, **you may spend white mana as though it were mana of
+    any color**." (False Dawn.)
+
+    CR 609.4b's permission as a *resolved effect with a window* rather than as
+    a static ability (Celestial Dawn, Sunglasses of Urza) or a per-spell grant
+    (:class:`SpendManaAsThough`, North Star): nothing about the pool changes
+    and nothing is bounded by a count — for the rest of the turn the seat's
+    payments may read one colour of mana as another.
+
+    The two colour lists are ``mana_spending.ManaSpending``'s own, with its own
+    "empty means every": ``fungible_colors`` is which mana the permission
+    covers and ``as_colors`` what it may be spent as. They are read off the
+    sentence by the one table that reads the static spelling, so the two cannot
+    come to mean different permissions.
+    """
+
+    fungible_colors: tuple[str, ...]
+    as_colors: tuple[str, ...]
+    duration: "Duration"
+
+
+@dataclass(frozen=True)
 class ActivateEachLandsManaAbility:
     """"**Target player activates a mana ability of each land they control.**"
     (Drain Power.) "…you may have **defending player activate a mana ability of

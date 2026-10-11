@@ -4028,7 +4028,16 @@ def _from_targets_payload(targets) -> dict | None:
     if kind == "spell":
         # A spell on the stack, which the UI picks from a different zone than
         # any permanent — "stack" is the name for that picker.
-        return {"kind": "stack"}
+        spec: dict = {"kind": "stack"}
+        card_types = targets.get("card_types")
+        if card_types:
+            # "Target **instant or sorcery** spell becomes the color of your
+            # choice." (Vodalian Mystic.) The printed union, handed to the
+            # enumeration under the key the counter's own spec uses
+            # (``_counter_spec``), so a described spell target and a counter
+            # narrow the picker through one reader.
+            spec["stack_card_types"] = list(card_types)
+        return spec
     if kind != "object":
         return None
     filt = targets.get("filter") or {}

@@ -4353,7 +4353,13 @@ def _choose_single_object_target(
 #: creature die this turn) cannot be asked before the cast exists, and
 #: answering it early would withhold spells for a reason that is not true. A
 #: kind left off costs the old behaviour and nothing more.
-_TARGET_GUARDS = frozenset({"target_is_color", "target_shares_most_common_color"})
+_TARGET_GUARDS = frozenset({
+    "target_is_color", "target_shares_most_common_color",
+    # "Counter target spell if it shares a color with a creature you control."
+    # (Jaded Response.) A property of the spell the cast names, read against
+    # the caster's own board as it stands — askable before the cast exists.
+    "target_shares_color_with_matching",
+})
 
 
 def _reached_by_the_effect(
@@ -5214,12 +5220,45 @@ def chained_toll_declined(game: Game, player_index: int, entry: dict) -> bool:
     controller = game.players.index(caster)
     unpaid = tuple(links[0].payload.get("unpaid") or ())
     if not unpaid:
+        if chain_payment_counters_the_event_spell(entry):
+            # What paying buys is the *payer's*: somebody else's spell
+            # countered (Ice Cave), whoever's permanent makes the offer. Not a
+            # drawback its controller avoids, so no seat declines it by rule —
+            # whether the mana is worth spending is
+            # ``optional_pay_may_tap_lands``' question.
+            return False
         return player_index == controller
     loss = toll_branch_loss(
         game, controller, unpaid, {"caster"}, entry.get("_source_permanent")
     )
     unpaid_is_a_loss = loss is not None and loss != TollLoss()
     return (player_index == controller) != unpaid_is_a_loss
+
+
+def chain_payment_counters_the_event_spell(entry: dict) -> bool:
+    """Whether *entry* is a link of an offer chain whose payment buys exactly
+    one thing: the spell the trigger fired on, countered.
+
+    "Whenever a player casts a spell, any other player may pay that spell's
+    mana cost. If a player does, counter the spell." (Ice Cave.) Read off the
+    armed link's own compiled branches — a ``paid`` branch that is a counter
+    bound to the trigger and no ``unpaid`` branch at all — so it is a fact
+    about the program and never about a card.
+
+    The chain is only ever offered to seats *other* than the spell's caster,
+    and this engine has no teams, so for every seat that is asked the spell is
+    an opponent's: paying is a gain for the payer, at a price.
+    """
+    links = tuple(entry.get("_on_decline") or ())
+    if len(links) != 1 or getattr(links[0], "kind", None) != "unless_player_pays":
+        return False
+    payload = links[0].payload
+    paid = tuple(payload.get("paid") or ())
+    return bool(paid) and not payload.get("unpaid") and all(
+        getattr(step, "kind", None) == "counter_top_stack_spell"
+        and step.payload.get("bound_to_trigger")
+        for step in paid
+    )
 
 
 #: The life total below which a seat nobody asked starts spending its lands on
@@ -5291,6 +5330,22 @@ def optional_pay_may_tap_lands(game: Game, player_index: int, entry: dict) -> bo
       the dearer of the two. On another seat's turn the lands are idle and the
       standing answer stands: pay.
     """
+    if chain_payment_counters_the_event_spell(entry):
+        # **A gift at a price, to whichever seat pays it** (Ice Cave): the
+        # decline branch is only the chain moving on, so refusing costs
+        # nothing and this is not a toll — and what accepting buys is fully
+        # known, an opponent's spell countered, so it is not the unvalued offer
+        # of another seat's object either. It takes the gift rule's mana half:
+        # lands that are idle (another seat's turn) always, and on the seat's
+        # own turn only lands nothing in its hand could use.
+        if game.active_player_index != player_index:
+            return True
+        payer = game.players[player_index]
+        return not any(
+            card.primary_type != "land"
+            and _cast_candidate(game, player_index, card, hand_index) is not None
+            for hand_index, card in hand_spells(payer)
+        )
     if entry.get("_on_decline") or int(entry.get("damage", 0) or 0) > 0:
         loss = _life_only_toll(entry)
         if loss is None or game.active_player_index != player_index:

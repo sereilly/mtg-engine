@@ -432,9 +432,15 @@ class ChooseCreatureType:
     already writes from the middle of its own sentence. The sentence after it
     ("All creatures **of that type** get -1/-1") reads it back.
 
-    Carries no fields: the catalog is CR 205.3m's creature types, which no card
-    narrows, and the chooser is the effect's controller (CR 608.2d).
+    The catalog is CR 205.3m's creature types and the chooser is the effect's
+    controller (CR 608.2d). ``excluded`` is the one narrowing a card prints of
+    it — "Choose a creature type **other than Wall**." (Unnatural Selection) —
+    as lowercase creature types the answer may not be. A restriction on a
+    *choice*, so it is enforced where the choice is made: the prompt does not
+    offer the word and the resolver refuses it.
     """
+
+    excluded: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

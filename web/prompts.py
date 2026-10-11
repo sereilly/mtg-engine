@@ -1260,7 +1260,10 @@ def _number_choice(ctx: PromptContext, choices: list) -> dict:
 def _land_type_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "card_name": choices[0].data["card_name"],
-        "options": ["plains", "island", "swamp", "mountain", "forest"],
+        # The five, or the list the sentence narrowed them to ("becomes a
+        # Plains or an Island", Tundra Kavu) — read through the resolver's own
+        # reader, so the picker cannot offer a type the answer path refuses.
+        "options": list(ctx.game.land_type_choice_options(choices[0])),
     }
 
 
@@ -1993,7 +1996,9 @@ def _creature_type_choice(ctx: PromptContext, choices: list) -> dict:
     return {
         "player_index": choices[0].player_index,
         "card_name": data.get("card_name", ""),
-        "creature_types": sorted(CREATURE_TYPES),
+        # …less a printed "other than Wall" (Unnatural Selection), through the
+        # resolver's own reader.
+        "creature_types": sorted(ctx.game.creature_type_choice_options(choices[0])),
         "default_creature_type": data.get("default_creature_type"),
     }
 

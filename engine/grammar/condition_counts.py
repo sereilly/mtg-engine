@@ -233,6 +233,22 @@ def _accept_color_census_condition(stream: TokenStream) -> "ast.Condition | None
         # which object "it" is.
         if stream.accept_phrase("that", "permanent"):
             return ast.SharesColorWithChosenPermanent()
+        # "…if it shares a color with **a creature you control**" (Jaded
+        # Response). The relation once more, with a described set on the far
+        # side: any permanent the noun phrase admits. Read last, because the
+        # two clauses above open on "the" and "that", which no object phrase
+        # behind an article does — and read whole, by the noun reader, or the
+        # sentence is not this one: a phrase that left words behind it would be
+        # a narrowing consumed and dropped.
+        if stream.accept_word("a", "an"):
+            try:
+                matching = parse_object_filter(stream)
+            except GrammarError:
+                matching = None
+            if matching is not None and (
+                stream.exhausted or stream.at_punct(".", ",")
+            ):
+                return ast.SharesColorWithMatching(matching)
     stream.reset(mark)
     return None
 

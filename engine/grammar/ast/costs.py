@@ -437,8 +437,29 @@ class RemoveCounterCost:
     subject: "ObjectFilter | None" = None
 
 
+@dataclass(frozen=True)
+class EventSpellManaCost:
+    """"…may pay **that spell's mana cost**." (Ice Cave.)
+
+    :class:`PayAttachedManaCost`'s sibling one object over, and its own node
+    for that node's reason: no symbol can say it. The price is the mana cost of
+    the spell the trigger's own condition named ("whenever a player casts **a
+    spell**"), which does not exist until that spell is cast — so the number is
+    read when the offer is made, off the object still on the stack.
+
+    "Mana cost includes color" is the card's own reminder and CR 202.1a's rule:
+    the coloured symbols are owed as printed. An ``{X}`` in it is the value
+    announced for that spell (CR 107.3h), and a spell with no mana cost has a
+    cost nobody can pay (CR 118.6).
+
+    Carries nothing: which spell is the event's, exactly as "counter it" names
+    it one sentence over.
+    """
+
+
 Cost = Union[
     ManaCost, TapSelf, SacrificeCost, DiscardCost, PayLifeCost,
+    EventSpellManaCost,
     PayManaPerCounterCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
     PutHandCardOnLibraryCost,

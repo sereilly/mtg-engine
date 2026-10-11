@@ -52,6 +52,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_return_instead_of_untapping,
                       _parse_count_objects,
                       _parse_tapped_lands_produce_chosen,
+                      parse_turn_mana_change,
                       _parse_spend_mana_as_though,
                       _parse_choose_blocks_for_defenders,
                       _parse_sacrifice_expansion_permanents,
@@ -487,6 +488,16 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         try:
             duration = _parse_duration(stream)
             if duration.kind is not None and stream.accept_punct(","):
+                # "Until end of turn, **spells and abilities you control that
+                # would add colored mana instead add that much white mana**. …
+                # **you may spend white mana as though it were mana of any
+                # color**." (False Dawn.) Two sentences that are effects only
+                # *behind* a printed window — the second is a static line
+                # elsewhere — so they are read here, with the window in hand,
+                # and refuse without consuming for every other sentence.
+                mana_change = parse_turn_mana_change(stream, duration)
+                if mana_change is not None:
+                    return mana_change
                 return _distribute_duration(
                     parse_statement(stream, top_level=False), duration, stream
                 )

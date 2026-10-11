@@ -1234,6 +1234,18 @@ REMOVED_FROM_COMBAT_PERMANENTS = "removed_from_combat_permanents"
 #: card that prints it is a sorcery.
 CHOSEN_CREATURE_TYPE_THIS_WAY = "chosen_creature_type_this_way"
 
+#: The ``cost_from`` word for "**that spell's** mana cost" (Ice Cave): the price
+#: is the mana cost of the spell the trigger fired on, read off the stack as
+#: the offer is made. Named here because the lowering writes it and the offer
+#: handler reads it, and a cost keyed by a word only one of them knew would be
+#: a cost of nothing — which every board can pay.
+EVENT_SPELL_MANA_COST = "event_spell_mana_cost"
+
+#: The ``payer`` word of an offer chain made to "**any other player**" under an
+#: event that froze a seat (Ice Cave: every player but the one who cast the
+#: spell). Beside the cost word above for the same reason.
+OTHER_THAN_EVENT_SUBJECT_PLAYER = "other_than_event_subject_player"
+
 #: What "**that color**" names (Persecute). One colour symbol, chosen by the
 #: controller of the resolving spell (CR 608.2d) in the sentence in front, and
 #: read back by the sentence that spends it through a ``color_filter_from`` key.

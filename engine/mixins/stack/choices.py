@@ -2962,6 +2962,40 @@ class PendingChoicesMixin:
 
     _BASIC_LAND_TYPES = ("plains", "island", "swamp", "mountain", "forest")
 
+    def land_type_choice_options(self, choice: PendingChoice) -> tuple[str, ...]:
+        """The basic land types a pending ``land_type_choice`` may be answered
+        with: the list its sentence printed ("becomes **a Plains or an
+        Island**", Tundra Kavu), or CR 305.6's five where it printed none
+        ("the basic land type of your choice", Jinx; Phantasmal Terrain).
+
+        **One reader**, asked by the resolver that checks the answer, by the
+        default a non-interactive seat takes and by the prompt renderer
+        (idiom 9) — so the picker cannot show a type the answer path refuses,
+        and a seat cannot name one the card does not print. A printed entry
+        outside the five is dropped rather than offered: the wire field is the
+        five-way basic, and a type nobody can send is not an option.
+        """
+        printed = tuple(
+            word for word in (
+                str(option).strip().lower()
+                for option in (choice.data.get("options") or ())
+            )
+            if word in self._BASIC_LAND_TYPES
+        )
+        return printed or self._BASIC_LAND_TYPES
+
+    def default_land_type_choice(self, choice: PendingChoice) -> str:
+        """What a non-interactive seat answers a ``land_type_choice`` with.
+
+        An Island, which is the provisional default the kind has always taken
+        — unless the sentence offered a list that does not include one, where
+        the first printed type is the answer: the default has to be a type the
+        resolver accepts, or the prompt would be discarded unanswered and the
+        land left unchanged by an ability that resolved.
+        """
+        offered = self.land_type_choice_options(choice)
+        return "island" if "island" in offered else offered[0]
+
     def confirm_land_type(self, player_index: int, land_type: str) -> bool:
         """Resolve a pending Phantasmal Terrain choice with the controller's chosen
         basic land type, overriding the provisional default on the enchanted land."""
@@ -2980,7 +3014,7 @@ class PendingChoicesMixin:
         exactly as it was so its behaviour does not move.
         """
         land_type = str(land_type or "").strip().lower()
-        if land_type not in self._BASIC_LAND_TYPES:
+        if land_type not in self.land_type_choice_options(choice):
             return False
         permanent_id = choice.data.get("land_permanent_id")
         if permanent_id is not None:
@@ -3141,7 +3175,7 @@ class PendingChoicesMixin:
 
     def arm_creature_type_choice(
         self, player_index: int, *, card_name: str, result_key: str, context,
-        default: str | None,
+        default: str | None, excluded: tuple[str, ...] = (),
     ):
         """Queue "choose a creature type" for the resolving spell's controller.
 
@@ -3150,6 +3184,11 @@ class PendingChoicesMixin:
         creature-type shape: Extinction is a sorcery, so there is no permanent
         for a CR 614.1c entry choice to have been recorded on, and the sentence
         that spends the word is the next step of the same resolution.
+
+        *excluded* is a printed "**other than Wall**" (Unnatural Selection):
+        carried on the prompt, which is what the picker's list and the
+        resolver's check both read (``creature_type_choice_options``). Absent
+        from the prompt data when the card prints none.
         """
         return self.arm_pending_choice(
             "creature_type_choice", player_index,
@@ -3157,7 +3196,25 @@ class PendingChoicesMixin:
             result_key=result_key,
             default_creature_type=default,
             _context=context,
+            **({"excluded": list(excluded)} if excluded else {}),
         )
+
+    def creature_type_choice_options(self, choice: PendingChoice) -> frozenset[str]:
+        """The creature types a pending ``creature_type_choice`` may be
+        answered with: CR 205.3m's catalog, less whatever the sentence printed
+        after "other than".
+
+        **One reader** for the resolver and the prompt renderer (idiom 9), so
+        the picker cannot offer a word the answer path refuses and a seat
+        cannot name one the card forbids.
+        """
+        from ...grammar.vocabulary import CREATURE_TYPES
+
+        excluded = {
+            str(word).strip().lower()
+            for word in (choice.data.get("excluded") or ())
+        }
+        return frozenset(CREATURE_TYPES - excluded) if excluded else CREATURE_TYPES
 
     def confirm_creature_type_choice(
         self, player_index: int, creature_type: str
@@ -3180,11 +3237,9 @@ class PendingChoicesMixin:
         An empty answer keeps whatever the handler stamped before arming, which
         is a real choice already recorded rather than none at all.
         """
-        from ...grammar.vocabulary import CREATURE_TYPES
-
         word = str(creature_type or "").strip().lower()
         if word:
-            if word not in CREATURE_TYPES:
+            if word not in self.creature_type_choice_options(choice):
                 return False
             choice.data["_context"].results[choice.data["result_key"]] = word
             self.log.append(f"{choice.data.get('card_name', '')}: chose {word}")
@@ -8724,6 +8779,17 @@ class PendingChoicesMixin:
         """
         from ...handlers.control_flow import _narrow_to_takeable_actions
 
+        # "…may pay **that spell's mana cost**" (Ice Cave). The price was read
+        # off a spell, and a spell that has since left the stack has no mana
+        # cost to pay (CR 118.6) and nothing left to buy — so the offer is one
+        # that can no longer be taken, exactly as an action with nothing left
+        # to act on is. Asked here because both answer paths ask here, and a
+        # seat charged for a counter of nothing has paid a cost for no effect.
+        priced_spell = entry.get("_priced_spell")
+        if priced_spell is not None and not any(
+            item is priced_spell for item in self.stack
+        ):
+            return False
         context = entry.get("_context")
         steps = tuple(entry.get("_on_accept") or ())
         if context is None or not steps:
@@ -10467,7 +10533,11 @@ register_choice(
     resolve=lambda game, choice, r: game._resolve_land_type(choice, r["land_type"]),
     # The provisional default stamped when the Aura attached is an Island, so
     # taking it again is what a non-interactive controller does.
-    default=lambda game, choice: game._resolve_land_type(choice, "island"),
+    # …unless the sentence offered a list without one (``default_land_type_
+    # choice``): the default must be an answer the resolver accepts.
+    default=lambda game, choice: game._resolve_land_type(
+        choice, game.default_land_type_choice(choice)
+    ),
     action="land_type_confirm",
     prompt_key="land_type_choice",
     # Phantasmal Terrain arms this as it enters, and its own comment says "the

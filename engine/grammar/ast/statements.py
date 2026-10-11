@@ -69,6 +69,7 @@ from .damage import (
 from .characteristics import (
     BecomeColor,
     BecomeCopy,
+    BecomeThatType,
     ChangeLandType,
     LandTypeSwap,
     ChangeSupertype,
@@ -153,6 +154,8 @@ from .mana import (
     NoteManaSpent,
     ProducesManaInstead,
     SpendManaAsThough,
+    AddedManaBecomes,
+    GrantManaSpending,
 )
 from .library import (
     PutExiledPileOnLibrary,
@@ -305,7 +308,7 @@ Effect = Union[
     CoinFlipStakesLoop,
     DamageThoseDamagedThisGame,
     DamageRidersUntilEndOfTurn,
-    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
+    DealDamage, Pump, SetBasePT, ChangeBasePT, GainAbilityText, GainKeyword, GainType, BecomeAura, ChangeSupertype, ChangeLandType, BecomeThatType, LandTypeSwap, LoseAbilityText, LoseKeyword, MoveCounter, PlayerGetsCounters, PutCounter, RemoveCounter,
     DoublePower, SwitchPT,
     GainLife, LoseLife, PayLife, SetLifeTotal, ExchangeLifeTotals, Ante, Draw, Discard, LookTopCycleForLife, SeparateLibraryTopIntoPiles, SeparateIntoPiles, Mill, MillUntil, PutMilledCardOntoBattlefield, PutHandCardsOnLibrary, Scry, Destroy, Sacrifice, SacrificeAndReturnTargets,
     SacrificeExpansionPermanents, ShuffleGraveyardIntoLibrary, ShuffleHandIntoLibrary,
@@ -339,7 +342,7 @@ Effect = Union[
     PhaseOut,
     SimultaneousPhasing,
     ActivateEachLandsManaAbility, LoseUnspentMana,
-    AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, PreventDamage,
+    AddManaForTappedLand, NoteManaSpent, ProducesManaInstead, SpendManaAsThough, AddedManaBecomes, GrantManaSpending, PreventDamage,
     RedirectDamage, DamageBecomesCounterRemoval,
     RedirectDamage, DoubleCombatDamage, ChooseDamageSource, ChosenSourceNextDamage,
     DamageCantBePreventedOrRedirected, DamageReducedByPaidMana,
@@ -454,7 +457,9 @@ class UnlessPlayerPays:
     picks nobody, so every seat the phrase names is asked in turn until one pays.
     """
     payer: PlayerRef
-    cost: "ManaCost"
+    #: A printed symbol run, or "that spell's mana cost" (Ice Cave) — a price
+    #: read off the spell the trigger fired on (``EventSpellManaCost``).
+    cost: "ManaCost | EventSpellManaCost"
     otherwise: "Statement | None"
     #: What paying *buys* — "Then **if any player pays {2}**, discard three
     #: cards" (Rhystic Scrying) — the same chain with the polarity reversed.
