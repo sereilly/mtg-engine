@@ -1551,6 +1551,14 @@ class PendingChoicesMixin:
             # than folded into it: `reorder_library` is a prompt that already
             # exists, with its own UI, AI default and action, and CR 608.2 keeps
             # a decision armed by answering another inside the same resolution.
+            #
+            # (Apocalypse measured that first claim and did not act on it here:
+            # the bottom of a library *is* observed once the deck runs down to
+            # it, and ``offer_library_bottom_order`` is the seam that asks —
+            # Goblin Ringleader's sorted reveal calls it. This family still
+            # lays the rest down unasked, held by
+            # ``test_401_4_the_rest_going_to_the_bottom_is_not_asked_about``;
+            # changing that is one call below and a label in the client.)
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
                 if len(rest) > 1:
@@ -2133,9 +2141,85 @@ class PendingChoicesMixin:
             "reorder_library", caster_index, new_order=new_order, shuffle=shuffle
         )
 
+    def reorder_library_pile(self, choice: PendingChoice) -> list:
+        """The cards a ``reorder_library`` prompt is arranging, uppermost first.
+
+        The top ``top_count`` of the target library, or — ``position ==
+        "bottom"`` — its last ``top_count``: the cards an effect has just put
+        "on the bottom of your library in any order" (CR 401.4). One reader for
+        what the prompt shows, what an answer permutes and what the default
+        leaves, because a second would be free to show one end of a library and
+        rearrange the other.
+        """
+        library = self.players[choice.data["target_index"]].library
+        count = int(choice.data["top_count"])
+        if choice.data.get("position") == "bottom":
+            return library[max(len(library) - count, 0):]
+        return library[:count]
+
+    def offer_library_bottom_order(
+        self, owner, count: int, *, chooser_index: int | None = None
+    ) -> bool:
+        """Ask for the order of the *count* cards an effect has just put on the
+        bottom of *owner*'s library "in any order". True when a seat was asked.
+
+        CR 401.4: "If an effect puts two or more cards in a specific position
+        in a library at the same time, the owner of those cards may arrange
+        them in any order. That library's owner doesn't reveal the order in
+        which the cards go into the library." The caller lays the cards down
+        first — it knows whether they came from another zone (the funnel,
+        CR 903.9b) or were only ever moved *within* the library, which is what
+        a looked-at or revealed pile is (CR 701.20b) — and the order is then
+        the ordinary ``reorder_library`` prompt pointed at the library's other
+        end. The arrangement Scroll Rack's top-of-library tail already has, for
+        its reason: the renderer, the wire action and the answer check all
+        exist, and a second prompt would be a second answer to one question.
+
+        **Only an interactive seat is asked.** "As they lay" is the default
+        order and taking it needs no prompt, so a headless or AI seat queues
+        nothing and consumes no randomness — which is what keeps a seeded run,
+        and every test written before the question existed, identical.
+
+        ``chooser_index`` is the seat that arranges where a card gives the
+        order to somebody other than the owner (the caster of a spell that
+        looks through an opponent's library, CR 608.2); absent, it is the
+        owner's by CR 401.4. Fewer than two cards leave no order to choose.
+        """
+        seat = self.seat_index(owner)
+        count = min(int(count), len(self.players[seat].library))
+        chooser = seat if chooser_index is None else chooser_index
+        if count < 2 or chooser not in self.interactive_seats:
+            return False
+        self.arm_pending_choice(
+            "reorder_library", chooser,
+            target_index=seat, top_count=count, position="bottom",
+            may_shuffle=False,
+        )
+        return True
+
     def _resolve_reorder_library(self, choice: PendingChoice, new_order: list, shuffle: bool) -> bool:
         target = self.players[choice.data["target_index"]]
         top_count = choice.data["top_count"]
+        # "…and the rest **on the bottom of your library in any order**."
+        # (Goblin Ringleader.) The same question about the library's other end:
+        # the pile is its last N cards, everything above them stays where it
+        # is, and element 0 of the answer is the uppermost of the pile — the
+        # first of them a draw would reach — which is what "leftmost" means on
+        # the prompt either way. No shuffle is ever offered there.
+        if choice.data.get("position") == "bottom":
+            pile = self.reorder_library_pile(choice)
+            count = len(pile)
+            if len(new_order) != count or sorted(new_order) != list(range(count)):
+                return False
+            target.library[len(target.library) - count:] = [
+                pile[i] for i in new_order
+            ]
+            self.log.append(
+                f"{target.name} put {count} cards on the bottom of their "
+                f"library in an order they chose"
+            )
+            self.discard_pending_choice(choice)
+            return True
         top = target.library[:top_count]
         rest = target.library[top_count:]
         # "Look at the top five cards of target player's library" (Visions) and
@@ -2161,6 +2245,16 @@ class PendingChoicesMixin:
     def _default_reorder_library(self, choice: PendingChoice) -> None:
         from ...ai_policy import choose_reorder_library_order
 
+        # The bottom of a library: as they lay. The order is the owner's
+        # freedom and nothing scores it — ``choose_reorder_library_order``
+        # ranks the *next draws*, which these are the furthest cards from — so
+        # the default is the order the effect put them down in, the one a seat
+        # that was never asked gets (``offer_library_bottom_order``).
+        if choice.data.get("position") == "bottom":
+            identity = list(range(len(self.reorder_library_pile(choice))))
+            if not self._resolve_reorder_library(choice, identity, shuffle=False):
+                self.discard_pending_choice(choice)
+            return
         order = choose_reorder_library_order(
             self, choice.player_index, choice.data["target_index"], choice.data["top_count"]
         )

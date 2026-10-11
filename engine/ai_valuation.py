@@ -893,6 +893,9 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
     * something put onto the battlefield **for its controller** that the type
       describes — a card from the controller's own hand (Belbe's Portal), a
       token the card creates (Volrath's Laboratory);
+    * cards of the type taken out of the controller's **own library** into
+      their hand (Brass Herald's reveal) — a type the deck does not hold makes
+      that sentence a four-card mill to the bottom;
     * the two derivation tables that read "of the chosen type" on lines the
       compiled program does not carry: an untap lock is a denial (An-Zerrin
       Ruins), a cost reduction a gift (Urza's Incubator) and a cost increase a
@@ -921,6 +924,13 @@ def chosen_creature_type_side(card: CardDefinition) -> str | None:
             sides.add("you")
         elif instruction.kind == "put_chosen_card_from_hand_onto_battlefield" and (
             payload.get("whose") in (None, "you")
+        ):
+            sides.add("you")
+        elif instruction.kind == "reveal_top_sorting_by_filter" and (
+            # The caster's own pile only: "each player reveals …" hands every
+            # seat its cards of the type, which says nothing about whose to
+            # name.
+            payload.get("whose") is None
         ):
             sides.add("you")
     text = card.oracle_text or ""

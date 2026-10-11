@@ -1014,7 +1014,7 @@ def reveal_top_sorting_by_chosen_name(game: Game, instruction: OracleInstruction
     return True, "resolved"
 
 
-def _place_sorted_reveal(game, caster, revealed, payload, matches) -> None:
+def _place_sorted_reveal(game, caster, revealed, payload, matches) -> tuple[list, list]:
     """Split one revealed pile between its two printed zones.
 
     The half :func:`reveal_top_sorting_by_chosen_name` and
@@ -1027,11 +1027,35 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> None:
     (``put_card_into_hand``, ``put_card_into_graveyard``), never by appending to
     a list: CR 903.9b rides the first and the discard/mill watchers ride the
     second.
+
+    "…and the rest **on the bottom of your library in any order**." (Goblin
+    Ringleader.) The one rest that is a *position* rather than a zone, and so
+    the one move here that is not a zone change: CR 701.20b leaves a revealed
+    card in the library it was turned up in, and the bottom of that library is
+    still that library. It is therefore laid down directly rather than through
+    ``put_card_into_library`` — CR 903.9b offers a commander the command zone
+    when it "would be put into its owner's … library **from anywhere**", and a
+    card that never left has come from nowhere (the same reading the scry and
+    look-and-bottom resolvers take). It is also the one placed as a pile
+    instead of card by card: CR 401.4 gives the order of cards put in one
+    position at one time to their owner, so they are gathered and the seam
+    that asks for it (``offer_library_bottom_order``) is called once every
+    find has been taken.
+
+    Returns what each half came to — ``(matched, rest)``, the cards in revealed
+    order — for a caller that says where they went; the two older callers read
+    neither.
     """
     match_zone = str(payload.get("match_zone", "hand"))
     rest_zone = str(payload.get("rest_zone", "graveyard"))
+    matched, rest, bottomed = [], [], []
     for card in revealed:
-        zone = match_zone if matches(card) else rest_zone
+        found = bool(matches(card))
+        (matched if found else rest).append(card)
+        zone = match_zone if found else rest_zone
+        if zone == "library_bottom":
+            bottomed.append(card)
+            continue
         if zone == "hand":
             game.put_card_into_hand(caster, card)
         elif zone == "battlefield":
@@ -1053,6 +1077,10 @@ def _place_sorted_reveal(game, caster, revealed, payload, matches) -> None:
             caster.exile.append(card)
         else:
             game.put_card_into_graveyard(caster, card, from_zone="library")
+    if bottomed:
+        caster.library.extend(bottomed)
+        game.offer_library_bottom_order(caster, len(bottomed))
+    return matched, rest
 
 
 @effect_handler("reveal_top_sorting_by_filter")
@@ -1069,11 +1097,28 @@ def reveal_top_sorting_by_filter(game: Game, instruction: OracleInstruction, con
     CR 701.20 shows the cards and moves none of them, so the pile is taken off
     the library here and every card is placed by this handler. Fewer cards than
     the printed number is an ordinary board — the reveal shows what is there.
+
+    "Put all **Goblin** cards revealed this way into your hand and the rest
+    **on the bottom of your library in any order**." (Goblin Ringleader and
+    Apocalypse's six other recruiters.) The same step with a subtype for the
+    predicate and a position for the rest. What went where is logged for that
+    rest and not for the others, because it is the one that leaves no trace: a
+    graveyard and an exile pile are public and can be read afterwards, and the
+    bottom of a library cannot (CR 401.2) — so the reveal line alone would
+    leave the table to work out which of four cards the player now holds.
     """
     count = resolve_amount(
         instruction.payload.get("amount", 0) or 0, context.x_value
     )
     described = dict(instruction.payload.get("filter") or {})
+    # "…all creature cards **of the chosen type**…" (Brass Herald). The word is
+    # the CR 614.1c record on the ability's source, turned here into the
+    # ordinary ``subtype_filter`` the card matcher reads. The source is read
+    # even if it has left the battlefield — the type it chose is its last known
+    # information (CR 608.2h). No record leaves the key in place and
+    # ``_card_matches_filter`` then refuses every card: nothing is kept, rather
+    # than every creature card.
+    described = _resolve_chosen_subtype(described, context.source_permanent)
     # "**Each player** reveals the top five cards of **their** library."
     # (Clear the Land.) One seat or every seat, and the procedure below is
     # identical either way — which is why this is a loop over a seat list
@@ -1100,12 +1145,23 @@ def reveal_top_sorting_by_filter(game: Game, instruction: OracleInstruction, con
         game.log.append(
             f"{looked.name} revealed {', '.join(card.name for card in revealed)}"
         )
-        _place_sorted_reveal(
+        matched, rest = _place_sorted_reveal(
             game, looked, revealed, instruction.payload,
             lambda card, _owner=looked: _card_matches_filter(
                 card, described, game=game, owner=_owner
             ),
         )
+        if instruction.payload.get("rest_zone") == "library_bottom":
+            kept = ", ".join(card.name for card in matched) or "no card"
+            where = (
+                "onto the battlefield"
+                if instruction.payload.get("match_zone") == "battlefield"
+                else "into their hand"
+            )
+            game.log.append(
+                f"{looked.name} put {kept} {where} and {len(rest)} card(s) "
+                f"on the bottom of their library"
+            )
     return True, "resolved"
 
 

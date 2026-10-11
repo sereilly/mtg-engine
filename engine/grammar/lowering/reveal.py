@@ -55,7 +55,7 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY)
-from ...subject_filters import card_only_filter
+from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
 from ._common import (
@@ -173,8 +173,20 @@ def _lower_reveal_top_sorting_by_filter(
     (CR 400.1), so a restriction that can only be tested on a permanent is one
     the sort would silently drop, and dropping it here would put the whole pile
     in the hand.
+
+    "Put all creature cards **of the chosen type** revealed this way into your
+    hand" (Brass Herald). The type is the CR 614.1c record on the ability's
+    *source*, which no card in a library can answer — so the key rides past the
+    card-only gate, exactly as Belbe's Portal's does in ``zones``, and the
+    handler turns it into an ordinary ``subtype_filter`` off that source before
+    any card is tested. Named at this call because each name is a claim that
+    the resolver really does that; unresolved, the key makes
+    ``_card_matches_filter`` refuse every card, and the whole pile goes to the
+    rest rather than to the hand.
     """
-    described = card_only_filter(node.filter.to_payload())
+    described = card_only_filter(
+        node.filter.to_payload(), carried_separately=SOURCE_RESOLVED_CARD_KEYS
+    )
     if described is None:
         raise LoweringError(
             "the sorted reveal cannot test this restriction on a card",
