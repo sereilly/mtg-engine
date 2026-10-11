@@ -690,6 +690,16 @@ def _cast_narrowing_admits(
 
         if not is_multicolored(_cast_colors(game, card, caster)):
             return False
+    # "…cast a **nonred** spell" (Dwarven Patrol). The colour rows above with
+    # the answer turned over, and over the same effective colours: a red-green
+    # spell *is* red (CR 105.2b) and does not answer, a colourless one is not
+    # and does (CR 105.2c) -- and a land is not a spell, so playing one never
+    # reaches here at all (the card's own ruling).
+    excluded_colour = trig.condition.payload.get("cast_excluded_color")
+    if excluded_colour and _COLOR_SYMBOLS.get(excluded_colour) in _cast_colors(
+        game, card, caster
+    ):
+        return False
     # "…casts a spell **of the chosen color**" (Jeweled Torque). CR 614.1c's
     # choice, recorded on the permanent as it entered — so, unlike every
     # narrowing above, the colour is not in the trigger's text at all and the
@@ -746,6 +756,17 @@ def _cast_narrowing_admits(
                 continue
             if cast_colors & game._effective_colors(candidate):
                 return False
+    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
+    # same reader the layer seed uses rather than as a substring of the type
+    # line — a substring match would let "Dog" answer for a "Dogpile", and would
+    # answer for a card *type* word too, which is the `cast_type` row's job.
+    cast_subtype = trig.condition.payload.get("cast_subtype")
+    if cast_subtype:
+        from .layer_bridge import printed_shape
+
+        _, subtypes = printed_shape(card)
+        if cast_subtype.lower() not in subtypes:
+            return False
     return True
 
 
@@ -791,40 +812,14 @@ def _controller_cast_filter(
         return False
     if trig.condition.kind == "enchantment_cast" and "enchantment" not in card.type_line.lower():
         return False
-    # "…a spell that's white, blue, black, or red" (Quirion Dryad): the
-    # colour list arrives as condition payload, the raw captured phrase; the
-    # trigger fires only when the cast spell shares at least one listed
-    # colour (CR 105.2b — a multicoloured object *is* each of its colours).
-    if not _cast_colour_union_admits(
-        trig.condition.payload.get("cast_colors"),
-        _cast_colors(game, card, caster_index),
-    ):
+    # Every printed narrowing of the cast — a colour, a colour list, a type, a
+    # union of types, a subtype — is asked of the one helper the other two cast
+    # scopes ask. This filter used to test four of them inline and none of the
+    # rest, so a narrowing the table carried on this scope and the helper
+    # alone read was dropped here in silence: "whenever you cast a
+    # **multicolored** spell" fired on every spell its controller cast.
+    if not _cast_narrowing_admits(game, permanent, trig, card, caster_index):
         return False
-    # "…a noncreature spell" (Spellgorger Weird): the type word from the
-    # trigger's own text, tested against the cast card's type line — "non"
-    # negates, so a noncreature trigger stays silent for a creature spell.
-    cast_type = trig.condition.payload.get("cast_type")
-    if cast_type:
-        type_line = card.type_line.lower()
-        if cast_type.startswith("non"):
-            if cast_type[3:] in type_line:
-                return False
-        elif cast_type not in type_line:
-            return False
-    # "…a **Dog** spell" (Rin and Seri). The printed subtype, read through the
-    # same reader the layer seed uses rather than as a substring of the type
-    # line — a substring match would let "Dog" answer for a "Dogpile", and would
-    # answer for a card *type* word too, which is the row above's job.
-    # "an **instant or sorcery** spell" — a printed union, so any of the listed
-    # types answers it (CR 205.2b — an object with several card types satisfies
-    # an effect applying to any of them). Its own key because
-    # the single-type row above tests "this one" and a union tests "any of
-    # these", and folding them would make one of the two silently wrong.
-    cast_types = trig.condition.payload.get("cast_types")
-    if cast_types:
-        type_line = card.type_line.lower()
-        if not any(word in type_line for word in cast_types.split(" or ")):
-            return False
     # "…your **first** … spell each turn" (Double Vision). The ordinal is asked
     # of the caster's own record of what they have cast this turn, counting only
     # the spells this condition's narrowing admits — the spell that fired this
@@ -838,13 +833,6 @@ def _controller_cast_filter(
             if _cast_narrowing_admits(game, permanent, trig, spell, caster_index)
         ]
         if len(matching) != 1 or matching[0] is not card:
-            return False
-    cast_subtype = trig.condition.payload.get("cast_subtype")
-    if cast_subtype:
-        from .layer_bridge import printed_shape
-
-        _, subtypes = printed_shape(card)
-        if cast_subtype.lower() not in subtypes:
             return False
     return True
 

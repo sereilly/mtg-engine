@@ -1192,6 +1192,18 @@ CARD_CHANNELS: tuple[tuple[str, object], ...] = (
         lambda card, s: stack_static_claims_line(s, card.name),
     ),
     (
+        # "Activate only if **Gerrard Capashen** is attacking." CR 602.5's
+        # clause with the card naming itself in it (CR 201.5). The sentence
+        # channel above asks the same table with no name in hand, so the row
+        # that reads "this <noun> is attacking" never saw the collapsed
+        # subject and the clause was reported unclaimed while the activation
+        # path — which does pass the name — refused the ability on it. A card
+        # channel for `stack_statics`' reason one entry up: only the card can
+        # say that the name in the clause is its own.
+        "activation_restrictions.py (self-named)",
+        lambda card, s: activation_restriction_line(s, card.name),
+    ),
+    (
         # Gaze of Pain: "you may … . **If you do**, it assigns no combat damage
         # this turn." One clause, two sentences, and the second is the half the
         # card is played for.

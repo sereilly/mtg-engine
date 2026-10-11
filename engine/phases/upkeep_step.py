@@ -1174,6 +1174,30 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 # other, where `count_from_payload` answers it.
                 if handler is not None and "x_from_count" in trig.instruction.payload:
                     handler = None
+                # The two fixed-damage rows read a number and deal it to the
+                # player whose upkeep it is, and nothing else. A printed
+                # **target** is something else: "…deals 1 damage to target
+                # opponent or planeswalker" (Scalding Tongs, Thumbscrews) and
+                # "…deals 3 damage to target creature you control" (Spiteful
+                # Bully) all dealt their damage to their own controller's face.
+                # So is an **intervening "if"**: the row queues a damage event
+                # of its own with no condition on it, so CR 603.4's second
+                # check — as the ability resolves — was never made (Misers'
+                # Cage, Kezzerdrix, Mask of Intolerance: answer the trigger by
+                # making its condition false and the damage came anyway).
+                # Either one is declined exactly as the where-clause above is,
+                # and the trigger goes on the stack as itself, where the
+                # target is chosen (CR 603.3d) and the gate re-asked.
+                if (
+                    handler is not None
+                    and kind == "deal_damage"
+                    and cond in ("upkeep_self", "upkeep_each")
+                    and (
+                        "targets" in trig.instruction.payload
+                        or "intervening_if" in trig.instruction.payload
+                    )
+                ):
+                    handler = None
                 if handler is None and cond in _ORDINARY_UPKEEP_SEATS:
                     # An upkeep trigger with nothing interactive about it —
                     # "At the beginning of your upkeep, you may search your

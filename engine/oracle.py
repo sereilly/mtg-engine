@@ -1325,6 +1325,18 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # reports supported and never fires.
     ("you_cast_spell",
      r"whenever you cast a (?P<cast_multicolored>)multicolored spell"),
+    # "Whenever you cast a **nonred** spell" (Dwarven Patrol), and the colour
+    # itself beside it. **Before the subtype row below** for the multicolored
+    # row's reason and a worse one: `[a-z][a-z-]+` took "nonred" for a creature
+    # type, so the Patrol compiled a trigger narrowed to a subtype called
+    # "nonred" that no spell has -- and only the grammar refusing the same
+    # words kept it from shipping silent. The negation is its own key rather
+    # than a "non" prefix on `color_word`: that key is looked up in the colour
+    # table, where "nonred" names nothing and admits every spell.
+    ("you_cast_spell",
+     r"whenever you cast a non(?P<cast_excluded_color>white|blue|black|red|green) spell"),
+    ("you_cast_spell",
+     r"whenever you cast a (?P<color_word>white|blue|black|red|green) spell"),
     ("you_cast_spell",              r"whenever you cast a (?P<cast_subtype>[a-z][a-z-]+) spell"),
     ("you_cast_spell",              r"whenever you cast a spell"),
     # "When **you play a card**, sacrifice this artifact." (Juju Bubble.)

@@ -1365,12 +1365,19 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             return False
         return life_holds(player)
 
-    if kind == "cards_in_zones":
+    if kind in ("cards_in_zones", "distinct_among"):
         # "If there are **ten or more creature cards total in all graveyards**"
         # (Avatar of Woe). The count is a ``count_spec`` — the one a
         # where-clause over the same noun phrase builds — so it is answered by
         # the one evaluator every such count goes through, and the narrowings a
         # card in a graveyard can carry are the ones that one tests.
+        #
+        # "If there are **four or more basic land types among lands that player
+        # controls**" (Mask of Intolerance) is the same comparison over the
+        # same kind of spec, with the aggregate naming what is counted — two
+        # kinds because the two are admitted in different places (a cast-time
+        # cost gate reads piles, never a seat an event froze), one branch
+        # because nothing about answering them differs.
         from ._common import count_from_payload
 
         return _compare_count(

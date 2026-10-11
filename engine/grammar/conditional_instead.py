@@ -102,7 +102,7 @@ def _parse_conditional_instead_rider(
     """
     last = steps[-1] if steps else None
     last_guard, replaced = _guarded(last)
-    if not isinstance(replaced, _REPLACEABLE):
+    if not _is_replaceable(replaced):
         return False
     mark = stream.mark()
     if not stream.accept_word("if"):
@@ -129,7 +129,7 @@ def _parse_conditional_instead_rider(
         except GrammarError:
             stream.reset(mark)
             return False
-    if type(replacement) is not type(replaced):
+    if not _same_shape(replaced, replacement):
         stream.reset(mark)
         return False
     # "Counter target spell **if its mana value is 2 or less**. If this spell
@@ -232,11 +232,54 @@ def _accept_resized_this_way(stream: TokenStream, replaced):
 #: fronted spelling Urza's Rage already reads, over a sentence that names
 #: nobody: the searcher is the spell's controller in both, so it has no row in
 #: `_INSTEAD_SUBJECT_FIELDS` and needs none.
+#:
+#: `LoseLife` and `Draw` joined them for Apocalypse's Sanctuaries -- "Target
+#: player loses 1 life. If you control a green permanent and a white permanent,
+#: **that player** loses 3 life instead." (Necra Sanctuary) and "…draw a card,
+#: then discard a card. If you control a red permanent and a green permanent,
+#: **instead** draw two cards, then discard a card." (Ceta Sanctuary). The
+#: second is the first pair whose replaced sentence is *two* actions, which is
+#: `_is_replaceable`'s other arm rather than a row here.
 _REPLACEABLE = (
     ast.GainLife, ast.AddMana, ast.DealDamage,
     ast.Discard, ast.Pump, ast.PreventDamage,
     ast.CounterSpell, ast.Destroy, ast.SearchLibrary,
+    ast.LoseLife, ast.Draw,
 )
+
+
+def _is_replaceable(statement) -> bool:
+    """Whether the rider may replace *statement*: one kind in ``_REPLACEABLE``,
+    or a "…, then …" sentence made of nothing else.
+
+    "Draw a card, then discard a card. If …, instead draw two cards, then
+    discard a card." (Ceta Sanctuary.) The replaced *sentence* is the unit —
+    the ruling is "one or two cards, but never three" — and a sentence joined
+    by "then" reaches the loop as one :class:`ast.Sequence`. Admitted only
+    when every step is a kind the rider replaces alone, so the sequence widens
+    the set by no kind `_REPLACEABLE` does not already name.
+    """
+    if isinstance(statement, ast.Sequence):
+        return all(isinstance(step, _REPLACEABLE) for step in statement.steps)
+    return isinstance(statement, _REPLACEABLE)
+
+
+def _same_shape(replaced, replacement) -> bool:
+    """Whether *replacement* is *replaced* said again: the same kind, and for
+    a "…, then …" sentence the same kinds in the same order.
+
+    The type agreement the rider has always required, one level in. A
+    sequence replacing a sequence of another length, or with one step of
+    another kind, is a different sentence standing in for this one.
+    """
+    if type(replacement) is not type(replaced):
+        return False
+    if not isinstance(replaced, ast.Sequence):
+        return True
+    return len(replacement.steps) == len(replaced.steps) and all(
+        type(new) is type(old)
+        for new, old in zip(replacement.steps, replaced.steps)
+    )
 
 
 def _guarded(statement):
@@ -274,6 +317,8 @@ _INSTEAD_SUBJECT_FIELDS = {
     ast.DealDamage: "recipients",
     ast.CounterSpell: "subject",
     ast.Destroy: "subject",
+    ast.LoseLife: "player",
+    ast.Draw: "player",
 }
 
 #: The object back-references: a pronoun, a demonstrative, and the marker
@@ -346,6 +391,31 @@ def _instead_subject(named, original):
     return original if announced and restates_target(named, original) else None
 
 
+def _resized_damage(replaced, replacement):
+    """*replaced* at the size a recipient-less *replacement* prints, or None
+    when that sentence is anything but the first with its number changed.
+
+    "…this enchantment deals 1 damage to target creature. If …, this
+    enchantment deals 3 damage **instead**." (Raka Sanctuary.) The second
+    sentence names nobody at all, and the only recipient in the pair is the
+    replaced sentence's — exactly one of the two ever happens, and CR 601.2c
+    allows one announcement whichever it is. So the replacement *is* that
+    sentence with the printed number in it, riders and all, which is the
+    reading ``_accept_resized_this_way`` gives "prevent the next 6 damage this
+    way". Left with no recipient, the arm lowered to no instruction and the
+    upgrade dealt nothing while the card read supported.
+
+    Held to that and no further: the same source and a bare amount. A
+    replacement dealing its damage from somewhere else, or printing a rider of
+    its own, is restating something this cannot name, and refuses the rider.
+    """
+    if not replaced.recipients:
+        return None
+    if replacement != ast.DealDamage(replaced.source, replacement.amount, ()):
+        return None
+    return replace(replaced, amount=replacement.amount)
+
+
 def _instead_inherits_subject(replaced, replacement):
     """*replacement* with every back-reference to *replaced*'s subject
     resolved, or None when one points at something *replaced* did not name.
@@ -358,8 +428,18 @@ def _instead_inherits_subject(replaced, replacement):
     word means and what a mismatch does.
 
     A kind with no row names no subject a second sentence could point back
-    at, and is passed through.
+    at, and is passed through. A "…, then …" sentence is resolved step by
+    step against the step it restates (``_same_shape`` has already paired
+    them).
     """
+    if isinstance(replaced, ast.Sequence):
+        resolved_steps = tuple(
+            _instead_inherits_subject(old, new)
+            for old, new in zip(replaced.steps, replacement.steps)
+        )
+        if any(step is None for step in resolved_steps):
+            return None
+        return ast.Sequence(resolved_steps)
     field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
     if field is None:
         return replacement
@@ -369,6 +449,8 @@ def _instead_inherits_subject(replaced, replacement):
         if resolved is None:
             return None
         return replacement if resolved is named else replace(replacement, **{field: resolved})
+    if not named:
+        return _resized_damage(replaced, replacement)
     # A recipient list, compared position by position. A list of another
     # length restates nothing position by position, so it is legal only when
     # no word in it points back.
