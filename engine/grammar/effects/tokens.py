@@ -235,6 +235,14 @@ def _parse_token_name_words(stream: TokenStream) -> str | None:
 _TOKEN_RECIPIENT_PREFIXES: tuple[tuple[tuple[str, ...], str], ...] = (
     (("each", "player"), "each_player"),
     (("each", "opponent"), "each_opponent"),
+    # "…exile it and **each other player** creates a 3/3 black Angel creature
+    # token with flying." (Haunted Angel.) The third spelling of the seat
+    # `seats.parse_player_ref` already reads this way, and for its reason:
+    # CR 102.2/102.3 make a player's opponents every player who is not them,
+    # and this engine has no teams — so "each other player" and "each opponent"
+    # name the same seats in a duel and in a free-for-all alike. A row rather
+    # than a second referent, so the two positions read one phrase one way.
+    (("each", "other", "player"), "each_opponent"),
     (("target", "opponent"), "target_opponent"),
     # "For each creature that died this way, **that player** creates two 1/1 red
     # Goblin creature tokens." (Mogg Infestation.) Anaphoric rather than

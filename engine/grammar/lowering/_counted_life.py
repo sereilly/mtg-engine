@@ -48,7 +48,8 @@ since it left ``game``, 219 were one more printed shape of a gain's amount and
 64 were a seat, a gain's or a loss's.
 """
 
-from ...oracle_types import OracleInstruction, X_FROM_COUNT
+from ...oracle_types import (DISCARDED_THIS_WAY, OracleInstruction,
+                             X_FROM_COUNT)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (count_filter_on_frozen_seat, count_spec,
@@ -491,6 +492,42 @@ def lower_per_each_gain(
             )
         payload["per_each"] = {
             "recorded_cards": "sacrificed_cards", "filter": described,
+        }
+        return (OracleInstruction("target_gains_life", "", payload),)
+    if isinstance(node.per_each, ast.CountOfDiscardsThisWay):
+        # "Target player discards two cards. You gain 3 life **for each land
+        # card discarded this way**." (Gerrard's Verdict.) The branch above one
+        # record over, on the same ``recorded_cards`` channel: the list the
+        # discard in front wrote, counted against the printed phrase. The
+        # *gainer* is the effect's controller and the *discarder* is whoever
+        # the first sentence named, which is why the count is read off the
+        # record and not off anybody's graveyard.
+        if node.player.kind != "you":
+            raise LoweringError(
+                "a gain counted off this effect's own discard is the "
+                "effect's controller's",
+                node=node,
+            )
+        if DISCARDED_THIS_WAY not in produced:
+            raise LoweringError(
+                f"back-reference to {DISCARDED_THIS_WAY!r} with no producer "
+                "in this effect",
+                node=node,
+            )
+        from ...subject_filters import card_only_filter
+
+        described = card_only_filter(node.per_each.filter.to_payload())
+        if described is None or dropped_narrowings(
+            node.per_each.filter, node.per_each.filter.to_payload()
+        ):
+            # Only what is *printed* is testable off a record (CR 613.1): a
+            # card in a hand has no computed characteristics.
+            raise LoweringError(
+                "a discarded-card count cannot test this restriction",
+                node=node,
+            )
+        payload["per_each"] = {
+            "recorded_cards": DISCARDED_THIS_WAY, "filter": described,
         }
         return (OracleInstruction("target_gains_life", "", payload),)
     if isinstance(node.per_each, ast.CountersRemovedForCost):

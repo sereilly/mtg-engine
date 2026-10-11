@@ -18,6 +18,7 @@ from ..cost_records import accept_counters_removed_for_cost
 from ..records import (_parse_for_each_this_way,
                        scaled_by_recorded_count,
                       accept_plus_per_cost_paid,
+                      parse_for_each_discarded_this_way,
                       parse_for_each_milled_this_way,
                       parse_for_each_sacrificed_this_way)
 
@@ -331,6 +332,15 @@ def _parse_gains(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
                     # than the card prints, and the failure that took this line
                     # down.
                     per_each = parse_for_each_sacrificed_this_way(
+                        stream, parse_object_filter
+                    )
+                if per_each is None:
+                    # "You gain 3 life **for each land card discarded this
+                    # way**." (Gerrard's Verdict.) The same shape one record
+                    # over, read here for the reason the reader above is: the
+                    # noun fallback below would take "land card" for a count of
+                    # the battlefield and strand the participle.
+                    per_each = parse_for_each_discarded_this_way(
                         stream, parse_object_filter
                     )
                 if per_each is None:

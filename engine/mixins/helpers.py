@@ -17,7 +17,8 @@ from ..control import (
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
-from ..exiled_records import forget_record, newest_record_for
+from ..exiled_records import (forget_record, newest_record_for,
+                              record_exiled_card)
 from ..events import Event, collect, emit
 from ..faces import whole_card
 from ..layer_bridge import computed_controller
@@ -2251,6 +2252,22 @@ class GameHelpersMixin:
                 entries.append(
                     link_exiled_card(source, card, seat, face_down=face_down)
                 )
+            if face_down and (source is None or not self.is_on_battlefield(source)):
+                # CR 406.3 needs a record somebody can still *find*. A spell
+                # has no permanent to hold one ("Target player exiles all
+                # cards from their hand face down", Suppress), and a permanent
+                # that paid for the ability with itself is not on a battlefield
+                # to be scanned ("{T}, Sacrifice this artifact: Each player
+                # exiles all cards from their hand face down", Memory Jar) — so
+                # for both the fact goes on the game's register, which is
+                # `exile_top_of_library`'s arrangement for Three Wishes. Without
+                # it the pile was face up to every viewer for as long as it
+                # stayed exiled, which for Memory Jar was always.
+                #
+                # Only when the link cannot be seen: `face_down_exiled_cards`
+                # counts both registers, and a card recorded on each would hide
+                # a second, face-up copy of itself.
+                record_exiled_card(self, card, seat, face_down=True)
         if context is not None:
             context.results.setdefault("exiled_cards", []).extend(taken)
             context.results.setdefault("exiled_entries", []).extend(entries)

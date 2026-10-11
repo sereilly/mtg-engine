@@ -103,6 +103,17 @@ _DELAYED_OPENERS: tuple[tuple[tuple[str, ...], str, bool, str, bool], ...] = (
     # wrong card — the same distinction the two upkeep rows draw.
     (("at", "the", "beginning", "of", "your", "next", "end", "step"),
      "controllers_next_end_step", True, "until_it_triggers", False),
+    # "At the beginning of **the end step of that player's next turn**, that
+    # player returns those cards to their hand." (Suppress.) The fourth end-step
+    # row and the fourth seat: not the next end step there is, not the
+    # controller's own, but one belonging to the player the sentence in front
+    # named — and of their *next* turn, which on that player's own turn is the
+    # one after this (see `delayed_triggers.EVENTS_AFTER_THIS_TURN`). Binds no
+    # object: the possessive names a seat, which is `binds_player` one layer
+    # down, exactly as the two bound-player upkeep rows below are read.
+    (("at", "the", "beginning", "of", "the", "end", "step", "of", "that",
+      "player", "'s", "next", "turn"),
+     "bound_players_next_turns_end_step", True, "until_it_triggers", False),
     # "At the beginning of your next upkeep, …" (Giant Slug, Hazezon Tamar).
     # The controller's own upkeep, however many turns away — so it waits for
     # the step rather than expiring with the turn.

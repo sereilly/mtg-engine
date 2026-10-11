@@ -761,6 +761,39 @@ def parse_for_each_sacrificed_this_way(
     return ast.CountOfSacrificesThisWay(filt)
 
 
+def parse_for_each_discarded_this_way(
+    stream: TokenStream, parse_filter,
+) -> "ast.CountOfDiscardsThisWay | None":
+    """``for each <cards> discarded this way`` — how many of what an earlier
+    step of this same effect *discarded* answer a printed noun phrase.
+
+    "Target player discards two cards. You gain 3 life **for each land card
+    discarded this way**." (Gerrard's Verdict.)
+
+    Its own reader beside :func:`parse_for_each_sacrificed_this_way`, which it
+    is shaped exactly like and names a different record. The **bare** "for each
+    card discarded this way" is ``_THIS_WAY_COUNTS``' row and is read first by
+    every caller, so this one is reached only by a *narrowed* phrase — which a
+    slot holding a number cannot answer. A phrase that does not say **card** is
+    refused: what is discarded is a card in a hand (CR 701.9a), and "for each
+    creature discarded this way" is a sentence nobody printed.
+
+    Returning None leaves the cursor where it was.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("for", "each"):
+        return None
+    try:
+        filt = parse_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not filt.is_card or not stream.accept_phrase("discarded", "this", "way"):
+        stream.reset(mark)
+        return None
+    return ast.CountOfDiscardsThisWay(filt)
+
+
 def parse_for_each_revealed_this_way(
     stream: TokenStream, parse_filter,
 ) -> "ast.CountOfRevealsThisWay | None":

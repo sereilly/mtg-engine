@@ -576,6 +576,18 @@ class ObjectFilter:
     # this position has one at all — is the lowering's to decide, and a
     # lowering not written for the field refuses it by name.
     shares_color_with_it: bool = False
+    #: "…discards all cards **of each of the sacrificed creature's colors**."
+    #: (Mind Extraction.) The same relation with a different referent: not
+    #: the object an event was about but the permanent this spell's own
+    #: **cost** sacrificed (CR 601.2h), which is gone by resolution and read as
+    #: last-known information (CR 608.2h) off the record the payment kept.
+    #: "Each of" a multicolored creature's colors is *any* of them — CR 105.2b,
+    #: and the card's own ruling — and a colorless one has none.
+    #:
+    #: Its own field rather than a value of the one above, because who can
+    #: answer differs: that one needs the firing event and this one the cast's
+    #: cost record, and a lowering written for either refuses the other by name.
+    colors_of_sacrificed_for_cost: bool = False
     # "…**other than a basic land**" / "…**except for basic lands**" (Eye of
     # Singularity prints both, one on each line). One field for two spellings,
     # because they name the same set: a permanent that is a land with the Basic

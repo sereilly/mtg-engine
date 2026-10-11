@@ -238,6 +238,8 @@ class _FilterDraft:
     name_from_recorded_card: bool = False
     #: See ``ast.ObjectFilter.shares_color_with_it``.
     shares_color_with_it: bool = False
+    #: See ``ast.ObjectFilter.colors_of_sacrificed_for_cost``.
+    colors_of_sacrificed_for_cost: bool = False
     excluded_basic_lands: bool = False
     created_with_source: bool = False
     #: See ``ast.ObjectFilter.put_onto_battlefield_by_source``.
@@ -292,6 +294,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         name_from_event=d.name_from_event,
         name_from_recorded_card=d.name_from_recorded_card,
         shares_color_with_it=d.shares_color_with_it,
+        colors_of_sacrificed_for_cost=d.colors_of_sacrificed_for_cost,
         excluded_basic_lands=d.excluded_basic_lands,
         any_classes=d.any_classes,
         targets_object=d.targets_object,

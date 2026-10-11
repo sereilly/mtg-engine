@@ -99,6 +99,16 @@ def _lower_gain_life(
     event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     recipient = "caster" if node.player.kind == "you" else "target"
+    # "**Each player** gains 1 life." (Putrid Warrior.) "…**each opponent**
+    # gains that much life." (Grollub.) A *set* of seats, which is the loss's
+    # own reading of the same two words one function down — and until Putrid
+    # Warrior was driven it was not this function's: the quantifier fell
+    # through to "target", so one seat gained and the card compiled supported.
+    # In a duel "each opponent" and "the default target" are the same player,
+    # which is how Grollub looked right for nine sets; "each player" is wrong
+    # at two seats already, because the gain reached one of them.
+    if node.player.kind in _PER_SEAT_LIFE_RECIPIENTS:
+        recipient = node.player.kind
     # "**Its controller** gains life equal to its mana value." (Illumination.)
     # The controller of the object the previous step acted on, which is neither
     # of the two seats a life gain normally knows — and by the time this runs

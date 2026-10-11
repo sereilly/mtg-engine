@@ -160,6 +160,15 @@ def take_special_action(
             if arrived
             else f"{player.name} discarded {card.name}, and it was diverted"
         )
+        # …and it is still CR 701.9a's discard, so the board's watchers hear of
+        # it: the move alone was a discard nothing could see, and "whenever an
+        # opponent discards a card" (Megrim) did nothing. Announced rather than
+        # run through ``_discard_card``, because the two replacements that seam
+        # asks are both about a discard something *caused* — "if an effect
+        # causes you to discard" (Library of Leng), "a spell or ability an
+        # opponent controls causes" (Dodecapod) — and a special action is the
+        # player's own (CR 116.1), caused by nothing.
+        game.announce_discard(player, card)
         _priority_returns(game)
         return None
     return f"no special action named {kind!r}"

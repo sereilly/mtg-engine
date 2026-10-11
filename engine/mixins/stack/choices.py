@@ -56,6 +56,9 @@ from ...oracle_types import (SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
 # (Planar Overlay's "return those lands"); on a line of its own so the import
 # above, which every round appends to, cannot collide with it.
 from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
+# Which cards a chosen discard took (Gerrard's Verdict); its own line for the
+# reason the one above has one.
+from ...oracle_types import DISCARDED_THIS_WAY
 from ...search_filters import landing_seat, search_matches, searched_seat
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -2275,14 +2278,19 @@ class PendingChoicesMixin:
         if any(index not in eligible for index in chosen):
             return False
         # Remove in descending order so earlier indices stay valid as we pop.
+        took: list = []
         for hand_index in sorted(chosen, reverse=True):
-            if not _resolve_one_discard(self, choice.player_index, hand_index, to_library):
+            if not _resolve_one_discard(
+                self, choice.player_index, hand_index, to_library, took=took
+            ):
                 return False
         self.discard_pending_choice(choice)
-        self._after_discard_answered(choice, len(chosen))
+        self._after_discard_answered(choice, len(chosen), took)
         return True
 
-    def _after_discard_answered(self, choice: PendingChoice, discarded: int) -> None:
+    def _after_discard_answered(
+        self, choice: PendingChoice, discarded: int, took: list | None = None
+    ) -> None:
         """Everything that reads *how many* cards were actually discarded.
 
         One place, because both answer paths — a seat's own picks and the
@@ -2309,6 +2317,13 @@ class PendingChoicesMixin:
             # key cannot be both.
             by_seat = results.setdefault(DISCARDED_BY_SEAT, {})
             by_seat[choice.player_index] = discarded
+            # …and *which* cards went, for the sentence that asks about them
+            # rather than about how many: "You gain 3 life for each **land
+            # card** discarded this way" (Gerrard's Verdict). Extended rather
+            # than assigned, as the random discard's record is: two discards in
+            # one resolution are one "this way". A card that went somewhere
+            # hidden is not in *took* (CR 701.9c) and is counted above only.
+            results.setdefault(DISCARDED_THIS_WAY, []).extend(took or ())
         player = self.players[choice.player_index]
         if choice.data.get("draw_that_many") and discarded > 0:
             # CR 614.5: a draw a replacement effect *created* is not replaced
@@ -2592,6 +2607,14 @@ class PendingChoicesMixin:
             # after one and not after two would be answering a card nobody
             # printed.
             up_to=bool(choice.data.get("up_to")),
+            # CR 109.5: the picks after the first are the same spell's, and
+            # they are armed from an *answer* — when nothing is resolving and
+            # `arm_pending_choice` has no seat to stamp. Carried, so the second
+            # card Mind Warp takes was caused by the same player as the first.
+            **(
+                {"_cause_seat": choice.data["_cause_seat"]}
+                if choice.data.get("_cause_seat") is not None else {}
+            ),
         )
 
     def _record_revealed_hand_pick(
@@ -2641,7 +2664,15 @@ class PendingChoicesMixin:
             # nothing else".
             return True
         if fate == "discard":
-            return _resolve_one_discard(self, victim_index, hand_index, to_library=False)
+            # The causing seat comes off *this* prompt: `_resolve_one_discard`
+            # looks its own up under the ``discard`` kind, which is not the
+            # prompt an opponent's pick out of a revealed hand is — so a
+            # Psychic Purge taken by Coercion was "caused by nobody" whenever
+            # the caster answered from a prompt rather than a default.
+            return _resolve_one_discard(
+                self, victim_index, hand_index, to_library=False,
+                cause_seat=choice.data.get("_cause_seat"),
+            )
         if fate == "library_top":
             # "Put that card on top of that player's library." (Painful
             # Memories.) Both seams, and both for the reason they exist: a hand
@@ -2848,12 +2879,14 @@ class PendingChoicesMixin:
         from ...handlers.zones import _resolve_one_discard
 
         discarded = 0
+        took: list = []
         for _ in range(int(choice.data["count"])):
             eligible = self.live_discard_candidates(choice)
             if not eligible:
                 break
             if not _resolve_one_discard(
-                self, choice.player_index, eligible[0], to_library=False
+                self, choice.player_index, eligible[0], to_library=False,
+                took=took,
             ):
                 break
             discarded += 1
@@ -2870,7 +2903,7 @@ class PendingChoicesMixin:
         # not evaluate, not a claim about the pool, and the next card to print a
         # ceiling whose payoff is *not* worth the cards is what would need a
         # real valuation here rather than a default.
-        self._after_discard_answered(choice, discarded)
+        self._after_discard_answered(choice, discarded, took)
 
     def auto_resolve_pending_discard(self) -> None:
         """Resolve a pending discard with a default choice (the lowest-index cards,
@@ -7608,7 +7641,16 @@ class PendingChoicesMixin:
         for perm in chosen_perms:
             self.sacrifice_permanent(perm)
         for i in sorted(hand, reverse=True):
-            self.put_card_into_graveyard(player, player.hand.pop(i))
+            # "…Players **discard** cards … the same way." Through the discard
+            # seam, never straight to the graveyard: it is CR 701.9a's event,
+            # and by the bare move no "whenever a player discards a card" ever
+            # heard of the largest discard the card makes. The cause is the
+            # seat that cast it, off the prompt (the answer arrives after the
+            # resolution has returned).
+            self._discard_card(
+                player, player.hand.pop(i),
+                cause_seat=choice.data.get("_cause_seat"),
+            )
         self.discard_pending_choice(choice)
         self.log.append(f"{player.name} resolved their Balance sacrifices")
         return True
@@ -9057,6 +9099,7 @@ class PendingChoicesMixin:
     def arm_discard_unless_pay_life(
         self, player_index: int, *, card, life: int, source_name: str,
         queued_draws: int = 0, queued_exclude_sources: tuple[int, ...] = (),
+        cause_seat: int | None = None,
     ) -> None:
         """Offer *player_index* the choice of paying *life* or discarding *card*.
 
@@ -9087,6 +9130,12 @@ class PendingChoicesMixin:
             _card=card,
             _queued_draws=int(queued_draws),
             _queued_exclude_sources=tuple(queued_exclude_sources),
+            # Whose ability would make this seat discard (CR 109.5): the
+            # permanent printing the sentence, which is not whoever happens to
+            # be resolving when the draw it replaces is made — a draw step has
+            # nobody resolving at all. Named by the caller, so
+            # `arm_pending_choice`'s own stamp never overrides it.
+            **({"_cause_seat": int(cause_seat)} if cause_seat is not None else {}),
         )
 
     def confirm_discard_unless_pay_life(
@@ -9127,7 +9176,11 @@ class PendingChoicesMixin:
                 f"({data.get('source_name', '')})"
             )
         elif card is not None and self.take_card_from_hand(player, card):
-            self.put_card_into_graveyard(player, card)
+            # Through the discard seam, never straight to the graveyard: a
+            # discard is CR 701.9a's event, so a replacement over it (Library
+            # of Leng, Dodecapod) and every watcher of one (Megrim) sees this
+            # one too. The cause is the seat the offer was armed for.
+            self._discard_card(player, card, cause_seat=data.get("_cause_seat"))
             self.log.append(
                 f"{player.name} discarded {data.get('card_name', 'a card')} "
                 f"({data.get('source_name', '')})"

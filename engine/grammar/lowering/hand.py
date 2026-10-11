@@ -55,6 +55,7 @@ from ._common import (_amount_payload, _describe_targets, _is_you,
 from ._events import (_DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER)
+from ._cost_records import SACRIFICED_FOR_COST
 from ._record_keys import CHOSEN_HAND_CARDS_RESULT
 
 
@@ -389,6 +390,18 @@ def _lower_discard(
                     described_filter, mana_value_equals_chosen_number=False
                 )
                 carried["mana_value_from"] = CHOSEN_NUMBER_THIS_WAY
+            # "…discards all cards **of each of the sacrificed creature's
+            # colors**." (Mind Extraction.) A fourth record, and the one that
+            # is not a step's: what the spell's own *cost* ate (CR 601.2h),
+            # which a different printed line charges and this clause cannot
+            # see — so there is no producer to demand, for the reason
+            # ``_record_conditions`` gives for ``CostObjectWas``. An unpaid
+            # channel has no colours, and the handler discards nothing.
+            if described_filter.colors_of_sacrificed_for_cost:
+                described_filter = dataclasses.replace(
+                    described_filter, colors_of_sacrificed_for_cost=False
+                )
+                carried["any_colors_from_cost"] = SACRIFICED_FOR_COST
             described = chargeable_card_filter(described_filter)
             if described is None:
                 raise LoweringError(

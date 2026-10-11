@@ -796,23 +796,34 @@ def _parse_put_exiled_this_way(
         except GrammarError:
             stream.reset(ahead)
             fronted = None
-    subject = parse_recipient(stream)
-    if not isinstance(subject, ast.TargetSpec):
-        stream.reset(mark)
-        return None
-    if subject.quantifier not in ("all", "each") or subject.targeted:
-        stream.reset(mark)
-        return None
-    if not subject.filter.is_card:
-        stream.reset(mark)
-        return None
-    pronoun = "you" if player is None or player.kind == "you" else "they"
-    if not stream.accept_word(pronoun):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("exiled", "this", "way"):
-        stream.reset(mark)
-        return None
+    # "…that player returns **those cards** to their hand." (Suppress.) The
+    # same record by its other name: with a seat printed in front of the verb,
+    # "those cards" are the ones that seat's earlier step put away, and the
+    # lowering's producer gate is what refuses the pronoun where no step of
+    # the effect exiled a pile for it to name.
+    if (
+        player is not None and fronted is None
+        and stream.accept_phrase("those", "cards")
+    ):
+        subject = ast.TargetSpec("all", ast.ObjectFilter(is_card=True))
+    else:
+        subject = parse_recipient(stream)
+        if not isinstance(subject, ast.TargetSpec):
+            stream.reset(mark)
+            return None
+        if subject.quantifier not in ("all", "each") or subject.targeted:
+            stream.reset(mark)
+            return None
+        if not subject.filter.is_card:
+            stream.reset(mark)
+            return None
+        pronoun = "you" if player is None or player.kind == "you" else "they"
+        if not stream.accept_word(pronoun):
+            stream.reset(mark)
+            return None
+        if not stream.accept_phrase("exiled", "this", "way"):
+            stream.reset(mark)
+            return None
     if fronted is not None:
         zone = fronted
     else:

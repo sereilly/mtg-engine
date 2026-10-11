@@ -180,6 +180,15 @@ DELAYED_EVENTS: dict[str, str] = {
     # `next_end_step` row above, and the two upkeep rows below, for why that is
     # a separate event and not a second spelling.
     "controllers_next_end_step": "the end step",
+    # "At the beginning of the end step of **that player's next turn**, that
+    # player returns those cards to their hand." (Suppress.) The third end-step
+    # row, and the seat is what makes it a third: a player the creating effect
+    # named, who is neither the ability's controller nor (necessarily) the
+    # active player when it is created. Seated by ``bound_player_index`` — see
+    # :data:`EVENTS_SEATED_BY_BOUND_PLAYER` — and held past the turn it was
+    # armed in by :data:`EVENTS_AFTER_THIS_TURN`: cast on that player's own
+    # turn, their "next turn" is not this one.
+    "bound_players_next_turns_end_step": "the end step",
     # "Take an extra turn after this one. At the beginning of **that turn's**
     # end step, you lose the game." (Final Fortune.) Not the two rows above and
     # not a narrowing of either: "that turn" is the turn the *same effect* just
@@ -359,7 +368,14 @@ WHILE_THE_GAME_LASTS = "while_the_game_lasts"
 #: A set here rather than a flag on the entry, for :data:`DELAYED_EVENTS`'
 #: reason: which turn a printed phrase names is a fact about the *event*, and a
 #: per-entry flag would have a default whose safe value differs per card.
-EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({"granted_extra_turns_end_step"})
+EVENTS_AFTER_THIS_TURN: frozenset[str] = frozenset({
+    "granted_extra_turns_end_step",
+    # "…the end step of that player's **next turn**" (Suppress). Cast during
+    # that player's own turn — a sorcery's caster targeting themselves, or an
+    # ability with the same words — the turn the end-step site is about to
+    # announce is *this* one, and the words name the one after.
+    "bound_players_next_turns_end_step",
+})
 
 
 #: Events whose *seat* is the player the creating effect recorded rather than
@@ -378,6 +394,9 @@ EVENTS_SEATED_BY_BOUND_PLAYER: frozenset[str] = frozenset({
     # possessive naming the same kind of seat: the player an earlier step of the
     # creating effect recorded, not the ability's controller.
     "bound_players_upkeep",
+    # "…the end step of **that player's** next turn" (Suppress). The same
+    # possessive on a different step.
+    "bound_players_next_turns_end_step",
 })
 
 

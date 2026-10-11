@@ -11,6 +11,9 @@ from ..exiled_records import (record_exiled_card, records_for_cards,
 from ..linked_exile import (LEAVES, UNTAPPED, link_exiled_card, linked_entries,
                             take_linked_entries, take_linked_entry_at,
                             until_leaves_has_ended)
+# Which exiled cards are face down (CR 406.3) — its own line, so the import
+# above, which rounds append to, cannot collide with it.
+from ..linked_exile import face_down_exiled_cards
 from ..keywords import grant_keyword
 from ..models import Permanent
 from ._common import (
@@ -1300,6 +1303,12 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     # same to the draw, and writing it is what says the number is this step's
     # answer rather than an absence.
     context.results["discarded_count"] = 0
+    # …and *which* cards, for "You gain 3 life for each **land card** discarded
+    # this way" (Gerrard's Verdict). Seeded empty for the count's reason: a
+    # missing key and an empty list read the same to the sentence behind this
+    # one, and writing it is what says this step answered. The prompt fills it
+    # (`_after_discard_answered`), since nobody knows the cards until then.
+    context.results.setdefault(DISCARDED_THIS_WAY, [])
     if actual <= 0:
         game.log.append(f"{target.name} has no cards to discard")
         return True, "resolved"
@@ -1362,9 +1371,25 @@ def opponent_discards_random_card_on_damage(game: Game, instruction: OracleInstr
     return True, "resolved"
 
 
-def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_library: bool) -> bool:
+def _resolve_one_discard(
+    game: Game, player_index: int, hand_index: int, to_library: bool,
+    *, took: list | None = None, cause_seat: int | None = None,
+) -> bool:
     """Move one chosen card from a player's hand to their graveyard (or, with
-    Library of Leng, the top of their library). Returns False on a bad index."""
+    Library of Leng, the top of their library). Returns False on a bad index.
+
+    *took* collects **which** card went, for the sentence behind the discard
+    that asks ("You gain 3 life for each land card discarded this way",
+    Gerrard's Verdict) — the chosen discard's half of the record
+    ``discard_x_target_cards`` writes for a random one, under the same rule:
+    a card that went to a *hidden* zone unrevealed (Library of Leng's library
+    top) has undefined characteristics (CR 701.9c) and is counted, not listed.
+
+    *cause_seat* is whose spell or ability asked for this discard, for a
+    caller whose prompt is not the ``discard`` kind this function looks up — an
+    opponent's pick out of a revealed hand (Coercion) is a different prompt
+    armed by the same resolution. None reads it off the ``discard`` prompt.
+    """
     if not (0 <= player_index < len(game.players)):
         return False
     player = game.players[player_index]
@@ -1373,12 +1398,29 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     card = player.hand.pop(hand_index)
     choice = game.pending_choice_of("discard", player_index)
     allow_top = bool(choice is not None and choice.data.get("allow_top_of_library"))
+    if cause_seat is None and choice is not None:
+        cause_seat = choice.data.get("_cause_seat")
     if to_library and allow_top:
         game.put_card_into_library(player, card, "top")
         game.log.append(f"{player.name} discarded {card.name} to the top of their library (Library of Leng)")
     else:
-        game.put_card_into_graveyard(player, card)
-        game.log.append(f"{player.name} discarded {card.name}")
+        # CR 614: "If a spell or ability an opponent controls causes you to
+        # discard this card, put it onto the battlefield … instead of putting
+        # it into your graveyard." (Dodecapod.) Asked here because this seam
+        # performs Library of Leng's replacement itself, by offering the
+        # destination, and so never runs the ``discard`` event `_discard_card`
+        # does — one predicate and one body, read by both. A seat that chose
+        # the library top above applied the Library's replacement first
+        # (CR 616.1), after which there is no graveyard move left to replace.
+        from ..replacements import discarded_onto_battlefield
+
+        if not discarded_onto_battlefield(
+            game, player, card, game.discard_cause_seat(cause_seat)
+        ):
+            game.put_card_into_graveyard(player, card)
+            game.log.append(f"{player.name} discarded {card.name}")
+        if took is not None:
+            took.append(card)
     # The discarded card's own trigger (CR 113.6, Psychic Purge — a sorcery
     # whose ability would otherwise function only on the stack, and whose
     # trigger condition can only be met in a hand). This is the
@@ -1393,10 +1435,7 @@ def _resolve_one_discard(game: Game, player_index: int, hand_index: int, to_libr
     # `arm_pending_choice` from the resolving stack): by the time a prompt is
     # answered the resolution that armed it has returned, so `resolving_seats`
     # is empty and reading it here would say "nobody caused this".
-    game._announce_discard_triggers(
-        player, card,
-        cause_seat=(choice.data.get("_cause_seat") if choice is not None else None),
-    )
+    game._announce_discard_triggers(player, card, cause_seat=cause_seat)
     # …and the board's watchers (Necropotence). The second of the two discard
     # seams: a watcher announced on one path only would fire for a random
     # discard and not for a chosen one, which is half the cards in the pool.
@@ -4053,6 +4092,34 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
             return True, "resolved"
         filters = dict(filters)
         filters["mana_value"] = {"op": "eq", "value": chosen_number}
+    # "…discards all cards **of each of the sacrificed creature's colors**."
+    # (Mind Extraction.) The fourth record, and the one a *cost* wrote: the
+    # permanent the cast sacrificed (CR 601.2h), carried on the stack item's
+    # choices as the object it was — so its colours are the ones it last had on
+    # the battlefield (CR 608.2h), read through the layers and not off its
+    # printed card. Resolved into the ordinary ``any_colors`` union: a
+    # multicolored creature takes every card sharing **any** of its colours
+    # (CR 105.2b, and the card's ruling of 2004-10-04).
+    #
+    # **No colour means no discard**, for the reason the colour record above
+    # gives — a colorless creature, or a channel nothing paid into, read as
+    # "no narrowing" would empty the hand. The hand has still been revealed.
+    cost_channel = instruction.payload.get("any_colors_from_cost")
+    if cost_channel is not None:
+        from ..object_colors import object_colors
+
+        paid = (context.choices or {}).get(str(cost_channel))
+        shared = object_colors(game, paid)
+        if not shared:
+            game.log.append(
+                f"{context.card.name}: "
+                + ("the sacrificed permanent is colorless"
+                   if paid is not None else "nothing was sacrificed")
+                + ", so nothing is discarded"
+            )
+            return True, "resolved"
+        filters = dict(filters)
+        filters["any_colors"] = list(shared)
     victims = [victim]
     spared_by_seat: dict = {}
     if instruction.payload.get("who") == "each_player":
@@ -4628,6 +4695,16 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
     by_seat = dict(context.results.get(EXILED_BY_SEAT) or {})
     if who == "each_player":
         seats = list(range(len(game.players)))
+    elif who == "that_player":
+        # "…**that player** returns those cards to their hand." (Suppress.) The
+        # seat the resolution was handed — for a delayed ability, the player
+        # its creating effect bound (CR 603.7c), carried on the stack item's
+        # own target. By identity, and nobody's pile when no seat was recorded:
+        # falling back to the caster would hand the spell's controller a hand
+        # the card took from somebody else.
+        seats = [
+            i for i, seated in enumerate(game.players) if seated is context.target
+        ][:1]
     else:
         seats = [game.players.index(context.caster)]
     described = dict(payload.get("filter") or {})
@@ -4639,10 +4716,27 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
                 card, described, game=game, owner=player
             ):
                 continue
+            # Asked before the card leaves, because the answer is derived from
+            # the pile: a card exiled **face down** (CR 406.3) going back to a
+            # hidden zone was never shown to anybody, and a log line naming it
+            # is the one place the table would learn what Suppress hid.
+            hidden = any(
+                held is card for held in face_down_exiled_cards(game, seat)
+            )
             if not game.take_card_from_exile(player, card):
                 game.log.append(
-                    f"{context.card.name}: {card.name} is no longer exiled"
+                    f"{context.card.name}: "
+                    f"{'a face-down card' if hidden else card.name} "
+                    "is no longer exiled"
                 )
+                continue
+            if zone == "hand" and hidden:
+                game.put_card_into_hand(player, card)
+                game.log.append(
+                    f"{player.name} returned a face-down card from exile to "
+                    "their hand"
+                )
+                returned += 1
                 continue
             if zone == "hand":
                 # "…returns to **their** hand each card they exiled this way."
@@ -7244,10 +7338,36 @@ def exile_hand_pile(game: Game, instruction: OracleInstruction, context: OracleE
     seat = game.players.index(caster)
     source = context.source_permanent
     payload = dict(instruction.payload)
+    described = dict(payload.get("card_filter") or {})
+    # "**Target player** exiles all cards from their hand face down."
+    # (Suppress.) One chosen seat's whole hand, the same act a third way round:
+    # nobody picks, so nothing is asked, and the seat is the resolution's own
+    # target. A **spell** has no permanent to link the pile to, so the
+    # face-down record goes on the game's register instead — the arrangement
+    # ``exile_top_of_library`` has for Three Wishes, made inside
+    # ``exile_hand_slots`` so every caller of that seam gets it. With no target
+    # nothing is exiled: the caster's own hand is not the hand the card named.
+    if str(payload.get("who", "you")) == "target_player":
+        victim_seat = next(
+            (i for i, seated in enumerate(game.players) if seated is context.target),
+            None,
+        )
+        if victim_seat is None:
+            game.log.append(f"{context.card.name}: no player was named to exile a hand")
+            return True, "resolved"
+        victim = game.players[victim_seat]
+        game.exile_hand_slots(
+            context, source, victim_seat,
+            [
+                slot for slot, card in enumerate(victim.hand)
+                if _card_matches_filter(card, described)
+            ],
+            face_down=bool(payload.get("face_down")),
+        )
+        return True, "resolved"
     if payload.get("face_down") and source is None:
         game.log.append("the face-down exile has no permanent to be linked to")
         return True, "resolved"
-    described = dict(payload.get("card_filter") or {})
     # "**Each player** exiles all cards from their hand face down." (Memory
     # Jar.) The same act once per seat rather than a second kind: what the
     # exile does to a hand does not depend on whose it is, and the seat is what
@@ -8250,6 +8370,9 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     player_seat = game.players.index(caster)
     by_seat = context.results.setdefault(DISCARDED_BY_SEAT, {})
     by_seat[player_seat] = 0
+    # …and *which* cards, seeded empty for the count's reason; the prompt's
+    # answer fills it (`_after_discard_answered`).
+    context.results.setdefault(DISCARDED_THIS_WAY, [])
     if amount <= 0:
         game.log.append(f"{caster.name} has no cards to discard")
         return True, "resolved"
@@ -9886,6 +10009,16 @@ REVEALED_HAND_INDEX = "revealed_card_hand_index"
 #: whichever was armed last.
 _DISCARDED_REVEALED_CARD = "discarded_revealed_card"
 
+#: Whose ability is making the offered seat discard (CR 109.5), for the two
+#: "…discards it unless they pay N life" branches below. They run under a
+#: context whose ``caster`` has been swapped for the **paying** seat — which is
+#: what lets one ``pay_life`` instruction charge whoever was offered it — so by
+#: the time the declined branch discards, ``Game.resolving_seats`` names the
+#: victim and "a spell or ability an opponent controls causes you to discard"
+#: (Psychic Purge, Dodecapod) would read as the victim's own doing. Written
+#: into the scratchpad the two contexts share, by the step that still knows.
+_DISCARD_CAUSE_SEAT = "discard_cause_seat"
+
 
 @effect_handler("reveal_random_card_from_hand")
 def reveal_random_card_from_hand(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -10070,7 +10203,14 @@ def discard_revealed_card(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
         return True, "resolved"
     victim.hand.pop(index)
-    game.put_card_into_graveyard(victim, card)
+    # Through the discard seam, never straight to the graveyard: a discard is
+    # CR 701.9a's event whoever chose the card, so a replacement over it
+    # (Library of Leng, Dodecapod) and every watcher of one (Megrim, Psychic
+    # Purge) has to see this one too. It went by the graveyard seam alone until
+    # Dodecapod was driven against it, and nothing watching a discard fired.
+    game._discard_card(
+        victim, card, cause_seat=context.results.get(_DISCARD_CAUSE_SEAT)
+    )
     game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 
@@ -10109,6 +10249,10 @@ def discard_revealed_unless_pay_life(game: Game, instruction: OracleInstruction,
     # rather than resolved at lowering.
     amount = int(card.cmc or 0) if printed == "revealed_mana_value" else int(printed)
     discard = (_OracleInstruction("discard_revealed_card", "", {}),)
+    # Before the caster is swapped, while the resolving seat is still the
+    # ability's own controller — see ``_DISCARD_CAUSE_SEAT``. The scratchpad is
+    # shared with the paying context, so the declined branch reads it there.
+    context.results[_DISCARD_CAUSE_SEAT] = game.discard_cause_seat()
     paying_context = dataclasses.replace(context, caster=victim)
     if not can_pay_life(victim, amount):
         game._execute_oracle_instruction(discard[0], paying_context)
@@ -10171,10 +10315,15 @@ def discard_revealed_matching_unless_pay_life(game: Game, instruction: OracleIns
         card for card in revealed
         if _card_matches_filter(card, described, game=game, owner=victim)
     ]
+    # Read once, before any offer swaps the caster — see ``_DISCARD_CAUSE_SEAT``.
+    cause_seat = game.discard_cause_seat()
     for card in matching:
         paying = dataclasses.replace(
             context, caster=victim,
-            results={**context.results, _DISCARDED_REVEALED_CARD: card},
+            results={
+                **context.results, _DISCARDED_REVEALED_CARD: card,
+                _DISCARD_CAUSE_SEAT: cause_seat,
+            },
         )
         discard = (
             _OracleInstruction("discard_bound_revealed_card", "", {}),
@@ -10217,7 +10366,10 @@ def discard_bound_revealed_card(game: Game, instruction: OracleInstruction, cont
     if not game.take_card_from_hand(victim, card):
         game.log.append(f"{context.card.name}: {card.name} is no longer in hand")
         return True, "resolved"
-    game.put_card_into_graveyard(victim, card)
+    # Through the discard seam, for ``discard_revealed_card``'s reason.
+    game._discard_card(
+        victim, card, cause_seat=context.results.get(_DISCARD_CAUSE_SEAT)
+    )
     game.log.append(f"{victim.name} discards {card.name}")
     return True, "resolved"
 
