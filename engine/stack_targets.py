@@ -138,6 +138,9 @@ _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 #: * "(spells|abilities) … that target(s) …" / "that targets only …" — a
 #:   description of somebody else's object;
 #: * "chooses one or more targets" — Psychic Battle's own condition;
+#: * "is choosing targets" — the Flagbearers' description of an *opponent's*
+#:   announcement ("While an opponent is choosing targets as part of casting a
+#:   spell they control…");
 #: * "for each target [beyond the first]" — a cost counted off the targets the
 #:   sentence behind it chooses (Fireball, Phyrexian Purge), not a second
 #:   choice;
@@ -153,6 +156,7 @@ _NOT_A_CHOICE = re.compile(
     r"|(?:spells?|abilit(?:y|ies))[^.,;]*? that (?:can )?targets?(?: only)?[^.,;]*"
     r"|that targets? only[^.,;]*"
     r"|chooses? one or more targets"
+    r"|(?:is|are) choosing targets"
     r"|for each target(?: beyond the first)?\b"
     r"|the target or targets"
     r"|change (?:the|a) target of"

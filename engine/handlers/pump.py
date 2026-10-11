@@ -496,6 +496,17 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
         if not chosen_subtype:
             game.log.append(f"{card.name}: no creature type was chosen")
             return True, "resolved"
+    # "Creatures **target player** controls get +1/+1 until end of turn." (Day.)
+    # The seat the announcement chose (CR 601.2c), asked of ``subject_matches``
+    # with that seat in hand — the reader the tap, destroy and animation sweeps
+    # over the same printed phrase use. With no seat to answer it the word
+    # refuses, so the sweep reaches nobody rather than everybody.
+    scoped_to = instruction.payload.get("controller")
+    targeted_seat = (
+        game.players.index(context.target)
+        if context.target is not None and context.target in game.players
+        else None
+    )
     if instruction.payload.get("opponents_only"):
         # "Creatures your opponents control get -2/-2 until end of turn"
         # (Massacre Wurm): every opponent's board and none of the caster's.
@@ -507,6 +518,12 @@ def buff_creatures_global(game: Game, instruction: OracleInstruction, context: O
     for player in target_players:
         for perm in list(player.battlefield):
             if not perm.is_creature:
+                continue
+            if scoped_to is not None and not subject_matches(
+                game, perm, {"controller": scoped_to},
+                observer=game.players.index(caster),
+                targeted_player=targeted_seat,
+            ):
                 continue
             if exclude_self is not None and perm is exclude_self:
                 continue
