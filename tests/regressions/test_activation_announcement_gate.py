@@ -46,8 +46,8 @@ from engine.models import Permanent
 from engine.oracle import compile_card_oracle, compiled_units
 from engine.shields import shields_on
 from engine.targeting import (
-    ROLES_TARGET_KIND, derive_activation_spec, spec_is_a_cost,
-    usable_activated_abilities,
+    ROLES_TARGET_KIND, activation_target_slot, derive_activation_spec,
+    spec_is_a_cost, usable_activated_abilities,
 )
 from tests.helpers import _nosick, resolve_stack
 
@@ -167,6 +167,38 @@ def _gate(game, source, ability, **named):
     return game.activation_target_refusal(0, source, ability, x_value=1, **named)
 
 
+def _announcement_naming(game, ability, offered, permanent) -> "list[int] | None":
+    """The ids of a **whole** announcement that names *permanent*, or None when
+    this board cannot make one.
+
+    One id for every ability but those whose slot prints an exact count of two
+    or more ("Untap **two** target lands", Argothian Elder): CR 601.2c asks for
+    a choice "for each target", so one named permanent is not an announcement
+    of that ability at all and the gate refuses it for its *size*
+    (``legality.exact_target_count``, the engine's own answer to how many).
+    Read as "the gate refuses a target the picker offers", that refusal was
+    this sweep asking a question about legality with an announcement that was
+    illegal for another reason — so the probe is filled out to the printed
+    size with other permanents the picker offers, and what is judged is the
+    one being asked about.
+    """
+    slot = activation_target_slot(ability)
+    required = (
+        legality.exact_target_count(slot[0], slot[1], 1) if slot is not None else None
+    )
+    if not required or required < 2:
+        return [permanent.permanent_id]
+    fillers = [
+        other.permanent_id for other in game.all_permanents()
+        if other is not permanent
+        and (game.controller_index_of(other), game.battlefield_index_of(other))
+        in offered["permanent"]
+    ][: required - 1]
+    if len(fillers) < required - 1:
+        return None
+    return [permanent.permanent_id, *fillers]
+
+
 def _unpaid(game, source) -> tuple:
     return (
         game.is_on_battlefield(source), source.tapped, len(game.stack),
@@ -232,9 +264,11 @@ def _named_sweep(catalog, by_name, only=None):
             seat = game.controller_index_of(permanent)
             slot = game.battlefield_index_of(permanent)
             is_offered = (seat, slot) in offered["permanent"]
+            named = _announcement_naming(game, ability, offered, permanent)
+            if named is None:
+                continue
             judge(
-                _gate(game, source, ability,
-                      target_permanent_ids=[permanent.permanent_id]),
+                _gate(game, source, ability, target_permanent_ids=named),
                 is_offered, f"seat {seat}: {permanent.card.name}",
             )
             if not is_offered and permanent is not source and unoffered is None:
@@ -244,7 +278,8 @@ def _named_sweep(catalog, by_name, only=None):
         before = _unpaid(game, source)
         result = game.queue_permanent_ability(
             0, card.name, permanent_index=game.battlefield_index_of(source),
-            ability_index=index, target_permanent_ids=[unoffered.permanent_id],
+            ability_index=index,
+            target_permanent_ids=_announcement_naming(game, ability, offered, unoffered),
         )
         driven += 1
         if result.supported or _unpaid(game, source) != before:

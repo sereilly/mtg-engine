@@ -327,7 +327,17 @@ def divide(total: int, entries, *, division: str) -> list[tuple[int, int | None,
     """
     normalized = [divided_entry(entry) for entry in entries]
     amounts = announced_division(entries)
-    if amounts is None or (division != CHOSEN and division not in CARD_DIVIDED):
+    if division == EACH:
+        # Every target takes the whole of what the **resolving** instruction
+        # deals, which is *total* — not what was stamped at the announcement.
+        # The two are one number for Firestorm. They are not for "Shower of
+        # Coals deals 2 damage to each of up to three targets. … deals 4
+        # damage to each of those permanents and/or players instead if there
+        # are seven or more cards in your graveyard": the amount is settled
+        # as the spell resolves (CR 608.2h), and a stamp can only know what
+        # the card would have dealt as it was cast.
+        amounts = [total] * len(normalized)
+    elif amounts is None or (division != CHOSEN and division not in CARD_DIVIDED):
         share = total // len(normalized) if normalized else 0
         amounts = [share] * len(normalized)
     return [
@@ -356,10 +366,53 @@ def divided_instruction(instructions):
             if found is not None:
                 return found
             continue
+        if instruction.kind == "if_then":
+            found = _divided_in_both_arms(instruction)
+            if found is not None:
+                return found
+            continue
         targets = instruction.payload.get("targets")
         if isinstance(targets, dict) and targets.get("kind") == "divided":
             return instruction
     return None
+
+
+def _divided_in_both_arms(conditional):
+    """The divided instruction of an ``if_then`` whose **two arms announce the
+    same list**, or None.
+
+    "Shower of Coals deals 2 damage to each of up to three targets. … deals 4
+    damage to each of those permanents and/or players **instead** if there are
+    seven or more cards in your graveyard." The condition is asked as the spell
+    resolves, so as it is cast both arms are still in front of the caster — and
+    they name one list of targets (CR 601.2c: chosen once, for whichever arm
+    resolves). The replacing arm is the one returned, because it is the arm
+    ``targeting.py``'s own walk reads first; what each target is *dealt* is
+    the resolving arm's own amount (:func:`divide`), never this one's.
+
+    Two refusals, each a way the answer would be about half the card:
+
+    * **a ``was_kicked`` condition** is settled as the spell is cast
+      (CR 601.2b precedes CR 601.2c), and ``targeting.instructions_as_announced``
+      hands this module the one arm that cast will run. Read card-wide, a
+      division printed only for the kicked cast (Magma Burst) or sized by it
+      (Pollen Remedy) stays unfound, which is what every caller asking about
+      the *card* has always been told;
+    * **arms that describe different lists** — a division in one arm and a
+      single target in the other, or two different ceilings — are two
+      announcements, and nothing here can say which the caster is making.
+    """
+    payload = conditional.payload or {}
+    condition = payload.get("condition")
+    if isinstance(condition, dict) and condition.get("kind") == "was_kicked":
+        return None
+    then = divided_instruction(tuple(payload.get("then") or ()))
+    otherwise = divided_instruction(tuple(payload.get("else") or ()))
+    if then is None or otherwise is None:
+        return None
+    if then.payload.get("targets") != otherwise.payload.get("targets"):
+        return None
+    return then
 
 
 def divided_description(instructions) -> tuple[dict, dict] | None:

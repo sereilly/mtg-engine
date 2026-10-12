@@ -139,6 +139,15 @@ def card_divided_each_description(
     spell in the pool prints and which the ordinary one-target description
     already reads.
 
+    "Shower of Coals deals 2 damage to each of **up to** three targets." The
+    same list with a ceiling where Firestorm prints a count: CR 601.2c lets
+    the caster name three, two or one, and each one named takes the whole
+    amount. So the number travels as ``max_targets`` — the key a divided
+    description has always carried a printed ceiling under (Contagion's "one
+    or two") and the one the cast gate, the picker and the client already
+    read — and **not** as ``target_count``, which those same readers hold an
+    announcement to exactly.
+
     Here rather than in ``lowering/damage.py`` for the reason
     :func:`divided_target_description` is here: this description is read by the
     casting path's gate, the picker, the share stamping and the handler, and the
@@ -152,10 +161,13 @@ def card_divided_each_description(
         and (recipient.count_from_x or recipient.count > 1)
     ):
         return None
-    return card_divided_target_description(
+    described = card_divided_target_description(
         division=EACH,
         count="x" if recipient.count_from_x else recipient.count,
     )
+    if recipient.max_count is not None:
+        described["max_targets"] = described.pop("target_count")
+    return described
 
 
 def card_divided_shares_payload(effects) -> dict[str, object] | None:

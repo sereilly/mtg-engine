@@ -6437,6 +6437,17 @@ def expand_ability_lines(
       each. From there it is the named-counter entry state and an ordinary
       upkeep trigger with a ``CouldNot`` branch, none of which know the word.
 
+    * an **ability-word paragraph that says "…instead"** becomes the last
+      sentence of the paragraph above it
+      (:func:`expand_instead_paragraph_lines`) — "Thermal Blast deals 3 damage
+      to target creature.\\nThreshold — Thermal Blast deals 5 damage instead if
+      there are seven or more cards in your graveyard." CR 608.2c's later text
+      modifying earlier text, over a paragraph break the ability word put
+      there and CR 207.2c says means nothing. The one rewrite here that joins
+      lines; from there the pair is two sentences of one line to the sentence
+      loop, which already folds an "instead" sentence into the step it
+      replaces.
+
     And one rewrite that is the *card's* rather than the rules': a legendary
     card's shortened self-reference written out in full
     (``engine/self_reference.py``). It belongs in this pass for exactly the
@@ -6454,6 +6465,14 @@ def expand_ability_lines(
     oracle_text = expand_short_self_references(
         oracle_text, card_name, legendary=legendary
     )
+    # CR 608.2c's, and the one rewrite here that *joins* lines where the rest
+    # split or replace them: an ability-word paragraph saying "…instead" is the
+    # last sentence of the paragraph above it. Its own statement for echo's
+    # reason below, and ahead of every keyword rewrite on purpose: a printed
+    # keyword line does not end a sentence, which is the gate that keeps this
+    # from joining onto one, and several of them are rewritten into text that
+    # does.
+    oracle_text = expand_instead_paragraph_lines(oracle_text)
     # CR 702.30a's rewrite, as its own statement rather than another layer of
     # the composition below: an echo keyword line is a whole line and none of
     # the rewrites below reads one, so the order between them carries no
@@ -6608,6 +6627,82 @@ def expand_same_is_true_lines(oracle_text: str) -> str:
             continue
         out.append(first)
         out.extend(first.replace(quality, other) for other in qualities)
+    return "\n".join(out)
+
+
+#: The sentence-replacing "instead": the word with no "of" behind it. "Instead
+#: of" compares two things inside one sentence ("…instead of any other type"),
+#: which is a sentence standing on its own.
+_REPLACING_INSTEAD = re.compile(r"\binstead\b(?! of\b)", re.IGNORECASE)
+
+#: Parenthesised reminder text, for asking how a printed line *ends* without it.
+_TRAILING_REMINDER = re.compile(r"\s*\([^()]*\)\s*$")
+
+
+def _replaces_the_paragraph_above(sentence: str) -> bool:
+    """Whether an ability-word paragraph's text replaces the paragraph above
+    it rather than standing as an ability of its own.
+
+    "Thermal Blast deals 5 damage **instead** if there are seven or more cards
+    in your graveyard." Three tests, each a way the word can mean something
+    else:
+
+    * it says "instead", and not "instead of";
+    * it does not say "would" — "If a creature would die, exile it instead" is
+      CR 614.1a's replacement of an *event*, complete in itself;
+    * it is not an ability with a cost or a trigger of its own, whose "instead"
+      is about its own effect.
+    """
+    lowered = sentence.lower()
+    if _REPLACING_INSTEAD.search(lowered) is None or re.search(r"\bwould\b", lowered):
+        return False
+    return not _is_ability_line(sentence)
+
+
+def expand_instead_paragraph_lines(oracle_text: str) -> str:
+    """*oracle_text* with an ability-word paragraph that replaces the one above
+    it joined onto that paragraph as its last sentence.
+
+    "Thermal Blast deals 3 damage to target creature.\\nThreshold — Thermal
+    Blast deals 5 damage instead if there are seven or more cards in your
+    graveyard." is **one** effect printed as two paragraphs: CR 608.2c's later
+    text modifying the meaning of earlier text, with exactly one of the two
+    amounts ever dealt. Every reader of a card's lines takes a line as a unit —
+    the compiler lowers each to its own instruction and a spell resolves them
+    all in order — so read as printed the second paragraph either means
+    nothing (it names no recipient) or happens *as well* (3 damage, then 5).
+    The sentence loop already folds an "…instead" sentence into the step it
+    replaces (``engine/grammar/conditional_instead.py``); what it needs is to
+    be handed both sentences on one line.
+
+    The paragraph break is typography, and the rule says so: an ability word
+    "has no rules meaning" (CR 207.2c), and it is the ability word that puts
+    the break there. So the join is gated on exactly that — the line must open
+    with one — and the word is dropped as the grammar would have dropped it.
+    Threshold prints it this way, and so do hellbent ("…deals 5 damage instead
+    if you have no cards in hand") and metalcraft after it.
+
+    Everything else about the gate is refusal: see
+    :func:`_replaces_the_paragraph_above`, and the paragraph above must *end a
+    sentence* — a keyword line ("Kicker {2}") is nothing an "instead" can
+    replace. A paragraph this does not join is left exactly as printed, where
+    it reports as unclaimed text rather than as a guess.
+    """
+    if not oracle_text or "instead" not in oracle_text.lower():
+        return oracle_text
+    out: list[str] = []
+    for line in oracle_text.splitlines():
+        printed = line.strip()
+        sentence = strip_ability_word(printed)
+        if (
+            out
+            and sentence != printed
+            and _TRAILING_REMINDER.sub("", out[-1]).rstrip().endswith((".", '."'))
+            and _replaces_the_paragraph_above(sentence)
+        ):
+            out[-1] = f"{out[-1].rstrip()} {sentence}"
+            continue
+        out.append(line)
     return "\n".join(out)
 
 

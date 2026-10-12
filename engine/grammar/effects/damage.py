@@ -85,12 +85,13 @@ def _accept_several_any_targets(stream: TokenStream) -> "ast.TargetSpec | None":
     """
     mark = stream.mark()
     stream.accept_phrase("each", "of")
+    ceiling = stream.accept_phrase("up", "to")  # "…each of up to three targets"
     token = stream.peek()
     word = stream.peek_word()
     counted = token is not None and (
         token.kind == NUMBER or word in NUMBER_WORDS or word == "x"
     )
-    if not counted or stream.peek_word(1) != "targets":
+    if not counted or stream.peek_word(1) != "targets" or (ceiling and word == "x"):
         stream.reset(mark)
         return None
     amount = parse_amount(stream)
@@ -100,7 +101,7 @@ def _accept_several_any_targets(stream: TokenStream) -> "ast.TargetSpec | None":
         "any_target",
         count=amount.value if fixed else 0,
         count_from_x=not fixed,
-        targeted=True,
+        targeted=True, max_count=amount.value if ceiling else None,
     )
 
 
