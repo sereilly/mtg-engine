@@ -1050,6 +1050,9 @@ TRIGGERED_LABELS: dict[str, str] = {
     "reveal_top_sorting_by_filter": "triggered_look",
     "reveal_hand_and_choose": "triggered_look",
     "scry": "triggered_look",
+    # "At the beginning of your upkeep, surveil 1." (Think Tank.) Scry's
+    # bucket: the same look, with the graveyard for the bottom.
+    "surveil": "triggered_look",
     "mill_target_player": "triggered_mill",
     # Life loss is not damage by the rules (CR 120.3), but for a report about
     # what an ability does to a player it is the same bucket.

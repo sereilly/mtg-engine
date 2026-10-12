@@ -24,6 +24,7 @@ from ._core import (
     PlayerRef,
     ObjectFilter,
     Recipient,
+    ThatMuch,
 )
 
 
@@ -68,6 +69,15 @@ class Pump:
     # number: "beyond the first" is the only offset Magic prints on this
     # clause, and a free integer would invite a lowering to invent one.
     per_each_beyond_first: bool = False
+    # "Creatures you control get +0/+1 until end of turn **for each card
+    # discarded this way**" (Sacred Rites). A count an earlier step of this
+    # same effect *recorded* — the back-reference ``records`` reads for a life
+    # gain and a counter placement, spent by a pump. Not ``per_each`` above:
+    # that describes a set on a board, and what was discarded is on no board
+    # and is not the graveyard either (which holds everything else that ever
+    # got there). The node carries the record's key, and lowering refuses it
+    # unless a step in front of the sentence writes that key.
+    per_each_recorded: "ThatMuch | None" = None
 
 
 @dataclass(frozen=True)

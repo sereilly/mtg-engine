@@ -592,6 +592,33 @@ def _lower_discard(
         # the channel the draw beside it travels (``lowering/cards``), so the
         # two halves of that sentence are sized by one spec. Chosen, never "at
         # random": the sampling handler below reads no count spec.
+        if isinstance(node.count, ast.AnyNumber):
+            # "Discard **any number of cards at random**." (Rites of
+            # Initiation.) Two decisions the card splits between two parties:
+            # the player chooses *how many* and chance chooses *which*. So it
+            # is two steps — a number with the hand as its ceiling, then the
+            # sampling handler sized by that answer — and neither handler
+            # learns the other's job. The chosen form one branch up asks one
+            # question because there the cards are the answer to both.
+            #
+            # Unnarrowed, as printed: a narrowing would have to bound the
+            # number *and* the sample by one reading of the phrase, and no
+            # card asks for it.
+            if node.filter is not None:
+                raise LoweringError(
+                    "the any-number random discard is unnarrowed", node=node
+                )
+            return (
+                OracleInstruction("choose_number", "", {
+                    "minimum": 0,
+                    "maximum_from_count": {
+                        "zone": "hand", "owner": "you", "filter": {},
+                    },
+                }),
+                OracleInstruction("discard_x_target_cards", "", {
+                    "who": "caster", "amount_from": CHOSEN_NUMBER_THIS_WAY,
+                }),
+            )
         counted: dict[str, object] = {}
         if isinstance(node.count, ast.CountOf) and not node.at_random:
             counted = {X_FROM_COUNT: count_spec(node.count.filter, node)}

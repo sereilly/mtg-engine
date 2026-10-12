@@ -460,6 +460,26 @@ def _lower_mill(
                 "cost_sacrifice_characteristic": node.count.characteristic
             },
         }
+    elif isinstance(node.count, (ast.Half, ast.CountOf)):
+        # "Target player mills **half their library**, rounded down."
+        # (Traumatize.) A count taken at resolution (CR 608.2h), on the spec
+        # the draw one family up already travels on for the identical phrase —
+        # one evaluator, so "draws half" and "mills half" cannot round
+        # differently.
+        #
+        # One seat only. The dispatcher resolves the count once, for the seat
+        # the resolution is carrying, so "each player mills half their
+        # library" would mill every library by one player's number; that
+        # refuses rather than being read as this.
+        halved = halved_count_spec(node.count, node)
+        if halved is None or node.player.kind not in (
+            "you", "target_player", "target_opponent",
+        ):
+            raise LoweringError(
+                "a counted mill is counted once, for the caster or a target",
+                node=node,
+            )
+        payload = {"amount": "x", X_FROM_COUNT: halved}
     else:
         payload = {"amount": _amount_payload(node.count)}
     if node.player.kind == "that_player":
@@ -616,3 +636,9 @@ def _lower_scry(node: ast.Scry) -> tuple[OracleInstruction, ...]:
     library, so the handler reads ``context.caster``.
     """
     return (OracleInstruction("scry", "", {"amount": _amount_payload(node.count)}),)
+
+
+def _lower_surveil(node: ast.Surveil) -> tuple[OracleInstruction, ...]:
+    """"Surveil N." (CR 701.25a.) Scry's shape for scry's reason: the count is
+    the whole payload, and the library is the controller's own."""
+    return (OracleInstruction("surveil", "", {"amount": _amount_payload(node.count)}),)

@@ -2443,6 +2443,24 @@ class PendingChoicesMixin:
         rest = owner.library[top_count:]
         kept = [looked[i] for i in card_order[: top_count - bottom_count]]
         bottomed = [looked[i] for i in card_order[top_count - bottom_count :]]
+        if choice.data.get("destination") == "graveyard":
+            # Surveil (CR 701.25a): the cards not kept go to the graveyard
+            # where a scry sends them to the bottom. The same answer shape —
+            # ``bottom_count`` is "how many of the trailing entries leave the
+            # top" — because it is the same decision. They come off the
+            # library together and are then put where they go one by one,
+            # through the graveyard seam and naming the zone they left
+            # (CR 614 may divert one; "put into your graveyard from your
+            # library" is a trigger some cards watch).
+            owner.library = kept + rest
+            for card in bottomed:
+                self.put_card_into_graveyard(owner, card, from_zone="library")
+            self.log.append(
+                f"{self.players[choice.player_index].name} surveilled "
+                f"{top_count} ({bottom_count} to the graveyard)"
+            )
+            self.discard_pending_choice(choice)
+            return True
         # The bottomed cards go under everything that was already below the
         # looked-at ones, which is why `rest` sits between the two slices.
         owner.library = kept + rest + bottomed

@@ -318,6 +318,32 @@ def _lower_search_library(
         # the picker and ``legality`` gates the announcement — the search's find
         # is chosen at resolution and this is not that choice.
         payload.update(payload_targets)
+    if node.count_amount is not None:
+        # "…for up to **that many** basic land cards" (Rites of Spring) / "up
+        # to **X**" (New Frontiers). A ceiling the resolution reads: a record
+        # goes on ``amount_from``, the channel the other-library search's "that
+        # many" already travels to this handler, behind the gate every
+        # back-reference carries; the cast's X goes as the word, resolved where
+        # ``"any"`` is. Either way the handler sizes the slots, so the one
+        # destination and the one entry state ride as the single-find keys.
+        if len(destinations) != 1 or node.named_alternatives or node.one_of_each:
+            raise LoweringError(
+                "a search with a computed ceiling puts its finds in one zone",
+                node=node,
+            )
+        if isinstance(node.count_amount, ast.ThatMuch):
+            del payload["count"]
+            payload.update(_back_reference_payload(node.count_amount, produced, None))
+            if "amount_from" not in payload:
+                raise LoweringError(
+                    "a search ceiling reads a step of this same effect", node=node
+                )
+        else:
+            payload["count"] = "x"
+        payload["up_to"] = True
+        payload["destination"] = _SEARCH_DESTINATIONS[node.to.name]
+        if node.all_tapped:
+            payload["enters_tapped"] = True
     if node.unbounded:
         # "…for **any number of** Goblin cards" (Goblin Recruiter). The ceiling
         # is the zone rather than the card, and only the resolution knows how

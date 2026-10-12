@@ -411,6 +411,312 @@ def test_extract_exiles_a_card_from_the_library_of_the_player_it_names(set_pool)
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
 
+import random as _w1g7_random
+
+import pytest as _w1g7_pytest
+
+from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
+from engine.models import Permanent as _w1g7_Permanent
+from engine.oracle import compile_card_oracle as _w1g7_compile
+from tests.helpers import _mk_card as _w1g7_mk_card
+from tests.helpers import resolve_stack as _w1g7_resolve_stack
+
+
+def _w1g7_duel(set_pool, *, hand0=(), hand1=(), gy0=(), gy1=(), lib0=(),
+               lib1=(), bf0=(), bf1=(), interactive=()):
+    """A two-seat game with costs off, built from card names (ODY over LEA).
+    A seat in *interactive* is asked its decisions instead of defaulting."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    seats = [
+        _w1g7_PlayerState(
+            name=f"P{seat}", life=20,
+            hand=[pool[n] for n in hand], graveyard=[pool[n] for n in gy],
+            library=[pool[n] for n in lib],
+        )
+        for seat, (hand, gy, lib) in enumerate(
+            ((hand0, gy0, lib0), (hand1, gy1, lib1))
+        )
+    ]
+    game = _w1g7_Game(players=seats)
+    game.enforce_mana_costs = False
+    for seat in interactive:
+        game.interactive_seats.add(seat)
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            perm = _w1g7_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            perm.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def _w1g7_names(cards):
+    return [card.name for card in cards]
+
+
+def _w1g7_on_board(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+def _w1g7_settle(game, limit=50):
+    """Drain the stack and give every owed prompt its default answer."""
+    for _ in range(limit):
+        _w1g7_resolve_stack(game)
+        if not game.pending_choices and not game.pending_replacement_choices:
+            return
+        game.auto_resolve_pending_choices()
+        game.auto_resolve_pending_replacement_choices()
+    raise AssertionError("the game did not settle")
+
+
+def _w1g7_picks(*indices):
+    return [{"zone": "library", "index": index} for index in indices]
+
+
+# --- Traumatize: half a library, rounded down ----------------------------------
+
+@_w1g7_pytest.mark.parametrize(
+    "library, milled", [(7, 3), (8, 4), (1, 0), (0, 0)],
+)
+def test_traumatize_mills_half_the_targets_library_rounded_down(
+    set_pool, library, milled
+):
+    """"Target player mills half their library, rounded down." The half is
+    taken as the spell resolves (CR 608.2h), of the *target's* library, and an
+    empty one mills nothing and loses nobody the game (CR 704.5b is about a
+    draw)."""
+    game = _w1g7_duel(
+        set_pool, hand0=["Traumatize"], lib0=["Island"] * 5,
+        lib1=["Forest"] * library,
+    )
+    assert game.cast_from_hand(0, "Traumatize", target_player_index=1).supported
+    _w1g7_settle(game)
+    assert len(game.players[1].graveyard) == milled
+    assert len(game.players[1].library) == library - milled
+    assert len(game.players[0].library) == 5, "the caster's library is untouched"
+    assert not game.players[1].lost
+
+
+def test_traumatize_takes_the_top_cards_and_may_be_aimed_at_its_caster(set_pool):
+    game = _w1g7_duel(
+        set_pool, hand0=["Traumatize"],
+        lib1=["Forest", "Island", "Swamp", "Plains", "Mountain"],
+    )
+    game.cast_from_hand(0, "Traumatize", target_player_index=1)
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[1].graveyard) == ["Forest", "Island"]
+    assert _w1g7_names(game.players[1].library) == ["Swamp", "Plains", "Mountain"]
+
+    own = _w1g7_duel(
+        set_pool, hand0=["Traumatize"], lib0=["Island"] * 4, lib1=["Forest"] * 4,
+    )
+    own.cast_from_hand(0, "Traumatize", target_player_index=0)
+    _w1g7_settle(own)
+    assert len(own.players[0].library) == 2 and len(own.players[1].library) == 4
+
+
+def test_a_fraction_of_a_library_is_one_quantity_however_it_is_spelled():
+    """"Half their library" is "cards equal to half the number of cards in
+    their library" without the noun, so both spell one spec — and the draw
+    that has read the long form since Peer into the Abyss reads the same one.
+    A set of seats refuses: the count is taken once."""
+    def program(text):
+        return _w1g7_compile(_w1g7_mk_card("Bisect", "{U}", "Sorcery", text))
+
+    short = program("Target player mills half their library, rounded down.")
+    long = program(
+        "Target player mills cards equal to half the number of cards in their "
+        "library, rounded down."
+    )
+    assert short.supported and long.supported
+    assert short.instructions[0].payload == long.instructions[0].payload
+    assert short.instructions[0].payload["x_from_count"] == {
+        "zone": "library", "owner": "owner", "filter": {}, "half": "down",
+    }
+    up = program("Target player mills half their library, rounded up.")
+    assert up.instructions[0].payload["x_from_count"]["half"] == "up"
+    assert program("Mill half your library, rounded down.").supported
+    assert not program("Each player mills half their library, rounded down.").supported
+    assert not program("Target player mills half your library, rounded down.").supported
+    assert not program("Target player mills half their graveyard.").supported
+
+
+def test_a_rounded_up_half_and_a_third_are_counted_as_printed(set_pool):
+    for text, expected in (
+        ("Target player mills half their library, rounded up.", 4),
+        ("Target player mills a third of their library, rounded down.", 2),
+    ):
+        game = _w1g7_duel(set_pool, lib1=["Forest"] * 7)
+        game.players[0].hand.append(_w1g7_mk_card("Bisect", "{U}", "Sorcery", text))
+        assert game.cast_from_hand(0, "Bisect", target_player_index=1).supported
+        _w1g7_settle(game)
+        assert len(game.players[1].graveyard) == expected, text
+
+
+# --- Rites of Spring: a search with a recorded ceiling -------------------------
+
+_W1G7_SPRING_LIBRARY = [
+    "Forest", "Grizzly Bears", "Island", "Swamp", "Bayou", "Plains", "Mountain",
+]
+
+
+def test_rites_of_spring_finds_up_to_as_many_basics_as_cards_discarded(set_pool):
+    """"Discard any number of cards. Search your library for up to that many
+    basic land cards, reveal them, put them into your hand, then shuffle." Two
+    discards is a ceiling of two; a nonbasic land, a nonland and a third find
+    are each refused; finding fewer is legal (its ruling, 2004-10-04)."""
+    game = _w1g7_duel(
+        set_pool, hand0=["Rites of Spring", "Grizzly Bears", "Giant Growth", "Terror"],
+        lib0=_W1G7_SPRING_LIBRARY, interactive=(0,),
+    )
+    assert game.cast_from_hand(0, "Rites of Spring").supported
+    assert game.confirm_discard(0, [0, 1])
+    (search,) = game.pending_choices
+    assert search.kind == "search_library"
+    assert (search.data["count"], search.data["up_to"]) == (2, True)
+    assert search.data["reveal"] is True
+
+    library = _w1g7_names(game.players[0].library)
+    at = library.index
+    assert not game.confirm_search_library_picks(
+        0, _w1g7_picks(at("Forest"), at("Island"), at("Swamp"))
+    ), "three finds for two discards"
+    assert not game.confirm_search_library_picks(0, _w1g7_picks(at("Bayou")))
+    assert not game.confirm_search_library_picks(0, _w1g7_picks(at("Grizzly Bears")))
+    assert game.confirm_search_library_picks(0, _w1g7_picks(at("Forest"), at("Island")))
+
+    assert sorted(_w1g7_names(game.players[0].hand)) == ["Forest", "Island", "Terror"]
+    assert sorted(_w1g7_names(game.players[0].library)) == sorted(
+        ["Grizzly Bears", "Swamp", "Bayou", "Plains", "Mountain"]
+    )
+    assert not game.stack and not game.pending_choices
+    assert any("revealed Forest, Island" in line for line in game.log)
+
+
+def test_rites_of_spring_may_find_fewer_and_one_discard_is_one_find(set_pool):
+    game = _w1g7_duel(
+        set_pool, hand0=["Rites of Spring", "Grizzly Bears", "Terror"],
+        lib0=_W1G7_SPRING_LIBRARY, interactive=(0,),
+    )
+    game.cast_from_hand(0, "Rites of Spring")
+    assert game.confirm_discard(0, [0, 1])
+    library = _w1g7_names(game.players[0].library)
+    assert game.confirm_search_library_picks(0, _w1g7_picks(library.index("Swamp")))
+    assert _w1g7_names(game.players[0].hand) == ["Swamp"]
+
+    single = _w1g7_duel(
+        set_pool, hand0=["Rites of Spring", "Grizzly Bears"],
+        lib0=_W1G7_SPRING_LIBRARY, interactive=(0,),
+    )
+    single.cast_from_hand(0, "Rites of Spring")
+    assert single.confirm_discard(0, [0])
+    library = _w1g7_names(single.players[0].library)
+    assert not single.confirm_search_library(0, library.index("Bayou"))
+    assert single.confirm_search_library(0, library.index("Mountain"))
+    assert _w1g7_names(single.players[0].hand) == ["Mountain"]
+
+
+def test_rites_of_spring_with_nothing_discarded_searches_for_nothing(set_pool):
+    game = _w1g7_duel(
+        set_pool, hand0=["Rites of Spring", "Grizzly Bears"],
+        lib0=_W1G7_SPRING_LIBRARY, interactive=(0,),
+    )
+    game.cast_from_hand(0, "Rites of Spring")
+    assert game.confirm_discard(0, [])
+    assert not game.pending_choices and not game.stack
+    assert _w1g7_names(game.players[0].hand) == ["Grizzly Bears"]
+    assert _w1g7_names(game.players[0].library) == _W1G7_SPRING_LIBRARY
+
+
+def test_a_search_ceiling_with_no_record_behind_it_is_refused():
+    assert not _w1g7_compile(_w1g7_mk_card(
+        "Bare Spring", "{G}", "Sorcery",
+        "Search your library for up to that many basic land cards, reveal "
+        "them, put them into your hand, then shuffle.",
+    )).supported
+
+
+# --- Last Rites: a pick out of a revealed hand per card discarded --------------
+
+def test_last_rites_takes_a_nonland_card_per_card_its_caster_discarded(set_pool):
+    """"Discard any number of cards. Target player reveals their hand, then
+    you choose a nonland card from it for each card discarded this way. That
+    player discards those cards." The caster picks, a land is not a legal
+    pick, and the picks number exactly what was discarded."""
+    game = _w1g7_duel(
+        set_pool, hand0=["Last Rites", "Forest", "Island", "Swamp"],
+        hand1=["Grizzly Bears", "Forest", "Terror", "Giant Growth"],
+        interactive=(0,),
+    )
+    assert game.cast_from_hand(0, "Last Rites", target_player_index=1).supported
+    assert game.confirm_discard(0, [0, 1])
+    (pick,) = game.pending_choices
+    assert (pick.kind, pick.player_index) == ("revealed_hand_pick", 0)
+    assert pick.data["legal_indices"] == [0, 2, 3]
+    assert pick.data["remaining"] == 2
+
+    assert not game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=1)
+    assert game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=2)
+    assert game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=0)
+    assert not game.pending_choices and not game.stack
+
+    assert _w1g7_names(game.players[1].hand) == ["Forest", "Giant Growth"]
+    assert _w1g7_names(game.players[1].graveyard) == ["Terror", "Grizzly Bears"]
+    assert _w1g7_names(game.players[0].hand) == ["Swamp"]
+
+
+def test_last_rites_takes_what_there_is_and_reveals_even_for_nothing(set_pool):
+    """Three discards against one nonland card is one pick (CR 608.2: as much
+    as possible); no discards is a revealed hand and no pick."""
+    game = _w1g7_duel(
+        set_pool, hand0=["Last Rites", "Forest", "Island", "Swamp"],
+        hand1=["Grizzly Bears", "Forest"], interactive=(0,),
+    )
+    game.cast_from_hand(0, "Last Rites", target_player_index=1)
+    assert game.confirm_discard(0, [0, 1, 2])
+    assert game.pending_choices[0].data["remaining"] == 1
+    assert game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=0)
+    assert _w1g7_names(game.players[1].hand) == ["Forest"]
+    assert not game.pending_choices and not game.stack
+
+    none = _w1g7_duel(
+        set_pool, hand0=["Last Rites", "Forest"], hand1=["Grizzly Bears"],
+        interactive=(0,),
+    )
+    none.cast_from_hand(0, "Last Rites", target_player_index=1)
+    assert none.confirm_discard(0, [])
+    assert not none.pending_choices and not none.stack
+    assert _w1g7_names(none.players[1].hand) == ["Grizzly Bears"]
+    assert any("revealed their hand" in line for line in none.log)
+
+
+def test_last_rites_discards_reach_a_discard_watcher_on_both_sides(set_pool):
+    """Both halves are discards (CR 701.9a) through the one seam: a Confessor
+    hears the caster's own card and the one taken from the target."""
+    game = _w1g7_duel(
+        set_pool, hand0=["Last Rites", "Forest"], hand1=["Grizzly Bears", "Terror"],
+        bf0=["Confessor"], interactive=(0,),
+    )
+    game.cast_from_hand(0, "Last Rites", target_player_index=1)
+    assert game.confirm_discard(0, [0])
+    assert game.resolve_pending_choice("revealed_hand_pick", 0, hand_index=0)
+    _w1g7_settle(game)
+    assert game.players[0].life == 22
+
+
+def test_a_counted_revealed_pick_needs_its_record_and_its_ending():
+    def supported(text):
+        return _w1g7_compile(_w1g7_mk_card("Rite", "{B}", "Sorcery", text)).supported
+
+    pick = (
+        "Target player reveals their hand, then you choose a nonland card "
+        "from it for each card discarded this way."
+    )
+    assert supported(
+        "Discard any number of cards. " + pick + " That player discards those cards."
+    )
+    assert not supported(pick + " That player discards those cards."), "no producer"
+    assert not supported("Discard any number of cards. " + pick), "no fate"
+
 # ==== end W1G7 ======================================================
 
 

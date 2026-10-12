@@ -860,6 +860,11 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
         # the prompt still says "Scry 3" when only two cards are there.
         "amount": choice.data["amount"],
         "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
+        # Where the cards the seat does not keep go: "bottom" is a scry
+        # (CR 701.22a) and "graveyard" a surveil (CR 701.25a). Sent because
+        # the one answer shape serves both and only the words on the prompt
+        # can tell the seat which it is deciding.
+        "destination": choice.data.get("destination", "bottom"),
     }
 
 

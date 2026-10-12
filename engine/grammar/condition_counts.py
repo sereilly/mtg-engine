@@ -398,8 +398,22 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
         comparison = _parse_count_bound(stream)
         if stream.accept_word("life"):
             return ast.PlayerLifeIs(counted, comparison)
-        if stream.accept_word("cards", "card") and stream.accept_phrase("in", "hand"):
-            return ast.ZoneHasCards(counted, "hand", comparison)
+        if stream.accept_word("cards", "card") and stream.accept_word("in"):
+            if stream.accept_word("hand"):
+                return ast.ZoneHasCards(counted, "hand", comparison)
+            # "if **you have 200 or more cards in your library**" (Battle of
+            # Wits). The third word order of the one question, with the pile
+            # named after the count: the possessive has to be the subject's
+            # own ("you … your", anybody else "… their"), because a clause
+            # counting one player's pile on another's say-so is a different
+            # sentence and nothing here would carry whose.
+            own = "your" if counted.kind == "you" else "their"
+            if stream.accept_word(own) and stream.peek_word() in (
+                "library", "graveyard", "hand",
+            ):
+                zone = stream.peek_word()
+                stream.advance(1)
+                return ast.ZoneHasCards(counted, zone, comparison)
     stream.reset(have_mark)
 
     # "if **a player controls more creatures than each other player**" (Wild

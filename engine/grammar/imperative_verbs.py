@@ -552,7 +552,7 @@ def parse_imperative_verb(
     # `Scry 1.` used to die on "expected a subject" — and why every scry line
     # in the pool produced no instruction at all while its card still reported
     # supported on the strength of its other line.
-    if stream.at_word("scry"):
+    if stream.at_word("scry") or stream.at_word("surveil"):
         return _parse_scry(stream)
     if stream.at_word("reveal"):
         # "**Reveal your hand** and put all land cards from it onto the

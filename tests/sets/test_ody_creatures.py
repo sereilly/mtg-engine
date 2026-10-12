@@ -487,6 +487,114 @@ def test_a_thought_beast_under_another_controller_lowers_that_players_maximum(
     assert _w1g7_maximum_hand_size(game, 0) == 7
     assert _w1g7_maximum_hand_size(game, 1) == 3
 
+
+def _w1g7_settle(game, limit=50):
+    """Drain the stack and give every owed prompt its default answer."""
+    for _ in range(limit):
+        _w1g7_resolve_stack(game)
+        if not game.pending_choices and not game.pending_replacement_choices:
+            return
+        game.auto_resolve_pending_choices()
+        game.auto_resolve_pending_replacement_choices()
+    raise AssertionError("the game did not settle")
+
+
+# --- Confessor: "whenever a player discards a card" ---------------------------
+
+def test_confessor_watches_every_players_discards_its_controllers_included(
+    set_pool,
+):
+    """"Whenever **a player** discards a card, you may gain 1 life." The third
+    printed seat of the discard trigger, and the widest: an opponent's discard
+    to a spell and the controller's own discard to a cost both fire it, once
+    per card (CR 701.9a)."""
+    pool = {**set_pool("LEA"), **set_pool("ODY"), **set_pool("7ED")}
+    game = _w1g7_duel(
+        set_pool, bf0=["Confessor", "Wild Mongrel"], hand0=["Forest", "Forest"],
+        hand1=["Grizzly Bears", "Grizzly Bears", "Forest"],
+    )
+    game.players[0].hand.append(pool["Mind Rot"])
+
+    assert game.cast_from_hand(0, "Mind Rot", target_player_index=1).supported
+    _w1g7_settle(game)
+    assert len(game.players[1].graveyard) == 2
+    assert game.players[0].life == 22, "one trigger per card an opponent discarded"
+
+    assert game.activate_permanent_ability(
+        0, "Wild Mongrel", cost_hand_index=0
+    ).supported
+    _w1g7_settle(game)
+    assert game.players[0].life == 23, "its controller's own discard counts too"
+    assert game.players[1].life == 20
+
+
+def test_confessor_sees_a_cleanup_discard_and_each_copy_answers_for_its_owner(
+    set_pool,
+):
+    """No spell or ability caused the cleanup discard (CR 514.1) and it is a
+    discard all the same; and "you" is each Confessor's own controller."""
+    game = _w1g7_duel(
+        set_pool, bf0=["Confessor"], bf1=["Confessor"],
+        hand1=["Grizzly Bears"] * 9,
+    )
+    game.resolve_cleanup_step(1)
+    _w1g7_settle(game)
+    assert len(game.players[1].hand) == 7
+    assert (game.players[0].life, game.players[1].life) == (22, 22)
+
+
+def test_confessor_asks_its_controller_and_no_is_an_answer(set_pool):
+    """"You may": an interactive seat is asked once per trigger, and declining
+    gains nothing."""
+    game = _w1g7_duel(
+        set_pool, bf0=["Confessor"], hand1=["Grizzly Bears"] * 8,
+        interactive=(0,),
+    )
+    game.resolve_cleanup_step(1)
+    _w1g7_resolve_stack(game)
+    offers = game.pending_choices_of("optional_pay", 0)
+    assert len(offers) == 1
+    assert game.resolve_pending_choice("optional_pay", 0, accept=False)
+    assert game.players[0].life == 20
+
+    game.players[1].hand.extend([game.players[1].hand[0]])
+    game.resolve_cleanup_step(1)
+    _w1g7_resolve_stack(game)
+    assert game.resolve_pending_choice("optional_pay", 0, accept=True)
+    assert game.players[0].life == 21
+
+
+def test_the_discard_trigger_still_tells_its_three_seats_apart():
+    """The narrowing is data on one condition kind, so all three spellings are
+    asked of one fire site — and an invented card printing each must hear only
+    what it names."""
+    def watcher(name, who):
+        card = _w1g7_mk_card(
+            name, "{1}", "Enchantment",
+            f"Whenever {who} a card, you gain 1 life.",
+        )
+        assert _w1g7_compile(card).supported, name
+        return card
+
+    yours = watcher("Own Discards", "you discard")
+    theirs = watcher("Their Discards", "an opponent discards")
+    anyones = watcher("Any Discards", "a player discards")
+    filler = _w1g7_mk_card("Filler", "", "Sorcery", "")
+
+    def life_after(discarder):
+        seats = [_w1g7_PlayerState(name="P0", life=20), _w1g7_PlayerState(name="P1", life=20)]
+        game = _w1g7_Game(players=seats)
+        game.enforce_mana_costs = False
+        for card in (yours, theirs, anyones):
+            game._put_permanent_onto_battlefield(0, _w1g7_Permanent(card=card), None)
+        seats[discarder].hand = [filler] * 8
+        game.resolve_cleanup_step(discarder)
+        _w1g7_settle(game)
+        return seats[0].life
+
+    assert life_after(0) == 22, "'you' and 'a player'"
+    assert life_after(1) == 22, "'an opponent' and 'a player'"
+
 # ==== end W1G7 ======================================================
 
 

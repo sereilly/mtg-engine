@@ -637,18 +637,31 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
                 card, instruction.payload, game=game, owner=caster_index,
             )
         )
+    elif printed_count == "x":
+        # "…for up to **X** basic land cards" (New Frontiers): the X the spell
+        # was cast with (CR 107.3a), read where every other X is.
+        count = max(0, int(context.x_value or 0))
     else:
         count = int(printed_count)
     destinations = list(instruction.payload.get("destinations") or ())
+    tapped = list(instruction.payload.get("tapped") or ())
     if not destinations and count > 1:
         # A search for several cards that all go to one place (Jester's Cap's
         # three exiles). The counted flow is driven by one entry per find, so
         # the list is built here where the number is known — Cultivate's
         # printing carries its own, because its finds go to different places.
         destinations = [instruction.payload.get("destination", "hand")] * count
-    if counted_from is not None and count <= 0:
+        # …and one entry state per find, for the search whose number the card
+        # did not print: "put them onto the battlefield **tapped**" says it
+        # once for however many there are, and the counted flow reads a flag
+        # per slot. A list the lowering sized (Cultivate) is left as printed.
+        if not tapped and instruction.payload.get("enters_tapped"):
+            tapped = [True] * count
+    if (counted_from is not None or printed_count == "x") and count <= 0:
         game.log.append(
             f"{context.card.name}: nothing was recorded to search for"
+            if counted_from is not None
+            else f"{context.card.name}: X is 0, so there is nothing to search for"
         )
         return True, "resolved"
     game.arm_pending_choice(
@@ -665,7 +678,7 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # find fills which slot is then its own question, asked through the
         # `search_destination` prompt when the slots differ.
         destinations=destinations,
-        tapped=list(instruction.payload.get("tapped") or ()),
+        tapped=tapped,
         # The searching card's name, for the prompts' labels — data, not
         # dispatch.
         card_name=context.card.name if context.card is not None else "",
@@ -1679,7 +1692,16 @@ def discard_x_target_cards(game: Game, instruction: OracleInstruction, context: 
             return True, "resolved"
         target = game.players[seat]
     amount = instruction.payload.get("amount")
-    if not isinstance(amount, int):
+    recorded_size = instruction.payload.get("amount_from")
+    if recorded_size is not None:
+        # "Discard **any number** of cards at random." (Rites of Initiation.)
+        # The player chose how many — the step in front of this one asked and
+        # wrote the answer down — and chance chooses which. Read off the
+        # scratchpad because that is where a number chosen during a resolution
+        # is (CR 608.2d); an absent record is a step that never ran, and that
+        # is no cards rather than the cast's X.
+        amount = int(context.results.get(str(recorded_size)) or 0)
+    elif not isinstance(amount, int):
         amount = context.x_value
     x = max(0, amount or 0)
     # "…discards a **creature** card at random." (Rag Man.) The sample is drawn
@@ -5840,6 +5862,37 @@ def scry(game: Game, instruction: OracleInstruction, context: OracleExecutionCon
         top_count=top_count, amount=amount, card_name=context.card.name,
     )
     game.log.append(f"{caster.name} is scrying {top_count}")
+    return True, "pending_scry"
+
+
+@effect_handler("surveil")
+def surveil(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """CR 701.25a: look at the top N cards of your library, then put any number
+    of them into your graveyard and the rest on top of your library in any
+    order.
+
+    Scry's decision with one destination changed, so it is scry's prompt with
+    that destination as data (``destination: "graveyard"``) rather than a
+    second prompt kind — the look, the arrangement, the validation and the
+    suspension of the resolution behind it are the same, and one answer shape
+    is one thing for a client to send. What differs is where the cards the
+    seat does not keep go, and ``_resolve_scry`` reads that off the choice.
+
+    CR 701.25c: a surveil of 0 is no surveil event, so nothing is armed; and a
+    short library offers what is there (no draw, so CR 704.5b never fires).
+    """
+    caster = context.caster
+    amount = resolve_amount(instruction.payload.get("amount", 1) or 1, context.x_value)
+    top_count = min(amount, len(caster.library))
+    if top_count <= 0:
+        game.log.append(f"{caster.name} surveils {amount} with nothing to look at")
+        return True, "resolved"
+    game.arm_pending_choice(
+        "scry", game.players.index(caster),
+        top_count=top_count, amount=amount, card_name=context.card.name,
+        destination="graveyard",
+    )
+    game.log.append(f"{caster.name} is surveilling {top_count}")
     return True, "pending_scry"
 
 

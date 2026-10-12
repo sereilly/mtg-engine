@@ -326,8 +326,14 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # whose discard it watches. The kind is named for the *event* for that
     # reason — it was `you_discard_card` while "you" was the only spelling the
     # pool printed, which is a kind named after one of its own narrowings.
+    #
+    # "Whenever **a player** discards a card, you may gain 1 life."
+    # (Confessor.) The third printed seat, and the widest: every discard there
+    # is, the controller's own included. The same capture, because the three
+    # are one question with three answers and the fire site reads the answer.
     ("discards_card",
-     r"whenever (?:you discard|(?P<discarder>an opponent) discards) a card"),
+     r"whenever (?:you discard|(?P<discarder>an opponent|a player) discards) "
+     r"a card"),
     # "Whenever a spell or ability an opponent controls causes you to discard
     # **a card**, you gain 2 life and you may draw a card." (Spiritual Focus.)
     # The **second dispatch scope** for the condition the "when" table carries
