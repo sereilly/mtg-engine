@@ -15,6 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
+from engine.color_changes import spell_color_change
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
 from engine.faces import combined_oracle_text, face_cards, is_face, whole_card
@@ -899,7 +900,10 @@ def _serialize_stack_item(item, game: Game) -> dict:
     recolored = item.choices.get("color_override")
     if recolored:
         serialized_card["color_override"] = recolored
-        serialized_card["colors"] = [recolored]
+        # The colours the engine answers with, not the record as stored: a
+        # spell made colourless (Ersatz Gnomes) has none (CR 105.2c), and the
+        # stored word was being sent as a sixth colour.
+        serialized_card["colors"] = list(spell_color_change(item) or ())
 
     return {
         "type": item_type,

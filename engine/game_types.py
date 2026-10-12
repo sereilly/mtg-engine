@@ -37,6 +37,11 @@ class SimulationResult:
 #                    new_color, because what a spell was announced with and
 #                    what was done to it are two facts — one key made Sleight
 #                    of Mind cast to write "red" a red spell.
+#   color_effect     beside color_override: how long that effect lasts and when
+#                    it was created (``color_changes.recolor_spell`` writes
+#                    both), so it can go on applying to the permanent the
+#                    spell becomes (CR 400.7a) with its own duration and its
+#                    own timestamp (CR 613.7b)
 #   divided_targets  a divided spell's full cross-seat target list (Fireball,
 #                    Volcanic Eruption) as (seat, battlefield_index) pairs, where
 #                    a (seat, None) entry is that player's face. Takes precedence
@@ -45,7 +50,8 @@ class SimulationResult:
 #                    choice prevention spells): a battlefield Permanent or a
 #                    stack spell's CardDefinition
 CHOICE_KEYS = (
-    "new_color", "old_color", "color_override", "divided_targets", "chosen_source",
+    "new_color", "old_color", "color_override", "color_effect",
+    "divided_targets", "chosen_source",
     # "For each additional {1}{R} you paid, …" (Primitive Justice, Taste of
     # Paradise); "If this spell's additional cost was paid, …" (Undergrowth).
     # An *offer* the caster took, counted — not an object a cost ate like the

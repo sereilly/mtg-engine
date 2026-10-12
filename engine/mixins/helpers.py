@@ -128,9 +128,16 @@ class GameHelpersMixin:
         call site already passed through ``self``/``game``, so the board became
         askable without touching one of them.
         """
-        recolored = getattr(item, "choices", {}).get("color_override")
-        if recolored:
-            return (recolored,)
+        # ``is not None``: a spell made colourless has no colours (CR 105.2c)
+        # and that is an answer. The record was returned as stored, so Ersatz
+        # Gnomes' "target spell becomes colorless" made a spell the colour
+        # ``"colorless"`` — a non-empty answer to every reader asking whether
+        # it has one.
+        from ..color_changes import spell_color_change
+
+        recolored = spell_color_change(item)
+        if recolored is not None:
+            return recolored
         from ..object_colors import card_colors
 
         return tuple(card_colors(

@@ -1515,7 +1515,31 @@ LOWERING_FAMILIES = [
      #
      # Lowering-only, like `zones`, `library`, `mana` and `redirection`: the
      # parse half is 329 lines and crossed nothing.
-     "exchanges"]
+     "exchanges",
+     # `colors` split off `lowering/types.py` at 1,010 lines, Apocalypse's
+     # second wave — the round "target **spell or permanent**" stopped being
+     # read as "target permanent" (Illusion, Blind Seer) and the colour
+     # lowering took a third subject zone. The seam is `types`' own first
+     # paragraph, which listed four CR 205 lowerings and then the colour
+     # change "which is CR 105 and layer 5 and is **here anyway**", and its
+     # third, which draws the CR's line in as many words: "CR 105 what colour
+     # it is (layer 5) … and CR 205 is what it **is**". The waiver had a
+     # reason — one `becomes` production parses all five, and the lowering was
+     # moved in to share the parse module's name — and that reason is about a
+     # mirror, which a size may break: it is `text_changes`' prediction a
+     # paragraph up read the other way.
+     #
+     # The name is `engine/color_changes.py`'s, the write API every handler
+     # behind these instructions goes through, so the mirror re-forms on the
+     # engine side rather than forking a third word for one subject (the
+     # reuse `untap_restrictions` and `linked_exile` make). The two halves
+     # share no name in either direction, checked at the split: everything
+     # either reads is in `_common`, `_events` and `_filters`.
+     #
+     # Lowering-only, like `zones` and `exchanges`: the parse half stays in
+     # `effects/types.py`, where the colour is one branch of the `becomes`
+     # production reading the duration clause the other four read.
+     "colors"]
 # `delayed` is the lowering-only family Visions' second wave split off
 # `lowering/stack.py`, when the counter's "unless its controller pays {1} **and
 # 1 life**" (Mundungu) took that module past the guard below. The line is the

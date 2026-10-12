@@ -1397,6 +1397,15 @@ COUNTERS_REMOVED = "counters_removed"
 #: two sit at opposite ends of the pipeline.
 CHOSEN_TARGET_PERMANENTS = "chosen_target_permanents"
 
+#: The ``targets`` description kind of "target **spell or permanent**" (Illusion,
+#: Blind Seer): one chosen object in one of two zones. Beside ``"spell"`` (the
+#: stack) and ``"object"`` (the battlefield), which are the description's words
+#: for the two halves. Here because three ends of the pipeline spell it — the
+#: lowering that writes it, ``targeting._from_targets_payload`` that turns it
+#: into the ``spell_or_permanent`` picker, and the handler that asks which half
+#: the announcement named.
+SPELL_OR_OBJECT_TARGET = "spell_or_object"
+
 
 #: "**Choose two target creature cards in your graveyard.** … return **the
 #: chosen cards** to the battlefield tapped." (Victimize.) The same shape one

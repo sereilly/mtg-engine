@@ -464,6 +464,23 @@ def _action_activate(session, req, seat_type):
         engine_stack_index = None
         if req.target_stack_index is not None:
             engine_stack_index = len(session.game.stack) - 1 - req.target_stack_index
+        # …and a **role** whose object is a spell on the stack, named in the
+        # role refs (the cast side's Suffocating Blast shape, should an ability
+        # print it). Translated here into the one stack channel an activation
+        # has and a slot marker the engine fills from it
+        # (``legality.named_role_objects``), so the wire's top-first index
+        # never reaches the engine.
+        role_refs = None
+        if req.target_role_refs:
+            role_refs = []
+            for ref in req.target_role_refs:
+                entry = ref.model_dump(exclude={"stack_index"})
+                if ref.stack_index is not None:
+                    engine_stack_index = (
+                        len(session.game.stack) - 1 - ref.stack_index
+                    )
+                    entry["stack"] = True
+                role_refs.append(entry)
         # "A source of your choice" (Jade Monolith): a chosen stack spell's
         # index arrives top-first; convert like target_stack_index.
         engine_source_stack_index = None
@@ -507,11 +524,7 @@ def _action_activate(session, req, seat_type):
             # Forwarded as plain dicts, which is the shape the engine's own
             # channel takes: the engine has no business importing a request
             # model, and the two names are the same words.
-            target_role_refs=(
-                [ref.model_dump() for ref in req.target_role_refs]
-                if req.target_role_refs
-                else None
-            ),
+            target_role_refs=role_refs,
             # CR 601.2d's announced division, forwarded exactly as the cast
             # path's helper forwards it and in the same shape: a two-tuple
             # where no share was announced (which is what an evenly-divided

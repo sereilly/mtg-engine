@@ -3795,6 +3795,15 @@ class AbilityActivationMixin:
                 indices.append(None)
                 stamps.append(None)
                 continue
+            if ref.get("stack"):
+                # A **stack** slot answers with none of the three either: the
+                # spell it names rides ``target_stack_item``, the scalar an
+                # activation has carried since Deathgrip, and every reader
+                # fills the slot from there (``legality.named_role_objects``).
+                ids.append(None)
+                indices.append(None)
+                stamps.append(None)
+                continue
             index = ref.get("graveyard_index")
             ids.append(None)
             indices.append(index if isinstance(index, int) else None)

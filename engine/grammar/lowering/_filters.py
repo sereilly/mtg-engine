@@ -326,6 +326,16 @@ CONDITIONALLY_EMITTED_FIELDS: dict[str, str] = {
     # payload from a filter refuses it by name, and the one written for it
     # carries the count as its own key.
     "target_count": "target_count",
+    # "target **spell or permanent**" (the Lace cycle, Illusion, Blind Seer).
+    # A second *zone*, which no filter payload can say — every key here is a
+    # question asked of one permanent — so it has no ``to_payload`` form and
+    # every lowering that builds a payload from the filter refuses the phrase
+    # by name. The ones written for it name the field in
+    # ``carried_separately`` and say what they do with the spell half: the
+    # chosen-colour recolour describes the union to the picker
+    # (``lowering/types``), and the text change carries the permanent half
+    # alone and says so (``lowering/characteristics``).
+    "also_spell": "also_spell",
     # "another permanent **of that type**" (Enchantment Alteration). Which type
     # "that" is depends on the object the sentence's *other* clause named, so
     # no read of the candidate alone can answer it and there is no payload form.

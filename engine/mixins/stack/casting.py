@@ -61,7 +61,8 @@ from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
                           enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
                           enchant_subject_seat, instructions_as_announced,
-                          role_is_seat, spec_roles, targets_mana_value_x)
+                          role_is_seat, role_is_stack, spec_roles,
+                          targets_mana_value_x)
 
 def _optional_cost_offers(
     costs: "tuple[AdditionalCost, ...]",
@@ -1554,6 +1555,22 @@ class SpellCastingMixin:
             if stack_refusal is not None:
                 self.log.append(stack_refusal)
                 return SimulationResult(card.name, False, classification.effect_kind, stack_refusal)
+            # …and the rule's other side: a stack object named for an
+            # announcement that has no target there (a Lightning Bolt, a Terror,
+            # a Wrath of God), or beside a permanent for "target spell **or**
+            # permanent". It was accepted, recorded and ignored.
+            stray_refusal = self.stray_stack_target_refusal(
+                caster_index, card, mode_stack_item, from_zone=from_zone,
+                mode_index=announced_mode,
+                optional_cost_payments=optional_paid,
+                names_a_permanent=bool(
+                    [pid for pid in (mode_ids or ()) if isinstance(pid, int)]
+                    or mode_slot is not None
+                ),
+            )
+            if stray_refusal is not None:
+                self.log.append(stray_refusal)
+                return SimulationResult(card.name, False, classification.effect_kind, stray_refusal)
 
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
@@ -4089,7 +4106,7 @@ class SpellCastingMixin:
         )
     def _named_role_targets(
         self, caster_index: int, target_player_index, target_permanent_index,
-        target_permanent_ids, roles=(),
+        target_permanent_ids, roles=(), target_stack_item=None,
     ) -> list:
         """The objects a roles announcement named, in role order.
 
@@ -4115,10 +4132,24 @@ class SpellCastingMixin:
         the announcement: an id list positional in role order carries ``None``
         in that slot, and guessing "the None one is the player" would fill a
         permanent slot whose permanent has left.
+
+        **A role whose object is a spell is filled from the stack channel**
+        (*target_stack_item*), on the same argument one field over: "the spell
+        this one targets" has been ``StackItem.target_stack_item`` since
+        Counterspell, the resolution reads it back as ``context.stack_target``,
+        and "Counter **target spell** and … deals 3 damage to target creature"
+        (Suffocating Blast) means exactly that. So that announcement is a
+        stack index beside ``[None, creature_id]``, and a stack slot with no
+        spell named stays None — which the count check reads as the incomplete
+        announcement it is.
         """
         player_slots = {
             index for index, role in enumerate(roles)
             if isinstance(role, dict) and role_is_seat(role)
+        }
+        stack_slots = {
+            index for index, role in enumerate(roles)
+            if isinstance(role, dict) and role_is_stack(role)
         }
         seated = (
             self.players[target_player_index]
@@ -4129,6 +4160,7 @@ class SpellCastingMixin:
         if target_permanent_ids:
             return [
                 seated if index in player_slots
+                else target_stack_item if index in stack_slots
                 else (
                     self.permanent_by_id(permanent_id)
                     if permanent_id is not None else None
@@ -4154,7 +4186,9 @@ class SpellCastingMixin:
             )
         )
         return [
-            seated if index in player_slots else self.permanent_at(seat, slot)
+            seated if index in player_slots
+            else target_stack_item if index in stack_slots
+            else self.permanent_at(seat, slot)
             for index, slot in enumerate(slots)
         ]
 
@@ -4389,7 +4423,7 @@ class SpellCastingMixin:
         if roles:
             chosen = self._named_role_targets(
                 caster_index, target_player_index, target_permanent_index,
-                target_permanent_ids, roles,
+                target_permanent_ids, roles, target_stack_item,
             )
             if len(chosen) != len(roles):
                 return False, f"{card.name} requires {len(roles)} targets"

@@ -278,6 +278,22 @@ class ObjectFilter:
     # lowering not written for it refuse the phrase by name rather than drop
     # the union and counter (or exile, or recolour) a spell alone.
     also_ability: bool = False
+    # "target **spell or permanent**" (the Lace cycle, Illusion, Blind Seer,
+    # the three text-changers). The union across two **zones** — an object on
+    # the stack or one on the battlefield — where ``also_ability`` above is the
+    # union across the two kinds of stack object. ``zone`` stays
+    # ``"battlefield"``, because the permanent half is what every other field
+    # of the filter describes; this says the phrase names a spell as well.
+    #
+    # The noun parser consumed the union and recorded nothing, so "target
+    # spell or permanent" and "target permanent" were one filter: every
+    # lowering not written for the union read it as a permanent, the picker
+    # offered permanents alone, and a spell named anyway was dropped at
+    # resolution for whatever permanent a scan could reach. It is listed in
+    # ``lowering/_filters.CONDITIONALLY_EMITTED_FIELDS`` with no payload form,
+    # so ``_filter_payload`` refuses the phrase by name for every lowering but
+    # the three that say what they do with the spell half.
+    also_spell: bool = False
     # "…activated ability **from an artifact source**" (Rust, Ayesha Tanaka).
     # A narrowing on the *permanent the ability came from*, which is the only
     # thing about an ability on the stack there is to narrow by — it has no card

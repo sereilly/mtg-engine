@@ -2110,11 +2110,25 @@ function confirmSeveralGraveyardTargets() {
 // legal target for the in-progress spell-target prompt — membership in the
 // backend-supplied set of legal stack indices.
 function isStackItemValidCastTarget(item, arrayIndex) {
-  if (!pendingCastTarget) return false;
-  // "stack" prompts target spells only; "spell_or_permanent" (lace) prompts allow
-  // either a permanent or a stack spell, flagged via alsoStack.
-  if (pendingCastTarget.targetKind !== "stack" && !pendingCastTarget.alsoStack) return false;
+  if (!pendingPromptTargetsTheStack()) return false;
   return !!pendingCastTarget.validStackIndices && pendingCastTarget.validStackIndices.has(Number(arrayIndex));
+}
+
+// Whether the in-progress target prompt is, right now, asking for an object on
+// the stack. Three shapes: a "stack" prompt targets spells only;
+// "spell_or_permanent" (the Laces, Illusion, Blind Seer) and a chosen damage
+// source allow a permanent or a stack spell, flagged via alsoStack; and a
+// **roles** walk asks for one while it stands on a spell role ("Counter target
+// spell and … deals 3 damage to target creature", Suffocating Blast) and for
+// something else on every other step. One predicate, because three places ask
+// it — which stack cards glow, whether a click on one is an answer, and whether
+// that click reaches the picker at all — and a roles walk known to two of them
+// is a spell that glows and cannot be clicked.
+function pendingPromptTargetsTheStack() {
+  const p = pendingCastTarget;
+  if (!p) return false;
+  if (p.targetKind === "stack" || p.alsoStack) return true;
+  return p.targetKind === "roles" && roleChoosesASpell(currentRole(p));
 }
 
 // Battlefield permanents that are legal targets for the in-progress prompt, as
@@ -2153,7 +2167,22 @@ function activatedAbilityDestroyPermanentColor(card) {
   if (s.kind !== "permanent") return undefined;
   return s.color_filter ?? null;
 }
-function activatedAbilityRequiresTargetPermanent(card) { return specKind(card) === "permanent"; }
+// …or a spell on the stack beside it: "{1}{U}: Target spell or permanent
+// becomes the color of your choice until end of turn" (Blind Seer). The cast
+// side has answered this kind since the Laces (`cardRequiresTargetPermanent`);
+// no activation branch read it, so the ability fell to the cascade's tail and
+// was sent with no target at all.
+//
+// …and "target **planeswalker**" (Sparkhunter Masticore's "{1}: This creature
+// deals 1 damage to target planeswalker"), the one activation kind in the pool
+// that names a permanent type no branch below read. It took the same tail:
+// a cost prompt, a bare activation, and the server's "this ability needs a
+// target". The backend's list is planeswalkers alone, so the permanent prompt
+// offers exactly those.
+function activatedAbilityRequiresTargetPermanent(card) {
+  const k = specKind(card);
+  return k === "permanent" || k === "spell_or_permanent" || k === "planeswalker";
+}
 // Aladdin: "Gain control of target artifact for as long as you control this creature."
 function activatedAbilityRequiresTargetArtifact(card) { return specKind(card) === "artifact"; }
 // …and "target player **or planeswalker**" (Wandering Mage's third ability,
@@ -11349,7 +11378,8 @@ function renderActivationPrompt() {
       body.textContent =
         "This spell names several targets of different kinds. Click the glowing "
         + "targets one at a time — each choice narrows the next. A role may be a "
-        + "player, in which case the pill is what glows.";
+        + "player, in which case the pill is what glows, or a spell on the "
+        + "stack, in which case the stack card is.";
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(roleTargetsHint())}</div>`,
@@ -12434,9 +12464,19 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     const fields = pendingTargetFields(card);
     // Circle of Protection's "source of your choice" may be a permanent or a spell
     // on the stack (also_stack), so it stays activatable when only a stack source exists.
-    const alsoStack = !!targetSpecOf(card).also_stack;
+    // Blind Seer's "target spell or permanent" is the same two zones as a *target*.
+    const spellOrPermanent = cardRequiresTargetSpellOrPermanent(card);
+    const chosenSource = !!targetSpecOf(card).also_stack;
+    const alsoStack = spellOrPermanent || chosenSource;
     if (fields.validKeys.size === 0 && !(alsoStack && fields.validStackIndices.size > 0)) {
-      updateActionHint(`No valid source for ${cardName} — nothing of that color to prevent.`, true);
+      // The source wording is Circle of Protection's alone; every other
+      // ability reaching this branch is looking for a target.
+      updateActionHint(
+        chosenSource
+          ? `No valid source for ${cardName} — nothing of that color to prevent.`
+          : `No valid target for ${cardName}.`,
+        true,
+      );
       return;
     }
     pendingCastTarget = {
@@ -14309,6 +14349,10 @@ function roleTargetNoun(role) {
   // The caster clicks a life pill for it, so the word has to be the one on the
   // pill and not the spec kind.
   if (roleChoosesAPlayer(role)) return "player";
+  // A role whose object is a **spell on the stack** ("Counter target spell and
+  // … deals 3 damage to target creature", Suffocating Blast). The spec kind is
+  // the picker's name for the zone ("stack"); the caster is asked for a spell.
+  if (roleChoosesASpell(role)) return "spell";
   return role.kind || "permanent";
 }
 
@@ -14327,6 +14371,12 @@ function roleChoosesAPlayer(role) {
 /** Whether this role's objects are chosen from a graveyard rather than a board. */
 function roleReadsAGraveyard(role) {
   return !!role && role.kind === "graveyard_creature";
+}
+
+/** Whether this role is answered by clicking a spell on the stack
+ * (`engine/targeting.role_is_stack`). */
+function roleChoosesASpell(role) {
+  return !!role && role.kind === "stack";
 }
 
 /** The role a roles walk is currently asking for, or null when it is finished. */
@@ -14417,6 +14467,29 @@ function chooseRolePlayer(targetSeat) {
   advanceRoleWalk(option);
 }
 
+/** Answer the current role with a **spell on the stack** (Suffocating Blast's
+ * "target spell").
+ *
+ * The third sibling: a stack card has neither a seat-and-slot nor a life pill,
+ * it has its place in the cascade — `arrayIndex`, top-first, which is the
+ * `stack_index` the backend enumerated the option under and the index the
+ * server converts on the way in. `selectStackSpellTarget` hands the click here
+ * while a roles walk stands on a spell role.
+ */
+function chooseRoleSpell(arrayIndex) {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return;
+  const option = (p.roleOptions || []).find(
+    (o) => o && o.kind === "stack" && o.stack_index === arrayIndex,
+  );
+  if (!option) {
+    updateActionHint("That isn't a legal choice for this target.", true);
+    return;
+  }
+  p.roleChosen.push({ stackIndex: arrayIndex, zone: "stack" });
+  advanceRoleWalk(option);
+}
+
 /** The tail every answered role runs: finish, or step to the next role. */
 function advanceRoleWalk(option) {
   const p = pendingCastTarget;
@@ -14481,14 +14554,17 @@ function confirmRoleTargets() {
   // …and a slot answered by a **player** cannot travel as one either: a hole in
   // a positional id list cannot say whether the slot is a seat or a permanent
   // that has left. Same shape, third alternative.
+  // …nor can a slot answered by a **spell on the stack**, which has no
+  // permanent id at all: the fourth alternative, by its top-first stack index.
   const needsRoleRefs = roleChosen.some(
-    (t) => t.zone === "graveyard" || t.zone === "player",
+    (t) => t.zone === "graveyard" || t.zone === "player" || t.zone === "stack",
   );
   const roleRefs = roleChosen.map((t) => {
     if (t.zone === "graveyard") {
       return { graveyard_seat: t.seat, graveyard_index: t.idx };
     }
     if (t.zone === "player") return { seat: t.seat };
+    if (t.zone === "stack") return { stack_index: t.stackIndex };
     return { permanent_id: t.id };
   });
   // In role order, which is the order the engine's own roles list is in — the
@@ -17623,9 +17699,16 @@ function toggleStackClickHold(arrayIndex) {
 
 function selectStackSpellTarget(arrayIndex) {
   const pending = pendingCastTarget;
-  if (!pending || (pending.targetKind !== "stack" && !pending.alsoStack)) return;
+  if (!pendingPromptTargetsTheStack()) return;
   const item = _currentStack[arrayIndex];
   if (!item || !isStackItemValidCastTarget(item, arrayIndex)) return;
+
+  // A roles walk standing on a spell role: the click answers that one role and
+  // the walk goes on to the next — nothing is sent yet, and the prompt stays.
+  if (pending.targetKind === "roles") {
+    chooseRoleSpell(arrayIndex);
+    return;
+  }
 
   pendingCastTarget = null;
   renderActivationPrompt();
@@ -17719,9 +17802,9 @@ function renderStack(stack) {
   }
 
   // The canvas stack cascade is the only stack UI. While targeting a spell on
-  // the stack (Counterspell, Fork), legal targets get a glow on the canvas.
-  const choosingStackTarget = !!pendingCastTarget
-    && (pendingCastTarget.targetKind === "stack" || pendingCastTarget.alsoStack);
+  // the stack (Counterspell, Fork, a roles walk on its spell role), legal
+  // targets get a glow on the canvas.
+  const choosingStackTarget = pendingPromptTargetsTheStack();
   if (battlefieldCanvas) {
     battlefieldCanvas.stackTargetableIndices = choosingStackTarget
       ? new Set(_currentStack.map((item, i) => i).filter((i) => isStackItemValidCastTarget(_currentStack[i], i)))
@@ -20397,7 +20480,7 @@ function initBattlefieldCanvas() {
       // While targeting a spell on the stack (Counterspell, Fork, lace spells…),
       // clicking a spell card in the canvas stack cascade chooses it as the
       // target. The canvas stack index matches the state.stack array index.
-      if (pendingCastTarget && (pendingCastTarget.targetKind === "stack" || pendingCastTarget.alsoStack)) {
+      if (pendingPromptTargetsTheStack()) {
         selectStackSpellTarget(info.index);
         return;
       }
@@ -21569,15 +21652,19 @@ function handlePlayerPillClick(targetSeat, event) {
     boardTargeting.onPlayer(targetSeat);
     return;
   }
+  // The prompts a face can answer. **A roles walk is one of them** — while it
+  // stands on a player role the pill is that role's answer ("target creature
+  // and … target player or planeswalker", Shower of Sparks; "target player
+  // gains control of target permanent", Donate), and `handlePlayerTargetClick`
+  // has had the branch that hands the click to the walk since Donate. This
+  // gate did not list the kind, so the click never reached it: both pills
+  // glowed, neither answered, and every roles spell with a seat in it could be
+  // started in the browser and never finished. Found by driving one.
   if (
     !pendingCastTarget ||
     (pendingCastTarget.targetKind !== "player" &&
       pendingCastTarget.targetKind !== "any" &&
       pendingCastTarget.targetKind !== "divided" &&
-      // A roles walk standing on a player role (Donate, Lunge, Last Stand).
-      // `handlePlayerTargetClick` has answered that since the role existed,
-      // and this gate in front of it never let a click through — the pill
-      // glowed and nothing happened, so the spell could not be cast.
       pendingCastTarget.targetKind !== "roles")
   )
     return;

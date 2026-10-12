@@ -17,6 +17,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
                            kickers_paid)
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
+from ...color_changes import carry_spell_color_change
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
@@ -1610,6 +1611,16 @@ class StackResolutionMixin:
             # because a later card may ask either question and they are not the
             # same one: a reanimation stamps the first and not the second.
             permanent.metadata["cast_from_zone"] = cast_from_zone
+            # CR 400.7a: an effect that changed this spell's colour on the
+            # stack "continue[s] to apply to the permanent that spell
+            # becomes". The spell's record ended with the spell, so a Lace cast
+            # at a Grizzly Bears spell logged "became R" and put a green Bears
+            # onto the battlefield (the five Laces and Ersatz Gnomes). Carried
+            # here for the reason the kicked stamp below is: before the
+            # permanent enters, so whatever reads its colour as it arrives
+            # reads the colour it arrives with — and with the effect's own
+            # duration and timestamp (``color_changes``).
+            carry_spell_color_change(choices, permanent)
             # "If this creature **was kicked**, it enters with …" / "When this
             # creature enters, **if it was kicked**, …" / "…if this creature
             # **wasn't kicked**, sacrifice it" (Skizzik, turns later). CR

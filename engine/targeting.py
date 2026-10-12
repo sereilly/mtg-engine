@@ -48,7 +48,7 @@ from .cast_costs import (additional_costs, costs_charged_from, kicker_costs,
                          kickers_paid)
 from .divided_damage import CARD_DIVIDED, CHOSEN, DIVIDED_TARGETS, divided_entry
 from .enter_effects import copy_on_enter_type
-from .oracle_types import _COLOR_WORD_TO_SYMBOL
+from .oracle_types import SPELL_OR_OBJECT_TARGET, _COLOR_WORD_TO_SYMBOL
 
 #: The payload key a computed amount's count spec is stamped under. Spelled here
 #: rather than imported from ``oracle_types`` beside the module's other
@@ -3456,6 +3456,20 @@ def _sized_division(described: dict | None, instruction) -> dict | None:
 
 def _from_instruction(instruction) -> dict | None:
     """The spec one instruction describes, or None when it describes none."""
+    # **A step of a several-role announcement answers with the announcement.**
+    # "Counter target spell **and** Suffocating Blast deals 3 damage to target
+    # creature" stamps one ordered ``roles`` list on both steps, and the first
+    # of them is a counter — a kind with a payload reader of its own two lines
+    # down, which pre-empts the generic ``targets`` reading. Left to it, the
+    # line's picker was the counter's alone: a stack picker, the creature
+    # never asked for. A stamped step (``payload_own_role``) says which slot
+    # of a shared announcement it spends, so the announcement is the answer
+    # whatever kind carries it; every instruction that names no role falls
+    # through exactly as before.
+    if payload_own_role(instruction.payload) is not None:
+        announced = _from_targets_payload(instruction.payload.get("targets"))
+        if announced is not None:
+            return announced
     # A kind with several specs settles its own case first, because it is the
     # only reader that knows how to combine its payload with its `targets`
     # description — a colour-restricted counterspell carries both, and the
@@ -4083,7 +4097,22 @@ def _from_targets_payload(targets) -> dict | None:
             # (``_counter_spec``), so a described spell target and a counter
             # narrow the picker through one reader.
             spec["stack_card_types"] = list(card_types)
+        # A **spell role** carries what narrows it in the picker's own keys
+        # (``lowering/_roles._spell_role_description``): a counter keeps its
+        # colour and type on its payload, not in ``targets``, so the role was
+        # stamped with the step's derived ``stack_*`` flags and they are handed
+        # straight back. Absent on every description that is not a role.
+        for key, value in targets.items():
+            if key.startswith("stack_"):
+                spec[key] = value
         return spec
+    if kind == SPELL_OR_OBJECT_TARGET:
+        # "Target **spell or permanent** becomes the color of your choice until
+        # end of turn." (Illusion, Blind Seer.) One object in one of two zones
+        # — the picker the Lace cycle's kind row (``_KIND_TO_SPEC``) has always
+        # answered with, reached here by a card that *describes* the union.
+        # Bare, because the lowering admits no narrowing beside it.
+        return {"kind": "spell_or_permanent"}
     if kind != "object":
         return None
     filt = targets.get("filter") or {}
@@ -4559,6 +4588,48 @@ def spec_offers_a_player(spec: dict | None) -> bool:
         and not spec.get("land_filter")
         and not spec.get("creatures_only")
     )
+
+
+#: The spec kind of a picker over the **stack** — a spell or an ability there
+#: and nothing else — and, since Suffocating Blast, the kind of a *role* whose
+#: object is one. A role is "itself an ordinary object description"
+#: (:func:`roles_spec`), so its kind is the one-target kind for the same slot.
+STACK_TARGET_KIND = "stack"
+
+
+def role_is_stack(role: dict | None) -> bool:
+    """Whether *role*'s object is a spell or ability on the stack.
+
+    :func:`role_is_seat`'s sibling, for the same readers: the walk that turns
+    a candidate back into an object, the gate that fills each slot from the
+    channel it travels on, the stamp reader and the resolution. A role's
+    object is a permanent unless one of these says otherwise, and a reader
+    that did not ask would look a stack slot up on a battlefield.
+    """
+    return bool(role) and role.get("kind") == STACK_TARGET_KIND
+
+
+def spec_names_the_stack(spec: dict | None) -> bool:
+    """Whether an announcement under *spec* may name an **object on the
+    stack** (CR 601.2c) — as its target, as one of two zones its target may
+    be in, as CR 609.7a's chosen source, or as one role of several.
+
+    The one answer to "has ``target_stack_index`` anything to say here?", for
+    the gate that refuses a stack object named where it has not
+    (``legality.stray_stack_target_refusal``, and its activation twin). Four
+    shapes, because the stack reaches a spec four ways: the ``stack`` kind (a
+    counter, a copy, a retarget), ``spell_or_permanent`` (the Laces, Illusion,
+    Unsubstantiate), the ``also_stack`` flag on a chosen-source picker (Circle
+    of Protection, Reverse Damage) and a ``stack`` **role** beside a permanent
+    or a seat (Suffocating Blast).
+    """
+    if not spec:
+        return False
+    if spec.get("kind") in (STACK_TARGET_KIND, "spell_or_permanent"):
+        return True
+    if spec.get("also_stack"):
+        return True
+    return any(role_is_stack(role) for role in spec_roles(spec))
 
 
 def stack_object_mana_value(item) -> int:

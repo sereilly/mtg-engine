@@ -1219,33 +1219,12 @@ def test_a_shared_color_condition_is_asked_of_a_spell_and_refuses_elsewhere():
     assert not trailing.parsed
 
 
-# -- Suffocating Blast (driven, and declined) --------------------------------
-
-
-def test_suffocating_blast_is_refused_until_a_spell_and_a_creature_can_be_named_together(
-    set_pool,
-):
-    """"Counter target spell and Suffocating Blast deals 3 damage to target
-    creature." Two targets in two zones (CR 601.2c announces both), and no
-    announcement here carries a stack slot beside a battlefield one. It
-    compiled on arrival off its *first* target alone, and driven that was: a
-    picker offering the spell and nothing else, the cast accepted with no
-    creature on any battlefield, a named artifact dealt the damage, and an
-    unnamed creature slot answered by whichever creature the resolver met.
-
-    Refused, by the roles walk that proves the two targets are two, until the
-    stack slot exists — a card that reports unsupported naming its clause is
-    the honest state for one that cannot be announced."""
-    blast = set_pool("APC")["Suffocating Blast"]
-    program = _w1g7_compile(blast)
-
-    assert not program.supported
-    assert program.instructions == ()
-
-    game, p0, _p1 = _w1g7_instant_duel()
-    p0.hand = [blast]
-    assert not game.cast_from_hand(0, "Suffocating Blast").supported
-    assert [card.name for card in p0.hand] == ["Suffocating Blast"]
+# -- Suffocating Blast (driven, and declined in wave 1) -----------------------
+#
+# W1G7's test here asserted the decline — the card refused in the lowering
+# until an announcement could carry a stack slot beside a battlefield one. Wave
+# 2 built that slot, so the assertion of the refusal left with it; the card's
+# tests are in the W2G1 section below. The edge the refusal drew stays tested:
 
 
 def test_one_target_named_once_beside_a_spell_is_still_one_announcement(catalog_by_name):
@@ -1377,6 +1356,552 @@ def test_smash_whose_artifact_has_left_draws_nothing(set_pool, catalog_by_name):
 
 # ==== W2G1 ============================================================
 # W2G1's tests go between this line and the "end W2G1" line.
+
+import pytest as _w2g1_pytest
+
+from engine import Game as _W2G1Game, PlayerState as _W2G1PlayerState
+from engine import faces as _w2g1_faces
+from engine.grammar import compile_line as _w2g1_compile_line
+from engine.models import Permanent as _W2G1Permanent
+from engine.oracle import compile_card_oracle as _w2g1_compile
+from engine.targeting import derive_cast_spec as _w2g1_derive_cast_spec
+from tests.helpers import resolve_stack as _w2g1_resolve_stack
+
+
+def _w2g1_duel(*, interactive=()):
+    """A two-seat game with costs off. Non-interactive by default, so a colour
+    the resolution asks for is answered by the registry's own default; a test
+    that reads the prompt names its interactive seat."""
+    players = [_W2G1PlayerState(name="A"), _W2G1PlayerState(name="B")]
+    game = _W2G1Game(players=players)
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    return game, players[0], players[1]
+
+
+def _w2g1_put(game, seat, card):
+    """Put *card* onto *seat*'s battlefield, ready to act this turn."""
+    permanent = _W2G1Permanent(card=card)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    game.players[seat].battlefield.append(permanent)
+    game._sync_control()
+    return permanent
+
+
+def _w2g1_spell_from(game, seat, card, **announcement):
+    """*seat* puts *card* on the stack; returns the stack object."""
+    game.players[seat].hand.append(card)
+    queued = game.queue_from_hand(seat, card.name, **announcement)
+    assert queued.supported, queued.details
+    return game.stack[-1]
+
+
+def _w2g1_illusion(set_pool):
+    """The split card and its Illusion half — the half is what compiles and
+    what is cast by name (CR 709.3); the whole card is what a hand holds."""
+    whole = set_pool("APC")["Illusion // Reality"]
+    half = next(
+        unit for unit in _w2g1_faces.compilation_units([whole])
+        if unit.name == "Illusion"
+    )
+    return whole, half
+
+
+# -- Suffocating Blast --------------------------------------------------------
+
+
+def test_suffocating_blast_asks_for_a_spell_and_then_a_creature(
+    set_pool, catalog_by_name
+):
+    """"Counter target spell and Suffocating Blast deals 3 damage to target
+    creature." Two targets in two zones, announced together (CR 601.2c): the
+    picker walks a spell role and then a creature role, and every announcement
+    short of both is refused with the card still in hand — the four ways it
+    mis-played before the stack slot existed."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    ring = _w2g1_put(game, 1, catalog_by_name["Sol Ring"])
+    giant = _w2g1_put(game, 0, catalog_by_name["Hill Giant"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    blast = set_pool("APC")["Suffocating Blast"]
+    p0.hand = [blast]
+
+    offered = game.cast_target_spec(0, blast)
+    assert offered["kind"] == "roles"
+    assert [role["kind"] for role in offered["roles"]] == ["stack", "creature"]
+    assert [(entry["kind"], entry["name"]) for entry in offered["valid_targets"]] == [
+        ("stack", "Lightning Bolt"),
+    ]
+    assert sorted(step["name"] for step in offered["valid_targets"][0]["next"]) == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+
+    refused = {
+        "nothing named": {},
+        "the spell alone": {"target_stack_index": 0},
+        "the creature alone": {"target_permanent_ids": [None, bears.permanent_id]},
+        "an artifact for the creature": {
+            "target_stack_index": 0,
+            "target_permanent_ids": [None, ring.permanent_id],
+        },
+        "an id list that is not positional": {
+            "target_stack_index": 0, "target_permanent_ids": [bears.permanent_id],
+        },
+    }
+    for why, announcement in refused.items():
+        assert not game.queue_from_hand(0, "Suffocating Blast", **announcement).supported, why
+        assert [card.name for card in p0.hand] == ["Suffocating Blast"], why
+    assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+    assert giant.damage_marked == 0 and bears.damage_marked == 0
+
+
+def test_suffocating_blast_counters_the_spell_and_burns_the_creature(
+    set_pool, catalog_by_name
+):
+    """Both halves, in printed order, each on the object named for it — and on
+    nothing else: the artifact and the caster's own creature are untouched."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    ring = _w2g1_put(game, 1, catalog_by_name["Sol Ring"])
+    giant = _w2g1_put(game, 0, catalog_by_name["Hill Giant"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert p0.life == 20
+    assert "Lightning Bolt was countered by Suffocating Blast and moved to graveyard" in game.log
+    assert "Suffocating Blast dealt 3 damage to Grizzly Bears" in game.log
+    assert sorted(card.name for card in p1.graveyard) == ["Grizzly Bears", "Lightning Bolt"]
+    assert [card.name for card in p0.graveyard] == ["Suffocating Blast"]
+    assert [perm.card.name for perm in p1.battlefield] == ["Sol Ring"]
+    assert ring in p1.battlefield and giant.damage_marked == 0
+
+
+def test_suffocating_blast_reads_back_both_of_its_targets(set_pool, catalog_by_name):
+    """``stack_targets.chosen_targets`` — what "becomes the target of a spell"
+    and CR 115.7's retargets ask — reads one target per role off the channel
+    each travels on: the spell from the stack channel, the creature by id."""
+    from engine.stack_targets import chosen_targets
+
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+
+    read = chosen_targets(game, game.stack[-1])
+
+    assert [(target.kind, target.channel, target.position) for target in read] == [
+        ("stack", "role", 0), ("permanent", "role", 1),
+    ]
+    assert read[0].stack_item is bolt
+    assert read[1].permanent_id == bears.permanent_id
+
+
+def test_suffocating_blast_whose_spell_has_left_still_burns_the_creature(
+    set_pool, catalog_by_name
+):
+    """CR 608.2b: "if **all** its targets … are now illegal, the spell doesn't
+    resolve" — one is not all. The counter is skipped (it does not reach for
+    the spell underneath) and the damage still happens."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Shock"], target_player_index=0)
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=1,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+    game.counter_stack_object(bolt)
+    assert game.resolve_top_of_stack()
+
+    assert bears.damage_marked == 3
+    assert [item.card.name for item in game.stack] == ["Shock"]
+    assert not any("countered by Suffocating Blast" in line for line in game.log)
+    assert [card.name for card in p0.graveyard] == ["Suffocating Blast"]
+
+
+def test_suffocating_blast_whose_creature_has_left_still_counters_the_spell(
+    set_pool, catalog_by_name
+):
+    """The other half of the same rule: the creature is gone, so no damage is
+    dealt — to it or to the creature that slid into its slot — and the spell
+    is countered all the same."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    giant = _w2g1_put(game, 1, catalog_by_name["Hill Giant"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+    game.remove_from_battlefield(bears)
+    _w2g1_resolve_stack(game)
+
+    assert p0.life == 20
+    assert [card.name for card in p1.graveyard] == ["Lightning Bolt"]
+    assert giant.damage_marked == 0
+    assert not any("dealt 3 damage" in line for line in game.log)
+
+
+def test_suffocating_blast_with_both_targets_gone_does_not_resolve(
+    set_pool, catalog_by_name
+):
+    """CR 608.2b's first half: every target illegal, so the spell is removed
+    from the stack and put into its owner's graveyard without doing anything."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    giant = _w2g1_put(game, 1, catalog_by_name["Hill Giant"])
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+    game.counter_stack_object(bolt)
+    game.remove_from_battlefield(bears)
+    _w2g1_resolve_stack(game)
+
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
+    assert [card.name for card in p0.graveyard] == ["Suffocating Blast"]
+    assert giant.damage_marked == 0
+
+
+def test_suffocating_blast_at_an_uncounterable_spell_still_deals_its_damage(
+    set_pool, catalog_by_name
+):
+    """"This spell can't be countered" (Urza's Rage) is not a targeting
+    restriction: the Rage is a legal answer to "target spell", the counter does
+    nothing, and the three damage is dealt (CR 608.2: as much as possible)."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Urza's Rage"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+    assert game.resolve_top_of_stack()
+
+    assert bears.damage_marked == 3
+    assert [item.card.name for item in game.stack] == ["Urza's Rage"]
+    _w2g1_resolve_stack(game)
+    assert p0.life == 17
+
+
+def test_suffocating_blast_must_burn_an_opponents_flagbearer_if_able(
+    set_pool, catalog_by_name
+):
+    """Standard Bearer: "While an opponent is choosing targets as part of
+    casting a spell they control…, that player must choose at least one
+    Flagbearer on the battlefield if able." The requirement is over the whole
+    announcement, and the creature slot is the one that can obey it."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    bearer = _w2g1_put(game, 1, set_pool("APC")["Standard Bearer"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    blast = set_pool("APC")["Suffocating Blast"]
+    p0.hand = [blast]
+
+    offered = game.cast_target_spec(0, blast)
+    assert [entry["name"] for entry in offered["required_targets"]] == ["Standard Bearer"]
+
+    refused = game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    )
+    assert not refused.supported and "Flagbearer" in refused.details
+    assert [card.name for card in p0.hand] == ["Suffocating Blast"]
+
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bearer.permanent_id],
+    ).supported
+    _w2g1_resolve_stack(game)
+    assert bearer.damage_marked == 3 and bears.damage_marked == 0
+
+
+def test_suffocating_blast_is_not_cast_at_a_protected_creature(
+    set_pool, catalog_by_name
+):
+    """A target is held at the announcement like any other: Scragnoth has
+    protection from blue and the Blast is blue and red, so it is not offered
+    for the creature role and naming it is refused (CR 702.16b)."""
+    game, p0, p1 = _w2g1_duel()
+    scragnoth = _w2g1_put(game, 1, catalog_by_name["Scragnoth"])
+    _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    blast = set_pool("APC")["Suffocating Blast"]
+    p0.hand = [blast]
+
+    assert game.cast_target_spec(0, blast)["valid_targets"] == []
+    assert not game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, scragnoth.permanent_id],
+    ).supported
+    assert [card.name for card in p0.hand] == ["Suffocating Blast"]
+
+
+def test_the_ai_names_both_of_suffocating_blasts_targets_or_does_not_cast_it(
+    set_pool, catalog_by_name
+):
+    """An AI seat holding the Blast: with an empty stack it proposes nothing
+    (there is no spell to name), and answering an opponent's spell it names
+    that spell and an opposing creature — an announcement the engine takes."""
+    from engine import ai_policy
+
+    game, p0, p1 = _w2g1_duel()
+    _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    _w2g1_put(game, 0, catalog_by_name["Hill Giant"])
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+    game.active_player_index = 1
+
+    assert ai_policy.choose_cast_action(game, 0) is None
+    assert ai_policy.choose_combat_instant_cast_action(game, 0) is None
+
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    action = ai_policy.choose_combat_instant_cast_action(game, 0)
+    assert action is not None and action.card_name == "Suffocating Blast"
+    announced = ai_policy.cast_announcement(action)
+    assert game.stack[announced["target_stack_index"]] is bolt
+    named = game.permanent_by_id(announced["target_permanent_ids"][1])
+    assert named.card.name == "Grizzly Bears"
+
+    assert game.queue_from_hand(0, "Suffocating Blast", **announced).supported
+    _w2g1_resolve_stack(game)
+    assert p0.life == 20 and named.damage_marked == 3
+
+
+def test_the_ai_never_proposes_suffocating_blast_or_illusion_to_be_refused():
+    """Both pinned into both decks of six simulated games. Illusion is cast
+    (a floor of one); Suffocating Blast needs a spell to answer and the
+    simulator casts only in its own main phases, so what is asserted of it is
+    the absence the brief asks for — no proposal the cast gate refused."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    report = run_ai_simulation(
+        [manifest_set_path("APC", include_measured=True)],
+        games=6, seed=1337, max_turns=18,
+        required_cards=["Suffocating Blast", "Illusion // Reality"],
+    )
+    assert report.games_completed == 6
+    mine = ("Suffocating Blast", "Illusion", "Reality", "Illusion // Reality")
+    assert [key for key in report.refused_casts if key.split(":")[0] in mine] == []
+    cast = [
+        line for line in report.log_lines
+        if " cast Illusion -> resolved" in line or " cast Reality -> resolved" in line
+    ]
+    assert len(cast) >= 1, report.refused_casts
+
+
+def test_a_spell_role_carries_what_narrows_its_spell_or_the_line_refuses():
+    """The lowering: a counter keeps its narrowing on its own payload, so the
+    role is stamped with the picker's own ``stack_*`` flags — and a pair the
+    roles walk has no word for refuses rather than keeping its first target."""
+    def compiled(line):
+        return _w2g1_compile_line(line, card_name="Suffocating Blast")
+
+    narrowed = compiled(
+        "Counter target creature spell and Suffocating Blast deals 3 damage "
+        "to target creature."
+    )
+    assert narrowed.usable
+    counter = narrowed.instructions[0]
+    assert counter.payload["targets"]["role"] == "spell"
+    assert counter.payload["targets"]["roles"][0] == {
+        "kind": "spell", "role": "spell", "stack_card_types": ["creature"],
+    }
+
+    seat = compiled(
+        "Counter target spell and Suffocating Blast deals 3 damage to target player."
+    )
+    assert seat.usable
+    roles = seat.instructions[0].payload["targets"]["roles"]
+    assert [(role["role"], role["kind"]) for role in roles] == [
+        ("spell", "spell"), ("player", "player"),
+    ]
+
+    # A spell beside a slot the walk cannot take is still two targets, so the
+    # line refuses rather than keeping the spell-only picker.
+    for line in (
+        "Counter target spell and Suffocating Blast deals 3 damage to any target.",
+    ):
+        refused = compiled(line)
+        assert not refused.usable and "announces both" in refused.lowering_error
+
+    # A counter with a second sentence names one target once.
+    plain = compiled("Counter target spell. Draw a card.")
+    assert plain.usable
+    assert "roles" not in str(plain.instructions[0].payload)
+
+
+# -- Illusion (of Illusion // Reality) ---------------------------------------
+
+
+def test_illusion_offers_a_spell_or_a_permanent_and_takes_one_of_them(
+    set_pool, catalog_by_name
+):
+    """"Target spell or permanent becomes the color of your choice until end of
+    turn." One target in one of two zones: the picker lists both, a named
+    spell is recoloured — not the creature beside it, which is what a scan
+    found while the union was unread — and naming one of each is refused."""
+    game, p0, p1 = _w2g1_duel(interactive=(0,))
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    whole, illusion = _w2g1_illusion(set_pool)
+    p0.hand = [whole]
+
+    offered = game.cast_target_spec(0, illusion)
+    assert offered["kind"] == "spell_or_permanent"
+    assert sorted((entry["kind"], entry["name"]) for entry in offered["valid_targets"]) == [
+        ("permanent", "Grizzly Bears"), ("stack", "Lightning Bolt"),
+    ]
+
+    both = game.queue_from_hand(
+        0, "Illusion", target_stack_index=0,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert not both.supported and "not one of each" in both.details
+    assert p0.hand == [whole]
+
+    assert game.queue_from_hand(0, "Illusion", target_stack_index=0).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    game.resolve_pending_choice("color_choice", 0, mana_color="U")
+
+    assert game._stack_item_colors(bolt) == ("U",)
+    assert game._effective_colors(bears) == {"G"}
+    assert "Lightning Bolt (on the stack) became U until end of turn (Illusion)" in game.log
+    assert [card.name for card in p0.graveyard] == ["Illusion // Reality"]
+    assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+
+
+def test_illusion_asks_its_colour_as_it_resolves_and_the_spell_keeps_it_as_a_permanent(
+    set_pool, catalog_by_name
+):
+    """CR 608.2d: the colour is chosen while the effect is applied. CR 400.7a:
+    the effect goes on applying to the permanent the spell becomes — a blue
+    Grizzly Bears — and ends with the turn it was created in (CR 514.2)."""
+    game, p0, p1 = _w2g1_duel(interactive=(0,))
+    bears_spell = _w2g1_spell_from(game, 1, catalog_by_name["Grizzly Bears"])
+    whole, _illusion = _w2g1_illusion(set_pool)
+    p0.hand = [whole]
+
+    assert game.queue_from_hand(0, "Illusion", target_stack_index=0).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game._stack_item_colors(bears_spell) == ("G",)
+    game.resolve_pending_choice("color_choice", 0, mana_color="U")
+
+    assert game._stack_item_colors(bears_spell) == ("U",)
+    _w2g1_resolve_stack(game)
+    (bears,) = p1.battlefield
+    assert game._effective_colors(bears) == {"U"}
+
+    game.resolve_cleanup_step(1)
+    assert game._effective_colors(bears) == {"G"}
+
+
+def test_illusion_recolours_a_permanent_until_end_of_turn(set_pool, catalog_by_name):
+    """The permanent half, which is the half it always had."""
+    game, p0, p1 = _w2g1_duel(interactive=(0,))
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    whole, _illusion = _w2g1_illusion(set_pool)
+    p0.hand = [whole]
+
+    assert game.queue_from_hand(
+        0, "Illusion", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    game.resolve_pending_choice("color_choice", 0, mana_color="B")
+
+    assert game._effective_colors(bears) == {"B"}
+    assert "Grizzly Bears became B until end of turn (Illusion)" in game.log
+    game.resolve_cleanup_step(0)
+    assert game._effective_colors(bears) == {"G"}
+
+
+def test_illusion_whose_spell_has_left_recolours_nothing(set_pool, catalog_by_name):
+    """CR 608.2b: its one target is gone, so the spell does not resolve — and
+    the creature on the battlefield is not a consolation target."""
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    whole, _illusion = _w2g1_illusion(set_pool)
+    p0.hand = [whole]
+
+    assert game.queue_from_hand(0, "Illusion", target_stack_index=0).supported
+    game.counter_stack_object(bolt)
+    _w2g1_resolve_stack(game)
+
+    assert game._effective_colors(bears) == {"G"}
+    assert not any("became" in line for line in game.log)
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
+
+
+def test_illusion_with_nothing_to_name_cannot_be_cast(set_pool):
+    game, p0, _p1 = _w2g1_duel()
+    whole, illusion = _w2g1_illusion(set_pool)
+    p0.hand = [whole]
+
+    assert game.cast_target_spec(0, illusion)["valid_targets"] == []
+    assert not game.cast_from_hand(0, "Illusion").supported
+    assert p0.hand == [whole]
+
+
+def test_a_recolour_of_a_spell_or_permanent_union_is_described_or_refuses():
+    """The lowering reads the union the noun now records: the bare phrase is
+    described to the picker; a narrowing of it, a colour *set* or a plural
+    refuses; and a phrase that names neither a spell nor the union no longer
+    falls through to the Lace cycle's spell-or-permanent picker."""
+    union = _w2g1_compile_line(
+        "Target spell or permanent becomes the color of your choice until end of turn."
+    )
+    assert union.usable
+    recolour = union.instructions[1]
+    assert recolour.payload == {
+        "targets": {"quantifier": "target", "kind": "spell_or_object"},
+        "until_eot": True,
+    }
+    for line in (
+        "Target red spell or permanent becomes the color of your choice.",
+        "Target spell or permanent becomes the color or colors of your choice.",
+        "Target creature becomes red.",
+        "Target red spell or permanent becomes blue.",
+    ):
+        assert not _w2g1_compile_line(line).usable, line
+    lace = _w2g1_compile_line("Target spell or permanent becomes red.")
+    assert lace.usable and "targets" not in lace.instructions[0].payload
+
+
+@_w2g1_pytest.mark.parametrize(
+    "name, cast_kind",
+    [("Suffocating Blast", "roles"), ("Illusion", "spell_or_permanent")],
+)
+def test_w2g1_both_cards_compile_supported_with_the_picker_they_print(
+    set_pool, name, cast_kind
+):
+    cards = _w2g1_faces.compilation_units(
+        [set_pool("APC")["Suffocating Blast"], set_pool("APC")["Illusion // Reality"]]
+    )
+    card = next(unit for unit in cards if unit.name == name)
+    program = _w2g1_compile(card)
+
+    assert program.supported
+    assert _w2g1_derive_cast_spec(card, program)["kind"] == cast_kind
 
 # ==== end W2G1 ========================================================
 

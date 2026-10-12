@@ -256,6 +256,11 @@ class _FilterDraft:
     #: (Diplomatic Escort). Set only by the bare-"spell" head noun, so it never
     #: travels without ``zone == "stack"``.
     also_ability: bool = False
+    #: See ``ast.ObjectFilter.also_spell`` — "target **spell or permanent**"
+    #: (the Lace cycle). Set only where the bare-"spell" head noun is unioned
+    #: with a generic noun that is not one, so it never travels with
+    #: ``zone == "stack"``.
+    also_spell: bool = False
     zone_owner: ast.PlayerRef | None = None
     saw_head: bool = False
     type_match: str = "any"
@@ -337,6 +342,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         power_greater_than_cards_in_hand=d.power_greater_than_cards_in_hand,
         zone=d.zone,
         also_ability=d.also_ability,
+        also_spell=d.also_spell,
         zone_owner=d.zone_owner,
         is_card=d.is_card,
         with_plus1_counter=d.with_plus1_counter,

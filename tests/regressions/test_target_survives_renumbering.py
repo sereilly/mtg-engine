@@ -218,7 +218,12 @@ _LEADB_PROBES = {
     "bounce_target_creature": "{T}: Return target creature to its owner's hand.",
     "return_spell_or_creature_to_hand":
         "{T}: Return target spell or creature to its owner's hand.",
-    "recolor_target_from_text": "{T}: Target permanent becomes blue.",
+    # The Lace cycle's own phrase. This probe read "Target permanent becomes
+    # blue", which lowered to the same kind only because the noun parser
+    # dropped the union the kind's picker is about — a phrase naming
+    # permanents alone was aimable at a spell. The lowering asks for the union
+    # now (``lowering/colors``), and the permanent half is what this drives.
+    "recolor_target_from_text": "{T}: Target spell or permanent becomes blue.",
     "tap_target_permanent": "{T}: Tap target permanent.",
     "untap_target_permanent": "{T}: Untap target permanent.",
 }

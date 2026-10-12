@@ -110,6 +110,15 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
                 target = ref.seat
                 role_ids.append(None)
                 continue
+            if ref.stack_index is not None:
+                # A role whose object is a **spell on the stack** ("Counter
+                # target spell and … deals 3 damage to target creature",
+                # Suffocating Blast). The third channel a cast already has: the
+                # stack index, converted here like the request's own, with the
+                # same ``None`` in the id list a seat leaves.
+                engine_stack_index = _engine_stack_index(ref.stack_index)
+                role_ids.append(None)
+                continue
             if ref.graveyard_seat is not None:
                 # No **spell** in the pool names a slot in a graveyard — the one
                 # ability that does is activated, and its path stamps the pile
