@@ -1331,4 +1331,27 @@ def test_a_cost_naming_its_own_card_is_charged(cost, field):
     (ability,) = _w1g9_compile(card).activated_abilities
     assert ability.supported and getattr(ability.cost, field) is True
 
+
+# --- Squirrel Mob: "+1/+1 for each other Squirrel on the battlefield" -------
+
+def test_squirrel_mob_counts_every_other_squirrel_and_not_itself(set_pool):
+    """It was 3/3 alone: the count was handed nothing to leave out, so "other"
+    was read and dropped. An opponent's Squirrels count, a second Mob counts
+    the first, and a Bear counts for nothing."""
+    game = _w1g9_duel(set_pool, bf0=["Squirrel Mob"])
+    first = _w1g9_on(game, 0, "Squirrel Mob")
+    game._recompute_continuous_effects()
+    assert (first.effective_power, first.effective_toughness) == (2, 2)
+
+    second = _w1g9_Permanent(card=set_pool("ODY")["Squirrel Mob"])
+    game._put_permanent_onto_battlefield(1, second, None)
+    _w1g9_squirrel_token(game, set_pool, 1)
+    game._put_permanent_onto_battlefield(
+        0, _w1g9_Permanent(card=set_pool("LEA")["Grizzly Bears"]), None
+    )
+    game._recompute_continuous_effects()
+    assert [(m.effective_power, m.effective_toughness) for m in (first, second)] == [
+        (4, 4), (4, 4),
+    ]
+
 # ==== end W1G9 ======================================================
