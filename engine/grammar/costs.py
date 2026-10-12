@@ -609,10 +609,23 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # ``ExileSelf`` names no object, so the source gets its own entry:
             # nothing is chosen, nothing can make the ability unpayable, and
             # there is no record of what was eaten.
-            counted = _accept_cost_count(stream)
+            # "Exile **any number of** cards from your graveyard" (Painbringer):
+            # the count is the payer's, which leaves the phrase the bare plural
+            # exactly as a printed count does.
+            any_number = bool(stream.accept_phrase("any", "number", "of"))
+            counted = None if any_number else _accept_cost_count(stream)
             exiled = _parse_cost_object(
-                stream, "exile", bare_plural=counted is not None
+                stream, "exile", bare_plural=any_number or counted is not None
             )
+            if any_number and not (
+                exiled.zone == "graveyard"
+                and getattr(exiled.zone_owner, "kind", None) == "you"
+            ):
+                # The payer names the set by graveyard slot; no channel names
+                # several permanents or several cards in a hand for an exile.
+                raise stream.error(
+                    "an exile of any number is charged out of your own graveyard"
+                )
             if exiled.is_source:
                 costs.append(ast.ExileSelf())
                 stream.accept_punct(",")
@@ -638,7 +651,8 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 raise stream.error("no cost path charges an exile of this shape")
             costs.append(
                 ast.ExileCost(
-                    exiled, count=counted or ast.Fixed(1), same_zone=same_zone
+                    exiled, same_zone=same_zone,
+                    count=ast.AnyNumber() if any_number else counted or ast.Fixed(1),
                 )
             )
             # "Exile two cards from your graveyard **and this creature**"
@@ -889,6 +903,21 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                         ast.ObjectFilter(is_source=True), count=ast.Fixed(1)
                     )
                 )
+            stream.accept_punct(",")
+            continue
+        if stream.accept_word("mill"):
+            # "{T}, **Mill a card**: Add {C}." (Millikin, Charmed Pendant.)
+            # CR 701.17a's keyword action as a cost: the payer's own library,
+            # an article or a printed number, and nothing behind the noun.
+            if stream.accept_word("a", "an"):
+                milled = 1
+            else:
+                counted = _accept_cost_count(stream)
+                if counted is None or not isinstance(counted, ast.Fixed):
+                    raise stream.error("a mill cost mills a printed number of cards")
+                milled = counted.value
+            stream.expect_word("card", "cards")
+            costs.append(ast.MillCost(milled))
             stream.accept_punct(",")
             continue
         if stream.at_word("discard"):

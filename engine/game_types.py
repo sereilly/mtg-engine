@@ -115,6 +115,12 @@ CHOICE_KEYS = (
     # the whole set, and a reader of "the exiled card" must not be handed a list
     # it would then treat as one card.
     "exiled_set_for_cost",
+    # The cards a printed **mill** cost put into the payer's graveyard ("{T},
+    # Mill a card: For each colored mana symbol in **the milled card's** mana
+    # cost, …", Charmed Pendant). A list for ``discarded_for_cost``'s reason,
+    # and on this channel for the others': by resolution the card is one of
+    # however many are in the graveyard, and only the payment knows which.
+    "milled_for_cost",
     # CR 107.4b's symbols a printed mana cost actually consumed ("Note the type
     # of mana spent to pay this activation cost", Jeweled Amulet, Ice Cauldron).
     # A symbol dict, and on this channel for the three above's reason: the pool

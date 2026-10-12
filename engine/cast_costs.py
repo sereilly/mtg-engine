@@ -496,13 +496,13 @@ class AdditionalCost:
         if self.exile_filter is not None:
             parts.append(f"exile a {filter_head_noun(self.exile_filter)}")
         if self.exile_graveyard_filter is not None:
-            noun = filter_head_noun(self.exile_graveyard_filter)
+            noun = graveyard_card_noun(self.exile_graveyard_filter)
             how_many = (
                 "X" if self.exile_graveyard_count_x
                 else str(self.exile_graveyard_count)
             )
             parts.append(
-                f"exile {how_many} {noun} card"
+                f"exile {how_many} {noun}"
                 + ("" if how_many == "1" else "s")
                 + " from your graveyard"
             )
@@ -806,6 +806,15 @@ def read_return_clause(phrase: str) -> tuple[dict, int, bool] | None:
     return None if described is None else (described, 1, False)
 
 
+def graveyard_card_noun(described: dict | None) -> str:
+    """What a graveyard-exile cost's cards are called in a sentence: "creature
+    card" for a phrase naming a type, plain "card" for one naming none
+    (Skeletal Scrying). ``filter_head_noun`` answers "permanent" for the
+    second, which is right for a board and wrong for a pile."""
+    kind = (described or {}).get("type_filter")
+    return f"{kind} card" if isinstance(kind, str) else "card"
+
+
 def read_graveyard_exile_clause(phrase: str) -> tuple[dict, int, bool] | None:
     """What "exile <n> <noun phrase> from your graveyard" charges, as
     ``(filter, count, count_is_x)``, or None.
@@ -876,13 +885,18 @@ def read_graveyard_exile_clause(phrase: str) -> tuple[dict, int, bool] | None:
         described, zone=unstated.zone, zone_owner=unstated.zone_owner
     )
     carried = chargeable_card_filter(stripped)
-    if carried is None or not (
-        carried.get("type_filter") or carried.get("subtype_filter")
-    ):
-        # An *unnamed* cost would let the payment eat any card in the pile --
-        # the same narrowing every other clause in this file makes, and for its
-        # reason: the payer would give up the cheapest thing they had.
+    if carried is None:
         return None
+    # "…, exile X **cards** from your graveyard." (Skeletal Scrying.) The
+    # empty reduction is a real answer — "any card in your graveyard" — and it
+    # is what the card prints. This refused every phrase that named no type, on
+    # the ground that an *unnamed* cost lets the payment eat any card in the
+    # pile; here any card in the pile is the printed price, and the refusal
+    # cost the card its support ("printed cost nothing charges") rather than
+    # protecting anything. What that rule guards is a narrowing the reduction
+    # **lost**, and ``chargeable_card_filter`` returns None for a key the card
+    # matcher cannot test rather than dropping it — the argument
+    # ``oracle.cost_object_is_chargeable`` makes for "Sacrifice a permanent".
     return carried, (0 if is_x else number), is_x
 
 

@@ -205,6 +205,123 @@ def test_w1g6_sandstone_deadfall_only_reaches_an_attacking_creature(set_pool):
     assert not refused.supported
     assert _w1g6_names(game, 0) == ["Forest", "Forest", "Sandstone Deadfall"]
 
+
+# --- Millikin, Charmed Pendant ----------------------------------------------
+# "{T}, Mill a card: Add {C}. (Activate only as an instant. …)" Mill as a
+# cost (CR 701.17a), paid last (CR 601.2h) and unpayable from an empty library
+# (CR 701.17b). **Not a mana ability**: Millikin's Scryfall ruling of
+# 2026-08-05 — "Millikin's ability is not a mana ability. Players can respond
+# to it, and it can't be activated in the middle of paying for a cost. A
+# recent update to rule 605.1a has made any abilities that move cards to or
+# from libraries no longer mana abilities." So it uses the stack, which is
+# what makes the printed "only as an instant" true.
+
+def _w1g6_pool_of(game, seat=0):
+    return {
+        symbol: count
+        for symbol, count in game.players[seat].mana_pool.items() if count
+    }
+
+
+def test_w1g6_millikin_mills_then_makes_colourless_through_the_stack(set_pool):
+    from engine.mana_payment import is_mana_ability
+
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    ability = _w1g6_compile(ody["Millikin"]).activated_abilities[0]
+    assert ability.cost.requires_tap and ability.cost.mill_cards == 1
+    assert not is_mana_ability(ability)
+
+    game = _w1g6_game(
+        mine=[ody["Millikin"]],
+        library=[lea["Lightning Bolt"], lea["Forest"], lea["Forest"]],
+    )
+    game.start_turn(0)
+
+    queued = game.queue_permanent_ability(0, "Millikin")
+
+    assert queued.details == "queued"
+    # The cost is paid — tapped, one card milled — and the mana is not there
+    # yet: the ability is an object somebody could respond to.
+    assert _w1g6_named(game, 0, "Millikin").tapped
+    assert [card.name for card in game.players[0].graveyard] == ["Lightning Bolt"]
+    assert len(game.players[0].library) == 2
+    assert len(game.stack) == 1 and _w1g6_pool_of(game) == {}
+
+    _w1g6_resolve_stack(game)
+    assert _w1g6_pool_of(game) == {"C": 1}
+    assert len(game.players[0].library) == 2, "exactly one card was milled"
+
+
+def test_w1g6_a_mill_cost_cannot_be_paid_from_an_empty_library(set_pool):
+    ody = set_pool("ODY")
+    for name in ("Millikin", "Charmed Pendant"):
+        game = _w1g6_game(mine=[ody[name]], library=[])
+        game.start_turn(0)
+
+        refused = game.activate_permanent_ability(0, name)
+
+        assert not refused.supported and "its cost mills 1" in refused.details
+        assert not _w1g6_named(game, 0, name).tapped
+        assert _w1g6_pool_of(game) == {}
+
+
+def test_w1g6_millikin_is_not_tapped_for_mana_like_a_mana_rock(set_pool):
+    """The tap-for-mana seam is reached part-way through a payment, and this
+    ability cannot be activated there (the ruling above)."""
+    from engine.mixins.turn_management import is_tap_alone_mana_ability
+
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    ability = _w1g6_compile(ody["Millikin"]).activated_abilities[0]
+    assert not is_tap_alone_mana_ability(ability)
+
+    game = _w1g6_game(mine=[ody["Millikin"]], library=[lea["Forest"]] * 3)
+    game.start_turn(0)
+    assert not game.tap_land_for_mana(0, 0)
+    assert len(game.players[0].library) == 3 and _w1g6_pool_of(game) == {}
+
+
+def test_w1g6_charmed_pendant_adds_a_mana_for_each_coloured_symbol_milled(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    for top, made in (
+        ("Lightning Bolt", {"R": 1}),       # {R}
+        ("Shivan Dragon", {"R": 2}),        # {4}{R}{R}: the generic adds nothing
+        ("Craw Wurm", {"G": 2}),            # {4}{G}{G}
+        ("Sol Ring", {}),                   # {1}
+        ("Forest", {}),                     # a land has no mana cost
+    ):
+        game = _w1g6_game(
+            mine=[ody["Charmed Pendant"]], library=[lea[top], lea["Island"]],
+        )
+        game.start_turn(0)
+
+        used = game.activate_permanent_ability(0, "Charmed Pendant")
+
+        assert used.supported, (top, used.details)
+        assert _w1g6_pool_of(game) == made, top
+        assert [card.name for card in game.players[0].graveyard] == [top]
+        assert len(game.players[0].library) == 1
+
+
+def test_w1g6_charmed_pendant_reads_the_card_its_cost_milled_not_the_pile(set_pool):
+    """The graveyard already holds a blue card on top; the mana comes from the
+    card the cost put there, and survives that card leaving in response."""
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Charmed Pendant"]], yard=[lea["Counterspell"]],
+        library=[lea["Shivan Dragon"], lea["Island"]],
+    )
+    game.start_turn(0)
+
+    queued = game.queue_permanent_ability(0, "Charmed Pendant")
+    assert queued.details == "queued" and _w1g6_pool_of(game) == {}
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Counterspell", "Shivan Dragon",
+    ]
+    game.players[0].graveyard.clear()
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pool_of(game) == {"R": 2}
+
 # ==== end W1G6 ======================================================
 
 

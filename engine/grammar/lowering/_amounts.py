@@ -26,7 +26,7 @@ from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
-from ._cost_records import cost_record_spec
+from ._cost_records import cost_count_spec, cost_record_spec
 from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
 
 
@@ -809,6 +809,10 @@ def _x_definition_spec(
                 "a recorded X names its producer and carries no bonus", node=node
             )
         if definition.source not in recorded:
+            # …unless the ability's own *cost* ate them (Painbringer).
+            paid = cost_count_spec(definition.source, recorded)
+            if paid is not None:
+                return paid
             # The gate every back-reference in this grammar carries: with no
             # step in front of it the words name nothing, and the spec would be
             # answered 0 — a card that reports supported and pumps by nothing.

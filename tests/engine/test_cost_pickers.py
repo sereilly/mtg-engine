@@ -77,6 +77,14 @@ _PICKERLESS_CAST_COSTS: dict[str, str] = {
     # there is no wire field for a set of graveyard positions on a cast, and the
     # client's X box and the picker would have to be one announcement.
     "Haunting Misery": "no cast-path graveyard set picker or wire field",
+    # "As an additional cost to cast this spell, exile X cards from your
+    # graveyard." (Odyssey.) Haunting Misery's cost with the type left off,
+    # charged by the same branch and missing the same two things. In a set
+    # whose graveyard is a resource the choice matters more than it did —
+    # which X cards go decides what threshold and flashback have left — so it
+    # is pinned beside the card it shares the gap with rather than papered
+    # over by a spec no client surface reads.
+    "Skeletal Scrying": "no cast-path graveyard set picker or wire field",
     # "As an additional cost to cast this spell, return X Swamps you control to
     # their owner's hand." The charger already honours ``cost_permanent_ids``
     # (casting.py's return branch); what is missing is the whole announcement:

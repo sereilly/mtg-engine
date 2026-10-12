@@ -25,6 +25,7 @@ every reading it had.
 """
 
 from . import ast
+from .cost_records import accept_mana_per_colored_symbol
 from .effects import (_parse_for_each_destroy_unless_paid,
                       _parse_have_source_deal_damage)
 from .effects.attachments import parse_excess_choice_paragraph
@@ -68,6 +69,13 @@ def parse_leading_iteration(
     have_deal = _parse_have_source_deal_damage(stream)
     if have_deal is not None:
         return have_deal
+    # "**For each colored mana symbol in the milled card's mana cost,** add one
+    # mana of that color." (Charmed Pendant.) A rate over a card the ability's
+    # own cost consumed, read whole and before the counts below — "colored
+    # mana symbol" is not a noun phrase any of them has a reading for.
+    per_symbol = accept_mana_per_colored_symbol(stream)
+    if per_symbol is not None:
+        return per_symbol
     each_bought_off = _parse_for_each_destroy_unless_paid(stream)
     if each_bought_off is not None:
         return each_bought_off

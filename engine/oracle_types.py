@@ -432,7 +432,14 @@ class ActivatedAbilityCost:
     #: ``sacrifice_count`` is: only a count can make the cost unpayable, and
     #: one card is no more a payment of a two-card cost than none is
     #: (CR 601.2h).
-    exile_count: int = 1
+    #:
+    #: ``"any"`` is "Exile **any number of** cards from your graveyard"
+    #: (Painbringer): the payer names the set as the ability is activated
+    #: (CR 601.2b) and naming none is a legal payment, the reading
+    #: ``sacrifice_count`` gives Sword of the Ages' identical words one field
+    #: up. Charged only out of the payer's own graveyard — the one zone with a
+    #: channel that names several cards (``cost_graveyard_indices``).
+    exile_count: "int | str" = 1
     #: "…from **a single** graveyard" (Night Soil). Every card must come out of
     #: the *same* pile. Its own flag rather than a narrowing of the filter,
     #: because the filter is asked of one card at a time and cannot say it —
@@ -761,6 +768,20 @@ class ActivatedAbilityCost:
     #: arguments ``parse_activated_ability_cost`` passes are at the front, so a
     #: field inserted among them silently rebinds one of them.
     remove_counter_filter: dict | None = None
+    #: Millikin: "{T}, **Mill a card**: Add {C}." How many cards the payer puts
+    #: from the top of their library into their graveyard (CR 701.17a) to pay.
+    #: An ``int`` for ``exile_top_of_library``'s reason: CR 701.17b makes the
+    #: cost unpayable from a library holding fewer cards, and that has to be
+    #: counted before the ability is activated. Zero is "no such cost".
+    #:
+    #: Paid **last** (CR 601.2h pays a cost that moves objects from the library
+    #: to a public zone after every other cost), and what it put in the
+    #: graveyard is recorded as ``milled_for_cost`` for a sentence that names
+    #: "the milled card" (Charmed Pendant).
+    #:
+    #: Last for ``remove_counter_filter``'s stated reason — the positional
+    #: arguments ``parse_activated_ability_cost`` passes are at the front.
+    mill_cards: int = 0
 
     @property
     def is_loyalty(self) -> bool:

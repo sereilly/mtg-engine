@@ -1157,12 +1157,38 @@ def _cost_picker_specs(cost, *, announced: dict | None = None) -> list[dict]:
             wanted = described.get("type_filter")
             if isinstance(wanted, str):
                 spec["card_type"] = wanted
+            else:
+                # "Exile **two cards** from your graveyard" (Psychatog,
+                # Bearscape), "Exile **a card** …" (Screams of the Damned).
+                # The phrase names no type, and a graveyard spec that names
+                # none is read as "a creature card" — the reanimation Auras'
+                # default (``graveyard_card_matches``). So the picker offered
+                # creature cards only for a cost the charger takes any card
+                # for: a pile of lands could pay and showed nothing to click.
+                # No card printed the unnarrowed phrase until Odyssey.
+                spec["any_card"] = True
+            # Whatever else the phrase narrows by rides along and is asked
+            # through the charger's own matcher (``_card_matches_filter``) by
+            # the enumerator, so what is offered and what is accepted cannot
+            # disagree. Emitted only when there is something to carry.
+            narrowing = {
+                key: value for key, value in described.items()
+                if not (key == "type_filter" and isinstance(value, str))
+            }
+            if narrowing:
+                spec["cost_filter"] = narrowing
             # How many the payer names. Emitted only when the printed count is
             # more than one, so every spec written before a counted cost existed
             # stays byte-identical.
-            count = int(getattr(cost, "exile_count", 1) or 1)
-            if count > 1:
-                spec["count"] = count
+            count = getattr(cost, "exile_count", 1) or 1
+            if count == "any":
+                # "Exile **any number of** cards from your graveyard"
+                # (Painbringer). No size to state — the set is the payer's,
+                # none included — so the spec says that instead of a number.
+                # The answer rides ``cost_graveyard_indices``.
+                spec["any_number"] = True
+            elif int(count) > 1:
+                spec["count"] = int(count)
             # "…from **a single** graveyard": all of them out of the same pile,
             # which is a restriction on the *set* rather than on any one card
             # and so cannot ride the filter.

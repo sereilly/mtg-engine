@@ -2889,6 +2889,30 @@ def _split_mana_per_counter(
     return remaining, rate, match.group(2)
 
 
+_MILL_COST = re.compile(r"\bmill (an?|\w+) cards?\s*(?=,|$)")
+
+
+def _mill_cost(cost_lower: str) -> int:
+    """How many cards a "**Mill a card**" cost clause mills, or 0.
+
+    "{T}, Mill a card: Add {C}." (Millikin.) The charging half of
+    ``grammar/costs.py``'s mill branch, admitting exactly what that admits: an
+    article or a printed number, and nothing after the noun — "mill a card
+    from target player's library" is not this cost and has no payment path.
+    The regex delimits the count and ``_NUMBER_WORDS`` reads it, the split
+    every counted clause in this file makes; a word that is not a number
+    charges nothing, which the pool-wide cost guard names.
+    """
+    match = _MILL_COST.search(cost_lower)
+    if match is None:
+        return 0
+    word = match.group(1)
+    if word in ("a", "an"):
+        return 1
+    number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    return number if number >= 2 else 0
+
+
 _CONJOINED_SELF_COST = re.compile(
     rf"\b(sacrifice|exile) (?!this\b)([^,:]+?) and this (?:{_SELF_COST_NOUNS})\b"
     r"\s*(?=,|$)"
@@ -3122,6 +3146,28 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
                         exile_zone_owner = (
                             "you" if "from your graveyard" in phrase else None
                         )
+    # "Exile **any number of** cards from your graveyard" (Painbringer). The
+    # count left to the payer, which is the sacrifice's "any number of" one
+    # verb over and is carried the same way: the same filter field, with the
+    # count saying it is a choice. The counted row above read "any" as a word
+    # that is not a number and charged nothing.
+    #
+    # Only "from your graveyard" — anchored in the regex rather than checked
+    # afterwards, because the activation path names the set by graveyard slot
+    # (``cost_graveyard_indices``) and has no such channel for a battlefield or
+    # a hand; the grammar refuses the other zones with the same words.
+    if exile_filter is None and not exile_self:
+        any_exile = re.search(
+            r"\bexile any number of ([^,:]+? from your graveyard)\s*(?=,|$)",
+            cost_lower,
+        )
+        if any_exile is not None:
+            narrowed = _chargeable_exile_filter(any_exile.group(1), plural=True)
+            if narrowed is not None:
+                exile_filter = narrowed
+                exile_count = "any"
+                exile_zone = "graveyard"
+                exile_zone_owner = "you"
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
@@ -3556,6 +3602,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
         chosen_keyword_options=_chosen_keyword_options(cost_lower),
+        mill_cards=_mill_cost(cost_lower),
     )
 
 

@@ -66,6 +66,18 @@ def _lower_add_mana(
     would add nothing while reporting success; it keeps its own fused
     ``sacrifice_self_for_mana`` handler on the legacy path.
     """
+    # "For each colored mana symbol in **the milled card's** mana cost, add one
+    # mana of that color." (Charmed Pendant.) Gated on the cost that writes the
+    # record: with no mill in front of the colon the words name no card.
+    if node.colored_symbols_of_record:
+        if node.colored_symbols_of_record not in produced:
+            raise LoweringError(
+                "a mana cost is read off a card this ability's own cost took, "
+                "and its cost takes none", node=node,
+            )
+        return (OracleInstruction("add_mana_from_text", "", {
+            "colored_symbols_of_record": node.colored_symbols_of_record,
+        }),)
     # "Add an amount of {B} equal to the sacrificed artifact's mana value."
     # (Priest of Yawgmoth.) The mana is one symbol and the *amount* is the mana
     # value of what the ability's sacrifice cost ate, which the handler reads
