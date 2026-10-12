@@ -367,12 +367,161 @@ def tap_planned_lands(game: Game, seat: int, action) -> None:
                 mana_color=color if color in ("W", "U", "B", "R", "G") else None,
             )
             continue
+        # A source whose mana ability costs mana ("{1}, {T}: Add {U}{B}.", the
+        # Odyssey filter lands; Mana Cylix). The plan put the tap that pays
+        # for it immediately in front of it (`_plan_through_a_priced_source`),
+        # so the pool holds its price now; activated like the non-land source
+        # above, and for the same reason — the tap seam runs only an ability
+        # whose whole cost is {T}.
+        priced = _priced_mana_source(game, seat, land)
+        if priced is not None:
+            slot = next(
+                (
+                    index for index, permanent in enumerate(game.controlled_by(seat))
+                    if permanent is land
+                ),
+                None,
+            )
+            if slot is None:
+                continue
+            game.activate_permanent_ability(
+                seat, land.card.name,
+                permanent_index=slot,
+                ability_index=priced.ability_index,
+                mana_color=color if color in ("W", "U", "B", "R", "G") else None,
+            )
+            continue
         game.tap_land_for_mana(
             seat, land.card.name,
             chosen_color=color,
             permanent_id=permanent_id,
             ability_index=planned_tap_ability(game, land, color),
         )
+
+
+@dataclass(frozen=True)
+class _PricedManaSource:
+    """A mana ability that costs mana, as the payment plan counts it — see
+    `_priced_mana_source`."""
+
+    #: Which of the permanent's usable abilities.
+    ability_index: int
+    #: The generic mana one activation costs, beside the tap.
+    price: int
+    #: Every symbol one activation may be asked for, the unasked one first.
+    symbols: tuple[str, ...]
+    #: How many mana of the asked symbol.
+    amount: int
+    #: A fixed run of different symbols ("{U}{B}"), or None.
+    run: "dict[str, int] | None" = None
+
+    def outputs(self) -> "list[tuple[str, dict[str, int]]]":
+        """``(symbol to ask for, what that activation adds)``, one per answer."""
+        if self.run is not None:
+            return [(self.symbols[0], dict(self.run))]
+        return [(symbol, {symbol: self.amount}) for symbol in self.symbols]
+
+
+def _priced_mana_source(
+    game: Game, seat: int, permanent: "Permanent | None"
+) -> "_PricedManaSource | None":
+    """The mana ability of a permanent *seat* controls whose cost is **generic
+    mana and {T}** and which is the only mana that permanent makes — or None.
+
+    "{1}, {T}: Add {U}{B}." (Darkwater Catacombs and the other four Odyssey
+    filter lands), "{1}, {T}: Add one mana of any color." (Mana Cylix,
+    Helionaut), "{2}, {T}: …" (Celestial Prism). **A land of this kind was a
+    land that made nothing for an AI seat**: the tap seam runs only an ability
+    whose whole cost is {T} (`land_mana_tap_refusal` answers
+    ``priced_mana_ability``), so the planner left it out and the seat counted
+    one land fewer than it controlled — ten filter lands were played in a
+    ten-game seeded Odyssey run and not one was ever activated (W1G2).
+
+    The cheap half of ROADMAP's "costed and sacrifice mana sources": a price
+    paid in mana renumbers nothing, where a sacrifice during payment moves the
+    battlefield under an announcement made by index. What it needs instead is
+    an *input* — a unit of mana from another source, in the pool before this
+    one is activated — which is `_plan_through_a_priced_source`'s to arrange.
+
+    Narrow on purpose, each clause a shape this cannot plan:
+
+    * **only generic mana in the price** — "{G}, {T}: Add {R}." (Fire Sprites)
+      needs a coloured input, a second matching problem;
+    * **only with {T}** — "{1}: Add {B}." (Bog Initiate) may be activated any
+      number of times, and how many is a search, not a tap;
+    * **no other mana ability on the permanent** — a land that also taps for
+      mana on its own (the Homelands tri-lands, Crystal Quarry) is already the
+      free planner's, and one slot in a plan cannot say which ability it means;
+    * **a yield the payload states** (`ai_valuation.planned_mana_yield`), with
+      no rider.
+
+    And only one the activation path will accept, by the gates
+    `_nonland_mana_source` asks: untapped, not a summoning-sick creature, not
+    under a ban or a permission that closes it to this seat.
+    """
+    import dataclasses
+
+    from .activation_restrictions import prints_activation_restriction
+    from .mana_payment import carries_an_offer
+    from .mana_payment import is_mana_ability as is_cr_mana_ability
+    from .mixins.turn_management import is_tap_alone_mana_ability
+    from .spell_prohibitions import permanent_activations_forbidden
+
+    if permanent is None or permanent.tapped:
+        return None
+    if game.land_mana_tap_refusal(permanent) not in (
+        "priced_mana_ability", "not_an_untapped_land",
+    ):
+        # A land the seam taps (None), or one it refuses for a reason that is
+        # not about the price: summoning sick, forbidden, stripped.
+        return None
+    if game._is_summoning_sick(permanent):
+        return None
+    usable = game.usable_abilities_of(permanent)
+    found: "_PricedManaSource | None" = None
+    for index, ability in enumerate(usable):
+        if is_tap_alone_mana_ability(ability):
+            return None
+        if not is_cr_mana_ability(ability):
+            continue
+        if found is not None:
+            # Two priced mana abilities: which one a plan's slot means is not
+            # something a slot can say.
+            return None
+        cost = ability.cost
+        mana = {symbol: int(amount or 0) for symbol, amount in cost.mana.items()}
+        generic = mana.get("generic", 0)
+        if generic < 1 or any(amount for symbol, amount in mana.items() if symbol != "generic"):
+            return None
+        if cost != dataclasses.replace(
+            type(cost)(mana={symbol: 0 for symbol in cost.mana}),
+            requires_tap=True, mana=cost.mana,
+        ):
+            return None
+        line = ability.source_line or ""
+        if prints_activation_restriction(line) or carries_an_offer(ability.instruction):
+            return None
+        produced = planned_mana_yield(ability.instruction)
+        if produced is None or produced.board_narrowed or produced.from_chosen_color:
+            return None
+        if not produced.symbols:
+            return None
+        if (
+            permanent_activations_forbidden(game, permanent)
+            or global_activation_ban(game, permanent) is not None
+            or activation_denial(game, seat, permanent, line)
+            or activation_permission_denial(game, seat, permanent, line)
+            or aura_restriction_active(permanent, "all_activated_abilities_shut_off")
+        ):
+            return None
+        found = _PricedManaSource(
+            ability_index=index,
+            price=generic,
+            symbols=produced.symbols,
+            amount=produced.amount,
+            run=dict(produced.run) if produced.run else None,
+        )
+    return found
 
 
 @dataclass(frozen=True)
@@ -6329,6 +6478,8 @@ def _max_affordable_x(
 def _plan_land_taps(
     game: Game, player: PlayerState, required: dict[str, int],
     *, paying_for: "Permanent | None" = None,
+    without: "frozenset[int]" = frozenset(),
+    through_priced: bool = True,
 ) -> tuple[tuple[int, ...], tuple[str, ...]] | None:
     """Which untapped lands to tap for *required*, and **which colour to ask
     each one for**: ``(slots, colours)`` in tap order, or None when the board
@@ -6379,10 +6530,14 @@ def _plan_land_taps(
     # as a generic mana it paid for a Priest of Yawgmoth the bucket cannot.
     # Nor one whose output the rest of the board decides (Gaea's Cradle with
     # no creature makes nothing) — `_land_mana_is_unplannable`.
+    #
+    # *without* is the slots a caller has already spoken for — the two halves
+    # of `_plan_through_a_priced_source` plan against disjoint sources.
     untapped_lands = [
         (index, _land_symbols(game, permanent), _land_mana_amount(game, permanent))
         for index, permanent in enumerate(game.controlled_by(player))
-        if game.land_mana_tap_refusal(permanent) is None
+        if index not in without
+        and game.land_mana_tap_refusal(permanent) is None
         and not _land_mana_is_unplannable(game, permanent)
     ]
     # **And the non-land sources, after every land** (`_nonland_mana_source`:
@@ -6399,7 +6554,7 @@ def _plan_land_taps(
     nonland_runs: dict[int, dict[str, int]] = {}
     if seat is not None:
         for index, permanent in enumerate(game.controlled_by(player)):
-            if permanent is paying_for:
+            if permanent is paying_for or index in without:
                 continue
             source = _nonland_mana_source(game, seat, permanent)
             if source is None:
@@ -6468,9 +6623,92 @@ def _plan_land_taps(
         take(best_idx, remaining[best_idx][1][0])
 
     if not _can_pay_cost(pool, required, player):
+        # What every free source makes is not enough. A source whose mana
+        # costs mana (a filter land) is asked last, and only here: a board
+        # the free sources pay for is planned exactly as it always was.
+        if through_priced and not without:
+            return _plan_through_a_priced_source(game, player, required, paying_for)
         return None
 
     return tuple(chosen), tuple(colors)
+
+
+def _plan_through_a_priced_source(
+    game: Game, player: PlayerState, required: dict[str, int],
+    paying_for: "Permanent | None",
+) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+    """`_plan_land_taps` for a cost the free sources cannot pay, through **one**
+    source whose mana costs mana (`_priced_mana_source`: "{1}, {T}: Add
+    {U}{B}.") — or None.
+
+    Three parts, in the order they are tapped:
+
+    1. the free sources that pay the source's **price**;
+    2. the source itself;
+    3. the free sources that pay what is left of *required* once the source's
+       output is counted — its symbols against the pips they match, any
+       surplus against the generic part.
+
+    **The order is the plan.** The executor taps a plan's slots in sequence
+    (`tap_planned_lands`), so with the price tapped immediately in front of
+    the source, the pool holds exactly that price when the source is activated
+    and there is no choice of which unit pays it. Tapped all together first,
+    the engine could pay the {1} with the one green mana the spell's {G} was
+    counting on. For the same reason this plans nothing while mana is already
+    floating: which floating unit a generic price would take is not this
+    planner's to say.
+
+    One priced source per plan. Two filter lands feeding one another is a
+    longer chain than this walks.
+    """
+    if any(int(player.mana_pool.get(symbol, 0) or 0) for symbol in _MANA_SYMBOLS):
+        return None
+    seat = next((i for i, seated in enumerate(game.players) if seated is player), None)
+    if seat is None:
+        return None
+    for index, permanent in enumerate(game.controlled_by(player)):
+        if permanent is paying_for:
+            continue
+        source = _priced_mana_source(game, seat, permanent)
+        if source is None:
+            continue
+        for asked, made in source.outputs():
+            rest = _plan_land_taps(
+                game, player, _less_mana(required, made), paying_for=paying_for,
+                without=frozenset({index}), through_priced=False,
+            )
+            if rest is None:
+                continue
+            price = _plan_land_taps(
+                game, player, {"generic": source.price}, paying_for=paying_for,
+                without=frozenset({index, *rest[0]}), through_priced=False,
+            )
+            if price is None:
+                continue
+            return (
+                (*price[0], index, *rest[0]),
+                (*price[1], asked, *rest[1]),
+            )
+    return None
+
+
+def _less_mana(required: dict[str, int], made: dict[str, int]) -> dict[str, int]:
+    """*required* with the mana *made* already in the pool: each symbol against
+    the pips it matches, and whatever is left over against the generic part.
+
+    A copy in *required*'s own key order — the planner walks the dict it is
+    handed, and a simulated game has to reproduce from its seed.
+    """
+    left = {symbol: int(amount or 0) for symbol, amount in required.items()}
+    spare = 0
+    for symbol, count in made.items():
+        used = min(int(count), left.get(symbol, 0))
+        if used:
+            left[symbol] -= used
+        spare += int(count) - used
+    if spare and left.get("generic", 0):
+        left["generic"] = max(0, left["generic"] - spare)
+    return left
 
 
 def _can_pay_cost(
