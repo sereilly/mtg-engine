@@ -77,6 +77,15 @@ def parse_player_ref(stream: TokenStream) -> ast.PlayerRef | None:
     # measured from.
     if stream.accept_phrase("any", "other", "player"):
         return ast.PlayerRef("any_other_player")
+    # "…**each of that player's opponents** draws three cards." (Standstill.)
+    # The same seats under their other printed name: the players who are not
+    # the one the sentence in front named (CR 102.2). A spelling of the
+    # referent above rather than a second one, so the event gate, the frozen
+    # seat and the enumeration are the ones Ice Cave's offer already has -
+    # which of "any" and "each" a card prints is what its verb does with the
+    # set, not a different set.
+    if stream.accept_phrase("each", "of", "that", "player", "'s", "opponents"):
+        return ast.PlayerRef("any_other_player")
     if stream.accept_phrase("target", "player"):
         return ast.PlayerRef("target_player")
     if stream.accept_phrase("target", "opponent"):

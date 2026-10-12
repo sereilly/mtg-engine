@@ -1026,4 +1026,106 @@ def test_verdant_succession_reads_the_controller_of_a_stolen_creature(set_pool):
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
 
+
+import pytest as _w1g9_pytest
+
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from engine.oracle import compile_card_oracle as _w1g9_compile
+from tests.helpers import _mk_card as _w1g9_mk_card
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_table(set_pool, *, hands=((), ()), boards=((), ()), costs=False):
+    """A game with one seat per entry of *hands*, built from card names
+    (Odyssey first, then Alpha); ten Forests in each library."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name=f"P{seat}", life=20, hand=[pool[n] for n in hand],
+            library=[pool["Forest"]] * 10,
+        )
+        for seat, hand in enumerate(hands)
+    ])
+    game.enforce_mana_costs = costs
+    for seat, names in enumerate(boards):
+        for name in names:
+            permanent = _w1g9_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game  # _w1g9_table (enchantments)
+
+
+def _w1g9_on(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+def _w1g9_hand_sizes(game):
+    return [len(player.hand) for player in game.players]
+
+
+# --- Standstill -------------------------------------------------------------
+
+def test_standstill_is_sacrificed_and_the_casters_opponents_draw_three(set_pool):
+    """"When a player casts a spell, sacrifice this enchantment. If you do,
+    each of that player's opponents draws three cards." An opponent blinks:
+    Standstill's controller draws, and the spell still resolves."""
+    game = _w1g9_table(
+        set_pool, hands=((), ("Grizzly Bears",)), boards=(("Standstill",), ()),
+    )
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_hand_sizes(game) == [3, 0]
+    assert [c.name for c in game.players[0].graveyard] == ["Standstill"]
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
+
+
+def test_standstill_pays_the_other_side_when_its_own_controller_casts(set_pool):
+    game = _w1g9_table(
+        set_pool, hands=(("Grizzly Bears",), ()), boards=(("Standstill",), ()),
+    )
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_hand_sizes(game) == [0, 3]
+
+
+def test_standstill_draws_once_for_two_spells_cast_in_a_row(set_pool):
+    """Two triggers, one Standstill: the later spell's trigger resolves first
+    and its caster's opponent draws; the earlier one finds nothing left to
+    sacrifice, and "if you do" is not done."""
+    game = _w1g9_table(
+        set_pool, hands=(("Lightning Bolt",), ("Lightning Bolt",)),
+        boards=(("Standstill",), ()),
+    )
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_hand_sizes(game) == [0, 3]
+    assert [p.life for p in game.players] == [17, 17]
+
+
+def test_standstill_counts_opponents_from_the_caster_in_a_three_player_game(set_pool):
+    game = _w1g9_table(
+        set_pool, hands=((), ("Grizzly Bears",), ()),
+        boards=(("Standstill",), (), ()),
+    )
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_hand_sizes(game) == [3, 0, 3]
+
+
+@_w1g9_pytest.mark.parametrize("text, supported", [
+    ("Whenever a player casts a spell, each of that player's opponents draws "
+     "a card.", True),
+    # No seat was frozen for the words to be measured from, and a verb with
+    # no reader for the set: both refuse rather than act on somebody else.
+    ("Whenever a creature attacks, each of that player's opponents draws a "
+     "card.", False),
+    ("Whenever a player casts a spell, each of that player's opponents loses "
+     "1 life.", False),
+])
+def test_that_players_opponents_is_read_only_where_a_seat_was_frozen(text, supported):
+    card = _w1g9_mk_card("Truce Probe", "{U}", "Enchantment", text)
+    assert _w1g9_compile(card).supported is supported
+
 # ==== end W1G9 ======================================================
