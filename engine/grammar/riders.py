@@ -386,18 +386,6 @@ def _with_no_regeneration(statement: ast.Statement) -> "ast.Statement | None":
     """
     if isinstance(statement, ast.Destroy):
         return dataclasses.replace(statement, no_regen=True)
-    if isinstance(statement, ast.Sequence):
-        # "…instead destroy all creatures, **then** create two 1/1 white Spirit
-        # creature tokens with flying. Creatures destroyed this way can't be
-        # regenerated." (Kirtar's Wrath.) The destroy is one step of a "…, then
-        # …" sentence, so the rider is about that step and passes over the
-        # rest. Without this the conditional below found nothing to mark on the
-        # replacing arm, marked the arm it replaces — which already says so —
-        # and the sweep that matters could be regenerated from.
-        folded = tuple(_with_no_regeneration(step) or step for step in statement.steps)
-        if folded == statement.steps:
-            return None
-        return dataclasses.replace(statement, steps=folded)
     if isinstance(statement, ast.OneOf):
         # "Destroy all green creatures **or** all white creatures. They can't
         # be regenerated." (Reign of Terror.) The rider is printed once and is

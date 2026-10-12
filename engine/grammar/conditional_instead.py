@@ -162,6 +162,7 @@ def _parse_conditional_instead_rider(
     if replacement is None:
         stream.reset(mark)
         return False
+    replacement = _with_own_no_regeneration(stream, replacement)
     if guard is not None:
         replacement = ast.Conditional(guard, replacement)
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
@@ -233,8 +234,50 @@ def _parse_trailing_if_instead(
     if replacement is None:
         stream.reset(mark)
         return False
+    replacement = _with_own_no_regeneration(stream, replacement)
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
     return True
+
+
+def _with_own_no_regeneration(stream: TokenStream, replacement):
+    """*replacement* with the no-regeneration rider printed **behind it**
+    folded in, the rider's sentence consumed — or *replacement* unchanged and
+    the cursor unmoved when no such sentence follows.
+
+    "Destroy all creatures. They can't be regenerated. / Threshold — If there
+    are seven or more cards in your graveyard, instead destroy all creatures,
+    then create two 1/1 white Spirit creature tokens with flying. **Creatures
+    destroyed this way can't be regenerated.**" (Kirtar's Wrath.) The card
+    prints the rider twice, once per sentence, because each is about the
+    sentence it follows — so the second belongs to the replacing arm and to
+    nothing else. Read here, while that arm is still in hand: left to the
+    sentence loop it reaches ``riders._attach_no_regeneration`` with the pair
+    already folded into a ``Conditional``, which marks whichever arm can carry
+    it — the replaced sentence's, when the replacing one is a "…, then …" the
+    rider cannot see into. That is a sweep the card says can't be regenerated
+    from, compiled regenerable, with nothing unread.
+
+    The words are the destroy production's own
+    (``effects.destruction._accept_destroyed_this_way_no_regen``), so the
+    spellings stay one rule. A replacement that destroys nothing leaves the
+    sentence where it is, for whoever reads it next.
+    """
+    from .effects.destruction import _accept_destroyed_this_way_no_regen
+
+    mark = stream.mark()
+    if not (stream.accept_punct(".") and _accept_destroyed_this_way_no_regen(stream)):
+        stream.reset(mark)
+        return replacement
+    several = isinstance(replacement, ast.Sequence)
+    parts = replacement.steps if several else (replacement,)
+    if not any(isinstance(part, ast.Destroy) for part in parts):
+        stream.reset(mark)
+        return replacement
+    marked = tuple(
+        replace(part, no_regen=True) if isinstance(part, ast.Destroy) else part
+        for part in parts
+    )
+    return ast.Sequence(marked) if several else marked[0]
 
 
 def _accept_resized_this_way(stream: TokenStream, replaced):

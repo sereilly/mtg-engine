@@ -68,8 +68,12 @@ def test_a_then_sentence_is_replaced_whole():
     "Draw a card, then discard a card. If you control a Swamp, instead draw "
     "two cards, then you gain 1 life.",
     # A step the rider does not replace alone is not replaced in a sequence.
-    "Draw a card, then sacrifice a creature. If you control a Swamp, instead "
-    "draw two cards, then sacrifice a creature.",
+    # (An untap: this example was a sacrifice until Odyssey's Epicenter made
+    # `Sacrifice` a kind the rider replaces — "Target player sacrifices a land
+    # of their choice. Each player sacrifices all lands they control instead
+    # if …" — and the sacrifice sequence became a pair that reads.)
+    "Draw a card, then untap target land. If you control a Swamp, instead "
+    "draw two cards, then untap target land.",
 ])
 def test_a_then_sentence_is_replaced_only_by_itself_said_again(line):
     with pytest.raises(GrammarError):
