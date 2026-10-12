@@ -1204,4 +1204,131 @@ def test_aboshan_taps_the_octopus_its_controller_names_to_tap_a_permanent(set_po
     ).supported
     assert not ogre.tapped
 
+
+def _w1g9_to_declare_attackers(game, active):
+    """Step the real turn structure to the declare-attackers step."""
+    game.active_player_index = active
+    for _ in range(4):
+        game.advance_combat_phase()
+        if game.current_step == "declare_attackers":
+            return
+    raise AssertionError(f"never reached declare attackers: {game.current_step}")
+
+
+def _w1g9_squirrel_token(game, set_pool, seat):
+    """A real token, made by the set's own token maker."""
+    game.players[seat].hand.append(set_pool("ODY")["Chatter of the Squirrel"])
+    assert game.cast_from_hand(seat, "Chatter of the Squirrel").supported
+    _w1g9_resolve_stack(game)
+    return next(
+        p for p in game.controlled_by(seat) if p.metadata.get("is_token")
+    )
+
+
+# --- Dogged Hunter: "{T}: Destroy target creature token." ------------------
+
+def test_dogged_hunter_destroys_a_creature_token(set_pool):
+    game = _w1g9_duel(set_pool, bf0=["Dogged Hunter"], bf1=["Grizzly Bears"])
+    token = _w1g9_squirrel_token(game, set_pool, 1)
+    spec = game.activation_target_spec(0, 0)
+    assert [t["name"] for t in spec["valid_targets"]] == ["Squirrel Token"]
+    assert game.queue_permanent_ability(
+        0, "Dogged Hunter", target_permanent_ids=[token.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_names(p.card for p in game.controlled_by(1)) == ["Grizzly Bears"]
+
+
+def test_dogged_hunter_cannot_be_aimed_at_a_creature_that_is_no_token(set_pool):
+    """"Token" is CR 111.1's fact about the object, held by the picker and by
+    the activation gate: a card named for it is refused with nothing paid."""
+    game = _w1g9_duel(set_pool, bf0=["Dogged Hunter"], bf1=["Grizzly Bears"])
+    hunter = _w1g9_on(game, 0, "Dogged Hunter")
+    bears = _w1g9_on(game, 1, "Grizzly Bears")
+    assert game.activation_target_spec(0, 0)["valid_targets"] == []
+    for ids in ([bears.permanent_id], None):
+        refused = game.queue_permanent_ability(
+            0, "Dogged Hunter", target_permanent_ids=ids
+        )
+        assert not refused.supported
+        assert not hunter.tapped and not game.stack
+    assert bears in game.all_permanents()
+
+
+@_w1g9_pytest.mark.parametrize("line, supported", [
+    ("{T}: Destroy target creature token.", True),
+    ("{T}: Destroy target artifact creature token.", True),
+    ("{T}: Destroy target creature token card.", False),
+])
+def test_token_reads_after_a_card_type_and_only_there(line, supported):
+    card = _w1g9_mk_card("Token Hound", "{W}", "Creature - Hound", line)
+    program = _w1g9_compile(card)
+    assert program.supported is supported
+    if supported:
+        assert program.instructions[0].payload["token_only"] is True
+
+
+# --- Lieutenant Kirtar -----------------------------------------------------
+
+def test_lieutenant_kirtar_is_sacrificed_to_exile_an_attacker(set_pool):
+    """"{1}{W}, Sacrifice Lieutenant Kirtar: Exile target attacking creature."
+    The cost names the card (CR 201.5) where every other card prints "this
+    creature" - and it is charged: Kirtar is in the graveyard before the
+    ability resolves."""
+    game = _w1g9_duel(
+        set_pool, bf0=["Lieutenant Kirtar"], bf1=["Gray Ogre", "Grizzly Bears"],
+        costs=True,
+    )
+    kirtar = _w1g9_on(game, 0, "Lieutenant Kirtar")
+    ogre, bears = _w1g9_on(game, 1, "Gray Ogre"), _w1g9_on(game, 1, "Grizzly Bears")
+    (ability,) = _w1g9_compile(kirtar.card).activated_abilities
+    assert ability.cost.sacrifice_self
+
+    _w1g9_to_declare_attackers(game, 1)
+    assert game.declare_attackers(1, [0], defending_player_index=0)[0]
+    game.players[0].mana_pool.update({"W": 2})
+    refused = game.queue_permanent_ability(
+        0, "Lieutenant Kirtar", target_permanent_ids=[bears.permanent_id]
+    )
+    assert not refused.supported, "the Bears are not attacking"
+    assert kirtar in game.all_permanents()
+    assert game.players[0].mana_pool["W"] == 2
+
+    assert game.queue_permanent_ability(
+        0, "Lieutenant Kirtar", target_permanent_ids=[ogre.permanent_id]
+    ).supported
+    assert _w1g9_names(game.players[0].graveyard) == ["Lieutenant Kirtar"]
+    assert ogre in game.all_permanents(), "the ability is still on the stack"
+    _w1g9_resolve_stack(game)
+    assert _w1g9_names(game.players[1].exile) == ["Gray Ogre"]
+
+
+def test_lieutenant_kirtar_has_nothing_to_exile_outside_combat(set_pool):
+    game = _w1g9_duel(
+        set_pool, bf0=["Lieutenant Kirtar"], bf1=["Gray Ogre"], costs=True,
+    )
+    game.players[0].mana_pool.update({"W": 2})
+    ogre = _w1g9_on(game, 1, "Gray Ogre")
+    assert not game.queue_permanent_ability(
+        0, "Lieutenant Kirtar", target_permanent_ids=[ogre.permanent_id]
+    ).supported
+    assert _w1g9_on(game, 0, "Lieutenant Kirtar")
+    assert game.players[0].mana_pool["W"] == 2
+
+
+@_w1g9_pytest.mark.parametrize("cost, field", [
+    ("Sacrifice Old Sergeant", "sacrifice_self"),
+    ("Exile Old Sergeant", "exile_self"),
+    ("Return Old Sergeant to its owner's hand", "return_self_to_hand"),
+])
+def test_a_cost_naming_its_own_card_is_charged(cost, field):
+    """An invented legend, not a name: each of the three self-costs is read
+    off the card's name exactly as off "this creature"."""
+    card = _w1g9_mk_card(
+        "Old Sergeant", "{W}", "Legendary Creature - Human Soldier",
+        f"{cost}: Draw a card.",
+    )
+    (ability,) = _w1g9_compile(card).activated_abilities
+    assert ability.supported and getattr(ability.cost, field) is True
+
 # ==== end W1G9 ======================================================

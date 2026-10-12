@@ -2889,7 +2889,9 @@ def _split_mana_per_counter(
     return remaining, rate, match.group(2)
 
 
-def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
+def parse_activated_ability_cost(
+    line: str, card_name: str | None = None
+) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
     colon = activation_colon_index(line or "")
@@ -2930,7 +2932,17 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # Non-mana additional costs written as prose in the cost clause. Only the
     # clause left of the ":" counts — "Draw a card" as an effect must not be read
     # as a cost.
-    cost_lower = cost_part.lower()
+    #
+    # "{1}{W}, Sacrifice **Lieutenant Kirtar**: …" A legendary permanent names
+    # itself where every other card prints "this creature" (CR 201.5), and the
+    # grammar reads the two as one reference - the lexer collapses the name to
+    # a SELF token. Collapsed here to the same words, so the self-cost readers
+    # below see one sentence: unread, the grammar admitted the line and this
+    # charger collected the mana and no sacrifice, which is the card kept on
+    # the battlefield and its ability repeatable.
+    cost_lower = _collapse_self_references(
+        cost_part.lower(), card_name, "this permanent"
+    )
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
     exile_self = bool(
         re.search(rf"\bexile this ({_SELF_COST_NOUNS})\b", cost_lower)
@@ -4493,14 +4505,14 @@ def _parse_activated_ability(line: str, card_name: str | None = None) -> ParsedA
             source_line=line,
             normalized_effect=effect_text,
             supported=True,
-            cost=parse_activated_ability_cost(line),
+            cost=parse_activated_ability_cost(line, card_name),
             effect_kind="activated_delayed_trigger",
             instruction=delayed,
         )
     instruction, effect_kind = _reading(
         _line_instruction(line, card_name, activated=True)
     )
-    cost = parse_activated_ability_cost(line)
+    cost = parse_activated_ability_cost(line, card_name)
     # "Tap enchanted creature: Target creature **other than the creature tapped
     # this way** …" (Veteran's Voice). The grammar resolved that pronoun to the
     # attached host, because a target filter is tested before the cost is paid

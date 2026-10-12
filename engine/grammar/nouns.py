@@ -580,6 +580,12 @@ def parse_object_filter(stream: TokenStream, *, allow_bare: bool = False) -> ast
                         "a class union cannot also be a conjunction of types"
                     )
                 d.any_classes = tuple(cross_axis)
+            # "Destroy target **creature token**." (Dogged Hunter.) CR 111.1's
+            # fact printed after a card type, the third position of the three
+            # ("a token creature", "a Caribou token" below, and "a token" as
+            # the head). Unread it was one unconsumed word.
+            if stream.accept_word("token", "tokens"):
+                d.token_only = True
             d.is_card = _accept_card_noun(stream)
             # "target instant or sorcery **spell**" (Miscast): the head noun
             # after a type union may be "spell", naming an object on the stack
