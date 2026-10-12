@@ -190,6 +190,13 @@ def _lower_next_damage_redirect_between_targets(
                 "amount": _amount_payload(node.amount),
                 "targets": card_divided_target_description(
                     division=EACH, count=2,
+                    # Which announced target is which end, in the sentence's
+                    # own words and its own order — what the handler reads by
+                    # position and a picker has to be able to say.
+                    roles=(
+                        "target the damage would be dealt to",
+                        "target the damage is dealt to instead",
+                    ),
                 ),
             },
         ),

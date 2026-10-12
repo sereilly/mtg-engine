@@ -4002,6 +4002,21 @@ def _from_targets_payload(targets) -> dict | None:
         printed_count = targets.get("target_count")
         if printed_count is not None and not isinstance(printed_count, bool):
             spec["divided_target_count"] = printed_count
+        # **What each position of the list is**, for a picker to say as the
+        # caster clicks (``_targets.card_divided_target_description``). The
+        # sentence's own roles where it gives its targets different jobs
+        # (Captain's Maneuver: the protected end, then the taker), and the
+        # printed shares where it gives them different amounts — "1 damage to
+        # any target, 2 damage to another target, and 3 damage to a third
+        # target" (Cone of Flame) is read by position exactly as the redirect
+        # is, and the first click is the one that gets 1. Absent wherever the
+        # positions are interchangeable, which is every other divided spell.
+        named = targets.get("target_roles")
+        shares = targets.get("shares")
+        if isinstance(named, (list, tuple)) and named:
+            spec["target_roles"] = [str(name) for name in named]
+        elif isinstance(shares, (list, tuple)) and len(set(shares)) > 1:
+            spec["target_roles"] = [f"target that gets {share}" for share in shares]
         if printed_count == "x":
             # "…to **each of X targets**" (Firestorm). X *is* how many targets
             # were chosen, so the caster is never asked for it separately —

@@ -2087,6 +2087,109 @@ def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
 
 # ==== W2G2 ============================================================
 # W2G2's tests go between this line and the "end W2G2" line.
+from engine import Game as _w2g2_Game, PlayerState as _w2g2_Player
+from engine.models import Permanent as _w2g2_Permanent
+from tests.helpers import _mk_card as _w2g2_mk_card, resolve_stack as _w2g2_resolve_stack
+
+
+def _w2g2_snake_game(set_pool, *, interactive=(0,)):
+    """Seat 1's turn with seat 1's Lightning Bolt and then Shock on the stack,
+    both aimed at seat 0, and nothing resolved. Returns ``(game, bolt item,
+    shock item)`` — Shock is the topmost."""
+    lea, sth = set_pool("LEA"), set_pool("STH")
+    filler = _w2g2_mk_card(name="Filler", type_line="Creature - Wall", power=0, toughness=1)
+    game = _w2g2_Game(players=[
+        _w2g2_Player(name="P0", library=[filler] * 10),
+        _w2g2_Player(
+            name="P1", hand=[lea["Lightning Bolt"], sth["Shock"]], library=[filler] * 10,
+        ),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(1)
+    game._settle()
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.queue_from_hand(1, "Shock", target_player_index=0).supported
+    bolt, shock = game.stack
+    return game, bolt, shock  # W2G2 creatures: two spells waiting
+
+
+def test_w2g2_a_snake_that_was_not_cast_asks_its_controller_which_spell(set_pool):
+    """Mystic Snake: "When this creature enters, counter target spell."
+
+    Put onto the battlefield by an effect, with two spells on the stack, for a
+    seat somebody can ask: the trigger chooses its target as it goes on the
+    stack (CR 603.3d) and the choice is the controller's — the ``trigger_target``
+    prompt, offering both spells, topmost first. Naming the **lower** one is
+    the answer no default would give; it is the one countered, and the other
+    resolves."""
+    game, bolt, shock = _w2g2_snake_game(set_pool)
+    game._put_permanent_onto_battlefield(
+        0, _w2g2_Permanent(card=set_pool("APC")["Mystic Snake"]), None
+    )
+
+    trigger = game.stack[-1]
+    assert trigger.is_ability and trigger.target_stack_item is None
+    prompt = game.pending_choice_of("trigger_target", 0)
+    assert prompt is not None, game.log
+    assert [(t["kind"], t["name"]) for t in prompt.data["targets"]] == [
+        ("stack", "Shock"), ("stack", "Lightning Bolt"),
+    ]
+    assert game.waiting_prompt().kind == "trigger_target"
+
+    assert game.confirm_trigger_target(0, stack_item=bolt)
+    assert trigger.target_stack_item is bolt
+    assert "Mystic Snake: targets Lightning Bolt" in game.log
+    assert game.pending_choices == []
+
+    _w2g2_resolve_stack(game)
+    assert "Lightning Bolt was countered by Mystic Snake and moved to graveyard" in game.log
+    assert game.players[0].life == 18, "Shock still resolved"
+    assert [c.name for c in game.players[1].graveyard] == ["Lightning Bolt", "Shock"]
+
+
+def test_w2g2_the_snake_s_answer_is_held_to_the_spells_it_was_offered(set_pool):
+    """An answer in another vocabulary names nothing this prompt offered: a
+    seat, a permanent's id, the trigger itself and a spell that has left are
+    each refused with the prompt still owed (CR 603.3d chooses from the list
+    that was offered, and only from it)."""
+    game, bolt, shock = _w2g2_snake_game(set_pool)
+    snake = _w2g2_Permanent(card=set_pool("APC")["Mystic Snake"])
+    game._put_permanent_onto_battlefield(0, snake, None)
+    trigger = game.stack[-1]
+
+    assert not game.confirm_trigger_target(0, seat=1)
+    assert not game.confirm_trigger_target(0, permanent_id=snake.permanent_id)
+    assert not game.confirm_trigger_target(0, stack_item=trigger)
+    assert game.trigger_target_stack_item(0, 0) is None, "the trigger is not a spell"
+    assert game.trigger_target_stack_item(0, 1) is shock
+    assert game.trigger_target_stack_item(0, 2) is bolt
+    assert game.trigger_target_stack_item(0, 3) is None
+    assert game.trigger_target_stack_item(1, 1) is None, "not seat 1's prompt"
+    assert game.pending_choice_of("trigger_target", 0) is not None
+    assert trigger.target_stack_item is None
+
+    # A spell that left the stack while the question was open is nobody's
+    # target any more.
+    game.stack.remove(shock)
+    assert not game.confirm_trigger_target(0, stack_item=shock)
+    assert game.confirm_trigger_target(0, stack_item=bolt)
+
+
+def test_w2g2_a_seat_nobody_asks_still_takes_the_topmost_opposing_spell(set_pool):
+    """The default did not move: with nobody to ask, the trigger names the
+    topmost spell an opponent controls as it is put on the stack, queues
+    nothing, and logs what it chose — what every seat got before the prompt
+    carried a spell."""
+    game, bolt, shock = _w2g2_snake_game(set_pool, interactive=())
+    game._put_permanent_onto_battlefield(
+        0, _w2g2_Permanent(card=set_pool("APC")["Mystic Snake"]), None
+    )
+
+    trigger = game.stack[-1]
+    assert trigger.target_stack_item is shock
+    assert "Mystic Snake: targets Shock" in game.log
+    assert game.pending_choices == []
 
 # ==== end W2G2 ========================================================
 

@@ -115,3 +115,77 @@ def test_a_top_of_library_reorder_says_which_end_it_is():
 
     assert prompt["position"] == "top"
     assert [card["name"] for card in prompt["cards"]] == ["A", "B", "C"]
+
+
+# ---------------------------------------------------------------------------
+# Wave 2: the modal says which end it is, and the look-and-pick family asks
+# ---------------------------------------------------------------------------
+
+
+def _impulse_session():
+    """A session whose seat 0 has resolved the look half of Impulse — "look at
+    the top four… put one of them into your hand and the rest on the bottom of
+    your library in any order" — armed the way the handler arms it, over a
+    library of six named cards."""
+    sid, session = _session_with_bottom_order(["A", "B", "C", "D", "E", "F"], 2)
+    game = session.game
+    game.pending_choices.clear()
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=4, amount=4, card_name="Impulse",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_bottom",
+    )
+    return sid, session
+
+
+def test_a_look_and_pick_that_bottoms_the_rest_asks_for_their_order_over_the_wire():
+    """Impulse through the two actions a browser sends: the pick, then the
+    order of what went down. The second prompt is the bottom-order one, over
+    exactly the three cards not taken, and the library reads the answer."""
+    sid, session = _impulse_session()
+
+    picked = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "look_top_pick_confirm", "hand_index": 1},
+    )
+    assert picked.status_code == 200, picked.text
+
+    prompt = _state(sid, 0)["reorder_library"]
+    assert prompt is not None and prompt["position"] == "bottom"
+    assert [card["name"] for card in prompt["cards"]] == ["A", "C", "D"]
+    assert _state(sid, 1)["reorder_library"] is None
+
+    answered = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "reorder_library_confirm", "card_order": [2, 0, 1]},
+    )
+    assert answered.status_code == 200, answered.text
+    game = session.game
+    assert [c.name for c in game.players[0].hand][-1] == "B"
+    assert [c.name for c in game.players[0].library] == ["E", "F", "D", "A", "C"]
+    assert _state(sid, 0)["reorder_library"] is None
+
+
+def test_the_modal_is_labelled_from_the_end_of_the_library_it_arranges():
+    """The ratchet on what was driven in a browser (Goblin Ringleader, Impulse
+    and Prophetic Bolt bottoming three or four cards, dragged into an order and
+    then drawn down to; Natural Selection as the top-of-library neighbour).
+
+    The title and subtitle were fixed text about the *top* of the library, so a
+    player arranging the last cards they would ever draw was told they were
+    arranging the next ones. They are worded from ``info.position`` now, and
+    the order on the wire is unchanged: leftmost is the uppermost of the pile.
+    """
+    from tests.helpers import app_js_function_body
+
+    body = app_js_function_body("renderReorderLibraryModal")
+    assert 'info.position === "bottom"' in body
+    assert "Order the Bottom of Library" in body
+    assert "the rightmost will be the very bottom card" in body
+    # The top-of-library wording is still there for the other end.
+    assert "Reorder Top of Library" in body
+    assert "The leftmost card will be on top of the library." in body
+    # One answered prompt leaves its listener behind; the next one's must not
+    # throw on the order the first already took.
+    assert "if (!reorderLibraryCurrentOrder) return;" in body

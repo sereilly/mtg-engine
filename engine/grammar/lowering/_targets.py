@@ -65,6 +65,7 @@ def divided_target_description(
 
 def card_divided_target_description(
     *, division: str, count: "int | str", shares: "tuple[int, ...] | None" = None,
+    roles: "tuple[str, ...] | None" = None,
 ) -> dict[str, object]:
     """The ``targets`` description for a list of targets the **card** sizes and
     shares out (CR 601.2c, and CR 601.2d only in the sense that it is not asked).
@@ -97,6 +98,20 @@ def card_divided_target_description(
     picker — and the first of those sits above the divided branch in the same
     function, so a divided description carrying a ``count`` was silently
     resolved as an "up to N target creatures" and dealt nothing at all.
+
+    ``roles`` names what each position of the list **is**, where the sentence
+    gives its targets different jobs: "the next X damage that would be dealt
+    to target … is dealt to another target … instead" (Captain's Maneuver)
+    announces the protected end first and the taker second, and the handler
+    reads them by position. A picker that cannot say which click is which has
+    the player guessing at the one thing the announcement decides. The word is
+    the roles channel's own (``lowering/_roles``: every slot of a several-kind
+    announcement carries a ``role``), and it is written under ``target_roles``
+    rather than as that channel's ``roles`` list for ``count``'s reason one
+    paragraph up: ``roles`` already means "a list of slot *descriptions* to
+    enumerate and re-check" to the readers of a roles announcement, and a
+    divided list has one description for every position. Omitted where the
+    positions are interchangeable (Firestorm, Magma Burst).
     """
     described: dict[str, object] = {
         "quantifier": "divided",
@@ -106,6 +121,8 @@ def card_divided_target_description(
     }
     if shares is not None:
         described["shares"] = list(shares)
+    if roles is not None:
+        described["target_roles"] = [str(name) for name in roles]
     return described
 
 

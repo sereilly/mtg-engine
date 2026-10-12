@@ -295,7 +295,12 @@ _MANEUVER = (
 def test_a_counted_redirect_between_two_announced_targets():
     """Both ends announced, neither the source: its own kind, on the one
     channel that carries a list of targets spanning both battlefields and the
-    players' faces — two entries, each the whole pool."""
+    players' faces — two entries, each the whole pool.
+
+    The two positions are not interchangeable — the handler arms the record on
+    the first and points it at the second — so the description names them, in
+    the sentence's own words and order (``target_roles``), for a picker to say
+    which click is which."""
     (redirect,) = _lowered(_MANEUVER, "Captain's Maneuver")
 
     assert redirect.kind == "redirect_next_damage_between_targets_until_eot"
@@ -304,6 +309,10 @@ def test_a_counted_redirect_between_two_announced_targets():
         "targets": {
             "quantifier": "divided", "kind": "divided", "division": "each",
             "target_count": 2,
+            "target_roles": [
+                "target the damage would be dealt to",
+                "target the damage is dealt to instead",
+            ],
         },
     }
 

@@ -1617,13 +1617,12 @@ class PendingChoicesMixin:
             # exists, with its own UI, AI default and action, and CR 608.2 keeps
             # a decision armed by answering another inside the same resolution.
             #
-            # (Apocalypse measured that first claim and did not act on it here:
-            # the bottom of a library *is* observed once the deck runs down to
-            # it, and ``offer_library_bottom_order`` is the seam that asks —
-            # Goblin Ringleader's sorted reveal calls it. This family still
-            # lays the rest down unasked, held by
-            # ``test_401_4_the_rest_going_to_the_bottom_is_not_asked_about``;
-            # changing that is one call below and a label in the client.)
+            # (That first claim was wrong, and Apocalypse measured it: the
+            # bottom of a library *is* observed once the deck runs down to it.
+            # ``offer_library_bottom_order`` is the seam that asks — Goblin
+            # Ringleader's sorted reveal calls it — and the "any order" tail
+            # below calls it too, now that the client labels the prompt by the
+            # end of the library it is about.)
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
                 if len(rest) > 1:
@@ -1641,12 +1640,22 @@ class PendingChoicesMixin:
             # Harbinger.) A stated order, not the player's freedom: the cards
             # go down shuffled, through the module RNG `run_ai_simulation`
             # seeds so a given seed still replays exactly. "In any order" is the
-            # other spelling and leaves them as they lay, because there the
-            # ordering is the player's by rule and nothing reads it.
+            # other spelling: the order is the player's by rule (CR 401.4), so
+            # the cards are laid down as they lay and an interactive seat is
+            # then asked to arrange them. Everybody else keeps "as they lay",
+            # which is what every seat got before the question was asked.
             if choice.data.get("rest_order") == "random":
                 rest = list(rest)
                 random.shuffle(rest)
+                caster.library.extend(rest)
+                return
             caster.library.extend(rest)
+            # Who arranges is the seat answering the look (CR 608.2): the
+            # pile's owner everywhere but a look through somebody else's
+            # library, which is the top-of-library tail's reading above.
+            self.offer_library_bottom_order(
+                caster, len(rest), chooser_index=choice.player_index,
+            )
 
         # "**You may** reveal a … card from among them" (Garruk's Harbinger).
         # Declining is a legal answer, and it is not the same as an illegal one:
@@ -8494,6 +8503,7 @@ class PendingChoicesMixin:
     def confirm_trigger_target(
         self, player_index: int, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
+        stack_item=None,
     ) -> bool:
         """Answer a triggered ability's target choice.
 
@@ -8506,11 +8516,39 @@ class PendingChoicesMixin:
         *permanent_ids* is the answer for an ability that prints **several**
         targets ("up to two target creatures"): every object named at once,
         because CR 601.2c makes them one announcement.
+
+        *stack_item* is the answer for an ability whose target is a **spell**
+        ("When this creature enters, counter target spell", Mystic Snake): the
+        stack object itself, because a spell has no id and its position is only
+        true until the stack next moves. The wire names it by position
+        (``trigger_target_stack_item``) and this is what that resolves to.
         """
         return self.resolve_pending_choice(
             "trigger_target", player_index, permanent_id=permanent_id, seat=seat,
-            permanent_ids=permanent_ids,
+            permanent_ids=permanent_ids, stack_item=stack_item,
         )
+
+    def trigger_target_stack_item(self, player_index: int, top_first_index: int):
+        """The stack object *player_index*'s pending ``trigger_target`` prompt
+        offers at *top_first_index* — the position a client sees it at, topmost
+        being 0 — or None when the prompt offers no spell there.
+
+        Resolved against the prompt's own candidates and never against the
+        stack alone, so a position naming a spell the picker did not offer is
+        no answer at all rather than a counter aimed at something the printed
+        phrase excludes.
+        """
+        choice = self.pending_choice_of("trigger_target", player_index)
+        if choice is None or not isinstance(top_first_index, int):
+            return None
+        position = len(self.stack) - 1 - top_first_index
+        if not 0 <= position < len(self.stack):
+            return None
+        named = self.stack[position]
+        for target in choice.data.get("targets") or ():
+            if target.get("kind") == "stack" and target.get("stack_item") is named:
+                return named
+        return None
 
     def _resolve_trigger_targets(self, choice: PendingChoice, permanent_ids) -> bool:
         """Record **several** chosen targets on the stack object (CR 601.2c).
@@ -8560,6 +8598,7 @@ class PendingChoicesMixin:
     def _resolve_trigger_target(
         self, choice: PendingChoice, permanent_id: int | None = None,
         seat: int | None = None, permanent_ids: list[int] | None = None,
+        stack_item=None,
     ) -> bool:
         """Record the chosen target on the stack object that asked (CR 601.2c).
 
@@ -8583,6 +8622,26 @@ class PendingChoicesMixin:
             return self._resolve_trigger_targets(choice, permanent_ids)
         targets = choice.data.get("targets") or ()
         card_name = choice.data.get("card_name", "Ability")
+        # "…counter target **spell**" (Mystic Snake). A prompt offers spells or
+        # it offers permanents and players, never both — the spec that armed it
+        # is one kind — so an answer in the other vocabulary names nothing this
+        # prompt offered and is refused rather than read as a seat.
+        offered_spells = [
+            target["stack_item"] for target in targets
+            if target.get("kind") == "stack"
+        ]
+        if offered_spells or stack_item is not None:
+            if not any(offered is stack_item for offered in offered_spells):
+                return False
+            # Still on the stack: a spell that has left is nobody's target.
+            if not any(existing is stack_item for existing in self.stack):
+                return False
+            queued = self._choice_is_queued(choice)
+            self.discard_pending_choice(choice)
+            item.target_stack_item = stack_item
+            self.log.append(f"{card_name}: targets {stack_item.card.name}")
+            self._announce_answered_targets(item, choice, queued)
+            return True
         if permanent_id is None:
             offered_seats = {
                 target.get("seat")
@@ -8697,6 +8756,27 @@ class PendingChoicesMixin:
             self.discard_pending_choice(choice)
             return True
         item = choice.data.get("_trigger_item")
+        # "…counter target **spell**" (Mystic Snake): the topmost spell on the
+        # side the effect wants — a counter is aimed at an opponent's — and the
+        # topmost offered when that side has none, because the target is
+        # mandatory. The candidates were armed topmost first
+        # (``_choose_trigger_stack_target``).
+        spells = [target for target in targets if target.get("kind") == "stack"]
+        if spells:
+            wanted = (
+                self._default_trigger_target_side(item, choice.player_index)
+                if item is not None else set()
+            )
+            chosen = next(
+                (
+                    target for target in spells
+                    if target["stack_item"].caster_index in wanted
+                ),
+                spells[0],
+            )
+            return self._resolve_trigger_target(
+                choice, stack_item=chosen["stack_item"]
+            )
         if item is not None:
             standing = self._default_opposing_seat(choice.player_index)
             for target in targets:
@@ -10558,6 +10638,7 @@ register_choice(
     "trigger_target",
     resolve=lambda game, choice, r: game._resolve_trigger_target(
         choice, r.get("permanent_id"), r.get("seat"), r.get("permanent_ids"),
+        r.get("stack_item"),
     ),
     default=lambda game, choice: game._default_trigger_target(choice),
     action="trigger_target_confirm",

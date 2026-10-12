@@ -178,6 +178,58 @@ def _effect_order(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+_SEARCH_COLOR_WORDS = {"W": "white", "U": "blue", "B": "black", "R": "red", "G": "green"}
+
+_SEARCH_COMPARISON_WORDS = {
+    "eq": "{value}", "le": "{value} or less", "lt": "less than {value}",
+    "ge": "{value} or greater", "gt": "greater than {value}",
+}
+
+
+def search_slot_label(slot: dict) -> str:
+    """One printed description of a one-per-description search, in words a
+    dialog can put on a slot: "a creature card", "a noncreature, nonland card",
+    "a Plains land card".
+
+    *slot* is in ``search_matches``' own vocabulary (``card_type`` /
+    ``exclude_types`` / ``restrictions``), which is what the engine tests a
+    card against and nothing a player reads. This is presentation only — the
+    words are assembled from the keys that predicate honours, in the order a
+    card prints them (supertype, colour, subtype, type), and a key this does
+    not know adds nothing rather than a guess, so the label can say less than
+    the slot tests and never more.
+    """
+    restrictions = slot.get("restrictions") or {}
+    words: list[str] = []
+    excluded = [f"non{name}" for name in slot.get("exclude_types") or ()]
+    if excluded:
+        words.append(", ".join(excluded))
+    words.extend(str(word) for word in restrictions.get("supertypes") or ())
+    colors = [
+        _SEARCH_COLOR_WORDS.get(str(symbol).upper(), str(symbol))
+        for symbol in restrictions.get("any_colors") or ()
+    ]
+    if colors:
+        words.append(" or ".join(colors))
+    words.extend(str(word).capitalize() for word in restrictions.get("subtypes") or ())
+    card_type = slot.get("card_type", "any")
+    types = card_type if isinstance(card_type, (list, tuple)) else (card_type,)
+    types = [str(name) for name in types if name and name != "any"]
+    if types:
+        words.append(" or ".join(types))
+    words.append("card")
+    label = " ".join(words)
+    if restrictions.get("named"):
+        label += f" named {restrictions['named']}"
+    mana_value = restrictions.get("mana_value")
+    if isinstance(mana_value, dict) and mana_value.get("op") in _SEARCH_COMPARISON_WORDS:
+        label += " with mana value " + _SEARCH_COMPARISON_WORDS[mana_value["op"]].format(
+            value=mana_value.get("value")
+        )
+    article = "an" if label[:1].lower() in "aeiou" else "a"
+    return f"{article} {label}"
+
+
 @prompt_renderer("search_library")
 def _search_library(ctx: PromptContext, choices: list) -> dict:
     """The cards the search may look at, and which of them it may find.
@@ -198,6 +250,12 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     destinations = list(choice.data.get("destinations") or ())
     payload = {
         "caster_seat": choice.player_index,
+        # **Whose** zones these are, which is not always the seat choosing:
+        # Guided Passage's opponent picks out of the caster's library, and the
+        # cards go to that library's owner's hand. The dialog said "your
+        # library" and "your hand" to whoever was asked.
+        "zone_seat": ctx.game.players.index(caster),
+        "zone_owner_name": caster.name,
         "count": choice.data["count"],
         "card_type": choice.data["card_type"],
         "card_name": choice.data.get("card_name", ""),
@@ -221,10 +279,16 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
             [ctx.serialize_card(card) for card in caster.library]
             if "library" in zones else []
         ),
+        # Asked the way the resolver asks (``_resolve_search_library_picks``):
+        # with the game and the answering seat, so a colour or a creature type
+        # a static gives a card outside the battlefield (Celestial Dawn,
+        # Conspiracy) is in this list exactly when the answer would be taken.
         "legal_indices": (
             [
                 index for index, card in enumerate(caster.library)
-                if search_matches(card, choice.data)
+                if search_matches(
+                    card, choice.data, game=ctx.game, owner=choice.player_index
+                )
             ]
             if "library" in zones else []
         ),
@@ -239,6 +303,12 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         payload["destinations"] = destinations
         payload["tapped"] = list(choice.data.get("tapped") or ())
         payload["up_to"] = bool(choice.data.get("up_to"))
+        # CR 701.23d: how many this answer **must** name — the engine's own
+        # floor, which is 0 for "up to" and for a search nothing can answer.
+        # Sent so the dialog can hold its confirm (and withhold "fail to
+        # find") until the answer is one the resolver will take, instead of
+        # sending an under-find to be refused whole.
+        payload["min_picks"] = ctx.game._search_floor(choice)
     # "a land card **of each basic land type**" (Gaea's Balance); "a creature
     # card, a land card, and a noncreature, nonland card" (Guided Passage). One
     # find per printed description. `legal_indices` is the union of them, which
@@ -246,16 +316,45 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
     # together are not an answer — so the descriptions ride beside it, in the
     # engine's own words, for a dialog to label its picks with. Additive like
     # everything else here: the engine checks the answer whole either way.
+    #
+    # Each description also says **which cards answer it** and what to call
+    # it. Which description a pick fills is not readable off the union — a
+    # Tropical Island answers the Forest slot and the Island slot — so a dialog
+    # that wants to refuse a second creature has to be told per slot, by the
+    # one predicate the resolver assigns with (``slot_assignment``).
     described = search_slots(choice.data)
     if described:
-        payload["one_of_each"] = [dict(slot) for slot in described]
+        def _answers(slot: dict, cards) -> list[int]:
+            return [
+                index for index, card in enumerate(cards)
+                if search_matches(
+                    card, slot, game=ctx.game, owner=choice.player_index
+                )
+            ]
+
+        payload["one_of_each"] = [
+            {
+                **dict(slot),
+                "label": search_slot_label(slot),
+                "legal_indices": (
+                    _answers(slot, caster.library) if "library" in zones else []
+                ),
+                **(
+                    {"legal_graveyard_indices": _answers(slot, caster.graveyard)}
+                    if "graveyard" in zones else {}
+                ),
+            }
+            for slot in described
+        ]
     if "graveyard" in zones:
         payload["graveyard_cards"] = [
             ctx.serialize_card(card) for card in caster.graveyard
         ]
         payload["legal_graveyard_indices"] = [
             index for index, card in enumerate(caster.graveyard)
-            if search_matches(card, choice.data)
+            if search_matches(
+                card, choice.data, game=ctx.game, owner=choice.player_index
+            )
         ]
     return payload
 
@@ -508,21 +607,42 @@ def _trigger_target(ctx: PromptContext, choices: list) -> dict:
     client cannot tell them apart by which fields happen to be filled in. A
     player carries a seat and no id; a permanent carries both, because the id is
     the identity and the seat is where to draw the highlight.
+
+    …or a **spell** ("When this creature enters, counter target spell", Mystic
+    Snake). A spell has no id, so a ``stack`` candidate carries its position in
+    the stack as the client is shown it — ``stack_index``, topmost being 0, the
+    convention a cast's ``target_stack_index`` already uses — read off the
+    stack as it stands now rather than as it stood when the prompt was armed.
+    The answer is checked against the object, not the number
+    (``Game.trigger_target_stack_item``).
     """
     choice = choices[0]
+    depth = len(ctx.game.stack)
+    positions = {id(item): position for position, item in enumerate(ctx.game.stack)}
+    candidates = []
+    for target in choice.data.get("targets") or ():
+        if target.get("kind") == "stack":
+            position = positions.get(id(target.get("stack_item")))
+            if position is None:
+                continue
+            candidates.append({
+                "kind": "stack",
+                "stack_index": depth - 1 - position,
+                "seat": target.get("seat"),
+                "name": target.get("name"),
+            })
+            continue
+        candidates.append({
+            "kind": target.get("kind", "permanent"),
+            "seat": target.get("seat"),
+            "index": target.get("permanent_index"),
+            "id": target.get("permanent_id"),
+            "name": target.get("name"),
+        })
     payload = {
         "player_seat": choice.player_index,
         "card_name": choice.data.get("card_name", ""),
-        "candidates": [
-            {
-                "kind": target.get("kind", "permanent"),
-                "seat": target.get("seat"),
-                "index": target.get("permanent_index"),
-                "id": target.get("permanent_id"),
-                "name": target.get("name"),
-            }
-            for target in choice.data.get("targets") or ()
-        ],
+        "candidates": candidates,
     }
     # "Up to two target creatures" (Basri's Acolyte, Cho-Arrim Bruiser): how
     # many the answer may name. Sent for ``modal_mode_targets``' reason — the
