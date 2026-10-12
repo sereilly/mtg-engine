@@ -217,12 +217,19 @@ class OracleInstructionsMixin:
         )
         state_machine.run(instruction)
 
-    def _apply_cast_triggers(self, caster_index: int, card: CardDefinition) -> None:
+    def _apply_cast_triggers(
+        self, caster_index: int, card: CardDefinition, item=None,
+    ) -> None:
         """Fire triggers that respond to this spell's *controller* casting it.
 
         Announced on the event bus rather than looked up by card name: the
         oracle compiler already recognizes these conditions, so a card written
         "whenever you cast an enchantment spell" needs no registry entry.
+
+        *item* is the spell's own stack object, and it rides every event whose
+        trigger may act on **that spell** as ``cast_item`` — see
+        ``handlers._common.triggering_spell`` for why the card beside it cannot
+        say which spell that is.
         """
         # "When **you cast this spell**, counter it unless you sacrifice a land."
         # (Mana Vortex.) CR 603.6d: the ability is on the object being cast and
@@ -233,7 +240,7 @@ class OracleInstructionsMixin:
         # directly above its own spell.
         emit(
             self, "self_cast", subject=card,
-            caster_index=caster_index, cast_card=card,
+            caster_index=caster_index, cast_card=card, cast_item=item,
         )
         emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
         # "When **you play a card**" (Juju Bubble). CR 701.18b: casting a card
@@ -262,9 +269,12 @@ class OracleInstructionsMixin:
             self, "you_cast_first_spell_each_turn",
             subject=card, caster_index=caster_index,
             # "Copy **that spell**": the effect needs the object, not just the
-            # fact of the cast, so the card rides the trigger's captured context
-            # and the handler finds it on the stack by identity.
-            cast_card=card,
+            # fact of the cast, so the spell's stack object rides the trigger's
+            # captured context and the handler finds it by identity. The card
+            # rides beside it for the readers that ask what the spell *is*
+            # (its name, its colours, its mana value) — it cannot say *which*
+            # spell, because every copy of a card is one ``CardDefinition``.
+            cast_card=card, cast_item=item,
         )
         # "Whenever an opponent casts their **second** spell each turn"
         # (Mangara). Round 123's ordinal asked by the other seat: the same
@@ -324,7 +334,7 @@ class OracleInstructionsMixin:
         # the flag and only a trigger printed with the verb reads it.
         emit(
             self, "spell_cast", subject=card, caster_index=caster_index,
-            cast_card=card, event_subject_player=caster_index,
+            cast_card=card, cast_item=item, event_subject_player=caster_index,
             kicked=bool(item is not None and kicked(card, item.choices)),
         )
         # …and the other thing a cast can do to the board: end a continuous
@@ -369,7 +379,7 @@ class OracleInstructionsMixin:
             targeted_seats, targeted_ids = spell_targets(self, item)
         emit(
             self, "opponent_casts_spell", subject=card, caster_index=caster_index,
-            cast_from_zone=cast_from_zone, cast_card=card,
+            cast_from_zone=cast_from_zone, cast_card=card, cast_item=item,
             event_subject_player=caster_index,
             targeted_seats=targeted_seats, targeted_permanent_ids=targeted_ids,
         )

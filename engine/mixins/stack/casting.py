@@ -1915,6 +1915,20 @@ class SpellCastingMixin:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)
 
+        # …and a payment the caster *named* is the payment, or the cast is
+        # illegal (CR 601.2h: no partial payment, no unpayable one). Below the
+        # gate above so a board that cannot pay at all says so first, and
+        # beside it for the same reason: nothing has been spent.
+        unpayable = self._named_cast_cost_refusal(
+            caster_index, card, cast_costs,
+            cost_permanent_ids=cost_permanent_ids,
+            cost_permanent_index=cost_permanent_index,
+            x_value=resolved_x_value, taken=optional_paid,
+        )
+        if unpayable is not None:
+            self.log.append(unpayable)
+            return SimulationResult(card.name, False, classification.effect_kind, unpayable)
+
         # The announced alternative cost, checked in the same step and for the
         # same rule (CR 601.2h). Below the additional costs only in source
         # order; nothing between the two spends anything, so a refusal from
@@ -2271,7 +2285,7 @@ class SpellCastingMixin:
             self._apply_spell_cast_any_triggers(
                 caster_index, card, from_zone, item=spell_item
             )
-            self._apply_cast_triggers(caster_index, card)
+            self._apply_cast_triggers(caster_index, card, item=spell_item)
             # "An opponent chooses one —" (CR 700.2e): the other player chooses
             # "when the spell's controller normally would", which is CR 601.2b.
             # Armed here rather than earlier because CR 601.2i finishes the
@@ -2540,6 +2554,174 @@ class SpellCastingMixin:
                         f"{card.name} can't be cast: {shortfall} "
                         f"for its additional cost (CR 601.2h)"
                     )
+        return None
+
+    @staticmethod
+    def _chosen_cast_cost_demands(
+        costs: tuple[AdditionalCost, ...],
+        *,
+        x_value: int | None,
+        taken: dict[str, int] | None,
+    ) -> "list[tuple[str, AdditionalCost, int]]":
+        """Every chosen-permanent price this cast charges, as ``(verb, cost,
+        how many)`` in the order :meth:`_pay_additional_costs` collects them.
+
+        One list for the gate that checks a named payment and the payment that
+        takes it, so the two cannot count different prices: an offer nobody
+        took is not in it (CR 601.2b), and an X is the announced one
+        (CR 107.3a). "Sacrifice **all** permanents you control" is not in it
+        either — a quantifier leaves nothing to choose.
+        """
+        demands: list[tuple[str, AdditionalCost, int]] = []
+        for cost in costs:
+            if not optional_cost_taken(cost, taken):
+                continue
+            if cost.exile_filter is not None:
+                demands.append(("exile", cost, 1))
+            if cost.sacrifice_filter is not None:
+                demands.append(("sacrifice", cost, max(1, cost.sacrifice_count)))
+            if cost.return_filter is not None:
+                demands.append(("return", cost, cost.returned_count(x_value)))
+        return demands
+
+    def _named_cast_cost_payers(
+        self,
+        caster_index: int,
+        cost_permanent_ids: "list[int] | None",
+        cost_permanent_index: "int | None",
+    ) -> "list[Permanent | None]":
+        """Whom the caster named to pay, in the order they named them; ``None``
+        stands for a name that finds no permanent.
+
+        Two channels because a counted cost needs several names and
+        ``cost_permanent_index`` can carry one: the id list is the channel
+        every chosen cost permanent arrives on for an activation, and the
+        single slot — counted into the **caster's** battlefield — is what every
+        caller written before a counted cast cost existed still sends. The ids
+        win where both arrive, which is what the wire sends for one click.
+        """
+        named: "list[Permanent | None]" = [
+            self.permanent_by_id(permanent_id) if isinstance(permanent_id, int) else None
+            for permanent_id in (cost_permanent_ids or ())
+            if permanent_id is not None
+        ]
+        if not named and isinstance(cost_permanent_index, int) and not isinstance(
+            cost_permanent_index, bool
+        ):
+            named.append(
+                self.permanent_at(self.players[caster_index], cost_permanent_index)
+            )
+        return named
+
+    def _named_cast_cost_refusal(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        costs: tuple[AdditionalCost, ...],
+        *,
+        cost_permanent_ids: "list[int] | None",
+        cost_permanent_index: "int | None",
+        x_value: int | None = None,
+        taken: dict[str, int] | None = None,
+    ) -> str | None:
+        """Why the permanents the caster **named** to pay *card*'s additional
+        costs cannot pay them, or None.
+
+        CR 601.2h: "Partial payments are not allowed. Unpayable costs can't be
+        paid" — and CR 601.2e sends a cast that cannot be completed as proposed
+        back to the moment before it. A caster who names what they will
+        sacrifice, exile or return has *announced* that payment; if what they
+        named cannot make it, the cast is illegal. It is not a different cast
+        paid with something else.
+
+        The cast-side twin of ``_named_cost_refusal`` (the activation path's,
+        which is CR 601.2h reached through CR 602.2b). Every charger in
+        :meth:`_pay_additional_costs` honoured a named permanent "where it is
+        legal" and otherwise took ``default_sacrifice_pick`` — right for a seat
+        that named nothing and wrong for one that did. Diabolic Intent ("…,
+        sacrifice a creature") told to sacrifice a Forest sacrificed a
+        creature; Gaea's Balance ("…, sacrifice five lands") told to sacrifice
+        four lands and a creature sacrificed five lands; a creature named on
+        the other side of the table cost its caster one of their own. All 43
+        spells in the pool whose additional cost hands its payer a choice did
+        it, the eleven kicker and buyback ones included.
+
+        Asked beside ``_unpayable_additional_cost`` and before anything is
+        spent, over the same candidate lists the payment claims from, in the
+        payment's own order:
+
+        * a name that finds no permanent, or a permanent no price of this cast
+          could take, refuses;
+        * so does a permanent named twice — one creature is not two;
+        * so does a list **shorter** than a counted price ("five lands", an
+          announced X of Swamps). Topping it up from the default is the same
+          substitution as replacing it: the caster pays with a land they did
+          not name;
+        * and so does a list longer than the cast charges.
+
+        A cast that names **nobody** is not asked — every price then takes its
+        deterministic default, the headless convention the AI and the test
+        corpus stand on. Nor is a cast that charges no chosen permanent at all
+        (an offer declined, a spell with no such cost): a stray cost field
+        there names nothing and substitutes nothing.
+        """
+        demands = self._chosen_cast_cost_demands(costs, x_value=x_value, taken=taken)
+        if not demands:
+            return None
+        named = self._named_cast_cost_payers(
+            caster_index, cost_permanent_ids, cost_permanent_index
+        )
+        if not named:
+            return None
+        claimable = [
+            (verb, wanted, self._additional_cost_candidates(caster_index, cost, giving_up=verb))
+            for verb, cost, wanted in demands
+        ]
+        seen: list[Permanent] = []
+        for found in named:
+            if found is None:
+                return (
+                    f"{card.name} can't be cast: a permanent named to pay its "
+                    f"additional cost is not on the battlefield (CR 601.2h)"
+                )
+            # By identity: `in` compares Permanents by value and would accept a
+            # look-alike on the wrong battlefield.
+            if not any(
+                found is option for _verb, _wanted, options in claimable for option in options
+            ):
+                return (
+                    f"{card.name} can't be cast: {found.card.name} cannot pay "
+                    f"its additional cost (CR 601.2h)"
+                )
+            if any(found is earlier for earlier in seen):
+                return (
+                    f"{card.name} can't be cast: {found.card.name} is named "
+                    f"twice and can pay its additional cost once (CR 601.2h)"
+                )
+            seen.append(found)
+        # Claimed the way the payment claims them: each price takes, of what
+        # is still unclaimed, the names its own candidates contain.
+        unclaimed = list(named)
+        for verb, wanted, options in claimable:
+            claimed = [
+                found for found in unclaimed
+                if any(found is option for option in options)
+            ][:wanted]
+            if len(claimed) < wanted:
+                return (
+                    f"{card.name} can't be cast: its additional cost takes "
+                    f"{wanted} permanent(s) to {verb} and {len(claimed)} "
+                    f"were named (CR 601.2h)"
+                )
+            unclaimed = [
+                found for found in unclaimed
+                if not any(found is taken_one for taken_one in claimed)
+            ]
+        if unclaimed:
+            return (
+                f"{card.name} can't be cast: {unclaimed[0].card.name} is named "
+                f"beyond what its additional cost takes (CR 601.2h)"
+            )
         return None
 
     def _discard_cost_payers(
@@ -2930,7 +3112,10 @@ class SpellCastingMixin:
         refusal with nothing spent, never a slide onto a legal neighbour; so is
         an id named twice, or more ids than the cost takes. Fewer than the cost
         takes is a partial naming, and the payment fills the rest by the
-        default rule, exactly as the counted additional sacrifice does.
+        default rule. (The counted *additional* cost did the same until
+        ``_named_cast_cost_refusal``, which refuses a short list — CR 601.2h
+        allows no partial payment. This path still tops one up; it is the same
+        question and a separate change.)
         """
         if not named_ids:
             return [], None
@@ -3572,6 +3757,36 @@ class SpellCastingMixin:
         discarded_cards: list[CardDefinition] = []
         # The named discards, in the order they were named; each pays one card.
         named_discards = list(cost_hand_cards or ())
+        # The permanents the caster named, each claimed once by the first
+        # price below whose candidates contain it. ``_named_cast_cost_refusal``
+        # has already held a named list to exactly what these prices take, so
+        # a default pick beneath a named one is reached only where the board
+        # changed between the gate and here — the half-step this engine cannot
+        # rewind.
+        named_payers: list = [
+            found for found in self._named_cast_cost_payers(
+                caster_index, cost_permanent_ids, cost_permanent_index
+            )
+            if found is not None
+        ]
+
+        def claim(candidates: list) -> "Permanent":
+            """The next named payer *candidates* contains, else the default."""
+            nonlocal named_payers
+            # `in` compares Permanents by value and would match a look-alike;
+            # membership is by identity.
+            chosen = next(
+                (
+                    claimed for claimed in named_payers
+                    if any(perm is claimed for perm in candidates)
+                ),
+                None,
+            )
+            if chosen is None:
+                return self.default_sacrifice_pick(candidates)
+            named_payers = [perm for perm in named_payers if perm is not chosen]
+            return chosen
+
         for cost in costs:
             # CR 601.2b's *optional* price, collected only when the
             # announcement took it -- the same reader ``_unpayable_additional_cost``
@@ -3613,18 +3828,11 @@ class SpellCastingMixin:
                     caster_index, cost, giving_up="exile"
                 )
                 if candidates:
-                    named = (
-                        self.permanent_at(caster, cost_permanent_index)
-                        if isinstance(cost_permanent_index, int)
-                        else None
-                    )
-                    # `in` compares Permanents by value and would match a
-                    # look-alike; membership is by identity.
-                    chosen = (
-                        named
-                        if any(perm is named for perm in candidates)
-                        else self.default_sacrifice_pick(candidates)
-                    )
+                    # Named by id or by the legacy slot, like every price
+                    # here. This charger read the slot alone, so a creature
+                    # named by id — the only way the wire names one — was not
+                    # read at all and the default went instead.
+                    chosen = claim(candidates)
                     owner_index = self.owner_index_of(chosen)
                     exiled_card = chosen.card
                     self.remove_from_battlefield(chosen)
@@ -3636,25 +3844,10 @@ class SpellCastingMixin:
                         f"{caster.name} exiled {exiled_card.name} to cast {card.name}"
                     )
             if cost.sacrifice_filter is not None:
-                # Whom the payer named, in the order they named them. Two
-                # channels because a counted cost needs two names and
-                # `cost_permanent_index` can only carry one: the id list is the
-                # same channel every chosen cost permanent arrives on for an
-                # activation, and the single index is what every caller written
-                # before a counted cast cost existed still sends.
-                named: list = [
-                    found
-                    for found in (
-                        self.permanent_by_id(permanent_id)
-                        for permanent_id in (cost_permanent_ids or ())
-                        if isinstance(permanent_id, int)
-                    )
-                    if found is not None
-                ]
-                if not named and isinstance(cost_permanent_index, int):
-                    at_index = self.permanent_at(caster, cost_permanent_index)
-                    if at_index is not None:
-                        named.append(at_index)
+                # Whom the payer named, in the order they named them
+                # (``_named_cast_cost_payers`` says why there are two
+                # channels).
+                #
                 # Re-enumerated per victim, never sliced off one list: each
                 # sacrifice removes a permanent, and a list held across that
                 # holds an object the board no longer has.
@@ -3662,18 +3855,7 @@ class SpellCastingMixin:
                     candidates = self._additional_cost_candidates(caster_index, cost)
                     if not candidates:
                         break  # gated above; a board that changed since is a no-op
-                    # `in` compares Permanents by value and would match a
-                    # look-alike; membership is by identity.
-                    chosen = next(
-                        (
-                            claimed for claimed in named
-                            if any(perm is claimed for perm in candidates)
-                        ),
-                        None,
-                    )
-                    if chosen is None:
-                        chosen = self.default_sacrifice_pick(candidates)
-                    named = [perm for perm in named if perm is not chosen]
+                    chosen = claim(candidates)
                     name = chosen.card.name
                     if self.sacrifice_permanent(chosen) is not None:
                         # The **first**, which is "the sacrificed creature" a
@@ -3702,18 +3884,7 @@ class SpellCastingMixin:
                     )
                     if not candidates:
                         break  # gated above; a board that changed since is a no-op
-                    chosen = next(
-                        (
-                            claimed for claimed in (
-                                self.permanent_by_id(permanent_id)
-                                for permanent_id in (cost_permanent_ids or ())
-                                if isinstance(permanent_id, int)
-                            )
-                            if claimed is not None
-                            and any(perm is claimed for perm in candidates)
-                        ),
-                        None,
-                    ) or self.default_sacrifice_pick(candidates)
+                    chosen = claim(candidates)
                     name = chosen.card.name
                     return_permanent_to_owners_hand(self, chosen, caster)
                     self.log.append(

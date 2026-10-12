@@ -1450,14 +1450,14 @@ class DeclareBlockersStepMixin:
             if toll and plan_payment(
                 self.players[blocker_seat].mana_pool,
                 untapped_mana_lands(self.controlled_by(blocker_seat)),
-                toll,
+                toll, payer=self.players[blocker_seat],
             ) is None:
                 return False
             for cost in self._block_mana_costs_of(blocker, attacker):
                 if plan_payment(
                     self.players[blocker_seat].mana_pool,
                     untapped_mana_lands(self.controlled_by(blocker_seat)),
-                    cost,
+                    cost, payer=self.players[blocker_seat],
                 ) is None:
                     return False
             # "…unless you tap an untapped creature you control not declared as
@@ -1787,7 +1787,7 @@ class DeclareBlockersStepMixin:
         return total, plan_payment(
             defender.mana_pool,
             untapped_mana_lands(self.controlled_by(controller_index)),
-            total,
+            total, payer=defender,
         )
 
     def _pay_block_declaration_mana(

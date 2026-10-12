@@ -2200,6 +2200,143 @@ def test_w2g2_a_seat_nobody_asks_still_takes_the_topmost_opposing_spell(set_pool
 
 # ==== W2G4 ============================================================
 # W2G4's tests go between this line and the "end W2G4" line.
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import _nosick as _w2g4_nosick
+
+
+def _w2g4_creature_table(set_pool, catalog_by_name, mine, *, interactive=(0,)):
+    """Seat 0 controls *mine* (Apocalypse cards first, the pool otherwise) at
+    its main phase. Returns ``(game, seat 0's permanents)``."""
+    def card(name):
+        return set_pool("APC").get(name) or catalog_by_name[name]
+
+    board = [_w2g4_nosick(_w2g4_Permanent(card=card(name))) for name in mine]
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(name="Keeper", battlefield=board,
+                          library=[catalog_by_name["Forest"]] * 6),
+        _w2g4_PlayerState(name="Other", library=[catalog_by_name["Forest"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._settle()
+    return game, board  # W2G4: the creature table
+
+
+# -- item 4: what holds an ability on the stack while a colour is chosen ------
+
+
+def test_w2g4_spiritmongers_colour_ability_is_held_until_the_colour_is_named(
+    set_pool, catalog_by_name
+):
+    """"{G}: This creature becomes the color of your choice until end of
+    turn." On the paths a seat is on — ``activate_permanent_ability`` (which
+    settles) and ``pass_priority`` — a resolution that stops to ask keeps its
+    object on the stack (CR 608.2), the game waits (CR 117.3b), and the log
+    does not say "resolved" until the answer arrives."""
+    game, (monger,) = _w2g4_creature_table(set_pool, catalog_by_name, ["Spiritmonger"])
+    mark = len(game.log)
+
+    assert game.activate_permanent_ability(0, "Spiritmonger", ability_index=1).supported
+
+    (held,) = game.stack
+    assert held.is_ability and held.resolution_held
+    (owed,) = game.pending_choices
+    assert owed.kind == "color_choice" and owed.data["_stack_item"] is held
+    assert game.waiting_prompt() is owed and game.effect_suspended
+    assert game.log[mark:] == [
+        "Spiritmonger ability added to stack",
+        "Spiritmonger: Keeper chooses a color",
+        "Spiritmonger ability is resolving, awaiting a choice",
+    ]
+    assert monger.effective_colors == {"B", "G"}
+
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
+
+    assert monger.effective_colors == {"R"}
+    assert game.stack == [] and game.waiting_prompt() is None
+    assert game.log[-1] == "Spiritmonger finished resolving"
+
+
+def test_w2g4_a_bare_resolve_top_of_stack_is_the_headless_form_and_says_so(
+    set_pool, catalog_by_name
+):
+    """The observation W1G1 made, pinned as what it is. ``resolve_top_of_stack``
+    called with no ``pause_for_choices`` is the headless form — "the object
+    resolves and pops immediately and the caller drains the prompts" — so with
+    an interactive seat it logs "ability resolved" and empties the stack with
+    the colour still owed. Nothing can be done in the gap: the prompt holds the
+    game and the effect is applied by the answer. No seat is ever on this
+    path; the two a seat is on are the test above."""
+    game, (monger,) = _w2g4_creature_table(set_pool, catalog_by_name, ["Spiritmonger"])
+    assert game.queue_permanent_ability(0, "Spiritmonger", ability_index=1).supported
+
+    game.resolve_top_of_stack()
+
+    assert game.stack == [] and game.log[-1] == "Spiritmonger ability resolved"
+    (owed,) = game.pending_choices
+    assert "_stack_item" not in owed.data
+    assert game.waiting_prompt() is owed, "and the game waits all the same"
+    assert monger.effective_colors == {"B", "G"}
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
+    assert monger.effective_colors == {"R"}
+
+
+# -- item 5: a gift names its own seat ----------------------------------------
+
+
+def test_w2g4_mournful_zombie_gives_its_life_to_the_seat_that_paid_for_it(
+    set_pool, catalog_by_name
+):
+    """"{W}, {T}: Target player gains 1 life." The AI named an opponent — the
+    policy's list of gift kinds said ``gain_life``, a name nothing compiles to,
+    so the ability fell through to "aim it at them". It proposes its own seat
+    now, and the activation it proposes gains that seat the life."""
+    from engine.ai_policy import choose_activation_action
+
+    game, (zombie,) = _w2g4_creature_table(
+        set_pool, catalog_by_name, ["Mournful Zombie"], interactive=(),
+    )
+    action = choose_activation_action(game, 0)
+
+    assert action is not None and action.permanent_name == "Mournful Zombie"
+    assert action.target_player_index == 0 and action.target_permanent_index is None
+    assert game.activate_permanent_ability(
+        0, "Mournful Zombie", target_player_index=action.target_player_index,
+    ).supported
+    assert [player.life for player in game.players] == [21, 20]
+    assert zombie.tapped
+    assert "Keeper gained 1 life from Mournful Zombie (20 -> 21)" in game.log
+
+
+def test_w2g4_mournful_zombie_in_a_simulated_game_never_heals_the_other_seat():
+    """The same through whole games, where it was first seen: every "gained 1
+    life from Mournful Zombie" line names the seat whose activation it follows.
+    The card is pinned into both decks; the test asks that it was activated at
+    all, not how often."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    gains = []
+    for seed in (7, 11, 1337):
+        report = run_ai_simulation(
+            cards_path=[manifest_set_path("APC", include_measured=True)],
+            games=3, seed=seed, max_turns=18, required_cards=["Mournful Zombie"],
+        )
+        assert report.ok, report.issues[:3]
+        activator = None
+        for line in report.log_lines:
+            if " activate Mournful Zombie" in line:
+                activator = line.split(" activate ")[0].split()[-1]
+            elif "gained 1 life from Mournful Zombie" in line:
+                gains.append((activator, line.split()[0]))
+        if gains:
+            break
+
+    assert gains, "no seed activated a Mournful Zombie"
+    assert all(activator == gainer for activator, gainer in gains), gains
 
 # ==== end W2G4 ========================================================
 

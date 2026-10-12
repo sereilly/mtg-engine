@@ -14,7 +14,8 @@ from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
 from ..resumption import run_resumable
-from ._common import _card_matches_filter, count_from_payload, resolve_amount
+from ._common import (_card_matches_filter, count_from_payload, resolve_amount,
+                      triggering_spell)
 from .registry import effect_handler
 
 if TYPE_CHECKING:
@@ -29,19 +30,19 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
     (Double Vision.)
 
     "That spell" is the one the trigger fired on. Located on the stack by the
-    card the event recorded — not by taking the topmost instant or sorcery,
-    which is the same object only while nothing has been cast in response, and a
-    different one the moment something has.
+    object the event recorded (``triggering_spell``) — not by taking the
+    topmost instant or sorcery, which is the same object only while nothing has
+    been cast in response, and not by the card it was cast from, which every
+    other copy of that card on the stack shares.
 
     A spell that has already left the stack is copied by nothing: CR 707.10
     copies an object, and by then there is none. That is the honest outcome
-    rather than reaching for whatever else is up there.
+    rather than reaching for whatever else is up there — which the card lookup
+    did: with the first Bolt of the turn countered in response, the copy was of
+    an opponent's Bolt underneath it.
     """
     caster = context.caster
-    cast_card = (context.trigger_context or {}).get("cast_card")
-    copied = next(
-        (item for item in reversed(game.stack) if item.card is cast_card), None
-    )
+    copied = triggering_spell(game, context)
     if copied is None:
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
@@ -623,10 +624,9 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
             # the trigger fired on, found on the stack by identity — CR 603.3
             # puts the trigger *above* it, so the stack top is this ability's
             # own object and everything cast in response sits between them.
-            cast_card = (context.trigger_context or {}).get("cast_card")
-            chosen = next(
-                (item for item in game.stack if item.card is cast_card), None
-            )
+            # The identity is the stack object's, not its card's
+            # (``triggering_spell``): the second of two Bolts is not the first.
+            chosen = triggering_spell(game, context)
             if chosen is None:
                 # Countered, exiled or already resolved while the trigger waited
                 # (CR 608.2b's shape: the object is gone, the rest happens).

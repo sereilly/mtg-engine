@@ -642,6 +642,57 @@ _SEAT_DENIAL_KINDS = frozenset({"discard_target_cards"})
 _SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
 
 
+#: Kinds whose effect on the **player** they target is a gift and whose
+#: category cannot say so: ``life`` holds "gains life" beside "loses life" and
+#: "exchange life totals", and ``zones`` holds a draw beside a discard.
+#: (``prevention`` answers for a shield by itself — ``_OWN_CATEGORIES``.)
+_SEAT_GIFT_KINDS = frozenset({"target_gains_life", "draw_target_cards"})
+
+
+def ability_seat_side(instruction: OracleInstruction | None) -> str | None:
+    """Whose **seat** an effect that names a player — or "any target" — should
+    name: "you", "opponent", or None when the compiled program does not say.
+
+    :func:`ability_target_side` is the question for an object; this is the one
+    for a face. The policy answered it with a list of three instruction kinds
+    (``_choose_target_for_instruction``), two of which no handler has —
+    ``gain_life`` and ``prevent_damage`` are what those effects were called
+    before the grammar lowered them to ``target_gains_life`` and
+    ``grant_prevention_shield``. A kind name nothing compiles is a claim about
+    the pool that expired: every "target player gains N life" ability (Mournful
+    Zombie, Tonic Peddler) and every "prevent the next N damage that would be
+    dealt to any target" one (Samite Healer and eighteen more) fell through to
+    the default and was aimed at an opponent.
+
+    Read step by step with the wrappers opened, over the steps whose target can
+    be a player's face (``_SEAT_SPEC_KINDS``), the denial winning where steps
+    differ — :func:`ability_target_side`'s rule. A printed "target
+    **opponent**" is the card's own answer and comes first: "You draw a card
+    and target opponent gains 3 life" (Armistice) names an opponent however
+    much of a gift the life is.
+    """
+    if instruction is None:
+        return None
+    sides: set[str | None] = set()
+    for step in _effect_steps(instruction):
+        targets = (step.payload or {}).get("targets")
+        if not isinstance(targets, dict) or targets.get("kind") not in _SEAT_SPEC_KINDS:
+            continue
+        if targets.get("opponents_only"):
+            sides.add("opponent")
+        elif step.kind in _SEAT_GIFT_KINDS:
+            sides.add("you")
+        elif step.kind in _SEAT_DENIAL_KINDS:
+            sides.add("opponent")
+        else:
+            sides.add(_effect_side(step))
+    if "opponent" in sides:
+        return "opponent"
+    if "you" in sides:
+        return "you"
+    return None
+
+
 def entry_trigger_seat_side(
     card: CardDefinition, optional_cost_payments: dict | None = None
 ) -> str | None:
@@ -1677,6 +1728,20 @@ class DividedShape:
     #: is the only choice it has, and a filter bounding that list to one
     #: player's board is the card making it.
     whole_board: bool = False
+    #: One side per printed target, for the division whose targets are **not
+    #: interchangeable** — "The next X damage that would be dealt to target
+    #: creature, planeswalker, or player this turn is dealt to **another**
+    #: target … instead" (Captain's Maneuver): entry 0 is spared and entry 1
+    #: takes what it was spared. Empty for every other division in the pool,
+    #: whose targets all receive the same thing and so share :attr:`side`.
+    #:
+    #: Read off ``_SLOT_ROLE_SIDES``, the table the several-target channel
+    #: already answers "what does this kind do to each slot" from (Kor Chant is
+    #: this sentence with a chosen source), and only where the description
+    #: prints exactly that many targets. With one side for both ends the policy
+    #: announced two opposing objects: it shielded an opponent and sent the
+    #: damage to another thing of theirs.
+    slot_sides: tuple[str | None, ...] = ()
 
 
 def divided_shape(program, instructions=None) -> DividedShape | None:
@@ -1710,6 +1775,9 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
         side = "you" if sum(deltas) > 0 else "opponent" if sum(deltas) < 0 else None
     else:
         side = activation_target_side(instruction)
+    slot_sides = _SLOT_ROLE_SIDES.get(instruction.kind, ())
+    if described.get("target_count") != len(slot_sides):
+        slot_sides = ()
     return DividedShape(
         side=side,
         thresholded=category == "damage",
@@ -1717,6 +1785,7 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
             described.get("division") != CHOSEN
             and bool((described.get("filter") or {}).get("controller"))
         ),
+        slot_sides=slot_sides,
     )
 
 
@@ -1776,6 +1845,13 @@ _SLOT_ROLE_SIDES: dict[str, tuple[str | None, ...]] = {
     # permanent**" (Legerdemain). One is given and one is taken; two of the
     # caster's own is an exchange of nothing.
     "exchange_control_of_targets": ("you", "opponent"),
+    # "The next X damage that would be dealt to target creature, planeswalker,
+    # or player this turn is dealt to **another target** creature,
+    # planeswalker, or player instead" (Captain's Maneuver). Kor Chant's two
+    # ends without the chosen source, announced on the divided channel
+    # (``target_count: 2``) rather than the several-target one — so it is
+    # :func:`divided_shape` that reads this row, as ``DividedShape.slot_sides``.
+    "redirect_next_damage_between_targets_until_eot": ("you", "opponent"),
 }
 
 #: Steps that act on a recorded group (``permanents_from``) and whose category

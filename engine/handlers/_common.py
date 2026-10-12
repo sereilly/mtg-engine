@@ -2771,6 +2771,36 @@ def frozen_that_player_seat(game: Game, context: OracleExecutionContext) -> int 
     return None
 
 
+def triggering_spell(game: Game, context: OracleExecutionContext):
+    """The spell a cast trigger fired on, if it is still on the stack; else
+    ``None``.
+
+    "Whenever a player casts a spell, counter **it** unless that player pays
+    {3}." (Nether Void.) CR 603.3 puts the trigger on the stack above the spell
+    it is about, and by the time it resolves anything may sit between the two —
+    so the fire site freezes *which* spell (``cast_item``, the spell's own
+    stack object) and this finds it by identity.
+
+    **The card cannot answer.** ``cast_card`` rides the same event and three
+    handlers used to look for "the stack item whose card is this one". A deck
+    repeats one immutable ``CardDefinition`` per copy and both seats' decks are
+    built from one catalog, so two Lightning Bolts on the stack are two objects
+    with one card: Nether Void's trigger for the second Bolt armed its payment
+    against the first, and a trigger whose own spell had been countered in
+    response went on to counter a bystander that merely shared its card. Eight
+    of the pool's nine readers did the first and all nine the second. The same
+    reason ``counter_stack_ability`` finds "that ability" by
+    ``activated_ability_item`` rather than by its source.
+
+    ``None`` means the object is gone (CR 608.2b's shape), and a caller does
+    the rest of what it can — never the same thing to another spell.
+    """
+    cast_item = (context.trigger_context or {}).get("cast_item")
+    if cast_item is None:
+        return None
+    return next((item for item in game.stack if item is cast_item), None)
+
+
 def resolve_role_permanent(
     game: Game,
     context: OracleExecutionContext,

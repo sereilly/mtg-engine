@@ -757,7 +757,9 @@ class DeclareAttackersStepMixin:
             for land in untapped_mana_lands(self.controlled_by(controller))
             if not any(land is attacker for attacker in attackers)
         ]
-        return total, plan_payment(controller.mana_pool, available, total)
+        return total, plan_payment(
+            controller.mana_pool, available, total, payer=controller,
+        )
 
     def _pay_declaration_mana(
         self, controller_index: int, total: dict[str, int], plan
@@ -1171,7 +1173,7 @@ class DeclareAttackersStepMixin:
                     for land in untapped_mana_lands(self.controlled_by(attacker_seat))
                     if land is not attacker
                 ],
-                cost,
+                cost, payer=self.players[attacker_seat],
             ) is None:
                 return False
 

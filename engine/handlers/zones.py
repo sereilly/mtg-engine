@@ -1085,6 +1085,9 @@ def reveal_library_opponent_chooses(game: Game, instruction: OracleInstruction, 
         tapped=[False] * len(slots),
         card_name=card_name,
         record=context.results,
+        # The whole library was revealed two lines up, so which cards were
+        # chosen out of it is something every player watched.
+        finds_are_public=True,
     )
     game.log.append(
         f"{game.players[chooser].name} is choosing from {caster.name}'s library"
@@ -8464,6 +8467,10 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
         rest_order=payload.get("rest_order", "any"),
         rest_destination=payload.get("rest_destination", "library_bottom"),
         pick_destination=payload.get("pick_destination", "hand"),
+        # Whether the pile was shown to the table above (CR 701.20a), which is
+        # what lets the answer's log line name the card that was kept. Absent
+        # for a look, so those prompts carry exactly the data they always did.
+        **({"revealed": True} if payload.get("revealed") else {}),
         # "Put **two** of them into your hand" (Ancestral Memories): how many
         # picks are still owed. One is every other card in the family, and the
         # answer path re-arms the prompt while more are owed — see

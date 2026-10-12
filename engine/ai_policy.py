@@ -23,6 +23,7 @@ from .ai_valuation import (
     entry_trigger_target_side,
     entry_triggers_bought,
     ability_denies_its_target,
+    ability_seat_side,
     ability_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
@@ -3985,6 +3986,18 @@ def choose_divided_targets(
     # too small to fill the count is no legal announcement at all, which is what
     # `()` means here.
     exact = _card_divided_target_count(spec, x_value)
+    if exact is not None and len(shape.slot_sides) == exact:
+        # The targets are not interchangeable (Captain's Maneuver: the first is
+        # spared, the second takes the damage), so each is taken from the board
+        # its own slot names — `ai_valuation.DividedShape.slot_sides`. Which
+        # candidate on that board is this module's weight, and it is the one
+        # every divided spell has: the first the enumeration offers, a player's
+        # face where the printed noun admits one. So the caster's own face is
+        # what is spared and an opponent's is where the damage goes.
+        picked = _divided_slot_picks(candidates, shape.slot_sides, caster_index)
+        return [] if picked is None else [
+            (entry["seat"], entry.get("index")) for entry in picked
+        ]
     if exact is not None:
         return (
             [] if len(wanted) < exact
@@ -4008,6 +4021,28 @@ def choose_divided_targets(
         else (entry["seat"], entry.get("index"), share)
         for entry, share in zip(chosen, shares)
     ]
+
+
+def _divided_slot_picks(candidates, slot_sides, caster_index: int):
+    """One enumerated target per printed slot, each from the board its slot
+    names ("you" the caster's, "opponent" anybody else's, None either), no
+    target twice — or None when some slot has nothing to name, which is no
+    legal announcement (CR 601.2c) rather than one to fill from the wrong
+    board."""
+    picked: list = []
+    for side in slot_sides:
+        offered = [
+            entry for entry in candidates
+            if not any(entry is taken for taken in picked)
+            and (
+                side is None
+                or (_divided_candidate_seat(entry) == caster_index) == (side == "you")
+            )
+        ]
+        if not offered:
+            return None
+        picked.append(offered[0])
+    return picked
 
 
 def _card_divided_target_count(spec: dict, x_value: int | None) -> int | None:
@@ -5652,7 +5687,13 @@ def _choose_target_for_instruction(instruction: OracleInstruction, caster_index:
         # "Target creature you control" — the equip's creature is the
         # activator's own (CR 702.6a).
         return caster_index
-    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage"}:
+    # A gift names its own seat: "target player gains 3 life", "target player
+    # draws a card", "prevent the next 1 damage that would be dealt to any
+    # target". *Which* effects those are is `ai_valuation.ability_seat_side`'s
+    # reading of the compiled program — this line used to name three kinds, two
+    # of which nothing compiles, so a life gain and every shield went to an
+    # opponent.
+    if ability_seat_side(instruction) == "you":
         return caster_index
     # "deal_damage"/"destroy_target"/etc., and the fallback for any other
     # proactive effect: target an opponent (MVP heuristic, see

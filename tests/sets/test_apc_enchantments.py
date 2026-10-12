@@ -1297,6 +1297,112 @@ def test_w1g6_phyrexian_arena_draws_and_bleeds_on_its_controllers_upkeep(set_poo
 
 # ==== W2G4 ============================================================
 # W2G4's tests go between this line and the "end W2G4" line.
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import _nosick as _w2g4_nosick
+from tests.helpers import resolve_stack as _w2g4_resolve_stack
+
+
+def _w2g4_enchantment_table(set_pool, catalog_by_name, mine, *, their_hand, interactive=(0,)):
+    """Seat 0 controls *mine* (Apocalypse cards first, the pool otherwise) at
+    its main phase; seat 1 holds *their_hand*. Mana costs are not enforced
+    while the table is laid and the caller turns them on for what it charges."""
+    def card(name):
+        return set_pool("APC").get(name) or catalog_by_name[name]
+
+    board = [_w2g4_nosick(_w2g4_Permanent(card=card(name))) for name in mine]
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(name="Keeper", battlefield=board,
+                          library=[catalog_by_name["Forest"]] * 6),
+        _w2g4_PlayerState(name="Caster", hand=[card(name) for name in their_hand],
+                          library=[catalog_by_name["Forest"]] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._settle()
+    return game, board  # W2G4: the enchantment table
+
+
+def _w2g4_spells(game) -> list:
+    return [item for item in game.stack if not item.is_ability]  # W2G4: spells only
+
+
+# -- item 2: a cast trigger is about the spell that fired it ------------------
+
+
+def test_w2g4_ice_cave_prices_and_counters_the_spell_its_trigger_fired_on(
+    set_pool, catalog_by_name
+):
+    """"Whenever a player casts a spell, any other player may pay that spell's
+    mana cost. If a player does, counter the spell."
+
+    Two Fireballs are one card and two spells — one cast for X=1, one for X=3
+    in response. The top trigger is the second Fireball's: the price it offers
+    is {3}{R}, paying it taps all four lands, and the Fireball it counters is
+    the X=3 one. It used to find the first Fireball by its card: the offer was
+    {1}{R} and the spell countered was the wrong one.
+    """
+    game, board = _w2g4_enchantment_table(
+        set_pool, catalog_by_name,
+        ["Ice Cave", "Mountain", "Island", "Island", "Island"],
+        their_hand=["Fireball", "Fireball"],
+    )
+    lands = board[1:]
+    assert game.queue_from_hand(1, "Fireball", target_player_index=0, x_value=1).supported
+    assert game.queue_from_hand(1, "Fireball", target_player_index=0, x_value=3).supported
+    small, large = _w2g4_spells(game)
+    assert small.card is large.card and (small.x_value, large.x_value) == (1, 3)
+    assert [item.card.name for item in game.stack] == [
+        "Fireball", "Ice Cave", "Fireball", "Ice Cave",
+    ]
+    game.enforce_mana_costs = True
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+    (asked,) = [choice for choice in game.pending_choices if choice.kind == "optional_pay"]
+    assert asked.player_index == 0
+    assert asked.data["prompt"] == "Pay {3}{R} (Fireball's mana cost)?"
+    assert game.confirm_optional_pay(0, accept=True) is True
+
+    assert all(land.tapped for land in lands)
+    assert _w2g4_spells(game) == [small] and _w2g4_spells(game)[0] is small
+    assert "Fireball was countered by Ice Cave and moved to graveyard" in game.log
+
+    # The first Fireball's own trigger is still under it, and asks its own
+    # price; with every land tapped a yes buys nothing, and it resolves for 1.
+    game.resolve_top_of_stack(pause_for_choices=True)
+    (asked,) = [choice for choice in game.pending_choices if choice.kind == "optional_pay"]
+    assert asked.data["prompt"] == "Pay {1}{R} (Fireball's mana cost)?"
+    assert game.confirm_optional_pay(0, accept=False) is True
+    game.enforce_mana_costs = False
+    _w2g4_resolve_stack(game)
+    assert game.players[0].life == 19
+
+
+def test_w2g4_ice_cave_offers_nothing_once_its_spell_has_left_the_stack(
+    set_pool, catalog_by_name
+):
+    """The second Fireball is countered in response to its own Ice Cave
+    trigger. A price nobody can pay is an offer nobody is made (CR 118.6) — and
+    the first Fireball, which is the same card, is neither priced nor
+    countered in its place."""
+    game, board = _w2g4_enchantment_table(
+        set_pool, catalog_by_name,
+        ["Ice Cave", "Mountain", "Island", "Island", "Island"],
+        their_hand=["Fireball", "Fireball"],
+    )
+    game.queue_from_hand(1, "Fireball", target_player_index=0, x_value=1)
+    game.queue_from_hand(1, "Fireball", target_player_index=0, x_value=3)
+    small, large = _w2g4_spells(game)
+    game.enforce_mana_costs = True
+
+    game.counter_stack_object(large)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.pending_choices == []
+    assert _w2g4_spells(game)[0] is small and len(_w2g4_spells(game)) == 1
+    assert not any(land.tapped for land in board[1:])
 
 # ==== end W2G4 ========================================================
 

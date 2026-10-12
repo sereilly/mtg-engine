@@ -1771,7 +1771,7 @@ class LegalityMixin:
                 payable = plan_payment(
                     dict(caster.mana_pool),
                     untapped_mana_lands(self.controlled_by(caster_index)),
-                    wanted,
+                    wanted, payer=caster,
                 ) is not None
             offers.append({
                 "kind": "optional_cost",
@@ -1839,7 +1839,7 @@ class LegalityMixin:
                 required = dict(floor)
                 for symbol, amount in one.items():
                     required[symbol] = required.get(symbol, 0) + amount * times
-                if plan_payment(pool, lands, required) is not None:
+                if plan_payment(pool, lands, required, payer=caster) is not None:
                     payable = times
                     break
             offers.append({
@@ -1964,7 +1964,7 @@ class LegalityMixin:
                 required = dict(printed)
                 for symbol, amount in payment.items():
                     required[symbol] = required.get(symbol, 0) + amount
-                if plan_payment(pool, lands, required) is not None:
+                if plan_payment(pool, lands, required, payer=caster) is not None:
                     return x_value
         return 0
 

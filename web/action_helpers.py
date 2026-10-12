@@ -171,7 +171,21 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # And the same choice for a cost that eats more than one permanent
         # (Phyrexian Tribute): one index cannot name two victims, so the id list
         # the activation path has always forwarded is forwarded here too.
-        cost_permanent_ids=req.cost_permanent_ids,
+        #
+        # **A single ``cost_permanent_id`` travels as an id as well.** The
+        # request resolver turns it into a bare slot and writes no seat beside
+        # it, and the engine counts a cost slot into the *caster's*
+        # battlefield — so an id naming somebody else's creature arrived as
+        # whatever the caster held in that slot. The engine refuses a named
+        # payment that cannot pay (``_named_cast_cost_refusal``, CR 601.2h),
+        # and it can only refuse what it is told was named; the activation
+        # branch of ``web/actions.py`` forwards its cost id for this reason.
+        cost_permanent_ids=(
+            req.cost_permanent_ids
+            if req.cost_permanent_ids is not None
+            or getattr(req, "cost_permanent_id", None) is None
+            else [req.cost_permanent_id]
+        ),
         cost_hand_index=req.cost_hand_index,
         # …and the further cards of a "discard two cards" cost (Forbid's
         # buyback), on the activation path's field.

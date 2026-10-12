@@ -264,6 +264,14 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "Target land becomes the basic land type of your choice until end of
+        # turn. / **Draw a card.**" (Shimmering Mirage.) CR 608.2c follows the
+        # instructions in the order written, and the first is not done until
+        # the type is named: run ahead of the answer, the draw put the card in
+        # hand while its controller was still choosing. Jinx's delayed draw is
+        # the same step behind the same prompt, created early where nobody
+        # could see it.
+        "land_type_choice",
         # "Starting with you, each player chooses one of the exiled cards
         # and puts it onto the battlefield tapped under their control.
         # **Repeat this process until all cards exiled this way have been

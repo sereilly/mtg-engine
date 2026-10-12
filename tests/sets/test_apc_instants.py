@@ -1481,6 +1481,231 @@ def test_w2g2_captains_maneuver_protects_the_first_named_and_burdens_the_second(
 
 # ==== W2G4 ============================================================
 # W2G4's tests go between this line and the "end W2G4" line.
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import _nosick as _w2g4_nosick
+
+
+def _w2g4_instant_table(set_pool, catalog_by_name, *, hand, interactive):
+    """Seat 0 at its main phase holding *hand* (Apocalypse cards) with a
+    Forest; its library is an Island over two Swamps. Returns ``(game,
+    forest)``."""
+    forest = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Forest"]))
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(
+            name="Chooser", hand=[set_pool("APC")[name] for name in hand],
+            battlefield=[forest],
+            library=[catalog_by_name[name] for name in ("Island", "Swamp", "Swamp")],
+        ),
+        _w2g4_PlayerState(name="Other", library=[catalog_by_name["Swamp"]] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._settle()
+    return game, forest  # W2G4: the instant table
+
+
+# -- item 4: the type is named before the card is drawn -----------------------
+
+
+def test_w2g4_shimmering_mirage_draws_only_after_the_type_is_named(
+    set_pool, catalog_by_name
+):
+    """"Target land becomes the basic land type of your choice until end of
+    turn. / Draw a card." CR 608.2c: in the order written.
+
+    A human seat was asked for the type with the card already drawn — the log
+    read "choose a basic land type…", "drew 1 card", "awaiting a choice". Now
+    the hand is empty and the library untouched while the prompt is owed, the
+    spell is held on the stack, and the answer is what lets the draw happen.
+    """
+    game, forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Shimmering Mirage"], interactive=(0,),
+    )
+    chooser = game.players[0]
+    mark = len(game.log)
+
+    assert game.cast_from_hand(
+        0, "Shimmering Mirage", target_permanent_ids=[forest.permanent_id]
+    ).supported
+
+    assert game.pending_land_type_choice["player_index"] == 0
+    assert chooser.hand == [] and len(chooser.library) == 3
+    assert [item.card.name for item in game.stack] == ["Shimmering Mirage"]
+    assert game.waiting_prompt() is not None and game.effect_suspended
+    assert game.log[mark:] == [
+        "Shimmering Mirage added to stack",
+        "Shimmering Mirage: choose a basic land type for Forest",
+        "Shimmering Mirage is resolving, awaiting a choice",
+    ]
+
+    assert game.confirm_land_type(0, "swamp") is True
+
+    assert forest.basic_land_types == ("swamp",)
+    assert [card.name for card in chooser.hand] == ["Island"]
+    assert [card.name for card in chooser.graveyard] == ["Shimmering Mirage"]
+    assert game.stack == [] and game.waiting_prompt() is None
+    assert game.log[mark + 3:] == [
+        "Shimmering Mirage: Forest becomes a Swamp",
+        "Shimmering Mirage drew 1 card",
+        "Shimmering Mirage resolved and moved to graveyard",
+        "Shimmering Mirage finished resolving",
+    ]
+
+
+def test_w2g4_shimmering_mirage_for_a_seat_nobody_asks_still_does_both(
+    set_pool, catalog_by_name
+):
+    """The kind stays queued for a seat the engine plays — its callers are
+    written around that — and the queue's own default is what finishes the
+    spell: the land becomes an Island, the card is drawn, in that order."""
+    game, forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Shimmering Mirage"], interactive=(),
+    )
+    chooser = game.players[0]
+
+    assert game.cast_from_hand(
+        0, "Shimmering Mirage", target_permanent_ids=[forest.permanent_id]
+    ).supported
+    assert game.pending_land_type_choice is not None and chooser.hand == []
+
+    game.auto_resolve_pending_choices()
+
+    assert forest.basic_land_types == ("island",)
+    assert [card.name for card in chooser.hand] == ["Island"]
+    assert [card.name for card in chooser.graveyard] == ["Shimmering Mirage"]
+    assert game.pending_choices == [] and not game.effect_suspended
+
+
+# -- item 7: a two-ended redirect is announced with two sides -----------------
+
+
+def _w2g4_maneuver_table(set_pool, catalog_by_name):
+    """Seat 0 holds Captain's Maneuver with a Grizzly Bears; seat 1 has a Hill
+    Giant and a Lightning Bolt in hand."""
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Captain's Maneuver"], interactive=(),
+    )
+    bears = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Grizzly Bears"]))
+    giant = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Hill Giant"]))
+    game._put_permanent_onto_battlefield(0, bears, 0)
+    game._put_permanent_onto_battlefield(1, giant, 1)
+    game.players[1].hand.append(catalog_by_name["Lightning Bolt"])
+    return game, bears, giant  # W2G4: the Maneuver table
+
+
+def test_w2g4_the_ai_spares_itself_and_sends_captains_maneuvers_damage_across(
+    set_pool, catalog_by_name
+):
+    """"The next X damage that would be dealt to target creature, planeswalker,
+    or player this turn is dealt to another target creature, planeswalker, or
+    player instead." The announcement's first entry is spared and its second
+    takes the damage. Read as one side for both, the AI named two opposing
+    objects — it shielded its opponent's face and sent the damage to their
+    creature. It names its own face and theirs now, and the announcement does
+    what the card prints: of a Bolt aimed at the caster, two go across."""
+    from engine.ai_policy import choose_divided_targets
+
+    game, _bears, _giant = _w2g4_maneuver_table(set_pool, catalog_by_name)
+    maneuver = set_pool("APC")["Captain's Maneuver"]
+
+    announced = choose_divided_targets(game, 0, maneuver, x_value=2)
+    assert announced == [(0, None), (1, None)]
+
+    assert game.cast_from_hand(
+        0, "Captain's Maneuver", x_value=2, divided_targets=announced,
+    ).supported
+    assert (
+        "Captain's Maneuver: the next 2 damage that would be dealt to Chooser "
+        "this turn is dealt to Other instead"
+    ) in game.log
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert [player.life for player in game.players] == [19, 18]
+
+
+def test_w2g4_captains_maneuver_is_not_proposed_with_nobody_to_send_the_damage_to(
+    set_pool, catalog_by_name
+):
+    """A slot with nothing on its own board to name is no announcement, rather
+    than one filled from the other board: with the opponent untargetable and
+    no opposing permanent, the second end has no taker and the card is not
+    announced at all."""
+    from engine.ai_policy import choose_divided_targets
+
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Captain's Maneuver"], interactive=(),
+    )
+    ivory = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Ivory Mask"]))
+    game._put_permanent_onto_battlefield(1, ivory, 1)
+    game._recompute_continuous_effects()
+    maneuver = set_pool("APC")["Captain's Maneuver"]
+    offered = game.cast_target_spec(0, maneuver)["valid_targets"]
+    assert not any(entry["seat"] == 1 for entry in offered), offered
+
+    assert choose_divided_targets(game, 0, maneuver, x_value=2) == []
+
+
+def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
+    """Whole games with the card pinned into both decks: every Maneuver that
+    resolves moves damage off the seat that cast it."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    redirects = []
+    for seed in (7, 11, 1337):
+        report = run_ai_simulation(
+            cards_path=[manifest_set_path("APC", include_measured=True)],
+            games=4, seed=seed, max_turns=18, required_cards=["Captain's Maneuver"],
+        )
+        assert report.ok, report.issues[:3]
+        caster = None
+        for line in report.log_lines:
+            if " cast Captain's Maneuver" in line:
+                caster = line.split(" cast ")[0].split()[-1]
+            elif line.strip().startswith("Captain's Maneuver: the next "):
+                spared = line.split("would be dealt to ")[1].split(" this turn")[0]
+                taker = line.split("is dealt to ")[1].split(" instead")[0]
+                redirects.append((caster, spared, taker))
+        if redirects:
+            break
+
+    assert redirects, "no seed cast a Captain's Maneuver"
+    for caster, spared, taker in redirects:
+        assert spared == caster and taker != caster, redirects
+
+
+# -- item 6: a private look names nothing in the log ---------------------------
+
+
+def test_w2g4_prophetic_bolt_keeps_a_card_the_log_does_not_name(set_pool, catalog_by_name):
+    """"Prophetic Bolt deals 4 damage to any target. Look at the top four
+    cards of your library. Put one of those cards into your hand and the rest
+    on the bottom of your library in any order." To look is not to reveal
+    (CR 701.20e): the log, which every seat is sent, used to say "put Island
+    into their hand". The card is in the hand; the line says "a card"."""
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Prophetic Bolt"], interactive=(0,),
+    )
+    chooser = game.players[0]
+    chooser.library[:] = [
+        catalog_by_name[name] for name in ("Island", "Serra Angel", "Sol Ring", "Crusade", "Swamp")
+    ]
+    mark = len(game.log)
+
+    assert game.cast_from_hand(0, "Prophetic Bolt", target_player_index=1).supported
+    assert game.players[1].life == 16
+    assert game.pending_choice_of("look_top_pick", 0) is not None
+    assert game.confirm_look_top_pick(0, 1)
+
+    assert [card.name for card in chooser.hand] == ["Serra Angel"]
+    assert [card.name for card in chooser.library] == ["Swamp", "Island", "Sol Ring", "Crusade"]
+    said = game.log[mark:]
+    assert "Chooser put a card into their hand and the rest away" in said
+    assert not any(
+        name in line for line in said for name in ("Island", "Serra Angel", "Sol Ring", "Crusade")
+    ), said
 
 # ==== end W2G4 ========================================================
 
