@@ -2028,7 +2028,11 @@ def test_layers_only_import_downward(layers):
         # `_chosen_members` joins at Planeshift's Phase 0, for that reason:
         # `board` imports the sacrifice half of the "one of those" pick it
         # used to define.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
+        #
+        # `_record_definitions` joins at the Phase 0 before Odyssey: the
+        # where-clause definitions that read a record, which `where_x` now
+        # imports as one call.
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2492,7 +2496,7 @@ FAMILY_SHARED = {
     # older module's name has said since the first cut. It is also the half that
     # grows: a set adds a printed shape of counted damage far oftener than it
     # teaches `count_spec` a new zone. A floor for `_amounts`' reason exactly —
-    # `damage` reads it, `upkeep` its one predicate, `where_x` its one
+    # `damage` reads it, `upkeep` its one predicate, `_record_definitions` its one
     # characteristic set, and it reads none of the three back. It reads
     # `_amounts` for `count_spec`, which is a floor reading a floor, the
     # arrangement `_amounts` already has with `_common`.
@@ -2535,7 +2539,7 @@ FAMILY_SHARED = {
     # A single-importer floor for `_counted_pumps`' reason exactly — `life`
     # reads it and it reads nothing back — and it reads `_amounts`, `_common`,
     # `_events`, `_deaths`, `_cost_records` and `_counted_damage` (for the one
-    # characteristic set `where_x` and `cards` also read), which is a floor
+    # characteristic set `_record_definitions` and `cards` also read), which is a floor
     # reading floors.
     "_counted_life",
     # `_bites` split out of `lowering/damage.py` at Mirage's third wave, the
@@ -2613,7 +2617,8 @@ FAMILY_SHARED = {
     # reason: four lowering families read it (`control_flow` threads what an
     # offer's action records into its `then`, `sequences` threads each step's
     # records forward and asks the primary for "if you do", `repeats` hands a
-    # round's records to the condition printed after it, and `where_x` asks
+    # round's records to the condition printed after it, and `where_x` asks —
+    # through `_record_definitions` since the Phase 0 before Odyssey —
     # whether "this way" has a producer), so it cannot live in any of them.
     "_records",
     # `_sweeps` split out of `lowering/damage.py` the next time *that* module
@@ -2961,6 +2966,29 @@ FAMILY_SHARED = {
     # arrangement `_bound_returns` has with `_described_returns`, and nothing
     # reads back.
     "_record_conditions",
+    # `_record_definitions` pre-split out of `lowering/where_x.py` at the Phase 0
+    # before Odyssey, 35 lines under the guard with at least four of the wave's
+    # nine groups due to add a "where X is …" definition. It is the entry
+    # above's cut one printed position over: an X answered by looking at the
+    # game as the clause resolves — a count of a zone and its arithmetic, the
+    # counters on the source, a characteristic of the object the sentence named
+    # — stayed, and an X answered by a record of something already done (a
+    # step's "this way", what a cost ate, the turn's tally, a payment made as
+    # the source entered) left. `_amounts._x_definition_spec` had already drawn
+    # that line as a parameter: it reads a board on any call and a record only
+    # when its caller passes `recorded`.
+    # Measured, as the seam rule asks: of `where_x`'s imports, `_counted_damage`,
+    # `_records`, `_common` and `tapped_this_way_record` were read by the moved
+    # functions alone and `count_spec`, the two seat rewrites and `dataclasses`
+    # by the rest alone; the halves share `_mentions_x` / `_stamp_x_from_count`
+    # and nothing else. `lower_where_x` hands every clause down once, where the
+    # first record branch was read. The branches on both sides answer disjoint
+    # node classes, so the order between the halves decides nothing, and 0 of
+    # 5,266 compiled programs moved.
+    # The name is the entry above's move again — the mirror's word and what the
+    # module holds. A single-importer floor for `_recipients`' reason: `where_x`
+    # reads it, a family may not import a sibling, and nothing reads back.
+    "_record_definitions",
     # `_collapses` split out of `lowering/control_flow.py` at Urza's Legacy's
     # Phase 0, eleven lines under the guard with three of the wave's five
     # groups due to compose a `may` or a `sequence` and none of them able to

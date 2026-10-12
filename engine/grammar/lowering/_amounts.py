@@ -586,8 +586,8 @@ def tapped_this_way_record(filt: "ast.ObjectFilter", produced, node) -> str:
       count would be a zero the card never printed.
 
     A floor rather than a helper in either family, for this module's own reason:
-    ``lowering/where_x`` and ``lowering/damage`` both ask it and neither may
-    import the other.
+    the where-clause (``_record_definitions``, for ``where_x``) and
+    ``lowering/damage`` both ask it and neither may import the other.
     """
     described = filt.to_payload()
     if filt.zone != "battlefield" or set(described) - {
@@ -820,7 +820,7 @@ def _x_definition_spec(
     if recorded is not None and isinstance(definition, ast.RecordedCardManaValue):
         # "…gets +X/+X until end of turn, where X is **the revealed card's mana
         # value**." (Planeswalker's Favor, Scorn.) The spec
-        # ``where_x.lower_where_x`` stamps for the same definition wrapped
+        # ``_record_definitions`` stamps for the same definition wrapped
         # round a sentence (Infernal Genesis), behind the same producer gate —
         # it reaches here instead because a P/T where-clause rides the ``Pump``
         # node. One evaluator answers both.
@@ -842,13 +842,13 @@ def _per_each_offset(node: ast.Pump) -> int:
 # The other end of a computed quantity: the sentence that spends it.
 #
 # Moved here from ``_common`` at the thousand-line guard, along the line this
-# module's own docstring already draws. These two are read by
-# ``lowering/where_x.py`` and by nothing else, and what they do is the "against
-# the sentence that spends it" half of CR 107.3: one asks whether the sentence
-# reads an X at all, the other writes the definition onto every step of it.
-# ``count_spec`` above answers what the quantity *is*; these answer where it
-# goes. `_common` is the module every family imports, so a pair with one caller
-# and one subject belongs in the floor that owns the subject.
+# module's own docstring already draws. These two are read by the where-clause
+# (``where_x.py`` and its floor ``_record_definitions.py``) and by nothing
+# else, and what they do is the "against the sentence that spends it" half of
+# CR 107.3: one asks whether the sentence reads an X at all, the other writes
+# the definition onto every step of it. ``count_spec`` above answers what the
+# quantity *is*; these answer where it goes. `_common` is the module every
+# family imports; one clause calls this pair, so it sits with its subject.
 # ---------------------------------------------------------------------------
 
 def _stamp_x_from_count(

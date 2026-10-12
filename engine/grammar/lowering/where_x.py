@@ -1,15 +1,27 @@
 """What defines the X a sentence's ``where`` clause names (CR 608.2).
 
 Split out of ``lower`` when that module reached the thousand-line guard, and
-the split needed one change to be legal: these four productions each began by
-calling ``lower_statement`` on the sentence the clause wraps, which would be an
-*upward* import from here. The caller lowers that sentence and passes the
-result in as *inner*.
+the split needed one change to be legal: the four productions it held then each
+began by calling ``lower_statement`` on the sentence the clause wraps, which
+would be an *upward* import from here. The caller lowers that sentence and
+passes the result in as *inner*.
 
 That inversion is not a workaround, it is the honest shape. Every one of these
 does the same two things to an already-lowered sentence — check that it reads an
 X at all, then stamp the definition onto it — and none of them cares how the
 sentence was lowered. What differs between them is only *what is counted*.
+
+**And what is counted is read off the game or off a record, of which only the
+first is here.** A count of a zone and the arithmetic over it, the counters on
+the source, a characteristic of the object the sentence named: each is answered
+by looking at the game as the clause resolves, and each is below. A definition
+answered by a *record* of something already done — what an earlier step of the
+same effect wrote down, what a cost ate, what the turn tallied, what was paid
+as the source entered — is ``_record_definitions``, pre-split from here at the
+Phase 0 before Odyssey along the line ``conditions`` and ``_record_conditions``
+had already taken. :func:`lower_where_x` hands every clause down to it once,
+ahead of its own readings, and that module's docstring has the measurements. A
+new definition goes to whichever half its answer comes from.
 
 The definition is stamped rather than folded into the amounts because the count
 is taken at **resolution**: a permanent entering between the trigger and its
@@ -26,12 +38,9 @@ from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
-                       count_filter_on_targeted_seat,
-                       count_spec, tapped_this_way_record)
+                       count_filter_on_targeted_seat, count_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
-from ._counted_damage import _READABLE_COST_SACRIFICE_CHARACTERISTICS
-from ._records import produced_keys
-from ._common import _restrictions_beyond
+from ._record_definitions import lower_record_definition
 
 def _round_every_x_spec(
     instructions: tuple[OracleInstruction, ...], rounding: str, divisor: int
@@ -111,60 +120,20 @@ def lower_where_x(
         return _round_every_x_spec(
             halved, node.definition.rounding, node.definition.divisor
         )
-    damage = _damage_dealt_definition(node.definition)
-    if damage is not None:
-        return _lower_where_x_damage_dealt(node, damage, inner)
-    if isinstance(node.definition, ast.CountOfDeaths):
-        return _lower_where_x_deaths(node, inner, produced)
+    # A definition answered by a **record** of something already done — what a
+    # step of this effect wrote down, what a cost ate, what the turn tallied,
+    # what was paid as the source entered — is ``_record_definitions``'. Handed
+    # down here, where the first of those readings always was; every branch on
+    # either side answers a node class no other does, so the order between the
+    # two halves decides nothing.
+    recorded = lower_record_definition(node, inner, produced)
+    if recorded is not None:
+        return recorded
     if isinstance(node.definition, ast.CharacteristicOfSubject):
         return _lower_where_x_characteristic(node, inner, produced, event)
-    if isinstance(node.definition, ast.CountOfDeathsThisWay):
-        return _lower_where_x_this_way(node, inner, produced)
-    if isinstance(node.definition, ast.CountOfTapsThisWay):
-        return _lower_where_x_tapped_this_way(node, inner, produced)
-    # "…, where X is the number of cards **revealed this way**." (Cinder Seer,
-    # Ivy Seer, Nightshade Seer and their three Scents.) The one definition
-    # here that is a plain number rather than a set or a characteristic: the
-    # parse resolved the printed noun and participle to a scratchpad key, so
-    # what is left to check is that a step of this effect writes it.
-    if isinstance(node.definition, ast.ThatMuch):
-        return _lower_where_x_recorded(node, inner, produced)
-    # "…where X is **the milled card's mana value**." (Infernal Genesis.) A
-    # characteristic of the cards a step of this effect recorded; the same
-    # producer gate as the count above.
-    if isinstance(node.definition, ast.RecordedCardManaValue):
-        key = node.definition.record
-        if key not in (produced | _records_within(inner)):
-            raise LoweringError(
-                f"back-reference to {key!r} with no producer in this effect",
-                node=node,
-            )
-        if not _mentions_x(inner):
-            raise LoweringError("a where-clause defined an X nothing reads", node=node)
-        return _stamp_x_from_count(inner, {"recorded_card_mana_value": key})
-    # "…where X is **1 plus** the exiled creature's mana value" (Food Chain) /
-    # "…1 plus the sacrificed creature's mana value" (Metamorphosis). The
-    # constant is unwrapped here rather than in the `Plus`/`Minus` arm further
-    # down, because that arm ends by demanding a ``CountOf`` — a cost record is
-    # not a count of a zone, so both cards fell straight through it to "only a
-    # count can define X in a where-clause" and needed a card hook to be played
-    # at all. ``plus`` is the same key `_source_counter_spec` uses and
-    # `_scaled`/`_plus` apply it at the single evaluation point, so the two
-    # branches below stay exactly what they were.
-    cost_plus, cost_definition = _cost_record_offset(node.definition)
-    if isinstance(cost_definition, ast.ExiledForCost):
-        return _lower_where_x_exiled_for_cost(node, inner, cost_definition, cost_plus)
-    if isinstance(cost_definition, ast.SacrificedForCost):
-        return _lower_where_x_sacrificed_for_cost(
-            node, inner, cost_definition, cost_plus
-        )
-    if isinstance(node.definition, ast.LifePaidAsEntered):
-        return _lower_where_x_life_paid(node, inner)
     counter_spec = _source_counter_spec(node.definition)
     if counter_spec is not None:
         return _lower_where_x_counters(node, inner, counter_spec)
-    if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
-        return _lower_where_x_sacrificed_power(node, inner)
     # "…where X is **twice** the number of …" (Jovial Evil). The factor is
     # unwrapped here and handed to `count_spec`, so only the definitions this
     # branch can scale accept one: a `Times` over a death history or a mana
@@ -259,7 +228,6 @@ def lower_where_x(
     return _stamp_x_from_count(inner, spec)
 
 
-
 def _is_cast_time_countable(definition: "ast.Amount") -> bool:
     """Whether *definition* is the plain board count CR 601.2b can freeze.
 
@@ -283,103 +251,6 @@ def _is_cast_time_countable(definition: "ast.Amount") -> bool:
                 return False
         else:
             return isinstance(definition, ast.CountOf)
-
-def _cost_record_offset(
-    definition: "ast.Amount",
-) -> tuple[int, "ast.Amount"]:
-    """``(constant, definition)`` for "<n> plus <a cost record>", else
-    ``(0, definition)``.
-
-    Only a printed constant on the **left** and only addition, which is the one
-    shape the pool prints ("1 plus the exiled creature's mana value"). A
-    subtraction, or a constant on the right, is left wrapped so the dispatcher
-    falls to its own refusal rather than reading a sentence with its arithmetic
-    silently changed — a cost record is last-known information about one object
-    (CR 608.2h) and a card that printed either would be a card nobody has read.
-    """
-    if (
-        isinstance(definition, ast.Plus)
-        and isinstance(definition.left, ast.Fixed)
-        and not isinstance(definition.right, ast.Fixed)
-    ):
-        return definition.left.value, definition.right
-    return 0, definition
-
-
-def _lower_where_x_exiled_for_cost(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    definition: "ast.ExiledForCost",
-    plus: int = 0,
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is **the exiled card's mana value**." (Necropolis.)
-
-    Not a count of anything a zone holds: the card left the graveyard while the
-    ability's own cost was being paid (CR 601.2h), so the number is last-known
-    information the activation path recorded. Stamped like every other
-    definition, at the same single dispatch point, so the sentence in front of
-    it needs no special case.
-
-    Mana value alone. Power and toughness are printed characteristics of a card
-    (CR 208.2) and could be read here, but nothing records them — the channel
-    carries the card, and a card's *computed* P/T does not exist off the
-    battlefield (CR 613.1) — so admitting them would stamp a definition the
-    resolution answers with a zero.
-    """
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    if definition.characteristic != "mana_value":
-        raise LoweringError(
-            "only the exiled card's mana value is recorded by a cost payment",
-            node=node,
-        )
-    spec: dict[str, object] = {
-        "cost_exile_characteristic": definition.characteristic
-    }
-    if plus:
-        spec["plus"] = plus
-    return _stamp_x_from_count(inner, spec)
-
-
-def _lower_where_x_sacrificed_for_cost(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    definition: "ast.SacrificedForCost",
-    plus: int = 0,
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is **the sacrificed creature's mana value**." (Burnt
-    Offering.)
-
-    :func:`_lower_where_x_exiled_for_cost` one zone over, and the same argument:
-    the creature was eaten by the spell's own additional cost (CR 601.2b) before
-    the spell was ever on the stack, so nothing on a board answers for it and
-    the number is last-known information (CR 608.2h) the payment path recorded.
-
-    Mana value **and** the P/T, held to the set the resolution-time evaluator
-    actually answers (`_READABLE_COST_SACRIFICE_CHARACTERISTICS`) rather than to
-    a list written here. It read "mana value alone" until Freyalise Supplicant
-    needed the power one family over, on the stated ground that a computed P/T
-    "does not exist once the permanent has left the battlefield" — which was
-    never true of this channel: it carries the `Permanent`, whose effective P/T
-    is exactly CR 608.2h's last-known information, and `target_gains_life` has
-    read the toughness off it for Life Chisel since that card landed. A
-    characteristic outside the set is still a refusal, because a definition the
-    evaluator cannot answer is a card that reports supported and computes zero.
-    """
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    if definition.characteristic not in _READABLE_COST_SACRIFICE_CHARACTERISTICS:
-        raise LoweringError(
-            "no handler reads the sacrificed permanent's "
-            f"{definition.characteristic!r} back from a cost payment",
-            node=node,
-        )
-    spec: dict[str, object] = {
-        "cost_sacrifice_characteristic": definition.characteristic
-    }
-    if plus:
-        spec["plus"] = plus
-    return _stamp_x_from_count(inner, spec)
 
 
 def _source_counter_spec(definition: "ast.Amount") -> dict[str, object] | None:
@@ -450,57 +321,6 @@ def _lower_where_x_counters(
     return _stamp_x_from_count(inner, spec)
 
 
-def _lower_where_x_life_paid(
-    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is the life paid as this artifact entered."
-    (Phyrexian Processor.)
-
-    Not a count of anything and not a recompute: the number was chosen once, as
-    a CR 614.1c replacement while the permanent was entering, and is read
-    unchanged however many activations later. So it travels as a ``source_record``
-    — the same channel Spiny Starfish's regeneration tally already rides — and
-    the evaluator reads it off the ability's own source.
-
-    Beside the two cost channels rather than under ``count_spec`` for that
-    reason: a cost is paid as *this* ability is activated and a count is taken
-    as it resolves, while this was settled before either happened.
-    """
-    from ...enter_effects import LIFE_PAID_AS_ENTERED
-
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"source_record": LIFE_PAID_AS_ENTERED})
-
-
-def _lower_where_x_sacrificed_power(
-    node: ast.WhereX, inner: tuple[OracleInstruction, ...]
-) -> tuple[OracleInstruction, ...]:
-    """"…where X is the total power of the creatures sacrificed this way."
-    (Sword of the Ages.)
-
-    Not a count of a set on any board, so it carries no owner and no zone: the
-    creatures were eaten by this ability's own cost (CR 601.2h) and are cards in
-    a graveyard by the time X is read. What is summed is their last power on the
-    battlefield (CR 608.2h), recorded as the cost was charged.
-
-    Only "creatures" is admitted, because that is the only set the cost charger
-    records — a card printing another noun would be aggregating over a payment
-    nothing kept, and lowering refuses rather than reading a zero.
-    """
-    filt = node.definition.filter
-    if filt.card_types != ("creature",) or _restrictions_beyond(
-        filt, frozenset({"card_types"})
-    ):
-        raise LoweringError(
-            "the sacrificed total is read off creatures and nothing narrower",
-            node=node,
-        )
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"cost_sacrifices_power": True})
-
-
 def _names_a_player_target(inner: tuple[OracleInstruction, ...]) -> bool:
     """Whether the lowered sentence chose a *player* as its target.
 
@@ -556,31 +376,6 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=No
     # the same binding in the amount position ("a card **for each** … they
     # control"): one rewrite for both spellings of the count.
     return count_filter_on_targeted_seat(filt)
-
-
-def _lower_where_x_deaths(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"…where X is the number of creatures that died under your control this
-    turn." (Liliana's Standard Bearer.)
-
-    The count is a per-seat turn history (``engine/models.py``'s
-    ``creatures_died_under_your_control_this_turn``, kept since round 14 because
-    the game-wide tally cannot answer "under your control"), so it reads a
-    counter rather than a zone. Only the bare creature filter is admitted: the
-    tracker counts creatures and nothing narrower, and a narrowing it cannot
-    apply would be counted as if it were not there.
-    """
-    filt = node.definition.filter
-    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
-        raise LoweringError(
-            "the death tracker counts creatures and cannot be narrowed", node=node
-        )
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"history": "creatures_died_under_your_control"})
 
 
 #: Trigger conditions whose fire site freezes the spell that was cast
@@ -778,188 +573,3 @@ def _referent_matches_role(referent, role: dict) -> bool:
         if bool(getattr(referent, adjective, False)) != bool(role.get(key)):
             return False
     return True
-
-
-def _lower_where_x_this_way(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is the number of creatures that **died this way**."
-    (Hellfire.)
-
-    A back-reference, not a count of a zone: the objects are exactly the ones
-    an earlier step of this same effect destroyed, and by the time this is asked
-    they are in graveyards. So it is stamped like every other where-clause and
-    resolved at the same dispatch point, reading the scratchpad key the sweep
-    handlers write.
-
-    Refused without a producer, for the reason every back-reference in this file
-    is: "this way" with no earlier step names nothing, and `count_from_payload`
-    would answer 0 — a card that reports supported and deals three damage
-    flat.
-
-    Only the bare creature filter is admitted. The record is a *number*, not the
-    set, so a narrower noun phrase ("the number of **black** creatures that died
-    this way") is a question nothing can re-ask — it would be counted as though
-    the narrowing were not there.
-    """
-    filt = node.definition.filter
-    if filt.to_payload() != {"type_filter": "creature"} or filt.zone != "battlefield":
-        raise LoweringError(
-            "'died this way' counts what the earlier step destroyed and cannot "
-            "be narrowed further", node=node,
-        )
-    if "destroyed_this_way" not in produced:
-        raise LoweringError(
-            "'died this way' with no earlier step in this effect that destroyed "
-            "anything", node=node,
-        )
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"back_reference": "destroyed_this_way"})
-
-
-def _records_within(instructions: tuple[OracleInstruction, ...]) -> frozenset[str]:
-    """Every scratchpad key *instructions* and their nested steps record.
-
-    "This way" names an earlier step of the **same effect**, and *produced* — the
-    set threaded between the sentences of a paragraph — cannot see inside the
-    sentence the where-clause wraps. Hellfire prints the sweep and the count in
-    two sentences, so the thread carried it; Monsoon prints "tap all untapped
-    Islands … **and** this enchantment deals X damage …, where X is the number
-    of Islands tapped this way" as one, and the producer is a step of the very
-    tuple being stamped.
-
-    Read through ``_PRODUCES`` like every other question about what a step
-    records, so a producer has one declaration however deeply it is nested.
-    """
-    keys: set[str] = set()
-    for instruction in instructions:
-        keys |= produced_keys(instruction)
-        for key in ("steps", "then", "else", "otherwise", "action"):
-            nested = instruction.payload.get(key)
-            if (
-                isinstance(nested, tuple) and nested
-                and isinstance(nested[0], OracleInstruction)
-            ):
-                keys |= _records_within(nested)
-    return frozenset(keys)
-
-
-def _lower_where_x_recorded(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is the number of cards **revealed this way**." (Cinder Seer.)
-
-    ``_lower_where_x_this_way`` with the narrowing question already settled:
-    the parse resolved the printed noun *and* participle together against
-    ``where_x.accept_this_way_count``'s table, so by the time the node is built
-    the words have been checked against the record they name and what arrives
-    is a key. What is left is the gate every back-reference in this file
-    carries — a step of this same effect has to write it — and it is asked of
-    ``produced`` **and** of the sentence being stamped, because a card may
-    print the producer and the reader as two sentences (the five Seers, whose
-    activated ability is a paragraph) or as one.
-
-    A printed bonus refuses: "where X is the number of cards revealed this way
-    **plus one**" is a number no card prints here, and the ``x_from_count``
-    spec's ``plus`` is written by the arithmetic unwrapping in
-    :func:`lower_where_x`, not by this channel.
-    """
-    if node.definition.source is None or node.definition.bonus:
-        raise LoweringError(
-            "a where-clause reads a named record with no printed bonus",
-            node=node,
-        )
-    if node.definition.source not in (produced | _records_within(inner)):
-        raise LoweringError(
-            f"back-reference to {node.definition.source!r} with no producer in "
-            "this effect",
-            node=node,
-        )
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"back_reference": node.definition.source})
-
-
-def _lower_where_x_tapped_this_way(
-    node: ast.WhereX,
-    inner: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is the number of Islands **tapped this way**." (Monsoon.)
-
-    ``_lower_where_x_this_way`` one verb over, and refused on the same three
-    questions. What the sweep tapped is not what the board now holds tapped —
-    an Island that was already tapped is not one this effect turned, and CR
-    611.2c fixed the set when the effect began — so the number can only come
-    from the record the sweep wrote.
-
-    Only the bare head noun is admitted, for the reason the death form states:
-    the record is a *number*, not the set, so a narrower noun phrase would be
-    counted as though the narrowing were not there. The sweep's own narrowings
-    ("untapped", "that player controls") are exactly the ones the card leaves
-    off the where-clause, which is why the head noun is enough.
-    """
-    record = tapped_this_way_record(
-        node.definition.filter, produced | _records_within(inner), node,
-    )
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(inner, {"back_reference": record})
-
-
-def _damage_dealt_definition(definition) -> "tuple[ast.DamageDealtThisTurn, int] | None":
-    """The damage history a where-clause defines, and the constant added to it.
-
-    "…where X is **3 plus** the amount of damage dealt …" (Blazing Effigy). The
-    sum is unwrapped here rather than in the branch below, exactly as
-    ``lower_where_x`` unwraps ``ast.Times``: the base belongs to the clause, not
-    to the history, and a definition that is a sum over anything *else* falls
-    through to the refusals below rather than silently losing its left half.
-    """
-    base = 0
-    if isinstance(definition, ast.Plus) and isinstance(definition.left, ast.Fixed):
-        base = int(definition.left.value)
-        definition = definition.right
-    if isinstance(definition, ast.DamageDealtThisTurn):
-        return definition, base
-    return None
-
-
-def _lower_where_x_damage_dealt(
-    node: ast.WhereX,
-    damage: "tuple[ast.DamageDealtThisTurn, int]",
-    inner: tuple[OracleInstruction, ...],
-) -> tuple[OracleInstruction, ...]:
-    """"…, where X is 3 plus the amount of damage dealt to this creature this
-    turn by other sources named ~." (Blazing Effigy.)
-
-    Stamped like every other where-clause and resolved at the same single
-    dispatch point; what differs is only what is read. The record is
-    ``engine/damage_ledger.py`` — a history, because the creature the clause
-    asks about is in a graveyard by the time a dies-trigger asks, and the damage
-    marked on it went with it (CR 400.7).
-
-    Every narrowing the words printed rides on the spec, ``base`` included, so
-    the reader applies all of them or none: a base honoured at one return site
-    and forgotten at another is the dropped-rider bug with an arithmetic face,
-    and here it is the difference between three damage and none.
-    """
-    definition, base = damage
-    if not _mentions_x(inner):
-        raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    return _stamp_x_from_count(
-        inner,
-        {
-            "damage_ledger": {
-                "recipient": definition.recipient,
-                "source_name": definition.source_name,
-                "others_only": definition.others_only,
-                "base": base,
-            }
-        },
-    )

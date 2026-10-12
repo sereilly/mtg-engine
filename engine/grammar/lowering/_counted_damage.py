@@ -1,13 +1,13 @@
 """How much damage a clause computes, and which seat it lands on.
 
 A **floor**, not a family: `damage.py` reads it, `upkeep.py` reads its one
-predicate and `where_x.py` its one characteristic set, and it reads none of the
-three back — inside `lowering/` a module a family imports has to sit below the
-families (`_bites` is a floor for exactly that reason, one cut earlier off the
-same original file). The direction cannot be reversed either —
-`_lower_halved_damage` stays in `damage.py` because it lowers the quantity
-*underneath* by re-entering the damage lowering, which is the one amount that
-has to know about the shapes.
+predicate and `_record_definitions.py` (for `where_x`) its one characteristic
+set, and it reads none of them back — inside `lowering/` a module a family
+imports has to sit below the families (`_bites` is a floor for exactly that
+reason, one cut earlier off the same original file). The direction cannot be
+reversed either — `_lower_halved_damage` stays in `damage.py` because it lowers
+the quantity *underneath* by re-entering the damage lowering, which is the one
+amount that has to know about the shapes.
 
 Split out of `_amounts` at Tempest's Phase 0, along the second half of the
 sentence that module's own docstring had already drawn round its subject:
