@@ -1491,6 +1491,13 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # them is only ever as complete as the last card that touched it — the
     # argument `draws_card` is dispatched with, one record over.
     ("you_lose_life",               r"whenever you lose life"),
+    # "Whenever you win a coin flip …" (Chance Encounter). Announced from the
+    # one seam a player-won flip goes through (``handlers/_common.
+    # flip_coin_for``), carrying the flipper's seat — CR 705.2: "only the
+    # player who flips the coin wins or loses the flip". A flip nobody can win
+    # (Mana Clash's heads-or-tails) does not go through that seam and is not
+    # announced.
+    ("you_win_coin_flip",           r"whenever you win a coin flip"),
     # "Whenever you sacrifice a permanent …" (Havoc Jester). Emitted from
     # ``Game.sacrifice_permanent``, the one place CR 701.21a happens — which is
     # why this row could be added without hunting for a fire site: there are
@@ -4522,9 +4529,15 @@ def _protection_quality_word(word: str) -> bool:
     One reader, so what is admitted here and what a shield answers to cannot come
     apart again.
     """
-    from .keywords import protection_quality
+    from .keywords import protection_qualities_named
 
-    return protection_quality(word) is not None
+    # The shorthand reader (CR 702.16h/i), which answers every single-quality
+    # word exactly as ``protection_quality`` does and additionally reads the
+    # members that stand for several abilities — "each color" (Iridescent
+    # Angel). It is the function ``_protection_qualities`` builds a
+    # permanent's qualities with, so the delegation above is unchanged: one
+    # reader, one vocabulary.
+    return protection_qualities_named(word) is not None
 
 
 def _protection_clause_modelled(clause: str) -> bool:

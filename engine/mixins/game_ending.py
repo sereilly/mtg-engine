@@ -982,21 +982,47 @@ class GameEndingMixin:
             # (``_can_be_targeted``, which asks ``_card_has_quality``) had already
             # refused to *put* it there. A rule enforced at announcement and not
             # at the sweep is a rule that holds until something changes.
+            #
+            # **"This effect doesn't remove this Aura" exempts the Aura from
+            # its own grant and from nothing else** (CR 702.16n's last
+            # sentence: "If the creature has other instances of protection
+            # from the same quality, those instances affect Auras as normal").
+            # The exemption was the bare phrase — any Aura printing it stayed
+            # on however the creature came by the protection, so a White Ward
+            # survived a second source of protection from white. The question
+            # is asked with that one Aura's grant left out
+            # (``ignoring_aura``), which is the rule as written: Tattoo Ward
+            # stays on under its own protection from enchantments and comes
+            # off under a second Ward's.
+            #
+            # Every verdict is reached before anything moves (CR 704.3: the
+            # actions are performed simultaneously), so two Auras that remove
+            # each other both go.
+            verdicts = []
             for player in self.players:
-                departing = []
                 for perm in list(self.controlled_by(player)):
                     attached_to = perm.metadata.get("attached_to")
                     if "Aura" in perm.card.type_line and attached_to is not None:
-                        if self._is_protected_from(attached_to, perm):
-                            text = perm.effective_card.oracle_text.lower()
-                            exempt = "remove this aura" in text or "remove all auras" in text
-                            if not exempt:
-                                self._permanent_to_graveyard(player, perm)
-                                self.log.append(
-                                    f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
-                                )
-                                changed = True
-                                departing.append(perm)
+                        text = perm.effective_card.oracle_text.lower()
+                        if "remove all auras" in text:
+                            continue
+                        own_exempt = "remove this aura" in text
+                        if self._is_protected_from(
+                            attached_to, perm,
+                            ignoring_aura=perm if own_exempt else None,
+                        ):
+                            verdicts.append((player, perm))
+            for player in self.players:
+                departing = []
+                for owner, perm in verdicts:
+                    if owner is not player:
+                        continue
+                    self._permanent_to_graveyard(player, perm)
+                    self.log.append(
+                        f"{perm.card.name} put into graveyard (702.16c: enchanted permanent has protection)"
+                    )
+                    changed = True
+                    departing.append(perm)
                 self.remove_all_from_battlefield(departing)
 
             # CR 704.5n (and 702.16d, 301.5c, 701.3d): an Equipment attached

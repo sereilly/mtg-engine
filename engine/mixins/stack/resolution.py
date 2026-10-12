@@ -626,6 +626,20 @@ class StackResolutionMixin:
         """
         offer = self._trigger_target_candidates(item)
         if offer is None:
+            # A target this picker does not choose — and one of those is a
+            # card in a graveyard, which a trigger's handler finds for itself
+            # as it resolves. Under "Cards in graveyards can't be the targets
+            # of spells or abilities" (Ground Seal) such a trigger has no
+            # legal target to be put on the stack with, which is CR 603.3d's
+            # removal exactly as the arm below applies it to an empty list.
+            # ``legality.sealed_graveyard_target_refusal`` is the one
+            # predicate, asked again as the ability resolves (CR 608.2b).
+            if self.sealed_graveyard_target_refusal(item) is not None:
+                self.stack = [existing for existing in self.stack if existing is not item]
+                self.log.append(
+                    f"{item.card.name}'s triggered ability was removed from the stack: "
+                    "it has no legal target (603.3d)"
+                )
             return
         spec, chooser_index, candidates = offer
         self._arm_trigger_target_choice(item, spec, chooser_index, candidates)
@@ -1496,6 +1510,13 @@ class StackResolutionMixin:
             # handlers behind it read a vanished stamp as "nothing was
             # announced" and returned a different card.
             illegal = self.vanished_graveyard_target_refusal(item)
+        if illegal is None:
+            # …and the fourth: an ability whose one target is a card in a
+            # graveyard that its *handler* would find for itself (a trigger
+            # has no picker for one), while the board says no card in a
+            # graveyard may be targeted (Ground Seal). Inert unless such a
+            # permanent is on the battlefield.
+            illegal = self.sealed_graveyard_target_refusal(item)
         if illegal is not None:
             self.log.append(illegal)
             if item.ability_instruction is None and not item.is_copy:

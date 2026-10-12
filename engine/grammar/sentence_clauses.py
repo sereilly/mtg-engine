@@ -144,10 +144,18 @@ def _parse_leading_for_each(
         kind = stream.peek()
         if kind.kind in (PT, WORD):
             stream.advance()
-            if stream.accept_word("counter", "counters") and stream.accept_phrase(
-                "you", "put", "on", "a", "creature", "this", "way"
-            ) and stream.accept_punct(","):
-                return ast.CountersPlacedThisWay(counter=kind.text)
+            if stream.accept_word("counter", "counters"):
+                # "**For each delay counter removed this way,** you lose 1
+                # life unless you pay {1}{W}." (Delaying Shield.) The same
+                # opening with the other participle: a count of what the
+                # sentence in front took *off*, with nothing bound.
+                if stream.accept_phrase("removed", "this", "way"):
+                    if stream.accept_punct(","):
+                        return ast.CountersRemovedThisWay(counter=kind.text)
+                elif stream.accept_phrase(
+                    "you", "put", "on", "a", "creature", "this", "way"
+                ) and stream.accept_punct(","):
+                    return ast.CountersPlacedThisWay(counter=kind.text)
     stream.reset(placed)
     paid = stream.mark()
     symbols = accept_additional_cost_paid(stream)

@@ -283,6 +283,10 @@ _EVENT_QUANTITIES: dict[str, str] = {
     # delayed announcement, which has frozen the same number under the same
     # key since Acidic Dagger — nothing read it until a card asked how much.
     "bound_permanent_deals_combat_damage": "damage_dealt",
+    # "…whenever target creature deals damage, you gain **that much** life."
+    # (Spiritualize.) The unnarrowed event beside it, announced from the same
+    # seam with the same number under the same key.
+    "bound_permanent_deals_damage": "damage_dealt",
 }
 
 

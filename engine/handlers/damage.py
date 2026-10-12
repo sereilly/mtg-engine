@@ -2902,6 +2902,34 @@ def redirect_source_class_damage_until_eot(
     caster = context.caster
     guard = context.source_permanent
     card_name = getattr(context.card, "name", None)
+    spell_types = tuple(instruction.payload.get("spell_types") or ())
+    if spell_types:
+        # "The next time an **instant or sorcery spell** would deal damage to
+        # you this turn, that spell deals that damage to its controller
+        # instead." (Aegis of Honor.) The same record with the class named as
+        # a kind of spell: ``spell_sources`` is what Harsh Judgment's static
+        # derives, with no colour here, and the taker is read off the spell
+        # when the damage would be dealt (``to_source_controller``) — which is
+        # why this arm needs no permanent to take anything, and why an Aegis
+        # that has left the battlefield by then changes nothing (CR 113.7a:
+        # once activated, the ability exists independently of its source).
+        add_redirect(
+            caster,
+            DamageRedirect(
+                new_recipient=None,
+                spell_sources=(spell_types, None),
+                to_source_controller=True,
+                uses=instruction.payload.get("uses"),
+                source_name=card_name,
+            ),
+        )
+        game.log.append(
+            f"{card_name}: the next time an "
+            + " or ".join(spell_types)
+            + f" spell would deal damage to {caster.name} this turn, it deals "
+            "that damage to its controller instead"
+        )
+        return True, "resolved"
     if guard is None:
         game.log.append(f"{card_name}: nothing is there to take the damage")
         return True, "resolved"

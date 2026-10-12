@@ -557,6 +557,14 @@ _BY_NODE_TYPE_WITH_EVENT_AND_PRODUCED: dict[type, object] = {
     # reaches the bound branch through the *delay's* event, which is a fact
     # about the sentence rather than about where in it the clause sits.
     ast.Sacrifice: _lower_sacrifice,
+    # "The next time **that source** would deal damage this turn, …"
+    # (Desperate Gambit) names a source a step in front of it chose; "the next
+    # time **that creature** would deal combat damage this turn, …" (Impulsive
+    # Maneuvers) names the creature its trigger's event was about. One node,
+    # two antecedents, two places to look — the row left the records-only
+    # table below when the second arrived, as ``ast.SearchLibrary`` and
+    # ``ast.CreateCopyToken`` did above.
+    ast.ChosenSourceNextDamage: _lower_chosen_source_next_damage,
 }
 
 
@@ -650,9 +658,6 @@ _BY_NODE_TYPE_WITH_PRODUCED: dict[type, object] = {
     # record from an earlier step of the same sentence, "it" has no referent but
     # the source, and the two readings lower to different machinery.
     ast.SacrificeUnlessPay: _lower_sacrifice_unless_pay,
-    # Beside ``ast.PreventDamage``'s shield, which is an arm of the chain: the
-    # source this names is one a step in front of it chose (idiom 7).
-    ast.ChosenSourceNextDamage: _lower_chosen_source_next_damage,
     ast.AddMana: _lower_add_mana,
     # "it" names the card an earlier step of *this* effect turned up, so the
     # lowering needs ``produced`` where the event-bearing table passes

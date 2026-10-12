@@ -243,6 +243,14 @@ class BoardTargetImmunity:
 
     filter: dict
     spell_class: str
+    #: Which of the two separately targeted things this conjunct stops
+    #: (CR 115.1a for a spell, CR 115.1c/d for an ability). Dense Foliage names
+    #: spells and nothing else; "Creatures you control can't be the targets of
+    #: blue spells **or abilities from blue sources**." (Spellbane Centaur)
+    #: prints one conjunct of each kind, and *spell_class* is then the class of
+    #: **source** the ability half names — the string
+    #: :func:`source_is_in_class` reads.
+    source_kind: str = SPELL_SOURCE
 
 
 #: The plural of :data:`_TARGET_IMMUNITY`'s sentence, and the plural is not
@@ -280,16 +288,54 @@ def board_target_immunities(line: str) -> tuple[BoardTargetImmunity, ...]:
     spell_class = next(
         (value for phrase, value in _SPELL_CLASSES if printed == phrase), None
     )
-    if spell_class is None:
-        return ()
+    if spell_class is not None:
+        classes: tuple[tuple[str, str], ...] = ((SPELL_SOURCE, spell_class),)
+    else:
+        # "…of **blue spells or abilities from blue sources**" (Spellbane
+        # Centaur). The source-class body Raiding Party prints about itself,
+        # here about a described set — the same conjuncts, read by the same
+        # pattern, and all or nothing for :func:`source_class_immunities`'
+        # reason: half a narrowed shroud is strictly more permissive than the
+        # card prints.
+        found = []
+        for part in printed.split(" or "):
+            part_match = _SOURCE_CLASS_PART.match(part.strip())
+            if part_match is None:
+                return ()
+            colour = part_match.group("spell_color")
+            if colour is not None:
+                found.append(
+                    (SPELL_SOURCE, COLOR_CLASS_PREFIX + _COLOR_WORDS[colour])
+                )
+                continue
+            source = part_match.group("ability_class")
+            found.append((
+                ABILITY_SOURCE,
+                COLOR_CLASS_PREFIX + _COLOR_WORDS[source]
+                if source in _COLOR_WORDS else source,
+            ))
+        classes = tuple(found)
     described = subject_filter_payload(match.group("subject"), plural=True)
     if not described:
         return ()
-    return (BoardTargetImmunity(described, spell_class),)
+    return tuple(
+        BoardTargetImmunity(described, named, source_kind)
+        for source_kind, named in classes
+    )
 
 
-def board_target_immunity_classes(game, permanent) -> frozenset[str]:
+def board_target_immunity_classes(
+    game, permanent, source_kind: str = SPELL_SOURCE,
+) -> frozenset[str]:
     """Every class of spell that may not target *permanent*, read off the board.
+
+    *source_kind* asks the other half instead: with :data:`ABILITY_SOURCE` the
+    answer is every class of **source** whose abilities may not target it
+    ("…or abilities from blue sources", Spellbane Centaur), the strings
+    :func:`source_is_in_class` reads. One scan for both halves, because they
+    are conjuncts of one printed sentence about one described set — and a
+    spell and an ability are separately targeted (CR 115.1a, CR 115.1c/d), so
+    neither half may answer for the other.
 
     The board-wide sibling of :func:`spell_target_immunity_classes`, and it
     takes the *game* because that is the whole difference: the clause is printed
@@ -309,7 +355,7 @@ def board_target_immunity_classes(game, permanent) -> frozenset[str]:
     for seat, source in game.permanents_with_controller():
         for line in _lines_of(source.effective_card):
             for found in board_target_immunities(line):
-                if found.spell_class in classes:
+                if found.source_kind != source_kind or found.spell_class in classes:
                     continue
                 if subject_matches(
                     game, permanent, dict(found.filter),
@@ -481,9 +527,69 @@ def immunity_claims_line(line: str) -> bool:
             # enforcement reads, or the card is admitted with the protection
             # absent.
             or board_target_immunities(clause)
+            or graveyard_target_immunity(clause)
         )
         for clause in clauses
     )
+
+
+#: "Cards in graveyards can't be the targets of spells or abilities." (Ground
+#: Seal.) The fourth subject a shroud can be printed about, and the first that
+#: is not a permanent: every reader above is asked through
+#: ``Game._can_be_targeted``, which takes a permanent, and a card in a
+#: graveyard is not one (CR 115.2: an object in another zone is a target only
+#: where the spell or ability says it can be).
+#:
+#: Whole, with no payload: the sentence names every graveyard, every card in
+#: one, and both kinds of targeting object (CR 115.1a spells, CR 115.1c/d
+#: abilities — triggered as well as activated, which is where it differs from
+#: Peace Talks' "spells or **activated** abilities"). A printing that narrowed
+#: any of the three would be a different rule and stays unmatched.
+_GRAVEYARD_TARGET_IMMUNITY = re.compile(
+    r"^cards in graveyards can't be the targets of spells or abilities$"
+)
+
+
+def graveyard_target_immunity(line: str) -> bool:
+    """Whether *line* is, in full, the graveyard shroud.
+
+    One matcher for the claim (:func:`immunity_claims_line`) and for the
+    enforcement (:func:`graveyard_cards_untargetable`), so a wording admitted
+    here is one the target enumeration really honours.
+    """
+    return bool(_GRAVEYARD_TARGET_IMMUNITY.match(
+        " ".join((line or "").split()).strip().rstrip(".").lower()
+    ))
+
+
+def graveyard_cards_untargetable(game) -> str | None:
+    """The name of a permanent under which no card in a graveyard may be
+    targeted — or None when nothing on the battlefield says so.
+
+    Asked of the board when a target is chosen and again as the object
+    resolves, never latched: the card's ruling is that the ability "only works
+    when Ground Seal is on the battlefield" (CR 113.6), so it ends with the
+    permanent and reaches a spell cast before it arrived (CR 608.2b).
+
+    Read off ``effective_card``, so a copy answers with what it copied
+    (CR 707.2) and a text change is folded in (CR 612.1).
+
+    **Targets only.** The ruling's other half: "Abilities that don't target
+    cards in graveyards (like the one Tormod's Crypt has) can still affect
+    those cards." So this is asked by the one enumeration of graveyard
+    *targets* (``legality._enumerate_graveyard_creatures``) and by the
+    resolution re-check (``Game.graveyard_target_is_legal``), and by nothing
+    that merely moves a card — a cost paid out of a graveyard, a mass exile,
+    and a flashback cast (CR 702.34a casts the card; nothing targets it) are
+    all untouched.
+    """
+    if game is None:
+        return None
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            if graveyard_target_immunity(line):
+                return permanent.card.name
+    return None
 
 
 def _lines_of(card) -> list[str]:

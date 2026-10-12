@@ -39,7 +39,8 @@ writes it and the loop here that reads it still spell it once.
 
 from __future__ import annotations
 
-from ...oracle_types import CHOSEN_TARGET_PERMANENTS, OracleInstruction
+from ...oracle_types import (CHOSEN_TARGET_PERMANENTS, COUNTERS_REMOVED,
+                             OracleInstruction)
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -257,6 +258,48 @@ def _lower_for_each_counters_placed(
             "for_each", "",
             {
                 "iterator": {"produced_by": _COUNTERS_PLACED_THIS_WAY},
+                "effect": inner,
+            },
+        ),
+    )
+
+
+def _lower_for_each_counter_removed(
+    node: ast.ForEach,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"**For each delay counter removed this way,** you lose 1 life unless you
+    pay {1}{W}." (Delaying Shield.)
+
+    :func:`_lower_for_each_life_lost`'s twin, one channel over: a loop whose
+    iterator is a number, read off the *resolution scratchpad* — how many
+    counters the sentence in front took off — rather than off the firing
+    event. One repetition per counter, so each is its own offer and its own
+    payment, which is what "for each … unless you pay" says (the price is
+    {1}{W} a counter, not {1}{W} for the lot).
+
+    Refused without the producer, as every "this way" window is: with no
+    earlier removal the words name a number nobody recorded, an unwritten
+    quantity reads as zero, and the card would report supported and never ask
+    anybody for anything. The printed counter kind is not compared with the
+    record — the record is a count, not a kind — so what is checked is that a
+    step of this same effect removed counters at all; the body does not name
+    the kind and has nothing to disagree with.
+    """
+    if COUNTERS_REMOVED not in produced:
+        raise LoweringError(
+            "'counters removed this way' needs a step of this effect that "
+            "removed some",
+            node=node,
+        )
+    if not inner:
+        raise LoweringError("a per-counter loop with no effect in it", node=node)
+    return (
+        OracleInstruction(
+            "for_each", "",
+            {
+                "iterator": {"repeat_from_result": COUNTERS_REMOVED},
                 "effect": inner,
             },
         ),

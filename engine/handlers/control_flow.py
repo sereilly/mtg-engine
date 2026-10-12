@@ -46,7 +46,7 @@ from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
 from ._common import (CHOSEN_CARD_TYPE, _card_matches_filter, attached_host,
-                      defending_player_seat, flip_coin,
+                      defending_player_seat, flip_coin, flip_coin_for,
                       permanent_matches_filter, permanent_state_holds,
                       triggering_spell)
 from .registry import effect_handler
@@ -2358,7 +2358,7 @@ def flip_a_coin(game: Game, instruction: OracleInstruction, context: OracleExecu
     effect of its own — it is the randomiser the conditionals branch on, and it
     lives beside ``if_then`` for the same reason ``sequence`` does.
     """
-    won = flip_coin()
+    won = flip_coin_for(game, context.caster, flip=flip_coin)
     context.results["coin_flip"] = won
     game.log.append(
         f"{context.card.name}: {'won' if won else 'lost'} the coin flip"
@@ -2395,7 +2395,7 @@ def flip_coins_until_loss(game: Game, instruction: OracleInstruction, context: O
     made = 0
     clean = True
     while made < limit and clean:
-        clean = flip_coin()
+        clean = flip_coin_for(game, context.caster, flip=flip_coin)
         made += 1
         game.log.append(
             f"{card_name}: {'won' if clean else 'lost'} the coin flip"
@@ -2436,7 +2436,7 @@ def coin_flip_stakes_loop(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{card_name}: no opponent to play against")
         return True, "resolved"
     stake = max(0, int(instruction.payload.get("stake", 1)))
-    won = flip_coin()
+    won = flip_coin_for(game, caster, flip=flip_coin)
     context.results["coin_flip"] = won
     if won:
         game._gain_life(caster, stake, card_name)
@@ -4836,8 +4836,17 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # is the only thing that can answer. Read beside the two counted forms
     # above, before either branch that wants a board to scan.
     repeat_cost = filters.get("repeat_from_cost")
+    # "For each **delay counter removed this way**" (Delaying Shield) — the
+    # fourth number, and the plainest: a count an earlier step of this same
+    # effect wrote into the resolution scratchpad, with no seat and no base.
+    # Read once, before the first repetition, for the snapshot rule above: a
+    # body that removed more counters must not lengthen its own loop.
+    repeat_result = filters.get("repeat_from_result")
     seat_set = filters.get("players")
-    if repeat_cost is not None:
+    if repeat_result is not None:
+        times = int(context.results.get(str(repeat_result), 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif repeat_cost is not None:
         paid = (context.choices or {}).get("additional_costs_paid") or {}
         times = int(paid.get(str(repeat_cost), 0) or 0)
         matched = [_A_REPETITION] * max(0, times)

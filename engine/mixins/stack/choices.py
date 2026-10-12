@@ -3278,6 +3278,18 @@ class PendingChoicesMixin:
             player_index, int(option_index), kind="reveal_until_kind_draw"
         )
 
+    def confirm_skip_draw(self, player_index: int, skip: bool) -> bool:
+        """Resolve the oldest pending "you may skip that draw instead" offer
+        for *player_index* (Obstinate Familiar).
+
+        Index 0 is the draw and index 1 the skip, the order the interceptor
+        offers them in; which of the two a non-interactive seat takes is the
+        interceptor's to say (it depends on whether there is a card to draw).
+        """
+        return self.resolve_replacement_choice(
+            player_index, 1 if skip else 0, kind="skip_draw"
+        )
+
     def confirm_leng_discard(self, player_index: int, to_library: bool) -> bool:
         """Resolve the oldest pending Library of Leng destination choice for
         *player_index*: the discarded card goes on top of their library (the
@@ -11946,6 +11958,26 @@ register_choice(
     # and the decline - runs through one resolver, and the draw a decline
     # remakes is the resolver's own business. So nothing inside the resolution
     # is waiting on the answer, exactly as for the offers around it.
+    default_at_arm=True,
+    spectator_visible=True,
+    hidden_for_ai=False,
+)
+
+register_choice(
+    # "If you would draw a card, you may skip that draw instead." (Obstinate
+    # Familiar.) The third optional replacement of one draw, registered the
+    # way the two above are and for their reasons: the draw that armed it was
+    # consumed, both answers run through one resolver, and a non-interactive
+    # seat takes the stated default where it stands.
+    "skip_draw",
+    resolve=_resolve_replacement,
+    default=_default_replacement,
+    action="skip_draw_confirm",
+    prompt_key="skip_draw",
+    blocked_detail=(
+        "choose whether to skip that draw (Obstinate Familiar) before other "
+        "actions"
+    ),
     default_at_arm=True,
     spectator_visible=True,
     hidden_for_ai=False,

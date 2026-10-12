@@ -4442,6 +4442,19 @@ class SpellCastingMixin:
                         # e.g. "enchant creature card in a graveyard" (Animate Dead).
                         # If the player chose a specific graveyard card, validate that
                         # choice; otherwise require at least one legal creature card.
+                        #
+                        # "Cards in graveyards can't be the targets of spells
+                        # or abilities." (Ground Seal.) This arm is a list of
+                        # its own — it predates ``_enumerate_graveyard_creatures``,
+                        # where every other graveyard target is asked the
+                        # question — so an Aura spell that enchants a card in
+                        # a graveyard (CR 303.4a: it targets what it will
+                        # enchant) has to be asked here as well. The picker
+                        # already offered nothing; the cast went through.
+                        from ...target_immunity import graveyard_cards_untargetable
+
+                        if graveyard_cards_untargetable(self) is not None:
+                            return False, f"no valid target for {card.name}"
                         if isinstance(target_permanent_index, int):
                             gy_idx = target_player_index if target_player_index is not None else caster_index
                             if gy_idx < 0 or gy_idx >= len(self.players):

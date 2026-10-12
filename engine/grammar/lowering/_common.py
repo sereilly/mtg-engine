@@ -536,3 +536,26 @@ def _check_grantable(keyword: str, node) -> None:
         raise LoweringError(
             f"granting {keyword!r} needs the printed number it takes", node=node
         )
+    # Protection is the word plus a **quality** (CR 702.16a), and the quality
+    # has to be one a shield answers to. The grant handler writes whatever
+    # words it is handed into the permanent's protection channel and
+    # ``_protection_qualities`` drops the ones it cannot read — so an
+    # unreadable quality was a grant that compiled, reported supported and
+    # protected from nothing. The qualities resolved from a *record* (a chosen
+    # colour, a chosen permanent's colours) are the grant handler's own and are
+    # gated by the lowering that knows whether the record exists.
+    if keyword.startswith("protection from "):
+        from ...keywords import protection_qualities_named
+        from ..keywords import (CHOSEN_COLOR_PROTECTIONS,
+                                PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS)
+
+        if (
+            keyword not in CHOSEN_COLOR_PROTECTIONS
+            and keyword != PROTECTION_FROM_EACH_OF_THAT_PERMANENTS_COLORS
+            and protection_qualities_named(
+                keyword[len("protection from "):]
+            ) is None
+        ):
+            raise LoweringError(
+                f"no shield answers to {keyword!r}", node=node
+            )

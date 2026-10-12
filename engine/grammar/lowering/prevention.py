@@ -24,7 +24,7 @@ from .. import ast
 from ..errors import LoweringError
 from ..vocabulary import IMPLEMENTED_KEYWORDS
 from ._blankets import _lower_prevent_all
-from ._events import CHOSEN_DAMAGE_SOURCE
+from ._events import CHOSEN_DAMAGE_SOURCE, _EVENT_SUBJECT_OBJECTS
 from ._prevented_riders import (
     _alternate_amount,
     _counted_pool_counter_rider,
@@ -889,7 +889,7 @@ def _lower_choose_damage_source(
 
 
 def _lower_chosen_source_next_damage(
-    node: ast.ChosenSourceNextDamage, produced: frozenset[str],
+    node: ast.ChosenSourceNextDamage, event: str | None, produced: frozenset[str],
 ) -> tuple[OracleInstruction, ...]:
     """"The next time that source would deal damage this turn, it deals double
     that damage instead." / "…, prevent that damage." (Desperate Gambit.)
@@ -913,15 +913,34 @@ def _lower_chosen_source_next_damage(
         raise LoweringError(
             f"no instruction carries out {node.modification!r}", node=node
         )
-    if CHOSEN_DAMAGE_SOURCE not in produced:
-        raise LoweringError(
-            "nothing in front of this sentence chose the source it names",
-            node=node,
-        )
     if node.duration.kind not in _REST_OF_TURN:
         raise LoweringError(
             "a one-shot damage rider lasts exactly this turn", node=node
         )
-    return (
-        OracleInstruction(kind, "", {"source_from": CHOSEN_DAMAGE_SOURCE}),
-    )
+    if node.source == "event_subject":
+        # "Whenever a creature attacks, … the next time **that creature** would
+        # deal combat damage this turn, …" (Impulsive Maneuvers.) The pronoun's
+        # only possible antecedent is the object the trigger's event was about,
+        # so the event has to be one whose fire site froze one — the same
+        # producer gate as the branch below, asked of the event instead of the
+        # records. Under any other line the words name nobody and the handler
+        # would arm a rider on nothing.
+        if event not in _EVENT_SUBJECT_OBJECTS:
+            raise LoweringError(
+                f"no event named {event!r} froze the creature this sentence "
+                "names",
+                node=node,
+            )
+        payload: dict[str, object] = {"source_from": "event_subject"}
+    else:
+        if CHOSEN_DAMAGE_SOURCE not in produced:
+            raise LoweringError(
+                "nothing in front of this sentence chose the source it names",
+                node=node,
+            )
+        payload = {"source_from": CHOSEN_DAMAGE_SOURCE}
+    if node.combat_only:
+        # Emitted only when printed, so Desperate Gambit's two instructions
+        # stay byte-identical.
+        payload["combat_only"] = True
+    return (OracleInstruction(kind, "", payload),)

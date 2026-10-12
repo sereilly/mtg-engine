@@ -615,9 +615,14 @@ def grantable_protection_quality(word: str) -> bool:
     ends — this file's own text table and ``grammar/statics.py``'s lowering —
     because the two must admit the same sentences.
     """
-    from .keywords import protection_quality
+    from .keywords import protection_qualities_named
 
-    return protection_quality(word) is not None
+    # ``protection_qualities_named`` rather than ``protection_quality``: the
+    # reader ``_protection_qualities`` builds a lord's grant with, which also
+    # reads the two shorthands for several abilities — "each color"
+    # (CR 702.16h) and "each of its colors" (CR 702.16i, Earnest Fellowship),
+    # the second computed per creature the anthem reaches.
+    return protection_qualities_named(word) is not None
 
 
 def _parse_subject(words: list[str]) -> LordBuffFilter | None:

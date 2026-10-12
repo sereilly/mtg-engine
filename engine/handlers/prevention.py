@@ -30,7 +30,8 @@ from ..shields import (
     make_whole_source,
 )
 from ..divided_damage import DIVIDED_TARGETS, EVENLY, divide, divided_entry
-from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm)
+from ..next_damage import (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT, arm,
+                           rider_key)
 from ..oracle_types import single_chosen_id
 from ._common import (default_announced_permanent, divided_target_permanent,
                       names_a_target_list,
@@ -1550,15 +1551,29 @@ def _arm_next_damage_rider(
     permanents had nothing to choose, and the flip still happened. The rider is
     simply not armed, and the log says so rather than saying nothing.
     """
-    recorded = (context.results or {}).get(str(instruction.payload.get("source_from")))
+    source_from = str(instruction.payload.get("source_from"))
+    if source_from == "event_subject":
+        # "Whenever a creature attacks, flip a coin. If you win the flip, the
+        # next time **that creature** would deal combat damage this turn, …"
+        # (Impulsive Maneuvers.) The object the firing event was about, by the
+        # id the fire site froze (CR 603.10) — the trigger chose nothing, so
+        # there is no record of this resolution's to read.
+        recorded = (context.trigger_context or {}).get("event_subject_permanent_id")
+    else:
+        recorded = (context.results or {}).get(source_from)
     card_name = getattr(context.card, "name", "an effect")
     source = game.permanent_by_id(recorded) if isinstance(recorded, int) else None
-    if source is None or not arm(source, key):
-        game.log.append(f"{card_name}: no source was chosen")
+    combat_only = bool(instruction.payload.get("combat_only"))
+    if source is None or not arm(source, rider_key(key, combat_only=combat_only)):
+        game.log.append(
+            f"{card_name}: "
+            + ("that creature is gone" if source_from == "event_subject"
+               else "no source was chosen")
+        )
         return True, "resolved"
     game.log.append(
-        f"{card_name}: the next damage {source.card.name} would deal this turn "
-        f"{description}"
+        f"{card_name}: the next {'combat ' if combat_only else ''}damage "
+        f"{source.card.name} would deal this turn {description}"
     )
     return True, "resolved"
 

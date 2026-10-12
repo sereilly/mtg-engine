@@ -87,8 +87,8 @@ from .damage_redirects import (
     live_recipient,
 )
 from .hand_locks import lock_card_in_hand
-from .next_damage import (DAMAGE_DOUBLED_NEXT, armed,
-                          spend as spend_next_damage)
+from .next_damage import (DAMAGE_DOUBLED_NEXT, armed_for_event,
+                          spend_for_event)
 from .search_filters import card_has_type
 from .models import Permanent, PlayerState
 from .replacement_choices import (
@@ -198,6 +198,28 @@ DAMAGE_BECOMES_COUNTERS = 8  # Lichenthrope
 # the whole event, so a shield spent first is spent on damage that was never
 # going to be dealt.
 DAMAGE_BECOMES_LIBRARY_EXILE = 9  # Crumbling Sanctuary
+# "If damage would be dealt to **you**, put that many delay counters on this
+# enchantment instead." (Delaying Shield.) / "…exile that many cards from your
+# graveyard instead. If you can't, you lose the game." (Nefarious Lich.) The
+# same substitution as the three at 7-9 with one difference that moves it to
+# the *other* side of the shields: what the damage becomes is a **price its
+# own controller pays** — a counter that costs {1}{W} or a life at the next
+# upkeep, a card out of a graveyard that may be the game — where a -1/-1
+# counter and a card off a symmetric library were paid whether or not a shield
+# was spent. CR 616.1e gives the choice to the affected player, and that
+# player would take every point a Circle of Protection or a prevention pool
+# stops before paying for the rest, so these sit **behind** every shield
+# (10-660) and are asked only about what the shields let through.
+#
+# Ahead of the multipliers at 700-720, for the mirror of that argument: the
+# price is "that many", and a player choosing the order pays for the printed
+# damage rather than for double it.
+#
+# The Shield before the Lich: both consume the event, so a seat holding both
+# takes one, and the default should be the one whose price can still be paid
+# off rather than the one that can end the game on the spot.
+DAMAGE_TO_YOU_BECOMES_COUNTERS = 670  # Delaying Shield
+DAMAGE_BECOMES_GRAVEYARD_EXILE = 680  # Nefarious Lich
 
 # …and multipliers go *after* the shields, at the far end of the shared space.
 # CR 616.1e gives the choice to the affected player, and this is the order they
@@ -285,6 +307,12 @@ DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
 # order. Being optional, the number matters less than for its neighbours -
 # declining leaves the event for whatever is behind it.
 DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
+# Beside it and for its reason exactly: the second optional consuming
+# replacement, a decision its own controller makes about their own draw. After
+# Pursuit, because that one hands something back for the draw it takes and this
+# one hands back nothing — the order a player holding both would choose, which
+# CR 616.1e permits. Declining either leaves the event for whatever is behind.
+DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -1961,6 +1989,197 @@ def _damage_becomes_library_exile(game, payload: dict) -> ReplacementOutcome | N
     return ReplacementOutcome(replaced=True)
 
 
+#: "If damage would be dealt to **you**, put that many **delay** counters on
+#: this **enchantment** instead." (Delaying Shield.) Lichenthrope's sentence
+#: with the two ends moved: the damage was headed for a *player*, and the
+#: counters land on the permanent printing the line rather than on what was
+#: hit. The counter word and the noun the card calls itself are payload, the
+#: way Pursuit of Knowledge's are — a creature printing the sentence with
+#: another word is printing the same replacement.
+_DAMAGE_TO_YOU_BECOMES_COUNTERS_RE = re.compile(
+    r"^if damage would be dealt to you, put that many "
+    r"(?P<counter>[a-z][a-z'-]*) counters on this "
+    r"(?:creature|artifact|enchantment|land|permanent) instead$"
+)
+
+
+def damage_to_you_becomes_counters(line: str) -> str | None:
+    """The counter *line* turns its controller's damage into, or None.
+
+    One reader for the interceptor and for the support gate
+    (``replacement_claims_line``), so what is claimed and what fires cannot
+    drift.
+    """
+    match = _DAMAGE_TO_YOU_BECOMES_COUNTERS_RE.match(
+        " ".join((line or "").split()).strip().lower().rstrip(".")
+    )
+    return match.group("counter") if match is not None else None
+
+
+def _own_counter_substitutions(game, payload: dict) -> list:
+    """``(permanent, counter)`` for every permanent of the damaged player's
+    that turns this damage into counters on itself. Pure.
+
+    "Dealt to **you**" is the permanent's controller (CR 109.5), so the scan is
+    the recipient's own battlefield — an opponent's Shield does nothing for
+    the player being hit. Read off ``effective_card`` (CR 707.2, CR 612.1).
+    """
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or not isinstance(recipient, PlayerState):
+        return []
+    found = []
+    for permanent in game.controlled_by(recipient):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            counter = damage_to_you_becomes_counters(line)
+            if counter is not None:
+                found.append((permanent, counter))
+                break
+    return found
+
+
+def _applies_damage_to_you_becomes_counters(game, payload: dict) -> bool:
+    return bool(_own_counter_substitutions(game, payload))
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_TO_YOU_BECOMES_COUNTERS,
+    applies=_applies_damage_to_you_becomes_counters,
+)
+def _damage_to_you_becomes_counters(game, payload: dict) -> ReplacementOutcome | None:
+    """Delaying Shield: "If damage would be dealt to you, put that many delay
+    counters on this enchantment instead."
+
+    CR 614's substitution, not CR 615's prevention — the card's ruling says so
+    in as many words ("the damage is replaced and is not 'prevented'. This
+    means it can replace damage that 'can't be prevented'"), which is why this
+    is registered without ``prevents=True``: an event locked against
+    prevention still reaches it. The damage is **not dealt**: no life is lost,
+    no lifelink, nothing that watches damage being dealt to a player fires.
+
+    One permanent takes the counters — the oldest, by ``permanent_id`` — for
+    the reason Pursuit of Knowledge's offer names one source: the event is
+    consumed by the first replacement applied to it, so a second Shield has
+    nothing left to replace.
+    """
+    found = _own_counter_substitutions(game, payload)
+    if not found:  # pragma: no cover - the predicate just said otherwise
+        return None
+    from .named_counters import add_counters
+
+    permanent, counter = min(found, key=lambda entry: entry[0].permanent_id)
+    amount = int(payload["amount"])
+    total = add_counters(permanent, counter, amount)
+    game.log.append(
+        f"{permanent.card.name}: {amount} damage to {payload['recipient'].name} "
+        f"becomes {amount} {counter} counter(s) instead ({total} on it)"
+    )
+    return ReplacementOutcome(replaced=True)
+
+
+#: Nefarious Lich. One printed line, two sentences, and the constant is both
+#: because the interceptor performs both — the exile, and CR 104.3e behind a
+#: graveyard that cannot pay. A claim stopping at the first sentence would
+#: admit a card whose drawback is the second.
+DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT = (
+    "if damage would be dealt to you, exile that many cards from your "
+    "graveyard instead. if you can't, you lose the game"
+)
+
+
+def _damage_graveyard_exile_source(game, payload: dict):
+    """The damaged player's own permanent whose text substitutes this damage,
+    or None. Pure. "To **you**" is its controller (CR 109.5)."""
+    recipient = payload["recipient"]
+    if payload["amount"] <= 0 or not isinstance(recipient, PlayerState):
+        return None
+    for permanent in game.controlled_by(recipient):
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            if (
+                " ".join(line.split()).strip().lower().rstrip(".")
+                == DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT
+            ):
+                return permanent
+    return None
+
+
+def _applies_damage_becomes_graveyard_exile(game, payload: dict) -> bool:
+    return _damage_graveyard_exile_source(game, payload) is not None
+
+
+def _graveyard_cards_already_owed(game, seat: int) -> int:
+    """How many cards of *seat*'s graveyard an unanswered exile pick has
+    already spoken for.
+
+    A pick is a prompt, so the cards it will take are still in the pile when
+    the next damage event asks whether the pile can pay — three attackers are
+    three events, and the third must not count cards the first two are about
+    to exile.
+    """
+    return sum(
+        int(choice.data.get("count", 0))
+        for choice in game.pending_choices
+        if choice.kind == "graveyard_exile_pick"
+        and int(choice.data.get("owner_index", -1)) == seat
+        and not choice.data.get("up_to")
+    )
+
+
+@replacement_effect(
+    "damage_to_player", DAMAGE_BECOMES_GRAVEYARD_EXILE,
+    applies=_applies_damage_becomes_graveyard_exile,
+)
+def _damage_becomes_graveyard_exile(game, payload: dict) -> ReplacementOutcome | None:
+    """Nefarious Lich: "If damage would be dealt to you, exile that many cards
+    from your graveyard instead. If you can't, you lose the game."
+
+    CR 614's substitution: the damage is **not dealt** — no life is lost, and
+    nothing that watches damage dealt to a player fires. What it becomes is a
+    price paid out of the graveyard, and the second sentence is this
+    replacement's own failure branch rather than a separate ability (Forbidden
+    Crypt's shape, one zone over): with fewer cards than damage the player
+    loses the game on the spot (CR 104.3e), applied here and not left to a
+    state-based action.
+
+    **Which cards go is the player's choice**, and in this block it matters —
+    a flashback card and a land are not the same card to give up. So it is
+    asked through the pick that already exists for "exile N cards from that
+    graveyard" (``arm_graveyard_exile_pick``, Rysorian Badger's prompt): an
+    interactive seat is queued and the stack object that dealt the damage
+    waits on the answer, every other seat takes the stated default — the first
+    N in pile order — where the effect stands. A pile holding exactly the
+    number owed is no choice, and is exiled without asking.
+    """
+    from types import SimpleNamespace
+
+    source = _damage_graveyard_exile_source(game, payload)
+    if source is None:  # pragma: no cover - the predicate just said otherwise
+        return None
+    recipient = payload["recipient"]
+    seat = game.players.index(recipient)
+    amount = int(payload["amount"])
+    available = len(recipient.graveyard) - _graveyard_cards_already_owed(game, seat)
+    if available < amount:
+        if not recipient.lost:
+            recipient.lost = True
+            game.log.append(
+                f"{source.card.name}: {recipient.name} could not exile {amount} "
+                f"card(s) from their graveyard and lost the game (104.3e)"
+            )
+        return ReplacementOutcome(replaced=True)
+    game.log.append(
+        f"{source.card.name}: {amount} damage to {recipient.name} becomes "
+        f"{amount} card(s) exiled from their graveyard instead"
+    )
+    game.arm_graveyard_exile_pick(
+        seat, seat, {"count": amount, "any_card": True},
+        # The pick's resolver records what was exiled on its context's
+        # scratchpad, for a sentence that reads it back. Nothing here does, so
+        # this is a context with a name to show and nowhere a result goes.
+        SimpleNamespace(card=source.card, results={}),
+    )
+    return ReplacementOutcome(replaced=True)
+
+
 #: The damage-multiplier sentence, with **two** words as payload: the factor
 #: and whether the source is narrowed to the reader's own. It replaced a
 #: ``TRIPLE_DAMAGE_TEXT`` constant, which was one card's printing of it and
@@ -2121,7 +2340,12 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
     """
     if payload["amount"] <= 0:
         return False
-    return armed(payload.get("source"), DAMAGE_DOUBLED_NEXT) > 0
+    # "…would deal **combat** damage…" (Impulsive Maneuvers) answers only to a
+    # combat event; the unnarrowed rider (Desperate Gambit) to every one.
+    return armed_for_event(
+        payload.get("source"), DAMAGE_DOUBLED_NEXT,
+        combat=bool(payload.get("combat")),
+    ) > 0
 
 
 @replacement_effect(
@@ -2153,7 +2377,9 @@ def _double_next_damage_from_chosen_source(
     """
     source = payload.get("source")
     amount = int(payload["amount"])
-    spend_next_damage(source, DAMAGE_DOUBLED_NEXT)
+    spend_for_event(
+        source, DAMAGE_DOUBLED_NEXT, combat=bool(payload.get("combat"))
+    )
     card = getattr(source, "card", source)
     game.log.append(
         f"{amount} damage from {getattr(card, 'name', 'a chosen source')} "
@@ -3961,6 +4187,139 @@ def _resolve_draw_becomes_counter(
     return drawn
 
 
+#: "If you would draw a card, you may skip that draw instead." (Obstinate
+#: Familiar.) Pursuit of Knowledge's sentence with nothing where the counter
+#: was: an optional replacement of one draw by **no event at all** (CR 614.10:
+#: "'Skip [something]' is the same as 'Instead of doing [something], do
+#: nothing.'").
+#:
+#: The whole line, with no payload: the sentence names the draw, the seat and
+#: the option and nothing else. A printing that added a condition or a rider
+#: would be a different rule and stays unmatched.
+SKIP_DRAW_TEXT = "if you would draw a card, you may skip that draw instead"
+
+
+def skip_draw_line(line: str) -> bool:
+    """Whether *line* is, in full, the optional skip. One reader for the
+    interceptor and for the claim (``REPLACEMENT_LINES``)."""
+    return " ".join((line or "").split()).strip().lower().rstrip(".") == SKIP_DRAW_TEXT
+
+
+def _skip_draw_sources(game, payload: dict) -> list:
+    """Every permanent offering to skip *this* draw.
+
+    "If **you** would draw a card" is CR 109.5's seat, so only the drawing
+    player's own permanents offer it. CR 614.5's exclusion is honoured through
+    the ``exclude_sources`` key every draw replacement here reads — the draw a
+    declined offer leaves is remade through the seam, and a source already
+    asked must not ask again. Read off ``effective_card`` (CR 707.2, CR 612.1),
+    and pure, like every applicability predicate in this file.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if perm.permanent_id not in exclude
+        and any(
+            skip_draw_line(line)
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_skip_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _skip_draw_sources(game, payload)
+    )
+
+
+@replacement_effect("draw", DRAW_MAY_BE_SKIPPED, applies=_applies_skip_draw)
+def _skip_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Obstinate Familiar: "If you would draw a card, you may skip that draw
+    instead."
+
+    One draw at a time (CR 121.2 makes a multi-card instruction that many
+    draws), and **optional**, so it is a :class:`ReplacementChoice` — the
+    shape Pursuit of Knowledge's offer above has, for its reasons: the answer
+    arrives from a human on a later request, and both answers finish through
+    one registered resolver.
+
+    The default a non-interactive seat takes is the choice a player would
+    make: draw the card — unless the library is **empty**, where the draw
+    would lose the game at the next state-based check (CR 704.5b) and skipping
+    it is the whole reason the card is played. A seat that always skipped
+    would never draw again; one that never did would deck itself beside the
+    permanent that prevents it.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _skip_draw_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="skip_draw",
+            player_index=seat,
+            options=("draw the card", "skip the draw"),
+            default_option=0 if player.library else 1,
+            data={
+                "source_id": source.permanent_id,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may skip that draw ({source.card.name})"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("skip_draw")
+def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    """Carry out the answer to Obstinate Familiar's offer.
+
+    Option 0 declines: the draw is remade through ``_draw_with_replacements``
+    with the offering permanent excluded, so every *other* draw replacement
+    still gets its turn and this one is not asked twice (CR 614.5).
+
+    Option 1 skips: nothing happens and no card is drawn, so "whenever you
+    draw a card" sees one fewer draw and an empty library is never drawn from.
+
+    Nothing here reads the source again, so a Familiar that left the
+    battlefield while the offer was queued changes neither answer: the
+    replacement was applied when it was offered (CR 614.1), and the two
+    options are what it offered.
+    """
+    player = game.players[choice.player_index]
+    data = choice.data
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=tuple(data.get("exclude_sources") or ()),
+        )
+    else:
+        source = game.permanent_by_id(int(data["source_id"]))
+        game.log.append(
+            f"{player.name} skipped a draw"
+            + (f" ({source.card.name})" if source is not None else "")
+        )
+    if remaining > 0:
+        # The draws queued behind this one are their own events (CR 121.2) and
+        # are offered on their own — including by this source again.
+        drawn += game._draw_with_replacements(player, remaining)
+    return drawn
+
+
 def _chains_affected_draws(payload: dict) -> int:
     """How many of this event's draws the exemption leaves.
 
@@ -4774,6 +5133,13 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # stopping at the first sentence would admit the card with the clause that
     # makes it a real card doing nothing.
     (RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, ""),
+    # _skip_instead_of_drawing (Obstinate Familiar): the phrase is the whole
+    # line. The offer and both of its answers are the interceptor's.
+    (SKIP_DRAW_TEXT, ""),
+    # _damage_becomes_graveyard_exile (Nefarious Lich): the constant is both
+    # printed sentences, because the interceptor performs both — the exile,
+    # and CR 104.3e behind a graveyard that cannot pay.
+    (DAMAGE_BECOMES_GRAVEYARD_EXILE_TEXT, ""),
 )
 
 
@@ -4830,6 +5196,11 @@ def replacement_claims_line(line: str) -> bool:
     # of the same reader the interceptor uses, so a kind it cannot read leaves
     # the line unclaimed rather than admitted with no counters arriving.
     if damage_becomes_counters(normalized) is not None:
+        return True
+    # "If damage would be dealt to you, put that many delay counters on this
+    # enchantment instead." (Delaying Shield), the same arrangement: the
+    # counter word and the card's own noun are payload.
+    if damage_to_you_becomes_counters(normalized) is not None:
         return True
     # "If an instant or sorcery source would deal 3 or more damage to you…"
     # (Forethought Amulet), the same arrangement for the same reason.

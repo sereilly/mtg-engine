@@ -115,6 +115,15 @@ def _w3g2_table(catalog):
         perm.metadata["summoning_sick"] = False
     game.players[0].battlefield.extend([mine, *fodder])
     game.players[1].battlefield.append(theirs)
+    # The same fodder one zone over: a card in hand, for a line whose cost is
+    # a discard. "Discard a card: This creature gains protection from the
+    # color of your choice until end of turn." (Resilient Wanderer) is the
+    # first such line in the population, and with an empty hand the engine
+    # rightly refuses the activation (CR 602.2b through CR 601.2h) — so the
+    # sweep stopped at a cost it could not pay and never reached the choice
+    # it is about. The Forests above are there for the same reason, for a
+    # sacrifice.
+    game.players[0].hand.append(catalog["Forest"])
     return game, mine
 
 
