@@ -257,9 +257,16 @@ def _parse_create_delayed_trigger(stream: TokenStream, parse_statement) -> "ast.
         # order the "when" branch puts `_parse_targeted_combat_delay` in.
         aimed = _parse_targeted_damage_delay(stream)
         if aimed is not None:
-            target, agent = aimed
-            event, binds, once, duration = (
-                "bound_permanent_deals_combat_damage", True, False, "end_of_turn",
+            # "Whenever **target creature deals damage**, you gain that much
+            # life." (Spiritualize) is the same opener with no "combat", no
+            # narrowed recipient and its window printed in front of the
+            # sentence — so the event and the duration are the opener's own
+            # answer, not constants of this branch.
+            target, agent, combat_only, duration = aimed
+            event, binds, once = (
+                "bound_permanent_deals_combat_damage" if combat_only
+                else "bound_permanent_deals_damage",
+                True, False,
             )
         subject = None if event is not None else _delayed_bound_subject(stream)
         if subject is not None and stream.accept_phrase("is", "dealt", "damage", "by"):

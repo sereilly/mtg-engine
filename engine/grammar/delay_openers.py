@@ -508,9 +508,19 @@ _BLOCK_PAIR_WINDOWS: tuple[tuple[tuple[str, ...], str], ...] = (
 
 def _parse_targeted_damage_delay(
     stream: TokenStream,
-) -> "tuple[ast.TargetSpec, ast.ObjectFilter] | None":
+) -> "tuple[ast.TargetSpec, ast.ObjectFilter | None, bool, str | None] | None":
     """``target <noun> deals combat damage to <noun> this turn`` — the opener
     that **chooses** the creature whose damage it watches (Acidic Dagger).
+
+    …and ``target <noun> deals damage`` (Spiritualize: "Until end of turn,
+    whenever target creature deals damage, you gain that much life."). The
+    same opener with each of its three narrowings taken away, and each is
+    *read* rather than assumed: whether the word "combat" was printed, whether
+    a phrase after "to" narrows what was damaged, and whether the window was
+    printed here ("this turn") or is still owed by a duration in front of the
+    sentence. Returns ``(target, agent or None, combat_only, duration or
+    None)``; a None duration that no leading window fills is refused by the
+    lowering, because a repeating ability with no window is one nothing lifts.
 
     :func:`_parse_targeted_combat_delay`'s twin one event over, and the same
     reason it exists: CR 602.2b picks the target as the ability is activated, so
@@ -537,19 +547,34 @@ def _parse_targeted_damage_delay(
         # ``DelayedTrigger`` binds one id.
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("deals", "combat", "damage", "to"):
+    if not stream.accept_word("deals"):
         stream.reset(mark)
         return None
-    stream.accept_word("a", "an")
-    try:
-        agent = parse_object_filter(stream)
-    except GrammarError:
+    combat_only = bool(stream.accept_word("combat"))
+    if not stream.accept_word("damage"):
         stream.reset(mark)
         return None
-    if agent is None or not stream.accept_phrase("this", "turn"):
+    agent = None
+    if stream.accept_word("to"):
+        stream.accept_word("a", "an")
+        try:
+            agent = parse_object_filter(stream)
+        except GrammarError:
+            stream.reset(mark)
+            return None
+        if agent is None:
+            stream.reset(mark)
+            return None
+    duration = "end_of_turn" if stream.accept_phrase("this", "turn") else None
+    if combat_only and (agent is None or duration is None):
+        # Acidic Dagger's whole sentence, as it was read before the opener
+        # learned the shorter one: the combat form with a word missing is a
+        # printing no card has, and the two it would be confused with — the
+        # bound-subject "whenever **that creature** deals combat damage this
+        # turn" — are read by the branch behind this one.
         stream.reset(mark)
         return None
-    return chosen, agent
+    return chosen, agent, combat_only, duration
 
 
 #: The two block events a delay may watch **about its own source**, by the

@@ -177,6 +177,14 @@ DELAYED_EVENTS: dict[str, str] = {
     # Announced from the same seam, and only for *combat* damage — a creature's
     # ping ability is not what this card watches.
     "bound_permanent_deals_combat_damage": "the damage event's announcement",
+    # "Until end of turn, whenever target creature **deals damage**, you gain
+    # that much life." (Spiritualize.) The row above without CR 510.2's word:
+    # every damage event the bound permanent is the source of, a ping ability's
+    # as much as a combat step's, to a creature or to a player. Its own event
+    # rather than that one with a flag, for the reason the two block events
+    # above are two: which announcements wake an entry is what an event *is*,
+    # and an entry armed for combat damage must not answer to anything else.
+    "bound_permanent_deals_damage": "the damage event's announcement",
     # "At the beginning of your next main phase, …" (Mana Drain). Either main
     # phase of the controller's — the next one there is.
     "controllers_next_main_phase": "the main phase entry",

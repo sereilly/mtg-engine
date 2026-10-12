@@ -559,6 +559,20 @@ def _announce(game, event: dict, dealt: int) -> None:
     # kill the creature, and by then "it can't be regenerated" has to be true.
     _apply_dealer_riders(game, source, recipient)
     emit(game, "damage_dealt", **payload)
+    if isinstance(source, Permanent):
+        # "Until end of turn, whenever target creature **deals damage**, you
+        # gain that much life." (Spiritualize.) The delayed twin of the
+        # announcement above, for the reason every delayed announcement in
+        # this function gives: the ability belongs to no permanent, so the
+        # scan ``emit`` runs cannot reach it. Any damage the bound permanent
+        # is the source of, combat or not, to a creature or a player — the
+        # narrower combat event is announced below, where it always was.
+        fire_delayed_triggers(
+            game, "bound_permanent_deals_damage",
+            subject=source,
+            agent=recipient if isinstance(recipient, Permanent) else None,
+            trigger_context={"damage_dealt": dealt},
+        )
     if not isinstance(recipient, PlayerState):
         # "Whenever that creature is dealt damage by an attacking creature this
         # turn, …" (Glyph of Life) — a delayed ability (CR 603.7) belongs to no
