@@ -3043,13 +3043,35 @@ def resolve_role_player(
     A second player role is refused here rather than resolved to the first,
     which is the same direction ``resolve_role_permanent`` takes on a slot that
     no longer resolves.
+
+    **Unless the announcement recorded its seats per role**
+    (``targeting.ROLE_SEATS``), which is what one naming two players does:
+    "…creatures **target player** controls … creatures **another target
+    player** controls" (Cultural Exchange). Then the slot is read the way its
+    siblings read theirs — positionally — and the scalar is not consulted at
+    all: a ``None`` there is a slot CR 608.2b has judged illegal, and the
+    answer is nobody rather than whoever the scalar still names. The refusal
+    above stands for a two-player payload announced *without* the list, which
+    is an announcement the cast gate does not accept.
     """
-    from ..targeting import payload_role_slot, role_is_seat, spec_roles
+    from ..targeting import (payload_role_slot, recorded_role_seats,
+                             role_is_seat, spec_roles)
 
     slot = payload_role_slot(payload, role)
     if slot is None:
         return None
     roles = spec_roles((payload or {}).get("targets"))
+    if not (0 <= slot < len(roles)) or not role_is_seat(roles[slot]):
+        return None
+    recorded = recorded_role_seats(context)
+    if recorded is not None:
+        named = recorded[slot] if slot < len(recorded) else None
+        if (
+            isinstance(named, int) and not isinstance(named, bool)
+            and 0 <= named < len(game.players)
+        ):
+            return named
+        return None
     seats = [index for index, entry in enumerate(roles) if role_is_seat(entry)]
     if seats != [slot]:
         return None

@@ -59,7 +59,7 @@ from ...target_restrictions import forbidden_target
 from ...targeting import (bounce_subject_filter, destroy_subject_filter,
                           graveyard_target_spec)
 from ...subject_filters import card_matches_any, filter_head_noun, subject_matches
-from ...targeting import (_ENCHANT_LAND_SUBTYPES, derive_cast_spec,
+from ...targeting import (ROLE_SEATS, _ENCHANT_LAND_SUBTYPES, derive_cast_spec,
                           enchant_subject_colours,
                           enchant_subject_keyword_exclusion,
                           enchant_subject_seat, instructions_as_announced,
@@ -511,6 +511,15 @@ class SpellCastingMixin:
         # A pair of targets may sit on two battlefields, which one
         # `target_player_index` cannot express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # The same announcement **one entry per role** — the shape
+        # `activate_permanent_ability` has taken since Goblin Welder: each a
+        # dict naming a ``permanent_id``, a ``seat``, or ``{"stack": True}``
+        # (the spell `target_stack_index` names). The only spelling that can
+        # say **two players** ("…target player controls … another target
+        # player controls", Cultural Exchange): `target_player_index` is one
+        # seat. Where given it is the announcement, and the two fields above
+        # are derived from it (`_role_announcement_stamps`).
+        target_role_refs: list[dict] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
@@ -599,6 +608,7 @@ class SpellCastingMixin:
             target_player_index=target_player_index,
             target_permanent_index=target_permanent_index,
             target_permanent_ids=target_permanent_ids,
+            target_role_refs=target_role_refs,
             x_value=x_value,
             new_color=new_color,
             target_stack_index=target_stack_index,
@@ -846,6 +856,15 @@ class SpellCastingMixin:
         # A pair of targets may sit on two battlefields, which one
         # `target_player_index` cannot express — see `_stack_push`.
         target_permanent_ids: list[int | None] | None = None,
+        # The same announcement **one entry per role** — the shape
+        # `activate_permanent_ability` has taken since Goblin Welder: each a
+        # dict naming a ``permanent_id``, a ``seat``, or ``{"stack": True}``
+        # (the spell `target_stack_index` names). The only spelling that can
+        # say **two players** ("…target player controls … another target
+        # player controls", Cultural Exchange): `target_player_index` is one
+        # seat. Where given it is the announcement, and the two fields above
+        # are derived from it (`_role_announcement_stamps`).
+        target_role_refs: list[dict] | None = None,
         x_value: int | None = None,
         new_color: str | None = None,
         target_stack_index: int | None = None,
@@ -924,6 +943,23 @@ class SpellCastingMixin:
         chosen_source_stack_index: int | None = None,
     ) -> SimulationResult:
         caster = self.players[caster_index]
+        # CR 601.2c, said one role at a time. Turned **here**, before anything
+        # below reads a target field, into the channels a cast has always had:
+        # the id list positional in role order (``None`` where the slot is not
+        # a permanent), the scalar seat (the first player named) and — only
+        # where two or more players were named — every seat by slot
+        # (``targeting.ROLE_SEATS``), which is what the gate, the stack item
+        # and the resolution read slot 1's player from. One translation, the
+        # activation path's own, where each caller used to make it for itself
+        # (the wire did, onto one seat).
+        role_seats: "list | None" = None
+        if target_role_refs:
+            (
+                target_permanent_ids, _role_indices, _role_stamps,
+                role_seat, role_seats,
+            ) = self._role_announcement_stamps(target_role_refs)
+            if role_seat is not None:
+                target_player_index = role_seat
         # Casting from the hand is a rule; casting from anywhere else is an
         # effect (CR 601.3), asked of the permission seam. The lookup prefers a
         # covered occurrence so a duplicate without permission cannot shadow
@@ -1509,6 +1545,9 @@ class SpellCastingMixin:
                 # CR 601.2b is answered above; CR 702.33g makes the targets this
                 # gate counts depend on it.
                 optional_cost_payments=optional_paid,
+                # The cast's own announcement only: a "choose one or more"
+                # mode names its targets on the mode, which has one seat.
+                target_role_seats=None if chosen_modes else role_seats,
             )
             if not target_ok:
                 self.log.append(target_reason)
@@ -2340,6 +2379,11 @@ class SpellCastingMixin:
                         # that reason. `_resolve_card` copies it onto the
                         # permanent as it is built.
                         "chosen_creature_type": chosen_type_word,
+                        # Every seat the announcement named, by role, where it
+                        # named two or more (`targeting.ROLE_SEATS`) — beside
+                        # `target_player_index` above, which then holds the
+                        # first. None for every other cast.
+                        ROLE_SEATS: role_seats,
                         # "If you cast it any time a sorcery couldn't have been
                         # cast, …" (Mirage's five flash Auras). Answered *here*
                         # because here is the only moment it can be: CR 601.3d's
@@ -4252,6 +4296,7 @@ class SpellCastingMixin:
     def _named_role_targets(
         self, caster_index: int, target_player_index, target_permanent_index,
         target_permanent_ids, roles=(), target_stack_item=None,
+        role_seats=None,
     ) -> list:
         """The objects a roles announcement named, in role order.
 
@@ -4287,11 +4332,33 @@ class SpellCastingMixin:
         stack index beside ``[None, creature_id]``, and a stack slot with no
         spell named stays None — which the count check reads as the incomplete
         announcement it is.
+
+        **Two player roles are filled from *role_seats***, the per-slot list a
+        roles announcement of several seats carries (``targeting.ROLE_SEATS``).
+        "Choose any number of creatures **target player** controls. Choose the
+        same number of creatures **another target player** controls."
+        (Cultural Exchange.) The paragraph above stands for every announcement
+        naming one player, and it could not say this one: read off the scalar
+        both slots are one seat, which the walk's CR 115.3 distinctness then
+        refuses — so the card could not be announced at all. A slot the list
+        leaves empty, or names a seat that does not exist for, stays None.
         """
         player_slots = {
             index for index, role in enumerate(roles)
             if isinstance(role, dict) and role_is_seat(role)
         }
+
+        def seat_at(index: int):
+            if role_seats is None:
+                return seated
+            named = role_seats[index] if index < len(role_seats) else None
+            if (
+                isinstance(named, int) and not isinstance(named, bool)
+                and 0 <= named < len(self.players)
+            ):
+                return self.players[named]
+            return None
+
         stack_slots = {
             index for index, role in enumerate(roles)
             if isinstance(role, dict) and role_is_stack(role)
@@ -4304,7 +4371,7 @@ class SpellCastingMixin:
         )
         if target_permanent_ids:
             return [
-                seated if index in player_slots
+                seat_at(index) if index in player_slots
                 else target_stack_item if index in stack_slots
                 else (
                     self.permanent_by_id(permanent_id)
@@ -4331,7 +4398,7 @@ class SpellCastingMixin:
             )
         )
         return [
-            seated if index in player_slots
+            seat_at(index) if index in player_slots
             else target_stack_item if index in stack_slots
             else self.permanent_at(seat, slot)
             for index, slot in enumerate(slots)
@@ -4348,6 +4415,7 @@ class SpellCastingMixin:
         x_value: int | None = None,
         target_permanent_ids: list[int | None] | None = None,
         optional_cost_payments: dict | None = None,
+        target_role_seats: "list | None" = None,
     ) -> tuple[bool, str]:
         """Return (True, 'valid') if all required targets exist, else (False, reason).
 
@@ -4366,6 +4434,11 @@ class SpellCastingMixin:
         Timber was refused "requires 2 targets" and one named with two was
         accepted. None reads every arm, which is the question a caller with no
         announcement in hand is asking.
+
+        *target_role_seats* is the announcement's seat **per role**, where it
+        named more than one player (``targeting.ROLE_SEATS``); the roles gate
+        below fills each player slot from it, and every seat in it is held to
+        the same name-protection question the scalar is.
         """
         # Protection from this spell's *name* (Runed Halo, CR 702.16i): the
         # player can't be chosen as a target, which under CR 601.2c makes the
@@ -4374,16 +4447,19 @@ class SpellCastingMixin:
         # the spell's type is.
         from ...named_protection import protected_from
 
-        if (
-            target_player_index is not None
-            and 0 <= target_player_index < len(self.players)
-            and protected_from(self, target_player_index, card)
+        for named_seat in dict.fromkeys(
+            [target_player_index, *(target_role_seats or ())]
         ):
-            details = (
-                f"{self.players[target_player_index].name} has protection from "
-                f"{card.name}"
-            )
-            return False, details
+            if (
+                isinstance(named_seat, int)
+                and 0 <= named_seat < len(self.players)
+                and protected_from(self, named_seat, card)
+            ):
+                details = (
+                    f"{self.players[named_seat].name} has protection from "
+                    f"{card.name}"
+                )
+                return False, details
         if card.primary_type not in ("instant", "sorcery"):
             # Aura spells are always targeted: a legal enchant target must be
             # chosen when the spell is cast (MTG Rules 115.1b, 601.2c)
@@ -4582,6 +4658,7 @@ class SpellCastingMixin:
             chosen = self._named_role_targets(
                 caster_index, target_player_index, target_permanent_index,
                 target_permanent_ids, roles, target_stack_item,
+                role_seats=target_role_seats,
             )
             if len(chosen) != len(roles):
                 return False, f"{card.name} requires {len(roles)} targets"

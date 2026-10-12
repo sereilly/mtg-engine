@@ -92,32 +92,34 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     target = req.target_seat if req.target_seat is not None else _default_target(card_name, seat)
     # A roles announcement whose slots are not all permanents (Donate's "target
     # player gains control of target permanent you control"). One entry per
-    # role, in role order, translated **here** into the two channels a cast
-    # already has: the id list, positional in the same order with ``None`` where
-    # the slot is not a permanent, and the seat, which is where a stack item has
-    # carried "the player this spell targets" since the first spell to name one.
+    # role, in role order, **forwarded** as the plain dicts the engine's own
+    # channel takes — the shape the activate branch in ``actions.py`` has
+    # always forwarded, so a cast and an activation say "this slot is a
+    # player" in the same words.
     #
-    # Translated at the boundary rather than forwarded, for the reason the mode
-    # choices above are: the wire's shape exists to keep "which slot is this?"
-    # answerable, and the engine's exists to be read back at resolution. A
-    # third parameter on ``queue_from_hand`` would be a second spelling of an
-    # announcement it already takes.
-    role_ids = None
+    # This used to translate the refs here, onto the two channels a cast had:
+    # the id list and **one** seat ("a third parameter on ``queue_from_hand``
+    # would be a second spelling of an announcement it already takes"). One
+    # seat is what could not say "target player … **another** target player"
+    # (Cultural Exchange) — the second ref overwrote the first — so the
+    # translation is the engine's now (``_role_announcement_stamps``, the one
+    # an activation goes through), and what stays at the boundary is the part
+    # that is about the wire: which end of the stack an index counts from.
+    role_refs = None
     if req.target_role_refs:
-        role_ids = []
+        role_refs = []
         for ref in req.target_role_refs:
             if ref.seat is not None:
-                target = ref.seat
-                role_ids.append(None)
+                role_refs.append({"seat": ref.seat})
                 continue
             if ref.stack_index is not None:
                 # A role whose object is a **spell on the stack** ("Counter
                 # target spell and … deals 3 damage to target creature",
-                # Suffocating Blast). The third channel a cast already has: the
-                # stack index, converted here like the request's own, with the
-                # same ``None`` in the id list a seat leaves.
+                # Suffocating Blast). The stack channel a cast already has:
+                # the index, converted here like the request's own, and a
+                # marker saying which slot it fills.
                 engine_stack_index = _engine_stack_index(ref.stack_index)
-                role_ids.append(None)
+                role_refs.append({"stack": True})
                 continue
             if ref.graveyard_seat is not None:
                 # No **spell** in the pool names a slot in a graveyard — the one
@@ -130,7 +132,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
                     status_code=400,
                     detail="a cast cannot name a graveyard slot for a role",
                 )
-            role_ids.append(ref.permanent_id)
+            role_refs.append({"permanent_id": ref.permanent_id})
     # Cross-seat divided targets (Fireball): (seat, index|None) pairs; an index
     # of None is that player's face.
     # A three-tuple only where a share was announced (CR 601.2d): the two-tuple
@@ -159,9 +161,11 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
         # index on the first slot's board. Rookie Mistake has been half-castable
         # in the browser since round 65 for exactly this reason; the engine and
         # the activation path (below) had it right the whole time.
-        target_permanent_ids=(
-            role_ids if role_ids is not None else req.target_permanent_ids
-        ),
+        target_permanent_ids=req.target_permanent_ids,
+        # …or the same announcement one role at a time (see above). Where
+        # present it is the announcement, and the engine derives the id list
+        # and the seat(s) from it.
+        target_role_refs=role_refs,
         x_value=x_value,
         new_color=req.mana_color,
         target_stack_index=engine_stack_index,

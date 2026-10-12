@@ -3663,6 +3663,64 @@ def role_is_seat(role: dict | None) -> bool:
     return bool(role) and role.get("kind") in SEAT_ROLE_KINDS
 
 
+#: The ``choices`` key an announcement naming **more than one seat** records
+#: them under: one entry per role, positional in role order, an ``int`` seat
+#: where the role's object is a player and ``None`` everywhere else.
+#:
+#: "Choose any number of creatures **target player** controls. Choose the same
+#: number of creatures **another target player** controls." (Cultural Exchange.)
+#: Two instances of the word, both players, and a stack object has one field
+#: that means "the player this targets" (``target_player_index``) — which every
+#: roles reader filled every seat slot from, so the second player was never
+#: announced at all and ``resolve_role_player`` refused the pair outright.
+#:
+#: **A fourth positional list beside the three a roles announcement already
+#: has** (ids, graveyard stamps, indices —
+#: ``activation._role_announcement_stamps``), for the reason those are lists:
+#: a reader holding slot *n* asks each and exactly one replies. It rides
+#: ``choices`` rather than a new ``StackItem`` field for the reason the divided
+#: list does (``divided_targets``, the other announcement that names several
+#: players): that dict is copied whole onto a copy (CR 707.10) and carried
+#: whole into the resolution context, so no construction site has to remember
+#: a new field.
+#:
+#: **Present only where the scalar cannot say it** — two or more seat roles.
+#: An announcement with one seat role records nothing here and is read off
+#: ``target_player_index`` exactly as it always was, which is every roles card
+#: the pool held before this one; where the list is present the scalar still
+#: holds the first seat named, so a reader of "the player this spell targets"
+#: sees a player the spell really targets.
+#:
+#: A ``None`` in a seat slot is a slot that **names nobody**: either the
+#: announcement left it out (which the gate refuses) or CR 608.2b found its
+#: player an illegal target as the object resolved
+#: (``stack_targets.blank_illegal_targets``) — and the step that spends that
+#: role is then skipped, never re-aimed at the scalar.
+ROLE_SEATS = "role_seats"
+
+
+def recorded_role_seats(holder) -> "list | None":
+    """The per-role seat list *holder* recorded (:data:`ROLE_SEATS`), or None.
+
+    *holder* is anything carrying an announcement's ``choices`` — a stack item
+    or the resolution context cut from it. None is every announcement that
+    named at most one seat, and a ``ChosenMode``, which has no ``choices`` at
+    all: a "choose one or more" mode naming two players is not something this
+    engine can record, and it answers the way an unrecorded seat always has.
+    """
+    seats = (getattr(holder, "choices", None) or {}).get(ROLE_SEATS)
+    return list(seats) if isinstance(seats, (list, tuple)) else None
+
+
+def role_seat_positions(roles) -> list[int]:
+    """Which slots of *roles* — a spec's or a payload's ordered list — are
+    seats."""
+    return [
+        index for index, role in enumerate(roles or ())
+        if isinstance(role, dict) and role_is_seat(role)
+    ]
+
+
 #: The narrowings a **graveyard** role carries, and the whole of what separates
 #: one from the battlefield roles beside it.
 #:
