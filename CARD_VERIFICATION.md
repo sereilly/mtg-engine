@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **4924**
-- Passed: **656** (409 checked in-game, 247 auto-passed)
-- Failed: **0**
-- Equivalent to a passing card: **55**
-- Untested: **4213**
+- Passed: **678** (431 checked in-game, 247 auto-passed)
+- Failed: **2**
+- Equivalent to a passing card: **56**
+- Untested: **4188**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -122,7 +122,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | An-Havva Township | ⬜ untested |  |
 | An-Zerrin Ruins | ⬜ untested |  |
 | Ana Disciple | ⬜ untested |  |
-| Ana Sanctuary | ⬜ untested |  |
+| Ana Sanctuary | ✅ pass |  |
 | Anaba Ancestor | ⬜ untested |  |
 | Anaba Bodyguard | ✅ pass | auto-pass: keywords only (first strike) |
 | Anaba Shaman | ⬜ untested |  |
@@ -130,7 +130,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Anaconda | ✅ pass | auto-pass: keywords only (swampwalk) |
 | Anarchist | ⬜ untested |  |
 | Anarchy | ⬜ untested |  |
-| Anavolver | ⬜ untested |  |
+| Anavolver | ✅ pass |  |
 | Ancestral Knowledge | ⬜ untested |  |
 | Ancestral Mask | ⬜ untested |  |
 | Ancestral Memories | ⬜ untested |  |
@@ -491,7 +491,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Brand of Ill Omen | ⬜ untested |  |
 | Branded Brawlers | ⬜ untested |  |
 | Brash Taunter | ⬜ untested |  |
-| Brass Herald | ⬜ untested |  |
+| Brass Herald | ✅ pass |  |
 | Brass Man | ✅ pass |  |
 | Brass Secretary | ⬜ untested |  |
 | Brass-Talon Chimera | ⬜ untested |  |
@@ -578,7 +578,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Capashen Unicorn | ⬜ untested |  |
 | Capsize | ⬜ untested |  |
 | Captain Sisay | ⬜ untested |  |
-| Captain's Maneuver | ⬜ untested |  |
+| Captain's Maneuver | ✅ pass |  |
 | Capture Sphere | ⬜ untested |  |
 | Carapace | ⬜ untested |  |
 | Caribou Range | ⬜ untested |  |
@@ -635,7 +635,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cessation | ⬜ untested |  |
 | Ceta Disciple | ⬜ untested |  |
 | Ceta Sanctuary | ⬜ untested |  |
-| Cetavolver | ⬜ untested |  |
+| Cetavolver | ✅ pass |  |
 | Chain Lightning | ⬜ untested |  |
 | Chain Stasis | ⬜ untested |  |
 | Chains of Mephistopheles | ⬜ untested |  |
@@ -747,8 +747,8 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Cloudchaser Eagle | ⬜ untested |  |
 | Cloudskate | ⬜ untested |  |
 | Coal Golem | ⬜ untested |  |
-| Coalition Flag | ⬜ untested |  |
-| Coalition Honor Guard | ⬜ untested |  |
+| Coalition Flag | ✅ pass |  |
+| Coalition Honor Guard | ≡ equivalent | same behaviour as Standard Bearer |
 | Coalition Victory | ⬜ untested |  |
 | Coastal Drake | ⬜ untested |  |
 | Coastal Hornclaw | ⬜ untested |  |
@@ -987,7 +987,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Deflection | ⬜ untested |  |
 | Dega Disciple | ⬜ untested |  |
 | Dega Sanctuary | ⬜ untested |  |
-| Degavolver | ⬜ untested |  |
+| Degavolver | ✅ pass |  |
 | Dehydration | ⬜ untested |  |
 | Delif's Cone | ⬜ untested |  |
 | Delif's Cube | ⬜ untested |  |
@@ -1093,7 +1093,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Draconian Cylix | ⬜ untested |  |
 | Dracoplasm | ⬜ untested |  |
 | Drafna's Restoration | ⬜ untested |  |
-| Dragon Arch | ⬜ untested |  |
+| Dragon Arch | ✅ pass |  |
 | Dragon Blood | ⬜ untested |  |
 | Dragon Engine | ⬜ untested |  |
 | Dragon Mask | ⬜ untested |  |
@@ -1234,7 +1234,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Embargo | ⬜ untested |  |
 | Emberwilde Caliph | ⬜ untested |  |
 | Emberwilde Djinn | ⬜ untested |  |
-| Emblazoned Golem | ⬜ untested |  |
+| Emblazoned Golem | ✅ pass |  |
 | Emerald Charm | ⬜ untested |  |
 | Emerald Dragonfly | ⬜ untested |  |
 | Emerald Medallion | ⬜ untested |  |
@@ -1419,7 +1419,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Fighting Drake | ✅ pass | auto-pass: keywords only (flying) |
 | Final Fortune | ⬜ untested |  |
 | Finishing Blow | ⬜ untested |  |
-| Fire // Ice | ⬜ untested |  |
+| Fire // Ice | ❌ fail | Browser cannot aim Fire at a player. A divided spell with a printed bound (max_targets: Fire, Arc Lightning, Contagion, Elven Rite, Flameshot, Bounty of the Hunt) is routed to the several-permanents picker (app.js startCastTargetCascade asks cardRequiresSeveralTargets before cardRequiresDividedDamage): life-pill clicks are ignored, there is no division prompt, and the prompt says 'Choosing none is legal'. Fire at one creature and Ice both work; the engine and the AI cast Fire at a face correctly. APC Phase 5, 2026-10-11. |
 | Fire Ants | ⬜ untested |  |
 | Fire Covenant | ⬜ untested |  |
 | Fire Diamond | ⬜ untested |  |
@@ -1588,7 +1588,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Gabriel Angelfire | ⬜ untested |  |
 | Gadrak, the Crown-Scourge | ⬜ untested |  |
 | Gaea's Avenger | ✅ pass |  |
-| Gaea's Balance | ⬜ untested |  |
+| Gaea's Balance | ✅ pass |  |
 | Gaea's Blessing | ⬜ untested |  |
 | Gaea's Bounty | ⬜ untested |  |
 | Gaea's Cradle | ⬜ untested |  |
@@ -1717,7 +1717,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Goblin Patrol | ⬜ untested |  |
 | Goblin Raider | ⬜ untested |  |
 | Goblin Recruiter | ⬜ untested |  |
-| Goblin Ringleader | ⬜ untested |  |
+| Goblin Ringleader | ✅ pass |  |
 | Goblin Rock Sled | ⬜ untested |  |
 | Goblin Sappers | ⬜ untested |  |
 | Goblin Scouts | ⬜ untested |  |
@@ -1795,7 +1795,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Guardian Angel | ✅ pass |  |
 | Guardian Beast | ✅ pass |  |
 | Guerrilla Tactics | ⬜ untested |  |
-| Guided Passage | ⬜ untested |  |
+| Guided Passage | ✅ pass |  |
 | Guided Strike | ⬜ untested |  |
 | Guiding Spirit | ⬜ untested |  |
 | Gulf Squid | ⬜ untested |  |
@@ -2030,7 +2030,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Incinerate | ⬜ untested |  |
 | Indentured Djinn | ⬜ untested |  |
 | Indestructible Aura | ⬜ untested |  |
-| Index | ⬜ untested |  |
+| Index | ✅ pass |  |
 | Indulging Patrician | ⬜ untested |  |
 | Infantry Veteran | ⬜ untested |  |
 | Infernal Contract | ⬜ untested |  |
@@ -2738,7 +2738,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mystic Might | ⬜ untested |  |
 | Mystic Remora | ⬜ untested |  |
 | Mystic Skyfish | ⬜ untested |  |
-| Mystic Snake | ⬜ untested |  |
+| Mystic Snake | ✅ pass |  |
 | Mystic Veil | ⬜ untested |  |
 | Mystical Tutor | ⬜ untested |  |
 | Márton Stromgald | ⬜ untested |  |
@@ -2766,7 +2766,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Necra Disciple | ⬜ untested |  |
 | Necra Sanctuary | ⬜ untested |  |
 | Necratog | ⬜ untested |  |
-| Necravolver | ⬜ untested |  |
+| Necravolver | ✅ pass |  |
 | Necrite | ⬜ untested |  |
 | Necrologia | ⬜ untested |  |
 | Necromancy | ⬜ untested |  |
@@ -2970,7 +2970,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | People of the Woods | ⬜ untested |  |
 | Peregrine Drake | ⬜ untested |  |
 | Perish | ⬜ untested |  |
-| Pernicious Deed | ⬜ untested |  |
+| Pernicious Deed | ✅ pass |  |
 | Persecute | ⬜ untested |  |
 | Personal Incarnation | ✅ pass |  |
 | Pestilence | ✅ pass |  |
@@ -3226,7 +3226,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Raka Disciple | ⬜ untested |  |
 | Raka Sanctuary | ⬜ untested |  |
 | Rakalite | ⬜ untested |  |
-| Rakavolver | ⬜ untested |  |
+| Rakavolver | ✅ pass |  |
 | Rally | ≡ equivalent | same behaviour as Piety |
 | Rambunctious Mutt | ⬜ untested |  |
 | Ramirez DePietro | ✅ pass | auto-pass: keywords only (first strike) |
@@ -3751,7 +3751,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shivan Oasis | ⬜ untested |  |
 | Shivan Phoenix | ⬜ untested |  |
 | Shivan Raptor | ⬜ untested |  |
-| Shivan Reef | ⬜ untested |  |
+| Shivan Reef | ✅ pass |  |
 | Shivan Wurm | ⬜ untested |  |
 | Shivan Zombie | ✅ pass | auto-pass: keywords only (protection from white) |
 | Shock | ⬜ untested |  |
@@ -4028,7 +4028,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Squallmonger | ⬜ untested |  |
 | Squandered Resources | ⬜ untested |  |
 | Squee's Embrace | ⬜ untested |  |
-| Squee's Revenge | ⬜ untested |  |
+| Squee's Revenge | ✅ pass |  |
 | Squee's Toy | ⬜ untested |  |
 | Squee, Goblin Nabob | ⬜ untested |  |
 | Squeeze | ⬜ untested |  |
@@ -4046,7 +4046,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Stampeding Wildebeests | ⬜ untested |  |
 | Stand // Deliver | ⬜ untested |  |
 | Stand or Fall | ⬜ untested |  |
-| Standard Bearer | ⬜ untested |  |
+| Standard Bearer | ✅ pass |  |
 | Standing Stones | ⬜ untested |  |
 | Standing Troops | ✅ pass | auto-pass: keywords only (vigilance) |
 | Stangg | ⬜ untested |  |
@@ -4128,7 +4128,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Subterranean Spirit | ⬜ untested |  |
 | Subversion | ⬜ untested |  |
 | Sudden Impact | ⬜ untested |  |
-| Suffocating Blast | ⬜ untested |  |
+| Suffocating Blast | ✅ pass |  |
 | Suffocation | ⬜ untested |  |
 | Sulam Djinn | ⬜ untested |  |
 | Suleiman's Legacy | ⬜ untested |  |
@@ -4182,7 +4182,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Symbiotic Deployment | ⬜ untested |  |
 | Syphon Soul | ⬜ untested |  |
 | Tablet of Epityr | ⬜ untested |  |
-| Tahngarth's Glare | ⬜ untested |  |
+| Tahngarth's Glare | ❌ fail | Human caster vs AI loses the rest of the phase. After the caster confirms their reorder of the opponent's top three, the response still has the spell on the stack with the AI's half pending (web/actions.py answers AI prompts before the handler, not after); the client auto-passes priority and the server applies that pass after the spell finishes, so both players have passed on an empty stack and the main phase ends (seen 2 of 2: M1 -> M2, M2 -> cleanup). Both reorders themselves happen. APC Phase 5, 2026-10-11. |
 | Tahngarth's Rage | ⬜ untested |  |
 | Tahngarth, Talruum Hero | ⬜ untested |  |
 | Taiga | ✅ pass |  |
@@ -4250,7 +4250,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Temporal Adept | ⬜ untested |  |
 | Temporal Aperture | ⬜ untested |  |
 | Temporal Distortion | ⬜ untested |  |
-| Temporal Spring | ⬜ untested |  |
+| Temporal Spring | ✅ pass |  |
 | Tempting Licid | ⬜ untested |  |
 | Tendrils of Despair | ⬜ untested |  |
 | Teremko Griffin | ✅ pass | auto-pass: keywords only (flying, banding) |

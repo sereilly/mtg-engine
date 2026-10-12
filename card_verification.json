@@ -35,6 +35,16 @@
       "status": "pass",
       "updated_at": 1786224667.7086859
     },
+    "Ana Sanctuary": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787829.5574312
+    },
+    "Anavolver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787821.376683
+    },
     "Ancestral Recall": {
       "reason": "",
       "status": "pass",
@@ -205,6 +215,11 @@
       "status": "pass",
       "updated_at": 1782020824.069998
     },
+    "Brass Herald": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787831.1243548
+    },
     "Brass Man": {
       "reason": "",
       "status": "pass",
@@ -230,6 +245,11 @@
       "status": "pass",
       "updated_at": 1788202934.1076071
     },
+    "Captain's Maneuver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787836.1057532
+    },
     "Castle": {
       "reason": "",
       "status": "pass",
@@ -239,6 +259,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
+    },
+    "Cetavolver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787822.96348
     },
     "Channel": {
       "reason": "",
@@ -304,6 +329,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782020378.44773
+    },
+    "Coalition Flag": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787854.2120926
     },
     "Coat of Arms": {
       "reason": "",
@@ -430,6 +460,11 @@
       "status": "pass",
       "updated_at": 1782958758.4311402
     },
+    "Degavolver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787826.1210663
+    },
     "Demonic Attorney": {
       "reason": "",
       "status": "pass",
@@ -499,6 +534,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1788819524.225117
+    },
+    "Dragon Arch": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787839.58826
     },
     "Dragon Whelp": {
       "reason": "",
@@ -580,6 +620,11 @@
       "status": "pass",
       "updated_at": 1781455740.8711123
     },
+    "Emblazoned Golem": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787847.7523997
+    },
     "Erg Raiders": {
       "reason": "",
       "status": "pass",
@@ -629,6 +674,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782191393.570935
+    },
+    "Fire // Ice": {
+      "reason": "Browser cannot aim Fire at a player. A divided spell with a printed bound (max_targets: Fire, Arc Lightning, Contagion, Elven Rite, Flameshot, Bounty of the Hunt) is routed to the several-permanents picker (app.js startCastTargetCascade asks cardRequiresSeveralTargets before cardRequiresDividedDamage): life-pill clicks are ignored, there is no division prompt, and the prompt says 'Choosing none is legal'. Fire at one creature and Ice both work; the engine and the AI cast Fire at a face correctly. APC Phase 5, 2026-10-11.",
+      "status": "fail",
+      "updated_at": 1791787864.256923
     },
     "Fire Elemental": {
       "reason": "",
@@ -710,6 +760,11 @@
       "status": "pass",
       "updated_at": 1787458385.902812
     },
+    "Gaea's Balance": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787841.139815
+    },
     "Gaea's Liege": {
       "reason": "",
       "status": "pass",
@@ -770,6 +825,11 @@
       "status": "pass",
       "updated_at": 1782957382.565658
     },
+    "Goblin Ringleader": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787842.6988528
+    },
     "Granite Gargoyle": {
       "reason": "",
       "status": "pass",
@@ -799,6 +859,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786234750.7371247
+    },
+    "Guided Passage": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787849.5104907
     },
     "Hasran Ogress": {
       "reason": "",
@@ -879,6 +944,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783041095.545866
+    },
+    "Index": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787844.5205953
     },
     "Instill Energy": {
       "reason": "",
@@ -1230,6 +1300,11 @@
       "status": "pass",
       "updated_at": 1782540531.3900843
     },
+    "Mystic Snake": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787837.7943609
+    },
     "Nafs Asp": {
       "reason": "",
       "status": "pass",
@@ -1239,6 +1314,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782542402.284975
+    },
+    "Necravolver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787824.558571
     },
     "Nether Shadow": {
       "reason": "",
@@ -1304,6 +1384,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782358756.4484005
+    },
+    "Pernicious Deed": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787852.6590126
     },
     "Personal Incarnation": {
       "reason": "",
@@ -1409,6 +1494,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782363471.1071694
+    },
+    "Rakavolver": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787819.601704
     },
     "Red Elemental Blast": {
       "reason": "",
@@ -1615,6 +1705,11 @@
       "status": "pass",
       "updated_at": 1781585859.2176287
     },
+    "Shivan Reef": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787846.124625
+    },
     "Silent Dart": {
       "reason": "",
       "status": "pass",
@@ -1690,6 +1785,16 @@
       "status": "pass",
       "updated_at": 1782599426.231112
     },
+    "Squee's Revenge": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787851.096526
+    },
+    "Standard Bearer": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787827.9391923
+    },
     "Stasis": {
       "reason": "",
       "status": "pass",
@@ -1720,6 +1825,11 @@
       "status": "pass",
       "updated_at": 1782018447.4809692
     },
+    "Suffocating Blast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787834.440406
+    },
     "Sunglasses of Urza": {
       "reason": "",
       "status": "pass",
@@ -1740,10 +1850,20 @@
       "status": "pass",
       "updated_at": 1782586131.826179
     },
+    "Tahngarth's Glare": {
+      "reason": "Human caster vs AI loses the rest of the phase. After the caster confirms their reorder of the opponent's top three, the response still has the spell on the stack with the AI's half pending (web/actions.py answers AI prompts before the handler, not after); the client auto-passes priority and the server applies that pass after the spell finishes, so both players have passed on an empty stack and the main phase ends (seen 2 of 2: M1 -> M2, M2 -> cleanup). Both reorders themselves happen. APC Phase 5, 2026-10-11.",
+      "status": "fail",
+      "updated_at": 1791787866.331467
+    },
     "Taiga": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782592454.1705534
+    },
+    "Temporal Spring": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791787832.8447487
     },
     "Terror": {
       "reason": "",
