@@ -271,3 +271,29 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
         return True
     stream.reset(probe)
     return False
+
+
+def names_each_zone_ahead(stream: TokenStream) -> bool:
+    """Whether the clause ahead spells its pile "in **each** graveyard".
+
+    :func:`accept_zone_scope` reads those words as every seat's pile, the same
+    set of cards "all graveyards" names — right for a *count* ("for each card
+    named ~ in each graveyard", Life Burst), where either spelling is one
+    number. Behind a *threshold* the words distribute: "seven or more cards in
+    each graveyard" asks the question of each pile separately, and the summed
+    count holds on a board where no single graveyard does. The scope keeps no
+    record of which word it was spelled with, so a condition reader asks this
+    **before** it reads the scope and refuses.
+
+    Scans to the first token that is not a word, so a later clause's "each
+    graveyard" is not this clause's.
+    """
+    offset = 0
+    while stream.peek_word(offset) is not None:
+        if (
+            stream.peek_word(offset) == "each"
+            and stream.peek_word(offset + 1) in _ZONE_NOUNS
+        ):
+            return True
+        offset += 1
+    return False

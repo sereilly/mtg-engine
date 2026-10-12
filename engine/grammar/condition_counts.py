@@ -58,6 +58,7 @@ from .seat_comparisons import accept_margin
 from .seats import accept_life_total_of
 from .stream import TokenStream
 from .vocabulary import CARD_TYPES, COLOR_WORDS
+from .zones import names_each_zone_ahead
 
 
 def _parse_count_bound(stream: TokenStream) -> ast.Comparison:
@@ -779,6 +780,16 @@ def accept_counted_condition(stream: TokenStream) -> "ast.Condition | None":
             # refuses rather than being read as a different bound.
             stream.reset(number_mark)
             there_comparison = None
+        if names_each_zone_ahead(stream):
+            # "…seven or more cards **in each graveyard**": a threshold asked of
+            # each pile separately. The zone reader would hand back every
+            # seat's pile and this clause would compare the *sum* — a condition
+            # that holds on a board the words do not name. No card prints it,
+            # and it refuses rather than being counted as "all graveyards".
+            raise stream.error(
+                "a threshold over each zone separately is not a count over all "
+                "of them"
+            )
         there_quantifier = None
         if there_comparison is None:
             there_quantifier = "no" if stream.accept_word("no") else (
