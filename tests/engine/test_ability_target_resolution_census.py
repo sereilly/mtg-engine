@@ -398,8 +398,16 @@ def _announce(card, index):
         return None
     slot = game.battlefield_index_of(source)
     spec = game.activation_target_spec(0, slot, ability_index=index)
-    if spec.get("kind") in ("stack", "spell_or_permanent"):
+    if spec.get("kind") == "stack":
         # Something for "target spell" to name: seat 1 pumps its own creature.
+        # Only where a spell is the *only* thing the ability may name. For
+        # "target spell or permanent" (Blind Seer - which read "target
+        # permanent" on the tree this rig was written on) :func:`_pick` names a
+        # permanent, and a pump spell left under the ability then resolves, or
+        # is removed with its creature, inside the resolution being measured:
+        # the census reported the pump's own doing as something the ability
+        # had moved. That ability at a *spell* is held by
+        # ``test_blind_seers_spell_that_has_left_is_not_swapped_for_a_permanent``.
         game.players[1].hand.append(_POOL["Giant Growth"])
         creature = next(p for p in game.controlled_by(1) if p.card.name == "Bait Creature")
         game.queue_from_hand(1, "Giant Growth", target_permanent_ids=[creature.permanent_id])

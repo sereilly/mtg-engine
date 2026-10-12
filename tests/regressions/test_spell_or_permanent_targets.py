@@ -147,7 +147,15 @@ def test_blind_seers_spell_that_has_left_is_not_swapped_for_a_permanent(catalog_
     resolve_stack(game)
 
     assert game._effective_colors(bears) == {"G"}
-    assert "Blind Seer: no valid spell to recolour" in game.log
+    # Whose line says so depends on who notices first. W2G1 wrote this against
+    # the handler declining its own target; W2G3's gate now asks CR 608.2b of
+    # an activated ability above the instructions, on a sibling branch, so the
+    # ability is removed before the handler runs. The game is the same either
+    # way and that is what is asserted; the line is the gate's.
+    assert (
+        "Blind Seer ability was removed from the stack: every target is illegal (608.2b)"
+        in game.log
+    )
     assert not any("became" in line for line in game.log)
 
 

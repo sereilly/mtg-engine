@@ -2785,6 +2785,15 @@ def redirect_next_damage_between_targets_until_eot(
     """
     card_name = getattr(context.card, "name", "")
     entries = list((context.choices or {}).get(DIVIDED_TARGETS) or ())
+    if len(entries) == 1:
+        # CR 608.2b: an end that became illegal while the spell waited is
+        # blanked out of the announcement before this runs
+        # (``legality.blank_illegal_resolution_targets`` drops a divided
+        # entry), so one entry here is two that were announced and one that
+        # is gone - the case the check below was written for, said the way it
+        # says it.
+        game.log.append(f"{card_name}: one of its targets is gone, nothing is redirected")
+        return True, "resolved"
     if len(entries) != 2:
         game.log.append(f"{card_name}: its two targets were not announced")
         return True, "resolved"
