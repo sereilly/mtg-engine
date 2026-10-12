@@ -23,6 +23,7 @@ from .ai_valuation import (
     entry_trigger_target_side,
     entry_triggers_bought,
     ability_denies_its_target,
+    ability_seat_side,
     ability_target_side,
     cards_drawn_by_controller,
     cards_drawn_by_target,
@@ -5652,7 +5653,13 @@ def _choose_target_for_instruction(instruction: OracleInstruction, caster_index:
         # "Target creature you control" — the equip's creature is the
         # activator's own (CR 702.6a).
         return caster_index
-    if instruction.kind in {"draw_target_cards", "gain_life", "prevent_damage"}:
+    # A gift names its own seat: "target player gains 3 life", "target player
+    # draws a card", "prevent the next 1 damage that would be dealt to any
+    # target". *Which* effects those are is `ai_valuation.ability_seat_side`'s
+    # reading of the compiled program — this line used to name three kinds, two
+    # of which nothing compiles, so a life gain and every shield went to an
+    # opponent.
+    if ability_seat_side(instruction) == "you":
         return caster_index
     # "deal_damage"/"destroy_target"/etc., and the fallback for any other
     # proactive effect: target an opponent (MVP heuristic, see

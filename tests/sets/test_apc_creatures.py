@@ -2180,6 +2180,61 @@ def test_w2g4_a_bare_resolve_top_of_stack_is_the_headless_form_and_says_so(
     assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
     assert monger.effective_colors == {"R"}
 
+
+# -- item 5: a gift names its own seat ----------------------------------------
+
+
+def test_w2g4_mournful_zombie_gives_its_life_to_the_seat_that_paid_for_it(
+    set_pool, catalog_by_name
+):
+    """"{W}, {T}: Target player gains 1 life." The AI named an opponent — the
+    policy's list of gift kinds said ``gain_life``, a name nothing compiles to,
+    so the ability fell through to "aim it at them". It proposes its own seat
+    now, and the activation it proposes gains that seat the life."""
+    from engine.ai_policy import choose_activation_action
+
+    game, (zombie,) = _w2g4_creature_table(
+        set_pool, catalog_by_name, ["Mournful Zombie"], interactive=(),
+    )
+    action = choose_activation_action(game, 0)
+
+    assert action is not None and action.permanent_name == "Mournful Zombie"
+    assert action.target_player_index == 0 and action.target_permanent_index is None
+    assert game.activate_permanent_ability(
+        0, "Mournful Zombie", target_player_index=action.target_player_index,
+    ).supported
+    assert [player.life for player in game.players] == [21, 20]
+    assert zombie.tapped
+    assert "Keeper gained 1 life from Mournful Zombie (20 -> 21)" in game.log
+
+
+def test_w2g4_mournful_zombie_in_a_simulated_game_never_heals_the_other_seat():
+    """The same through whole games, where it was first seen: every "gained 1
+    life from Mournful Zombie" line names the seat whose activation it follows.
+    The card is pinned into both decks; the test asks that it was activated at
+    all, not how often."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    gains = []
+    for seed in (7, 11, 1337):
+        report = run_ai_simulation(
+            cards_path=[manifest_set_path("APC", include_measured=True)],
+            games=3, seed=seed, max_turns=18, required_cards=["Mournful Zombie"],
+        )
+        assert report.ok, report.issues[:3]
+        activator = None
+        for line in report.log_lines:
+            if " activate Mournful Zombie" in line:
+                activator = line.split(" activate ")[0].split()[-1]
+            elif "gained 1 life from Mournful Zombie" in line:
+                gains.append((activator, line.split()[0]))
+        if gains:
+            break
+
+    assert gains, "no seed activated a Mournful Zombie"
+    assert all(activator == gainer for activator, gainer in gains), gains
+
 # ==== end W2G4 ========================================================
 
 # ==== W2G5 ============================================================
