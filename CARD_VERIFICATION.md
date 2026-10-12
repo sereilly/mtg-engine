@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **4924**
-- Passed: **678** (431 checked in-game, 247 auto-passed)
-- Failed: **2**
+- Passed: **680** (433 checked in-game, 247 auto-passed)
+- Failed: **0**
 - Equivalent to a passing card: **56**
 - Untested: **4188**
 
@@ -1419,7 +1419,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Fighting Drake | ✅ pass | auto-pass: keywords only (flying) |
 | Final Fortune | ⬜ untested |  |
 | Finishing Blow | ⬜ untested |  |
-| Fire // Ice | ❌ fail | Browser cannot aim Fire at a player. A divided spell with a printed bound (max_targets: Fire, Arc Lightning, Contagion, Elven Rite, Flameshot, Bounty of the Hunt) is routed to the several-permanents picker (app.js startCastTargetCascade asks cardRequiresSeveralTargets before cardRequiresDividedDamage): life-pill clicks are ignored, there is no division prompt, and the prompt says 'Choosing none is legal'. Fire at one creature and Ice both work; the engine and the AI cast Fire at a face correctly. APC Phase 5, 2026-10-11. |
+| Fire // Ice | ✅ pass |  |
 | Fire Ants | ⬜ untested |  |
 | Fire Covenant | ⬜ untested |  |
 | Fire Diamond | ⬜ untested |  |
@@ -4182,7 +4182,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Symbiotic Deployment | ⬜ untested |  |
 | Syphon Soul | ⬜ untested |  |
 | Tablet of Epityr | ⬜ untested |  |
-| Tahngarth's Glare | ❌ fail | Human caster vs AI loses the rest of the phase. After the caster confirms their reorder of the opponent's top three, the response still has the spell on the stack with the AI's half pending (web/actions.py answers AI prompts before the handler, not after); the client auto-passes priority and the server applies that pass after the spell finishes, so both players have passed on an empty stack and the main phase ends (seen 2 of 2: M1 -> M2, M2 -> cleanup). Both reorders themselves happen. APC Phase 5, 2026-10-11. |
+| Tahngarth's Glare | ✅ pass |  |
 | Tahngarth's Rage | ⬜ untested |  |
 | Tahngarth, Talruum Hero | ⬜ untested |  |
 | Taiga | ✅ pass |  |

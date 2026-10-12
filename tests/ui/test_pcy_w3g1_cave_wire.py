@@ -100,7 +100,12 @@ def test_a_click_on_the_cave_is_an_activation_that_offers_the_toll():
         "seat": 0, "action": "resolve_optional_pay", "accept": False,
     })
     assert resp.status_code == 200, resp.text
-    assert _w3g1_pool(game) == {}, "the opponent has not answered yet"
+    # The AI's answer arrives in the request that armed its prompt. This read
+    # `{}` here ("the opponent has not answered yet") and needed the *next*
+    # request's preamble to finish the ability — the state Tahngarth's Glare
+    # lost a main phase to, pinned as intended (do_action now drains AI-owned
+    # prompts after the handler as well as before it).
+    assert _w3g1_pool(game) == {"R": 1}
     _auto_resolve_ai_pending(session)
     assert _w3g1_pool(game) == {"R": 1}
     assert game.pending_choices == []

@@ -186,7 +186,11 @@ def test_the_several_slot_pickers_show_the_requirement_and_hold_their_confirm():
     assert "!t.zone" in app_js_function_body("rolePermanentPicks")
 
     panel = app_js_function_body("renderActivationPrompt")
-    assert panel.count("targetRequirementRowsHtml(") == 3
+    # Four readers: the divided, roles and several pickers, each beside its
+    # confirm, and the one-click pickers' shared tail — which printed nothing
+    # until a Lightning Bolt under a Standard Bearer was read off the screen
+    # at the Apocalypse promotion (tests/ui/test_client_prompt_wording.py).
+    assert panel.count("targetRequirementRowsHtml(") == 4
     assert "severalOwesRequired" in panel and "dividedOwesRequired" in panel
     # "Choosing none is legal" is not said while a requirement binds.
     assert "targetRequirementOf(p.card)" in app_js_function_body("severalTargetsHint")

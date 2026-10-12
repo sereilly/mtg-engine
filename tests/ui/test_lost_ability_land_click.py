@@ -300,7 +300,7 @@ def test_the_activation_funnel_routes_the_land_before_it_reads_any_text():
     assert "tapLandAsItsNewType(card, permanentIndex)" in body
     for reader in (
         "getActivatedAbilityOptions(card)", "card?.oracle_text",
-        "cardRequiresManaColorChoice(card)", "getDualLandColors(card)",
+        "cardRequiresManaColorChoice(card)", "abilityManaColors(card)",
     ):
         assert routed < body.index(reader), reader
 
