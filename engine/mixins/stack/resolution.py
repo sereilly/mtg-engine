@@ -18,6 +18,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
+from ...destruction_events import destruction_finished
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
@@ -1348,6 +1349,9 @@ class StackResolutionMixin:
         finally:
             self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
+            # What the object destroyed has triggered abilities that were
+            # waiting for it to finish (CR 603.3b); it has.
+            destruction_finished(self)
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).

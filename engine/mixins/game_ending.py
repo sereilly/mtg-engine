@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 
+from ..destruction_events import NO_SPELL_OR_ABILITY, NOT_A_DESTRUCTION
 from ..lethal_damage import lethal_damage_destroys
 from ..control import (
     LINKED_CONTROL_CONDITIONS,
@@ -728,6 +729,9 @@ class GameEndingMixin:
                     player, _zero_toughness,
                     allow_regeneration=False, respect_indestructible=False,
                     on_destroy=_on_destroy_5f,
+                    # "…it's put into its owner's graveyard" — CR 701.8b: not
+                    # destroyed, so nothing watching a destruction hears of it.
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -778,6 +782,11 @@ class GameEndingMixin:
                     player, _lethally_damaged,
                     on_regenerate=_regenerated,
                     on_destroy=_on_destroy_5g,
+                    # Destroyed (CR 701.8b names these two actions), and by no
+                    # spell or ability — whoever dealt the damage. Said here
+                    # rather than read off ``resolving_seats``, because this
+                    # check runs inside resolutions too.
+                    cause=NO_SPELL_OR_ABILITY,
                 ):
                     changed = True
 
@@ -807,6 +816,7 @@ class GameEndingMixin:
                     on_destroy=lambda perm: self.log.append(
                         f"{perm.card.name} went to graveyard (704.5i: 0 loyalty)"
                     ),
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -889,6 +899,7 @@ class GameEndingMixin:
                     player, _illegally_attached,
                     allow_regeneration=False, respect_indestructible=False,
                     on_destroy=_on_destroy_5m,
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 
@@ -1097,6 +1108,8 @@ class GameEndingMixin:
                     on_destroy=lambda perm: self.log.append(
                         f"{perm.card.name} sacrificed (704.5s: Saga reached final chapter)"
                     ),
+                    # A sacrifice (CR 701.21a: "doesn't destroy it").
+                    cause=NOT_A_DESTRUCTION,
                 ):
                     changed = True
 

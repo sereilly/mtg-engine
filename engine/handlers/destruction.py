@@ -7,6 +7,7 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..object_colors import share_a_color
+from ..destruction_events import mark_delayed_destruction
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
@@ -1061,18 +1062,30 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     # ``engine.dexterity`` is the one place that substitution is made and
     # explained. Only the count is this card's ("up to two permanents").
     chosen = flip_lands_on(candidates, maximum=2)
+    # "…**destroy** all nontoken permanents it touches. Then **destroy** this
+    # artifact." Two destructions, through the destroy seam every sibling here
+    # uses. They were a bare removal and a move to the graveyard — one of the
+    # two destructions in the engine that went round the seam — so the Orb
+    # destroyed an indestructible permanent, destroyed a creature through its
+    # regeneration shield (CR 702.12b, CR 701.8c), and nothing watching a
+    # destruction heard of either.
     for victim_player, victim_perm in chosen:
-        game.remove_from_battlefield(victim_perm)
-        game._permanent_to_graveyard(victim_player, victim_perm)
-        game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
-    # Always destroy Chaos Orb itself
+        if game._destroy_swept_permanents(
+            victim_player, lambda perm, victim=victim_perm: perm is victim
+        ):
+            game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
+        else:
+            game.log.append(
+                f"Chaos Orb flip touched {victim_perm.card.name}, which was "
+                "not destroyed"
+            )
+    # "Then destroy this artifact."
     if source_permanent is not None:
         holder = game.controller_index_of(source_permanent)
-        if holder is not None:
-            player = game.players[holder]
-            game.remove_from_battlefield(source_permanent)
-            game._permanent_to_graveyard(player, source_permanent)
-    game.log.append("Chaos Orb was destroyed after flip")
+        if holder is not None and game._destroy_swept_permanents(
+            game.players[holder], lambda perm: perm is source_permanent
+        ):
+            game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
 
 
@@ -1181,7 +1194,12 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         "bounce": "bounce_at_next_end_step",
         "sacrifice": "sacrifice_at_next_end_step",
     }.get(action, "destroy_at_next_end_step")
-    source.metadata[key] = True
+    if key == "destroy_at_next_end_step":
+        # A destruction, so the mark carries who set it up (CR 603.7d–e) —
+        # the end step that carries it out has no spell or ability resolving.
+        mark_delayed_destruction(game, source, key)
+    else:
+        source.metadata[key] = True
     return True, "resolved"
 
 

@@ -1853,6 +1853,65 @@ def _loyalty_activation_filter(
     )
 
 
+def destroyed_trigger_applies(
+    game: Game,
+    observer: Permanent,
+    observer_seat: int | None,
+    trig: ParsedTriggeredAbility,
+    event: Event,
+) -> bool:
+    """"Whenever a spell or ability an opponent controls destroys a noncreature
+    permanent you control" (Karmic Justice) — CR 701.8's event, asked for one
+    watching ability.
+
+    Two narrowings, and the condition's payload names both:
+
+    * ``destroyed_cause`` — **whose** spell or ability did it. The event
+      carries the seat (``cause_seat``) or None, and None is an answer: lethal
+      damage destroys a creature and no spell or ability did (CR 704.5g),
+      whoever dealt the damage. "An opponent" is every seat but the watcher's
+      own (CR 102.2). A cause word this does not know refuses, which is the
+      direction a trigger must fail in.
+    * ``destroyed_filter`` — **what** was destroyed, through the one matcher
+      every printed noun phrase is read by. Asked while the permanent is still
+      on its battlefield (CR 603.10a): its types are layer 4's, so a land an
+      effect animated is a creature at the moment it is destroyed.
+
+    *observer_seat* is passed rather than read off the board, and that is the
+    reason this is a function beside the registered filter: a watcher destroyed
+    earlier in the same simultaneous event still sees the rest of it
+    (CR 603.10a), and it has no controller to ask by then
+    (``destruction_events.DestructionLedger.departed``).
+    """
+    if observer_seat is None:
+        return False
+    payload = trig.condition.payload
+    cause = payload.get("destroyed_cause")
+    if cause is not None:
+        causer = event.payload.get("cause_seat")
+        if not isinstance(causer, int):
+            return False
+        if cause != "an opponent" or causer == observer_seat:
+            return False
+    return subject_matches(
+        game,
+        event.subject,
+        payload.get("destroyed_filter"),
+        observer=observer_seat,
+        source=observer,
+    )
+
+
+@event_filter("permanent_destroyed")
+def _permanent_destroyed_filter(
+    game: Game, permanent: Permanent, trig: ParsedTriggeredAbility, event: Event
+) -> bool:
+    """The watcher on the battlefield: its seat is the control seam's."""
+    return destroyed_trigger_applies(
+        game, permanent, game.controller_index_of(permanent), trig, event,
+    )
+
+
 def trigger_subject_matches(
     game: Game,
     trig: ParsedTriggeredAbility,

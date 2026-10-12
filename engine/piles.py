@@ -620,6 +620,11 @@ def _battlefield_fates(game, session: PileSession, chosen_fate: str, other_fate)
                     game.players[seat],
                     lambda candidate, target=permanent: candidate is target,
                     allow_regeneration=not payload.get("no_regeneration"),
+                    # The spell or ability that separated the piles destroys
+                    # (CR 109.5) — named here, because the piles are dealt
+                    # with when the last answer arrives and nothing is
+                    # resolving by then.
+                    cause=session.caster,
                 ))
             game.log.append(
                 f"{session.card_name} destroyed "

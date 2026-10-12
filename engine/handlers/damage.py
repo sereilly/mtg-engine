@@ -8,6 +8,7 @@ from ..damage_redirects import DamageRedirect, add_redirect
 from ..divided_damage import (
     DIVIDED_TARGETS, EVENLY, divide, divided_entry,
 )
+from ..destruction_events import mark_delayed_destruction
 from ..dexterity import flip_lands_on
 from ..models import Permanent
 from ..named_counters import counters_on
@@ -149,7 +150,7 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # than sequenced — the end step's existing delayed-destruction sweep does
     # the rest (phases/end_step.py:_delayed_eot_removal).
     if instruction.payload.get("destroys_source_at_end_step") and own_permanent is not None:
-        own_permanent.metadata["destroy_at_next_end_step"] = True
+        mark_delayed_destruction(game, own_permanent, "destroy_at_next_end_step")
 
     # "…it deals **that much** damage" (Brash Taunter): the number is the firing
     # event's, frozen into the trigger's context by the fire site. An absent

@@ -4,6 +4,7 @@ import dataclasses
 
 from ..card_hooks import ON_SELF_RESOLVED
 from ..control import BASE_CONTROLLER, CONTROL_EFFECTS
+from ..destruction_events import instruction_finished
 from ..event_durations import end_event_durations
 from ..cast_costs import kicked
 from ..events import emit
@@ -141,6 +142,14 @@ class OracleInstructionsMixin:
                 )
             self.resolving_seats.pop()
             self.resolving_targets.pop()
+            # A destruction this instruction performed has triggered abilities
+            # that are waiting for the resolution to finish (CR 603.3b), and
+            # the simultaneous event a watcher was destroyed in ends with the
+            # instruction that began it. Asked only when the destroy seam left
+            # something behind, so every other instruction pays one attribute
+            # read. See engine/destruction_events.py.
+            if self.destruction.held or self.destruction.departed:
+                instruction_finished(self)
 
     def _apply_spell_text(
         self,

@@ -27,6 +27,8 @@ from ..replacements import TOP_OF_LIBRARY_DISCARD_TEXT, apply_replacements
 from ..oracle import compile_card_oracle, lex_oracle_text
 from ..trigger_utils import iter_triggered_abilities, make_trigger_event, matching_triggers
 from ..damage_redirects import source_matches
+from ..destruction_events import (RESOLVING, announce_destroyed,
+                                  destruction_finished)
 from ..search_filters import card_has_type
 
 def _damage_word_matches(trig, combat: bool) -> bool:
@@ -344,8 +346,17 @@ class EffectsMixin:
         source: "Permanent | None" = None,
         defending: int | None = None,
         that_player: int | None = None,
+        cause=RESOLVING,
     ) -> "Permanent | None":
         """Destroy the permanent *described* names on *target*'s battlefield.
+
+        **One of the two places a permanent is destroyed** (CR 701.8), and so
+        one of the two that announce it: ``destruction_events.announce_destroyed``
+        is called here once nothing has replaced the destruction, with *cause*
+        saying whose spell or ability did it. The default is CR 109.5's
+        controller of whatever is resolving, which is right for an effect
+        handler; a caller outside a resolution (an upkeep effect, a turn step)
+        names the seat itself. See ``engine/destruction_events.py``.
 
         **The whole noun phrase, as one payload.** This used to take seven named
         filter keys, which made the printed narrowing a hand-maintained
@@ -402,6 +413,13 @@ class EffectsMixin:
             # this was one of the two places asking half of it.
             if not bypass_regeneration and regeneration_replaces_destruction(self, perm):
                 return None  # type: ignore[return-value]
+            # It is destroyed (CR 701.8a), and said so while it is still on
+            # the battlefield: what watches a destruction looks back at the
+            # permanent as it last existed there (CR 603.10a), and may be this
+            # permanent itself. Before the move rather than after it, because
+            # a replaced move is still a destruction — the announcement is of
+            # what was done, not of where the card ended up.
+            announce_destroyed(self, perm, cause)
             self.remove_from_battlefield(perm)
             # `_permanent_to_graveyard` announces the land-dies triggers
             # (Dingus Egg) along with everything else a death announces — the
@@ -413,6 +431,11 @@ class EffectsMixin:
             # Gauntlet of Might, Lord of Atlantis, Nightmare's swamp count) must be
             # recomputed now that it has left the battlefield.
             self._recompute_continuous_effects()
+            # …and what the destruction triggered goes on the stack, unless a
+            # resolution is still running — then it waits for that to finish
+            # (CR 603.3b), so a target is chosen off the board the whole
+            # effect left behind.
+            destruction_finished(self)
             return perm
 
         if target_permanent_index is not None:
