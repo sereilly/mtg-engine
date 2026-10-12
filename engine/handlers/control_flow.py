@@ -3342,6 +3342,19 @@ def _action_is_takeable(
     if instruction.kind == "remove_counter_from_self":
         if source is None:
             return False
+        # "…sacrifice this creature **unless you remove a +1/+1 counter from
+        # it**." (Junk Golem.) A *permanent* that left while this ability
+        # waited has no counter to give: CR 122.2 — counters "are not retained
+        # if that object moves from one zone to another" — so the removal is
+        # an action nobody can take, however many the departed object still
+        # carries in memory. Without it the offer was made over a Golem in a
+        # graveyard, and a Living Artifact destroyed in response to its own
+        # trigger still paid out its life. Only a permanent is asked: the
+        # other source this reader answers for is a card in exile (All
+        # Hallow's Eve), which is where its counters are.
+        if context is not None and source is context.source_permanent:
+            if not game.is_on_battlefield(source):
+                return False
         counter = str(instruction.payload.get("counter", "doom"))
         # The same reader the removal itself uses (``named_counters.counters_on``),
         # so the offer and the action cannot disagree about where the counters

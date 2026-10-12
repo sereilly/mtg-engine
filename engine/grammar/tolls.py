@@ -36,7 +36,7 @@ from .phrases import (_accept_life_alternative, _parse_mana_payment,
                       _parse_pay_life, _parse_per_each_objects)
 from .sacrifices import _parse_counted_sacrifice
 from .effects import (_parse_discard, _parse_mill, _parse_put_counter,
-                      _parse_put_hand_cards_on_library)
+                      _parse_put_hand_cards_on_library, _parse_remove_counter)
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
@@ -357,6 +357,13 @@ def _accept_price_action(
         if exiled is None:
             stream.reset(mark)
         return exiled
+    # "…unless you **remove a +1/+1 counter from it**" (Junk Golem). The
+    # seventh currency, see :func:`accept_counter_removal_price`.
+    if stream.at_word("removes", "remove"):
+        removed = accept_counter_removal_price(stream)
+        if removed is None:
+            stream.reset(mark)
+        return removed
     # "…unless the player **puts a -1/-1 counter on a creature they control**"
     # (Thelon's Chant, Tourach's Chant). Another printed currency beside mana
     # and a discard, and the same decomposition for the same reason.
@@ -436,6 +443,43 @@ def accept_graveyard_exile_price(
     return ast.Exile(dataclasses.replace(
         spec, filter=dataclasses.replace(spec.filter, zone_owner=payer),
     ))
+
+
+def accept_counter_removal_price(stream: TokenStream) -> "ast.RemoveCounter | None":
+    """``remove[s] a <kind> counter from <the ability's own permanent>`` as a
+    **price** — or None with the cursor unmoved.
+
+    "At the beginning of your upkeep, sacrifice this creature **unless you
+    remove a +1/+1 counter from it**." (Junk Golem.) The sibling the exile
+    price above was written to stand beside, and decomposed the same way: the
+    removal is the offer's *action*, so it reaches the :class:`ast.May` every
+    "unless" already is, and the takeability gate that knows an empty Living
+    Artifact cannot pay ("you may remove a vitality counter from this Aura",
+    ``remove_counter_from_self``) is the one that says a Golem with no counter
+    left is not offered the price — the sacrifice stands.
+
+    **One counter, off the permanent the sentence is about, and nothing else.**
+    A counter on somebody else's permanent is not a resource the payer gives
+    up, a *target* is not a price (CR 601.2b's cost against CR 601.2c's
+    target), and "remove all" or "any number of" is a quantity the offer's
+    "can you?" does not ask — each refuses rather than being read as this.
+    """
+    mark = stream.mark()
+    try:
+        removal = _parse_remove_counter(stream)
+    except GrammarError:
+        removal = None
+    subject = None if removal is None else removal.subject
+    if (
+        removal is None
+        or not isinstance(subject, ast.TargetSpec)
+        or subject.targeted
+        or not subject.filter.is_source
+        or removal.count != ast.Fixed(1)
+    ):
+        stream.reset(mark)
+        return None
+    return removal
 
 
 def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":

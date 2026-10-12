@@ -2175,6 +2175,135 @@ def test_w1g6_zoologist_with_an_empty_library_reveals_nothing(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# The five creatures the group implemented. The twenty-odd it only *drove*
+# (they compiled on the day of the ingest) are in
+# `test_ody_creatures_driven_w1g8.py`, a file of the group's own, so this one
+# keeps its room for the groups still to land.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Junk Golem -------------------------------------------------------------
+# "At the beginning of your upkeep, sacrifice this creature unless you remove a
+# +1/+1 counter from it." The toll's seventh currency: the removal is the
+# offer's action, so the `may` every "unless" already is asks for it and the
+# takeability gate decides whether there is anything to ask about.
+
+def test_w1g8_junk_golem_pays_a_counter_each_upkeep_until_it_has_none(set_pool):
+    game = _w1g8.table(set_pool)
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    assert _w1g8.pt(golem) == (3, 3), "enters with three +1/+1 counters"
+
+    sizes = []
+    for _ in range(3):
+        _w1g8.upkeep(game)
+        sizes.append(_w1g8.pt(golem) if game.is_on_battlefield(golem) else None)
+
+    # The third counter leaves a 0/0, which state-based actions take.
+    assert sizes == [(2, 2), (1, 1), None]
+    assert _w1g8.pile(game, 0) == ["Junk Golem"]
+
+
+@_w1g8_pytest.mark.parametrize("accept, left", [(True, (2, 2)), (False, None)])
+def test_w1g8_junk_golem_asks_its_controller_and_obeys_the_answer(
+    set_pool, accept, left
+):
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+
+    assert _w1g8.owed(game) == [("optional_pay", 0)]
+    assert game.stack, "the ability waits on the stack for its answer (CR 608.2)"
+    assert game.confirm_optional_pay(0, accept=accept)
+    _w1g8.settle(game)
+
+    if left is None:
+        assert _w1g8.pile(game, 0) == ["Junk Golem"]
+        assert "Junk Golem was sacrificed" in game.log
+    else:
+        assert _w1g8.pt(golem) == left
+
+
+def test_w1g8_junk_golem_with_no_counter_is_not_offered_the_price(set_pool):
+    """Kept alive at no counters by an anthem, the Golem has nothing to pay
+    with: no prompt, and the sacrifice stands (CR 118.12a — the "unless" is an
+    offer, and an action nobody can take is not offered)."""
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    _w1g8.put(game, set_pool, 0, "Glorious Anthem")
+    for _ in range(3):
+        game.active_player_index = 0
+        game.resolve_upkeep(0)
+        assert game.confirm_optional_pay(0, accept=True)
+        _w1g8.settle(game)
+    assert _w1g8.pt(golem) == (1, 1), "the anthem alone"
+
+    game.resolve_upkeep(0)
+    assert _w1g8.owed(game) == []
+    _w1g8.settle(game)
+
+    assert _w1g8.names(game, 0) == ["Glorious Anthem"]
+    assert _w1g8.pile(game, 0) == ["Junk Golem"]
+
+
+def test_w1g8_junk_golem_gone_in_response_is_asked_nothing(set_pool):
+    """Counters are not retained across a zone change (CR 122.2), so a Golem
+    destroyed with its trigger on the stack has none to remove: nobody is
+    asked, and there is nothing left to sacrifice."""
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.active_player_index = 0
+    game.resolve_upkeep(0, defer_priority=True)
+    assert [item.card.name for item in game.stack] == ["Junk Golem"]
+
+    _w1g8.leave(game, golem)
+    _w1g8.settle(game)
+
+    assert _w1g8.owed(game) == []
+    assert not any("Removed a +1/+1 counter" in line for line in game.log)
+
+
+def test_w1g8_junk_golem_grows_for_one_mana_and_a_card_and_is_refused_without(
+    set_pool,
+):
+    game = _w1g8.table(set_pool, hand=["Forest"], enforce=True)
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.players[0].mana_pool["C"] = 2
+
+    used = game.activate_permanent_ability(0, "Junk Golem")
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert _w1g8.pt(golem) == (4, 4)
+    assert _w1g8.pile(game, 0) == ["Forest"] and not game.players[0].hand
+
+    refused = game.activate_permanent_ability(0, "Junk Golem")
+    assert not refused.supported and "discard" in refused.details
+    assert game.players[0].mana_pool["C"] == 1, "a refused activation spends nothing"
+    assert _w1g8.pt(golem) == (4, 4)
+
+
+@_w1g8_pytest.mark.parametrize(
+    "price",
+    [
+        "remove all +1/+1 counters from it",        # a quantity nobody asks "can you?" of
+        "remove a +1/+1 counter from target creature",  # a target is not a price
+        "remove two +1/+1 counters from it",        # one handler, one counter
+    ],
+)
+def test_w1g8_a_counter_removal_price_is_one_counter_off_the_source(price):
+    """The refusing gate's refusal test: a price the offer cannot ask about is
+    refused whole, never read as "remove one from this"."""
+    from tests.helpers import _mk_card
+
+    probe = _mk_card(
+        "Probe Golem", "Artifact Creature — Golem",
+        f"At the beginning of your upkeep, sacrifice this creature unless you {price}.",
+    )
+    assert not _w1g8_compile(probe).supported
 
 # ==== end W1G8 ======================================================
 

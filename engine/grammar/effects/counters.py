@@ -682,7 +682,10 @@ def _parse_remove_counter(stream: TokenStream) -> ast.RemoveCounter | None:
     missing production instead of on a counter kind they never mentioned.
     """
     mark = stream.mark()
-    stream.expect_word("remove")
+    # "removes" is the same verb behind a printed third-person payer ("…unless
+    # that player **removes** a counter from it"), which only the toll's price
+    # list reaches — the statement dispatch opens on the imperative.
+    stream.expect_word("remove", "removes")
     if stream.accept_word("a", "an"):
         count: ast.Amount = ast.Fixed(1)
     else:
