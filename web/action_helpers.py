@@ -196,6 +196,13 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             else [req.cost_permanent_id]
         ),
         cost_hand_index=req.cost_hand_index,
+        # …and which cards in the caster's graveyard pay "exile X cards from
+        # your graveyard" (Skeletal Scrying, Haunting Misery), by slot, on the
+        # field the activation branch already forwards for Psychatog. The
+        # engine holds a named set to the count (CR 601.2h) and takes the top
+        # of the pile for a cast that names none, so an absent field is every
+        # cast a client that does not know the field makes today.
+        cost_graveyard_indices=req.cost_graveyard_indices,
         # …and the further cards of a "discard two cards" cost (Forbid's
         # buyback), on the activation path's field.
         cost_other_hand_indices=req.cost_other_hand_indices,

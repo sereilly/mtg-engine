@@ -15,7 +15,7 @@ one permanent, cast three ways: naming one too few (refused, nothing spent),
 naming exactly the count (those permanents and no others pay) and naming
 nobody (the deterministic default, which the AI and the test corpus stand on).
 
-Before the fix: every one of them accepted the short list.
+Before the fix: every one of them accepted the short list ("queued").
 """
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def _board(card) -> Game:
     game = Game(players=[PlayerState(name="P1"), PlayerState(name="P2")])
     game.enforce_mana_costs = True
     for seat in (0, 1):
-        for name in _LANDS * 4 + ("Grizzly Bears",) * 4:
+        for name in _LANDS * 4 + ("Grizzly Bears",) * 4 + ("Black Knight",) * 4:
             permanent = Permanent(card=by_name[name])
             game._put_permanent_onto_battlefield(seat, permanent, None)
             permanent.metadata["summoning_sickness_turn"] = -99
@@ -151,5 +151,6 @@ def test_a_short_list_of_alternative_cost_permanents_is_refused():
     assert not topped_up, f"a short list was accepted and filled in: {topped_up}"
     assert not wrong_payers, wrong_payers
     assert not default_refused, default_refused
-    # Measured: seven cards (Ensnare, Fireblast, Gush, Pulverize, Thwart, …).
-    assert examined >= 5, [entry[0].name for entry in population]
+    # Measured: seven cards — Delraich, Ensnare, Fireblast, Gush, Mogg Alarm,
+    # Pulverize, Thwart — every one castable for its cost on this board.
+    assert examined >= 7, [entry[0].name for entry in population]
