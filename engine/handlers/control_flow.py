@@ -2508,8 +2508,7 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
         # one decision default alike.
         context.results[CHOSEN_NUMBER_THIS_WAY] = high
         if high <= low:
-            # One legal answer is not a choice (CR 608.2d asks for a decision
-            # only where there is one to make).
+            # One legal answer is not a choice, so nobody is asked.
             return True, "resolved"
         game.arm_pending_choice(
             "number_choice", seat,

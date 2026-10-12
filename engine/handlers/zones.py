@@ -657,11 +657,27 @@ def search_library(game: Game, instruction: OracleInstruction, context: OracleEx
         # per slot. A list the lowering sized (Cultivate) is left as printed.
         if not tapped and instruction.payload.get("enters_tapped"):
             tapped = [True] * count
-    if (counted_from is not None or printed_count == "x") and count <= 0:
+    computed = counted_from is not None or printed_count == "x"
+    if computed and count <= 0 and instruction.payload.get("up_to"):
+        # "…for **up to** X basic land cards" with X = 0 (New Frontiers), or
+        # "up to that many" after nothing was discarded (Rites of Spring). A
+        # search for up to no cards is still a search: the library is looked
+        # through, nothing can be found, and the shuffle that ends it still
+        # happens — CR 701.23c's situation ("that player may still search that
+        # zone but can't find any cards"), and CR 701.23g lets a player take
+        # an offered search whose finds are impossible. So it is the
+        # fail-to-find without the prompt: there is no card a seat could name.
+        searched = game.players[seats.get("zone_seat", caster_index)]
+        if "library" in zones:
+            random.shuffle(searched.library)
+        whose = "their" if searched is caster else f"{searched.name}'s"
+        game.log.append(
+            f"{caster.name} searched {whose} library for up to 0 cards and shuffled"
+        )
+        return True, "resolved"
+    if counted_from is not None and count <= 0:
         game.log.append(
             f"{context.card.name}: nothing was recorded to search for"
-            if counted_from is not None
-            else f"{context.card.name}: X is 0, so there is nothing to search for"
         )
         return True, "resolved"
     game.arm_pending_choice(
@@ -1511,9 +1527,14 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
     # chooses which card. Defer to a pending choice; the UI prompts the human and
     # the AI auto-resolves it. Library of Leng lets them choose top-of-library.
     player_index = game.players.index(target)
+    # "Target player discards **up to** two cards": a ceiling, so fewer (none
+    # included) is a legal answer. Only when printed, so every discard armed
+    # before the key existed is byte-identical.
+    ceiling = bool(instruction.payload.get("up_to"))
     game.arm_pending_choice(
         "discard", player_index,
         count=actual,
+        **({"up_to": True} if ceiling else {}),
         allow_top_of_library=game._controls_top_of_library_discard(target),
         # The scratchpad rides the prompt: how many cards actually went is not
         # known until the seat answers, and `_after_discard_answered` is the one
@@ -1521,7 +1542,10 @@ def discard_target_cards(game: Game, instruction: OracleInstruction, context: Or
         # default) reach.
         _results=context.results,
     )
-    game.log.append(f"{target.name} must choose {actual} card(s) to discard")
+    game.log.append(
+        f"{target.name} may discard up to {actual} card(s)" if ceiling
+        else f"{target.name} must choose {actual} card(s) to discard"
+    )
     return True, "pending_discard"
 
 
@@ -8553,7 +8577,18 @@ def look_top_pick_to_hand(game: Game, instruction: OracleInstruction, context: O
     # wrong library is worse than the spell fizzling, and the pile is hidden,
     # so nobody would see it.
     chooser = caster
-    if payload.get("pile_owner") is not None:
+    if payload.get("pile_owner") == "damaged_player":
+        # "…**that player** reveals the top two cards of their library."
+        # (Balshan Beguiler.) The seat the damage event froze (CR 603.10), off
+        # the key every damage announcement stamps — never ``context.target``,
+        # which for a trigger that chose nothing is whatever the resolution
+        # happened to be carrying. No record, no pile.
+        seat = (context.trigger_context or {}).get("defending_player_index")
+        if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
+            game.log.append(f"{context.card.name}: no recorded player, no library")
+            return True, "resolved"
+        caster = game.players[seat]
+    elif payload.get("pile_owner") is not None:
         if context.target not in game.players:
             game.log.append(f"{context.card.name}: no player chosen")
             return True, "resolved"
@@ -8701,6 +8736,8 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
     # sends a flag rather than an amount. `up_to` then makes it a ceiling: "any
     # number" includes none, and a required count would force the whole hand out.
     any_number = bool(instruction.payload.get("any_number"))
+    # "Discard **up to** two cards": the same ceiling with a printed number.
+    ceiling = any_number or bool(instruction.payload.get("up_to"))
     amount = (
         len(eligible) if any_number else
         min(
@@ -8731,7 +8768,7 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
         count=amount,
         # Only when the phrase printed a ceiling, so every discard written
         # before "any number of" existed arms a byte-identical choice.
-        **({"up_to": True} if any_number else {}),
+        **({"up_to": True} if ceiling else {}),
         filter=described,
         allow_top_of_library=game._controls_top_of_library_discard(caster),
         # The live scratchpad, so the answer can record how many were actually
@@ -8741,7 +8778,7 @@ def discard_controller_cards(game: Game, instruction: OracleInstruction, context
         _results=context.results,
     )
     game.log.append(
-        f"{caster.name} may discard up to {amount} card(s)" if any_number
+        f"{caster.name} may discard up to {amount} card(s)" if ceiling
         else f"{caster.name} must choose {amount} card(s) to discard"
     )
     return True, "pending_discard"

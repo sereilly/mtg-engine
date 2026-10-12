@@ -471,10 +471,15 @@ def _action_discard_confirm(session, req, seat_type):
         raise HTTPException(status_code=400, detail="no discard pending")
     if req.seat != pending["player_index"]:
         raise HTTPException(status_code=400, detail="not your discard")
-    if not req.discard_indices:
+    # "Discard **up to** two cards" / "discard **any number of** cards": none
+    # is a legal answer, and the engine has always taken it. This refused an
+    # empty list before the engine was asked, so over the wire a ceiling was a
+    # floor of one. Only a ceiling may be answered with nothing — an exact
+    # discard with no cards named is still a malformed request.
+    if not req.discard_indices and not pending.get("up_to"):
         raise HTTPException(status_code=400, detail="discard_indices is required")
     ok = session.game.confirm_discard(
-        req.seat, list(req.discard_indices), to_library=bool(req.to_library)
+        req.seat, list(req.discard_indices or []), to_library=bool(req.to_library)
     )
     if not ok:
         raise HTTPException(status_code=400, detail="invalid discard selection")

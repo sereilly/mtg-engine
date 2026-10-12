@@ -200,6 +200,7 @@ from .hand import (
     parse_player_exiles_cards_from_hand,
 )
 from .library import (
+    accept_subject_reveals_top_caster_picks,
     _parse_look_at_hand,
     parse_player_looks_at_own_library_top,
     parse_player_reorders_your_library_top,
@@ -404,6 +405,7 @@ __all__ = [
     "parse_player_exiles_cards_from_hand",
     "_parse_reveal_hand",
     "accept_subject_reveals_counted_top_sorted",
+    "accept_subject_reveals_top_caster_picks",
     "accept_subject_reveals_top_of_library",
     "_parse_reveal_hand_and_choose",
     "_parse_exile_graveyard_position",

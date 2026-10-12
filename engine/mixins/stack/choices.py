@@ -1681,7 +1681,11 @@ class PendingChoicesMixin:
             # end of the library it is about.)
             if choice.data.get("rest_destination") == "library_top":
                 caster.library[:0] = list(rest)
-                if len(rest) > 1:
+                # "…You choose one of those cards and put it into their
+                # graveyard." (Balshan Beguiler.) No clause about the rest at
+                # all: they were revealed, not moved, so they are where they
+                # were and in the order they were — nobody is asked.
+                if len(rest) > 1 and choice.data.get("rest_order") != "unchanged":
                     # Whose library is reordered, and **who orders it**: one
                     # seat everywhere but Sealed Fate, where the cards go back
                     # on the opponent's library in an order the caster chooses
@@ -1760,6 +1764,11 @@ class PendingChoicesMixin:
             taken_to = str(choice.data.get("pick_destination", "hand"))
             if taken_to == "exile":
                 caster.exile.append(kept)
+            elif taken_to == "graveyard":
+                # "You choose two of those cards and put them into that
+                # player's graveyard." (Bamboozle.) Through the graveyard
+                # seam, naming the zone the card left.
+                self.put_card_into_graveyard(caster, kept, from_zone="library")
             else:
                 self.put_card_into_hand(caster, kept)
             self.discard_pending_choice(choice)
@@ -1769,11 +1778,20 @@ class PendingChoicesMixin:
             shown = (
                 kept.name if self.find_is_public(choice.data, taken_to) else "a card"
             )
-            self.log.append(
-                f"{caster.name} took {shown} "
-                + ("into exile " if taken_to == "exile" else "into their hand ")
-                + f"({remaining - 1} more to take)"
-            )
+            if taken_to == "graveyard":
+                # Who chose and whose pile are two seats here (Bamboozle), so
+                # the line names both, as the last link of the chain does.
+                self.log.append(
+                    f"{self.players[choice.player_index].name} put {kept.name} "
+                    f"from {caster.name}'s library into {caster.name}'s "
+                    f"graveyard ({remaining - 1} more to choose)"
+                )
+            else:
+                self.log.append(
+                    f"{caster.name} took {shown} "
+                    + ("into exile " if taken_to == "exile" else "into their hand ")
+                    + f"({remaining - 1} more to take)"
+                )
             # The keys are listed rather than the whole ``data`` dict passed
             # back, for `_rearm_revealed_hand_pick`'s reason: ``arm_pending_choice``
             # stamps its own bookkeeping into ``data`` (which stack object is
@@ -1808,6 +1826,18 @@ class PendingChoicesMixin:
             self.log.append(
                 f"{self.players[choice.player_index].name} exiled a card from "
                 f"{caster.name}'s library"
+            )
+            return True
+        # "…and put it into **their graveyard**." (Balshan Beguiler; the last
+        # of Bamboozle's two.) The fifth printed destination for the taken
+        # card. A graveyard is public and so was the pile, so the card is
+        # named.
+        if choice.data.get("pick_destination") == "graveyard":
+            self.put_card_into_graveyard(caster, kept, from_zone="library")
+            self.discard_pending_choice(choice)
+            self.log.append(
+                f"{self.players[choice.player_index].name} put {kept.name} from "
+                f"{caster.name}'s library into {caster.name}'s graveyard"
             )
             return True
         # Where the *kept* card goes, read the same way the rest's destination
@@ -11972,4 +12002,14 @@ register_choice(
     # the stated maximum keep is taken where the effect stands.
     default_at_arm=True,
     spectator_visible=True,
+    # "…then sacrifices the rest. **Each player discards cards the same
+    # way.**" (Balancing Act.) The first card with a step *behind* the keep,
+    # and that step arms a prompt of its own for the same seat. Left running,
+    # one seat owed a keep and a discard at once and each answer was refused
+    # naming the other — every blocking prompt refuses every action but its
+    # own. So the keep holds the resolution the way a forced sacrifice does,
+    # and the step behind it runs when the last keep is answered. Nothing
+    # changes for the four cards printed before it: none has a step behind
+    # the keep, and a seat nobody asks never queues one.
+    suspends=True,
 )

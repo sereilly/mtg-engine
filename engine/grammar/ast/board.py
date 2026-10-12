@@ -802,6 +802,13 @@ class KeepSlot:
     """
     count: int
     filter: ObjectFilter
+    #: "…chooses **a number of** permanents they control **equal to the number
+    #: of permanents controlled by the player who controls the fewest**"
+    #: (Balancing Act). The slot's size is not printed: it is the smallest
+    #: number of such permanents any player controls, one number for the whole
+    #: table that only the resolution knows. ``count`` is 0 beside it — there
+    #: is no printed number to carry — and the flag is what a lowering reads.
+    as_many_as_fewest: bool = False
 
 
 @dataclass(frozen=True)
@@ -847,3 +854,10 @@ class KeepChosenSacrificeRest:
     pool: ObjectFilter
     slots: tuple[KeepSlot, ...]
     fate: str = "sacrifice_rest"
+    #: "…then sacrifices the rest. **Each player discards cards the same
+    #: way.**" (Balancing Act.) A second sentence that cannot be read alone:
+    #: "the same way" is the first sentence's whole procedure — keep as many
+    #: as the player with the fewest, lose the rest — said of hands. On the
+    #: node because the production has to consume it with the sentence it
+    #: refers to; the lowering emits it as its own step.
+    discard_same_way: bool = False

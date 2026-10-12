@@ -368,6 +368,15 @@ def controller_discard(node: ast.Discard) -> tuple[OracleInstruction, ...]:
             raise LoweringError(
                 "the random controller discard is counted or X", node=node
             )
+        if node.up_to:
+            # A ceiling is a choice of how many, and a sample has no chooser:
+            # "any number … at random" above is the one spelling that says
+            # who picks the number. Read as a count, "up to two at random"
+            # would discard exactly two.
+            raise LoweringError(
+                "a random discard has nobody to choose under a ceiling",
+                node=node,
+            )
         random_payload: dict[str, object] = {
             "amount": amount, "who": "caster",
         }
@@ -390,6 +399,12 @@ def controller_discard(node: ast.Discard) -> tuple[OracleInstruction, ...]:
             "the controller discard is chosen, and counted or X", node=node
         )
     payload: dict[str, object] = {"amount": amount, **counted}
+    if node.up_to:
+        # "Discard **up to** two cards." A ceiling: fewer, none
+        # included, is a legal answer, and the prompt has to be told so or it
+        # demands exactly the printed number. The fused "…, then draw that
+        # many" (Kinetic Augur) carried it; the bare sentence dropped it.
+        payload["up_to"] = True
     # "Discard a **creature** card" (Crypt Lurker). Gated by the same reader
     # the discard *cost* is (round 87): the prompt and its re-check ask
     # ``_card_matches_filter``, so a phrase reaching past what that can

@@ -355,10 +355,13 @@ def test_dwarven_recruiter_asks_a_person_for_up_to_every_dwarf(set_pool):
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
 
+import random as _w1g7_random
+
 import pytest as _w1g7_pytest
 
 from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
 from engine.hand_size import maximum_hand_size as _w1g7_maximum_hand_size
+from engine.handlers._common import permanent_effective_colors as _w1g7_colors
 from engine.models import Permanent as _w1g7_Permanent
 from engine.oracle import compile_card_oracle as _w1g7_compile
 from tests.helpers import _mk_card as _w1g7_mk_card
@@ -594,6 +597,432 @@ def test_the_discard_trigger_still_tells_its_three_seats_apart():
 
     assert life_after(0) == 22, "'you' and 'a player'"
     assert life_after(1) == 22, "'an opponent' and 'a player'"
+
+
+def _w1g7_attack(game, seat, name, blocks=None):
+    """*seat* attacks with its creature *name*; combat walks to the second
+    main phase, or stops where a prompt holds it. True if it got there."""
+    game.start_turn(seat)
+    game._close_current_priority_step()
+    slot = [p.card.name for p in game.controlled_by(seat)].index(name)
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    declared = game.declare_attackers(seat, [slot])
+    assert declared[0], declared
+    game.advance_combat_phase()
+    blocked = game.declare_blockers(1 - seat, dict(blocks or {}))
+    assert blocked[0], blocked
+    for _ in range(10):
+        if game.current_step == "postcombat_main":
+            return True
+        game.advance_combat_phase()
+        if game.pending_choices:
+            return False
+        _w1g7_resolve_stack(game)
+    return game.current_step == "postcombat_main"
+
+
+# --- Balshan Beguiler: the damaged player's top two, and its controller picks ---
+
+_W1G7_BEGUILED = ["Forest", "Grizzly Bears", "Island", "Terror"]
+
+
+def test_balshan_beguiler_bins_one_of_the_damaged_players_top_two(set_pool):
+    """"Whenever this creature deals combat damage to a player, that player
+    reveals the top two cards of their library. You choose one of those cards
+    and put it into their graveyard." The pile is the damaged player's, the
+    choice is the Beguiler's controller's, and the card not chosen stays where
+    it was — the sentence moves one card."""
+    game = _w1g7_duel(
+        set_pool, bf0=["Balshan Beguiler"], lib0=["Mountain"] * 5,
+        lib1=_W1G7_BEGUILED, interactive=(0,),
+    )
+    assert not _w1g7_attack(game, 0, "Balshan Beguiler"), "held: a pick is owed"
+    assert game.players[1].life == 19
+    (pick,) = game.pending_choices
+    assert (pick.kind, pick.player_index) == ("look_top_pick", 0)
+    assert (pick.data["pile_index"], pick.data["top_count"]) == (1, 2)
+    assert any("P1 reveals Forest, Grizzly Bears" in line for line in game.log)
+
+    assert game.resolve_pending_choice("look_top_pick", 0, keep_index=1)
+    assert _w1g7_names(game.players[1].graveyard) == ["Grizzly Bears"]
+    assert _w1g7_names(game.players[1].library) == ["Forest", "Island", "Terror"]
+    assert not game.pending_choices, "one card left: nothing to order"
+    assert len(game.players[0].library) == 5
+
+
+def test_balshan_beguiler_does_nothing_when_blocked_and_reads_the_seat_it_hit(
+    set_pool,
+):
+    """Blocked, it dealt no combat damage to a player. And "that player" is
+    whoever was damaged: under the other seat's control it opens *this*
+    seat's library and that seat's controller chooses."""
+    blocked = _w1g7_duel(
+        set_pool, bf0=["Balshan Beguiler"], bf1=["Grizzly Bears"],
+        lib0=["Mountain"] * 5, lib1=_W1G7_BEGUILED, interactive=(0,),
+    )
+    assert _w1g7_attack(blocked, 0, "Balshan Beguiler", blocks={0: 0})
+    assert blocked.players[1].graveyard == []
+    assert _w1g7_names(blocked.players[1].library) == _W1G7_BEGUILED
+
+    theirs = _w1g7_duel(
+        set_pool, bf1=["Balshan Beguiler"], lib0=_W1G7_BEGUILED,
+        lib1=["Mountain"] * 5, interactive=(1,),
+    )
+    assert not _w1g7_attack(theirs, 1, "Balshan Beguiler")
+    (pick,) = theirs.pending_choices
+    assert (pick.player_index, pick.data["pile_index"]) == (1, 0)
+    assert theirs.resolve_pending_choice("look_top_pick", 1, keep_index=0)
+    assert _w1g7_names(theirs.players[0].graveyard) == ["Forest"]
+    assert _w1g7_names(theirs.players[0].library) == ["Grizzly Bears", "Island", "Terror"]
+
+
+def test_balshan_beguiler_over_a_library_of_one_or_none(set_pool):
+    one = _w1g7_duel(
+        set_pool, bf0=["Balshan Beguiler"], lib0=["Mountain"] * 5, lib1=["Forest"],
+        interactive=(0,),
+    )
+    _w1g7_attack(one, 0, "Balshan Beguiler")
+    assert one.resolve_pending_choice("look_top_pick", 0, keep_index=0)
+    assert _w1g7_names(one.players[1].graveyard) == ["Forest"]
+
+    none = _w1g7_duel(
+        set_pool, bf0=["Balshan Beguiler"], lib0=["Mountain"] * 5, interactive=(0,),
+    )
+    assert _w1g7_attack(none, 0, "Balshan Beguiler")
+    assert not none.pending_choices and not none.players[1].lost
+
+
+def test_that_player_reveals_and_you_choose_needs_an_event_that_froze_a_seat():
+    """Under a trigger that damaged nobody, "that player" names a seat no fire
+    site recorded, and a pile nobody named is not opened."""
+    card = _w1g7_mk_card(
+        "Idle Beguiler", "{U}", "Enchantment",
+        "At the beginning of your upkeep, that player reveals the top two "
+        "cards of their library. You choose one of those cards and put it "
+        "into their graveyard.",
+    )
+    assert not _w1g7_compile(card).supported
+
+
+# --- The sheet's creatures that compiled before this round, driven --------------
+
+_W1G7_CHOSEN_DISCARD_COSTS = [
+    "Amugaba", "Balshan Griffin", "Face of Fear", "Fledgling Imp",
+    "Krosan Archer", "Patrol Hound", "Phantatog", "Pulsating Illusion",
+    "Stalking Bloodsucker", "Tireless Tribe", "Wild Mongrel",
+]
+_W1G7_RANDOM_DISCARD_COSTS = [
+    "Dwarven Strike Force", "Frenetic Ogre", "Pardic Swordsmith",
+]
+
+
+def _w1g7_discard_ability(set_pool, name):
+    program = _w1g7_compile(set_pool("ODY")[name])
+    return next(
+        index for index, ability in enumerate(program.activated_abilities)
+        if "discard" in ability.source_line.lower()
+    )
+
+
+@_w1g7_pytest.mark.parametrize(
+    "name", _W1G7_CHOSEN_DISCARD_COSTS + _W1G7_RANDOM_DISCARD_COSTS
+)
+def test_a_discard_cost_takes_exactly_one_of_two_identical_cards(set_pool, name):
+    """"Discard a card: …" A hand holds one immutable card object per copy, so
+    paying with one of two Forests has to leave the other (CR 701.9a moves a
+    card, not a name). And an empty hand cannot pay: the activation is refused
+    with nothing spent."""
+    index = _w1g7_discard_ability(set_pool, name)
+    game = _w1g7_duel(set_pool, bf0=[name], hand0=["Forest", "Forest"])
+    assert game.activate_permanent_ability(
+        0, name, ability_index=index, cost_hand_index=0
+    ).supported
+    _w1g7_settle(game)
+    hand = _w1g7_names(game.players[0].hand)
+    assert hand.count("Forest") == 1, hand
+    assert _w1g7_names(game.players[0].graveyard) == ["Forest"]
+
+    empty = _w1g7_duel(set_pool, bf0=[name])
+    refused = empty.activate_permanent_ability(0, name, ability_index=index)
+    assert not refused.supported and "discard" in refused.details
+    assert _w1g7_on_board(empty, 0, name) is not None
+
+
+@_w1g7_pytest.mark.parametrize("name", _W1G7_CHOSEN_DISCARD_COSTS)
+def test_a_chosen_discard_cost_discards_the_card_its_payer_named(set_pool, name):
+    index = _w1g7_discard_ability(set_pool, name)
+    game = _w1g7_duel(set_pool, bf0=[name], hand0=["Forest", "Forest", "Island"])
+    assert game.activate_permanent_ability(
+        0, name, ability_index=index, cost_hand_index=2
+    ).supported
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[0].graveyard) == ["Island"]
+
+
+@_w1g7_pytest.mark.parametrize("name", _W1G7_RANDOM_DISCARD_COSTS)
+def test_a_random_discard_cost_is_chances_and_replays_per_seed(set_pool, name):
+    """"Discard a card **at random**:" the payer names nothing — an index sent
+    with the activation does not choose — and the seeded RNG picks, so a seed
+    replays and different seeds differ."""
+    def gone(seed):
+        _w1g7_random.seed(seed)
+        game = _w1g7_duel(set_pool, bf0=[name], hand0=["Forest", "Island", "Swamp"])
+        assert game.activate_permanent_ability(0, name, cost_hand_index=0).supported
+        _w1g7_settle(game)
+        return tuple(_w1g7_names(game.players[0].graveyard))
+
+    assert gone(5) == gone(5)
+    assert len({gone(seed) for seed in range(20)}) == 3, "every card can be the one"
+
+
+def test_what_the_discard_cost_creatures_buy(set_pool):
+    """One line per card: what the ability does, and that it ends at cleanup."""
+    def after(name, **zones):
+        game = _w1g7_duel(set_pool, bf0=[name], hand0=["Forest"], **zones)
+        index = _w1g7_discard_ability(set_pool, name)
+        assert game.activate_permanent_ability(0, name, ability_index=index).supported
+        _w1g7_settle(game)
+        return game
+
+    def body(game, name):
+        permanent = _w1g7_on_board(game, 0, name)
+        return permanent.effective_power, permanent.effective_toughness
+
+    for name, expected in (
+        ("Krosan Archer", (2, 5)), ("Phantatog", (2, 3)),
+        ("Pulsating Illusion", (4, 5)), ("Stalking Bloodsucker", (6, 6)),
+        ("Tireless Tribe", (1, 5)), ("Frenetic Ogre", (5, 3)),
+        ("Pardic Swordsmith", (3, 1)), ("Wild Mongrel", (3, 3)),
+    ):
+        game = after(name)
+        assert body(game, name) == expected, name
+        game.resolve_cleanup_step(0)
+        printed = set_pool("ODY")[name].raw
+        assert body(game, name) == (int(printed["power"]), int(printed["toughness"])), name
+
+    for name, keywords in (
+        ("Face of Fear", ["fear"]), ("Fledgling Imp", ["flying"]),
+        ("Patrol Hound", ["first strike"]),
+        ("Dwarven Strike Force", ["first strike", "haste"]),
+    ):
+        game = after(name)
+        permanent = _w1g7_on_board(game, 0, name)
+        assert all(game._has_keyword(permanent, word) for word in keywords), name
+        game.resolve_cleanup_step(0)
+        assert not any(game._has_keyword(permanent, word) for word in keywords), name
+
+    for name in ("Amugaba", "Balshan Griffin"):
+        game = after(name)
+        assert name in _w1g7_names(game.players[0].hand), name
+        assert name not in [p.card.name for p in game.controlled_by(0)]
+
+
+def test_pulsating_illusion_may_be_activated_once_each_turn(set_pool):
+    game = _w1g7_duel(set_pool, bf0=["Pulsating Illusion"], hand0=["Forest", "Island"])
+    assert game.activate_permanent_ability(0, "Pulsating Illusion").supported
+    _w1g7_settle(game)
+    second = game.activate_permanent_ability(0, "Pulsating Illusion")
+    assert not second.supported and "once each turn" in second.details
+    assert len(game.players[0].hand) == 1, "the refused activation discarded nothing"
+
+
+def test_wild_mongrels_colour_is_chosen_as_the_ability_resolves(set_pool):
+    """CR 608.2d: "the color of your choice" is asked during resolution, not
+    announced with the activation; the colour is written through the layer and
+    is gone with the turn."""
+    game = _w1g7_duel(
+        set_pool, bf0=["Wild Mongrel"], hand0=["Forest", "Island"], interactive=(0,),
+    )
+    mongrel = _w1g7_on_board(game, 0, "Wild Mongrel")
+    assert game.activate_permanent_ability(0, "Wild Mongrel", cost_hand_index=0).supported
+    (choice,) = game.pending_choices
+    assert choice.kind == "color_choice"
+    assert sorted(_w1g7_colors(mongrel)) == ["G"], "nothing chosen yet"
+    assert not game.resolve_pending_choice("color_choice", 0, mana_color="purple")
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="U")
+    assert sorted(_w1g7_colors(mongrel)) == ["U"]
+    assert (mongrel.effective_power, mongrel.effective_toughness) == (3, 3)
+
+    game.activate_permanent_ability(0, "Wild Mongrel", cost_hand_index=0)
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
+    assert sorted(_w1g7_colors(mongrel)) == ["R"], "the later choice (CR 613.7)"
+    game.resolve_cleanup_step(0)
+    assert sorted(_w1g7_colors(mongrel)) == ["G"]
+
+
+def test_phantatogs_other_ability_sacrifices_an_enchantment(set_pool):
+    game = _w1g7_duel(set_pool, bf0=["Phantatog", "Think Tank"], hand0=["Forest"])
+    assert game.activate_permanent_ability(0, "Phantatog", ability_index=0).supported
+    _w1g7_settle(game)
+    assert [p.card.name for p in game.controlled_by(0)] == ["Phantatog"]
+    assert _w1g7_names(game.players[0].hand) == ["Forest"]
+
+    bare = _w1g7_duel(set_pool, bf0=["Phantatog"], hand0=["Forest"])
+    assert not bare.activate_permanent_ability(0, "Phantatog", ability_index=0).supported
+
+
+def test_overeager_apprentice_pays_both_costs_for_three_black_mana(set_pool):
+    game = _w1g7_duel(set_pool, bf0=["Overeager Apprentice"], hand0=["Forest", "Island"])
+    assert game.activate_permanent_ability(
+        0, "Overeager Apprentice", cost_hand_index=1
+    ).supported
+    _w1g7_settle(game)
+    assert game.players[0].mana_pool["B"] == 3
+    assert _w1g7_names(game.players[0].hand) == ["Forest"]
+    assert list(game.controlled_by(0)) == []
+
+    empty = _w1g7_duel(set_pool, bf0=["Overeager Apprentice"])
+    assert not empty.activate_permanent_ability(0, "Overeager Apprentice").supported
+    assert len(list(empty.controlled_by(0))) == 1, "not sacrificed for a cost unpaid"
+
+
+def test_the_cephalids_loot_for_a_player_their_controller_targets(set_pool):
+    """"{T}: **Target player** draws a card, then discards a card." The picker
+    offers both seats and the targeted player chooses the discard."""
+    for name, count in (("Cephalid Looter", 1), ("Cephalid Broker", 2)):
+        game = _w1g7_duel(
+            set_pool, bf0=[name], hand1=["Forest"],
+            lib0=["Mountain"] * 3, lib1=["Island", "Swamp", "Plains"],
+            interactive=(1,),
+        )
+        spec = game.activation_target_spec(0, 0, 0)
+        assert spec["kind"] == "player" and len(spec["valid_targets"]) == 2
+        assert game.activate_permanent_ability(0, name, target_player_index=1).supported
+        (choice,) = game.pending_choices
+        assert (choice.kind, choice.player_index, choice.data["count"]) == ("discard", 1, count)
+        assert len(game.players[1].hand) == 1 + count
+        assert game.confirm_discard(1, list(range(count)))
+        assert len(game.players[1].hand) == 1 and len(game.players[0].library) == 3
+        assert not game.activate_permanent_ability(0, name, target_player_index=1).supported, (
+            "tapped"
+        )
+
+
+def test_mindslicer_empties_every_hand_when_it_dies_and_only_then(set_pool):
+    game = _w1g7_duel(
+        set_pool, bf0=["Mindslicer"], hand0=["Forest", "Island"], hand1=["Swamp"],
+    )
+    game.sacrifice_permanent(_w1g7_on_board(game, 0, "Mindslicer"))
+    assert len(game.stack) == 1, "a dies trigger is a stack object"
+    _w1g7_settle(game)
+    assert game.players[0].hand == [] and game.players[1].hand == []
+
+    moved = _w1g7_duel(set_pool, bf0=["Mindslicer"], hand0=["Forest"], hand1=["Swamp"])
+    moved.remove_from_battlefield(_w1g7_on_board(moved, 0, "Mindslicer"))
+    _w1g7_settle(moved)
+    assert len(moved.players[0].hand) == 1 and len(moved.players[1].hand) == 1
+
+
+def test_minotaur_explorer_is_sacrificed_unless_a_random_card_goes(set_pool):
+    def enter(hand, accept):
+        game = _w1g7_duel(
+            set_pool, hand0=["Minotaur Explorer", *hand], interactive=(0,),
+        )
+        assert game.cast_from_hand(0, "Minotaur Explorer").supported
+        # The cast runs on until the entry trigger's offer holds it (or, with
+        # nothing to discard, until the trigger has resolved); the offer is
+        # answered by hand, since ``resolve_stack`` would give it its default.
+        if game.pending_choices:
+            assert len(game.stack) == 1, "the entry trigger is a stack object"
+            assert game.resolve_pending_choice("optional_pay", 0, accept=accept)
+        _w1g7_settle(game)
+        return game
+
+    _w1g7_random.seed(9)
+    kept = enter(["Forest", "Island"], True)
+    assert [p.card.name for p in kept.controlled_by(0)] == ["Minotaur Explorer"]
+    assert len(kept.players[0].hand) == 1 and len(kept.players[0].graveyard) == 1
+
+    declined = enter(["Forest"], False)
+    assert list(declined.controlled_by(0)) == []
+    assert _w1g7_names(declined.players[0].hand) == ["Forest"]
+
+    unable = enter([], True)
+    assert list(unable.controlled_by(0)) == [], "no card to discard is no choice"
+
+
+def test_cursed_monstrosity_asks_for_a_land_card_whenever_it_is_targeted(set_pool):
+    """By a spell or by an ability, and the discard is of a *land* card: a
+    hand with none cannot pay, so the creature is sacrificed and the spell
+    that targeted it finds nothing (CR 608.2b)."""
+    def aimed(hand):
+        game = _w1g7_duel(
+            set_pool, hand0=["Giant Growth"], bf1=["Cursed Monstrosity"],
+            hand1=hand, interactive=(1,),
+        )
+        monster = _w1g7_on_board(game, 1, "Cursed Monstrosity")
+        assert game.queue_from_hand(
+            0, "Giant Growth", target_permanent_ids=[monster.permanent_id]
+        ).supported
+        assert [item.card.name for item in game.stack] == [
+            "Giant Growth", "Cursed Monstrosity",
+        ]
+        game.resolve_top_of_stack()
+        return game, monster
+
+    game, monster = aimed(["Grizzly Bears", "Forest"])
+    assert game.resolve_pending_choice("optional_pay", 1, accept=True)
+    assert not game.confirm_discard(1, [0]), "a creature card is not a land card"
+    assert game.confirm_discard(1, [1])
+    _w1g7_settle(game)
+    assert (monster.effective_power, monster.effective_toughness) == (7, 6)
+    assert _w1g7_names(game.players[1].graveyard) == ["Forest"]
+
+    game, _monster = aimed(["Grizzly Bears"])
+    _w1g7_settle(game)
+    assert list(game.controlled_by(1)) == []
+    assert "Cursed Monstrosity" in _w1g7_names(game.players[1].graveyard)
+
+    pinged = _w1g7_duel(
+        set_pool, bf0=["Prodigal Sorcerer"], bf1=["Cursed Monstrosity"],
+        hand1=["Forest"], interactive=(1,),
+    )
+    monster = _w1g7_on_board(pinged, 1, "Cursed Monstrosity")
+    assert pinged.queue_permanent_ability(
+        0, "Prodigal Sorcerer", target_permanent_ids=[monster.permanent_id]
+    ).supported
+    assert [item.card.name for item in pinged.stack][-1] == "Cursed Monstrosity"
+
+
+def test_aven_windreader_shows_the_top_card_and_moves_nothing(set_pool):
+    game = _w1g7_duel(
+        set_pool, bf0=["Aven Windreader"], lib1=["Terror", "Swamp"],
+    )
+    assert game.activate_permanent_ability(
+        0, "Aven Windreader", target_player_index=1
+    ).supported
+    _w1g7_settle(game)
+    assert any("revealed Terror" in line for line in game.log)
+    assert _w1g7_names(game.players[1].library) == ["Terror", "Swamp"]
+
+
+def test_sadistic_hypnotist_is_a_sorcery_speed_sacrifice_outlet(set_pool):
+    game = _w1g7_duel(
+        set_pool, bf0=["Sadistic Hypnotist", "Grizzly Bears"],
+        hand1=["Forest", "Island", "Swamp"], interactive=(1,),
+    )
+    game.start_turn(0)
+    game._close_current_priority_step()
+    bears = _w1g7_on_board(game, 0, "Grizzly Bears")
+    assert game.activate_permanent_ability(
+        0, "Sadistic Hypnotist", target_player_index=1,
+        cost_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert [p.card.name for p in game.controlled_by(0)] == ["Sadistic Hypnotist"]
+    assert game.confirm_discard(1, [0, 1])
+    assert _w1g7_names(game.players[1].hand) == ["Swamp"]
+
+    theirs = _w1g7_duel(
+        set_pool, bf0=["Sadistic Hypnotist", "Grizzly Bears"], hand1=["Forest"],
+    )
+    theirs.start_turn(1)
+    theirs._close_current_priority_step()
+    refused = theirs.activate_permanent_ability(
+        0, "Sadistic Hypnotist", target_player_index=1
+    )
+    assert not refused.supported and "sorcery" in refused.details
+    assert len(list(theirs.controlled_by(0))) == 2, "nothing was sacrificed"
 
 # ==== end W1G7 ======================================================
 

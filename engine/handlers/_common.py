@@ -1146,6 +1146,28 @@ def evaluate_count(
     # exactly the ones no longer on the battlefield, so there is nothing to
     # scan. Per seat, because the game-wide tally cannot answer "under your
     # control" (round 14).
+    # "Each player discards cards **the same way**" (Balancing Act): how many
+    # more of the counted things *owner* has than the player with the fewest —
+    # the same count taken for every living seat, and this seat's distance
+    # from the smallest. Unwrapped first because it is not a count of its own:
+    # it is an arithmetic over whichever one follows, asked once per seat.
+    if spec.get("excess_over_fewest"):
+        plain = {key: value for key, value in spec.items() if key != "excess_over_fewest"}
+        fewest = min(
+            (
+                evaluate_count(
+                    game, seat, plain, exclude=exclude, source=source,
+                    effect_spell=effect_spell,
+                )
+                for seat in game.players if not seat.lost
+            ),
+            default=0,
+        )
+        mine = evaluate_count(
+            game, owner, plain, exclude=exclude, source=source,
+            effect_spell=effect_spell,
+        )
+        return max(0, mine - fewest)
     history = spec.get("history")
     if history == "creatures_died_under_your_control":
         return int(getattr(owner, "creatures_died_under_your_control_this_turn", 0))

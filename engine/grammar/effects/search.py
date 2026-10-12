@@ -790,6 +790,14 @@ def _parse_counted_search(
                     up_to=True, unbounded=count is None, reveal=reveal,
                 )
     stream.reset(top_mark)
+    # "…for up to X basic land cards **and** put them onto the battlefield
+    # tapped." (New Frontiers.) The conjunction where every other counted
+    # search prints a comma — the join the singular production already reads
+    # ("…for a card and put that card into their hand"). Only in front of
+    # "put", so no other "and" is taken.
+    joined = stream.mark()
+    if not (stream.accept_word("and") and stream.at_word("put")):
+        stream.reset(joined)
     stream.expect_word("put")
     # "put **them** …" / "put **those cards** …" — one referent, two printed
     # spellings, and the same pair the reveal clause above and the shuffle-then-

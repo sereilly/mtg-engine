@@ -264,6 +264,14 @@ def test_the_kinds_that_suspend_are_the_ones_that_shape_a_later_step():
     suspending = {kind for kind, spec in CHOICE_SPECS.items() if spec.suspends}
     assert suspending == {
         "effect_order",     # CR 616.1e — the event itself has not happened yet
+        # "…then sacrifices the rest. **Each player discards cards the same
+        # way.**" (Balancing Act.) The first keep with a step behind it, and
+        # that step arms a discard for the same seat: armed together, each
+        # prompt refused the other's answer over the wire and the seat owing
+        # both could answer neither. The keep holds the resolution, so the
+        # discard is asked once every keep is answered — which is also the
+        # printed order.
+        "keep_permanents",
         # "Target land becomes the basic land type of your choice until end of
         # turn. / **Draw a card.**" (Shimmering Mirage.) CR 608.2c follows the
         # instructions in the order written, and the first is not done until

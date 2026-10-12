@@ -687,6 +687,47 @@ def test_rites_of_refusal_needs_a_spell_and_asks_nothing_if_it_leaves(set_pool):
     assert _w1g7_names(game.players[0].hand) == ["Forest"]
     assert _w1g7_names(game.players[0].graveyard) == ["Rites of Refusal"]
 
+
+# --- The sheet's instants that compiled before this round, driven ----------------
+
+def test_repel_puts_a_creature_on_top_of_its_owners_library(set_pool):
+    """Its **owner's** library (CR 400.3), so a creature under another
+    player's control goes home; a noncreature is no target, and with no
+    creature the spell cannot be cast (CR 601.2c)."""
+    from engine.control import change_control
+
+    game = _w1g7_duel(
+        set_pool, hand0=["Repel"], bf1=["Grizzly Bears"], lib0=["Island"],
+        lib1=["Swamp"],
+    )
+    bears = _w1g7_on_board(game, 1, "Grizzly Bears")
+    change_control(bears, 0, source="test")
+    game._sync_control()
+    assert game.cast_from_hand(
+        0, "Repel", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[1].library) == ["Grizzly Bears", "Swamp"]
+    assert _w1g7_names(game.players[0].library) == ["Island"]
+
+    ring = _w1g7_duel(set_pool, hand0=["Repel"], bf1=["Sol Ring"])
+    artifact = _w1g7_on_board(ring, 1, "Sol Ring")
+    assert not ring.cast_from_hand(
+        0, "Repel", target_permanent_ids=[artifact.permanent_id]
+    ).supported
+    assert [p.card.name for p in ring.controlled_by(1)] == ["Sol Ring"]
+
+
+def test_words_of_wisdom_draws_two_for_you_and_one_for_each_other_player(set_pool):
+    game = _w1g7_duel(
+        set_pool, hand0=["Words of Wisdom"], lib0=["Island", "Swamp", "Plains"],
+        lib1=["Forest", "Mountain"],
+    )
+    game.cast_from_hand(0, "Words of Wisdom")
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[0].hand) == ["Island", "Swamp"]
+    assert _w1g7_names(game.players[1].hand) == ["Forest"]
+
 # ==== end W1G7 ======================================================
 
 

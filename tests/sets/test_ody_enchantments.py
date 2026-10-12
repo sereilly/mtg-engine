@@ -612,6 +612,36 @@ def test_a_pile_count_reads_the_subjects_own_pile_in_either_word_order():
     assert not supported("you have three or more cards in their library")
     assert not supported("you have three or more cards in your sideboard")
 
+
+# --- Zombie Infestation (compiled before this round; driven) ---------------------
+
+def test_zombie_infestation_trades_two_cards_for_a_black_zombie(set_pool):
+    """"Discard two cards: Create a 2/2 black Zombie creature token." Two
+    cards, the two its controller names; one card cannot pay; and a pair of
+    identical cards is two cards."""
+    game = _w1g7_duel(
+        set_pool, bf0=["Zombie Infestation"], hand0=["Forest", "Forest", "Island"],
+    )
+    assert game.activate_permanent_ability(
+        0, "Zombie Infestation", cost_hand_index=0, cost_other_hand_indices=[2]
+    ).supported
+    _w1g7_settle(game)
+    assert _w1g7_names(game.players[0].hand) == ["Forest"]
+    assert sorted(_w1g7_names(game.players[0].graveyard)) == ["Forest", "Island"]
+    tokens = [p for p in game.controlled_by(0) if p.is_creature]
+    assert [(t.effective_power, t.effective_toughness) for t in tokens] == [(2, 2)]
+    assert tokens[0].has_type("zombie") and list(tokens[0].effective_card.colors) == ["B"]
+
+    short = _w1g7_duel(set_pool, bf0=["Zombie Infestation"], hand0=["Forest"])
+    assert not short.activate_permanent_ability(0, "Zombie Infestation").supported
+    assert _w1g7_names(short.players[0].hand) == ["Forest"]
+
+    pair = _w1g7_duel(set_pool, bf0=["Zombie Infestation"], hand0=["Forest", "Forest"])
+    assert pair.activate_permanent_ability(0, "Zombie Infestation").supported
+    _w1g7_settle(pair)
+    assert pair.players[0].hand == [] and len(pair.players[0].graveyard) == 2
+    assert sum(1 for p in pair.controlled_by(0) if p.is_creature) == 1
+
 # ==== end W1G7 ======================================================
 
 

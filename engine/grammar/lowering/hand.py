@@ -350,6 +350,20 @@ def _lower_discard(
     # "Each opponent discards two cards." (Bad Deal.) Chosen discards, one
     # pending choice per opponent — the random and variable forms stay with the
     # targeted handlers below, whose contracts they are.
+    if node.up_to and (
+        node.at_random
+        or node.player.kind not in ("target_player", "target_opponent")
+    ):
+        # "**Up to** two cards" is a ceiling the discarding player chooses
+        # under. One prompt below carries it — the chosen discard
+        # of a targeted player — and every other reading here would discard
+        # exactly the printed number while the card reported supported: a
+        # sample has no chooser, and the seats an event froze are armed with a
+        # count. So they refuse, by name, until a card prints one.
+        raise LoweringError(
+            "no discard handler for this seat offers a ceiling to choose under",
+            node=node,
+        )
     if node.player.kind == "each_opponent":
         amount = _amount_payload(node.count)
         if node.at_random or not isinstance(amount, int):
@@ -528,6 +542,11 @@ def _lower_discard(
     else:
         kind = "discard_target_cards"
         payload["amount"] = amount
+        if node.up_to:
+            # "Target player discards **up to** two cards." The ceiling rides
+            # to the prompt, which is what lets the player stop early; it
+            # lowered as exactly two until Odyssey, with no card printing it.
+            payload["up_to"] = True
         # "Whenever a permanent is returned to a player's hand, **that player**
         # discards a card." (Warped Devotion.) Under a trigger, "that player"
         # is the seat the firing event froze (CR 603.10) — and this branch read
