@@ -25,7 +25,7 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**44 unclaimed sentence(s) across 42 supported card(s).**
+**41 unclaimed sentence(s) across 40 supported card(s).**
 
 - **Ancestral Tribute**
   - `flashback {9}{w}{w}{w}`
@@ -51,15 +51,10 @@ anything anyone did, and every ingest would arrive red.
   - `flashback {1}{g}`
 - **Coffin Purge**
   - `flashback {b}`
-- **Decaying Soil**
-  - `as long as there are seven or more cards in your graveyard, this enchantment has "whenever a nontoken creature is put into your graveyard from the battlefield, you may pay {1}`
-  - `if you do, return that card to your hand."`
 - **Deep Reconnaissance**
   - `flashback {4}{g}`
 - **Dematerialize**
   - `flashback {5}{u}{u}`
-- **Divine Sacrament**
-  - `white creatures get an additional +1/+1 as long as there are seven or more cards in your graveyard`
 - **Earth Rift**
   - `flashback {5}{r}{r}`
 - **Elephant Ambush**

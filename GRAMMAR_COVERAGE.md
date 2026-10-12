@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 71.4% | 67.7% | 50.1% | 222 |
+| ODY *(measured)* | 335 | 507 | 75.1% | 73.4% | 55.8% | 241 |
 | **All (shipped)** | **7406** | **10877** | **90.6%** | **90.0%** | **61.7%** | **5693** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,15 +61,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 644 | 338 | expected a subject |  |
+| 633 | 331 | expected a subject |  |
 | 168 | 87 | unrecognized effect verb |  |
 | 152 | 84 | unconsumed text |  |
-| 68 | 49 | granted ability in quotes | phase 3 (quoted abilities) |
+| 63 | 44 | granted ability in quotes | phase 3 (quoted abilities) |
 | 36 | 36 | unrecognized activation cost |  |
-| 30 | 8 | expected what this creature can't block, or a duration |  |
+| 29 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
-| 10 | 9 | conditional_static_holds evaluates no such condition on a continuous buff |  |
 | 7 | 1 | no lowering for RawEffect |  |
 | 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
@@ -86,6 +85,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
+| 2 | 2 | expected 'a' |  |
 
 ## Cards executing through the grammar
 
@@ -113,6 +113,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Abomination**
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
   - `Whenever this creature blocks or becomes blocked by a green or white creature, destroy that creature at end of combat.`
+- **Aboshan's Desire**
+  - `Threshold — Enchanted creature has shroud as long as there are seven or more cards in your graveyard. (It can't be the target of spells or abilities.)`
 - **Aboshan, Cephalid Emperor**
   - `Tap an untapped Octopus you control: Tap target permanent.`
 - **About Face**
@@ -992,6 +994,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, if damage would be dealt to any creature, you may have that damage dealt to you instead.`
 - **Bloodcurdler**
   - `At the beginning of your upkeep, mill a card.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +1/+1 and has "At the beginning of your end step, exile two cards from your graveyard."`
 - **Bloodfell Caves**
   - `When this land enters, you gain 1 life.`
   - `{T}: Add {B} or {R}.`
@@ -1533,6 +1536,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Child of Gaea**
   - `At the beginning of your upkeep, sacrifice this creature unless you pay {G}{G}.`
   - `{1}{G}: Regenerate this creature.`
+- **Childhood Horror**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and can't block.`
 - **Chilling Apparition**
   - `{B}: Regenerate this creature.`
   - `Whenever this creature deals combat damage to a player, that player discards a card.`
@@ -1547,6 +1552,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{X}: This artifact becomes an X/X Construct artifact creature until end of turn.`
 - **Chlorophant**
   - `At the beginning of your upkeep, you may put a +1/+1 counter on this creature.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature has "At the beginning of your upkeep, you may put another +1/+1 counter on this creature."`
 - **Cho-Arrim Alchemist**
   - `{1}{W}{W}, {T}, Discard a card: The next time a source of your choice would deal damage to you this turn, prevent that damage. You gain life equal to the damage prevented this way.`
 - **Cho-Arrim Bruiser**
@@ -1925,6 +1931,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks, defending player chooses an untapped creature they control. That creature blocks this creature this turn if able.`
 - **Crashing Centaur**
   - `{G}, Discard a card: This creature gains trample until end of turn.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and has shroud. (It can't be the target of spells or abilities.)`
 - **Crater Hellion**
   - `When this creature enters, it deals 4 damage to each other creature.`
 - **Crazed Armodon**
@@ -2252,6 +2259,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Regenerate target creature. You gain control of that creature if it regenerates this way.`
 - **Decaying Soil**
   - `At the beginning of your upkeep, exile a card from your graveyard.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this enchantment has "Whenever a nontoken creature is put into your graveyard from the battlefield, you may pay {1}. If you do, return that card to your hand."`
 - **Decimate**
   - `Destroy target artifact, target creature, target enchantment, and target land. (You can't cast this spell unless you have legal choices for all its targets.)`
 - **Decompose**
@@ -2444,6 +2452,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}: This creature gets +1/+0 until end of turn.`
 - **Dirty Wererat**
   - `{B}, Discard a card: Regenerate this creature.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and can't block.`
 - **Disappear**
   - `{U}: Return enchanted creature and this Aura to their owners' hands.`
 - **Disciple of Kangee**
@@ -2538,6 +2547,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Divine Retribution deals damage to target attacking creature equal to the number of attacking creatures.`
 - **Divine Sacrament**
   - `White creatures get +1/+1.`
+  - `Threshold — White creatures get an additional +1/+1 as long as there are seven or more cards in your graveyard.`
 - **Divining Witch**
   - `{1}{B}, {T}, Discard a card: Choose a card name. Exile the top six cards of your library, then reveal cards from the top of your library until you reveal a card with the chosen name. Put that card into your hand and exile all other cards revealed this way.`
 - **Dizzying Gaze**
@@ -3635,6 +3645,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}{G}: Return this enchantment to its owner's hand.`
 - **Freyalise's Winds**
   - `Whenever a permanent becomes tapped, put a wind counter on it.`
+- **Frightcrawler**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +2/+2 and can't block.`
 - **Frog Tongue**
   - `When this Aura enters, draw a card.`
 - **Frost Breath**
@@ -4041,6 +4053,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When you control no Forests, sacrifice this creature.`
 - **Gorilla Shaman**
   - `{X}{X}{1}: Destroy target noncreature artifact with mana value X.`
+- **Gorilla Titan**
+  - `This creature gets +4/+4 as long as there are no cards in your graveyard.`
 - **Gorilla War Cry**
   - `All creatures gain menace until end of turn. (They can't be blocked except by two or more creatures.)`
   - `Draw a card at the beginning of the next turn's upkeep.`
@@ -5002,6 +5016,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Kaervek's Torch deals X damage to any target.`
 - **Kaervek, the Spiteful**
   - `Other creatures get -1/-1.`
+- **Kamahl's Desire**
+  - `Threshold — Enchanted creature gets +3/+0 as long as there are seven or more cards in your graveyard.`
 - **Kamahl, Pit Fighter**
   - `{T}: Kamahl deals 3 damage to any target.`
 - **Kangee, Aerie Keeper**
@@ -5129,6 +5145,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Destroy target Djinn or Efreet.`
 - **Kingfisher**
   - `When this creature dies, draw a card.`
+- **Kirtar's Desire**
+  - `Threshold — Enchanted creature can't block as long as there are seven or more cards in your graveyard.`
 - **Kirtar's Wrath**
   - `Destroy all creatures. They can't be regenerated.`
 - **Kismet**
@@ -5220,6 +5238,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, {T}, Discard a card: This creature deals 1 damage to any target.`
 - **Krosan Archer**
   - `{G}, Discard a card: This creature gets +0/+2 until end of turn.`
+- **Krosan Beast**
+  - `Threshold — This creature gets +7/+7 as long as there are seven or more cards in your graveyard.`
 - **Krovikan Elementalist**
   - `{2}{R}: Target creature gets +1/+0 until end of turn.`
   - `{U}{U}: Target creature you control gains flying until end of turn. Sacrifice it at the beginning of the next end step.`
@@ -5959,6 +5979,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}, Discard a card: Draw a card.`
 - **Metalworker**
   - `{T}: Reveal any number of artifact cards in your hand. Add {C}{C} for each card revealed this way.`
+- **Metamorphic Wurm**
+  - `Threshold — This creature gets +4/+4 as long as there are seven or more cards in your graveyard.`
 - **Metamorphosis**
   - `Add X mana of any one color, where X is 1 plus the sacrificed creature's mana value. Spend this mana only to cast creature spells.`
 - **Metathran Aerostat**
@@ -6300,14 +6322,24 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Mystic Compass**
   - `{1}, {T}: Target land becomes the basic land type of your choice until end of turn.`
   - `{1}, {T}: Target land becomes the basic land type of your choice until end of turn.`
+- **Mystic Crusader**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +1/+1 and has flying.`
 - **Mystic Decree**
   - `All creatures lose flying and islandwalk.`
+- **Mystic Enforcer**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+3 and has flying.`
+- **Mystic Penitent**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +1/+1 and has flying.`
 - **Mystic Remora**
   - `Whenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}.`
 - **Mystic Skyfish**
   - `Whenever you draw your second card each turn, this creature gains flying until end of turn.`
 - **Mystic Snake**
   - `When this creature enters, counter target spell.`
+- **Mystic Visionary**
+  - `Threshold — This creature has flying as long as there are seven or more cards in your graveyard.`
+- **Mystic Zealot**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +1/+1 and has flying.`
 - **Mystical Tutor**
   - `Search your library for an instant or sorcery card, reveal it, then shuffle and put that card on top.`
   - `Search your library for an instant or sorcery card, reveal it, then shuffle and put that card on top.`
@@ -6453,6 +6485,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}{R}, {T}: This creature deals 2 damage to target creature.`
 - **Nightshade Seer**
   - `{2}{B}, {T}: Reveal any number of black cards in your hand. Target creature gets -X/-X until end of turn, where X is the number of cards revealed this way.`
+- **Nimble Mongoose**
+  - `Threshold — This creature gets +2/+2 as long as there are seven or more cards in your graveyard.`
 - **Nine Lives**
   - `When there are nine or more incarnation counters on this enchantment, exile it.`
   - `When this enchantment leaves the battlefield, you lose the game.`
@@ -6511,6 +6545,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{G}: Regenerate enchanted creature.`
 - **Nut Collector**
   - `At the beginning of your upkeep, you may create a 1/1 green Squirrel creature token.`
+  - `Threshold — All Squirrels get +2/+2 as long as there are seven or more cards in your graveyard.`
 - **Oasis**
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
   - `{T}: Prevent the next 1 damage that would be dealt to target creature this turn.`
@@ -6699,6 +6734,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ostracize**
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
   - `Target opponent reveals their hand. You choose a creature card from it. That player discards that card.`
+- **Otarian Juggernaut**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+0 and attacks each combat if able.`
 - **Outbreak**
   - `Choose a creature type. All creatures of that type get -1/-1 until end of turn.`
 - **Outmaneuver**
@@ -6808,6 +6845,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Discard a card: Regenerate this creature. (The next time this creature would be destroyed this turn, instead tap it, remove it from combat, and heal all damage on it.)`
 - **Path of Peace**
   - `Destroy target creature. Its owner gains 4 life.`
+- **Patriarch's Desire**
+  - `Threshold — Enchanted creature gets an additional +2/-2 as long as there are seven or more cards in your graveyard.`
 - **Patrol Hound**
   - `Discard a card: This creature gains first strike until end of turn.`
 - **Patron Wizard**
@@ -7749,6 +7788,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature deals damage to itself equal to its power.`
 - **Repentant Vampire**
   - `Whenever a creature dealt damage by this creature this turn dies, put a +1/+1 counter on this creature.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature is white and has "{T}: Destroy target black creature."`
 - **Repercussion**
   - `Whenever a creature is dealt damage, this enchantment deals that much damage to that creature's controller.`
 - **Replenish**
@@ -8561,6 +8601,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature leaves the battlefield, sacrifice a creature.`
 - **Setessan Training**
   - `When this Aura enters, draw a card.`
+- **Seton's Desire**
+  - `Threshold — As long as there are seven or more cards in your graveyard, all creatures able to block enchanted creature do so.`
 - **Seton, Krosan Protector**
   - `Tap an untapped Druid you control: Add {G}.`
 - **Sever Soul**
@@ -9269,6 +9311,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura is put into a graveyard from the battlefield, return it to its owner's hand.`
 - **Spreading Plague**
   - `Whenever a creature enters, destroy all other creatures that share a color with it. They can't be regenerated.`
+- **Springing Tiger**
+  - `Threshold — This creature gets +2/+2 as long as there are seven or more cards in your graveyard.`
 - **Squall**
   - `Squall deals 2 damage to each creature with flying.`
   - `Squall deals 2 damage to each creature with flying.`
@@ -9375,6 +9419,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target land.`
 - **Stone-Tongue Basilisk**
   - `Whenever this creature deals combat damage to a creature, destroy that creature at end of combat.`
+  - `Threshold — As long as there are seven or more cards in your graveyard, all creatures able to block this creature do so.`
 - **Stonehands**
   - `{R}: Enchanted creature gets +1/+0 until end of turn.`
 - **Storm Caller**
@@ -10951,6 +10996,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Domain — This creature gets +1/+1 for each basic land type among lands you control.`
 - **Waylay**
   - `Create three 2/2 white Knight creature tokens. Exile them at the beginning of the next cleanup step.`
+- **Wayward Angel**
+  - `Threshold — As long as there are seven or more cards in your graveyard, this creature gets +3/+3, is black, has trample, and has "At the beginning of your upkeep, sacrifice a creature."`
 - **Wayward Soul**
   - `{U}: Put this creature on top of its owner's library.`
 - **Weakstone**
@@ -10972,6 +11019,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of your upkeep, untap enchanted land. You gain control of that land until end of turn.`
 - **Werebear**
   - `{T}: Add {G}.`
+  - `Threshold — This creature gets +3/+3 as long as there are seven or more cards in your graveyard.`
 - **Western Paladin**
   - `{B}{B}, {T}: Destroy target white creature.`
   - `{B}{B}, {T}: Destroy target white creature.`
