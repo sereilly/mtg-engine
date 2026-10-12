@@ -1810,16 +1810,18 @@ AST_FAMILIES = [
         # fired on the readers (`effects/board.py` at 1,007), not on the
         # inventory.
         "destruction",
-        # `zones` is the fourth of that shape. The ten nodes its productions
+        # `zones` is the fourth of that shape. The eleven nodes its productions
         # build are cards in a pile, and each lives with its *subject* rather
         # than with this reader: the five shuffles in `ast/shuffles.py` (in
         # `ast/board.py` until Planeshift's Phase 0, whatever this note used to
         # say — see under the list), `ExileTopOfLibrary`, `ExileEntireLibrary`
         # and `ExileGraveyardPosition` in `ast/exile.py` since Tempest's third
-        # wave, `PutIteratedCardOnLibrary` in `ast/cards.py` and
-        # `PutLibraryTopIntoHand` in `ast/library.py`. The guard fired on the
+        # wave, `PutIteratedCardOnLibrary` in `ast/cards.py`, and
+        # `PutLibraryTopIntoHand` and `GraveyardTopToLibrary` in
+        # `ast/library.py` (the latter only since Odyssey's Phase 0, when its
+        # production left `effects/library.py`). The guard fired on the
         # readers (`effects/library.py` at 1,030), not on the inventory, and an
-        # `ast/zones.py` gathered to match would put nine of the ten in one
+        # `ast/zones.py` gathered to match would put ten of the eleven in one
         # family with their lowering in another (only the last exile lowers in
         # `lowering/zones.py`) — exactly what `types` records.
         "zones",
@@ -1890,7 +1892,7 @@ AST_FAMILIES = [
 # would have meant the opposite of the module it was named for. The `zones`
 # exclusion therefore still holds, with its module names now the ones the code
 # has, and the parse side stays the one package without the word:
-# `effects/zones.py` is 553 lines and crossed nothing.
+# `effects/zones.py` was 553 lines then and has crossed nothing since.
 #
 # `ast/cards.py` was the other home on offer — its first line has claimed
 # "shuffle" since the package was cut — and was ruled out by arithmetic: 794
@@ -1977,6 +1979,14 @@ def test_layers_only_import_downward(layers):
         # `_strips`, so `search` now imports `_other_libraries` and
         # `_other_libraries` imports `_strips`. A floor reading a floor, as
         # `_roles` reads `_targets` on the lowering side; nothing reads back.
+        #
+        # It took a second importer at the Phase 0 before Odyssey, along the
+        # same fork: the tail of "Look at the top N cards of <player>'s
+        # library" left `library`, 21 lines under the guard, whose entry point
+        # branches on the possessive behind the verb exactly as the tutor's
+        # does. Two families read it now, each for its own production; the two
+        # productions share the subject — a library opened by somebody who is
+        # not its owner — and no reader.
         #
         # `_reveal_until` is the third, pre-split out of `reveal` between
         # Invasion's two waves with that module ten lines under the guard: the
@@ -2358,9 +2368,11 @@ FAMILY_SHARED = {
     # `effects/_other_libraries`, pre-split out of `effects/search.py` at the
     # Phase 0 before Invasion — "Search <player>'s library", the search whose
     # library is not the searcher's own (Jester's Cap, Bribery, Denying Wind).
-    # A single-importer floor like `_strips`, and the importer `_strips` has
-    # had in fact since it was written: the strip is tried from inside this
-    # production and from nowhere else.
+    # A single-importer floor like `_strips` until the Phase 0 before Odyssey,
+    # when the look at such a library (Visions, Coral Fighters, Sealed Fate)
+    # joined it out of `effects/library.py`: two families read it now. It is
+    # still the one importer `_strips` has had since it was written — the
+    # strip is tried from inside the search production and from nowhere else.
     "_other_libraries",
     # `effects/_reveal_until`, pre-split out of `effects/reveal.py` between
     # Invasion's two waves — the reveal that has no printed size and stops on a
@@ -2370,7 +2382,7 @@ FAMILY_SHARED = {
     # where everything below reads a fixed number of them". One node
     # (`ast.RevealUntil`), one lowering, one instruction kind, and a call graph
     # with one edge in and none out.
-    # A single-importer floor like the two above it. No mirror to fork:
+    # A single-importer floor like `_strips` above. No mirror to fork:
     # `lowering/reveal.py` lowers the node in one function and has not split.
     "_reveal_until",
     # `_recipients` split out of `lowering/damage.py` at ULG wave 1, when that

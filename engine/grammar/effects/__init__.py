@@ -192,7 +192,6 @@ from .hand import (
 from .library import (
     _parse_look_at_hand,
     parse_player_looks_at_own_library_top,
-    parse_graveyard_top_to_library,
     parse_player_reorders_your_library_top,
     parse_player_separates_your_library_top,
 )
@@ -221,6 +220,7 @@ from .zones import (
     _parse_exile_entire_library,
     _parse_put_iterated_card_on_library,
     parse_put_library_top_into_hand,
+    parse_graveyard_top_to_library,
 )
 from .search import _parse_search_library
 from .retargeting import _parse_change_event_targets, _parse_change_target

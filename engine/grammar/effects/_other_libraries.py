@@ -1,45 +1,76 @@
-"""Searching **another player's** library — "Search target player's library
-for three cards and exile them. Then that player shuffles."
+"""**Another player's** library, opened by somebody who is not its owner —
+searched ("Search target player's library for three cards and exile them. Then
+that player shuffles.") or looked at off the top ("Look at the top five cards
+of target player's library. You may then have that player shuffle that
+library.").
 
-A floor under ``effects/search.py``, pre-split out of it at the Phase 0 before
-Invasion, when that module sat 29 lines under the thousand-line guard with a
-wave of parallel groups about to land tutors in it. A floor rather than a
-family for ``_strips``' reason and ``lowering/_recipients``' before it:
-``search`` is the only module that asks. It could not be a family in any case —
-the word "search" keeps one entry point, ``_parse_search_library``, and a family
-may not be called from another one.
+A floor under two families, and it took them one at a time. The search's half
+was pre-split out of ``effects/search.py`` at the Phase 0 before Invasion, when
+that module sat 29 lines under the thousand-line guard with a wave of parallel
+groups about to land tutors in it; the look's half followed out of
+``effects/library.py`` at the Phase 0 before Odyssey, with that module 21
+under. In between this was a single-importer floor, for ``_strips``' reason and
+``lowering/_recipients``' before it — ``search`` was the only module that asked
+— and its first line said "Searching". Two families ask now, each for the one
+production here that is its own. It could not be a family in any case: the
+words "search" and "look" each keep one entry point
+(``_parse_search_library``, ``_parse_look_at_hand``), and a family may not be
+called from another one.
 
-**The seam is the first thing that entry point decides.** It reads "search" and
-then a possessive: "your" or "their" is the searcher's own library and
-everything left in ``search``, and anything else is this. Both sides had already
-said the two are different cards rather than two wordings — the tutor's
-docstring ("the engine's search flow only ever opens the searcher's own
-library, so 'search target player's library' is a different card") and
-:class:`ast.SearchPlayerLibrary` ("two seats are involved rather than one").
-Two seats is the whole subject here: whose library is opened is not who
-chooses (CR 608.2c), not necessarily whose battlefield a find lands on
-(Bribery, CR 110.2a), and it *is* who shuffles.
+**The seam is the same fork in both entry points: the possessive behind the
+verb.** ``search`` reads "search" and then "your" or "their", which is the
+searcher's own library and everything left there, and anything else is this.
+``library`` reads "look at the top N cards of" and then "your", which is
+everything left *there* — "the pick, the bottoming, the cast-zone rider — is
+only ever about your own library", in that branch's own words — and anything
+else is this. Both sides had already said the two are different cards rather
+than two wordings: the tutor's docstring ("the engine's search flow only ever
+opens the searcher's own library, so 'search target player's library' is a
+different card"), :class:`ast.SearchPlayerLibrary` ("two seats are involved
+rather than one") and :class:`ast.LookTopPickToHand`, whose ``pile_owner`` is
+whose library it is "when that is not the looker's own". Two seats is the whole
+subject here: whose library is opened is not who chooses (CR 608.2c), not
+necessarily whose battlefield a find lands on (Bribery, CR 110.2a), and it *is*
+who shuffles — which the look prints outright ("have **that player** shuffle
+**that library**").
 
-The call graph agreed before the cut was made. The production calls nothing
-left in ``search`` and only the entry point calls it; it reads no zone through
-``phrases._parse_zone``, which has no reading for the possessive it needs; and
-it was the **only** reader of ``_strips``, so that floor is imported from here
-now and ``search`` no longer imports it. ``_strips``' docstring called itself a
-floor under ``search`` whose two halves "share the printed word 'Search' and no
-vocabulary whatsoever" — true against the tutor, and not against this
-production, which reads ``Search <player>'s`` before handing the strip the
-player and ends on the same "and exile them. Then that player shuffles". The
-strip was always a branch of this reader. It stays its own module, because what
-that docstring says about a multi-zone strip by a recorded name is as true
-against a one-library search as against the tutor.
+The call graph agreed before each cut was made. The search production calls
+nothing left in ``search`` and only the entry point calls it; it reads no zone
+through ``phrases._parse_zone``, which has no reading for the possessive it
+needs; and it was the **only** reader of ``_strips``, so that floor is imported
+from here now and ``search`` no longer imports it. ``_strips``' docstring
+called itself a floor under ``search`` whose two halves "share the printed word
+'Search' and no vocabulary whatsoever" — true against the tutor, and not
+against this production, which reads ``Search <player>'s`` before handing the
+strip the player and ends on the same "and exile them. Then that player
+shuffles". The strip was always a branch of this reader. It stays its own
+module, because what that docstring says about a multi-zone strip by a recorded
+name is as true against a one-library search as against the tutor.
 
-It is also the half that had been growing: 63 lines when ``search`` left
-``library`` and 136 now, with each of the last three sets adding a destination
-or a spelling (Bribery, Rootwater Thief, Denying Wind).
+The look's tail is called from ``library._parse_look_statement`` and from
+nowhere else, calls :func:`_accept_that_library` below it and nothing left
+behind, and reads no parser at all: the node package and the token stream are
+everything it imports. The two halves share this module's subject and no
+reader — neither calls the other, and the strip is the search's alone.
 
-No mirror name to reuse. ``lowering/search.py`` lowers this node beside the
-tutor's and has never split, and the node sits in ``ast/library.py``; the name
-is the production's own.
+Both are halves that had been growing. The search was 63 lines when ``search``
+left ``library`` and 136 when it came here, each of the three sets before
+adding a destination or a spelling (Bribery, Rootwater Thief, Denying Wind).
+The look's tail printed one offer and prints five: the shuffle (Visions), the
+rearrangement (Natural Selection, Portent), the one card bottomed (Coral
+Fighters, Precognition), any number of them bottomed (Ransack) and a pick taken
+out of somebody else's pile (Sealed Fate).
+
+**Not every look across two seats is read here.** Tahngarth's Glare and
+Phyrexian Portal have another player look through *your* library, and both stay
+in ``library``: their looker is the printed subject, so they are reached from
+``player_verbs`` and never pass the fork this floor is cut on.
+
+No mirror name to reuse. ``lowering/search.py`` lowers the search's node beside
+the tutor's and has never split, ``lowering/library.py`` lowers the look's two
+beside every other look's, and all three nodes sit in ``ast/library.py``; the
+name is the two productions' own (``_parse_search_other_library``,
+``_parse_look_other_library_tail``).
 """
 
 
@@ -187,3 +218,137 @@ def _parse_search_other_library(stream: TokenStream) -> ast.Statement:
     stream.expect_word("then")
     stream.expect_word("shuffles")
     return ast.SearchPlayerLibrary(player, count, filt, ast.Zone("hand", holder))
+
+
+def _accept_that_library(stream: TokenStream) -> bool:
+    """Consume a back-reference to the library the look already named.
+
+    Three printed spellings for one thing — "that library", "the library",
+    "that player's library" — and Ransack prints two of them in one sentence
+    ("on the bottom of **that library** … the rest on top of **the library**").
+    Read as one because they are one: the look named the pile, and a sentence
+    that meant a *different* library would have to say which.
+    """
+    if stream.accept_phrase("that", "player", "'s", "library"):
+        return True
+    return stream.accept_phrase("that", "library") or stream.accept_phrase(
+        "the", "library"
+    )
+
+
+def _parse_look_other_library_tail(
+    stream: TokenStream, count, owner: ast.PlayerRef
+) -> ast.Statement:
+    """The rest of "Look at the top five cards of target player's library. You
+    may then have that player shuffle that library." (Visions.)
+
+    The shuffle sentence is read here rather than as a statement of its own
+    because "that library" is the one the look just named — parsed apart it
+    would have to guess a player, and guessing which library gets shuffled is
+    the one mistake this card can make. The tail is optional: a card that only
+    looks is this same effect without its offer, and refusing it would refuse a
+    shape the node already represents.
+    """
+    mark = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "you", "may", "then", "have", "that", "player", "shuffle", "that", "library"
+    ):
+        return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
+    stream.reset(mark)
+    # "**You may put that card on the bottom of that player's library.**"
+    # (Coral Fighters.) The other offer this template prints, and the other
+    # direction: Visions offers a shuffle, which the looker takes when the top
+    # is bad, and this offers the one card itself.
+    #
+    # "That player" is read as the very player the look named rather than as a
+    # fresh reference — parsed apart it would have to guess a seat, which is
+    # this production's whole reason for reading the tail at all.
+    bottomed = stream.mark()
+    if stream.accept_punct("."):
+        # "…library. **If you do,** you may put that card on the bottom…"
+        # (Precognition.) The join the *optional* printing needs and Coral
+        # Fighters' mandatory one does not: there the look always happens, so
+        # there is no condition for the offer to hang on. Consumed and dropped
+        # rather than modelled, because it states exactly what the enclosing
+        # "you may look" already means — the offer behind a look nobody took is
+        # an offer over no card, which is what the handler finds anyway.
+        if stream.accept_phrase("if", "you", "do"):
+            stream.accept_punct(",")
+        if stream.accept_phrase(
+            "you", "may", "put", "that", "card", "on", "the", "bottom", "of",
+            "that", "player", "'s", "library",
+        ):
+            return ast.LookAtLibraryTop(count, owner, may_bottom=True)
+    stream.reset(bottomed)
+    # "**Put any number of them on the bottom of that library in any order and
+    # the rest on top of the library in any order.**" (Ransack.) The same offer
+    # Coral Fighters prints, at a size where the words have to change: with one
+    # card looked at there is nothing to count and nothing to order, so that
+    # card says "that card" and this one says "any number of them". The
+    # decision is one decision either way — which of the looked-at cards go to
+    # the bottom, and in what order the rest go back — which is why both reach
+    # ``may_bottom`` rather than one of them growing a second flag that lowers
+    # to the same instruction.
+    counted_bottom = stream.mark()
+    if (
+        stream.accept_punct(".")
+        and stream.accept_phrase(
+            "put", "any", "number", "of", "them", "on", "the", "bottom", "of",
+        )
+        and _accept_that_library(stream)
+        and stream.accept_phrase(
+            "in", "any", "order", "and", "the", "rest", "on", "top", "of",
+        )
+        and _accept_that_library(stream)
+        and stream.accept_phrase("in", "any", "order")
+    ):
+        return ast.LookAtLibraryTop(count, owner, may_bottom=True)
+    stream.reset(counted_bottom)
+    # "**Exile one of those cards and put the rest back on top of that player's
+    # library in any order.**" (Sealed Fate.) The look-and-pick template over
+    # somebody else's pile: the cards are the opponent's and every decision
+    # about them is the caster's, which is the one thing ``looker`` cannot say
+    # (there the seat answers both questions at once). So it produces the pick
+    # node with ``pile_owner`` set rather than a second node — the procedure is
+    # the same one, over a library that is not the chooser's.
+    #
+    # Every word of both destinations, for this family's standing reason: where
+    # the taken card goes and where the rest go are the whole of what separates
+    # these cards, and a wording that sorted them elsewhere would be a
+    # different card wearing this one's head.
+    exiled = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "exile", "one", "of", "those", "cards", "and", "put", "the", "rest",
+        "back", "on", "top", "of", "that", "player", "'s", "library",
+        "in", "any", "order",
+    ):
+        return ast.LookTopPickToHand(
+            count,
+            pick_destination="exile",
+            rest_destination="library_top",
+            pile_owner=owner,
+        )
+    stream.reset(exiled)
+    # "…, **then put them back in any order**." (Natural Selection, Portent.)
+    # The looker rearranges the cards they saw, which is the other handler —
+    # and the optional shuffle after it is printed shorter here than Visions
+    # prints it, so both spellings are read rather than one being normalized
+    # into the other.
+    #
+    # This was a name-keyed hook on Natural Selection, and Portent prints the
+    # identical sentence: `card_hooks`' entry bar is that no second card shares
+    # the shape, and a second card did.
+    if stream.accept_punct(",") and stream.accept_phrase(
+        "then", "put", "them", "back", "in", "any", "order"
+    ):
+        shuffle_mark = stream.mark()
+        if stream.accept_punct(".") and stream.accept_phrase(
+            "you", "may", "have", "that", "player", "shuffle"
+        ):
+            return ast.LookAtLibraryTop(
+                count, owner, may_shuffle=True, may_reorder=True
+            )
+        stream.reset(shuffle_mark)
+        return ast.LookAtLibraryTop(count, owner, may_reorder=True)
+    stream.reset(mark)
+    return ast.LookAtLibraryTop(count, owner)

@@ -160,7 +160,7 @@ def _accept_exile_top_of_library(
     """``the top [N] card[s] of your library`` after a cost's "Exile" — or None
     with the cursor unmoved.
 
-    The cost twin of ``effects/library._parse_exile_top_of_library``, and a
+    The cost twin of ``effects/zones._parse_exile_top_of_library``, and a
     separate reader for the reason the whole of this module is separate: an
     effect's exile is lowered onto a handler and a cost's is charged by
     ``engine/oracle.py``'s reader, which has to admit exactly what this admits.

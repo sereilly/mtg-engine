@@ -14,9 +14,11 @@ hands down the player — never from the tutor — so when that production left
 under a floor; nothing reads back.
 
 **And the seam is a real one, which is what makes it a floor and not a
-convenience.** Everything in ``search`` and ``_other_libraries`` is CR 701.23's
-library walk — whose library, what may be found, where the find goes, and the
-shuffle that ends it. This is not a library search at all. It opens three zones
+convenience.** Everything in ``search``, and the production in
+``_other_libraries`` that tries this, is CR 701.23's library walk — whose
+library, what may be found, where the find goes, and the shuffle that ends it
+(the look that joined that floor at the Phase 0 before Odyssey is no search and
+never reaches here). This is not a library search at all. It opens three zones
 of three different kinds (an open zone, its owner's hidden hand, and a
 library), it finds by a name nothing printed rather than by a described card,
 it exiles everything it finds rather than moving one card somewhere, and it
