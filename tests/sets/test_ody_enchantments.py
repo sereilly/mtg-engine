@@ -261,6 +261,104 @@ def test_an_opponent_scoped_cast_trigger_reads_the_same_name_count(set_pool):
     _w1g4_resolve_stack(game)
     assert game.players[0].life == 22, "its own controller is no opponent"
 
+
+# --- Verdant Succession -------------------------------------------------------
+
+def _w1g4_bolt(game, set_pool, seat, victim):
+    """*seat* casts Lightning Bolt at *victim*; the Bolt resolves and
+    state-based actions are checked, leaving any dies-trigger on the stack."""
+    game.players[seat].hand.append(set_pool("LEA")["Lightning Bolt"])
+    assert game.queue_from_hand(
+        seat, "Lightning Bolt", target_permanent_ids=[victim.permanent_id]
+    ).supported
+    game.resolve_top_of_stack()
+    game.check_state_based_actions()
+
+
+def test_verdant_succession_replaces_a_dead_green_creature_from_its_controllers_library(set_pool):
+    """The dead creature's **controller** searches — here the opponent of the
+    Succession's controller — and the copy enters under that player."""
+    game = _w1g4_duel(
+        set_pool, bf0=["Verdant Succession"], bf1=["Grizzly Bears"],
+        lib0=["Grizzly Bears"],
+        lib1=["Forest", "Grizzly Bears", "Grizzly Bears", "Island"],
+    )
+    _w1g4_bolt(game, set_pool, 0, next(iter(game.controlled_by(1))))
+    assert [item.card.name for item in game.stack] == ["Verdant Succession"]
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert [p.card.name for p in game.controlled_by(1)] == ["Grizzly Bears"]
+    assert len(game.players[1].library) == 3
+    assert _w1g4_names(game.players[0].library) == ["Grizzly Bears"]
+    assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"]
+
+
+def test_verdant_succession_with_no_copy_left_finds_nothing(set_pool):
+    game = _w1g4_duel(
+        set_pool, bf0=["Verdant Succession"], bf1=["Grizzly Bears"],
+        lib0=["Grizzly Bears"], lib1=["Forest", "Island"],
+    )
+    _w1g4_bolt(game, set_pool, 0, next(iter(game.controlled_by(1))))
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert list(game.controlled_by(1)) == []
+    assert len(game.players[1].library) == 2
+
+
+def test_verdant_succession_ignores_a_nongreen_creature_and_a_token(set_pool):
+    from engine.tokens import make_token_card
+
+    game = _w1g4_duel(
+        set_pool, bf0=["Verdant Succession"], bf1=["Scathe Zombies"],
+        lib1=["Scathe Zombies", "Grizzly Bears"],
+    )
+    _w1g4_bolt(game, set_pool, 0, next(iter(game.controlled_by(1))))
+    assert game.stack == []
+
+    squirrel = _w1g4_Permanent(card=make_token_card(
+        name="Squirrel Token", power=1, toughness=1,
+        type_line="Creature — Squirrel", colors=("G",),
+    ))
+    squirrel.metadata["is_token"] = True
+    game._put_permanent_onto_battlefield(1, squirrel, None)
+    _w1g4_bolt(game, set_pool, 0, squirrel)
+    assert game.stack == []
+
+
+def test_verdant_succession_asks_the_dead_creatures_controller(set_pool):
+    """"That creature's controller **may**": the offer is on the seat that
+    controlled the creature, not on the enchantment's controller."""
+    game = _w1g4_duel(
+        set_pool, bf0=["Verdant Succession"], bf1=["Grizzly Bears"],
+        lib1=["Forest", "Grizzly Bears"],
+    )
+    game.interactive_seats.update({0, 1})
+    _w1g4_bolt(game, set_pool, 0, next(iter(game.controlled_by(1))))
+    game.resolve_top_of_stack()
+    assert [c.player_index for c in game.pending_choices] == [1]
+    assert game.players[1].library and list(game.controlled_by(1)) == []
+
+
+def test_verdant_succession_reads_the_controller_of_a_stolen_creature(set_pool):
+    """A creature P0 took from P1 dies: P0 controlled it, so P0's library is
+    searched — and the card itself goes to its owner's graveyard."""
+    from engine.control import change_control
+
+    game = _w1g4_duel(
+        set_pool, bf0=["Verdant Succession"], bf1=["Grizzly Bears"],
+        lib0=["Grizzly Bears"], lib1=["Grizzly Bears", "Grizzly Bears"],
+    )
+    bears = next(iter(game.controlled_by(1)))
+    change_control(bears, 0, source="w1g4")
+    game._sync_control()
+    assert game.controller_index_of(bears) == 0
+    _w1g4_bolt(game, set_pool, 1, bears)
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert "Grizzly Bears" in [p.card.name for p in game.controlled_by(0)]
+    assert game.players[0].library == [] and len(game.players[1].library) == 2
+    assert "Grizzly Bears" in _w1g4_names(game.players[1].graveyard)
+
 # ==== end W1G4 ======================================================
 
 

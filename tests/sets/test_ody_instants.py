@@ -298,6 +298,65 @@ def test_life_burst_names_its_player_and_gives_the_plain_four(set_pool):
     _w1g4_resolve_stack(game)
     assert (game.players[0].life, game.players[1].life) == (20, 24)
 
+
+# --- Entomb and Predict --------------------------------------------------------
+
+def test_entomb_puts_the_found_card_into_its_owners_graveyard(set_pool):
+    game = _w1g4_duel(
+        set_pool, hand0=["Entomb"], lib0=["Forest", "Craw Wurm", "Island"],
+    )
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Entomb").supported
+    game.resolve_top_of_stack()
+    prompt = next(c for c in game.pending_choices if c.kind == "search_library")
+    assert prompt.data["destination"] == "graveyard" and prompt.data["count"] == 1
+    assert prompt.data["card_type"] == "any" and not prompt.data["up_to"]
+    game.auto_resolve_pending_choices()
+    _w1g4_resolve_stack(game)
+    graveyard = _w1g4_names(game.players[0].graveyard)
+    assert len(graveyard) == 2 and "Entomb" in graveyard
+    assert len(game.players[0].library) == 2
+
+
+@_w1g4_pytest.mark.parametrize("named, drawn", [
+    ("Grizzly Bears", 2),   # the card that is milled
+    ("Craw Wurm", 1),       # a card that is not
+    ("", 1),                # naming nothing
+])
+def test_predict_draws_two_for_the_right_name_and_one_otherwise(
+    set_pool, named, drawn
+):
+    """The name is chosen as the spell resolves, before the mill, and it is
+    the caster's to choose — a prompt on their seat while the spell is held."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Predict"], lib0=["Forest", "Island", "Swamp"],
+        lib1=["Grizzly Bears", "Craw Wurm"],
+    )
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Predict", target_player_index=1).supported
+    game.resolve_top_of_stack()
+    prompt = game.waiting_prompt()
+    assert prompt.kind == "choose_card_name" and prompt.player_index == 0
+    assert game.players[1].graveyard == [], "nothing is milled before the name"
+    assert game.confirm_choose_card_name(0, named)
+    _w1g4_resolve_stack(game)
+    assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"]
+    assert len(game.players[0].hand) == drawn
+    assert _w1g4_names(game.players[0].graveyard) == ["Predict"]
+
+
+def test_predict_may_mill_its_own_caster(set_pool):
+    game = _w1g4_duel(
+        set_pool, hand0=["Predict"], lib0=["Forest", "Island", "Swamp"],
+    )
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Predict", target_player_index=0).supported
+    game.resolve_top_of_stack()
+    assert game.confirm_choose_card_name(0, "Forest")
+    _w1g4_resolve_stack(game)
+    assert _w1g4_names(game.players[0].graveyard) == ["Forest", "Predict"]
+    assert _w1g4_names(game.players[0].hand) == ["Island", "Swamp"]
+
 # ==== end W1G4 ======================================================
 
 

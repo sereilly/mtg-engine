@@ -254,6 +254,89 @@ def test_diligent_farmhand_finding_no_basic_land_still_shuffles_and_is_gone(set_
     assert list(game.controlled_by(0)) == []
     assert sorted(_w1g4_names(game.players[0].library)) == ["Bayou", "Grizzly Bears"]
 
+
+# --- The five -vores: a P/T counted over every graveyard (CR 604.3) ----------
+
+@_w1g4_pytest.mark.parametrize("vore, counted, keyword", [
+    ("Cantivore", "Animate Dead", "vigilance"),
+    ("Cognivore", "Giant Growth", "flying"),
+    ("Magnivore", "Fireball", "haste"),
+    ("Mortivore", "Grizzly Bears", None),
+    ("Terravore", "Forest", "trample"),
+])
+def test_a_vore_is_as_big_as_its_card_type_in_all_graveyards(
+    set_pool, vore, counted, keyword
+):
+    """Two in its controller's graveyard and one in the opponent's: 3/3. A
+    card of another type in each pile is not counted; a fourth arriving is
+    (CR 611.3a: the count is never locked in); with none it is 0/0 and put
+    into its owner's graveyard (CR 704.5f)."""
+    game = _w1g4_duel(
+        set_pool, gy0=[counted, counted, "Black Lotus"], gy1=[counted, "Black Lotus"],
+        bf0=[vore],
+    )
+    perm = _w1g4_on_board(game, 0, vore)
+    game.check_state_based_actions()
+    assert (perm.effective_power, perm.effective_toughness) == (3, 3)
+    if keyword:
+        assert game._has_keyword(perm, keyword)
+    game.players[1].graveyard.append(set_pool("LEA")[counted])
+    game.check_state_based_actions()
+    assert (perm.effective_power, perm.effective_toughness) == (4, 4)
+    game.players[0].graveyard.clear()
+    game.players[1].graveyard.clear()
+    game.check_state_based_actions()
+    assert not game.is_on_battlefield(perm)
+    assert _w1g4_names(game.players[0].graveyard) == [vore]
+
+
+def test_mortivore_regenerates_for_one_black_mana(set_pool):
+    game = _w1g4_duel(
+        set_pool, gy0=["Grizzly Bears", "Grizzly Bears"], bf0=["Mortivore"],
+    )
+    mortivore = _w1g4_on_board(game, 0, "Mortivore")
+    assert game.activate_permanent_ability(0, "Mortivore").supported
+    _w1g4_resolve_stack(game)
+    assert any("regeneration shield" in line for line in game.log)
+    assert game.is_on_battlefield(mortivore)
+
+
+# --- Dwarven Recruiter ---------------------------------------------------------
+
+def test_dwarven_recruiter_stacks_every_dwarf_on_top_of_a_shuffled_library(set_pool):
+    """Its entry trigger is a stack object; the search finds the Dwarf cards
+    and nothing else, reveals them (the log may name them), and they are the
+    top of the library afterwards."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Dwarven Recruiter"],
+        lib0=["Forest", "Dwarven Warriors", "Grizzly Bears",
+              "Dwarven Demolition Team", "Island"],
+    )
+    assert game.queue_from_hand(0, "Dwarven Recruiter").supported
+    game.resolve_top_of_stack()
+    assert [item.card.name for item in game.stack] == ["Dwarven Recruiter"]
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    library = _w1g4_names(game.players[0].library)
+    assert sorted(library[:2]) == ["Dwarven Demolition Team", "Dwarven Warriors"]
+    assert sorted(library[2:]) == ["Forest", "Grizzly Bears", "Island"]
+    assert any(line.startswith("P0 revealed") for line in game.log)
+
+
+def test_dwarven_recruiter_asks_a_person_for_up_to_every_dwarf(set_pool):
+    game = _w1g4_duel(
+        set_pool, hand0=["Dwarven Recruiter"],
+        lib0=["Forest", "Dwarven Warriors", "Dwarven Demolition Team"],
+    )
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Dwarven Recruiter").supported
+    game.resolve_top_of_stack()
+    game.resolve_top_of_stack()
+    prompt = next(c for c in game.pending_choices if c.kind == "search_library")
+    assert prompt.data["restrictions"] == {"subtypes": ["dwarf"]}
+    assert prompt.data["up_to"] and prompt.data["count"] == 2
+    assert prompt.data["reveal"] and prompt.data["destination"] == "library_top"
+
 # ==== end W1G4 ======================================================
 
 

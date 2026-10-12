@@ -330,6 +330,69 @@ def test_a_sweep_of_a_chosen_graveyard_names_its_player(set_pool):
     assert _w1g4_names(game.players[1].graveyard) == ["Forest"]
     assert _w1g4_names(game.players[0].graveyard) == ["Grizzly Bears", "Grave Purge"]
 
+
+# --- Buried Alive, Diabolic Tutor, Extract -----------------------------------
+
+_W1G4_LIBRARY = ["Forest", "Grizzly Bears", "Craw Wurm", "Scryb Sprites",
+                 "Black Lotus", "Island", "Shivan Dragon"]
+
+
+def test_buried_alive_puts_up_to_three_creature_cards_into_the_graveyard(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Buried Alive"], lib0=_W1G4_LIBRARY)
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Buried Alive").supported
+    game.resolve_top_of_stack()
+    prompt = next(c for c in game.pending_choices if c.kind == "search_library")
+    assert prompt.data["count"] == 3 and prompt.data["up_to"]
+    assert prompt.data["card_type"] == "creature"
+    assert prompt.data["destinations"] == ["graveyard"] * 3
+    game.auto_resolve_pending_choices()
+    _w1g4_resolve_stack(game)
+    buried = [n for n in _w1g4_names(game.players[0].graveyard) if n != "Buried Alive"]
+    assert len(buried) == 3
+    assert set(buried) <= {"Grizzly Bears", "Craw Wurm", "Scryb Sprites", "Shivan Dragon"}
+    assert len(game.players[0].library) == 4 and game.players[0].hand == []
+
+
+def test_buried_alive_over_a_library_of_no_creatures_finds_nothing(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Buried Alive"], lib0=["Forest", "Island"])
+    assert game.cast_from_hand(0, "Buried Alive").supported
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    assert _w1g4_names(game.players[0].graveyard) == ["Buried Alive"]
+    assert len(game.players[0].library) == 2
+
+
+def test_diabolic_tutor_finds_any_card_and_does_not_tell_the_table_which(set_pool):
+    """A search with no reveal into a hidden zone: the log every viewer is
+    sent says a card went to hand and never names it."""
+    game = _w1g4_duel(set_pool, hand0=["Diabolic Tutor"], lib0=_W1G4_LIBRARY)
+    assert game.cast_from_hand(0, "Diabolic Tutor").supported
+    _w1g4_resolve_stack(game)
+    game.auto_resolve_pending_choices()
+    (found,) = _w1g4_names(game.players[0].hand)
+    assert len(game.players[0].library) == 6
+    assert not any(found in line for line in game.log)
+    assert any("put a card into hand" in line for line in game.log)
+
+
+def test_extract_exiles_a_card_from_the_library_of_the_player_it_names(set_pool):
+    """The caster searches and chooses; the card goes to its owner's exile and
+    the searched player's library is the one that shrinks."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Extract"], lib0=["Swamp", "Plains"], lib1=_W1G4_LIBRARY,
+    )
+    game.interactive_seats.add(0)
+    assert game.queue_from_hand(0, "Extract", target_player_index=1).supported
+    game.resolve_top_of_stack()
+    prompt = next(c for c in game.pending_choices if c.kind == "search_library")
+    assert prompt.player_index == 0, "CR 608.2c: the spell's controller chooses"
+    assert prompt.data["zone_seat"] == 1 and prompt.data["destination"] == "exile"
+    game.auto_resolve_pending_choices()
+    _w1g4_resolve_stack(game)
+    assert len(game.players[1].library) == 6 and len(game.players[1].exile) == 1
+    assert len(game.players[0].library) == 2 and game.players[0].exile == []
+
 # ==== end W1G4 ======================================================
 
 
