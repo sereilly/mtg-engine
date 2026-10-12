@@ -175,7 +175,8 @@ class CastAction:
     # Whose copy of ``from_zone`` ``hand_index`` indexes into, when that is not
     # the caster's own: "Search target opponent's library for a card and exile
     # it. … you may play that card" (Grinning Totem) leaves the card in the
-    # *searched* player's exile (CR 400.3). None is the caster's own, which is
+    # *searched* player's exile pile (this engine keeps one per owner). None
+    # is the caster's own, which is
     # every other cast. **Not an announcement** — the cast path finds the pile
     # for itself, by the permission — so `cast_announcement` does not carry it;
     # it is for the executor, which reads the card off the zone

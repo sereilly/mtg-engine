@@ -1466,7 +1466,7 @@ class PermittedCast:
 
     * **where the card is** — ``zone``, ``owner_seat`` and ``index``. The pile
       is the grantee's own on every grant but the cross-seat one (Grinning
-      Totem leaves the card in the *searched* player's exile, CR 400.3);
+      Totem leaves the card in the *searched* player's exile pile);
     * **what it is cast as** — ``spell``, the half for a split card (CR 709.3)
       and ``held`` itself otherwise;
     * **what the cast is charged** — ``permission``: its required alternative
@@ -2863,6 +2863,57 @@ def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
     return None
 
 
+#: The steps that read a chosen name against a card off the top of **the
+#: targeted player's** library: "Choose a card name, then target player mills
+#: a card. If a card with the chosen name was milled this way…" (Predict;
+#: Foreshadow says "target opponent"). Whose library that is, is settled by
+#: the announcement, so this is half an answer and the game supplies the rest.
+_TARGET_LIBRARY_NAME_READERS = frozenset({"mill_target_player"})
+
+
+def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instruction) -> bool:
+    """Whether *instruction*'s "choose a card name" is looked for among cards
+    milled from **the target player's** library — so that, when that player is
+    the chooser, the name worth choosing is one of the chooser's own cards.
+
+    :func:`chosen_name_own_zone`'s question one seat over, and read the same
+    way: the steps behind the choice in the sequence that holds it, found by
+    identity. A player built their own deck, so what their own library still
+    holds is theirs to work out (CR 401.2 hides only *which card is where*) —
+    and an **opponent's** library is a hidden zone outright (CR 400.2), which
+    is why the answer for a milled opponent stays what it was: that seat's
+    graveyard, the public evidence of what its deck holds.
+    """
+    program = compile_card_oracle(card)
+
+    def search(step) -> bool:
+        if step is None:
+            return False
+        payload = getattr(step, "payload", None) or {}
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            for position, inner in enumerate(nested):
+                if inner is instruction:
+                    return any(
+                        later.kind in _TARGET_LIBRARY_NAME_READERS
+                        for later in nested[position + 1:]
+                    )
+                if search(inner):
+                    return True
+        return False
+
+    return any(
+        search(root)
+        for root in (
+            *program.instructions,
+            *(ability.instruction for ability in program.activated_abilities),
+            *(ability.instruction for ability in program.triggered_abilities),
+        )
+    )
+
+
 # --- CR 601.2b: the optional additional costs a cast may take ---------------
 #
 # What an offer *buys*, as the four things an optional cost in this pool can
@@ -3083,6 +3134,7 @@ __all__ = [
     "castable_commanders",
     "casting_under",
     "chosen_creature_type_side",
+    "chosen_name_is_read_off_the_targets_library",
     "counters_a_spell",
     "denied_graveyard_pile",
     "denies_its_target",

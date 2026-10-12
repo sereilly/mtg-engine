@@ -40,7 +40,7 @@ board, in a zone under each *kind* of permission the pool grants —
   Aperture);
 * ``opponents_exile`` — "Search target opponent's library for a card and exile
   it. … you may play that card" (Grinning Totem): the pile is the *other*
-  seat's (CR 400.3).
+  seat's.
 
 — and the claim is: **what a seat announces from its hand it announces from
 the zone.** Proposed from hand means proposed from the zone; the same target,

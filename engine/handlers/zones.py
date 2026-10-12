@@ -877,20 +877,49 @@ def choose_card_name(game: Game, instruction: OracleInstruction, context: Oracle
     # player has of what an opponent's library holds, and naming out of that
     # library itself would be the AI reading hidden information. Nothing to
     # see names nothing, which is legal and simply misses.
-    from ..ai_valuation import chosen_name_own_zone
+    #
+    # **And the fifth card looks wherever it is aimed.** "Choose a card name,
+    # then **target player** mills a card. If a card with the chosen name was
+    # milled this way, you draw two cards." (Predict.) The milled library is
+    # the announcement's, and a seat that aims it at itself — which is where
+    # this policy aims it — is asking about its own deck: the commonest name
+    # its own library still holds. It was named out of the opponent's
+    # graveyard all the same, so the seat milled its own library looking for
+    # a card from somebody else's, and with that graveyard empty it named
+    # nothing: one card drawn, every time, for a spell whose whole text is
+    # the second one. Aimed at another seat it keeps the public evidence —
+    # *that* seat's graveyard — and never reads the library it is milling.
+    from ..ai_valuation import (chosen_name_is_read_off_the_targets_library,
+                                chosen_name_own_zone)
 
     own_zone = (
         chosen_name_own_zone(context.card, instruction)
         if context.card is not None else None
     )
+    milled_seat = None
+    if (
+        own_zone is None
+        and context.card is not None
+        and chosen_name_is_read_off_the_targets_library(context.card, instruction)
+    ):
+        milled_seat = next(
+            (index for index, player in enumerate(game.players)
+             if player is context.target),
+            None,
+        )
     if own_zone is not None:
         default_name = _commonest_visible_name(
             game, seat, (own_zone,), exclude_basics=no_basics, card_type=card_type,
         )
+    elif milled_seat == seat:
+        default_name = _commonest_visible_name(
+            game, seat, ("library",), exclude_basics=no_basics, card_type=card_type,
+        )
     else:
         default_name = _commonest_visible_name(
             game,
-            next(iter(game.opponents_of(seat)), seat),
+            milled_seat if milled_seat is not None
+            else next(iter(game.opponents_of(seat)), seat),
             ("graveyard",), exclude_basics=no_basics, card_type=card_type,
         )
     game.arm_pending_choice(

@@ -228,7 +228,7 @@ def test_a_card_on_loan_is_played_before_the_hand(pool):
 
 def test_a_card_in_another_seats_exile_is_found_there(pool):
     """"Search target opponent's library for a card and exile it. … you may
-    play that card." (Grinning Totem.) CR 400.3 leaves it in the searched
+    play that card." (Grinning Totem.) The card stays in the searched
     player's exile; the action says whose pile, and the executor's one reader
     finds it."""
     game = _duel(pool, their_exile=["Grizzly Bears"], mine=["Forest"] * 2)
