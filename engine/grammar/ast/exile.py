@@ -24,8 +24,10 @@ nodes. The family name is the mirror's, unchanged, so ``effects/exile.py``,
 **The cut is by subject, not by reader**, and it has to be: the two reader-side
 families disagree about four of these nodes and always have. ``ExileTopOfLibrary``
 parses in ``effects/zones.py`` and lowers in ``lowering/linked_exile.py``;
-``ExileRandomFromHand`` parses in ``effects/cards.py`` and lowers in
-``lowering/hand.py``; ``CastFromExiledWith`` lowers in ``lowering/permissions.py``.
+``ExileRandomFromHand`` parses in ``effects/hand.py`` (``effects/cards.py`` until
+the Phase 0 before Odyssey) and lowers in ``lowering/hand.py``, while its counted
+sibling ``ExileCardsFromHand`` parses beside it and lowers in
+``lowering/exile.py``; ``CastFromExiledWith`` lowers in ``lowering/permissions.py``.
 Following either reader would have split this family down the middle and left
 the other half wherever its reader happened to live. What every node below has
 in common is the zone it names, which is the one thing none of them disagrees

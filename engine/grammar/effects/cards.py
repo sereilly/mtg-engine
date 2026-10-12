@@ -1,8 +1,38 @@
-"""Cards moving: drawing, discarding, milling, searching, revealing.
+"""Cards moving: drawing, discarding, milling, scrying, and a hand revealed.
 
 Draw / discard / mill share a shape — a player reference and a count — and are
-one-liners for that reason. Library search carries the filter that decides what
-may be found.
+one-liners for that reason. With the scry they are the four verbs here, and the
+mill brings Helm of Obedience's loop and the sentence that reads it. The rest
+is the **revealed hand**: the bare reveal and the three acts it carries
+(``_parse_reveal_hand``), the card revealed at random, Duress's paragraph, the
+two "discards … unless they pay life" offers and Stromgald Spy's standing
+reveal.
+
+**The first line ended "searching, revealing" until the Phase 0 before
+Odyssey**, over a sentence about the filter a library search carries — a
+production that left with ``library`` at The Dark and has been
+``effects/search.py``'s since Alliances. The reveals of a library's top went
+the same way; the ones still here are of a hand.
+
+Four productions left at that Phase 0, with this module 45 lines under the
+guard and the set's discards, mills and draws due here from several groups at
+once. None was called from here or called anything here, and none had changed
+since it was written. Sylvan Library's pick out of a hand and the two exiles
+from one (Elkin Lair, Mind Swords) joined ``hand``: ``lowering/hand.py``'s
+first paragraph names the first two as that family's, the third's node defines
+itself by them, and the exiles were the two here whose nodes are
+``ast/exile.py``'s. Forgotten Lore's four sentences joined ``paragraphs``.
+
+**The next cut is the revealed hand, and it has one edge to cross.** It is
+eight functions and 403 lines, the parse half of ``lowering/reveal.py``'s
+second block, and 78 of the 149 lines the functions here gained between
+``permissions`` leaving and that Phase 0 — against 32 for all four verbs. But
+``_parse_reveal_hand`` reads "…and discards …" through ``_parse_discard``, so
+the block cannot leave as a family while the discard stays, nor the discard for
+``hand`` — where ``lowering/hand.py`` put it, on CR 701.9a — while that reveal
+stays. The other seven call nothing outside the block and three of them are
+that function's tails, so what the call graph allows is a floor under this
+module, ``_reveal_until``'s arrangement under ``reveal``.
 
 Mana used to be here, on the grounds that adding mana is what a card *does*
 with a card or a permanent. It is `effects/mana.py` now: a template about what
@@ -27,9 +57,7 @@ from ..nouns import parse_object_filter
 from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..durations import _parse_duration
-from ..phrases import (accept_a_card_at_random_from_hand,
-                       _parse_mana_payment)
-from ..readers import accept_source_reference
+from ..phrases import accept_a_card_at_random_from_hand
 
 
 
@@ -692,35 +720,6 @@ def parse_put_milled_card_onto_battlefield(
     return ast.PutMilledCardOntoBattlefield()
 
 
-def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand | None":
-    """``choose two cards in your hand drawn this turn`` (Sylvan Library).
-
-    Refuses without consuming, so every other sentence opening with "choose"
-    keeps the reading it already had.
-
-    The noun phrase goes through the shared object parser, which is what makes
-    "choose two **creature** cards in your hand" the same production; only the
-    zone is required, because a pick out of anywhere else is a different
-    sentence with different hidden-information rules (CR 400.2).
-    """
-    mark = stream.mark()
-    if not stream.accept_word("choose"):
-        return None
-    try:
-        count = parse_amount(stream)
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not (filt.is_card and filt.zone == "hand"):
-        stream.reset(mark)
-        return None
-    # "…**drawn this turn**". A provenance rather than a characteristic — see
-    # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
-    drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
-    return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
-
-
 def _parse_random_card_from_hand(
     stream: TokenStream, player: ast.PlayerRef
 ) -> "ast.RevealRandomFromHand | None":
@@ -734,64 +733,6 @@ def _parse_random_card_from_hand(
     if accept_a_card_at_random_from_hand(stream):
         return ast.RevealRandomFromHand(player)
     return None
-
-
-def parse_exile_random_card_from_hand(
-    stream: TokenStream, player: ast.PlayerRef
-) -> "ast.ExileRandomFromHand | None":
-    """``<player> exiles a card at random from their hand`` (Elkin Lair).
-
-    The verb is consumed here rather than by the caller, so a refusal leaves the
-    stream where it found it — "that player exiles all cards from their library"
-    is read by the production beside this one and must keep its own words.
-    """
-    mark = stream.mark()
-    stream.expect_word("exiles", "exile")
-    if accept_a_card_at_random_from_hand(stream):
-        return ast.ExileRandomFromHand(player)
-    stream.reset(mark)
-    return None
-
-
-def parse_player_exiles_cards_from_hand(
-    stream: TokenStream, player: ast.PlayerRef
-) -> "ast.ExileCardsFromHand | None":
-    """``<player> exiles <N> cards from their hand`` (Mind Swords: "Each player
-    exiles two cards from their hand.")
-
-    The random exile above with the player choosing, so it is tried after that
-    one — "a card **at random**" is the narrower reading and must keep its
-    words — and after the pile reader, whose "all cards from their hand"
-    (Memory Jar) is no count at all. The noun phrase goes through the shared object parser, which is what
-    makes "two **nonland** cards" the same production; the zone is required,
-    and the hand must be the subject's own ("their" under a seat subject, "your"
-    under "you"), because a pick out of somebody else's hand is a different
-    sentence with different hidden-information rules (CR 400.2).
-
-    Refuses without consuming, so "that player exiles all cards from their
-    library" and the graveyard sweep beside it keep their own readers.
-    """
-    mark = stream.mark()
-    stream.expect_word("exiles", "exile")
-    try:
-        count = parse_amount(stream)
-        filt = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    owner = filt.zone_owner
-    if not (
-        # A printed number: "**all** cards from their hand" is a pile, which
-        # ``_parse_player_exiles_pile`` reads with its own handler.
-        isinstance(count, ast.Fixed)
-        and filt.is_card
-        and filt.zone == "hand"
-        and owner is not None
-        and (owner.kind == "owner" or owner.kind == player.kind == "you")
-    ):
-        stream.reset(mark)
-        return None
-    return ast.ExileCardsFromHand(player, count, filt)
 
 
 def _parse_discard_revealed_unless_pay_life(
@@ -893,63 +834,3 @@ def _parse_for_each_revealed_discard(
         stream.reset(mark)
         return None
     return ast.DiscardRevealedMatchingUnlessPayLife(player, filt, amount)
-
-
-def _parse_repeated_graveyard_pick(
-    stream: TokenStream, who: ast.PlayerRef
-) -> "ast.RepeatedGraveyardPick | None":
-    """Forgotten Lore's whole four-sentence effect. The subject has already
-    been read, so this starts at the verb.
-
-    Refuses without consuming, so "chooses a card name…" (Petra Sphinx) and
-    "chooses a creature…" (Takklemaggot) keep their own productions.
-
-    Every word is required, the exclusion clause included: without it the loop
-    would let one card be chosen forever, which is a different card — and the
-    self-reference at the end of it is the lexer's SELF token, because the
-    sentence names the spell by name.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("chooses", "a", "card", "in", "your", "graveyard"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("you", "may", "pay"):
-        stream.reset(mark)
-        return None
-    try:
-        cost = _parse_mana_payment(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase("if", "you", "do"):
-        stream.reset(mark)
-        return None
-    # The comma is a token of its own to the lexer, so it is consumed on its
-    # own rather than as a word inside the phrase.
-    if not stream.accept_punct(","):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "repeat", "this", "process", "except", "that", "opponent", "can't",
-        "choose", "a", "card", "already", "chosen", "for",
-    ):
-        stream.reset(mark)
-        return None
-    if not accept_source_reference(stream):
-        stream.reset(mark)
-        return None
-    if not stream.accept_punct("."):
-        stream.reset(mark)
-        return None
-    if not stream.accept_phrase(
-        "then", "put", "the", "last", "chosen", "card", "into", "your", "hand"
-    ):
-        stream.reset(mark)
-        return None
-    return ast.RepeatedGraveyardPick(who, cost)

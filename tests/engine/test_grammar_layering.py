@@ -1172,12 +1172,19 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
 # and both sentences lower to one instruction apiece beside the shields they
 # forbid. A near-empty `lowering/damage_locks.py` would buy back the symmetry
 # and cost the thing symmetry is for.
-# `hand` arrived on the parse side at the same wave, when `effects/cards.py`
+# `hand` arrived on the parse side at Visions' first wave, when `effects/cards.py`
 # crossed 1,002 lines and `lowering/cards.py` was nine from the guard. The
 # line is CR 402's own word: what a sentence does to a *hand* — reveal it,
 # discard from it, take a card at random out of it — against what
 # `cards` does to a card wherever it is. Both halves split in the same round,
 # so the mirror formed rather than re-formed.
+# (That list was the line and never the cut. What left `cards` was the
+# hand-to-library puts alone; the pick out of a hand and the two exiles from
+# one followed at Odyssey's Phase 0, with `cards` 45 under the guard, and the
+# reveal and the discard are still `cards`' — the reveal reads "and discards
+# …" through the discard's production, so neither can leave without the
+# other. And "the same wave", as this opened until then, had come to point at
+# `damage_locks`' Tempest paragraph above, which was written in between.)
 # `zones` used to be one of the asymmetries below — the note read "a near-empty
 # `effects/zones.py` would buy back the symmetry and cost the thing symmetry is
 # for", because zone movement is one `return`/`exile`/`put` production each on
@@ -1814,7 +1821,10 @@ AST_FAMILIES = [
         # nothing else, and it lives in `ast/cards.py` beside every other card
         # node because that is what it *is*. The guard fired on the readers
         # (`effects/cards.py` at 1,002 with Teferi's Puzzle Box in it), not on
-        # the inventory.
+        # the inventory. The three productions that joined it at Odyssey's
+        # Phase 0 change nothing here: `ChooseCardsInHand` is `ast/cards.py`'s
+        # too, and the two exiles from a hand build nodes of `ast/exile.py`,
+        # which files a node by the zone it names.
         "hand",
         # `destruction` is the third of that shape, and it arrived on the parse
         # side after the lowering side had carried it for a set. `Destroy`,

@@ -13,7 +13,7 @@ precisely so this stays true. Independence is the point: it is what makes
     text_changes     rewriting a printed word (CR 612)
     returns          an object put back into a zone it came from
     tapping          tapping, and not untapping
-    cards            drawing, discarding, milling, searching, revealing
+    cards            drawing, discarding, milling, scrying, revealing a hand
     mana             producing it
     production_changes  a standing swap of what a land makes when tapped
     stack            countering, choosing modes, and declining a cost
@@ -161,19 +161,15 @@ from .exile import (
 )
 from .cards import (
     _parse_draw,
-    _parse_choose_cards_in_hand,
     _parse_discard,
     _parse_discard_revealed_unless_pay_life,
     _parse_for_each_revealed_discard,
     _parse_mill,
     _parse_scry,
     _parse_play_with_hand_revealed,
-    parse_exile_random_card_from_hand,
-    parse_player_exiles_cards_from_hand,
     _parse_reveal_hand,
     _parse_reveal_hand_and_choose,
     parse_put_milled_card_onto_battlefield,
-    _parse_repeated_graveyard_pick,
 )
 # CR 601.3's permission sentences, split off `cards` at the size guard under
 # the name `lowering/permissions.py` has carried since Alliances. The two names
@@ -184,10 +180,18 @@ from .permissions import (_parse_cast_permission,
 # A hand emptying onto a library, split off `cards` at the size guard. The three
 # names it took keep their addresses: this package re-exports flat, so no caller
 # learns where the split fell.
+#
+# Three more followed at the Phase 0 before Odyssey, with `cards` 45 lines under
+# that guard: the pick out of a hand and the random exile from one, which
+# `lowering/hand.py`'s first paragraph names as this family's, and the counted
+# exile whose node defines itself by those two. Same addresses.
 from .hand import (
     _parse_put_hand_cards_on_library,
     _parse_player_puts_whole_hand_on_library,
     _parse_player_puts_hand_cards_on_library,
+    _parse_choose_cards_in_hand,
+    parse_exile_random_card_from_hand,
+    parse_player_exiles_cards_from_hand,
 )
 from .library import (
     _parse_look_at_hand,
@@ -410,7 +414,6 @@ __all__ = [
     "parse_put_milled_card_onto_battlefield",
     "_parse_put_hand_cards_on_library",
     "_parse_player_puts_whole_hand_on_library",
-    "_parse_repeated_graveyard_pick",
     "_parse_player_puts_hand_cards_on_library",
     "_parse_activates_each_lands_mana_ability",
     "_parse_loses_unspent_mana",
