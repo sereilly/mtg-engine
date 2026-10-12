@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **4924**
 - Distinct behaviours: **4457**
 - Cards sharing a behaviour with another: **675** in **208** classes
-- Unverified cards covered by a verified peer: **185**
+- Unverified cards covered by a verified peer: **186**
 
 | Size | Cards |
 | --- | --- |
@@ -113,7 +113,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Charging Rhino, Stalking Tiger |
 | 2 | Civic Guildmage, Sunscape Apprentice |
 | 2 | Clay Statue, Diabolic Machine |
-| 2 | Coalition Honor Guard, Standard Bearer |
+| 2 | Coalition Honor Guard, **Standard Bearer** |
 | 2 | Consume Strength, Steal Strength |
 | 2 | Crazed Skirge, Volcanic Dragon |
 | 2 | Crimson Acolyte, Obsidian Acolyte |
