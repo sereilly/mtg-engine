@@ -5153,6 +5153,10 @@ class PendingChoicesMixin:
                 elif target.is_copy:
                     # 704.5e: a countered copy of a spell ceases to exist.
                     self.log.append(f"{data['card_name']} countered {target.card.name} (copy), which ceases to exist")
+                elif self._redirect_unpaid_countered_card(data, target):
+                    # "…If that spell is countered this way, exile it instead
+                    # of putting it into its owner's graveyard." (Syncopate.)
+                    pass
                 else:
                     # The payer is the spell's *controller*; the card goes to
                     # its *owner's* graveyard (CR 701.6a, CR 108.3), and the
@@ -5169,6 +5173,36 @@ class PendingChoicesMixin:
                     if hook is not None:
                         hook(self, counter_card, target)
         self.discard_pending_choice(choice)
+        return True
+
+    def _redirect_unpaid_countered_card(self, data: dict, target) -> bool:
+        """Send a spell countered for an unpaid price where its counterspell
+        prints, and say whether one did (CR 614.1 over CR 701.6a).
+
+        "Counter target spell unless its controller pays {X}. If that spell is
+        countered this way, exile it instead of putting it into its owner's
+        graveyard." (Syncopate.) The hard counter redirects in its own
+        handler; a priced one counters *here*, after the payer declined, so
+        the destination rides the prompt. Through the handler's own
+        ``_redirect_countered_card`` - one mover for both roads - and with its
+        class test ("if an artifact or creature spell is countered this way",
+        Desertion's narrowing) asked of the card exactly as it is there.
+        """
+        destination = data.get("countered_destination")
+        counter_card = data.get("counter_card")
+        if not destination or counter_card is None:
+            return False
+        from ...handlers._common import _card_matches_filter
+        from ...handlers.stack import _redirect_countered_card
+
+        described = data.get("countered_filter")
+        if described and not _card_matches_filter(target.card, described):
+            return False
+        seat = data.get("counterer_index")
+        _redirect_countered_card(
+            self, counter_card, target, str(destination),
+            counterer=self.players[seat] if isinstance(seat, int) else None,
+        )
         return True
 
     # -- A permanent chosen as an effect resolves -----------------------------

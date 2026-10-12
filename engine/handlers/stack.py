@@ -997,6 +997,27 @@ def counter_top_stack_spell(game: Game, instruction: OracleInstruction, context:
                 # Absent when the card prints no life, so every prompt written
                 # before this existed carries byte-identical data.
                 **({"life": life} if life else {}),
+                # "…If that spell is countered this way, exile it instead of
+                # putting it into its owner's graveyard." (Syncopate.) Where
+                # the card goes if the price is not paid, carried to the
+                # decline path that does the countering - with whose
+                # counterspell it was, for the one destination that names a
+                # controller. Absent when the card prints no tail.
+                **(
+                    {
+                        "countered_destination": str(
+                            instruction.payload["countered_destination"]
+                        ),
+                        "countered_filter": instruction.payload.get(
+                            "countered_filter"
+                        ),
+                        "counterer_index": (
+                            game.players.index(context.caster)
+                            if context.caster in game.players else None
+                        ),
+                    }
+                    if instruction.payload.get("countered_destination") else {}
+                ),
                 _new=True,
             )
             game.log.append(

@@ -465,4 +465,170 @@ def test_a_tap_sweep_still_refuses_a_keyword_it_was_never_shown(set_pool):
         "High Tide Probe", "{U}", "Instant", "Tap all creatures with flying."
     )).supported
 
+
+# --- Syncopate: a price, and a destination if it goes unpaid ----------------
+
+def _w1g9_zones(game, seat):
+    player = game.players[seat]
+    return (
+        _w1g9_names(player.graveyard), _w1g9_names(player.exile),
+        _w1g9_names(p.card for p in game.controlled_by(seat)),
+    )
+
+
+def test_syncopate_exiles_the_spell_it_counters(set_pool):
+    """"Counter target spell unless its controller pays {X}. If that spell is
+    countered this way, exile it instead of putting it into its owner's
+    graveyard." The payer cannot cover {2}: countered, and the card is in
+    exile, never in a graveyard."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Syncopate"], hand1=["Grizzly Bears"], costs=True,
+    )
+    game.players[0].mana_pool.update({"U": 3})
+    game.players[1].mana_pool.update({"G": 2})
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert game.queue_from_hand(
+        0, "Syncopate", target_stack_index=0, x_value=2
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_zones(game, 1) == ([], ["Grizzly Bears"], [])
+    assert _w1g9_names(game.players[0].graveyard) == ["Syncopate"]
+
+
+def test_syncopate_leaves_a_spell_whose_controller_pays(set_pool):
+    game = _w1g9_duel(
+        set_pool, hand0=["Syncopate"], hand1=["Grizzly Bears"], costs=True,
+    )
+    game.players[0].mana_pool.update({"U": 3})
+    game.players[1].mana_pool.update({"G": 4})
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert game.queue_from_hand(
+        0, "Syncopate", target_stack_index=0, x_value=2
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_zones(game, 1) == ([], [], ["Grizzly Bears"])
+    assert sum(game.players[1].mana_pool.values()) == 0
+
+
+def test_syncopate_asks_a_person_and_exiles_when_they_decline(set_pool):
+    """The destination rides the payment prompt: a seat that could pay and
+    says no has the spell countered by the answer, and it is exiled there."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Syncopate"], hand1=["Grizzly Bears"], costs=True,
+    )
+    game.interactive_seats = {0, 1}
+    game.players[0].mana_pool.update({"U": 3})
+    game.players[1].mana_pool.update({"G": 4})
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert game.queue_from_hand(
+        0, "Syncopate", target_stack_index=0, x_value=2
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    prompt = game.pending_choice_of("mana_payment")
+    assert prompt is not None and prompt.player_index == 1
+    assert _w1g9_names(i.card for i in game.stack)[0] == "Grizzly Bears"
+    assert game.resolve_pending_choice("mana_payment", 1, pay=False)
+    assert _w1g9_zones(game, 1) == ([], ["Grizzly Bears"], [])
+    assert game.players[1].mana_pool["G"] == 2, "only the Bears were paid for"
+
+
+def test_syncopate_for_nothing_counters_nothing_and_needs_a_spell(set_pool):
+    game = _w1g9_duel(
+        set_pool, hand0=["Syncopate", "Syncopate"], hand1=["Grizzly Bears"],
+    )
+    refused = game.queue_from_hand(0, "Syncopate", x_value=2)
+    assert not refused.supported and len(game.players[0].hand) == 2
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert game.queue_from_hand(
+        0, "Syncopate", target_stack_index=0, x_value=0
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_zones(game, 1) == ([], [], ["Grizzly Bears"])
+
+
+@_w1g9_pytest.mark.parametrize("tail, where", [
+    ("put it on top of its owner's library instead of into that player's "
+     "graveyard.", "library"),
+    ("put it into its owner's hand instead of into that player's graveyard.",
+     "hand"),
+])
+def test_a_priced_counter_sends_the_card_wherever_its_tail_prints(
+    set_pool, tail, where
+):
+    """An invented card: the tail is Memory Lapse's and Remand's, and behind
+    a price it reaches the same mover the hard counter uses."""
+    tax = _w1g9_mk_card(
+        "Toll Lapse", "{1}{U}", "Instant",
+        "Counter target spell unless its controller pays {2}. If that spell "
+        "is countered this way, " + tail,
+    )
+    assert _w1g9_compile(tax).supported
+    game = _w1g9_duel(set_pool, hand1=["Grizzly Bears"], costs=True)
+    game.players[0].hand.append(tax)
+    game.players[0].mana_pool.update({"U": 2})
+    game.players[1].mana_pool.update({"G": 2})
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    assert game.queue_from_hand(0, "Toll Lapse", target_stack_index=0).supported
+    _w1g9_resolve_stack(game)
+    victim = game.players[1]
+    assert _w1g9_zones(game, 1) == ([], [], [])
+    if where == "library":
+        assert victim.library[0].name == "Grizzly Bears"
+    else:
+        assert _w1g9_names(victim.hand) == ["Grizzly Bears"]
+
+
+# --- Cease-Fire: a turn-long ban on one seat, by spell type -----------------
+
+def test_cease_fire_stops_its_target_casting_creature_spells_this_turn(set_pool):
+    """Enforced by the one cast-prohibition table its three readers ask: the
+    engine refuses the cast, and the same call says no to the AI and the
+    castable highlight."""
+    from engine.cast_prohibitions import cast_prohibition
+
+    game = _w1g9_duel(
+        set_pool, hand0=["Cease-Fire", "Grizzly Bears"],
+        hand1=["Grizzly Bears", "Juggernaut", "Lightning Bolt"],
+    )
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert spec["kind"] == "player" and spec["requires_target"]
+    assert game.queue_from_hand(0, "Cease-Fire", target_player_index=1).supported
+    _w1g9_resolve_stack(game)
+    assert len(game.players[0].hand) == 2, "and its caster drew a card"
+
+    victim = game.players[1]
+    for name in ("Grizzly Bears", "Juggernaut"):  # an artifact creature too
+        card = next(c for c in victim.hand if c.name == name)
+        refusal = cast_prohibition(game, 1, card)
+        assert refusal is not None and "creature spells this turn" in refusal.details
+        assert not game.queue_from_hand(1, name).supported
+    assert len(victim.hand) == 3 and not game.stack
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    # The caster named somebody else: their own creatures are not stopped.
+    assert game.queue_from_hand(0, "Grizzly Bears").supported
+
+
+def test_cease_fire_ends_with_the_turn(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Cease-Fire"], hand1=["Grizzly Bears"])
+    assert game.queue_from_hand(0, "Cease-Fire", target_player_index=1).supported
+    _w1g9_resolve_stack(game)
+    assert not game.queue_from_hand(1, "Grizzly Bears").supported
+    game.start_next_turn()
+    assert game.spell_types_forbidden_this_turn == {}
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+
+
+@_w1g9_pytest.mark.parametrize("line, supported", [
+    ("Target player can't cast creature spells this turn.", True),
+    ("Target player can't cast instant or sorcery spells this turn.", True),
+    # A window the record does not have, and no window at all (a permanent's
+    # static ability, which a table reads): both refuse.
+    ("Target player can't cast creature spells until your next turn.", False),
+    ("Target player can't cast creature spells.", False),
+    ("Target player can't cast green creature spells this turn.", False),
+])
+def test_a_typed_cast_ban_reads_only_the_window_it_can_keep(line, supported):
+    card = _w1g9_mk_card("Truce Probe", "{W}", "Instant", line)
+    assert _w1g9_compile(card).supported is supported
+
 # ==== end W1G9 ======================================================

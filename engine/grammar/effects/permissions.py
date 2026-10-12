@@ -646,6 +646,16 @@ def parse_cant_cast_spell_types(
     if not stream.accept_word("spells"):
         stream.reset(mark)
         return None
+    # "Target player can't cast creature spells **this turn**." (Cease-Fire.)
+    # The window printed behind the typed list, where Abeyance prints it in
+    # front of the sentence: the same field either way. Any other trailing
+    # window is left unread, so the line refuses on it rather than being
+    # recorded for a turn it does not name.
+    window_mark = stream.mark()
+    window = _parse_duration(stream)
+    if window.kind == "this_turn":
+        return ast.CantCastSpellTypes(subject, tuple(types), window)
+    stream.reset(window_mark)
     return ast.CantCastSpellTypes(subject, tuple(types))
 
 
