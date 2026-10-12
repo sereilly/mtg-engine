@@ -2940,6 +2940,18 @@ def return_source_card_to_battlefield(game: Game, instruction: OracleInstruction
     # payload key is every card written before the phrase existed and keeps
     # meaning "you".
     owners_control = instruction.payload.get("control") == "owner"
+    if instruction.payload.get("control") == "event_subject_controller":
+        # "…**that creature's controller** returns this Aura … to the
+        # battlefield." (Traveling Plague.) CR 110.2a: an object a player is
+        # instructed to put onto the battlefield enters under that player's
+        # control, and that is the seat the departing host's fire site froze — never re-derived,
+        # because the host has no controller any more. With no seat recorded
+        # nobody puts it anywhere.
+        frozen = (context.trigger_context or {}).get("event_subject_controller")
+        if not isinstance(frozen, int) or not 0 <= frozen < len(game.players):
+            game.log.append(f"{card.name}: no controller was recorded to return it")
+            return True, "resolved"
+        seat = frozen
     if owners_control and source is not None:
         from ..control import base_controller
 
@@ -4793,6 +4805,17 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         seats = list(range(len(game.players)))
     elif who == "you":
         seats = [game.players.index(context.caster)]
+    elif who in ("target_player", "target_opponent"):
+        # "**Target player** exiles all land cards from their graveyard."
+        # (Mudhole.) The one pile the announcement chose (CR 601.2c), which
+        # the resolution carries as its target player.
+        seats = [
+            index for index, player in enumerate(game.players)
+            if player is context.target
+        ]
+        if not seats:
+            game.log.append(f"{context.card.name}: no player was targeted")
+            return True, "resolved"
     else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"

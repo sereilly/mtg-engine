@@ -310,6 +310,236 @@ def test_w1g6_gravestorm_an_opponent_with_no_graveyard_is_not_asked(set_pool):
     _w1g6_resolve_stack(game)
     assert not game.players[0].hand and len(game.players[0].library) == 5
 
+
+# --- Pedantic Learning ------------------------------------------------------
+# "Whenever a land card is put into your graveyard from your library, you may
+# pay {1}. If you do, draw a card." The graveyard seam's one arrival event,
+# narrowed three ways as data: what the card is, whose pile, and where from.
+
+def _w1g6_learning(set_pool, library, **extra):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Pedantic Learning"], *extra.pop("mine", ())],
+        library=[lea[name] for name in library], **extra,
+    )
+    game.enforce_mana_costs = True
+    game.start_turn(0)
+    game.players[0].mana_pool["U"] = 1
+    return game  # _w1g6_learning
+
+
+def _w1g6_learning_triggers(game):
+    return [item for item in game.stack if item.card.name == "Pedantic Learning"]
+
+
+def test_w1g6_pedantic_learning_draws_for_a_land_milled_from_your_library(set_pool):
+    from engine.replacements import _mill_cards as _w1g6_mill
+
+    game = _w1g6_learning(set_pool, ["Forest", "Island", "Island"])
+    _w1g6_mill(game, game.players[0], 1)
+
+    assert len(_w1g6_learning_triggers(game)) == 1
+    _w1g6_resolve_stack(game)
+    offer = game.pending_choices_of("optional_pay", 0)[0]
+    assert offer.data["cost"] == {"generic": 1}
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pile(game.players[0], "hand") == ["Island"]
+    assert game.players[0].mana_pool["U"] == 0
+
+
+def test_w1g6_pedantic_learning_triggers_once_per_land_and_pays_each_separately(
+    set_pool,
+):
+    from engine.replacements import _mill_cards as _w1g6_mill
+
+    game = _w1g6_learning(set_pool, ["Forest", "Forest", "Island", "Island"])
+    _w1g6_mill(game, game.players[0], 2)
+    assert len(_w1g6_learning_triggers(game)) == 2
+
+    for _ in range(4):
+        _w1g6_resolve_stack(game)
+        offers = game.pending_choices_of("optional_pay", 0)
+        if not offers:
+            break
+        assert game.confirm_optional_pay(0, accept=True)
+
+    # One mana in the pool buys one card, not two.
+    assert len(game.players[0].hand) == 1
+
+
+def test_w1g6_pedantic_learning_ignores_every_other_arrival(set_pool):
+    from engine.replacements import _mill_cards as _w1g6_mill
+
+    lea = set_pool("LEA")
+    # A nonland card milled.
+    game = _w1g6_learning(set_pool, ["Lightning Bolt", "Island"])
+    _w1g6_mill(game, game.players[0], 1)
+    assert not _w1g6_learning_triggers(game)
+
+    # A land discarded: put into your graveyard, not from your library.
+    game = _w1g6_learning(set_pool, ["Island"], hand=[lea["Forest"]])
+    game.take_card_from_hand(game.players[0], lea["Forest"])
+    game._discard_card(game.players[0], lea["Forest"])
+    assert _w1g6_pile(game.players[0]) == ["Forest"]
+    assert not _w1g6_learning_triggers(game)
+
+    # A land sacrificed from the battlefield.
+    game = _w1g6_learning(set_pool, ["Island"], mine=[lea["Forest"]])
+    game.sacrifice_permanent(_w1g6_named(game, 0, "Forest"))
+    assert not _w1g6_learning_triggers(game)
+
+    # An opponent's land milled into the opponent's graveyard.
+    game = _w1g6_learning(set_pool, ["Island"], their_library=[lea["Forest"]])
+    _w1g6_mill(game, game.players[1], 1)
+    assert _w1g6_pile(game.players[1]) == ["Forest"]
+    assert not _w1g6_learning_triggers(game)
+
+
+# --- Traveling Plague -------------------------------------------------------
+# "At the beginning of each upkeep, put a plague counter on this Aura. /
+# Enchanted creature gets -1/-1 for each plague counter on this Aura. / When
+# enchanted creature leaves the battlefield, that creature's controller
+# returns this Aura from its owner's graveyard to the battlefield."
+# Rulings (Scryfall): "A counter is placed on every player's upkeep" (2004-10-
+# 04); "The controller of the dead creature chooses the new creature" (2004-
+# 10-04); "The triggered ability returns this card to the battlefield with no
+# counters on it" (2005-08-01).
+
+def _w1g6_plague(set_pool, theirs=("Hill Giant", "Grizzly Bears"), mine=("Craw Wurm",)):
+    from engine.auras import attach_aura as _w1g6_attach
+
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Traveling Plague"], *(lea[name] for name in mine)],
+        theirs=[lea[name] for name in theirs],
+    )
+    game.interactive_seats = {0, 1}
+    plague = _w1g6_named(game, 0, "Traveling Plague")
+    giant = _w1g6_named(game, 1, "Hill Giant")
+    _w1g6_attach(plague, giant)
+    return game, plague, giant  # _w1g6_plague
+
+
+def test_w1g6_traveling_plague_grows_at_every_upkeep_and_shrinks_its_host(set_pool):
+    from engine.named_counters import counters_on as _w1g6_counters
+
+    game, plague, giant = _w1g6_plague(set_pool)
+
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+    assert _w1g6_counters(plague, "plague") == 1
+    assert (giant.effective_power, giant.effective_toughness) == (2, 2)
+
+    # The opponent's upkeep counts too.
+    game.start_turn(1)
+    _w1g6_resolve_stack(game)
+    assert _w1g6_counters(plague, "plague") == 2
+    assert (giant.effective_power, giant.effective_toughness) == (1, 1)
+
+
+def _w1g6_plague_kills_its_host(set_pool, **board):
+    game, plague, giant = _w1g6_plague(set_pool, **board)
+    for seat in (0, 1, 0):
+        game.start_turn(seat)
+        _w1g6_resolve_stack(game)
+    game.check_state_based_actions()
+    # The Giant is dead at three counters, the Aura followed it (CR 704.5m),
+    # and the return is on the stack.
+    assert "Hill Giant" in _w1g6_pile(game.players[1])
+    assert _w1g6_pile(game.players[0]) == ["Traveling Plague"]
+    assert [item.card.name for item in game.stack] == ["Traveling Plague"]
+    game.resolve_top_of_stack()
+    return game  # _w1g6_plague_kills_its_host
+
+
+def test_w1g6_traveling_plague_is_returned_by_the_dead_creatures_controller(set_pool):
+    from engine.named_counters import counters_on as _w1g6_counters
+
+    game = _w1g6_plague_kills_its_host(set_pool)
+
+    # The dead creature's controller chooses, not the Aura's.
+    choice = game.pending_choices[0]
+    assert (choice.kind, choice.player_index) == ("permanent_choice", 1)
+    wurm = _w1g6_named(game, 0, "Craw Wurm")
+    assert not game.confirm_permanent_choice(0, wurm.permanent_id)
+    assert game.confirm_permanent_choice(1, wurm.permanent_id)
+    _w1g6_resolve_stack(game)
+
+    # It enters under the control of the player who put it there (CR 110.2a),
+    # attached to the creature they chose, as a new object with no counters.
+    returned = _w1g6_named(game, 1, "Traveling Plague")
+    assert returned.metadata.get("attached_to") is wurm
+    assert _w1g6_counters(returned, "plague") == 0
+    assert (wurm.effective_power, wurm.effective_toughness) == (6, 4)
+    assert not game.players[0].graveyard
+
+
+def test_w1g6_traveling_plague_stays_in_the_graveyard_with_nothing_to_enchant(
+    set_pool,
+):
+    game = _w1g6_plague_kills_its_host(set_pool, theirs=("Hill Giant",), mine=())
+
+    # CR 303.4g: no legal object to enchant, so the Aura stays where it is.
+    _w1g6_resolve_stack(game)
+    assert not game.pending_choices
+    assert _w1g6_pile(game.players[0]) == ["Traveling Plague"]
+    assert _w1g6_names(game, 0) == [] and _w1g6_names(game, 1) == []
+
+
+def test_w1g6_traveling_plague_follows_a_host_that_left_without_dying(set_pool):
+    game, plague, giant = _w1g6_plague(set_pool)
+    game.start_turn(0)
+    _w1g6_resolve_stack(game)
+
+    # Bounced: "leaves the battlefield" is wider than "dies".
+    game.remove_from_battlefield(giant)
+    game.put_card_into_hand(game.players[1], giant.card, from_battlefield=giant)
+    game.check_state_based_actions()
+    assert [item.card.name for item in game.stack] == ["Traveling Plague"]
+    game.resolve_top_of_stack()
+    bears = _w1g6_named(game, 1, "Grizzly Bears")
+    assert game.confirm_permanent_choice(1, bears.permanent_id)
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_named(game, 1, "Traveling Plague").metadata.get("attached_to") is bears
+
+
+# --- Malevolent Awakening ---------------------------------------------------
+# "{1}{B}{B}, Sacrifice a creature: Return target creature card from your
+# graveyard to your hand." Driven. One of the four activations the ingest's
+# stack-target guard named: the creature its cost sacrifices is a legal
+# re-aim its own picker could not have listed.
+
+def test_w1g6_malevolent_awakening_trades_a_creature_for_a_creature_card(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Malevolent Awakening"], lea["Grizzly Bears"], lea["Hill Giant"]],
+        yard=[lea["Craw Wurm"], lea["Forest"]], their_yard=[lea["Shivan Dragon"]],
+    )
+    game.start_turn(0)
+    giant = _w1g6_named(game, 0, "Hill Giant")
+
+    used = game.activate_permanent_ability(
+        0, "Malevolent Awakening", target_player_index=0, target_permanent_index=0,
+        cost_permanent_ids=[giant.permanent_id],
+    )
+    assert used.supported, used.details
+    assert _w1g6_pile(game.players[0], "hand") == ["Craw Wurm"]
+    assert _w1g6_pile(game.players[0]) == ["Forest", "Hill Giant"]
+    assert _w1g6_names(game, 0) == ["Grizzly Bears", "Malevolent Awakening"]
+
+    # A land card, and an opponent's creature card, are not legal targets —
+    # and a refused activation sacrifices nothing.
+    for seat, slot in ((0, 0), (1, 0)):
+        refused = game.activate_permanent_ability(
+            0, "Malevolent Awakening", target_player_index=seat,
+            target_permanent_index=slot,
+        )
+        assert not refused.supported
+    assert _w1g6_names(game, 0) == ["Grizzly Bears", "Malevolent Awakening"]
+
 # ==== end W1G6 ======================================================
 
 

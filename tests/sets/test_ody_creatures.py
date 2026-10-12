@@ -621,6 +621,202 @@ def test_w1g6_zombie_cannibal_blocked_deals_no_damage_to_a_player(set_pool):
     assert game.players[1].life == 20 and not game.pending_choices
     assert _w1g6_pile(game.players[1]) == ["Forest"]
 
+
+# --- Crypt Creeper, Famished Ghoul ------------------------------------------
+# Driven. "Sacrifice this creature: Exile target card from a graveyard."
+
+def test_w1g6_crypt_creeper_exiles_the_card_it_was_aimed_at(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Crypt Creeper"]], yard=[lea["Forest"]],
+        their_yard=[lea["Grizzly Bears"], lea["Lightning Bolt"]],
+    )
+    game.start_turn(0)
+    spec = game.activation_target_spec(0, 0, ability_index=0)
+    # Any card in any graveyard — and not itself, which is still a permanent
+    # when the target is chosen (CR 601.2c precedes CR 601.2h).
+    assert [(t["seat"], t["name"]) for t in spec["valid_targets"]] == [
+        (0, "Forest"), (1, "Grizzly Bears"), (1, "Lightning Bolt"),
+    ]
+
+    used = game.activate_permanent_ability(
+        0, "Crypt Creeper", target_player_index=1, target_permanent_index=1
+    )
+
+    assert used.supported, used.details
+    assert _w1g6_pile(game.players[1]) == ["Grizzly Bears"]
+    assert _w1g6_pile(game.players[1], "exile") == ["Lightning Bolt"]
+    assert _w1g6_pile(game.players[0]) == ["Forest", "Crypt Creeper"]
+
+
+def test_w1g6_crypt_creeper_is_not_sacrificed_for_nothing(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    # No card in any graveyard: no legal target, so it cannot be activated.
+    game = _w1g6_game(mine=[ody["Crypt Creeper"]])
+    game.start_turn(0)
+    assert not game.activate_permanent_ability(0, "Crypt Creeper").supported
+    assert _w1g6_names(game, 0) == ["Crypt Creeper"]
+
+    # A slot that names no card is refused with nothing paid.
+    game = _w1g6_game(mine=[ody["Crypt Creeper"]], their_yard=[lea["Grizzly Bears"]])
+    game.start_turn(0)
+    refused = game.activate_permanent_ability(
+        0, "Crypt Creeper", target_player_index=1, target_permanent_index=4
+    )
+    assert not refused.supported and _w1g6_names(game, 0) == ["Crypt Creeper"]
+
+
+def test_w1g6_crypt_creeper_does_nothing_once_its_target_has_left(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Crypt Creeper"]],
+        their_yard=[lea["Grizzly Bears"], lea["Lightning Bolt"]],
+    )
+    game.start_turn(0)
+    queued = game.queue_permanent_ability(
+        0, "Crypt Creeper", target_player_index=1, target_permanent_index=0
+    )
+    assert queued.details == "queued"
+    game.players[1].graveyard.pop(0)
+    _w1g6_resolve_stack(game)
+
+    # CR 608.2b: the Bolt is not exiled in the Bears' place.
+    assert _w1g6_pile(game.players[1]) == ["Lightning Bolt"]
+    assert not game.players[1].exile
+
+
+def test_w1g6_famished_ghoul_exiles_up_to_two_cards_from_one_graveyard(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Famished Ghoul"]], yard=[lea["Forest"]],
+        their_yard=[lea["Hill Giant"], lea["Lightning Bolt"], lea["Craw Wurm"]],
+    )
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+
+    queued = game.queue_permanent_ability(0, "Famished Ghoul")
+    assert queued.details == "queued"
+    assert _w1g6_pile(game.players[0]) == ["Forest", "Famished Ghoul"]
+    game.resolve_top_of_stack()
+    assert game.confirm_graveyard_pile_choice(0, 1)
+    pick = game.pending_choices[0]
+    assert (pick.data["owner_index"], pick.data["count"], pick.data["up_to"]) == (
+        1, 2, True,
+    )
+    assert not game.confirm_graveyard_exile_pick(0, [0, 1, 2])   # three is too many
+    assert game.confirm_graveyard_exile_pick(0, [0, 2])
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pile(game.players[1]) == ["Lightning Bolt"]
+    assert sorted(_w1g6_pile(game.players[1], "exile")) == ["Craw Wurm", "Hill Giant"]
+
+
+# --- Anarchist, Auramancer, Cartographer, Gravedigger, Scrivener ------------
+# Driven. "When this creature enters, you may return target <type> card from
+# your graveyard to your hand." Five types, one template.
+
+_W1G6_RETURNERS = [
+    ("Anarchist", "Fireball", "LEA"),
+    ("Auramancer", "Crusade", "LEA"),
+    ("Cartographer", "Forest", "LEA"),
+    ("Gravedigger", "Grizzly Bears", "LEA"),
+    ("Scrivener", "Lightning Bolt", "LEA"),
+]
+
+
+def _w1g6_returner(set_pool, name, wanted, code, *, yard=None):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    found = set_pool(code)[wanted]
+    # A card of a type none of the five returns sits in slot 0.
+    game = _w1g6_game(
+        hand=[ody[name]], yard=[lea["Sol Ring"], found, found] if yard is None else yard,
+        their_yard=[found],
+    )
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    return game, found  # _w1g6_returner
+
+
+@_w1g6_pytest.mark.parametrize("name, wanted, code", _W1G6_RETURNERS)
+def test_w1g6_an_entering_returner_takes_back_the_card_it_named(
+    set_pool, name, wanted, code
+):
+    game, _found = _w1g6_returner(set_pool, name, wanted, code)
+    spec = game.cast_target_spec(0, set_pool("ODY")[name])
+    # Only its own type, and only your own graveyard.
+    assert [(t["seat"], t["index"]) for t in spec["valid_targets"]] == [(0, 1), (0, 2)]
+
+    cast = game.queue_from_hand(
+        0, name, target_player_index=0, target_permanent_index=2
+    )
+    assert cast.supported, cast.details
+    game.resolve_top_of_stack()
+    # The entry trigger is its own stack object (CR 603.3).
+    assert _w1g6_names(game, 0) == [name] and len(game.stack) == 1
+    _w1g6_answer(game, accept=True)
+
+    # Exactly one of the two copies came back.
+    assert _w1g6_pile(game.players[0], "hand") == [wanted]
+    assert _w1g6_pile(game.players[0]) == ["Sol Ring", wanted]
+    assert _w1g6_pile(game.players[1]) == [wanted]
+
+
+@_w1g6_pytest.mark.parametrize("name, wanted, code", _W1G6_RETURNERS)
+def test_w1g6_an_entering_returner_may_decline_and_cannot_reach_other_piles(
+    set_pool, name, wanted, code
+):
+    game, _found = _w1g6_returner(set_pool, name, wanted, code)
+    assert game.queue_from_hand(
+        0, name, target_player_index=0, target_permanent_index=1
+    ).supported
+    game.resolve_top_of_stack()
+    _w1g6_answer(game, accept=False)
+    assert not game.players[0].hand and len(game.players[0].graveyard) == 3
+
+    # With no card of its type in your own graveyard there is no target: the
+    # trigger leaves the stack and the opponent's copy stays where it is.
+    lea = set_pool("LEA")
+    game, found = _w1g6_returner(set_pool, name, wanted, code, yard=[lea["Sol Ring"]])
+    assert game.queue_from_hand(0, name).supported
+    _w1g6_answer(game, accept=True)
+    assert _w1g6_names(game, 0) == [name]
+    assert not game.players[0].hand
+    assert _w1g6_pile(game.players[1]) == [wanted]
+
+
+# --- Zoologist --------------------------------------------------------------
+# Driven. "{3}{G}, {T}: Reveal the top card of your library. If it's a
+# creature card, put it onto the battlefield. Otherwise, put it into your
+# graveyard."
+
+@_w1g6_pytest.mark.parametrize(
+    "top, onto_battlefield",
+    [("Craw Wurm", True), ("Forest", False), ("Lightning Bolt", False)],
+)
+def test_w1g6_zoologist_puts_a_creature_into_play_and_bins_anything_else(
+    set_pool, top, onto_battlefield
+):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(mine=[ody["Zoologist"]], library=[lea[top], lea["Island"]])
+    game.start_turn(0)
+
+    used = game.activate_permanent_ability(0, "Zoologist")
+
+    assert used.supported, used.details
+    assert len(game.players[0].library) == 1
+    assert (top in _w1g6_names(game, 0)) is onto_battlefield
+    assert _w1g6_pile(game.players[0]) == ([] if onto_battlefield else [top])
+
+
+def test_w1g6_zoologist_with_an_empty_library_reveals_nothing(set_pool):
+    game = _w1g6_game(mine=[set_pool("ODY")["Zoologist"]], library=[])
+    game.start_turn(0)
+
+    used = game.activate_permanent_ability(0, "Zoologist")
+
+    assert used.supported, used.details
+    assert _w1g6_names(game, 0) == ["Zoologist"] and not game.players[0].graveyard
+
 # ==== end W1G6 ======================================================
 
 

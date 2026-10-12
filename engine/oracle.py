@@ -314,6 +314,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("card_put_into_graveyard",
      r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
      r"(?P<opponent_graveyard>)an opponent's graveyard from anywhere"),
+    # "Whenever **a land card** is put into **your** graveyard **from your
+    # library**, you may pay {1}. If you do, draw a card." (Pedantic Learning.)
+    # The same event at the same seam with a third narrowing no sibling
+    # prints: the zone the card *came out of*. It rides as data like the other
+    # two — ``Game.put_card_into_graveyard`` already puts the source zone on
+    # the event for every caller that names one — so a mill, a search that
+    # bins a card and a look that discards the rest are this condition, and a
+    # discard or a death is not.
+    ("card_put_into_graveyard",
+     r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
+     r"(?P<your_graveyard>)your graveyard (?P<from_library>)from your library"),
     # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
     # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
     # abilities watch, and the two discard seams announce it — the random/forced

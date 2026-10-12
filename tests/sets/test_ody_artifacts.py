@@ -322,6 +322,52 @@ def test_w1g6_charmed_pendant_reads_the_card_its_cost_milled_not_the_pile(set_po
 
     assert _w1g6_pool_of(game) == {"R": 2}
 
+
+# --- Steamclaw --------------------------------------------------------------
+# Driven. "{3}, {T}: Exile target card from a graveyard. / {1}, Sacrifice this
+# artifact: Exile target card from a graveyard."
+
+def test_w1g6_steamclaw_exiles_a_card_with_either_ability(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Steamclaw"]], yard=[lea["Forest"]],
+        their_yard=[lea["Grizzly Bears"], lea["Lightning Bolt"]],
+    )
+    game.start_turn(0)
+    claw = _w1g6_named(game, 0, "Steamclaw")
+
+    tapped = game.activate_permanent_ability(
+        0, "Steamclaw", ability_index=0, target_player_index=1,
+        target_permanent_index=1,
+    )
+    assert tapped.supported, tapped.details
+    assert claw.tapped and _w1g6_names(game, 0) == ["Steamclaw"]
+    assert [card.name for card in game.players[1].exile] == ["Lightning Bolt"]
+
+    # The second ability needs no untap: it is paid with the Steamclaw itself.
+    sacrificed = game.activate_permanent_ability(
+        0, "Steamclaw", ability_index=1, target_player_index=0,
+        target_permanent_index=0,
+    )
+    assert sacrificed.supported, sacrificed.details
+    assert _w1g6_names(game, 0) == []
+    assert [card.name for card in game.players[0].exile] == ["Forest"]
+    assert [card.name for card in game.players[0].graveyard] == ["Steamclaw"]
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_w1g6_steamclaw_with_no_card_to_exile_is_not_spent(set_pool):
+    ody = set_pool("ODY")
+    game = _w1g6_game(mine=[ody["Steamclaw"]])
+    game.start_turn(0)
+
+    for index in (0, 1):
+        assert not game.activate_permanent_ability(
+            0, "Steamclaw", ability_index=index
+        ).supported
+    assert _w1g6_names(game, 0) == ["Steamclaw"]
+    assert not _w1g6_named(game, 0, "Steamclaw").tapped
+
 # ==== end W1G6 ======================================================
 
 

@@ -50,7 +50,7 @@ from ..amounts import parse_amount
 from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..phrases import accept_graveyard_position
-from ..references import parse_player_ref, parse_recipient
+from ..references import parse_player_ref, parse_recipient, parse_target_spec
 from ..stream import TokenStream
 from ..vocabulary import NUMBER_WORDS
 
@@ -214,6 +214,29 @@ def _parse_shuffle_graveyard_into_library(stream: TokenStream) -> ast.Statement 
         stream.reset(mark)
         return None
     stream.reset(source)
+    # "Shuffle **any number of target creature cards from your graveyard** into
+    # your library." (Piper's Melody.) Gaea's Blessing's chosen cards with the
+    # caster's own pile and no player named in front — so it is that reading's
+    # node, a branch of this production. Read before the "all" pile below and
+    # non-consuming on refusal: a phrase that is not a target list out of
+    # *your* graveyard, bound for *your* library, keeps every reading it had.
+    own_chosen = stream.mark()
+    try:
+        chosen_cards = parse_target_spec(stream)
+    except GrammarError:
+        chosen_cards = None
+    if (
+        chosen_cards is not None
+        and chosen_cards.targeted
+        and chosen_cards.filter.is_card
+        and chosen_cards.filter.zone == "graveyard"
+        and getattr(chosen_cards.filter.zone_owner, "kind", None) == "you"
+        and stream.accept_phrase("into", "your", "library")
+    ):
+        return ast.ShuffleGraveyardIntoLibrary(
+            ast.PlayerRef("you"), chosen=chosen_cards
+        )
+    stream.reset(own_chosen)
     # "Shuffle **all creature cards from** your graveyard into your library."
     # (Barishi.) The same move over a named subset, so it is this node with a
     # filter rather than a second one — see ``ShuffleGraveyardIntoLibrary.cards``.

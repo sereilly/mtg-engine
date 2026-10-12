@@ -422,6 +422,31 @@ def lower_counter_sweep(node: ast.PutCounter) -> tuple[OracleInstruction, ...]:
     return (OracleInstruction("add_counter_to_each_matching", "", payload),)
 
 
+def _targeted_pile_sweeper(node: ast.Exile, subject: ast.TargetSpec) -> str | None:
+    """``"target_player"`` / ``"target_opponent"`` when a *chosen* player
+    empties **their own** graveyard, else None.
+
+    "Target player exiles all land cards from their graveyard." (Mudhole.) The
+    pairing ``_piles._sweep_graveyard_actor`` checks for "each player … their
+    graveyard", with the actor announced instead of enumerated: the seat that
+    performs the exile and the seat whose pile it is are one claim said twice,
+    so "their" has to be the pronoun (the noun parser's ``owner``) and nothing
+    else. Kept beside the exile sweep rather than added to that function,
+    because the *return* sweeps ask it too and none of their handlers has a
+    seat for a targeted player — admitted there it would return cards for
+    nobody.
+
+    The value is the printed word, which is the one ``targeting``'s pronoun
+    table turns into the player picker: "target opponent" must not offer the
+    caster (CR 102.2/102.3).
+    """
+    actor = node.actor.kind if node.actor is not None else None
+    owner = getattr(subject.filter.zone_owner, "kind", None)
+    if actor in ("target_player", "target_opponent") and owner == "owner":
+        return actor
+    return None
+
+
 def lower_exile_sweep(
     node: ast.Exile, subject: ast.TargetSpec, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -473,6 +498,11 @@ def lower_exile_sweep(
         # graveyards" refused while the identical return lowered, for no
         # reason either sentence prints.
         graveyard_owner = _sweep_graveyard_actor(node, subject)
+        targeted_seat = _targeted_pile_sweeper(node, subject)
+        if graveyard_owner is None and targeted_seat is not None:
+            # "**Target player** exiles all land cards from **their**
+            # graveyard." (Mudhole.) See :func:`_targeted_pile_sweeper`.
+            graveyard_owner = targeted_seat
         if graveyard_owner is None:
             raise LoweringError(
                 "the graveyard exile sweep reads your own pile, "
