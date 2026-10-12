@@ -4606,9 +4606,23 @@ class LegalityMixin:
             # would counter a spell whose player target is perfectly legal —
             # the wrong "yes" the table above is named for, arriving through a
             # role instead of through a kind.
-            return None
+            #
+            # **Answered where the announcement recorded its seats per role**
+            # (``targeting.ROLE_SEATS``): "…creatures **target player** controls
+            # … creatures **another target player** controls" (Cultural
+            # Exchange). There the reading this branch lacked exists — each
+            # player is on a slot of its own, so each has a verdict of its own
+            # and the object-level question is answerable. Donate's one seat is
+            # still read off the scalar and still declined here.
+            seated = self._role_seat_target_legality(
+                item, spec, holder, addresses=addresses,
+            )
+            if seated is None:
+                return None
+            legality: list[bool] = list(seated)
+        else:
+            legality = []
 
-        legality: list[bool] = []
         # **The printed description is re-asked too** (CR 608.2b: "Other
         # changes to the game state may cause a target to no longer be legal;
         # for example, its characteristics may have changed"). This loop
@@ -4728,6 +4742,55 @@ class LegalityMixin:
             if addresses is not None:
                 addresses.append(None)
         return legality
+
+    def _role_seat_target_legality(
+        self, item, spec, holder, *, addresses: "list | None" = None,
+    ) -> "list[bool] | None":
+        """CR 608.2b for the **player roles** of a roles announcement that
+        named more than one seat — one verdict per named player, in role
+        order — or None where the announcement recorded no per-role seats and
+        the question stays declined.
+
+        Legal is the announcement's question asked again, as it is everywhere
+        in this rule: still among what the role's own enumeration would offer
+        the caster now. The roles walk enumerates each slot through
+        ``_enumerate_targets`` with the role as the spec
+        (:meth:`role_target_options`), so the same call over the same role
+        is the list the picker was built from — a player who gained shroud in
+        response (CR 702.18a) or left the game (CR 800.4a) is missing from it
+        for the reason they could not have been named.
+
+        A slot already holding ``None`` names nobody and has no verdict:
+        blanking is idempotent, and a re-asked resolution must not count a
+        target that is not there.
+
+        What is *not* re-asked is the walk's relation between slots (the
+        printed "another"): two players named as different players cannot
+        come to be one.
+        """
+        from .targeting import recorded_role_seats, role_seat_positions
+
+        recorded = recorded_role_seats(holder)
+        if recorded is None:
+            return None
+        roles = spec_roles(spec)
+        verdicts: list[bool] = []
+        for position in role_seat_positions(roles):
+            seat = recorded[position] if position < len(recorded) else None
+            if seat is None:
+                continue
+            offered = {
+                entry.get("seat")
+                for entry in self._enumerate_targets(
+                    item.caster_index, item.card, dict(roles[position]),
+                    for_cast=False,
+                )
+                if entry.get("kind") == "player"
+            }
+            verdicts.append(seat in offered)
+            if addresses is not None:
+                addresses.append(("player", "role", position, None))
+        return verdicts
 
     def _player_target_legality(
         self, item, program, spec, holder, mode_index, *,
