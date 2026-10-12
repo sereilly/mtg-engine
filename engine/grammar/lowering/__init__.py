@@ -287,6 +287,7 @@ from .cards import (
     _lower_mill_until,
     _lower_put_milled_card_onto_battlefield,
     _lower_scry,
+    _lower_surveil,
 )
 # The hand family, split off `.cards` at the size guard in the same round its
 # parse mirror was. Every name keeps its address: this package re-exports flat,
@@ -615,6 +616,7 @@ __all__ = [
     "_lower_put_milled_card_onto_battlefield",
     "_lower_put_hand_cards_on_library",
     "_lower_scry",
+    "_lower_surveil",
     "_lower_add_mana",
     "_lower_note_mana_spent",
     "_TAPPED_LAND_MANA_RECIPIENTS",

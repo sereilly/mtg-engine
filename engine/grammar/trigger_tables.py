@@ -138,6 +138,9 @@ _WHENEVER_EVENTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     # discard seam, exactly as ``land_played``'s and ``draws_card``'s are.
     ("discards_card", ("you", "discard", "a", "card")),
     ("discards_card", ("an", "opponent", "discards", "a", "card")),
+    # "Whenever **a player** discards a card" (Confessor): the same event with
+    # no seat narrowed away.
+    ("discards_card", ("a", "player", "discards", "a", "card")),
     # "Whenever a spell or ability an opponent controls causes you to discard a
     # card" (Spiritual Focus). Carried here as well as in `engine/oracle.py`'s
     # table for this file's standing reason: a condition only one front end

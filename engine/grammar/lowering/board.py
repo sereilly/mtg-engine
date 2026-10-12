@@ -812,6 +812,21 @@ def _lower_keep_chosen_sacrifice_rest(
         raise LoweringError("a keep-and-sacrifice keeps something", node=node)
     slots: list[dict[str, object]] = []
     for slot in node.slots:
+        if slot.as_many_as_fewest:
+            # "…a number of permanents they control equal to the number of
+            # permanents controlled by the player who controls the fewest"
+            # (Balancing Act). No printed number: the handler takes the
+            # table's minimum once, before anybody answers (CR 608.2h), so the
+            # count travels as the word — as "any" and "x" do for a search.
+            if len(node.slots) != 1 or node.chooser.kind != "each_player":
+                raise LoweringError(
+                    "a keep sized by the fewest is one slot, kept by each player",
+                    node=node,
+                )
+            slots.append(
+                {"count": "fewest", "filter": _keep_pool_filter(slot.filter, node)}
+            )
+            continue
         if slot.count < 1:
             # A slot that keeps nothing is not a keep; it would make the
             # sentence "sacrifice everything" with four nouns printed in front
@@ -840,4 +855,25 @@ def _lower_keep_chosen_sacrifice_rest(
                 f"no keep prompt performs {node.fate!r}", node=node
             )
         payload["fate"] = node.fate
-    return (OracleInstruction("keep_chosen_sacrifice_rest", "", payload),)
+    kept = OracleInstruction("keep_chosen_sacrifice_rest", "", payload)
+    if not node.discard_same_way:
+        return (kept,)
+    # "Each player discards cards **the same way**." (Balancing Act.) The same
+    # procedure over hands — keep as many as the player with the fewest, lose
+    # the rest — which is a discard of each seat's *excess* over the smallest
+    # hand, chosen by that seat. So it is the per-seat counted discard Pox
+    # already lowers to, with the count the evaluator is asked for marked as
+    # an excess over the table's minimum; its own step, counted when it runs.
+    if node.fate != "sacrifice_rest":
+        raise LoweringError(
+            '"the same way" follows a keep whose rest is sacrificed', node=node
+        )
+    return (
+        kept,
+        OracleInstruction("each_player_discards_a_card", "", {
+            X_FROM_COUNT_PER_RECIPIENT: {
+                "zone": "hand", "owner": "target", "filter": {},
+                "excess_over_fewest": True,
+            },
+        }),
+    )

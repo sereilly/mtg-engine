@@ -103,6 +103,8 @@ def _lower_pump(
     # team buff, the bound target, the event's own subject), so a reading
     # placed after the subject branches below would be a counted pump
     # sized by its printed number alone.
+    if node.per_each_recorded is not None:
+        return _lower_pump_per_recorded(node, event, event_subject, produced)
     counted = lower_counted_pump(node, event)
     if counted is not None:
         return counted
@@ -659,6 +661,57 @@ def _lower_pump(
         return (OracleInstruction("buff_creatures_global", "", payload),)
 
     raise LoweringError("unsupported pump subject", node=node)
+
+
+def _lower_pump_per_recorded(
+    node: ast.Pump, event: str | None, event_subject: object | None,
+    produced: frozenset[str],
+) -> tuple[OracleInstruction, ...]:
+    """"Creatures you control get +0/+1 until end of turn **for each card
+    discarded this way**." (Sacred Rites, Rites of Initiation.)
+
+    A "for each" pump whose count is a *record* rather than a board: the
+    printed P/T sizes one repetition, exactly as it does for "for each creature
+    you control", and what multiplies it is the number the step in front of
+    the sentence wrote. So it is lowered as that sentence — every subject it
+    can be printed on (a class, one target, the source) reaches the branch
+    that already reads it — and the one key that differs is swapped: the count
+    spec becomes the ``back_reference`` ``count_from_payload`` answers for the
+    life gain and the counter placement that print the identical clause.
+
+    Two refusals, both the direction that cannot invent a number:
+
+    - **no duration** — a continuous bonus is rebuilt on every recompute, and
+      the scratchpad the record lives in is gone after the resolution that
+      wrote it (``_counted_pumps._lower_pump_per_milled`` says the same of its
+      own record);
+    - **no producer** — with no step writing the key the words name nothing,
+      and the pump would be a silent +0/+0 on a card reporting supported.
+    """
+    counted = node.per_each_recorded
+    if node.duration.kind is None:
+        raise LoweringError(
+            'a "this way" pump with no duration would be a continuous effect '
+            "sized by a frozen record", node=node,
+        )
+    if counted.source is None or counted.bonus or counted.source not in produced:
+        raise LoweringError(
+            f"back-reference to {counted.source!r} with no producer in this "
+            "effect", node=node,
+        )
+    stand_in = dataclasses.replace(
+        node, per_each_recorded=None,
+        per_each=ast.ObjectFilter(card_types=("creature",), controller="you"),
+    )
+    lowered = _lower_pump(stand_in, event, event_subject, produced)
+    if len(lowered) != 1 or "x_from_count" not in lowered[0].payload:
+        raise LoweringError(
+            "no pump handler sizes this subject by a recorded count", node=node
+        )
+    payload = {
+        **lowered[0].payload, "x_from_count": {"back_reference": counted.source},
+    }
+    return (OracleInstruction(lowered[0].kind, "", payload),)
 
 
 def _lower_double_power(node: ast.DoublePower) -> tuple[OracleInstruction, ...]:

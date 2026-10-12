@@ -1430,6 +1430,7 @@ def test_w1g6_zombify_does_nothing_when_its_target_has_left(set_pool):
 
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
+# (moved whole to test_ody_sorceries_later_groups.py when this file reached its size cap)
 
 # ==== end W1G7 ======================================================
 

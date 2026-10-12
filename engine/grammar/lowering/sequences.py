@@ -40,7 +40,7 @@ from __future__ import annotations
 import dataclasses
 
 from ...oracle_types import (COST_TARGET_BASE, COST_TARGET_PER,
-                             OracleInstruction)
+                             OracleInstruction, X_FROM_COUNT)
 from .. import ast
 from ..errors import LoweringError
 from ..phrases import is_pt_counter
@@ -317,14 +317,33 @@ def _lower_steps(
         # that number once — so the discard is handed the draw's own quantity
         # rather than a record: it is counted off the same board in the same
         # resolution, and a draw that came up short does not shrink it.
+        counted_once = None
         if (
             isinstance(step, ast.Discard)
             and isinstance(previous, ast.Draw)
             and step.count == ast.ThatMuch()
             and step.player == previous.player
         ):
-            step = dataclasses.replace(step, count=previous.count)
+            # "…draws cards equal to the number of cards **in their hand**,
+            # then discards that many cards." (Laquatus's Creativity.) The one
+            # count a second reading *would* change — the draw fills the pile
+            # it was sized by — so it is taken once: both steps ride a
+            # ``sequence`` carrying the spec and read the X resolved for it.
+            spec = instructions[-1].payload.get(X_FROM_COUNT) if instructions else None
+            if isinstance(spec, dict) and spec.get("zone") in ("hand", "library"):
+                counted_once = spec
+            step = dataclasses.replace(
+                step, count=ast.Var("x") if counted_once else previous.count
+            )
         lowered = lower_statement(step, produced, event=event, event_subject=event_subject, whole_effect=False)
+        if counted_once is not None:
+            draw = instructions[-1]
+            bare = {k: v for k, v in draw.payload.items() if k != X_FROM_COUNT}
+            instructions = instructions[:-1]
+            lowered = (OracleInstruction("sequence", "", {
+                "steps": (OracleInstruction(draw.kind, draw.value, bare), *lowered),
+                X_FROM_COUNT: counted_once,
+            }),)
         # A step reading a record only an earlier offer's branch writes belongs
         # *inside* that offer — see ``_fold_into_offer``.
         if offer_index is not None and offer_keys and all(

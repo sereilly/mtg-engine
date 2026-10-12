@@ -184,6 +184,15 @@ def _parse_search_library(stream: TokenStream) -> ast.Statement:
     # count read without them is a search that finds three and places one.
     if stream.accept_phrase("up", "to"):
         count = parse_amount(stream)
+        if isinstance(count, ast.ThatMuch) or (
+            isinstance(count, ast.Var) and count.name == "x"
+        ):
+            # "…for up to **that many** basic land cards" (Rites of Spring) /
+            # "…for up to **X** basic land cards" (New Frontiers). The counted
+            # tail with a ceiling only the resolution knows.
+            return _parse_counted_search(
+                stream, graveyard, None, possessive, ceiling=count,
+            )
         if not isinstance(count, ast.Fixed) or count.value < 1:
             raise stream.error("expected how many cards the search may find")
         return _parse_counted_search(stream, graveyard, count.value, possessive)
@@ -711,7 +720,7 @@ def _accept_each_searcher_shuffle(stream: TokenStream) -> bool:
 
 def _parse_counted_search(
     stream: TokenStream, graveyard: bool, count: int | None,
-    possessive: str = "your",
+    possessive: str = "your", ceiling: "ast.Amount | None" = None,
 ) -> ast.Statement:
     """The tail of ``Search your library for up to <N> <filter>, reveal <them>,
     <where they go>, then shuffle.`` (Cultivate, Land Tax.)
@@ -770,6 +779,10 @@ def _parse_counted_search(
                     stream.expect_word("library")
                 stream.accept_phrase("in", "any", "order")
                 zone = ast.Zone("library_top")
+                if ceiling is not None:
+                    raise stream.error(
+                        "a search with a computed ceiling puts its finds in one zone"
+                    )
                 return ast.SearchLibrary(
                     ast.PlayerRef("you"), filt, zone, graveyard,
                     extra_destinations=() if count is None else (zone,) * (count - 1),
@@ -777,6 +790,14 @@ def _parse_counted_search(
                     up_to=True, unbounded=count is None, reveal=reveal,
                 )
     stream.reset(top_mark)
+    # "…for up to X basic land cards **and** put them onto the battlefield
+    # tapped." (New Frontiers.) The conjunction where every other counted
+    # search prints a comma — the join the singular production already reads
+    # ("…for a card and put that card into their hand"). Only in front of
+    # "put", so no other "and" is taken.
+    joined = stream.mark()
+    if not (stream.accept_word("and") and stream.at_word("put")):
+        stream.reset(joined)
     stream.expect_word("put")
     # "put **them** …" / "put **those cards** …" — one referent, two printed
     # spellings, and the same pair the reveal clause above and the shuffle-then-
@@ -801,8 +822,13 @@ def _parse_counted_search(
             ),
             tapped=(tapped,) * (0 if count is None else count),
             up_to=True,
-            unbounded=count is None,
+            # "Any number of" is the ceiling-less spelling; a computed ceiling
+            # ("that many", X) is the other reason the count is not printed,
+            # and it says so on its own field rather than borrowing this one.
+            unbounded=count is None and ceiling is None,
             reveal=reveal,
+            count_amount=ceiling,
+            all_tapped=tapped and ceiling is not None,
         )
     if count != 2:
         raise stream.error(

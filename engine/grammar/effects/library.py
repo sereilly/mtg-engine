@@ -249,6 +249,88 @@ def parse_player_looks_at_own_library_top(
     )
 
 
+def accept_subject_reveals_top_caster_picks(
+    stream: TokenStream, subject: "ast.PlayerRef"
+) -> "ast.LookTopPickToHand | None":
+    """``<player> reveals the top <N> cards of their library. You choose <M>
+    of those cards and put (it|them) into (their|that player's) graveyard[.
+    Put the rest on top of their library in any order]`` — or None,
+    unconsumed. (Balshan Beguiler; Bamboozle.)
+
+    The look-and-pick procedure over somebody else's revealed pile: the cards
+    are the subject's and every decision about them is the effect's
+    controller's ("**you** choose"), which is :class:`ast.LookTopPickToHand`
+    with ``pile_owner`` set — Sealed Fate's shape with the pile shown
+    (CR 701.20a), the pick binned rather than exiled, and the subject printed
+    in front of the verb. The same node, so whose library is turned over and
+    who decides have one answer each.
+
+    Read whole, interior full stops included, for the Duress production's
+    reason: "those cards" and "the rest" are the pile this sentence revealed,
+    and parsed apart they name nothing.
+
+    Every clause is read and checked:
+
+    * **whose library** — "their", the subject's own;
+    * **how many are taken** — a printed number smaller than the pile, with
+      the pronoun that agrees with it ("it" for one, "them" for more);
+    * **whose graveyard** — "their" or "that player's", the pile's owner
+      either way (CR 400.3: a card goes to its owner's graveyard);
+    * **the rest** — "on top of their library in any order" is the chooser's
+      order to give. With no such clause (Balshan Beguiler) the rest were
+      never moved, so they stay as they lay and nobody is asked.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("reveals", "reveal"):
+        return None
+    if not stream.accept_phrase("the", "top"):
+        stream.reset(mark)
+        return None
+    try:
+        count = parse_amount(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not isinstance(count, ast.Fixed) or count.value < 2:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("cards", "of", "their", "library"):
+        stream.reset(mark)
+        return None
+    if not (stream.accept_punct(".") and stream.accept_phrase("you", "choose")):
+        stream.reset(mark)
+        return None
+    picks = parse_amount(stream)
+    if not isinstance(picks, ast.Fixed) or not 1 <= picks.value < count.value:
+        raise stream.error("expected how many of the revealed cards are chosen")
+    for word in ("of", "those", "cards", "and", "put"):
+        stream.expect_word(word)
+    stream.expect_word("it" if picks.value == 1 else "them")
+    stream.expect_word("into")
+    if not stream.accept_word("their"):
+        for word in ("that", "player", "'s"):
+            stream.expect_word(word)
+    stream.expect_word("graveyard")
+    rest_order = "unchanged"
+    rest = stream.mark()
+    if stream.accept_punct(".") and stream.accept_phrase(
+        "put", "the", "rest", "on", "top", "of", "their", "library",
+        "in", "any", "order",
+    ):
+        rest_order = "any"
+    else:
+        stream.reset(rest)
+    return ast.LookTopPickToHand(
+        count,
+        pick_count=picks,
+        pick_destination="graveyard",
+        rest_destination="library_top",
+        rest_order=rest_order,
+        pile_owner=subject,
+        revealed=True,
+    )
+
+
 def parse_player_reorders_your_library_top(
     stream: TokenStream, subject: "ast.Recipient"
 ) -> "ast.Statement | None":

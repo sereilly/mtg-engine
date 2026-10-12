@@ -80,6 +80,7 @@ from .effects import (
     _parse_reveal_hand,
     _parse_sacrifice,
     accept_subject_reveals_counted_top_sorted,
+    accept_subject_reveals_top_caster_picks,
     accept_subject_reveals_top_of_library,
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
@@ -290,6 +291,14 @@ def parse_player_subject_verb(
         sorted_top = accept_subject_reveals_counted_top_sorted(stream, source_spec)
         if sorted_top is not None:
             return sorted_top
+        # "**That player** reveals the top two cards of their library. You
+        # choose one of those cards and put it into their graveyard." (Balshan
+        # Beguiler; Bamboozle.) The third counted reading, parted from the one
+        # above by what follows the pile: a full stop and "you choose" against
+        # a comma and "puts all". Declines without consuming.
+        picked_top = accept_subject_reveals_top_caster_picks(stream, source_spec)
+        if picked_top is not None:
+            return picked_top
         top = accept_subject_reveals_top_of_library(stream, source_spec)
         if top is not None:
             return top

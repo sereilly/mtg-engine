@@ -1282,7 +1282,13 @@ class EffectsMixin:
             ):
                 if trig.instruction is None:
                     continue
-                if trig.condition.payload.get("discarder") == "an opponent":
+                discarder = trig.condition.payload.get("discarder")
+                if discarder == "a player":
+                    # "Whenever **a player** discards a card" (Confessor):
+                    # nobody is narrowed away, the watcher's controller
+                    # included.
+                    pass
+                elif discarder == "an opponent":
                     if controller_index == seat:
                         continue
                 elif controller_index != seat:

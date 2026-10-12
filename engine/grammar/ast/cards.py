@@ -186,6 +186,20 @@ class Scry:
 
 
 @dataclass(frozen=True)
+class Surveil:
+    """"Surveil N." (CR 701.25a.)
+
+    Scry's sibling with the graveyard where scry has the bottom of the
+    library: look at the top N of your own library, put any number of them
+    into your graveyard and the rest back on top in any order. Its own node
+    and not a flag on :class:`Scry` because they are two keyword actions with
+    two rules — "whenever you surveil" does not watch a scry — and no player
+    field for Scry's reason: CR 701.25a is defined over *your* library.
+    """
+    count: Amount = field(default_factory=lambda: Fixed(1))
+
+
+@dataclass(frozen=True)
 class Shuffle:
     player: PlayerRef
 

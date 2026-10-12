@@ -2526,6 +2526,37 @@ def choose_number(game: Game, instruction: OracleInstruction, context: OracleExe
     low = int(instruction.payload.get("minimum", 0))
     printed_high = instruction.payload.get("maximum")
     high = None if printed_high is None else int(printed_high)
+    ceiling = instruction.payload.get("maximum_from_count")
+    if ceiling is not None:
+        # "Discard **any number** of cards at random." (Rites of Initiation.)
+        # A number with no printed range: its ceiling is a count only the
+        # resolution knows (the cards in the chooser's hand), and its reader is
+        # the next step of this same resolution — so it is recorded in the
+        # scratchpad alone, whatever the source is. A permanent's standing
+        # ``chosen_number`` is a different record with a different reader, and
+        # an ability printing this sentence must not overwrite it.
+        if context.caster not in game.players:
+            game.log.append(f"{context.card.name}: nobody to choose a number")
+            return True, "resolved"
+        seat = game.players.index(context.caster)
+        from ._common import count_from_payload
+
+        high = max(low, count_from_payload(game, context, dict(ceiling), instruction))
+        # The policy for a seat nobody asks is the whole offer — the one
+        # ``_default_discard`` states for the chosen form of this same
+        # sentence ("discard any number of cards"), so the two spellings of
+        # one decision default alike.
+        context.results[CHOSEN_NUMBER_THIS_WAY] = high
+        if high <= low:
+            # One legal answer is not a choice, so nobody is asked.
+            return True, "resolved"
+        game.arm_pending_choice(
+            "number_choice", seat,
+            card_name=context.card.name if context.card is not None else "",
+            permanent=None, minimum=low, maximum=high, default_number=high,
+            result_key=CHOSEN_NUMBER_THIS_WAY, _context=context,
+        )
+        return True, "resolved"
     if permanent is None:
         # "Choose a number. Destroy all artifacts and creatures with mana value
         # equal to that number." (Void.) A *spell* choosing a number: there is

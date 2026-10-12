@@ -247,6 +247,18 @@ class SearchLibrary:
     #: and for its reason: the filter says what *one* find may be, and this is
     #: a list of them, each filled by at most one card.
     one_of_each: tuple[ObjectFilter, ...] = ()
+    #: "…for up to **that many** basic land cards" (Rites of Spring) and "…for
+    #: up to **X** basic land cards" (New Frontiers). A ceiling that is not a
+    #: printed number, so ``extra_destinations`` and ``tapped`` cannot be sized
+    #: by the parse — ``unbounded``'s situation with a different answer: there
+    #: the ceiling is the zone, here it is a number the resolution reads (a
+    #: record an earlier step wrote, or the cast's X). The amount itself rides,
+    #: because which of the two it is decides where the handler looks.
+    count_amount: "Amount | None" = None
+    #: Whether every find of a ``count_amount`` search enters tapped. One flag
+    #: for however many finds there turn out to be, since ``tapped`` above is
+    #: one entry per *printed* find and this shape prints none.
+    all_tapped: bool = False
 
 @dataclass(frozen=True)
 class LookAtLibraryTop:

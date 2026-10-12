@@ -54,7 +54,7 @@ from __future__ import annotations
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_HAND_CARDS_BY_SEAT,
                              LAST_TARGET_CONTROLLER,
                              OracleInstruction, REVEALED_HAND_CARDS,
-                             REVEALED_THIS_WAY)
+                             REVEALED_THIS_WAY, X_FROM_COUNT)
 from ...subject_filters import SOURCE_RESOLVED_CARD_KEYS, card_only_filter
 from .. import ast
 from ..errors import LoweringError
@@ -790,9 +790,28 @@ def _lower_reveal_hand_and_choose(
         payload["exclude_basic_lands"] = True
     # Both keys are emitted only when the card carries them, so Duress's payload
     # stays byte-identical and no behaviour signature moves.
-    amount = _amount_payload(node.count)
-    if amount != 1:
-        payload["count"] = amount
+    if isinstance(node.count, ast.ThatMuch):
+        # "…you choose a nonland card from it **for each card discarded this
+        # way**." (Last Rites.) A count an earlier step of this effect
+        # recorded, on the channel every recorded amount travels: the handler
+        # already sizes its pick through ``resolve_amount`` (Mind Warp's X), so
+        # the record becomes that X where every other computed amount does.
+        # Behind the gate every back-reference carries — with no producer the
+        # words name nothing and the pick would be of no cards.
+        if (
+            node.count.source is None or node.count.bonus
+            or node.count.source not in produced
+        ):
+            raise LoweringError(
+                f"back-reference to {node.count.source!r} with no producer in "
+                "this effect", node=node,
+            )
+        payload["count"] = "x"
+        payload[X_FROM_COUNT] = {"back_reference": node.count.source}
+    else:
+        amount = _amount_payload(node.count)
+        if amount != 1:
+            payload["count"] = amount
     if node.up_to:
         # "…choose **up to** X cards from it" (Discordant Dirge). CR 601.2c's
         # ceiling, carried so the prompt lets the chooser stop early. Emitted

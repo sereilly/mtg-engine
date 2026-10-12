@@ -509,6 +509,45 @@ def _accept_keep_slot(stream: TokenStream) -> "ast.KeepSlot | None":
     return ast.KeepSlot(count, described)
 
 
+def _accept_keep_as_many_as_the_fewest(stream: TokenStream) -> "ast.KeepSlot | None":
+    """``a number of <noun> they control equal to the number of <noun>
+    controlled by the player who controls the fewest`` — or None, unconsumed.
+    (Balancing Act prints it of permanents; Balance of lands.)
+
+    A keep whose size is the table's minimum rather than a printed number.
+    The noun is printed twice and read twice, and the two must be one noun:
+    "a number of lands equal to the number of creatures controlled by the
+    player who controls the fewest" is a different card, and a reader that
+    took the second noun on trust would count it as the first.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("a", "number", "of"):
+        return None
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if described.controller != "that_player" or not stream.accept_phrase(
+        "equal", "to", "the", "number", "of"
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        again = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if dataclasses.replace(described, controller=None) != again or not (
+        stream.accept_phrase(
+            "controlled", "by", "the", "player", "who", "controls", "the", "fewest",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.KeepSlot(0, described, as_many_as_fewest=True)
+
+
 def _accept_keep_slots(stream: TokenStream) -> "tuple[ast.KeepSlot, ...] | None":
     """One printed keep, as the slot — or slots — it names.
 
@@ -583,7 +622,8 @@ def parse_keep_then_sacrifice_rest(
         if pool is None:
             stream.reset(mark)
             return None
-    first = _accept_keep_slots(stream)
+    fewest = _accept_keep_as_many_as_the_fewest(stream) if pool is None else None
+    first = (fewest,) if fewest is not None else _accept_keep_slots(stream)
     if first is None or (bare_from and len(first) == 1):
         stream.reset(mark)
         return None
@@ -616,7 +656,24 @@ def parse_keep_then_sacrifice_rest(
             stream.reset(mark)
             return None
         pool = slots[0].filter
-    return ast.KeepChosenSacrificeRest(chooser, pool, tuple(slots))
+    # "…then sacrifices the rest. **Each player discards cards the same
+    # way.**" (Balancing Act.) Read here, behind the one keep it can refer to:
+    # "the same way" is this sentence's procedure said of hands, and split off
+    # it is a discard with no count. Only after a keep sized by the fewest —
+    # "the same way" as "chooses five lands" names no procedure a hand could
+    # follow — and the full stop that ends it is left for the sentence parser.
+    same_way = False
+    if fewest is not None and chooser.kind == "each_player":
+        rider = stream.mark()
+        if stream.accept_punct(".") and stream.accept_phrase(
+            "each", "player", "discards", "cards", "the", "same", "way"
+        ):
+            same_way = True
+        else:
+            stream.reset(rider)
+    return ast.KeepChosenSacrificeRest(
+        chooser, pool, tuple(slots), discard_same_way=same_way,
+    )
 
 
 def parse_choose_each_then_return(

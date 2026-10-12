@@ -349,6 +349,8 @@ ZONE_INSTRUCTION_CATEGORIES: dict[str, str] = {
     # Scry moves cards within one library (CR 701.22a) — the same family as
     # mill and draw, so no new category and GRAMMAR_CATEGORIES is unchanged.
     "scry": "zones",
+    # Surveil is scry with the graveyard for the bottom (CR 701.25a).
+    "surveil": "zones",
     "exile_creature_gain_life_equal_to_power": "zones",
     "exile_target_creature_until_eot": "zones",
     # The permanent exiles. Same category as the temporary one, so

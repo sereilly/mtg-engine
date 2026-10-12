@@ -404,6 +404,14 @@ def _look_top_pick(ctx: PromptContext, choices: list) -> dict:
         "top_count": top_count,
         "card_name": choice.data.get("card_name", ""),
         "cards": [ctx.serialize_card(card) for card in pile_owner.library[:top_count]],
+        # What the pick *is*, which the family varies and the prompt has to be
+        # able to say: where the chosen card goes, where the rest go, and how
+        # many picks are still owed. Sealed Fate exiles from an opponent's
+        # pile and Bamboozle bins two of four, and a prompt that could only
+        # say "keep one" describes neither.
+        "pick_destination": choice.data.get("pick_destination", "hand"),
+        "rest_destination": choice.data.get("rest_destination", "library_bottom"),
+        "remaining": int(choice.data.get("remaining", 1)),
     }
 
 
@@ -860,6 +868,11 @@ def _scry(ctx: PromptContext, choices: list) -> dict:
         # the prompt still says "Scry 3" when only two cards are there.
         "amount": choice.data["amount"],
         "cards": [ctx.serialize_card(card) for card in owner.library[:top_count]],
+        # Where the cards the seat does not keep go: "bottom" is a scry
+        # (CR 701.22a) and "graveyard" a surveil (CR 701.25a). Sent because
+        # the one answer shape serves both and only the words on the prompt
+        # can tell the seat which it is deciding.
+        "destination": choice.data.get("destination", "bottom"),
     }
 
 

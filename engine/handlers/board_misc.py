@@ -3757,6 +3757,23 @@ def rebalance_lands(game: Game, instruction: OracleInstruction, context: OracleE
     return True, "pending_rebalance_lands"
 
 
+def keep_slots_sized(slots, fewest: int) -> list[dict]:
+    """*slots* with every keep that is sized by the table's minimum given that
+    number.
+
+    "…a number of permanents they control equal to the number of permanents
+    controlled by the player who controls the fewest" (Balancing Act) prints
+    no count: the lowering writes the word ``"fewest"`` where a printed keep
+    writes its number, and this is the one place the word becomes one — the
+    handler below with the minimum it measured, and the census of keep prompts
+    with a minimum it states, so both arm the prompt the same way.
+    """
+    return [
+        {**slot, "count": int(fewest)} if slot.get("count") == "fewest" else slot
+        for slot in (slots or ())
+    ]
+
+
 @effect_handler("keep_chosen_sacrifice_rest")
 def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Each player chooses from among the permanents they control an artifact,
@@ -3811,6 +3828,34 @@ def keep_chosen_sacrifice_rest(game: Game, instruction: OracleInstruction, conte
     # the docstring gives: one seat's lands leaving cannot change what another
     # seat controls.
     fate = payload.get("fate")
+    if any(slot.get("count") == "fewest" for slot in slots):
+        # "…a number of permanents they control equal to the number of
+        # permanents controlled by **the player who controls the fewest**"
+        # (Balancing Act). One number for the whole table, taken here before
+        # any seat answers (CR 608.2h) and over the same candidates the prompt
+        # offers, so "how many may I keep" and "which may I keep" are one
+        # reading of the noun.
+        held = {seat: game.keep_choice_candidates(seat, pool) for seat in seats}
+        fewest = min((len(found) for found in held.values()), default=0)
+        if fewest <= 0:
+            # Somebody controls none, so nobody keeps any: the rest is the
+            # whole pool, and with one legal answer nobody is asked. Gathered
+            # before any leaves.
+            for seat in seats:
+                gone = [
+                    permanent.card.name for permanent in held[seat]
+                    if game.sacrifice_permanent(permanent) is not None
+                ]
+                if gone:
+                    game.log.append(
+                        f"{game.players[seat].name} sacrificed {', '.join(gone)} "
+                        f"({card_name})"
+                    )
+            return True, "resolved"
+        slots = keep_slots_sized(slots, fewest)
+        # A seat already at the minimum keeps everything it has — no rest, no
+        # decision, no prompt.
+        seats = [seat for seat in seats if len(held[seat]) > fewest]
     for seat in seats:
         game.arm_keep_permanents(
             seat, pool=pool, slots=slots, reason=card_name, fate=fate,

@@ -47,7 +47,8 @@ import dataclasses
 
 from .. import ast
 from ..amounts import accept_fraction_head, accept_rounding, parse_amount, parse_equal_to
-from ..records import (accept_as_many_as, parse_for_each_revealed_this_way,
+from ..records import (_parse_for_each_this_way, accept_as_many_as,
+                       parse_for_each_revealed_this_way,
                        parse_for_each_sacrificed_this_way)
 
 from ..amounts import accept_counters_on_source
@@ -310,6 +311,22 @@ def _parse_mill(stream: TokenStream, player: ast.PlayerRef) -> ast.Statement:
         if counted is not None:
             return ast.Mill(player, counted)
         stream.reset(equal_mark)
+    # "mills **half their library**, rounded down" (Traumatize). A fraction
+    # whose noun is the pile itself rather than a count of anything, so there
+    # is no "cards" for the ordinary reading to end on — and it is the same
+    # quantity as "cards equal to half the number of cards in their library"
+    # two lines up, so it is the same node. The possessive is the miller's
+    # own, read rather than assumed: half of somebody else's library is a
+    # number about a different pile.
+    divisor = accept_fraction_head(stream)
+    if divisor is not None:
+        stream.expect_word("your" if player.kind == "you" else "their")
+        stream.expect_word("library")
+        pile = ast.ObjectFilter(
+            zone="library", is_card=True,
+            zone_owner=ast.PlayerRef("you" if player.kind == "you" else "owner"),
+        )
+        return ast.Mill(player, ast.Half(ast.CountOf(pile), accept_rounding(stream), divisor))
     count = parse_amount(stream)
     stream.expect_word("card", "cards")
     repeated = _parse_mill_repeat_tail(stream, player, count)
@@ -379,13 +396,18 @@ def _parse_mill_repeat_tail(
 
 
 def _parse_scry(stream: TokenStream) -> ast.Statement:
-    """``Scry N`` (CR 701.22a).
+    """``Scry N`` (CR 701.22a) and ``Surveil N`` (CR 701.25a).
 
     Unlike draw / discard / mill there is no trailing noun — the printed
     template is "Scry 3", never "scry 3 cards" — so the amount is the whole
     tail. An ``Amount`` rather than a digit because "Scry X" is printable and
     the amount parser already reads spelled-out numbers.
+
+    One production for both because they are one template with the verb
+    changed: the verb is which keyword action, and so which node.
     """
+    if stream.accept_word("surveil"):
+        return ast.Surveil(parse_amount(stream))
     stream.expect_word("scry")
     count = parse_amount(stream)
     return ast.Scry(count)
@@ -648,6 +670,22 @@ def _parse_reveal_hand_and_choose(stream: TokenStream) -> ast.Statement | None:
     if not stream.accept_phrase("from", "it"):
         stream.reset(mark)
         return None
+    # "…you choose a nonland card from it **for each card discarded this
+    # way**. That player discards **those cards**." (Last Rites.) The same
+    # choice made as many times as an earlier step recorded: the count is the
+    # record's, read by the one reader every "for each … this way" goes
+    # through, and the ending is the plural of the one below — required whole,
+    # because a count with no fate is a pick nothing spends.
+    per_recorded = _parse_for_each_this_way(stream)
+    if per_recorded is not None:
+        stream.accept_punct(".")
+        if not stream.accept_phrase("that", "player", "discards", "those", "cards"):
+            raise stream.error(
+                "expected 'that player discards those cards' after a counted pick"
+            )
+        return ast.RevealHandAndChoose(
+            player, chosen.filter, fate="discard", count=per_recorded,
+        )
     # Marked before the full stop, because the ending may not be this
     # production's — see the fall-through below.
     tail = stream.mark()
