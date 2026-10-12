@@ -195,6 +195,7 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
     stream.advance()
     owner = accept_zone_possessive(stream)
     every = False
+    each = False
     if owner is None:
         # "in **all graveyards**" (Kindle, Lhurgoyf). CR 400.1 gives every
         # player their own copy of the graveyard, hand and library, so the
@@ -223,6 +224,15 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
             # leaves a plural's bare apostrophe attached, so the word to accept
             # is "players'" rather than a noun and a punctuation mark.
             stream.accept_word("players'")
+        elif stream.at_word("each") and stream.peek_word(1) in _ZONE_NOUNS:
+            # "…for each card named ~ **in each graveyard**" (Life Burst). The
+            # same scope distributed: CR 400.1's one pile per seat, so "each
+            # graveyard" and "all graveyards" name one set of cards and a count
+            # over either is the same number. Read only directly in front of a
+            # zone noun — "in each player's graveyard" is a possessive, and its
+            # reader is the branch above.
+            stream.advance()
+            each = True
         else:
             stream.accept_word("a", "an", "the")
     noun = stream.peek_word()
@@ -245,7 +255,7 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
         # Never after "all": that scope has already named every seat, so a
         # possessive behind it would be a second answer to the same question
         # and this branch would quietly keep it.
-        if owner is None and not every and stream.accept_word("of"):
+        if owner is None and not every and not each and stream.accept_word("of"):
             owner = _parse_zone_owner_of(stream)
             if owner is None:
                 stream.reset(probe)
@@ -257,7 +267,7 @@ def accept_zone_scope(stream: TokenStream, d) -> bool | None:
         # `zone_owner` refuses any kind but "you", so a production that has not
         # been taught the scope declines the sentence rather than quietly
         # reading one pile.
-        d.zone_owner = ast.PlayerRef("each_player") if every else owner
+        d.zone_owner = ast.PlayerRef("each_player") if every or each else owner
         return True
     stream.reset(probe)
     return False

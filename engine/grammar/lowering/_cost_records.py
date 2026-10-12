@@ -126,7 +126,24 @@ def cost_record_spec(definition, node) -> dict[str, object] | None:
     same evaluator every other channel reader goes through — so a pump's X and
     a damage's amount cannot read one record two ways. A characteristic the
     evaluator cannot answer refuses, naming the channel.
+
+    "…where X is **1 plus** the exiled creature's mana value" (Food Chain,
+    Metamorphosis) is unwrapped here, so every reader of a cost record takes
+    the constant or none does: the sentence form (``_record_definitions``) had
+    its own unwrapping over two of the four channels, and the form riding a
+    ``Pump`` read all four and no constant. ``plus`` is the key ``_scaled``
+    applies at the one evaluation point. Only a printed constant on the
+    **left** and only addition, the one shape the pool prints — a subtraction
+    or a constant on the right stays wrapped and the caller's refusal answers,
+    rather than a sentence being read with its arithmetic silently changed.
     """
+    plus = 0
+    if (
+        isinstance(definition, ast.Plus)
+        and isinstance(definition.left, ast.Fixed)
+        and not isinstance(definition.right, ast.Fixed)
+    ):
+        plus, definition = definition.left.value, definition.right
     row = COST_RECORD_CHANNELS.get(type(definition))
     if row is None:
         return None
@@ -137,7 +154,10 @@ def cost_record_spec(definition, node) -> dict[str, object] | None:
             f"{type(definition).__name__} record",
             node=node,
         )
-    return {key: definition.characteristic}
+    spec: dict[str, object] = {key: definition.characteristic}
+    if plus:
+        spec["plus"] = plus
+    return spec
 
 
 def optional_cost_key(symbols: str) -> str:

@@ -40,6 +40,7 @@ from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
                        count_filter_on_targeted_seat, counted_definition_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
+from ._events import CAST_SPELL_EVENTS
 from ._record_definitions import lower_record_definition
 
 def _round_every_x_spec(
@@ -153,6 +154,7 @@ def lower_where_x(
     spec = counted_definition_spec(
         node.definition, node,
         rewrite=lambda filt: _count_filter_for(filt, inner, node, event),
+        event=event,
     )
     if spec is None:
         raise LoweringError("only a count can define X in a where-clause", node=node)
@@ -339,12 +341,6 @@ def _count_filter_for(filt, inner: tuple[OracleInstruction, ...], node, event=No
     return count_filter_on_targeted_seat(filt)
 
 
-#: Trigger conditions whose fire site freezes the spell that was cast
-#: (``cast_card`` in the trigger's context), so "that spell" in a where-clause
-#: has an object to be a characteristic of.
-_CAST_SPELL_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
-
-
 def _lower_where_x_characteristic(
     node: ast.WhereX,
     inner: tuple[OracleInstruction, ...],
@@ -381,7 +377,7 @@ def _lower_where_x_characteristic(
         # step to read the binding off — the firing event is what says which
         # spell. Under any other event "that spell" names nothing frozen, and
         # the resolver would read a zero.
-        if event not in _CAST_SPELL_EVENTS:
+        if event not in CAST_SPELL_EVENTS:
             raise LoweringError(
                 "'that spell' names the spell a cast trigger fired on, and "
                 "this event freezes none", node=node,

@@ -274,6 +274,30 @@ def test_aether_burst_with_every_target_gone_does_nothing(set_pool):
     assert any("608.2b" in line for line in game.log)
     assert game.players[1].hand == []
 
+
+# --- Life Burst: "…for each card named ~ in each graveyard" -------------------
+
+def test_life_burst_gains_four_then_four_per_burst_in_each_graveyard(set_pool):
+    """One Life Burst in each graveyard: 4, then 8 more. "In each graveyard" is
+    "in all graveyards" distributed (CR 400.1: one pile per seat), and the copy
+    being cast is still on the stack."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Life Burst"], gy0=["Life Burst"],
+        gy1=["Life Burst", "Forest"],
+    )
+    assert game.cast_from_hand(0, "Life Burst", target_player_index=0).supported
+    _w1g4_resolve_stack(game)
+    assert (game.players[0].life, game.players[1].life) == (32, 20)
+
+
+def test_life_burst_names_its_player_and_gives_the_plain_four(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Life Burst"])
+    spec = game.cast_target_spec(0, set_pool("ODY")["Life Burst"])
+    assert spec["kind"] == "player" and spec["requires_target"]
+    assert game.cast_from_hand(0, "Life Burst", target_player_index=1).supported
+    _w1g4_resolve_stack(game)
+    assert (game.players[0].life, game.players[1].life) == (20, 24)
+
 # ==== end W1G4 ======================================================
 
 

@@ -210,6 +210,17 @@ def accept_name_comparison(
     # and the two cannot both claim it.
     if stream.accept_phrase("the", "same", "name", "as", "that", "card"):
         return "recorded"
+    # "…the number of cards in all graveyards **with the same name as that
+    # spell**" (Aven, Cabal, Dwarven and Nantuko Shrine; Cephalid Shrine prints
+    # "as **the** spell"). The firing event's object again — a cast event is
+    # about the spell that was cast — so it is the relation "that creature"
+    # names one branch down and takes its return value. Which events froze a
+    # spell is the lowering's to ask: a reader not written for a cast event
+    # refuses the key by the event's name.
+    if stream.accept_phrase("the", "same", "name", "as", "that", "spell") or (
+        stream.accept_phrase("the", "same", "name", "as", "the", "spell")
+    ):
+        return "event"
     if stream.accept_phrase("the", "same", "name", "as", "that"):
         from .vocabulary import CARD_TYPES
 

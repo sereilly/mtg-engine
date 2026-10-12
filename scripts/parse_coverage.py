@@ -109,6 +109,7 @@ from engine.cast_timing import (flash_permission_sentence,  # noqa: E402
 from engine.replacements import replacement_claims_line  # noqa: E402
 from engine.life_prohibitions import life_gain_ban_line  # noqa: E402
 from engine.target_requirements import must_choose_claims_line  # noqa: E402
+from engine.counted_names import counts_as_claims_line  # noqa: E402
 from engine.cost_modifiers import (cost_modifier_claims_line,  # noqa: E402
                                   cost_modifier_reduction_sentences,
                                   cost_modifiers_for)
@@ -503,6 +504,12 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # the pickers in front of them — its own channel, asking the reader those
     # paths enforce through.
     ("target_requirements.py", must_choose_claims_line),
+    # "If this card is in a graveyard, effects from spells named Flame Burst
+    # count it as a card named Flame Burst." (Pardic Firecat, Diligent
+    # Farmhand.) Read off the card in the graveyard by the one name test every
+    # zone count asks (handlers/_common._card_matches_filter), so the sentence
+    # has no instruction and this channel asks that test's own matcher.
+    ("counted_names.py", counts_as_claims_line),
     # A printed additional cost (CR 601.2b). Not an instruction — a cost is not
     # an effect — so the sentence would read as unclaimed without this, which
     # is what it *should* have read while the phrase sat in the spell-pattern

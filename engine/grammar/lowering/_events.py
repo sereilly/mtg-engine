@@ -188,6 +188,25 @@ EVENT_SUBJECT_NAMES: frozenset[str] = frozenset({
 })
 
 
+#: Trigger events whose fire site freezes **the spell that was cast** — its own
+#: stack object as ``cast_item`` and its card as ``cast_card``
+#: (``mixins/oracle_instructions._apply_spell_cast_any_triggers``) — so "that
+#: spell" under one of them names an object: its mana value (Pure Reflection),
+#: its mana cost (Invoke Prejudice's toll), its **name** (Bazaar of Wonders,
+#: the five Shrines).
+#:
+#: One table because there were three, and they disagreed. ``where_x`` and
+#: ``conditions`` each kept ``{"player_casts_spell", "spell_cast"}`` — the
+#: first a kind no fire site emits — and ``control_flow`` kept the pair below,
+#: so "that spell" had an antecedent under an opponent-scoped cast trigger in
+#: one sentence position and none in the other two. Membership is a claim
+#: about a stamp, as it is for the table above: an event joins when its emit
+#: carries both keys.
+CAST_SPELL_EVENTS: frozenset[str] = frozenset({
+    "spell_cast", "opponent_casts_spell",
+})
+
+
 #: Trigger events whose fire site stamps the object the event was about onto the
 #: **stack item** (``target_permanent_id``), so an effect may say "that <noun>"
 #: or "the other <noun>" and mean it — and the ordinary targeted handler

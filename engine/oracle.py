@@ -5546,6 +5546,16 @@ def _is_supported_static_creature_line(line: str, card_name: str | None = None) 
 
     if must_choose_claims_line(normalized):
         return True
+    # "If this card is in a graveyard, effects from spells named Flame Burst
+    # count it as a card named Flame Burst." (Pardic Firecat, Diligent
+    # Farmhand.) A static that functions in the graveyard (CR 113.6b) and
+    # widens what one spell's name count sees — read off the card's own text by
+    # the count's name test (engine/counted_names.py), so there is no
+    # instruction. Asked of the reader that test asks.
+    from .counted_names import counts_as_claims_line
+
+    if counts_as_claims_line(normalized):
+        return True
     # "You can't cast creature spells." (Steel Golem.) CR 601.3a scoped to the
     # permanent's own controller, enforced off the board at every cast — so
     # like every table above it produces no instruction, and a creature whose
@@ -7100,6 +7110,14 @@ def _derived_static_claims(
 
     if any(must_choose_claims_line(line) for line in oracle_text.splitlines()):
         claims.append(TARGET_REQUIREMENTS_CLAIM)
+    # "If this card is in a graveyard, effects from spells named ~ count it as
+    # a card named ~." (Pardic Firecat's line, on whatever prints it.) Read off
+    # the card in the graveyard by the count's own name test, so no instruction.
+    from .counted_names import CLAIM as COUNTED_NAMES_CLAIM
+    from .counted_names import counts_as_claims_line
+
+    if any(counts_as_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(COUNTED_NAMES_CLAIM)
     # "Players play with their hands revealed." (Revelation.) The per-seat
     # state payload derives who may see whose hand from the permanent's own
     # text (engine/revealed_hands.py), so there is no instruction — and on an

@@ -37,7 +37,7 @@ from ._amounts import (count_spec, counted_definition_spec,
                        _per_each_amount, _per_each_offset)
 from ._common import (chargeable_card_filter, _describe_targets,
                       _filter_payload, _is_enchanted, _is_source,
-                      _is_target)
+                      _is_target, _restrictions_beyond)
 from ._cost_records import cost_record_spec
 from ._events import _EVENT_SUBJECT_OBJECTS
 
@@ -467,7 +467,8 @@ def lower_counted_pump(
 # durational pump can read once and a continuous one cannot read again.
 # ---------------------------------------------------------------------------
 def _x_definition_spec(
-    definition: ast.Amount, node, *, recorded: "frozenset[str] | None" = None
+    definition: ast.Amount, node, *, recorded: "frozenset[str] | None" = None,
+    event: str | None = None,
 ) -> dict:
     """The spec behind a where-clause's X, whichever aggregate it names.
 
@@ -495,7 +496,9 @@ def _x_definition_spec(
     # multiplier and the offset already have. Unwrapped first because it is not
     # a definition at all: it is an arithmetic over whichever one follows.
     if isinstance(definition, ast.Half):
-        spec = _x_definition_spec(definition.of, node, recorded=recorded)
+        spec = _x_definition_spec(
+            definition.of, node, recorded=recorded, event=event
+        )
         spec["half"] = definition.rounding
         # Omitted at 2, so every spec written before fractions existed stays
         # byte-identical (see `ast.Half`).
@@ -508,7 +511,12 @@ def _x_definition_spec(
     # only where a resolution reads this spec: the durationless caller is a
     # layer 7c recompute, which asks ``evaluate_count`` and never the function
     # that subtracts.
-    counted = counted_definition_spec(definition, node, nested=recorded is not None)
+    # *event* reaches the count for the one narrowing that reads it ("…with
+    # the same name as that spell"), and only from the durational caller: a
+    # continuous pump has no trigger whose context could still be read.
+    counted = counted_definition_spec(
+        definition, node, nested=recorded is not None, event=event
+    )
     if counted is not None:
         return counted
     if isinstance(definition, ast.CountersOnSource):
@@ -538,6 +546,18 @@ def _x_definition_spec(
         # named, and the resolution reads the characteristic off it — mana
         # value off the card (CR 202.3), power and toughness through the layers
         # (CR 613), which is the resolution's business rather than this one's.
+        #
+        # A spelled-out referent may only restate the kind of object ("that
+        # **creature**'s power", Nantuko Mentor). "The **tapped** creature's
+        # power" parses as this node too, and names what a *cost* tapped:
+        # read here it sized the pump by its own target's power. The
+        # sentence form refuses the same phrase (``where_x._referent_role``).
+        if definition.referent is not None and _restrictions_beyond(
+            definition.referent, frozenset({"card_types", "subtypes"})
+        ):
+            raise LoweringError(
+                "a where-clause referent this pump cannot name", node=node
+            )
         return {
             "object_characteristic": {
                 "object": "target",

@@ -26,7 +26,8 @@ from ...oracle_types import OracleInstruction, TAPPED_THIS_WAY, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._common import dropped_narrowings
-from ._events import _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER
+from ._events import (CAST_SPELL_EVENTS, _EVENT_SUBJECT_PLAYERS,
+                      EVENT_SUBJECT_PLAYER)
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,14 @@ _COUNTABLE_ZONES = ("battlefield", "graveyard", "hand", "exile", "library")
 # behind the count actually answers: a key admitted here and unanswered there is
 # a narrowing dropped on the floor, and a count that ignores its adjective is
 # larger than the card printed.
-_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter"})
+_CARD_ZONE_KEYS = frozenset({"type_filter", "named", "color_filter", "named_from"})
+
+#: The spec's spelling of "…with the same name as **that spell**": a name no
+#: lowering can know, carried as *whose* name it is. ``count_spec_in_resolution``
+#: turns it into an ordinary ``named`` where the trigger's context is in hand,
+#: and a card matcher that meets it unresolved answers no — a count of nothing
+#: rather than of every card in the zone.
+NAMED_FROM_TRIGGERING_SPELL = "triggering_spell"
 
 #: Narrowings a count cannot apply even on the battlefield.
 #:
@@ -203,7 +211,7 @@ def count_filter_on_targeted_seat(
 
 def count_spec(
     filt: "ast.ObjectFilter", node, *, aggregate: str = "count", multiplier: int = 1,
-    offset: int = 0,
+    offset: int = 0, event: str | None = None,
 ) -> dict:
     """What ``count_from_payload`` needs to take this count at resolution.
 
@@ -211,10 +219,38 @@ def count_spec(
     amount that *is* one ("draw cards equal to the number of …"). They ask the
     same question of the same noun phrase, so a restriction one of them refused
     and the other silently dropped would be the same count meaning two things.
+
+    *event* is the trigger condition the sentence is printed under, for the one
+    narrowing that reads it — a name the firing event froze. A caller that
+    passes none refuses that phrase rather than counting without it.
     """
     if filt.zone not in _COUNTABLE_ZONES:
         raise LoweringError(f"no count reads the {filt.zone}", node=node)
     payload = dict(filt.to_payload())
+    # "…the number of cards in all graveyards **with the same name as that
+    # spell**" (Aven, Cabal, Cephalid, Dwarven and Nantuko Shrine). CR 201.2a
+    # against the spell the cast trigger fired on — a stack object the fire
+    # site froze (``cast_item``), whose name no lowering can know. So the key
+    # says whose name, and the resolution turns it into ``named``.
+    #
+    # Gated on the events that freeze a spell, like every reader of the phrase:
+    # under any other the words name nothing and the count would be of no card
+    # at all, on a card reporting supported. And only off the battlefield — a
+    # permanent's name is computed (CR 707.2) and the matcher behind a
+    # battlefield count has no key for the relation.
+    if payload.pop("name_from_event", None):
+        if event not in CAST_SPELL_EVENTS:
+            raise LoweringError(
+                "'the same name as that spell' names the spell a cast trigger "
+                f"fired on, and no event named {event!r} freezes one",
+                node=node,
+            )
+        if filt.zone == "battlefield" or "named" in payload:
+            raise LoweringError(
+                "a count compares a spell's name with cards in a zone, once",
+                node=node,
+            )
+        payload["named_from"] = NAMED_FROM_TRIGGERING_SPELL
     # The same gate `_filter_payload` puts in front of every other consumer of a
     # noun phrase, and it was missing here: `to_payload` emits nothing for a
     # *relative* narrowing, so "for each creature **blocking it**" reduced to
@@ -517,7 +553,8 @@ _SET_AGGREGATES: dict[type, str] = {
 
 
 def counted_definition_spec(
-    definition: "ast.Amount", node, *, rewrite=None, nested: bool = True
+    definition: "ast.Amount", node, *, rewrite=None, nested: bool = True,
+    event: str | None = None,
 ) -> dict | None:
     """The spec for an X defined as **an aggregate over a set, and the printed
     arithmetic on it** — or None when *definition* is not one.
@@ -552,7 +589,7 @@ def counted_definition_spec(
     knows the sentence. *nested* says whether a count may be taken off a count
     (``minus_count``): only ``count_from_payload`` evaluates one, so a reader
     asked through ``evaluate_count`` alone — a CR 613 recompute — refuses the
-    shape instead of dropping the subtrahend.
+    shape instead of dropping the subtrahend. *event* is :func:`count_spec`'s.
     """
     if rewrite is None:
         rewrite = lambda filt: filt  # noqa: E731 - the identity, named above
@@ -566,7 +603,7 @@ def counted_definition_spec(
             raise LoweringError(
                 "a continuous X cannot be one count minus another", node=node
             )
-        subtracted = count_spec(rewrite(definition.right.filter), node)
+        subtracted = count_spec(rewrite(definition.right.filter), node, event=event)
         definition = definition.left
     plus = 0
     if isinstance(definition, (ast.Plus, ast.Minus)):
@@ -584,7 +621,8 @@ def counted_definition_spec(
     if aggregate is None:
         return None
     spec = count_spec(
-        rewrite(definition.filter), node, aggregate=aggregate, multiplier=factor
+        rewrite(definition.filter), node, aggregate=aggregate, multiplier=factor,
+        event=event,
     )
     if plus:
         spec["plus"] = plus

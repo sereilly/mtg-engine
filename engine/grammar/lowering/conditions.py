@@ -30,7 +30,8 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_filter_on_frozen_seat, count_spec
 from ._common import _is_enchanted, testable_filter_payload
-from ._events import (ATTACHED_PERMANENT_CONTROLLER, CHOSEN_PERMANENT,
+from ._events import (ATTACHED_PERMANENT_CONTROLLER, CAST_SPELL_EVENTS,
+                      CHOSEN_PERMANENT,
                       _EVENT_SUBJECT_OBJECTS,
                       _EVENT_SUBJECT_PLAYERS, EVENT_SUBJECT_PLAYER,
                       names_attached_permanent)
@@ -119,7 +120,8 @@ def _condition_seat(condition, player, event, what: str) -> str:
 #: Only a cast trigger does today (``cast_card`` in the trigger's context), and
 #: the set is the gate rather than a comment: a condition asking about a name
 #: nobody recorded answers False forever, which is an ability that never fires.
-_SAME_NAME_EVENTS = frozenset({"player_casts_spell", "spell_cast"})
+#: The floor's one table of those events, under the name this reader asks by.
+_SAME_NAME_EVENTS = CAST_SPELL_EVENTS
 
 
 def _subject_could_be_counted(event_subject, counted) -> bool:

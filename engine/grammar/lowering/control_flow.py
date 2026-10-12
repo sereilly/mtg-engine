@@ -50,7 +50,8 @@ from ._collapses import (offered_seat_performs, without_restated_target,
                          _each_player_optional_tap,
                          _referent_seat_optional_draw)
 from ._common import _amount_payload, _is_source, variable_mana_payload
-from ._events import (EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER,
+from ._events import (CAST_SPELL_EVENTS, EVENT_SUBJECT_CONTROLLER,
+                      EVENT_SUBJECT_PLAYER,
                       _DEFENDING_PLAYER_EVENTS, _EVENT_SUBJECT_CONTROLLERS,
                       _EVENT_SUBJECT_PLAYERS, LOOP_BOUND_OBJECT,
                       frozen_seat_record)
@@ -184,7 +185,7 @@ _ENUMERATED_PAYERS: dict[str, str] = {
 
 #: The events whose fire site records the spell cast (``cast_card``), so "that
 #: spell's mana cost" names an object.
-_CAST_SPELL_EVENTS = frozenset({"spell_cast", "opponent_casts_spell"})
+_CAST_SPELL_EVENTS = CAST_SPELL_EVENTS
 
 
 def _lower_unless_player_pays(

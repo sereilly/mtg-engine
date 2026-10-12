@@ -200,7 +200,7 @@ def _lower_pump(
         # nothing, which refuses the shape outright — see
         # ``_x_definition_spec``.
         definition_spec = _x_definition_spec(
-            node.x_definition, node, recorded=produced
+            node.x_definition, node, recorded=produced, event=event
         )
         # Only the characteristics the card writes as X are variable: "+X/+0"
         # pumps power alone, so the literal half stays literal.
