@@ -1985,6 +1985,93 @@ def test_w1g9_the_groups_cards_through_whole_simulated_games():
 # ==== W2G3 ============================================================
 # W2G3's tests go between this line and the "end W2G3" line.
 
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState
+from engine.models import Permanent as _w2g3_Permanent
+from tests.helpers import resolve_stack as _w2g3_resolve_stack
+
+#: Where the borrowed cards were first printed; every other name is Apocalypse's.
+_W2G3_SANCTUARY_HOMES = {
+    "White Knight": "LEA", "Hill Giant": "LEA", "Grizzly Bears": "LEA", "Forest": "LEA",
+}
+
+
+def _w2g3_sanctuary_upkeep(set_pool):
+    """Seat 0 — a person, so CR 603.3d's choice is asked rather than defaulted
+    — controls a Raka Sanctuary and a white permanent; seat 1 controls a Hill
+    Giant and a Grizzly Bears. Seat 0's upkeep has begun and the Sanctuary's
+    trigger is on the stack waiting for its target. Returns the game and seat
+    1's two creatures."""
+    forest = set_pool("LEA")["Forest"]
+    game = _w2g3_Game(players=[
+        _w2g3_PlayerState(name="P0", library=[forest] * 6),
+        _w2g3_PlayerState(name="P1", library=[forest] * 6),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = {0}
+    game.active_player_index = 0
+    placed = []
+    for seat, name in (
+        (0, "Raka Sanctuary"), (0, "White Knight"), (1, "Hill Giant"), (1, "Grizzly Bears"),
+    ):
+        perm = _w2g3_Permanent(
+            card=set_pool(_W2G3_SANCTUARY_HOMES.get(name, "APC"))[name]
+        )
+        game._put_permanent_onto_battlefield(seat, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        placed.append(perm)
+    game.resolve_upkeep(0, defer_priority=True)
+    return game, placed[2], placed[3]
+
+
+def test_w2g3_raka_sanctuary_does_not_hit_the_creature_beside_a_target_that_left(set_pool):
+    """"…this enchantment deals 1 damage to **target creature**." Its
+    controller chooses the Hill Giant as the trigger goes on the stack (CR
+    603.3d), and the Giant leaves the battlefield in response. CR 608.2b: the
+    one target is illegal, so the ability does not resolve — where it used to
+    deal its damage to the Grizzly Bears, which had slid into the Giant's
+    battlefield slot and which nobody chose."""
+    game, giant, bears = _w2g3_sanctuary_upkeep(set_pool)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+
+    game.remove_from_battlefield(giant)
+    game.players[1].graveyard.append(giant.card)
+    _w2g3_resolve_stack(game)
+
+    assert (
+        "Raka Sanctuary ability was removed from the stack: "
+        "every target is illegal (608.2b)"
+    ) in game.log, game.log[-4:]
+    assert bears.damage_marked == 0, game.log[-4:]
+    assert not game.stack
+
+
+def test_w2g3_raka_sanctuary_does_not_hit_a_target_that_gained_protection(set_pool):
+    """The same trigger, its chosen target still on the battlefield but given
+    protection from red in response (Raka Sanctuary is a red enchantment): not
+    a creature the ability could name any more, so not one it damages."""
+    assert set_pool("APC")["Raka Sanctuary"].colors == ("R",)
+    game, giant, _bears = _w2g3_sanctuary_upkeep(set_pool)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+
+    giant.metadata["protection_from_red"] = True
+    _w2g3_resolve_stack(game)
+
+    assert giant.damage_marked == 0, game.log[-4:]
+    assert any("every target is illegal (608.2b)" in line for line in game.log)
+
+
+def test_w2g3_raka_sanctuary_still_deals_its_damage_to_a_legal_target(set_pool):
+    """The other direction: nothing happens in response, and the chosen
+    creature takes the 1 damage one colour buys."""
+    game, giant, bears = _w2g3_sanctuary_upkeep(set_pool)
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+
+    _w2g3_resolve_stack(game)
+
+    assert giant.damage_marked == 1, game.log[-4:]
+    assert bears.damage_marked == 0
+    assert not any("608.2b" in line for line in game.log)
+
 # ==== end W2G3 ========================================================
 
 # ==== W2G4 ============================================================

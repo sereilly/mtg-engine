@@ -4052,10 +4052,15 @@ class LegalityMixin:
         (Topple): every narrowing the picker enforced is re-enforced here
         without being re-read. The shapes that question does not cover are
         named in :func:`_resolution_rechecks_description`. A spell with several
-        targets still resolves while **any** one is legal; the illegal ones are
-        each left alone by their handler's own resolver (608.2b's last
-        sentence), which is what the census over the pool's multi-target spells
-        found every one of them already doing.
+        targets still resolves while **any** one is legal, and the illegal ones
+        are blanked out of its announcement before any instruction runs
+        (:meth:`blank_illegal_resolution_targets`, 608.2b's last sentence).
+        This paragraph used to say each was "left alone by its handler's own
+        resolver, which is what the census over the pool's multi-target spells
+        found every one of them already doing" — true of a target that had
+        *left* or stopped answering a description the handler re-read, and
+        never asked of one that had merely become untargetable: 42 of the 48
+        acted on a first target given shroud in response.
 
         **A spell that can target a player is answered too** — "any target", a
         divided one, a player-targeted one — through

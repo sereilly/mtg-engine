@@ -2522,9 +2522,13 @@ def pick_target_permanent(
             # creature's slot and the islandwalk landed there too; War Barge,
             # Runesword, the two Kjeldoran guards, Phantasmal Mount, Goblin
             # Sappers, Whippoorwill and Merieke Ri Berit all read the same
-            # resolver. The spells are already refused above the instructions
-            # (``legality.illegal_targets_refusal``); an activated ability has
-            # no such gate, so the fizzle has to be here.
+            # resolver. A spell, an activated ability and a trigger whose
+            # target was chosen are refused above the instructions when
+            # *every* target is gone (``legality.illegal_targets_refusal``);
+            # this is what is left for the object that still resolves because
+            # another of its targets is legal, and for a trigger whose target
+            # a fire site stamped — and it is the reading a slot blanked by
+            # ``blank_illegal_resolution_targets`` is given on purpose.
             return None
         # Scoped to *player* on purpose: the callers pass the battlefield the
         # target was chosen from ("a creature you control", "target artifact an
