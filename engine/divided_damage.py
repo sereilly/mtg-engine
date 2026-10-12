@@ -145,6 +145,32 @@ def announced_division(entries) -> list[int] | None:
     return [int(amount) for amount in amounts]
 
 
+def announced_no_targets(entries, described) -> bool:
+    """Whether *entries* is the announcement of **no targets at all** by a
+    spell that may make one.
+
+    "Shower of Coals deals 2 damage to each of **up to** three targets." CR
+    115.6: "A spell or ability that requires targets may allow zero targets to
+    be chosen." The cast path writes that announcement down as an empty list
+    (``casting._cast_onto_stack``, beside :func:`division_refusal`'s arm that
+    admits it), and this is the resolution's reader: an explicit ``[]`` on a
+    description that is :data:`EACH` under a printed ceiling.
+
+    Both halves are needed. ``None`` is "this channel was not used" — the
+    older single-target announcement every scripted duel still makes — and an
+    empty list on any other division is a caller's default, not a statement
+    (Fireball named through ``target_player_index`` with ``divided_targets=[]``
+    is one target, and has always resolved as one).
+    """
+    return (
+        isinstance(entries, (list, tuple))
+        and not entries
+        and isinstance(described, dict)
+        and described.get("division") == EACH
+        and described.get("max_targets") is not None
+    )
+
+
 def card_shares(total: int, count: int, *, division: str, shares) -> list[int]:
     """What each of *count* targets takes when the **card** sets the shares.
 
@@ -256,9 +282,19 @@ def division_refusal(
         if not entries:
             return None
     if not entries:
-        return None if named_targets else (
-            "a divided spell must have at least one target (CR 601.2d)"
-        )
+        if named_targets:
+            return None
+        if division == EACH and max_targets is not None:
+            # "…to each of **up to** three targets" (Shower of Coals). A
+            # ceiling on an :data:`EACH` list is the printed "up to", and CR
+            # 115.6 lets such a spell choose zero: "A spell or ability that
+            # requires targets may allow zero targets to be chosen." Nothing is
+            # divided here (each target named takes the whole amount), so
+            # CR 601.2d's "one or more targets" — the floor below — is not this
+            # spell's rule. A :data:`CHOSEN` ceiling is "among one, two, or
+            # three" and keeps the floor.
+            return None
+        return "a divided spell must have at least one target (CR 601.2d)"
     if max_targets is not None and len(entries) > max_targets:
         return (
             f"this spell has at most {max_targets} targets "
@@ -377,6 +413,35 @@ def divided_instruction(instructions):
     return None
 
 
+def conditional_division(instructions):
+    """``(condition, replacing arm's step, base arm's step)`` when the program's
+    division is one **both arms of a resolution-time condition announce**, else
+    None.
+
+    The pair :func:`_divided_in_both_arms` reads, handed out whole for the one
+    reader that must not take either arm on trust: the picker's
+    ``division_total`` (``legality.cast_target_spec``), which says how much each
+    target is dealt and can only say it of the arm the board selects *now*.
+    :func:`divided_instruction` returns the replacing arm because the list is
+    the same in both; the amount is not.
+    """
+    for instruction in instructions:
+        if instruction.kind == "sequence":
+            found = conditional_division(instruction.payload.get("steps") or ())
+            if found is not None:
+                return found
+            continue
+        if instruction.kind != "if_then" or _divided_in_both_arms(instruction) is None:
+            continue
+        payload = instruction.payload or {}
+        return (
+            payload.get("condition") or {},
+            divided_instruction(tuple(payload.get("then") or ())),
+            divided_instruction(tuple(payload.get("else") or ())),
+        )
+    return None
+
+
 def _divided_in_both_arms(conditional):
     """The divided instruction of an ``if_then`` whose **two arms announce the
     same list**, or None.
@@ -429,7 +494,8 @@ def divided_description(instructions) -> tuple[dict, dict] | None:
 
 __all__ = [
     "CARD_DIVIDED", "CHOSEN", "DIVIDED_TARGETS", "EACH", "EVENLY", "FIXED",
-    "announced_division", "card_shares", "divide", "divided_description",
+    "announced_division", "announced_no_targets", "card_shares",
+    "conditional_division", "divide", "divided_description",
     "divided_entry", "divided_entry_id", "divided_instruction",
     "division_refusal", "stamp_card_shares", "stamped_entry",
 ]

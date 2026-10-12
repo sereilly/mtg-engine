@@ -1254,6 +1254,48 @@ class LegalityMixin:
         context = OracleExecutionContext(caster=caster, target=caster, card=card)
         return max(0, int(count_from_payload(self, context, spec)))
 
+    def _size_conditional_division(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> None:
+        """Make a divided spec's ``division_total`` the amount of the arm the
+        board selects **now**, where the card prints two.
+
+        "Shower of Coals deals 2 damage to each of up to three targets. …
+        deals 4 damage to each of those permanents and/or players instead if
+        there are seven or more cards in your graveyard." One list, two
+        amounts, and the amount is settled as the spell resolves (CR 608.2h).
+        The card-level spec carries the replacing arm's (``derive_cast_spec``
+        has no game to ask), so a picker and the AI's "how much does each
+        target take" were told 4 over a graveyard of none.
+
+        Asked through the resolution's own evaluator with the caster's game as
+        it stands — the answer a spell cast and resolved now would get. It can
+        still change before the spell resolves, which is the rule; what this
+        stops is the spec naming a number the present board contradicts.
+
+        A condition settled at the cast (``was_kicked``) is not this:
+        ``divided_damage.conditional_division`` hands back only the
+        resolution-time kind, and the kicker's arm is already chosen by the
+        announcement the spec was derived for.
+        """
+        from .divided_damage import conditional_division
+        from .game_types import OracleExecutionContext
+        from .handlers.control_flow import evaluate_condition
+
+        arms = conditional_division(compile_card_oracle(card).instructions)
+        if arms is None:
+            return
+        condition, replacing, base = arms
+        caster = self.players[caster_index]
+        holds = evaluate_condition(
+            self,
+            OracleExecutionContext(caster=caster, target=caster, card=card),
+            condition,
+        )
+        amount = (replacing if holds else base).payload.get("amount")
+        if isinstance(amount, int) and not isinstance(amount, bool):
+            spec["division_total"] = amount
+
     def cast_target_spec(
         self,
         caster_index: int,
@@ -1337,6 +1379,8 @@ class LegalityMixin:
             mode_index=mode_index,
         ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
+        if spec.get("kind") == "divided" and mode_index is None:
+            self._size_conditional_division(caster_index, card, spec)
         # CR 107.3c: a spell that defines its own X takes the announcement away
         # from the caster, so the picker must not ask for one — and a divided
         # spell's caster needs the number *before* announcing the division

@@ -136,6 +136,12 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     # A three-tuple only where a share was announced (CR 601.2d): the two-tuple
     # is what every evenly-divided spell and every non-interactive caller sends,
     # and `engine/divided_damage.divided_entry` reads both.
+    #
+    # **An empty list is forwarded as one**, not as an absent field: "each of
+    # up to three targets" (Shower of Coals) may be cast naming nobody
+    # (CR 115.6), and `[]` is how a client says so — the default seat below
+    # rides every cast, so without the list the engine reads a face. For every
+    # other spell an empty list and an absent one are the same announcement.
     divided = (
         [
             (entry.seat, entry.index)
@@ -143,7 +149,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             else (entry.seat, entry.index, entry.amount)
             for entry in req.divided_targets
         ]
-        if req.divided_targets
+        if req.divided_targets is not None
         else None
     )
     return game.queue_from_hand(

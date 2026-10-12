@@ -35,8 +35,8 @@ from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
                                    cast_x_value, defines_cast_x, floors_cast_x)
 from ...damage_ledger import record_cast
 from ...divided_damage import (
-    CARD_DIVIDED, EVENLY, card_shares, divided_description, divided_entry,
-    division_refusal, stamp_card_shares, stamped_entry,
+    CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
+    divided_entry, division_refusal, stamp_card_shares, stamped_entry,
 )
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...faces import choose_a_face_refusal, holds_spell_named, spell_named
@@ -1611,6 +1611,14 @@ class SpellCastingMixin:
 
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
+        #
+        # Whether the caller sent the list **empty** is kept, because the
+        # cleaning below folds an empty list into "no list": for the one shape
+        # that may name nobody ("each of up to three targets") an explicit
+        # empty list is that announcement, and the division gate reads it.
+        named_no_division_targets = (
+            divided_targets is not None and not divided_targets
+        )
         if divided_targets is not None:
             cleaned: list[tuple] = []
             for entry in divided_targets:
@@ -1909,15 +1917,16 @@ class SpellCastingMixin:
                 _card_divided_target_count(found[1], resolved_x_value)
                 if division in CARD_DIVIDED else None
             )
+            named_outside = _named_divided_targets(
+                card, from_zone, target_player_index,
+                target_permanent_index, target_permanent_ids,
+            )
             refusal = division_refusal(
                 total,
                 divided_targets or (),
                 division=division,
                 max_targets=found[1].get("max_targets"),
-                named_targets=_named_divided_targets(
-                    card, from_zone, target_player_index,
-                    target_permanent_index, target_permanent_ids,
-                ),
+                named_targets=named_outside,
                 exact_targets=exact,
             )
             if refusal is not None:
@@ -1925,12 +1934,46 @@ class SpellCastingMixin:
                 return SimulationResult(
                     card.name, False, classification.effect_kind, refusal,
                 )
+            # "…to each of **up to** three targets" (Shower of Coals), cast
+            # naming nobody (CR 115.6). Written onto the announcement as the
+            # empty list it is — and an *explicit* empty list is that
+            # announcement whatever seat the cast also carries, because every
+            # cast over the wire carries one. Without the mark the resolution
+            # could not tell "nobody" from "nothing said", and a spell that
+            # targets nothing went looking for the default opponent's face.
+            #
+            # The seat is dropped with it: a spell that chose no target has
+            # none (CR 115.6 — "targeted only if one or more targets have been
+            # chosen"), and a seat left on the stack object would be read back
+            # as a player it targets. A *permanent* named outside the list is
+            # a target and keeps the announcement what it was.
+            names_a_permanent = bool(target_permanent_ids) or (
+                target_permanent_index is not None
+            )
+            if (
+                division == EACH
+                and found[1].get("max_targets") is not None
+                and not divided_targets
+                and not names_a_permanent
+                and (named_no_division_targets or not named_outside)
+            ):
+                divided_targets = []
+                target_player_index = None
             # The card's own shares, written onto the announcement now that it
             # is known to be legal. Here rather than at resolution because the
             # share has to ride its target: a target that has left is dropped
             # from the list (CR 608.2b), and a share read by position after that
             # would slide Cone of Flame's 3 onto the creature it assigned 2.
-            if division in CARD_DIVIDED and divided_targets:
+            #
+            # **Printed shares only** (:data:`FIXED`). An :data:`EACH` entry
+            # was stamped too, with "the whole amount" — a number the
+            # resolution settles, not the announcement (CR 608.2h): Shower of
+            # Coals deals 2 or 4 by the graveyard it finds, and its entries
+            # read 4 on a board where it would deal 2. ``divide`` has never
+            # read the stamp for ``EACH``, so the number said nothing true and
+            # nothing was asked of it; an entry with no amount is what "the
+            # card supplies it as it resolves" looks like.
+            if division == FIXED and divided_targets:
                 divided_targets = stamp_card_shares(
                     divided_targets,
                     card_shares(
