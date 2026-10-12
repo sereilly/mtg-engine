@@ -1691,6 +1691,103 @@ def test_w1g8_steam_vines_gone_in_response_still_destroys_and_burns(set_pool):
     assert _w1g8.pile(game, 0) == ["Steam Vines"], "and it does not come back"
     assert _w1g8.names(game, 0) == ["Mountain"]
 
+
+# --- driven: the four enchantments that compiled on the day of the ingest ---
+# Each given a game through its whole text; this is what the game showed.
+
+def _w1g8_dies(game, permanent):
+    _w1g8.leave(game, permanent)
+    _w1g8.settle(game)
+
+
+def test_w1g8_battle_strain_burns_the_controller_of_each_blocker(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Battle Strain")
+    giant = _w1g8.put(game, set_pool, 0, "Hill Giant")
+    blockers = [
+        _w1g8.put(game, set_pool, 1, name)
+        for name in ("Grizzly Bears", "Llanowar Elves")
+    ]
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    mine = list(game.controlled_by(0))
+    assert game.declare_attackers(0, [mine.index(giant)])[0]
+    game.advance_combat_phase()
+    theirs = list(game.controlled_by(1))
+
+    assert game.declare_blockers(
+        1, {theirs.index(blocker): mine.index(giant) for blocker in blockers}
+    )[0]
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 18], (
+        "one trigger a blocker, each on the blocker's controller"
+    )
+
+
+def test_w1g8_burning_sands_costs_a_land_for_every_creature_that_dies(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Burning Sands")
+    mine = _w1g8.put(game, set_pool, 0, "Llanowar Elves")
+    _w1g8.put(game, set_pool, 0, "Mountain")
+    theirs = _w1g8.put(game, set_pool, 1, "Grizzly Bears")
+    _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    _w1g8_dies(game, theirs)
+    assert _w1g8.names(game, 1) == [], "that creature's controller, not the enchantment's"
+    assert "Mountain" in _w1g8.names(game, 0)
+
+    _w1g8_dies(game, mine)
+    assert _w1g8.names(game, 0) == ["Burning Sands"]
+
+
+def test_w1g8_magma_vein_spends_a_land_to_sweep_the_ground(set_pool):
+    game = _w1g8.table(set_pool, enforce=True)
+    _w1g8.put(game, set_pool, 0, "Magma Vein")
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain")
+    _w1g8.put(game, set_pool, 1, "Llanowar Elves")
+    _w1g8.put(game, set_pool, 1, "Birds of Paradise")
+    game.start_turn(0)
+    game.players[0].mana_pool["R"] = 2
+
+    used = game.activate_permanent_ability(
+        0, "Magma Vein", cost_permanent_ids=[mountain.permanent_id]
+    )
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert _w1g8.names(game, 0) == ["Magma Vein"]
+    assert _w1g8.names(game, 1) == ["Birds of Paradise"]
+
+    without = game.activate_permanent_ability(0, "Magma Vein")
+    assert not without.supported and game.players[0].mana_pool["R"] == 1
+
+
+def test_w1g8_need_for_speed_trades_a_land_for_haste(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Need for Speed")
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain")
+    bears = _w1g8.put(game, set_pool, 0, "Grizzly Bears")
+    game.start_turn(0)
+    bears.metadata["summoning_sickness_turn"] = game.turn
+    assert game._is_summoning_sick(bears)
+
+    used = game.activate_permanent_ability(
+        0, "Need for Speed", target_permanent_ids=[bears.permanent_id],
+        cost_permanent_ids=[mountain.permanent_id],
+    )
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert not game._is_summoning_sick(bears)
+    assert "Mountain" not in _w1g8.names(game, 0)
+
+    again = game.activate_permanent_ability(
+        0, "Need for Speed", target_permanent_ids=[bears.permanent_id]
+    )
+    assert not again.supported and "no land available" in again.details
+
 # ==== end W1G8 ======================================================
 
 
