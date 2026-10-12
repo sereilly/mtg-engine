@@ -2055,20 +2055,48 @@ def _prevent_all_from_source_type(game, event: dict) -> PreventionOutcome | None
 #: "prevent". Written as a CR 614 replacement it would still arrive at the right
 #: life total and would report the wrong thing to everything that asks how much
 #: damage was prevented.
+#:
+#: **The source's colour is payload too** (the five Odyssey Spheres: "If a
+#: *red* source would deal damage to you, prevent 2 of that damage."). One
+#: optional word in front of "source", read through ``damage_source_colors`` at
+#: the moment the damage would be dealt (CR 615.1 — a static prevention is not
+#: locked in), so a spell answers with its stack colours, a permanent through
+#: layer 5, and a source Ghostly Flame makes colourless *as a source of damage*
+#: is no colour's source at all.
 _PREVENT_N_OF_DAMAGE_RE = re.compile(
-    r"^if a source would deal damage to you, prevent (?P<points>\d+) of that "
-    r"damage$"
+    r"^if a (?:(?P<color>white|blue|black|red|green) )?source would deal "
+    r"damage to you, prevent (?P<points>\d+) of that damage$"
 )
 
 
-def prevent_n_of_damage(line: str) -> int | None:
-    """How many points *line* shaves off each event, or None if it is not that
-    line. One matcher, asked by the interceptor below and by the claim reader,
-    so what is prevented and what is claimed cannot drift."""
+def static_points_shield(line: str) -> dict | None:
+    """What *line* shaves off each event — ``{"points": n, "color": symbol or
+    None}`` — or None if it is not that line.
+
+    One matcher, asked by the interceptor below and by the claim reader, so
+    what is prevented and what is claimed cannot drift. ``color`` is the mana
+    symbol of the printed colour word and None for the unnarrowed sentence.
+    """
     match = _PREVENT_N_OF_DAMAGE_RE.match(
         " ".join(line.strip().lower().rstrip(".").split())
     )
-    return int(match.group("points")) if match else None
+    if match is None:
+        return None
+    word = match.group("color")
+    if word is None:
+        return {"points": int(match.group("points")), "color": None}
+    from .oracle_types import _COLOR_WORD_TO_SYMBOL
+
+    return {"points": int(match.group("points")),
+            "color": _COLOR_WORD_TO_SYMBOL[word]}
+
+
+def prevent_n_of_damage(line: str) -> int | None:
+    """How many points *line* shaves off each event it answers to, or None if
+    it is not that line. The claim readers' question; the interceptor asks
+    :func:`static_points_shield`, which also carries the source narrowing."""
+    described = static_points_shield(line)
+    return described["points"] if described else None
 
 
 def _static_points_prevented(game, event: dict) -> int:
@@ -2093,11 +2121,22 @@ def _static_points_prevented(game, event: dict) -> int:
     if seat is None:
         return 0
     total = 0
+    source_colors: tuple[str, ...] | None = None
     for permanent in game.controlled_by(seat):
         for line in (permanent.effective_card.oracle_text or "").splitlines():
-            points = prevent_n_of_damage(line)
-            if points is not None:
-                total += points
+            described = static_points_shield(line)
+            if described is None:
+                continue
+            if described["color"] is not None:
+                # "a **red** source": the source's colour as a source of
+                # damage, asked once per event and only when some line narrows.
+                if source_colors is None:
+                    source_colors = damage_source_colors(
+                        game, event.get("source"), seat=event.get("source_seat")
+                    )
+                if described["color"] not in source_colors:
+                    continue
+            total += described["points"]
     return min(total, amount)
 
 
@@ -2119,7 +2158,7 @@ def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
     prevented = _static_points_prevented(game, event)
     game.log.append(
         f"{event['recipient'].name} prevented {prevented} of "
-        f"{event['amount']} damage (Urza's Armor)"
+        f"{event['amount']} damage (a static prevention)"
     )
     return PreventionOutcome(prevented=prevented)
 
