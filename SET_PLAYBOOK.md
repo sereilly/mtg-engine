@@ -187,7 +187,10 @@ result will be recorded - a commit that closes the wave.
 The tracker regeneration is committed per link, so `check_all` at the end of a
 gate reads clean rather than "stale". And a red link stops the fast-forward
 there: fix it *in that link*, then rebuild or merge forward the links above
-it. Three or four gates at `-n 4` fit this machine with nothing else running.
+it. Three or four gates at `-n 4` fit the machine that wave ran on with nothing
+else running - **read the memory before assuming it**: a suite worker peaks
+near 2 GB, and on a 16 GB machine one suite is the limit and the chain
+becomes Apocalypse's batch-and-bisect (below).
 
 *When two groups are briefed to edit one function, rehearse the pair - and run
 their tests in the rehearsal.* W1G1 and W1G2 both rewrote the kicker reader and
@@ -294,6 +297,118 @@ three **negative** assertions (`not any("603.3c" in line …)`) green and
 blind. Before changing a string the engine logs, grep the tests for its
 smallest distinctive token, not for the whole line - and read every `not` you
 find as a guard that will pass for ever once the string moves.
+
+**Apocalypse ran thirteen groups in two waves under two limits the earlier
+sets never met, and what it changed is where the tests run.** Each of these is
+a procedure.
+
+*Size the fan-out to the machine and the account, not only to the census.*
+Nine wave-1 groups were launched at once and told to run the full suite at
+`-n 4` before reporting. The machine has 16 GB and a suite worker peaks near
+2 GB: workers died, and a dead worker does not say so - it reads as
+`INTERNALERROR … KeyError: <WorkerController gw1>`, as `Different tests were
+collected between gw3 and gw0`, as a run that stops at six thousand tests, or
+as a bare `MemoryError` inside four unrelated guards of the integrator's own
+rehearsal. None of those is a finding about anybody's code, and three groups
+had one in hand. Then six of the nine were stopped by the account's rate
+limit, mid-edit. Both are now rules: **at most five agents at once** (hold the
+rest of a wave and start each as a slot frees - a wave-2 group can take a
+freed slot while wave 1's last groups finish), and **an agent never runs the
+full suite**. It runs the files it wrote, every test file it edited, and the
+files that cover the modules it touched (grep `tests/` for the names; a guard
+sits far from its code), serially or at `-n 2`, and lists them. The full
+suite is the integrator's, one at a time. "Three or four gates at `-n 4` fit
+this machine" above is true of this machine with nobody else on it.
+
+*When gates cannot overlap, stage every merge and gate the tree that holds
+several.* A full suite took between ninety minutes and three hours with
+agents working, so one per merge was a day. What each merge got instead, as
+its own commit: the conflict resolution, `oracle_diff` over that merge alone,
+and the **meeting-point tests** - every test file any merged branch added or
+edited, the set's own files and the structural guards - on the merged tree.
+The full suite then ran on a tree holding two, four and nine branches, and
+`main` fast-forwarded only to a tree whose own suite was green. A red on a
+cumulative tree is bisected by running the failing test on each link beneath
+it, which costs seconds. Three full suites gated nine merges and found one
+red, and it was attributable on sight.
+
+*Never edit a worktree while a test run is reading it.* The integrator merged
+two more branches into the link whose meeting-point run was still going; that
+run's result described no tree that ever existed and was thrown away. A
+wave-2 group did the same to itself and reported eighteen `TypeError`s from a
+half-old import. A run owns its worktree until it exits: stage the next merge
+on a new link.
+
+*A seeded simulation test asserts that its subject was exercised, never how
+often.* The one red the cumulative gates found was a group's own slow test
+with a floor of four recruiter casts over four seeded games - seven on its
+own tree, two the day another group's Volvers stopped being refused every
+turn and the same seed played a different game. A count over a seeded game is
+a statement about every *other* card in a set that is still being
+implemented. The honesty check is a floor of one.
+
+*Open the per-set test files with a marked section per group, before the
+fan-out.* Earlier waves appended blocks and the integrator unioned the
+collision at every merge. With one delimited region per group per file,
+written only by its owner, thirteen branches produced **no** conflict in a
+test file. The size cap was still crossed three times at integration - by
+what the briefs asked for - and the answer is a script that moves whole
+sections to a `_later_groups` sibling, asserts every moved line is in both
+the old text and the new file, and **leaves the marker pairs behind**, so a
+branch still in flight merges against unchanged context.
+
+*An interrupted wave resumes, and a checkpoint commit is what makes that
+cheap.* All nine agents stopped with their work in their worktrees, and all
+nine resumed from their transcripts on a message that said what the
+integrator could see - branch, uncommitted files, newest scratch files, the
+agent's last words - and what was left. One had twenty-four modified files and
+no commit. Brief a first commit as soon as the first card lands.
+
+*Brief wave 2 from wave 1's reports as they arrive, and extend a running
+group by message.* The first wave-2 group started on the link holding six
+merged branches while three wave-1 groups were still working, and two more
+were sent an extra item mid-run from a report or a rehearsal that arrived
+after they forked - with the census path, the parts, and the names a sibling
+had already taken so the two would union rather than fork. That is the
+Planeshift-to-Seventh procedure inside one set, and it is how a five-agent cap
+does not become idle slots.
+
+*Two groups in `web/static/` will find the same bug, and that is cheap.* Both
+wave-2 groups that drove a browser tried a roles spell with a player slot,
+both found that the life pill's click never reached its handler, and both
+added the same line. The conflict was one hunk. What it says is that six
+shipped cards could not be cast by a person and no test knew - the text-level
+test read the handler *behind* the gate and passed throughout.
+
+*And two branches met on a card with no conflict at all.* One made Impulse ask
+for the order of the cards it bottoms; the other wrote a wire test that
+resolves Impulse and asserts what every viewer is sent once the looker has
+answered. On the merged tree the looker still owed a prompt at that point.
+The meeting-point run found it in a minute; the fix was in the test, with the
+reason in its commit.
+
+*A test that fails in one full run and passes alone is a finding with a
+schedule, and the way to find it is to ask the process.* The wave-2 gate failed
+one test of 27,401: a wave-1 group's, on a card nobody in wave 2 had touched,
+with a 3/3 reading 1/1. It passed alone, in its file, and after every test file
+wave 2 had edited; an hour of reading for a module-level cache found none that
+could do it. What found it was a scratch pytest plugin - a
+`pytest_runtest_teardown` hook that replayed the failing test's scenario after
+**every** test in every worker and wrote down the first test after which the
+answer was wrong. One more full suite, and it named the same group's
+*previous* test; from there the defect reproduced in ten lines. Four memos in
+`engine/models.py` were keyed by `id(card)`, CPython reuses a freed object's
+address, and a creature granted an ability had been handed the fold of a card
+object that died a test earlier - another creature's name and size. Shipped
+for two months, and real in play for any token or copy. Three rules. **Do not
+re-run a red gate and take the green.** The same suite had passed three times
+at `-n 4`; the failure needs two tests in one worker in one order, which is
+what a worker count hides and a different one shows. **Ask the process, not
+the code**: a probe after every test costs one suite and names the polluter,
+where reading costs an afternoon and names a suspect. And **a memo keyed by
+`id()` is a bug with a delay** - `copies.card_identity` is the key, and
+`tests/regressions/test_derived_card_memo_identity.py` holds a guard over
+every module-level dict under `engine/`.
 
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
@@ -1990,6 +2105,21 @@ file. The remaining 64 reads are recorded in `PRIMARY_TYPE_BASELINE` as
 entries deliberately carry no reason, because nobody has yet asked of those
 sites whether they mean the card or the permanent.
 
+**Added at APC's Phase 6: three grammar modules ended the set inside the
+pre-split band, and the suite's CI baseline is nine sets old.** `check_all.py
+--caps` read *zero* modules within 30 lines of the cap at Apocalypse's Phase 0,
+so nothing was pre-split, and thirteen groups then crossed the cap exactly
+once, in round (`lowering/types.py`, split by its group into
+`lowering/colors.py`). What they left behind is `lowering/control_flow.py` at
+992, `effects/game.py` at 990 and `effects/library.py` at 979 - each reached
+by three or more of this set's groups, so each is "shared and tight" for the
+next one. **Phase 0 of the next set** pre-splits all three before any brief is
+written (hand the splitter the measurements to make, not a seam). And ROADMAP's
+invariant 2 still carries a CI baseline read at 21,127 tests; the suite is
+past 27,600 and `main` is unpushed. **Phase 0 of the next set** needs the
+branch pushed (its owner's decision, not an agent's) so that `suite wall time`
+can be read off a run, and decides BUDGET on that number.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,
@@ -2232,6 +2362,22 @@ is green, the trackers carry its row, and the census is in hand.
    old pool; The Dark's 119 cards went through it untouched.
    `test_the_sweep_covers_every_measured_set` now asserts the coverage, but the
    habit is the point: check the count moved before believing the zero.
+
+   **When the yield names a card a wave-1 group is about to own, hand it over
+   with the card - and put the table in every brief.** Apocalypse's ingest
+   turned four tests red, each a guard that reads both manifest roles naming
+   one of its cards: two wanted the two-kicker Volvers supported, one named
+   Desolation Angel's two "instead" arms, one named Mystic Snake's unannounced
+   spell target. Each went to the group that owned the card; the shared brief
+   carried the four by name with their owners ("these are the base and not
+   you - leave them alone and report any fifth"); and the owners' branches
+   were merged first. All four were green two merges in, and in both
+   non-trivial cases the guard was right and the cause was shipped: seven
+   by-type sweeps ignoring regeneration behind the Angel, a cast announcement
+   dropped before the trigger behind the Snake. The cost is that every group's
+   own run and every gate carries the known reds until the owners merge, which
+   is why the table has to be exact - and why this is for yield with an owner,
+   not for a failure nobody is about to touch.
 3. Regenerate the trackers. The set appears as a *(measured)* row in
    `GRAMMAR_COVERAGE.md` and `HOOK_RELIANCE.md`; the floors and ceilings do
    not move, by design.
@@ -2538,6 +2684,23 @@ groups only if they are written by subject as the reports arrive**, not by
 reporting group: five wave-1 reports each saw a piece of "what a cast may
 announce", and it became a brief when the pieces were put under one heading
 with every census path beside its number.
+
+**Apocalypse kept wave 1 out of `web/static/` and asked every report to name
+any prompt its card arms that a person could not answer.** Five did - a
+bottom-of-library order labelled as the top, a trigger whose spell target
+every seat defaulted, a requirement the several-slot pickers ignored, the two
+unlabelled ends of a redirect, a search with one card per description - and
+they were one wave-2 group's whole brief, with a port and a browser session of
+its own. It drove each as a human seat and found four more client defects in
+shipped play that no engine instrument and no text-level test could see (six
+cards with a player role no person could click; every divided spell taxed
+Fireball's extra mana). Nine groups each making one client change is nine
+edits to one file and nine browsers; one group making five is a morning. The
+wave was four groups: the one declined card with its nearest neighbour, that
+client group, and two piles - CR 608.2b for abilities, which three wave-1
+groups had each measured a piece of (479 of 622 single-target activations
+wrong in at least one way), and seven small defects that each had a card of
+the set standing on it. `oracle_diff` read **3, 1, 0 and 0**.
 
 **6ED took that rule to its limit: a wave of five groups and *no* cards at
 all.** The set arrived 335/335 supported with every instrument at zero, so
@@ -3011,6 +3174,24 @@ read in twenty minutes, before any card is implemented - run it then. The
 wrong insert was rehearsed in the same worktree and again at the promotion,
 with the promotion's script: one reprint among 318 decided an origin.
 
+**Apocalypse rehearsed three times, and only the first was a full suite.** On
+the day of the ingest, with 49 cards unsupported: 26 red, of which sixteen
+named the state of the work, four were ratchets, two were inventories and
+four were `MemoryError`s from a machine with nine agents on it. With all nine
+wave-1 branches merged and one card left, a **targeted** rehearsal - the 29
+guard files the first one had touched or that read the whole catalog, run
+serially in a throwaway worktree in fifteen minutes - turned eight red: three
+naming the one unsupported card, three ratchets, the deletion probe's 21 new
+findings (all quantifier words the payloads provably carry, read then rather
+than at the gate), and the AI's divided-card inventory, which wanted
+Captain's Maneuver reviewed. Reviewing it was the finding: the AI read the
+card's two ends as one side and would have shielded its opponent. That went
+by message to a wave-2 group already working on the AI's aim, and was fixed
+before the promotion instead of at it. The promotion then had nothing to
+read. **After the first, rehearse with the guards and not the suite**, as
+often as the tree changes shape - an inventory that asks for a review is
+asking early enough to be answered by somebody still in the code.
+
 **A new layout makes guards blind, not red.** A split card's whole-card
 program is supported and has no instructions, so every guard and instrument
 whose population is "each card, compiled" walks past both halves and reports
@@ -3120,6 +3301,32 @@ review directly shrinks this phase.
    it - a check of the *round*, with no Seventh Edition card in it - found
    that no such land could be tapped for mana. List the client-visible
    changes merged since the last promotion and click each once.
+
+   **Apocalypse gave this step to one agent with a brief, a port and a
+   browser session of its own, and it is the run to copy.** The brief was
+   four lists: the smoke, one card per headline mechanic *read off the
+   payload*, every client change the waves had merged with the neighbour
+   that must still work, and "record what you watched". All nine merged
+   client changes passed on the merged tree, 22 cards were recorded - and
+   three defects came back that no card-directed check would have found,
+   none of them the set's. **Play a whole game, not only the cards**: a
+   human's precombat main phase was being skipped whenever the AI acted in
+   its second main phase (in the web turn flow since August), and it was
+   found on turn nine of the smoke game, by playing. A spell whose human
+   answer arms an AI-owned prompt ended its caster's phase (Tahngarth's
+   Glare: the server answered AI prompts before a handler and never after).
+   And a divided spell with a ceiling of targets was handed the
+   several-permanents picker, so Fire could not reach a player. **A card
+   recorded failing is this phase working.** Two rows went red the day the
+   set shipped, and the same agent - holding the repros, the harness and
+   the session - was sent back in as the closer: fixed, driven, and each
+   row re-recorded only after the card was watched working. That is a
+   second gate after the promotion, and it is the right price; budget it.
+   One number from the closer worth carrying: the client's own list of
+   prompts that hold the auto-pass covered **49 of the registry's 86**
+   blocking kinds. A hand-kept client list of a server registry is a second
+   copy of one fact, and the fix was to send the fact
+   (`waiting_on_prompt`) rather than the thirty-seven missing names.
 
    **For a reprint set this step is the only one that shows what promotion
    bought**, and
@@ -4313,3 +4520,34 @@ agent. *Phase 1:* compute "new to this pool" at the ingest and give every
 such card to a group. *Phase 4:* rehearse a reprint-shaped set the day it is
 ingested. *Phase 5:* drive what the round changed, not only what the set
 brought. What stands is in ROADMAP, with parts.
+
+### APC — 2026-10-12
+
+*Two waves and thirteen groups under a cap of five agents, then a closer, on
+the third set of Invasion's block: 65.7% on arrival, no machinery, 143 cards
+all new.* Wave 1's nine groups landed 48 of the 49 unsupported cards with no
+hook, cleared the three supported cards carrying an unimplemented sentence,
+and drove all 94 that arrived compiling - nine mis-played. Wave 2 was the one
+declined card (Suffocating Blast) with its neighbour, five prompts a person
+could not answer, CR 608.2b for abilities (479 of 622 single-target
+activations wrong), and seven small defects with a card of the set standing on
+each. `oracle_diff` read 3, 1, 0 and 0. The wave-2 gate's one "flaky" failure
+was four memos keyed by `id(card)`; Phase 5 found a skipped main phase and two
+cards failing in the browser, and a closer cleared all three.
+
+*Edits in place:* Integration gains the Apocalypse block - the fan-out sized
+to the machine and the account (five agents; no agent runs the full suite),
+batch-and-bisect gates with meeting-point tests per merge, never editing a
+worktree under a run, a simulation floor of one, marked test sections and
+the whole-section split, resuming an interrupted wave, briefing wave 2 on a
+chain link and extending a running group by message, and a red gate that
+passes alone as a finding (the probe-after-every-test plugin). *Phase 1:* the
+ingest's yield handed to its owning groups with the table in every brief.
+*Phase 3:* wave 1 kept out of `web/static/`, one client group in wave 2.
+*Phase 4:* after the first, rehearse with the guards and not the suite; the
+promotion's own two reds were both guards assuming less than their invariant.
+*Phase 5:* one agent with four lists, a whole game played, and the closer as
+a second gate. *Known gaps:* three grammar modules inside the pre-split band
+and a CI baseline nine sets old, both for the next Phase 0. Nothing drained;
+what the set measured and left is one ROADMAP entry with its parts named, and
+CR 608.2b's entry there is rewritten to what is now true.

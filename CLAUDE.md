@@ -1507,19 +1507,29 @@ kind plus the three loops that render the prompts a viewer may see, refuse the
 actions a pending prompt blocks, and answer AI-owned prompts with their
 defaults. All three read the registry (see `engine/pending_choices.py`), so a
 new prompt is covered by construction rather than by remembering three edits in
-the routes.
+the routes. **The client does not keep its own copy of that registry either**:
+the state payload carries `waiting_on_prompt` — whether a `pass_priority` from
+this viewer would be refused — and the auto-pass reads it. The client's own
+list of blocking kinds had covered 49 of the registry's 86, so an auto-pass
+fired into 37 kinds of open prompt and was refused, silently, until a human's
+answer armed an AI-owned prompt and the stray pass ended a phase (Tahngarth's
+Glare). AI-owned prompts are answered both before and **after** an action's
+handler, so a prompt a human's answer arms is answered in the same request.
+And **an AI step never advances a human's turn**: `_advance_ai_turn` returns
+unless the active seat is an AI — a human's precombat main phase was being
+walked into combat whenever the AI had acted in its second main phase.
 
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (654 of the 4,781 catalog cards passing — 409
-checked in-game and 245 auto-passed — with 53 more reported `equivalent`; the
+manually validated in-game (680 of the 4,924 catalog cards passing — 433
+checked in-game and 247 auto-passed — with 56 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
-Stronghold, Exodus, Urza's Saga and every set since, Invasion and Planeshift
-included, all promoted before their in-game pass —
+Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift and
+Apocalypse included, all promoted before their in-game pass —
 have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current
@@ -1563,6 +1573,18 @@ driven as a human seat — and the same session's one click on a land under a
 Blood Moon found that the round's activation-gate merge had made every such
 land unclickable for mana: a client change held by a text-level test, first
 clicked at Phase 5.
+**Apocalypse moved it 409 to 433 — more than the twelve promotions before it
+added between them — and recorded a failure on the day a set shipped.** Phase 5 was one
+agent with a brief: twenty-two of the set's cards were watched working in the
+app and recorded, and two were recorded **failing** — Fire could not be aimed
+at a player (every divided spell with a ceiling of targets was handed the
+several-permanents picker), and Tahngarth's Glare ended its caster's phase
+(an AI-owned prompt armed by a human's answer was not answered in the same
+request). The smoke game beside them found a human's precombat main phase
+being skipped whenever the AI acted in its second main phase. A closing round
+fixed all three, and each failing row was re-recorded only after the card was
+watched working — which is the rule in the next paragraph, kept on the first
+occasion it could have been skipped.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

@@ -1,8 +1,8 @@
 # Scaling Roadmap
 
-Target: grow the card pool from **4,781** unique cards — thirty-one sets,
+Target: grow the card pool from **4,924** unique cards — thirty-two sets,
 LEA/LEB/2ED/ARN/ATQ/3ED/LEG/DRK/FEM/4ED/ICE/HML/ALL/MIR/VIS/5ED/WTH/TMP/STH/EXO/
-USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/M21, all shipped and all supported — to the
+USG/ULG/6ED/UDS/MMQ/NEM/PCY/INV/PLS/7ED/APC/M21, all shipped and all supported — to the
 full release line:
 **140 sets, 33,594 printings, 26,113 unique cards** per `set_progress.json`.
 
@@ -53,13 +53,17 @@ Anything that weakens these is a regression regardless of what it enables:
 
 1. **No silent wrongness.** A card may fail loudly as unsupported with a
    reason; it may never resolve as something other than what it says.
-2. **The suite stays fast.** **21,127 tests**, CI budget **940s**, CI-measured
+2. **The suite stays fast.** **27,624 tests** (Apocalypse's Phase 6 reading,
+   2026-10-12; 26,310 at its Phase 0), CI budget **940s**, CI-measured
    baseline **677s** (`ci.yml`), read from run 34296564407: `suite wall time:
-   677s`, **72% of budget**. The test count is MMQ's Phase 6 reading
-   (2026-09-13) and is up 995 on UDS's — the largest single-set rise the
-   project has recorded. The baseline is unchanged and now predates **three**
-   sets and a thousand tests, so it is the stalest number in this file: the
-   next Phase 0 owes CI a fresh one rather than trusting it.
+   677s`, **72% of budget** - *at 21,127 tests*. The baseline is unchanged
+   and now predates **nine** sets and six thousand tests, so it is the
+   stalest number in this file and no longer a statement about this suite:
+   locally, alone on a 12-core, 16 GB machine, the suite takes 34 minutes at
+   `-n 8` and 41 at `-n 6`. `main` is 79 commits ahead of anything
+   pushed (the rule below about an unpushed branch), so no runner number
+   exists for it. The next Phase 0 owes CI a fresh one, and should expect
+   the reading to be over budget rather than near it.
 
    **The creep warning no longer fires first**, and that is the live cost of the
    refresh rather than a thing to fix by raising the budget. At BASELINE 677 the
@@ -341,16 +345,33 @@ one card prints this") reads as a work item long after it stopped being true.
   cannot be distinguished from a check that passes, which is why the derivation
   and not the gate is where this had to be fixed.
 
-- **CR 608.2b is enforced for instants and sorceries only.** "If all its
-  targets are now illegal, the spell or ability doesn't resolve" is one gate,
-  `legality.illegal_targets_refusal`, asked once above the instructions;
-  CR 601.2c's announcement half is its twin, `legality.cast_target_refusal`.
-  One clause is also asked of abilities, as a separately named gate (EXO):
-  `legality.stale_comparison_refusal` re-asks a printed comparison between two
-  seats ("target opponent who has more life than you do" — the Keepers, the
-  Oaths) at resolution, bounded to specs carrying `compared` and to objects
-  whose compared seat is their **only** printed target. It is not a down
-  payment on the three declines below, each of which is its own round.
+- **CR 608.2b is asked of every object whose targets somebody chose** (APC
+  wave 2; of instants and sorceries since NEM). "If all its targets are now
+  illegal, the spell or ability doesn't resolve" is one gate,
+  `legality.illegal_targets_refusal`, asked once above the instructions - and
+  CR 608.2a's intervening-if is asked before it. CR 601.2c's announcement half
+  is its twin, `legality.cast_target_refusal`. Besides a spell it answers for
+  **an activated ability** (`StackItem.activated`) and for **a triggered
+  ability whose target was chosen** (`StackItem.targets_chosen`: the
+  `trigger_target` answer or default, an entry trigger's accepted cast
+  announcement, an accepted upkeep pick), through `ability_targets_refusal` /
+  `ability_target_verdicts` - the picker's own list, asked again. Census over
+  every activated ability that announces one target: **479 of 622 wrong in at
+  least one way before** (45 of 499 with the target gone - 25 of them running
+  an untargeted tail, which is Savage Gorilla's draw; 409 of 499 acting on a
+  target that gained shroud; 391 of 484 on one with protection from the
+  source; 313 of 477 after a type change, 185 of those hitting a bystander;
+  47 of 80 on a player who gained shroud) and none after among those judged.
+  **Each target is judged separately in an object that still resolves**:
+  `blank_illegal_resolution_targets` rewrites every illegal slot before any
+  instruction runs - 42 of 48 multi-target spells acted on a target given
+  shroud in response, and none does - and an object printing "still resolves
+  if its target becomes illegal" is blanked all the same (Gilded Drake, which
+  traded itself for a bystander). Held by
+  `tests/engine/test_ability_target_resolution_census.py`. One clause is a
+  separately named gate (EXO): `legality.stale_comparison_refusal` re-asks a
+  printed comparison between two seats ("target opponent who has more life
+  than you do" - the Keepers, the Oaths) at resolution.
 
   **The gate re-asks the target's *description* (NEM wave 2).** It used to ask
   only whether a target was still on the battlefield and targetable, so a
@@ -367,18 +388,38 @@ one card prints this") reads as a work item long after it stopped being true.
   Edict ("you own or control") needs an observer in the enumerator's
   `subject_matches` call. The declines:
 
-  * **A triggered ability's targets.** The death sweep enqueues a dies-trigger
-    while the dying permanent is still listed, so Blazing Effigy's "it deals 3
-    damage to target creature" records the dying Effigy itself and reaches the
-    right creature only by falling back to the index. Asking 608.2b of that id
-    counters an ability the engine mis-targeted and reports it as a
-    rules-correct fizzle. The fire sites have to choose targets after the
-    permanent has left first. The same resolver leaves a *triggered* ability
-    whose stamped graveyard choice vanishes falling to its untargeted
-    deterministic pick, which can pick a card nobody named; an **activated**
-    ability's is gated since 2026-10-06
-    (`legality.vanished_graveyard_target_refusal`, bounded by
-    `StackItem.activated`: 19 of 26 driven acted on another card before).
+  * **A trigger target not chosen through its own picker** is unmarked and
+    unjudged. (a) *A default taken while a permanent is on its way to a
+    graveyard* (`Game.departing`): the death sweep announces a dies-trigger
+    while the dying permanent is still listed, so a non-interactive default
+    can be the dying permanent itself ("Blazing Effigy: targets Blazing
+    Effigy") - a person's answer is judged; 20 triggers print a target and
+    fire on a death or a departure. The fix is to enqueue after the removal
+    (wrap `_destroy_swept_permanents`' loop, and the single-permanent paths,
+    in `deferring_triggers()`) and then drop `Game.departing`; four Blazing
+    Effigy tests pin the index fallback and will move. (b) A modal trigger's
+    mode target (one in the pool). (c) A spell target a trigger chose for
+    itself. (d) A cast announcement the picker has no list for (12 of 65
+    targeted entry triggers on the cast road; the 15 graveyard-card ones
+    among them still return a different card when the named one is exiled
+    in response). (e) Any fire-site stamp. The same resolver leaves a
+    *triggered* ability whose stamped graveyard choice vanishes falling to
+    its untargeted deterministic pick; an **activated** ability's is gated
+    (`legality.vanished_graveyard_target_refusal`).
+  * **An ability printing "target" more than once with one derived slot**:
+    Cuombajj Witches (still deals 1 to a first target that gained shroud),
+    Mogg Assassin, Keeper of the Dead. Needs the second slot announced - the
+    CR 602.3 entry above is the same missing prompt.
+  * **A roles announcement with a non-permanent slot**: Planeswalker's Scorn
+    and Favor (a shrouded "target opponent" still reveals), Goblin Welder's
+    graveyard slot - one branch in `ability_target_verdicts` with a per-role
+    verdict for a seat or a stamp. On the spell side, still: a roles spell's
+    player role (Donate), and a mode an opponent chose (CR 700.2e), at both
+    ends, because the chooser's seat is held only by the prompt.
+  * **Per-slot enumeration at announcement**: Primal Might's cast gate accepts
+    two of the caster's own creatures where the second slot says "you don't
+    control", and with the first gone the second is pumped
+    (`.scratch`-era repro: cast it at two of your own).
   * **A spell whose target may be a player — closed 2026-10-06, and the
     reason it stood is the lesson.** This bullet said a seat and a chosen
     player reach a stack item through the same `target_player_index`, so
@@ -404,13 +445,13 @@ one card prints this") reads as a work item long after it stopped being true.
     CR 601.2c's "can the announcement be made at all?" is asked per primary
     kind only.
 
-- **Four handler paths still resolve by index alone**, reached today only by
-  instants and so caught by the CR 608.2b gate first; the next *activated*
-  ability printed with the same text walks in. Four since NEM wave 1, which
-  made `prevention.apply_prevention_shield` read the id first (35 shipped
-  "any target" shields reached it): `board_misc.mark_text_modified`,
-  `combat.remove_creature_from_combat`, `zones.exile_target_creature_until_eot`
-  and `zones.exile_creature_gain_life_equal_to_power`. All four also carry a
+- **Four handler paths still resolve by index alone** - true of the code, and
+  since APC wave 2 unreachable with a stale index from a spell, an activated
+  ability or a chosen trigger target, because an illegal slot is blanked
+  above them; only a *stamped* trigger target can still walk in.
+  `board_misc.mark_text_modified`, `combat.remove_creature_from_combat`,
+  `zones.exile_target_creature_until_eot` and
+  `zones.exile_creature_gain_life_equal_to_power`. All four also carry a
   "fall back to the first matching permanent" default, the look-alike class.
 
 - **A still-legal target that changed controller is missed, and a bystander is
@@ -757,6 +798,124 @@ one card prints this") reads as a work item long after it stopped being true.
   * *Two cast-side costs have no picker*, pinned with their parts in
     `_PICKERLESS_CAST_COSTS`: Infernal Harvest's X is asked after any cost
     stage, and Haunting Misery has no graveyard wire field (W3G5).
+
+- **What Apocalypse measured and left** (2026-10-11; thirteen groups, each
+  part named in the report and the commit that declined it. CR 608.2b's
+  residue is in its own entry above.)
+
+  * *A blanket "lose all abilities" never takes a grant made earlier* (CR
+    613.7). 4 of 4 driven: a kicked Faerie Squadron and then Humility, or
+    Humble; Grizzly Bears with Jump or Flight and then Humility - the granted
+    keyword survives, and a kicked Rakavolver's granted trigger still gains
+    life where El-Hajjaj's printed one does not. The granted *activated*
+    ability is refused. Scope: every grant channel against Humility,
+    Titania's Song, Humble and Soul Sculptor; twelve cards print a kicked
+    "and with" grant. Parts: the removal carries a timestamp (the source's,
+    or stamped in `ALL_ABILITIES_REMOVED`); `GRANTED_ABILITY_LINES` entries
+    carry one; `Permanent.effective_card` appends only grants later than the
+    newest removal; `layer_bridge.collect_ability_effects` emits the removal
+    over all abilities at its timestamp rather than over
+    `_printed_abilities` at 0; `legality.lost_abilities_refusal`'s first arm
+    stops refusing later grants.
+  * *Text changes aimed at a spell.* Sleight of Mind, Magical Hack and Crystal
+    Spray print "target spell or permanent" and offer permanents; a named
+    spell is refused at announcement now, where it was accepted and ignored.
+    Illusion and Blind Seer were the same sentence for a colour and are done.
+    Parts: a text channel on a stack object (an effective card beside the
+    printed `StackItem.card`); every stack reader, and the compile at
+    resolution, reading it; the graveyard still receiving the printed card;
+    the CR 400.7a carry through `text_changes`; a `spell_or_permanent` spec
+    and a stack branch in `mark_text_modified`; the vocabulary prompt for a
+    spell target. Beside it: Double Vision and `copy_this_spell` copy
+    `choices` whole, so a copy inherits the original's recolour (by reading;
+    `forget_spell_color_change` at both sites, and a copy's own colour kept
+    apart from an effect's - CR 707.9b); and the Laces are still an
+    undescribed kind row for the picker Illusion now describes.
+  * *What a seatless viewer is sent.* `GET /state` with no seat returns the
+    `look_top_pick` prompt, cards included; the kind is `spectator_visible`,
+    as are 54 others (`scry`, `search_library`, `reorder_library`, `discard`,
+    `hand_to_library`). Parts: decide whether the seatless payload is a
+    hotseat view or a spectator's; split `spectator_visible` to match; check
+    the client's single-payload mode still renders its own prompts. Two log
+    leads beside it, not driven: a hand-to-library *cost* names its card
+    (`activation.py`), and the search-and-exile line names cards exiled face
+    down.
+  * *Two prompts that meet refuse each other.* Abundance's "the rest on the
+    bottom in any order" is the one look still not asked for its order: on a
+    two-card draw the order prompt sits beside the next draw's Abundance
+    offer and each answer is a 400 naming the other (Sylvan Library has the
+    shape). Parts: `web.prompts.blocking_prompt` admitting an answer to any
+    prompt the seat owes, or a queue order; the draws behind a reveal waiting
+    for its order; then the one call in `_resolve_reveal_until_kind_draw`.
+    Smaller, in the client: `hasBlockingPromptForAutoPass` omits four prompt
+    kinds, so auto-pass sends a pass the server refuses; a several-target
+    `trigger_target` names one target per click; a one-slot picker narrowed
+    by a Flagbearer does not say why; a click on the middle of a lower stack
+    card hits the card above.
+  * *Replacements that are never offered as a choice* (CR 616.1e). The
+    graveyard seam passes no `restart`, so Legacy Weapon under Forbidden
+    Crypt or Yawgmoth's Will takes the default order (exile first) even for
+    an asked seat; Library of Leng and Dodecapod on a taken discard likewise.
+    And Library of Leng is *offered* on a discard that pays a cost, against
+    its ruling ("costs aren't effects"): eight cost sites call
+    `_discard_card`, and one `as_cost` flag on the seam closes that and a
+    cost paid inside another player's resolution reading as opponent-caused.
+  * *Costs named and not held, the rest of it.* A named permanent pays a
+    spell's additional cost or the cast is refused (43 of 43 substituted a
+    default); an **alternative** cost's short list is still topped up
+    (`_resolve_alternative_cost_permanents`: Gush, Fireblast) - refuse
+    `len(named) < count` and check the client's picker always sends the full
+    count. `queue_from_hand`'s cost-waiver branch skips `_pay_cast_cost`,
+    where every optional offer is charged, so a kicker reads as free under a
+    waiver (read, not driven). The roles walk refuses one object for two
+    instances of "target", which CR 115.3 allows: a kicked Orim's Thunder
+    cannot name one artifact creature for both.
+  * *The Flagbearer requirement's edges* (`engine/target_requirements.py`).
+    An opponent-chosen mode's targets (CR 700.2e, three `mode_chooser` cards)
+    are named after the cast and are not held; `activate_from_hand` is not
+    gated and not censused; two different required nouns at once are read as
+    "either". One reading is pinned rather than ruled: "up to one target" may
+    not dodge by naming none.
+  * *Combat phrases that still refuse or re-check.* `lowering/keyword_removal`
+    and `lowering/_counted_pumps` gate an event subject on `object_only_filter`
+    where their handlers pass observer and source (Fervent Charge's mismatch;
+    swap each to `observer_source_filter`). "Whenever a creature blocks, ... it"
+    refuses (`matching_creature_blocks` is not an event-subject object; the
+    narrowed pair form needs a decision). "This creature can't block this
+    turn" and "enchanted creature can't attack this turn" refuse in the
+    lowering. The combat relation is refused by gain-control and
+    can't-be-regenerated's own narrower gates. And a rebound subject's "you
+    control" is re-checked at resolution, where the rules would still pump an
+    attacker that changed sides.
+  * *Small, each with a repro in its group's report.* A provisional
+    entry-choice default drives static effects while the prompt is open
+    (Engineered Plague shows -1/-1 before the answer; 31 cards; display only).
+    `destroy_all_matching` logs what it aimed at, not what died (55 cards
+    compile to the kind). "<Creature type> card" lowers with a creature
+    `type_filter`, so a Kindred card would be missed (none in the manifest).
+    `put_self_into_zone` passes `source.card` alone, so a *copy* of Legacy
+    Weapon leaving that way is read off its printed face; `MILLED_THIS_WAY`
+    records a card a replacement sent to a hidden zone. Dodecapod's counters
+    arrive after its entry is announced (Sand Golem's arrangement). A mana
+    source asked for a colour it does not print makes its first printed one.
+    Drain Life's and Soul Burn's X-colour restriction works by pips, which
+    under CR 609.4b lets five Plains count as five colours under Celestial
+    Dawn (Emblazoned Golem sets aside real units). The AI casts Dead Ringers
+    at mismatched colours and Captain's Maneuver at sorcery speed.
+  * *What the in-app pass left* (Phase 5 and its closer, 2026-10-12). A cast
+    with optional-cost offers (every kicker), or one that goes through the
+    several-target picker, gets no Auto-Tap offer when the pool is short -
+    only "insufficient mana" - because the fallback would have to price the
+    chosen offers and the offers path runs on through every target cascade.
+    A human's answer that arms an AI-owned prompt is answered in the same
+    request now (Tahngarth's Glare, Rhystic Cave); `pile_split` handing to
+    `pile_choice` has the same shape by the registry's design and no pile
+    card was driven. End Turn no longer stalls at the player's own attack
+    declaration and still asks about a block, on purpose. And layout, not
+    rules: at 1920x1080 the prompt panel covers the right end of a
+    seven-permanent battlefield row and the left of a four-card stack
+    cascade; a keyword badge sits partly under a counter badge; the
+    "Cast X targeting seat 1" hint appears for lands and untargeted spells.
 
 - **Ten flat spellings of the testable-keys check remain in `lowering/`**
   (down from 39 at VIS), each a set difference over the outer payload's keys
@@ -1191,20 +1350,26 @@ expire:
 > what is already there); `test_the_shipped_sets_are_in_printing_order` is the
 > assertion that can.
 
-Run against `set_progress.json` on 2026-10-06, with Seventh Edition shipped, it
-answers **Apocalypse** (APC, 2001-06-04, 143 cards, all new) — the third of
-Invasion's block — and then Odyssey (ODY, 2001-10-01, 335 cards, 321 new).
+Run against `set_progress.json` on 2026-10-11, with Apocalypse shipped, it
+answers **Odyssey** (ODY, 2001-10-01, 335 cards, 321 new by the release
+line's count - re-measure against this pool) and then Torment (TOR,
+2002-02-04, 142 new) and Judgment (JUD, 2002-05-27, 141 new).
 (FBB, SUM and 4BB are earlier and unshipped; they are alternate printings of
 the Revised and Fourth Edition card lists, which this pool already carries,
 and every answer this section has recorded passed over them.) **Expect
 Apocalypse to arrive the way Planeshift did, not the way a block-mate is
 supposed to**: Planeshift came in at 65.7% where this paragraph had guessed
 Urza's Legacy's 80.4%, because a block-mate inherits mechanics and not
-templates. Apocalypse's are enemy-colour split cards (the layout is built),
-the two-colour kicker creatures (two kickers on one card is built) and the
-"sanctuary" and "volver" cycles — measure at Phase 1. Odyssey is the next
-*machinery* set: flashback (an alternative cost paid from a graveyard) and
-threshold (a condition on a graveyard count) do not exist here.
+templates. **Apocalypse came in at 65.7% too** - the same number to the
+decimal - and the paragraph's guesses about *where* were half right: the
+split cards and the two-kicker spells compiled, the Volvers and two of five
+Sanctuaries did not, and the largest family was one nobody named (seven
+"reveal the top four cards" recruiters). **Odyssey is the next *machinery*
+set**: flashback (an alternative cost paid from a graveyard, CR 702.34) and
+threshold (a condition on a graveyard count) do not exist here, and it is
+the first set since Invasion to need a Phase 2. Probe each keyword's rewrite
+target before sizing it. Apocalypse was the answer on 2026-10-06 and
+shipped on 2026-10-11.
 Seventh Edition was the answer on 2026-10-05 and shipped the next day with
 **seventeen** new cards where `set_progress.json` said 0 — the caution this
 paragraph carried, priced. Earlier that day the rule answered Planeshift.
@@ -1325,6 +1490,7 @@ a wave is five parallel worktree groups integrated serially.
 | INV | 335 | 66.0% | 2 waves + 1 closer (four of wave 2's seven groups on the pile) |
 | PLS | 143 | 65.7% | 2 waves (five of wave 2's six groups on the pile) |
 | 7ED | 335 | 99.4% | 1 group (17 new cards, two productions) |
+| APC | 143 | 65.7% | 2 waves (nine groups, then four: one on the last card and three on the pile) |
 
 Three data points shape an estimate. **Legends** is the warning: the lowest
 starting coverage and the flattest ranking — after eight rounds, 113 of its 135
@@ -1340,18 +1506,18 @@ mis-playing along the way, which every set since Ice Age has repeated and which
 is the argument for the Rock Hydra step.
 
 **Where the pool stands** (regenerate rather than trust these; read
-2026-10-06, at Seventh Edition's close): 4,781 unique cards over 31 sets,
-7,263 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.0%
-and executes 61.5% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **1.1%**
+2026-10-12, at Apocalypse's close): 4,924 unique cards over 32 sets,
+7,406 printings, 100% supported. Grammar parses 90.6% of lines, lowers 90.0%
+and executes 61.7% (`GRAMMAR_COVERAGE.md`; no shipped set's row fell). **1.1%**
 of supported cards carry a name-keyed hook — 52 cards, 58 entries in 6
 registries (`HOOK_RELIANCE.md`) — and the projection that implies for the
-release line has fallen from 1,195 hand-written entries to **317**, across
-eighteen consecutive sets that added no hook and retired several. That is the
-measure moving the way the architecture needs it to. Parse coverage: 4,779 of
-4,781 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
+release line has fallen from 1,195 hand-written entries to **308**, across
+nineteen consecutive sets that added no hook and retired several. That is the
+measure moving the way the architecture needs it to. Parse coverage: 4,922 of
+4,924 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
 (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker.
-`CARD_VERIFICATION.md` is a log, not a target: 654 passed (409 in-game, 245
-auto), 53 equivalent, 0 failed, 4,074 untested.
+`CARD_VERIFICATION.md` is a log, not a target: 680 passed (433 in-game, 247
+auto), 56 equivalent, 0 failed, 4,188 untested.
 
 **A whole wave can fix a hundred cards and move no compiled program**, and 6ED's
 is the run to cite. Five groups, five Known-gaps entries, zero cards implemented,
