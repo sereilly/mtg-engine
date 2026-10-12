@@ -153,7 +153,7 @@ __all__ = ["accept_source_card_name", "parse_card_name"]
 
 
 def accept_name_comparison(
-    stream: TokenStream, classes: tuple[str, ...]
+    stream: TokenStream, classes: tuple[str, ...], *, is_card: bool = False
 ) -> str | None:
     """A noun phrase's **name comparison**, or None with nothing consumed.
 
@@ -173,13 +173,21 @@ def accept_name_comparison(
     the same name as another artifact" leaves its tokens on the stream and
     fails the line loudly instead of being read as this one, which would sweep
     a set the sentence never described.
+
+    *is_card* says the phrase's noun was "card(s)" — "all nonland **cards**
+    with the same name as another **card** in their hand" (Hint of Insanity).
+    The same self-comparison over a pile of cards instead of a board, and the
+    same requirement: the second noun has to be the first one's, so a card
+    phrase compared with "another permanent" refuses. The scope behind it ("in
+    their hand") is left on the stream for the zone reader.
     """
     from .vocabulary import singular
 
     mark = stream.mark()
     if stream.accept_phrase("the", "same", "name", "as", "another"):
         noun = singular(stream.peek_word() or "")
-        same_class = noun in classes if classes else noun == "permanent"
+        whole = "card" if is_card else "permanent"
+        same_class = noun in classes if classes else noun == whole
         if noun and same_class:
             stream.advance()
             return "another"

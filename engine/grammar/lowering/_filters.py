@@ -617,6 +617,54 @@ def chargeable_card_filter(filt: ast.ObjectFilter) -> dict | None:
     return card_only_filter(payload)
 
 
+#: The payload key for "…with the same name as another card **in their hand**"
+#: — CR 201.2a asked of a pile rather than of one card, so it is carried beside
+#: the filter and answered by the handler that holds the pile.
+SHARES_NAME_IN_HAND = "shares_name_in_hand"
+
+
+def hand_name_relation(
+    filt: ast.ObjectFilter, node=None
+) -> tuple[ast.ObjectFilter, dict[str, object]]:
+    """*filt* with "the same name as another card in their hand" split off, and
+    the key that carries it; ``(filt, {})`` when the phrase prints none.
+
+    "That player discards all nonland cards **with the same name as another
+    card in their hand**." (Hint of Insanity.) A relation between the cards of
+    one pile, which no card matcher can answer: ``_card_matches_filter`` is
+    shown one card, and two copies of a card in a hand are one object, so even
+    a matcher shown the pile could not ask by identity. The handler that walks
+    the hand counts names instead.
+
+    Lifted off the filter **before** the testability gate and put back as its
+    own key after it, the shape the colour and the creature type an earlier
+    step chose already take — a gate asking "can every key be answered of one
+    card?" must not be shown one that only the pile can.
+
+    The scope is required and must be the hand: "another card" with no zone
+    behind it compares against nobody knows what, and a pile other than the one
+    being discarded from is a different sentence.
+    """
+    if not filt.shares_name_with_another:
+        return filt, {}
+    if not (
+        filt.is_card and filt.zone == "hand"
+        and filt.zone_owner is not None and filt.zone_owner.kind == "owner"
+    ):
+        raise LoweringError(
+            "'the same name as another card' is compared within the hand the "
+            "cards are in", node=node,
+        )
+    default = ast.ObjectFilter()
+    return (
+        dataclasses.replace(
+            filt, shares_name_with_another=False, zone=default.zone,
+            zone_owner=None,
+        ),
+        {SHARES_NAME_IN_HAND: True},
+    )
+
+
 #: Whose graveyard a printed position may name, by the seat kind the possessive
 #: reads. A set rather than a fall-through for ``_GRAVEYARD_PILE_SEATS``' reason
 #: one module over: the payment path and the handler resolve exactly these, and

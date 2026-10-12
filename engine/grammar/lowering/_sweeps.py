@@ -59,7 +59,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
 from ._common import (
-    _PAYLOAD_HONOURED_FILTER_FIELDS, dropped_narrowings,
+    _PAYLOAD_HONOURED_FILTER_FIELDS, _describe_targets, dropped_narrowings,
     _restrictions_beyond,
     _filter_payload, refuse_untestable,
                       testable_filter_payload)
@@ -473,6 +473,19 @@ def lower_exile_sweep(
         # graveyards" refused while the identical return lowered, for no
         # reason either sentence prints.
         graveyard_owner = _sweep_graveyard_actor(node, subject)
+        # "Exile all cards from **target player's** graveyard other than basic
+        # land cards." (Haunting Echoes.) One pile, and the announcement chose
+        # whose (CR 601.2c) — no printed actor, so the spell's controller does
+        # the exiling, exactly as for "your graveyard". Read here rather than
+        # in the pairing above, which the *return* sweeps ask too: their
+        # handlers resolve the two seats that function names and no third.
+        chosen_pile = (
+            graveyard_owner is None and node.actor is None
+            and filt.zone_owner is not None
+            and filt.zone_owner.kind in ("target_player", "target_opponent")
+        )
+        if chosen_pile:
+            graveyard_owner = "target_player"
         if graveyard_owner is None:
             raise LoweringError(
                 "the graveyard exile sweep reads your own pile, "
@@ -495,12 +508,12 @@ def lower_exile_sweep(
                 "a card in a zone",
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "exile_graveyard_cards", "",
-                {"graveyard_owner": graveyard_owner, "filter": described},
-            ),
-        )
+        swept: dict[str, object] = {
+            "graveyard_owner": graveyard_owner, "filter": described,
+        }
+        if chosen_pile:
+            _describe_targets(swept, filt.zone_owner)
+        return (OracleInstruction("exile_graveyard_cards", "", swept),)
     if filt.zone != "battlefield" or filt.is_card:
         raise LoweringError("the exile sweep reads battlefield permanents", node=node)
     payload: dict[str, object] = {}

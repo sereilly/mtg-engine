@@ -127,4 +127,25 @@ def card_answers_to_name(
     return wanted in _counted_as(card, zone, name_key(effect_spell))
 
 
-__all__ = ["CLAIM", "card_answers_to_name", "counts_as_claims_line", "counts_as_line"]
+def cards_sharing_a_name(pile) -> frozenset[int]:
+    """The positions in *pile* whose card shares a name with **another** card
+    of the pile (CR 201.2a: at least one name in common).
+
+    By position, because "another" cannot be asked by identity: a deck repeats
+    one immutable ``CardDefinition`` per copy, so two copies of a card in a hand
+    are one object. A card with no name shares a name with nothing.
+    """
+    held: dict[str, list[int]] = {}
+    for index, card in enumerate(pile):
+        for own in {name_key(name) for name in card_names(card)}:
+            if own:
+                held.setdefault(own, []).append(index)
+    return frozenset(
+        index for indices in held.values() if len(indices) > 1 for index in indices
+    )
+
+
+__all__ = [
+    "CLAIM", "card_answers_to_name", "cards_sharing_a_name",
+    "counts_as_claims_line", "counts_as_line",
+]

@@ -56,6 +56,7 @@ from ._events import (_DAMAGED_PLAYER_EVENTS, _DEFENDING_PLAYER_EVENTS,
                       _EVENT_SUBJECT_CONTROLLERS, _EVENT_SUBJECT_PLAYERS,
                       EVENT_SUBJECT_CONTROLLER, EVENT_SUBJECT_PLAYER)
 from ._cost_records import SACRIFICED_FOR_COST
+from ._filters import hand_name_relation
 from ._record_keys import CHOSEN_HAND_CARDS_RESULT
 
 
@@ -334,7 +335,11 @@ def _lower_discard(
         # as ``discard_hand`` below reads the same seat, and admitted only under
         # an event that recorded one.
         damaged = node.player.kind == "that_player" and event in _DAMAGED_PLAYER_EVENTS
-        if not damaged and node.player.kind not in ("target_player", "target_opponent"):
+        # "Target player reveals their hand. **That player** discards all …"
+        # (Hint of Insanity): no event, so the player this effect targeted —
+        # Flay's reading below, and the handler's default seat.
+        named = node.player.kind == "that_player" and event is None
+        if not (damaged or named) and node.player.kind not in ("target_player", "target_opponent"):
             raise LoweringError(
                 "no handler discards every matching card from a seat nobody "
                 "targeted", node=node,
@@ -402,6 +407,8 @@ def _lower_discard(
                     described_filter, colors_of_sacrificed_for_cost=False
                 )
                 carried["any_colors_from_cost"] = SACRIFICED_FOR_COST
+            described_filter, shared = hand_name_relation(described_filter, node)
+            carried.update(shared)
             described = chargeable_card_filter(described_filter)
             if described is None:
                 raise LoweringError(
@@ -419,7 +426,7 @@ def _lower_discard(
             payload.update(carried)
         if damaged:
             payload["who"] = "damaged_player"
-        else:
+        elif not named:
             _describe_targets(payload, node.player)
         return (OracleInstruction("discard_all_matching_cards", "", payload),)
     # Only the controller's own discard and the at-random one below carry a

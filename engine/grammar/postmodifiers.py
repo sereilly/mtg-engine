@@ -369,6 +369,16 @@ def _parse_postmodifiers(
                 stream.accept_word("card")
                 d.excluded_basic_lands = True
                 continue
+            # "Exile all cards from target player's graveyard **other than basic
+            # land cards**." (Haunting Echoes.) The same class in the plural a
+            # sweep prints it in, behind the zone scope rather than in front of
+            # it. The head noun is required here: bare "other than basic land"
+            # is the singular above with its article missing.
+            elif stream.accept_phrase("than", "basic", "land", "cards") or (
+                stream.accept_phrase("than", "basic", "lands")
+            ):
+                d.excluded_basic_lands = True
+                continue
             elif stream.accept_phrase("than", "enchanted"):
                 noun = stream.peek_word()
                 if noun is not None:
