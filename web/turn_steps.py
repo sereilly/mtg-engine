@@ -10,6 +10,7 @@ up when the answer arrives.
 
 from __future__ import annotations
 
+from engine.hand_size import maximum_hand_size
 from engine.phases.upkeep_step import upkeep_prompt_key
 from engine.upkeep_costs import cost_from_payload
 
@@ -25,12 +26,22 @@ from .seats import (
 
 
 def _cleanup_discard_requirement(session: Session) -> int:
+    """How many cards the active seat still owes CR 514.1's discard.
+
+    Asked of ``engine.hand_size.maximum_hand_size`` — the reader the cleanup
+    step itself enforces with. This kept its own copy (the player flag and a
+    literal seven), so the engine deferred a human seat's discard under Cursed
+    Rack or Recycle and this then reported that nothing was owed: no prompt
+    was drawn, and advancing started the next turn with the cards still in
+    hand. The engine and the prompt must count against one number.
+    """
     if session.game.current_phase != "cleanup":
         return 0
     active = session.game.players[session.current_turn]
-    if active.has_no_max_hand_size:
+    limit = maximum_hand_size(session.game, session.current_turn)
+    if limit is None:
         return 0
-    return max(0, len(active.hand) - 7)
+    return max(0, len(active.hand) - limit)
 
 
 def _clear_cleanup_selection(session: Session) -> None:

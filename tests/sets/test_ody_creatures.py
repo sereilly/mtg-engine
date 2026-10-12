@@ -355,6 +355,138 @@ def test_dwarven_recruiter_asks_a_person_for_up_to_every_dwarf(set_pool):
 # ==== W1G7 ==========================================================
 # W1G7's tests go between this line and the "end W1G7" line.
 
+import pytest as _w1g7_pytest
+
+from engine import Game as _w1g7_Game, PlayerState as _w1g7_PlayerState
+from engine.hand_size import maximum_hand_size as _w1g7_maximum_hand_size
+from engine.models import Permanent as _w1g7_Permanent
+from engine.oracle import compile_card_oracle as _w1g7_compile
+from tests.helpers import _mk_card as _w1g7_mk_card
+from tests.helpers import resolve_stack as _w1g7_resolve_stack
+
+
+def _w1g7_duel(set_pool, *, hand0=(), hand1=(), gy0=(), gy1=(), lib0=(),
+               lib1=(), bf0=(), bf1=(), interactive=()):
+    """A two-seat game with costs off, built from card names (ODY over LEA).
+    A seat in *interactive* is asked its decisions instead of defaulting."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    seats = [
+        _w1g7_PlayerState(
+            name=f"P{seat}", life=20,
+            hand=[pool[n] for n in hand], graveyard=[pool[n] for n in gy],
+            library=[pool[n] for n in lib],
+        )
+        for seat, (hand, gy, lib) in enumerate(
+            ((hand0, gy0, lib0), (hand1, gy1, lib1))
+        )
+    ]
+    game = _w1g7_Game(players=seats)
+    game.enforce_mana_costs = False
+    for seat in interactive:
+        game.interactive_seats.add(seat)
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            perm = _w1g7_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            perm.metadata["summoning_sickness_turn"] = -99
+    return game
+
+
+def _w1g7_names(cards):
+    return [card.name for card in cards]
+
+
+def _w1g7_on_board(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+# --- Thought Nibbler / Eater / Devourer: a maximum hand size that is changed --
+
+@_w1g7_pytest.mark.parametrize(
+    "name, limit",
+    [("Thought Nibbler", 5), ("Thought Eater", 4), ("Thought Devourer", 3)],
+)
+def test_a_thought_beast_lowers_its_controllers_maximum_hand_size(
+    set_pool, name, limit
+):
+    """"Your maximum hand size is reduced by two / three / four." Its
+    controller alone, for as long as it is on the battlefield (CR 611.3a), and
+    enforced where CR 514.1 enforces it: the cleanup step."""
+    game = _w1g7_duel(
+        set_pool, bf0=[name],
+        hand0=["Grizzly Bears"] * 7, hand1=["Grizzly Bears"] * 7,
+    )
+    assert _w1g7_maximum_hand_size(game, 0) == limit
+    assert _w1g7_maximum_hand_size(game, 1) == 7
+
+    game.resolve_cleanup_step(0)
+    assert len(game.players[0].hand) == limit
+    assert len(game.players[0].graveyard) == 7 - limit
+
+    game.resolve_cleanup_step(1)
+    assert len(game.players[1].hand) == 7, "the opponent keeps seven"
+
+    game.remove_from_battlefield(_w1g7_on_board(game, 0, name))
+    assert _w1g7_maximum_hand_size(game, 0) == 7
+
+
+def test_the_thought_beasts_stack_and_stop_at_no_cards(set_pool):
+    """Two static abilities, both applied (CR 613.11): seven less two less
+    three is two; all three beasts are seven less nine, and a hand cannot be
+    smaller than empty (CR 107.1b)."""
+    two = _w1g7_duel(
+        set_pool, bf0=["Thought Nibbler", "Thought Eater"],
+        hand0=["Grizzly Bears"] * 6,
+    )
+    assert _w1g7_maximum_hand_size(two, 0) == 2
+    two.resolve_cleanup_step(0)
+    assert len(two.players[0].hand) == 2
+
+    three = _w1g7_duel(
+        set_pool,
+        bf0=["Thought Nibbler", "Thought Eater", "Thought Devourer"],
+        hand0=["Grizzly Bears"] * 3,
+    )
+    assert _w1g7_maximum_hand_size(three, 0) == 0
+    three.resolve_cleanup_step(0)
+    assert three.players[0].hand == []
+
+
+def test_a_thought_beast_and_a_cursed_rack_apply_in_the_order_they_entered(set_pool):
+    """The beasts' own ruling (Scryfall, 2009-10-01): "if you are affected by
+    Cursed Rack … and then put Thought Eater onto the battlefield, your maximum
+    hand size would be one. However, if those permanents entered in the
+    opposite order, your maximum hand size would be four." """
+    pool = {**set_pool("ATQ"), **set_pool("ODY")}
+
+    def board(*order):
+        game = _w1g7_duel(set_pool)
+        for name in order:
+            perm = _w1g7_Permanent(card=pool[name])
+            seat = 1 if name == "Cursed Rack" else 0
+            game._put_permanent_onto_battlefield(seat, perm, None)
+            if name == "Cursed Rack":
+                perm.metadata["chosen_player_index"] = 0
+        return game
+
+    assert _w1g7_maximum_hand_size(board("Cursed Rack", "Thought Eater"), 0) == 1
+    assert _w1g7_maximum_hand_size(board("Thought Eater", "Cursed Rack"), 0) == 4
+
+
+def test_a_thought_beast_under_another_controller_lowers_that_players_maximum(
+    set_pool,
+):
+    """"Your" is whoever controls it now (CR 613 layer 2 through the control
+    seam), not who it entered under."""
+    from engine.control import change_control
+
+    game = _w1g7_duel(set_pool, bf0=["Thought Devourer"])
+    beast = _w1g7_on_board(game, 0, "Thought Devourer")
+    change_control(beast, 1, source="test")
+    game._sync_control()
+    assert _w1g7_maximum_hand_size(game, 0) == 7
+    assert _w1g7_maximum_hand_size(game, 1) == 3
+
 # ==== end W1G7 ======================================================
 
 
