@@ -419,6 +419,32 @@ def _lower_destroy(
             return (
                 OracleInstruction("destroy_block_pair_partner", "", pair_payload),
             )
+        # "Whenever a player taps a land for mana, … destroy **that land**."
+        # (Price of Glory.) The land the event was about, which the tap seam is
+        # still holding when it runs the instruction — the same reason Storm
+        # Cauldron's "return it" is admitted under this event and no other. It
+        # rides ``destroy_event_subject``, whose id the seam stamps for it.
+        #
+        # Only the noun the condition printed. This event is *not* in
+        # ``_EVENT_SUBJECT_OBJECTS``, on purpose: that table would admit every
+        # "it" a lowering reads under it, and the seam runs a fixed list of
+        # kinds (``TAP_TRIGGER_KINDS``) with a damage arm that reads no
+        # recipient at all.
+        if event == "land_tapped_for_mana":
+            if filt.card_types != ("land",) or _restrictions_beyond(
+                filt, frozenset({"card_types"})
+            ):
+                raise LoweringError(
+                    "the tapped-land destroy names the land the event was "
+                    "about and carries no narrowing of its own",
+                    node=node,
+                )
+            tapped_payload: dict[str, object] = {}
+            if node.no_regen:
+                tapped_payload["bypass_regeneration"] = True
+            return (
+                OracleInstruction("destroy_event_subject", "", tapped_payload),
+            )
         if event not in _EVENT_STAMPED_TARGET_OBJECTS:
             raise LoweringError(
                 "\"that\" names the firing event's object, and this event records none",

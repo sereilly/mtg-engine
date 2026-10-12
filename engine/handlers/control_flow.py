@@ -2307,6 +2307,16 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         # The seat is the ability's controller (CR 109.5), which is
         # ``context.caster`` for a triggered ability as much as for a spell, and
         # the comparison is the one that other reader makes.
+        if payload.get("whose") == "event_subject_player":
+            # "…if it's not **that player's** turn" (Price of Glory). The seat
+            # the fire site froze. No record is a clause about nobody, and
+            # answers False either way round — the direction that stops the
+            # ability rather than the one that destroys on a guess.
+            seat = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(seat, int):
+                return False
+            theirs = game.active_player_index == seat
+            return (not theirs) if payload.get("negated") else theirs
         if context.caster not in game.players:
             return False
         mine = game.active_player_index == game.players.index(context.caster)

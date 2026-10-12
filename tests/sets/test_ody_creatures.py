@@ -2396,6 +2396,71 @@ def test_w1g8_came_under_control_this_turn_is_only_read_on_your_own_turn():
     assert _w1g8_compile(dog("your end step")).supported
     assert not _w1g8_compile(dog("each end step")).supported
 
+
+# --- Savage Firecat ---------------------------------------------------------
+# "Whenever you tap a land for mana, remove a +1/+1 counter from this
+# creature." The third seat the tap-for-mana event prints ("a player", "an
+# opponent", "you"), narrowed at the tap seam against the Firecat's controller.
+#
+# Like every non-mana trigger under this event the removal is resolved at the
+# tap seam rather than put on the stack (Manabarbs' convention; CR 603.3 and
+# Manabarbs' own 2009-10-01 ruling say stack — measured and reported, not
+# changed here: it is seven shipped cards' behaviour, not this one's).
+
+def _w1g8_tap(game, seat, land):
+    return game.tap_land_for_mana(seat, land.card.name, permanent_id=land.permanent_id)
+
+
+def test_w1g8_savage_firecat_loses_a_counter_for_each_land_its_controller_taps(set_pool):
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    mine = [_w1g8.put(game, set_pool, 0, "Mountain") for _ in range(3)]
+    theirs = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+    assert _w1g8.pt(cat) == (7, 7), "a 0/0 with seven +1/+1 counters"
+
+    assert _w1g8_tap(game, 0, mine[0]) and _w1g8_tap(game, 0, mine[1])
+    assert _w1g8.pt(cat) == (5, 5)
+    assert game.players[0].mana_pool["R"] == 2, "the mana is still made"
+
+    assert _w1g8_tap(game, 1, theirs)
+    assert _w1g8.pt(cat) == (5, 5), "\"you\" is the Firecat's controller, not any player"
+
+    game.become_tapped(mine[2])
+    assert _w1g8.pt(cat) == (5, 5), "tapped, but not for mana"
+
+
+def test_w1g8_savage_firecat_follows_its_controller(set_pool):
+    """CR 109.5: "you" is whoever controls the Firecat now. Stolen, it counts
+    the thief's taps and stops counting its owner's."""
+    from engine.control import change_control
+
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    mine = _w1g8.put(game, set_pool, 0, "Mountain")
+    theirs = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+    change_control(cat, 1, source="a test's theft")
+    game._sync_control()
+
+    assert _w1g8_tap(game, 0, mine)
+    assert _w1g8.pt(cat) == (7, 7)
+    assert _w1g8_tap(game, 1, theirs)
+    assert _w1g8.pt(cat) == (6, 6)
+
+
+def test_w1g8_savage_firecat_tapped_down_to_nothing_dies(set_pool):
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    lands = [_w1g8.put(game, set_pool, 0, "Mountain") for _ in range(8)]
+    game.start_turn(0)
+
+    for land in lands[:7]:
+        assert _w1g8_tap(game, 0, land)
+    game.check_state_based_actions()
+    assert _w1g8.pile(game, 0) == ["Savage Firecat"]
+    assert _w1g8_tap(game, 0, lands[7]), "with the Firecat gone a land is just a land"
+
 # ==== end W1G8 ======================================================
 
 

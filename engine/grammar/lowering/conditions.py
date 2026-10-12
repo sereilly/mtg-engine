@@ -924,6 +924,22 @@ def _lower_condition(
         payload: dict[str, object] = {"kind": "your_turn"}
         if condition.negated:
             payload["negated"] = True
+        if condition.whose == "that_player":
+            # "…if it's not **that player's** turn" (Price of Glory). The seat
+            # the firing event was about, which only an event that freezes one
+            # can answer; anywhere else the words name nobody and the clause
+            # would be asked about the ability's controller instead.
+            if event not in _EVENT_SUBJECT_PLAYERS:
+                raise LoweringError(
+                    "\"that player's turn\" names the firing event's player, "
+                    "and this event records none",
+                    node=condition,
+                )
+            payload["whose"] = EVENT_SUBJECT_PLAYER
+        elif condition.whose != "you":
+            raise LoweringError(
+                f"no turn condition names {condition.whose!r}", node=condition
+            )
         return payload
     # Every condition that reads a **record** rather than the board, handed down
     # as the last thing this function does — the arrangement `_bound_returns`

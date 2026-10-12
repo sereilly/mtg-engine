@@ -1508,6 +1508,93 @@ def test_w1g6_malevolent_awakening_trades_a_creature_for_a_creature_card(set_poo
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Price of Glory ---------------------------------------------------------
+# "Whenever a player taps a land for mana, if it's not that player's turn,
+# destroy that land." An intervening-if (CR 603.4) about the seat the event
+# named, and a destroy of the land the event was about. Resolved at the tap
+# seam, like every non-mana trigger under this event (see Savage Firecat's
+# note in `test_ody_creatures.py`).
+
+def _w1g8_tap(game, seat, land):
+    return game.tap_land_for_mana(seat, land.card.name, permanent_id=land.permanent_id)
+
+
+@_w1g8_pytest.mark.parametrize("active", [0, 1])
+def test_w1g8_price_of_glory_destroys_a_land_tapped_off_turn(set_pool, active):
+    """Only the player whose turn it is taps safely — the enchantment's own
+    controller included when the turn is somebody else's."""
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    lands = [
+        _w1g8.put(game, set_pool, 0, "Mountain"),
+        _w1g8.put(game, set_pool, 1, "Forest"),
+    ]
+    game.start_turn(active)
+    idle = 1 - active
+
+    assert _w1g8_tap(game, active, lands[active])
+    assert game.is_on_battlefield(lands[active])
+
+    assert _w1g8_tap(game, idle, lands[idle])
+    assert not game.is_on_battlefield(lands[idle])
+    assert _w1g8.pile(game, idle) == [lands[idle].card.name]
+    symbol = "R" if idle == 0 else "G"
+    assert game.players[idle].mana_pool[symbol] == 1, (
+        "the mana was made before the land died (CR 605.3b)"
+    )
+
+
+def test_w1g8_two_prices_of_glory_destroy_one_land_once(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    _w1g8.put(game, set_pool, 1, "Price of Glory")
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    assert _w1g8_tap(game, 1, forest)
+
+    assert _w1g8.pile(game, 1) == ["Forest"], "one card in the graveyard, not two"
+    assert any("the permanent it named is gone" in line for line in game.log)
+
+
+def test_w1g8_price_of_glory_spares_a_regenerating_land_and_ignores_other_taps(set_pool):
+    """It says *destroy*: nothing here bypasses regeneration. And a land
+    tapped for something other than mana is not this event at all."""
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    game.become_tapped(forest)
+    assert game.is_on_battlefield(forest)
+
+    program = _w1g8_compile(set_pool("ODY")["Price of Glory"])
+    assert "bypass_regeneration" not in program.triggered_abilities[0].instruction.payload
+
+
+def test_w1g8_that_players_turn_needs_an_event_that_names_a_player():
+    """The refusing gate's refusal test: "that player's turn" under an event
+    that froze no player would be asked about the ability's controller."""
+    from tests.helpers import _mk_card
+
+    under_a_tap = _mk_card(
+        "Probe Price", "Enchantment",
+        "Whenever a player taps a land for mana, if it's that player's turn, "
+        "destroy that land.",
+    )
+    under_an_attack = _mk_card(
+        "Probe Price", "Creature — Dwarf",
+        "Whenever this creature attacks, if it's not that player's turn, "
+        "you gain 1 life.",
+    )
+    assert _w1g8_compile(under_a_tap).supported
+    assert not _w1g8_compile(under_an_attack).supported
 
 # ==== end W1G8 ======================================================
 

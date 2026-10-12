@@ -423,6 +423,15 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
             return ast.TurnIsYours()
         if stream.accept_phrase("an", "opponent", "'s", "turn"):
             return ast.TurnIsYours(negated=True)
+        # "…**if it's not that player's turn**, destroy that land." (Price of
+        # Glory.) The same question about the seat the firing event named;
+        # which seat that is, and whether this event froze one, is the
+        # lowering's to say.
+        outsider = bool(stream.accept_word("not"))
+        if stream.accept_phrase("that", "player", "'s", "turn"):
+            return ast.TurnIsYours(negated=outsider, whose="that_player")
+        if outsider and stream.accept_phrase("your", "turn"):
+            return ast.TurnIsYours(negated=True)
     stream.reset(turn_mark)
 
     # The long record readers — "it was a creature card", "a white creature dies

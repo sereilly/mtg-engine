@@ -652,9 +652,15 @@ class TurnIsYours:
     the other way round; a second node would be two readers of one fact, free to
     disagree about a game with three seats (it is *not* "an opponent's turn":
     with the source's controller inactive, every other seat's turn qualifies).
+
+    ``whose`` is the seat the clause names when it is not "your": "if it's not
+    **that player's** turn" (Price of Glory) asks about the player the firing
+    event was about. A field rather than a node, for ``negated``'s reason —
+    it is one question, whose turn is it, asked about a different seat.
     """
 
     negated: bool = False
+    whose: str = "you"
 
 
 @dataclass(frozen=True)
