@@ -6033,7 +6033,18 @@ class LegalityMixin:
         # resolution then refuses is the bug this module exists to prevent, and
         # it was live: the re-check asked only "is it a creature card?".
 
+        # A **cost**'s narrowing beyond its head type ("Exile a *black* card
+        # from your graveyard") rides the spec as ``cost_filter`` and is asked
+        # through the matcher the charger accepts by, so the two cannot
+        # disagree about a phrase the target vocabulary above has no key for.
+        cost_filter = spec.get("cost_filter") if spec.get("exile_cost") else None
+
         def eligible(card) -> bool:
+            if cost_filter:
+                from .handlers._common import _card_matches_filter
+
+                if not _card_matches_filter(card, cost_filter):
+                    return False
             return graveyard_card_matches(spec, card)
 
         for seat, player in enumerate(self.players):

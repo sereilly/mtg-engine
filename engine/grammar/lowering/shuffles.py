@@ -77,12 +77,19 @@ def _lower_shuffle_graveyard_into_library(
         # phrase one destination over. ``graveyard_owner`` is the chosen seat
         # rather than the printed pronoun: CR 404.1 makes that seat's library
         # the only one those cards can be shuffled into.
-        if node.whose.kind != "target_player":
+        #
+        # "Shuffle **any number of target creature cards from your graveyard**
+        # into your library." (Piper's Melody.) The caster's own pile, with
+        # nobody named in front: the same payload with the seat known when the
+        # spell is announced, which is what scopes the picker to one graveyard
+        # (``_graveyard_to_library_spec`` reads ``graveyard_owner: "you"``).
+        if node.whose.kind not in ("target_player", "you"):
             raise LoweringError(
-                "a chosen-card graveyard shuffle names the player it targets",
+                "a chosen-card graveyard shuffle names you or the player it "
+                "targets",
                 node=node,
             )
-        payload["whose"] = payload["graveyard_owner"] = "target_player"
+        payload["whose"] = payload["graveyard_owner"] = node.whose.kind
         payload.update(_chosen_graveyard_cards(node.chosen.filter, node.chosen, node))
         return (OracleInstruction("shuffle_graveyard_into_library", "", payload),)
     if node.cards is not None:

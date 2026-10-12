@@ -535,12 +535,30 @@ def is_mana_ability(ability) -> bool:
     other two clauses alone. That is the honest answer rather than a silent
     one — the four AI call sites pass a bare instruction and no planeswalker
     reaches them.
+
+    **An ability whose cost mills is not a mana ability either**, and this one
+    is a *ruling*, not a rule this repo can cite. "{T}, Mill a card: Add {C}.
+    (Activate only as an instant.)" — Millikin's Scryfall ruling of 2026-08-05:
+    "Millikin's ability is not a mana ability. Players can respond to it, and
+    it can't be activated in the middle of paying for a cost. A recent update
+    to rule 605.1a has made any abilities that move cards to or from libraries
+    no longer mana abilities." The ``MagicCompRules.txt`` shipped here is the
+    April 2026 edition and its 605.1a does not carry that clause yet, so the
+    reading is held to the one cost the ruling was written about — a **mill**
+    cost (Millikin, Charmed Pendant) — rather than to everything a wider
+    reading of "move cards to or from libraries" would reach. It is the
+    printed reminder text made true: an ability that uses the stack is
+    activated whenever its controller has priority, which is "only as an
+    instant". Like the loyalty clause it is a property of the cost, so a
+    caller holding a bare instruction is not told.
     """
     instruction = getattr(ability, "instruction", ability)
     if instruction is None or not hasattr(instruction, "kind"):
         return False
     cost = getattr(ability, "cost", None)
     if getattr(cost, "loyalty", None) is not None:
+        return False
+    if getattr(cost, "mill_cards", 0):
         return False
     steps = (instruction, *_every_nested_step(instruction))
     if not any(step.kind in MANA_PRODUCING_KINDS for step in steps):

@@ -41,6 +41,7 @@ from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._piles import OWN_PILE_SEATS, frozen_pile_record, one_card_pile_pick
 from ._sweeps import lower_exile_sweep
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
@@ -566,23 +567,21 @@ def _lower_exile(
         and subject.filter.zone == "graveyard"
         and subject.filter.is_card
         and subject.filter.zone_owner is not None
-        and subject.filter.zone_owner.kind == "you"
+        and subject.filter.zone_owner.kind in OWN_PILE_SEATS
     ):
-        filt = subject.filter
-        leftover = _restrictions_beyond(
-            filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
-        )
-        if leftover or len(filt.card_types) > 1 or node.counters:
+        if node.counters:
             raise LoweringError(
                 "the chosen graveyard exile reads one card type", node=node
             )
-        chosen: dict[str, object] = {
-            "count": int(subject.count), "graveyard_owner": "you", "up_to": False,
-        }
-        if filt.card_types:
-            chosen["card_type"] = filt.card_types[0]
-        else:
-            chosen["any_card"] = True
+        # "…target opponent may exile a card from **their** graveyard"
+        # (Gravestorm) arrives here too, its pile rewritten to the offered
+        # seat — see ``_piles.OWN_PILE_SEATS``. The builder writes the one
+        # card its other callers print; the count is this sentence's own
+        # (Bloodcurdler's "exile **two** cards"), which the prompt reads.
+        chosen = one_card_pile_pick(
+            subject.filter, OWN_PILE_SEATS[subject.filter.zone_owner.kind], node,
+        )
+        chosen["count"] = int(subject.count)
         return (OracleInstruction("exile_cards_from_graveyard", "", chosen),)
     # "…**with two delay counters on it**." (Ertai's Meddling.) CR 121.1's
     # counters put on the card as it arrives in exile, which only ``exile_self``
@@ -649,6 +648,21 @@ def _lower_exile(
 
     filt = subject.filter
     if filt.zone == "graveyard" and filt.is_card:
+        # "…you may exile **target card from that player's graveyard**."
+        # (Zombie Cannibal.) One card out of the pile the firing event froze a
+        # seat for, asked of the controller as it resolves — Rysorian Badger's
+        # stated deviation with a count of one. See ``_piles.frozen_pile_record``.
+        frozen = frozen_pile_record(filt.zone_owner, event)
+        if frozen is not None:
+            if node.counters:
+                raise LoweringError(
+                    "a pick out of a recorded player's pile carries no counters",
+                    node=node,
+                )
+            return (OracleInstruction(
+                "exile_cards_from_graveyard", "",
+                one_card_pile_pick(filt, frozen, node),
+            ),)
         if filt.zone_owner is not None or filt.subtypes or filt.colors:
             # The picker this lowers onto enumerates every graveyard. Whose pile
             # it may read, and a subtype or colour narrowing, are still shapes

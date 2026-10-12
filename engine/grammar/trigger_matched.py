@@ -147,9 +147,19 @@ def _accept_card_put_into_graveyard_from_anywhere(
     if described is None:
         stream.reset(mark)
         return None
-    if not stream.accept_phrase(
-        "is", "put", "into", "an", "opponent", "'s", "graveyard",
-        "from", "anywhere",
+    # Compost's tail, or "…into **your** graveyard **from your library**"
+    # (Pedantic Learning) — the same event with the pile and the source zone
+    # printed differently. Both are read whole: which pile and which zone are
+    # the compiler's narrowings (``your_graveyard`` / ``from_library``), and a
+    # tail this did not check would be a narrowing consumed and unrecorded.
+    if not (
+        stream.accept_phrase(
+            "is", "put", "into", "an", "opponent", "'s", "graveyard",
+            "from", "anywhere",
+        )
+        or stream.accept_phrase(
+            "is", "put", "into", "your", "graveyard", "from", "your", "library",
+        )
     ):
         stream.reset(mark)
         return None

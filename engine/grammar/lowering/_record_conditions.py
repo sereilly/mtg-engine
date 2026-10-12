@@ -66,7 +66,42 @@ from ._events import COUNTED_NUMBER
 # the declaration it reads are exactly the pair a second spelling makes vacuous —
 # which is what these two files did to each other until Pyromancy gave the
 # channel a second reader.
-from ._cost_records import DISCARDED_FOR_COST, optional_cost_key
+from ._cost_records import (DISCARDED_FOR_COST, EXILED_SET_FOR_COST,
+                            SACRIFICED_FOR_COST, optional_cost_key)
+
+
+def targets_one_graveyard_card(instructions) -> bool:
+    """Whether the effect a clause guards targets **one card in a graveyard**
+    — what "it" names in "…if it shares a card type with the card exiled this
+    way" (Holistic Wisdom).
+
+    :func:`pronoun_target_referent`'s question for a third kind of object, and
+    asked separately rather than as a third referent word for the reason
+    :func:`announces_target_pair` is: two readers of that word pass any
+    non-None answer straight to an evaluator that knows a spell and a
+    permanent, so a new value there would be answered about the wrong object.
+
+    Read off the target derivation itself rather than off a list of kinds, so
+    what the picker offers and what this vouches for are one answer.
+    """
+    if len(instructions) != 1:
+        return False
+    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
+
+    spec = derive_instruction_spec(instructions) or {}
+    return spec.get("kind") == GRAVEYARD_TARGET_KIND and not spec.get("count")
+
+
+#: The payment channels "the card <participle> this way" may name in a shared
+#: card type comparison: ``{participle: (key the cost seeds into `produced`,
+#: choices key the payment path records the object under)}``. The exile and
+#: the sacrifice record one object beside their set; the discard records a
+#: list. The evaluator reads all three shapes.
+_SHARED_TYPE_CHANNELS: dict[str, tuple[str, str]] = {
+    "exiled": (EXILED_SET_FOR_COST, "exiled_for_cost"),
+    "sacrificed": (SACRIFICED_FOR_COST, "sacrificed_for_cost"),
+    "discarded": (DISCARDED_FOR_COST, "discarded_for_cost"),
+}
 
 
 def lower_record_condition(
@@ -75,6 +110,8 @@ def lower_record_condition(
     event: str | None = None,
     referent: str | None = None,
     event_subject=None,
+    *,
+    graveyard_target: bool = False,
 ) -> dict[str, object]:
     """The half of :func:`_lower_condition` that reads a record.
 
@@ -283,6 +320,29 @@ def lower_record_condition(
             "channel": f"{condition.channel}_for_cost",
             "filter": described,
         }
+    if isinstance(condition, ast.SharesCardTypeWithCostCard):
+        # "…if it shares a card type with **the card exiled this way**."
+        # (Holistic Wisdom.) Two gates, because the sentence names two things.
+        # The record: unlike ``CostObjectWas`` above this is asked of an
+        # *ability*, whose cost is in view (``lower_ability`` seeds
+        # ``produced`` off it), so an ability whose cost makes no such payment
+        # refuses rather than comparing against nothing for ever. And the
+        # pronoun: "it" is the one card in a graveyard the guarded effect
+        # targets, which only the conditional lowering can vouch for.
+        wanted = _SHARED_TYPE_CHANNELS.get(condition.channel)
+        if wanted is None or wanted[0] not in produced:
+            raise LoweringError(
+                f"'the card {condition.channel} this way' with no cost in this "
+                "ability that makes that payment",
+                node=condition,
+            )
+        if not graveyard_target:
+            raise LoweringError(
+                "'it shares a card type' needs the one graveyard card the "
+                "effect it guards targets",
+                node=condition,
+            )
+        return {"kind": "target_card_shares_type_with_cost_card", "channel": wanted[1]}
     if isinstance(condition, ast.DiscardedCardWas):
         # Same discipline as the two back-references above, with the producer
         # named in the printed words: an ability that discarded nothing has no

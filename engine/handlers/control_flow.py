@@ -1249,9 +1249,20 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
                 value = subject.effective_toughness
             else:
                 value = subject.effective_power
+        # "…less than or equal to **the number of cards in your graveyard**"
+        # (Ghastly Demise). A bound that is a count, taken now — as the
+        # instruction is followed (CR 608.2c) — through the evaluator every
+        # counted amount goes through. The spell itself is still on the stack
+        # while it resolves (CR 608.2n puts it in the graveyard as the last
+        # step), so it does not count itself: the card's own ruling.
+        bound = int(payload.get("count", 0))
+        counted = payload.get("count_from")
+        if isinstance(counted, dict):
+            from ._common import count_from_payload
+
+            bound = count_from_payload(game, context, counted)
         return _comparison_holds(
-            {"op": payload.get("op", "eq"), "value": int(payload.get("count", 0))},
-            value,
+            {"op": payload.get("op", "eq"), "value": bound}, value,
         )
 
     if kind == "is_state":
@@ -1793,6 +1804,35 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         wanted = tuple(payload.get("keywords") or ())
         has = bool(wanted) and all(target.has_keyword(word) for word in wanted)
         return (not has) if payload.get("negated") else has
+
+    if kind == "target_card_shares_type_with_cost_card":
+        # "Return target card from your graveyard to your hand **if it shares
+        # a card type with the card exiled this way**." (Holistic Wisdom.) Two
+        # cards and no permanent: the target is the graveyard slot the
+        # activation announced (the handler beside this reads the same one),
+        # and the other is what the ability's own cost ate, off the payment
+        # path's record (CR 608.2h). Compared by **printed** card types
+        # (CR 205.2a; a card in a zone has no computed ones, CR 613.1), any one
+        # in common answering — an Artifact Creature shares with an artifact
+        # and with a creature both.
+        #
+        # No target or no record answers False: there is then nothing "it"
+        # names, and the return this guards must not happen.
+        from ..layer_bridge import printed_shape
+
+        slot = context.target_permanent_index
+        pile = context.caster.graveyard
+        if not isinstance(slot, int) or isinstance(slot, bool) or not 0 <= slot < len(pile):
+            return False
+        recorded = (context.choices or {}).get(str(payload.get("channel")))
+        if recorded is None:
+            return False
+        paid = recorded if isinstance(recorded, (list, tuple)) else (recorded,)
+        target_types = printed_shape(pile[slot])[0]
+        return any(
+            target_types & printed_shape(getattr(entry, "card", entry))[0]
+            for entry in paid
+        )
 
     if kind == "cost_object_was":
         # "…**if the exiled creature was a Thrull**" (Soul Exchange). The object
@@ -3201,8 +3241,29 @@ def _action_is_takeable(
     if instruction.kind == "exile_cards_from_graveyard":
         from ._common import graveyard_card_matches
 
+        pile_owner = instruction.payload.get("graveyard_owner")
+        if pile_owner == "damaged_player" and not instruction.payload.get("up_to"):
+            # "…you may exile **target card from that player's graveyard**."
+            # (Zombie Cannibal.) One card out of the pile the firing event
+            # named, so an empty pile is a real "nothing to exile" — there is
+            # no legal target, and asking "you may?" and then offering a pick
+            # with no answer is two prompts a seat has to dismiss. "Up to"
+            # keeps its offer (Rysorian Badger): zero is one of its answers.
+            # With no recorded seat the offer stands, the direction this
+            # function's docstring names.
+            seat = (
+                (context.trigger_context if context is not None else None) or {}
+            ).get("defending_player_index")
+            if isinstance(seat, int) and 0 <= seat < len(game.players):
+                return any(
+                    graveyard_card_matches(instruction.payload, card)
+                    for card in game.players[seat].graveyard
+                )
+            return True
         if (
-            instruction.payload.get("graveyard_owner") != "you"
+            # "you" and the seat an offer was made to (Gravestorm) are both
+            # *player* here — the offered seat picking from its own pile.
+            pile_owner not in ("you", "offered_player")
             or instruction.payload.get("targets")
         ):
             return True

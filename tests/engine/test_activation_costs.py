@@ -120,6 +120,28 @@ def test_every_admitted_cost_clause_is_charged(pool):
                     and not charged.sacrifice_attached
                 ):
                     unpaid.append(f"{card.name}: {ability.source_line}")
+            # **The source itself**, under either verb. "{T}, Sacrifice two
+            # lands **and this artifact**" (Sandstone Deadfall) parses to a
+            # counted sacrifice and a sacrifice of the source, and the charger
+            # read neither — but for as long as this guard compared only the
+            # *chosen* clauses, a charger that read the lands and dropped the
+            # artifact would have passed it. The source is a clause like any
+            # other: printed, admitted, and owed.
+            source_sacrificed = any(
+                isinstance(cost, ast.SacrificeCost) and cost.filter.is_source
+                for cost in node.costs
+            )
+            if source_sacrificed != bool(charged.sacrifice_self):
+                unpaid.append(
+                    f"{card.name}: charged sacrifice_self="
+                    f"{charged.sacrifice_self} for {source_sacrificed}"
+                )
+            source_exiled = any(isinstance(cost, ast.ExileSelf) for cost in node.costs)
+            if source_exiled != bool(charged.exile_self):
+                unpaid.append(
+                    f"{card.name}: charged exile_self={charged.exile_self} "
+                    f"for {source_exiled}"
+                )
             chosen_sacrifices = [
                 cost for cost in node.costs
                 if isinstance(cost, ast.SacrificeCost)
@@ -169,7 +191,12 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{wanted_exile}"
                         )
                     wanted_count = (
-                        cost.count.value if isinstance(cost.count, ast.Fixed) else None
+                        cost.count.value if isinstance(cost.count, ast.Fixed)
+                        # "Exile **any number of** cards from your graveyard"
+                        # (Painbringer): the payer's choice, as the sacrifice
+                        # spells it one comparison up.
+                        else "any" if isinstance(cost.count, ast.AnyNumber)
+                        else None
                     )
                     if charged.exile_count != wanted_count:
                         unpaid.append(
@@ -181,6 +208,14 @@ def test_every_admitted_cost_clause_is_charged(pool):
                             f"{card.name}: charged same_zone="
                             f"{charged.exile_same_zone} for {cost.same_zone}"
                         )
+                # "{T}, **Mill a card**: Add {C}." (Millikin.) A cost with no
+                # branch here is a cost nobody compared — the hole the tap and
+                # the counter costs each had once.
+                if isinstance(cost, ast.MillCost) and charged.mill_cards != cost.count:
+                    unpaid.append(
+                        f"{card.name}: charged {charged.mill_cards} mill(s) "
+                        f"for {cost.count}"
+                    )
                 if isinstance(cost, ast.DiscardCost) and not cost.last_drawn:
                     # "Discard your hand" and "Discard this card" are their own
                     # fields, not counts — one is never unpayable and the other

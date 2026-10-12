@@ -131,6 +131,78 @@ def _returns_its_own_source(
 
 
 
+#: The one event whose fire site freezes the seat "that creature's controller"
+#: names for an Aura's own return (``helpers.remove_all_from_battlefield``
+#: stamps ``event_subject_controller`` while the host still has one).
+_DEPARTING_HOST_EVENT = "attached_creature_leaves_battlefield"
+
+
+def _lower_host_controller_returns_aura(
+    node: ast.ReturnToZone, event: str | None
+) -> "tuple[OracleInstruction, ...] | None":
+    """"When enchanted creature leaves the battlefield, **that creature's
+    controller returns this Aura from its owner's graveyard to the
+    battlefield**." (Traveling Plague.) — or None when the sentence is not a
+    departed host's controller putting the source back.
+
+    Two steps, both Takklemaggot's and neither new. CR 303.4f: an Aura put
+    onto the battlefield without being cast is attached to an object *its
+    controller-to-be chooses* as it enters, and nothing is targeted — so the
+    seat the sentence names picks a legal host (``choose_permanent`` over the
+    source's own enchant ability, the one predicate the attach re-asks), and
+    the card enters under that seat's control attached to it. CR 303.4g: with
+    nothing it could enchant the Aura stays where it is, which is the ``if``
+    around the move. It comes back a new object, so with no plague counters
+    (CR 400.7; the card's ruling of 2005-08-01 says so in as many words).
+
+    The seat is the one the departure froze — the host is in another zone by
+    now and has no controller to ask — so the sentence is admitted only under
+    the event that froze it. A rider the move does not carry refuses.
+    """
+    owner = node.from_zone.owner
+    actor = node.actor
+    if not (
+        owner is not None and owner.kind == "owner"
+        and actor is not None and actor.kind == "that_player"
+        and node.to.name == "battlefield" and node.to.owner is None
+    ):
+        return None
+    if event != _DEPARTING_HOST_EVENT:
+        raise LoweringError(
+            "\"that creature's controller\" returns an Aura only where a "
+            "departing host froze that seat",
+            node=node,
+        )
+    if (
+        node.entering_tapped or node.entering_counters or node.under_control_of
+        or node.attached_to or node.losing_subtypes or node.losing_abilities
+        or node.gaining_abilities or node.exile_on_leave
+    ):
+        raise LoweringError(
+            "the host's controller returns the Aura with no rider", node=node
+        )
+    choose = OracleInstruction("choose_permanent", "", {
+        # No noun is printed: what it may enchant is the Aura's own enchant
+        # ability, which ``legal_host_for_source`` asks.
+        "filter": {},
+        "result_key": _ATTACH_HOST_KEY,
+        "prompt": "Choose a permanent.",
+        "chooser": "event_subject_controller",
+        "optional": False,
+        "legal_host_for_source": True,
+    })
+    put = OracleInstruction("return_source_card_to_battlefield", "", {
+        "control": "event_subject_controller", "attached_to": _ATTACH_HOST_KEY,
+    })
+    return (OracleInstruction("sequence", "", {"steps": (
+        choose,
+        OracleInstruction("if_then", "", {
+            "condition": {"kind": "it_happened", "key": _ATTACH_HOST_KEY},
+            "then": (put,), "else": (),
+        }),
+    )}),)
+
+
 def lower_untargeted_return(
     node: ast.ReturnToZone,
     subject,
@@ -726,6 +798,9 @@ def lower_untargeted_return(
     # only ever as complete as the last card that touched it.
     if _is_source(subject) and node.from_zone is not None and node.from_zone.name == "graveyard":
         assert isinstance(subject, ast.TargetSpec)
+        rehosted = _lower_host_controller_returns_aura(node, event)
+        if rehosted is not None:
+            return rehosted
         if node.from_zone.owner is None or node.from_zone.owner.kind != "you":
             raise LoweringError(
                 "a card returns itself from its owner's graveyard", node=node

@@ -194,6 +194,17 @@ def _offered_keys(game, spec) -> set:
     return keys
 
 
+def _graveyard_keys(game) -> frozenset:
+    """Every card in every graveyard, in :func:`_target_key`'s spelling — the
+    piles as they stood when it was called."""
+    keys = set()
+    for seat, player in enumerate(game.players):
+        for index in range(len(player.graveyard)):
+            stamp = game.graveyard_target_at(seat, index)
+            keys.add(("graveyard", stamp.seat, id(stamp.card), stamp.ordinal))
+    return frozenset(keys)
+
+
 def _names(named, targets) -> bool:
     for target in targets or ():
         if named[0] != target.kind:
@@ -232,11 +243,15 @@ class _Sweep:
         self.targeted = 0          # announced a target; read back; one trigger
         self.untargeted = 0        # announced none (or a non-target); read (); no trigger
         self.wrong: list[str] = []
-        # (label, game, item, what its picker offered, its source) — for the
-        # change census.
+        # (label, game, item, what its picker offered, its source, every
+        # graveyard card there was when that picker ran) — for the change
+        # census.
         self.objects: list[tuple] = []
 
-    def judge(self, label, game, item, spec, named, offered=frozenset(), source=None) -> None:
+    def judge(
+        self, label, game, item, spec, named, offered=frozenset(), source=None,
+        piles_before=frozenset(),
+    ) -> None:
         targets = chosen_targets(game, item)
         watching = [
             trigger for trigger in _watching(game)
@@ -255,7 +270,7 @@ class _Sweep:
                 self.wrong.append(f"{label}: chose a target, {len(watching)} trigger(s)")
             else:
                 self.targeted += 1
-                self.objects.append((label, game, item, offered, source))
+                self.objects.append((label, game, item, offered, source, piles_before))
             return
         if targets:
             self.wrong.append(f"{label}: named no target, read {targets}")
@@ -285,12 +300,16 @@ def _sweep_casts(pool, by_name, only=None) -> _Sweep:
                 spec = game.cast_target_spec(0, face)
             keywords, named = _first_pick(game, spec)
             offered = _offered_keys(game, spec)
+            piles_before = _graveyard_keys(game)
             before = len(game.stack)
             result = game.queue_from_hand(0, face.name, **(keywords or {}))
             if not result.supported or len(game.stack) <= before:
                 continue
             item = game.stack[before]
-            sweep.judge(f"cast:{face.name}", game, item, spec, named, offered)
+            sweep.judge(
+                f"cast:{face.name}", game, item, spec, named, offered,
+                piles_before=piles_before,
+            )
     return sweep
 
 
@@ -334,6 +353,7 @@ def _sweep_activations(pool, by_name, only=None) -> _Sweep:
                     chosen = game.permanent_at(sole["seat"], sole["index"])
                     named = ("permanent", chosen.permanent_id)
             offered = _offered_keys(game, spec)
+            piles_before = _graveyard_keys(game)
             before = len(game.stack)
             result = game.queue_permanent_ability(
                 0, card.name, ability_index=index, **(keywords or {})
@@ -347,7 +367,10 @@ def _sweep_activations(pool, by_name, only=None) -> _Sweep:
                 continue
             if spec.get("sacrifice_cost") or spec.get("discard_cost"):
                 named = None
-            sweep.judge(f"act:{card.name}#{index}", game, item, spec, named, offered, source)
+            sweep.judge(
+                f"act:{card.name}#{index}", game, item, spec, named, offered, source,
+                piles_before=piles_before,
+            )
     return sweep
 
 
@@ -375,43 +398,66 @@ _ACTIVATION_CHANGED_FLOOR = 380
 _ACTIVATION_REFUSED_CEILING = 20
 
 
-#: Abilities whose cost puts a card into the graveyard their effect then
-#: targets ("Sacrifice a creature: return target creature card from your
-#: graveyard …"). The card the cost just put there was not in the pile when the
-#: ability's own picker ran, and *is* a legal target by the time a change is
-#: made — CR 115.7a judges "another legal target" when the target is changed,
-#: not when the object was announced. The only candidates in the pool the
-#: picker did not also offer.
-_FED_BY_THEIR_OWN_COST = frozenset({
-    "act:Phyrexian Furnace#1", "act:Recurring Nightmare#0",
-    "act:Apprentice Necromancer#0", "act:Obsessive Stitcher#1",
-})
+#: How many objects the change census may excuse for offering a card **their
+#: own announcement put into a graveyard** — see :func:`_fed_by_its_own_cost`.
+#: Eight in the pool at Odyssey's ingest (four of them Odyssey's). A ceiling
+#: rather than a list of names, because the excuse is a fact about the game the
+#: census drove and not about which card was driven; it is here so that the
+#: arm cannot quietly grow into the hole it was written to avoid.
+_FED_BY_OWN_COST_CEILING = 20
 
 
-def _change_every_object(objects) -> tuple[int, int, Counter, list]:
+def _fed_by_its_own_cost(game, unoffered, piles_before) -> bool:
+    """Whether every candidate the picker never offered is a card that was
+    **not in any graveyard when the picker ran**.
+
+    "Sacrifice this creature: Exile target card from a graveyard." (Crypt
+    Creeper.) CR 601.2c chooses the target before CR 601.2h pays the cost, so
+    the Creeper is on the battlefield while its own picker runs and in a
+    graveyard by the time anything could change the target — and CR 115.7a
+    judges "another legal target" when the target is changed, not when the
+    object was announced. A re-aim onto it is legal, and it is the one legal
+    target the object's own picker could not have listed.
+
+    This was a list of four card names, and Odyssey printed four more on the
+    day it was ingested (Crypt Creeper, Steamclaw, Malevolent Awakening,
+    Petrified Field). The property is stated instead: the piles are read
+    before the announcement and again here, and what is excused is exactly a
+    graveyard card in the second reading that was not in the first. A card
+    that *was* there and was not offered — the wider-list defect this census
+    exists to find — is not excused by it, whatever the ability costs.
+    """
+    arrived = _graveyard_keys(game) - piles_before
+    return bool(unoffered) and unoffered <= arrived
+
+
+def _change_every_object(objects, fed: list | None = None) -> tuple[int, int, Counter, list]:
     """CR 115.7a over every targeted object a sweep drove.
 
     **Every candidate is one the object's own picker offered** — the list taken
     before the object was announced, by the code the client and the
     announcement gates read. That is the property a re-aim must not lose: a
     target the object could not legally have had. Two things the picker could
-    not have offered are legal all the same and are allowed by name: an
-    ability's own source once paying its cost made it eligible (a Royal
-    Assassin tapped for its own cost is a tapped creature), and
-    :data:`_FED_BY_THEIR_OWN_COST`.
+    not have offered are legal all the same and are allowed, each by what it
+    is rather than by name: an ability's own source once paying its cost made
+    it eligible (a Royal Assassin tapped for its own cost is a tapped
+    creature), and a card the object's own announcement put into a graveyard
+    (:func:`_fed_by_its_own_cost`).
 
     Where a complete change exists the first one is written and read back: the
     object then names exactly the picks — as many targets as before, none of
     them the target that slot had — and still resolves. Where the engine offers
     no change the reason is counted. Returns ``(changed, with nowhere else to
-    point, refusals by reason, what went wrong)``.
+    point, refusals by reason, what went wrong)``; the labels excused by
+    :func:`_fed_by_its_own_cost` are appended to *fed* when a caller passes a
+    list for them.
 
     Inside the sweep's own test rather than a test of its own, so each sweep
     is built once: the objects are live games, and a second test reading them
     would rebuild the sweep on whichever worker it landed on.
     """
     changed, nowhere_to_go, refused, wrong = 0, 0, Counter(), []
-    for label, game, item, offered, source in objects:
+    for label, game, item, offered, source, piles_before in objects:
         slots = change_slots(game, item)
         if isinstance(slots, str):
             refused[slots] += 1
@@ -421,10 +467,10 @@ def _change_every_object(objects) -> tuple[int, int, Counter, list]:
         } - offered
         if source is not None:
             unoffered.discard(("permanent", source.permanent_id))
-        if unoffered and not (
-            label in _FED_BY_THEIR_OWN_COST
-            and all(key[0] == "graveyard" for key in unoffered)
-        ):
+        if unoffered and _fed_by_its_own_cost(game, unoffered, piles_before):
+            if fed is not None:
+                fed.append(label)
+        elif unoffered:
             wrong.append(f"{label}: offers {len(unoffered)} target(s) its picker never did")
             continue
         picks: list = []
@@ -494,11 +540,15 @@ def test_every_activation_reads_back_what_it_announced_and_triggers_once(pool, b
     assert sweep.targeted > 400, sweep.targeted
     assert sweep.untargeted > 450, sweep.untargeted
 
-    changed, nowhere_to_go, refused, wrong = _change_every_object(sweep.objects)
+    fed: list = []
+    changed, nowhere_to_go, refused, wrong = _change_every_object(sweep.objects, fed)
     assert not wrong, f"{len(wrong)}: {sorted(wrong)[:12]}"
     assert set(refused) <= _UNCHANGEABLE_REASONS, set(refused) - _UNCHANGEABLE_REASONS
     assert changed > _ACTIVATION_CHANGED_FLOOR, (changed, nowhere_to_go, dict(refused))
     assert sum(refused.values()) < _ACTIVATION_REFUSED_CEILING, dict(refused)
+    # The excuse has to have excused something — the four cards it replaced a
+    # list of are still in the pool — and not much.
+    assert 4 <= len(fed) < _FED_BY_OWN_COST_CEILING, sorted(fed)
 
 
 # -- validated backwards --------------------------------------------------------
@@ -587,6 +637,42 @@ def test_the_census_sees_a_change_offered_from_a_wider_list(pool, by_name, monke
     assert not any("Icy Manipulator" in line for line in wrong), wrong
 
 
+def test_the_census_excuses_only_a_card_the_announcement_put_there(pool, by_name, monkeypatch):
+    """:func:`_fed_by_its_own_cost` from both sides. Recurring Nightmare
+    sacrifices a creature and returns a creature card from its controller's
+    graveyard, so the creature it just sacrificed is a legal re-aim its picker
+    could not have listed — excused. Widen the same object's candidates by the
+    *opponent's* creature card, in its pile since before the picker ran, and
+    the census has to name the card again: the excuse is about when a card
+    arrived, not about which ability was driven."""
+    subset = {"Recurring Nightmare"}
+    sweep = _sweep_activations(pool, by_name, only=subset)
+    assert sweep.targeted == 1 and not sweep.wrong
+    fed: list = []
+    _changed, _nowhere, _refused, wrong = _change_every_object(sweep.objects, fed)
+    assert not wrong and fed == ["act:Recurring Nightmare#0"]
+
+    real = stack_targets._candidates
+
+    def widened(game, item, announcement, current):
+        # Seat 1's Grizzly Bears: a creature card, and never in *your* graveyard.
+        stamp = game.graveyard_target_at(1, 0)
+        return real(game, item, announcement, current) + [
+            stack_targets.ChosenTarget(
+                "graveyard", stamp=stamp,
+                channel=current.channel, position=current.position, mode=current.mode,
+            )
+        ]
+
+    sweep = _sweep_activations(pool, by_name, only=subset)
+    monkeypatch.setattr(stack_targets, "_candidates", widened)
+    fed = []
+    _changed, _nowhere, _refused, wrong = _change_every_object(sweep.objects, fed)
+
+    assert any("act:Recurring Nightmare#0: offers" in line for line in wrong), wrong
+    assert not fed
+
+
 # -- triggered abilities ---------------------------------------------------------
 
 #: Triggered abilities that **print a target and do not come to have one as a
@@ -615,12 +701,28 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     "Diabolic Servitude#0", "Iridescent Drake#0", "Body Snatcher#1",
     "Junk Diver#0", "Strongarm Thug#0", "Shipwreck Dowser#0",
     "Reya Dawnbringer#0", "Crypt Angel#0", "Phyrexian Delver#0",
+    # Odyssey's ingest. Driven: cast naming an enchantment card in its own
+    # graveyard, the creature's spell and then its entry trigger both read
+    # that card back and the trigger returns it — Gravedigger's shape and
+    # Gravedigger's gap, one card type over.
+    "Auramancer#0",
+    # Odyssey, W1G6. "…you may exile target card from **that player's**
+    # graveyard": both reasons at once — a card in a graveyard, out of a pile
+    # only the damage event names. Rysorian Badger's shape with a count of one
+    # (which is "up to two" and so reads as announcing nothing here): the
+    # controller is asked which card as the ability resolves, out of exactly
+    # that player's pile, and is not asked at all over an empty one.
+    "Zombie Cannibal#0",
     # narrowed by a seat only the firing event knows
     "Heart of Bogardan#1", "Oath of Lieges#0", "Oath of Scholars#0",
     "Oath of Ghouls#0", "Oath of Mages#0", "Oath of Druids#0",
     "Soltari Visionary#0", "Pandemonium#0", "Somnophore#0", "Sigil of Sleep#0",
     "Caustic Wasps#0", "Latulla's Orders#0", "Chandra's Incinerator#0",
     "Feline Sovereign#0",
+    # Odyssey's ingest. "…deal 1 damage to target creature **that player
+    # controls**" — Caustic Wasps' shape. Driven through a real combat damage
+    # step it targets a creature of the damaged player's and kills it.
+    "Spark Mage#0",
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",

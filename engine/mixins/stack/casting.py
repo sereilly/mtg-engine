@@ -25,8 +25,8 @@ from ...auras import aura_enchant_clause
 from ...alternative_costs import (AlternativeCost, alternative_costs,
                                   board_noun)
 from ...cast_costs import (AdditionalCost, OptionalManaCost, additional_costs,
-                           buyback_cost, cast_announces_x, kicked,
-                           optional_x_offers)
+                           buyback_cost, cast_announces_x, graveyard_card_noun,
+                           kicked, optional_x_offers)
 from ...cast_prohibitions import cast_prohibition
 from ...cast_restrictions import check_cast_timing
 from ...cast_timing import (CAST_AT_INSTANT_SPEED, a_sorcery_could_be_cast,
@@ -2516,10 +2516,10 @@ class SpellCastingMixin:
                 wanted = cost.exiled_from_graveyard(x_value)
                 available = self._graveyard_exile_candidates(caster_index, cost)
                 if len(available) < wanted:
-                    noun = filter_head_noun(cost.exile_graveyard_filter)
+                    noun = graveyard_card_noun(cost.exile_graveyard_filter)
                     return (
                         f"{card.name} can't be cast: {caster.name}'s graveyard "
-                        f"holds {len(available)} {noun} card(s) and its "
+                        f"holds {len(available)} {noun}(s) and its "
                         f"additional cost exiles {wanted} (CR 601.2h)"
                     )
             # CR 119.4: a player may pay life only down to 0, and CR 601.2h then

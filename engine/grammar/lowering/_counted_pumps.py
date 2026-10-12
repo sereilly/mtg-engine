@@ -38,7 +38,7 @@ from ._amounts import (count_spec, counted_definition_spec,
 from ._common import (chargeable_card_filter, _describe_targets,
                       _filter_payload, _is_enchanted, _is_source,
                       _is_target, _restrictions_beyond)
-from ._cost_records import cost_record_spec
+from ._cost_records import cost_count_spec, cost_record_spec
 from ._events import _EVENT_SUBJECT_OBJECTS
 
 #: The printed durations a *targeted* pump has a sweep for, mapped to the
@@ -592,6 +592,10 @@ def _x_definition_spec(
                 "a recorded X names its producer and carries no bonus", node=node
             )
         if definition.source not in recorded:
+            # …unless the ability's own *cost* ate them (Painbringer).
+            paid = cost_count_spec(definition.source, recorded)
+            if paid is not None:
+                return paid
             # The gate every back-reference in this grammar carries: with no
             # step in front of it the words name nothing, and the spec would be
             # answered 0 — a card that reports supported and pumps by nothing.

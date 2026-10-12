@@ -19,7 +19,7 @@ This module imports nothing from `phrases` any longer.
 """
 
 from . import ast
-from ..oracle_types import DREW_COUNT, REVEALED_THIS_WAY
+from ..oracle_types import DREW_COUNT, EXILED_THIS_WAY, REVEALED_THIS_WAY
 from .amounts import accept_counters_on_granter, accept_counters_on_source
 from .cost_records import (accept_cost_channel_possessive,
                            accept_cost_characteristic_of)
@@ -616,6 +616,16 @@ def accept_this_way_count(stream: TokenStream, filt) -> "ast.Amount | None":
         if filt.is_card and _names_only_cards(filt):
             return ast.ThatMuch(REVEALED_THIS_WAY)
     stream.reset(revealed)
+    # "…, where X is the number of cards **exiled this way**." (Painbringer.)
+    # The fifth participle, read exactly as the reveal above is and held to the
+    # bare noun for its reason. The key is the one a step of an *effect*
+    # writes; where the exile was the ability's own **cost** instead, the
+    # lowering finds no such step and asks ``_cost_records.cost_count_spec``.
+    exiled = stream.mark()
+    if stream.accept_phrase("exiled", "this", "way"):
+        if filt.is_card and _names_only_cards(filt):
+            return ast.ThatMuch(EXILED_THIS_WAY)
+    stream.reset(exiled)
     drew = stream.mark()
     if stream.accept_word("they", "you") and stream.accept_phrase("drew", "this", "way"):
         if filt.is_card and _names_only_cards(filt):

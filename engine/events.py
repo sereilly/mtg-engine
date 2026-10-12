@@ -420,8 +420,28 @@ def _card_put_into_graveyard_filter(
     without either word says.
     """
     payload = trig.condition.payload
+    # "…**from your library**" (Pedantic Learning). The one narrowing here that
+    # is about where the card came *from*, tested first because it is the
+    # cheapest and rules out the most: a discard, a death and a spell finishing
+    # all reach this seam with another source zone or none. The seam names the
+    # library for every caller that moves a card out of one.
+    if "from_library" in payload and event.payload.get("graveyard_from_zone") != "library":
+        return False
+    described = payload.get("graveyard_card_filter")
     if "your_graveyard" in payload:
-        return game.controller_index_of(permanent) == event.payload.get("owner_index")
+        if game.controller_index_of(permanent) != event.payload.get("owner_index"):
+            return False
+        if not described:
+            return True
+        # …and the phrase, where the sentence printed one ("a **land** card"):
+        # Energy Field's "a card" carries none and returned above.
+        from .handlers._common import _card_matches_filter
+
+        card = event.subject
+        return card is not None and _card_matches_filter(
+            card, described, game=game,
+            owner=game.players[event.payload["owner_index"]],
+        )
     if "another_card" in payload:
         return event.subject is not permanent.card
     # "Whenever **a black card** is put into **an opponent's** graveyard from
@@ -442,7 +462,6 @@ def _card_put_into_graveyard_filter(
     # position. Dropped, Compost would draw on every card reaching any
     # opponent's pile, which is a strictly larger card than the one printed and
     # one every census in this repo reads as implemented.
-    described = payload.get("graveyard_card_filter")
     if "opponent_graveyard" in payload or described:
         watcher = game.controller_index_of(permanent)
         owner = event.payload.get("owner_index")

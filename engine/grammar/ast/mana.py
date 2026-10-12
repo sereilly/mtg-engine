@@ -240,6 +240,14 @@ class AddMana:
     #: control", "a land an opponent controls"), each read word for word, so
     #: the one adjective Star Compass prints refused the whole line.
     could_produce_lands: object | None = None
+    #: "**For each colored mana symbol in the milled card's mana cost**, add
+    #: one mana of that color." (Charmed Pendant.) No symbol can be written
+    #: here: what is added is read off a card the ability's own *cost* put into
+    #: the graveyard, one mana per coloured symbol of its printed mana cost
+    #: (CR 202.1; a generic or colourless symbol adds nothing). The value is
+    #: the cost-record key that holds the card — ``"milled_for_cost"`` — so the
+    #: lowering can demand the cost that writes it.
+    colored_symbols_of_record: str | None = None
 
 
 @dataclass(frozen=True)

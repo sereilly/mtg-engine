@@ -361,6 +361,15 @@ def count_from_payload(
         return max(0, _scaled(
             sum(int(getattr(card, "cmc", 0) or 0) for card in discarded), spec
         ))
+    # "…where X is **the number of cards exiled this way**" (Painbringer). How
+    # many cards the ability's own cost exiled — the counter channel below one
+    # object kind over, and off the same record for its reason: the cards left
+    # the graveyard before the ability was on the stack (CR 601.2h), so no
+    # zone holds "the cards exiled this way" apart from everything else in
+    # exile. An "any number of" that named none is zero.
+    if spec.get("cost_exiled_count"):
+        exiled_set = (context.choices or {}).get("exiled_set_for_cost") or ()
+        return max(0, _scaled(len(exiled_set), spec))
     # "…equal to **the number of pain counters removed this way**" (Torture
     # Chamber); "You gain 2 life **for each elixir counter removed this way**"
     # (Essence Bottle). How many counters the ability's own cost took off,

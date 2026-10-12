@@ -314,6 +314,17 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("card_put_into_graveyard",
      r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
      r"(?P<opponent_graveyard>)an opponent's graveyard from anywhere"),
+    # "Whenever **a land card** is put into **your** graveyard **from your
+    # library**, you may pay {1}. If you do, draw a card." (Pedantic Learning.)
+    # The same event at the same seam with a third narrowing no sibling
+    # prints: the zone the card *came out of*. It rides as data like the other
+    # two — ``Game.put_card_into_graveyard`` already puts the source zone on
+    # the event for every caller that names one — so a mill, a search that
+    # bins a card and a look that discards the rest are this condition, and a
+    # discard or a death is not.
+    ("card_put_into_graveyard",
+     r"whenever (?P<graveyard_card_subject>an? [a-z]+ card) is put into "
+     r"(?P<your_graveyard>)your graveyard (?P<from_library>)from your library"),
     # "Whenever **you** discard a card" (Necropotence) beside "whenever **an
     # opponent** discards a card" (Megrim). CR 701.9a's discard is an action
     # abilities watch, and the two discard seams announce it — the random/forced
@@ -2889,6 +2900,69 @@ def _split_mana_per_counter(
     return remaining, rate, match.group(2)
 
 
+_MILL_COST = re.compile(r"\bmill (an?|\w+) cards?\s*(?=,|$)")
+
+
+def _mill_cost(cost_lower: str) -> int:
+    """How many cards a "**Mill a card**" cost clause mills, or 0.
+
+    "{T}, Mill a card: Add {C}." (Millikin.) The charging half of
+    ``grammar/costs.py``'s mill branch, admitting exactly what that admits: an
+    article or a printed number, and nothing after the noun — "mill a card
+    from target player's library" is not this cost and has no payment path.
+    The regex delimits the count and ``_NUMBER_WORDS`` reads it, the split
+    every counted clause in this file makes; a word that is not a number
+    charges nothing, which the pool-wide cost guard names.
+    """
+    match = _MILL_COST.search(cost_lower)
+    if match is None:
+        return 0
+    word = match.group(1)
+    if word in ("a", "an"):
+        return 1
+    number = int(word) if word.isdigit() else _NUMBER_WORDS.get(word, 0)
+    return number if number >= 2 else 0
+
+
+_CONJOINED_SELF_COST = re.compile(
+    rf"\b(sacrifice|exile) (?!this\b)([^,:]+?) and this (?:{_SELF_COST_NOUNS})\b"
+    r"\s*(?=,|$)"
+)
+
+
+def _split_conjoined_self(cost_lower: str) -> tuple[str, frozenset[str]]:
+    """*cost_lower* with every "… **and this <permanent>**" tail removed, plus
+    the verbs whose tail it was.
+
+    "{T}, Sacrifice two lands **and this artifact**" (Sandstone Deadfall);
+    "{T}, Exile two cards from your graveyard **and this creature**" (Zombie
+    Assassin). One printed verb naming a chosen set *and* the ability's own
+    source, source last — the mirror of Kyscu Drake's "Sacrifice this creature
+    and a creature named …", which names it first and has its own reader.
+
+    The tail is **taken out** rather than merely noticed, for the reason
+    :func:`_split_mana_per_counter` takes its clause out: every reader below
+    delimits a noun phrase to the end of its cost segment, so "two lands and
+    this artifact" reached the noun parser whole, was refused whole, and the
+    cost was charged as *nothing* — Sandstone Deadfall destroyed an attacker
+    for {T} and stayed on the battlefield with its controller's lands.
+
+    One reader for both verbs because it is one shape: what differs is which
+    flag the source rides (``sacrifice_self`` / ``exile_self``), and the caller
+    sets that only once the chosen half has been read. ``(?!this\\b)`` keeps the
+    source-first spelling with its own reader, and ``[^,:]`` keeps an Oxford
+    list ("a creature named …, a creature named …, and this creature") with
+    the list reader, which already counts its source.
+    """
+    verbs: set[str] = set()
+
+    def strip(match: "re.Match[str]") -> str:
+        verbs.add(match.group(1))
+        return f"{match.group(1)} {match.group(2)}"
+
+    return _CONJOINED_SELF_COST.sub(strip, cost_lower), frozenset(verbs)
+
+
 def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     required = {"W": 0, "U": 0, "B": 0, "R": 0, "G": 0, "C": 0, "generic": 0}
     requires_tap = False
@@ -2931,10 +3005,29 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # clause left of the ":" counts — "Draw a card" as an effect must not be read
     # as a cost.
     cost_lower = cost_part.lower()
+    # "{T}, Sacrifice two lands **and this artifact**" (Sandstone Deadfall);
+    # "{T}, Exile two cards from your graveyard **and this creature**" (Zombie
+    # Assassin). Taken off the clause before any reader below sees it — see
+    # :func:`_split_conjoined_self` — and put back as the source's own flag
+    # once the chosen half has been read.
+    cost_lower, conjoined_self = _split_conjoined_self(cost_lower)
     discard_last_drawn = "discard the last card you drew this turn" in cost_lower
     exile_self = bool(
         re.search(rf"\bexile this ({_SELF_COST_NOUNS})\b", cost_lower)
     )
+    # "**Exile this card from your hand**: Add {G}." (Elvish Spirit Guide.)
+    # The source, named as a *card* because that is what it is where this cost
+    # can be paid — and "card" is deliberately not among ``_SELF_COST_NOUNS``,
+    # so the line above read nothing and the ability compiled with **no cost
+    # at all**: on the battlefield the Guide made {G} for free as often as it
+    # was asked, and in a hand, where the card says the ability is, it could
+    # not be activated. Both halves are one fact (CR 113.6j) and it rides the
+    # two fields that already say it: the source is what is exiled, and the
+    # zone it is exiled from is a hand. ``activation_zones`` reads that pair.
+    exile_self_from_hand = bool(
+        re.search(r"\bexile this card from your hand\b", cost_lower)
+    )
+    exile_self = exile_self or exile_self_from_hand
     # "Exile a creature you control" (City of Shadows) / "Exile a creature
     # card from your graveyard" (Necropolis) - a *chosen* object rather than
     # the source. The regex only **delimits** the noun phrase to the end of
@@ -3016,7 +3109,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
     # enumerates cards the payer holds, and answering "battlefield" would look
     # for a permanent that is not there and charge nothing while the ability
     # still resolved.
-    exile_zone = "battlefield"
+    exile_zone = "hand" if exile_self_from_hand else "battlefield"
     if chosen_exile is not None:
         phrase = chosen_exile.group(1)
         if "from your graveyard" in phrase:
@@ -3064,6 +3157,28 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
                         exile_zone_owner = (
                             "you" if "from your graveyard" in phrase else None
                         )
+    # "Exile **any number of** cards from your graveyard" (Painbringer). The
+    # count left to the payer, which is the sacrifice's "any number of" one
+    # verb over and is carried the same way: the same filter field, with the
+    # count saying it is a choice. The counted row above read "any" as a word
+    # that is not a number and charged nothing.
+    #
+    # Only "from your graveyard" — anchored in the regex rather than checked
+    # afterwards, because the activation path names the set by graveyard slot
+    # (``cost_graveyard_indices``) and has no such channel for a battlefield or
+    # a hand; the grammar refuses the other zones with the same words.
+    if exile_filter is None and not exile_self:
+        any_exile = re.search(
+            r"\bexile any number of ([^,:]+? from your graveyard)\s*(?=,|$)",
+            cost_lower,
+        )
+        if any_exile is not None:
+            narrowed = _chargeable_exile_filter(any_exile.group(1), plural=True)
+            if narrowed is not None:
+                exile_filter = narrowed
+                exile_count = "any"
+                exile_zone = "graveyard"
+                exile_zone_owner = "you"
     # "Sacrifice this artifact" (Black Lotus, Bottle of Suleiman). Older
     # printings name the card instead of saying "this artifact", so accept
     # either wording.
@@ -3450,6 +3565,15 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
             if number >= 2:
                 remove_counter = counted_removal.group(2)
                 remove_counter_count = number
+    # The source a conjoined tail named, charged only where the chosen half in
+    # front of it was read: with that half unread the clause charges nothing at
+    # all, which is the answer the pool-wide guard compares against the
+    # grammar's and names — a source charged alone would be a third of the
+    # printed cost passing as the whole of it.
+    if "sacrifice" in conjoined_self and sacrifice_filter is not None:
+        sacrifice_self = True
+    if "exile" in conjoined_self and exile_filter is not None:
+        exile_self = True
     return ActivatedAbilityCost(
         required, requires_tap, discard_last_drawn, exile_self, sacrifice_self,
         return_self_to_hand=return_self_to_hand,
@@ -3489,6 +3613,7 @@ def parse_activated_ability_cost(line: str) -> ActivatedAbilityCost:
         exile_graveyard_position=exile_graveyard_position,
         untap_filter=_chargeable_untap_cost(cost_lower),
         chosen_keyword_options=_chosen_keyword_options(cost_lower),
+        mill_cards=_mill_cost(cost_lower),
     )
 
 

@@ -1652,7 +1652,14 @@ class PendingChoicesMixin:
             # looked at again.
             if choice.data.get("rest_destination") == "graveyard":
                 for card in rest:
-                    self.put_card_into_graveyard(caster, card)
+                    # The looked-at cards are the top of this library, so the
+                    # move is one out of a library and says so. The seam
+                    # announces a source zone only where a caller names it,
+                    # and unnamed this was a mill that Gaea's Blessing's own
+                    # trigger and "whenever a land card is put into your
+                    # graveyard from your library" (Pedantic Learning) could
+                    # not see.
+                    self.put_card_into_graveyard(caster, card, from_zone="library")
                 return
             # "…and **exile the rest**." (Browse.) The cards leave the game
             # rather than the library, which is why the same ability may be

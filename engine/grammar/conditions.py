@@ -30,7 +30,7 @@ entirely, which made every conditional trigger fire unconditionally.
 
 from . import ast
 from .errors import GrammarError
-from .bounds import parse_comparison
+from .bounds import accept_spelled_comparison, parse_comparison
 from .readers import accept_source_reference, accept_source_reference_spec
 from .references import parse_target_spec
 from .durations import _parse_duration
@@ -543,8 +543,14 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
     if stream.accept_word("its"):
         for words, characteristic in _ITS_CHARACTERISTICS:
             if stream.accept_phrase(*words, "is"):
+                # "Destroy target nonblack creature if **its toughness is less
+                # than or equal to the number of cards in your graveyard**."
+                # (Ghastly Demise.) The comparison spelled out in front of its
+                # bound, which is how a card compares against a count; the
+                # postfix "2 or less" keeps the reader it had.
                 return ast.SubjectCharacteristicIs(
-                    _TARGET_PRONOUN_SPEC, characteristic, parse_comparison(stream)
+                    _TARGET_PRONOUN_SPEC, characteristic,
+                    accept_spelled_comparison(stream) or parse_comparison(stream),
                 )
     stream.reset(its_mark)
 

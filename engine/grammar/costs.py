@@ -20,8 +20,10 @@ from . import ast
 from .amounts import parse_amount
 from .effects import _expect_counter_kind
 from .phrases import _parse_card_alternatives, accept_graveyard_position
+from .prices import (_accept_mana_alternative, _accept_mana_run,
+                     _accept_per_counter)
 from .errors import GrammarError
-from .lexer import MANA, PT, SELF, WORD
+from .lexer import MANA, SELF
 from .lowering._common import (chargeable_tap_filter,
                                graveyard_position_payload)
 from ..keywords import keyword_ability_name
@@ -292,111 +294,6 @@ def _parse_counter_removal_cost(stream: TokenStream) -> ast.RemoveCounterCost:
     )
 
 
-def _accept_mana_run(
-    stream: TokenStream,
-) -> tuple[tuple[str, int], ...] | None:
-    """A run of mana symbols at the cursor as ``(symbol, count)`` pairs, or None
-    with the cursor where it was.
-
-    The same symbols ``_parse_costs``' own mana branch reads, gathered here for
-    a payment written as prose ("Pay {1} for each ...") -- where the symbols are
-    a *rate* rather than the cost, so they must not reach the pips dict that
-    branch accumulates into.
-    """
-    mark = stream.mark()
-    pips: dict[str, int] = {}
-    while True:
-        token = stream.accept_kind(MANA)
-        if token is None:
-            break
-        symbol = token.text.strip("{}")
-        if symbol.isdigit():
-            pips["generic"] = pips.get("generic", 0) + int(symbol)
-        elif symbol in ("W", "U", "B", "R", "G", "C"):
-            pips[symbol] = pips.get(symbol, 0) + 1
-        else:
-            # {T}, {X} and the hybrids: a rate this cannot multiply. Refused
-            # whole rather than read as the part that matched.
-            stream.reset(mark)
-            return None
-    if not pips:
-        stream.reset(mark)
-        return None
-    return tuple(sorted(pips.items()))
-
-
-def _accept_per_counter(stream: TokenStream) -> str | None:
-    """``for each <kind> counter on this <noun>`` at the cursor, as the counter's
-    printed name — or None with the cursor where it was.
-
-    Only the ability's **own source** is admitted. "On this enchantment" is the
-    permanent the cost is being paid to activate, which is the one permanent a
-    cost charger has in hand; a counter on anything else would be a board read
-    the charger cannot make, and reading it as the source anyway would charge
-    the wrong number.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("for", "each"):
-        stream.reset(mark)
-        return None
-    # "for each **+1/+1** counter" (Skeleton Scavengers). A counter named by a
-    # power/toughness change is its own token kind, so a reader that asked only
-    # for a word saw nothing here and refused the clause -- which for an
-    # activation cost is the ability's whole line. The name is the token's text
-    # either way, which is what ``named_counters`` is keyed by.
-    named = stream.peek()
-    if named is None or named.kind not in (WORD, PT):
-        stream.reset(mark)
-        return None
-    counter = named.text
-    stream.advance()
-    if not stream.accept_word("counter", "counters"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("on"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("this"):
-        stream.reset(mark)
-        return None
-    noun = stream.peek_word()
-    if noun is None or _singular(noun) not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    return str(counter)
-
-
-def _accept_mana_alternative(stream: TokenStream) -> tuple[tuple[str, int], ...]:
-    """``or <mana symbols>`` at the cursor, as ``(symbol, count)`` pairs — or an
-    empty tuple with the cursor where it was.
-
-    Only a written-out run of ordinary symbols. ``{X}`` is deliberately not
-    admitted: an alternative whose size the payer announces would need the
-    announcement to reach a payment path that has none, and the empty tuple
-    keeps the words unconsumed so the ability refuses instead.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("or"):
-        stream.reset(mark)
-        return ()
-    pips: dict[str, int] = {}
-    while stream.at_kind(MANA):
-        token = stream.next()
-        symbol = token.text.strip("{}")
-        if symbol.isdigit():
-            pips["generic"] = pips.get("generic", 0) + int(symbol)
-        elif symbol in ("W", "U", "B", "R", "G", "C"):
-            pips[symbol] = pips.get(symbol, 0) + 1
-        else:
-            stream.reset(mark)
-            return ()
-    if not pips:
-        stream.reset(mark)
-        return ()
-    return tuple(sorted(pips.items()))
-
-
 def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
     """Parse the cost clause left of an activated ability's colon."""
     costs: list[ast.Cost] = []
@@ -609,10 +506,23 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
             # ``ExileSelf`` names no object, so the source gets its own entry:
             # nothing is chosen, nothing can make the ability unpayable, and
             # there is no record of what was eaten.
-            counted = _accept_cost_count(stream)
+            # "Exile **any number of** cards from your graveyard" (Painbringer):
+            # the count is the payer's, which leaves the phrase the bare plural
+            # exactly as a printed count does.
+            any_number = bool(stream.accept_phrase("any", "number", "of"))
+            counted = None if any_number else _accept_cost_count(stream)
             exiled = _parse_cost_object(
-                stream, "exile", bare_plural=counted is not None
+                stream, "exile", bare_plural=any_number or counted is not None
             )
+            if any_number and not (
+                exiled.zone == "graveyard"
+                and getattr(exiled.zone_owner, "kind", None) == "you"
+            ):
+                # The payer names the set by graveyard slot; no channel names
+                # several permanents or several cards in a hand for an exile.
+                raise stream.error(
+                    "an exile of any number is charged out of your own graveyard"
+                )
             if exiled.is_source:
                 costs.append(ast.ExileSelf())
                 stream.accept_punct(",")
@@ -638,9 +548,27 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                 raise stream.error("no cost path charges an exile of this shape")
             costs.append(
                 ast.ExileCost(
-                    exiled, count=counted or ast.Fixed(1), same_zone=same_zone
+                    exiled, same_zone=same_zone,
+                    count=ast.AnyNumber() if any_number else counted or ast.Fixed(1),
                 )
             )
+            # "Exile two cards from your graveyard **and this creature**"
+            # (Zombie Assassin). One printed verb naming a chosen set and the
+            # source, so it becomes two entries — the sacrifice's "two lands
+            # and this artifact" one verb over, and read by the charger through
+            # one reader for both (``oracle._split_conjoined_self``). Only the
+            # source may follow: a second *chosen* exile has no field to be
+            # charged from, so anything else is left unconsumed and refuses.
+            tail = stream.mark()
+            if stream.accept_word("and"):
+                try:
+                    also = _parse_cost_object(stream, "exile")
+                except GrammarError:
+                    also = None
+                if also is not None and also.is_source:
+                    costs.append(ast.ExileSelf())
+                else:
+                    stream.reset(tail)
             stream.accept_punct(",")
             continue
         if stream.at_word("pay"):
@@ -872,6 +800,21 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                         ast.ObjectFilter(is_source=True), count=ast.Fixed(1)
                     )
                 )
+            stream.accept_punct(",")
+            continue
+        if stream.accept_word("mill"):
+            # "{T}, **Mill a card**: Add {C}." (Millikin, Charmed Pendant.)
+            # CR 701.17a's keyword action as a cost: the payer's own library,
+            # an article or a printed number, and nothing behind the noun.
+            if stream.accept_word("a", "an"):
+                milled = 1
+            else:
+                counted = _accept_cost_count(stream)
+                if counted is None or not isinstance(counted, ast.Fixed):
+                    raise stream.error("a mill cost mills a printed number of cards")
+                milled = counted.value
+            stream.expect_word("card", "cards")
+            costs.append(ast.MillCost(milled))
             stream.accept_punct(",")
             continue
         if stream.at_word("discard"):

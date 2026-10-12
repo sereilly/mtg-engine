@@ -550,6 +550,14 @@ class GameActionRequest(BaseModel):
     # hand position. The shape `alternative_cost_other_hand_indices` below has
     # for Foil's "and another card". Absent is the engine's deterministic pick.
     cost_other_hand_indices: list[int] | None = None
+    # Which cards in the payer's graveyard pay an exile cost that takes more
+    # than one — "Exile two cards from your graveyard" (Psychatog), "Exile any
+    # number of cards from your graveyard" (Painbringer) — by graveyard slot,
+    # the whole set at once. A card in a graveyard has no id to be named by.
+    # ``cost_permanent_index`` stays the one-card spelling; absent is the
+    # engine's deterministic pick for a printed count and *no cards* for "any
+    # number of".
+    cost_graveyard_indices: list[int] | None = None
     # CR 118.9: cast this spell for its printed *alternative* cost rather than
     # its mana cost ("You may pay 1 life and exile a blue card from your hand
     # rather than pay this spell's mana cost"), and which card in hand pays the

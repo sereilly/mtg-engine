@@ -373,6 +373,23 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
                 pass
     stream.reset(cost_mark)
 
+    # "Return target card from your graveyard to your hand **if it shares a
+    # card type with the card exiled this way**." (Holistic Wisdom.) The cost
+    # channel again, compared with the guarded effect's own target rather than
+    # tested against a noun phrase. Every word is required: "shares a
+    # *creature* type" and "the card *discarded* this way" are other sentences,
+    # and the participle is carried so the lowering can find the cost.
+    shares_mark = stream.mark()
+    if stream.accept_phrase(
+        "it", "shares", "a", "card", "type", "with", "the", "card"
+    ):
+        participle = stream.peek_word()
+        if participle in ("exiled", "sacrificed", "discarded"):
+            stream.advance()
+            if stream.accept_phrase("this", "way"):
+                return ast.SharesCardTypeWithCostCard(str(participle))
+    stream.reset(shares_mark)
+
     # "if it's a creature or land card" (Track Down) — the present-tense twin of
     # the clause above, and a different question: that one asks what an object
     # *was* before it left a zone, this one asks what a card revealed by an

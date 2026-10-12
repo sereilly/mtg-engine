@@ -438,6 +438,24 @@ class RemoveCounterCost:
 
 
 @dataclass(frozen=True)
+class MillCost:
+    """"**Mill a card**" in front of a colon (Millikin, Charmed Pendant).
+
+    CR 701.17a: the payer puts that many cards from the top of their library
+    into their graveyard. :class:`ExileTopOfLibraryCost`'s sibling one zone
+    over, and its own node for the reason that one is not an ``ExileCost``: the
+    cards are named by position, nothing is chosen and nothing is matched.
+    What makes it unpayable is a library holding fewer cards than the cost
+    names (CR 701.17b: a player can't pay a cost that includes milling more
+    cards than their library holds), so a count is all it carries.
+
+    It moves a card out of a library into a public zone, so CR 601.2h pays it
+    **after** every other cost of the same activation.
+    """
+    count: int = 1
+
+
+@dataclass(frozen=True)
 class EventSpellManaCost:
     """"…may pay **that spell's mana cost**." (Ice Cave.)
 
@@ -462,7 +480,7 @@ Cost = Union[
     EventSpellManaCost,
     PayManaPerCounterCost, ExileSelf,
     ExileCost, ExileTopOfLibraryCost, ExileGraveyardPositionCost,
-    PutHandCardOnLibraryCost,
+    PutHandCardOnLibraryCost, MillCost,
     RemoveCounterCost, PayAttachedManaCost,
     ReturnSelfToHandCost
 ]

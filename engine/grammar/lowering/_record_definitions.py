@@ -74,7 +74,7 @@ from .. import ast
 from ..errors import LoweringError
 from ._amounts import _mentions_x, _stamp_x_from_count, tapped_this_way_record
 from ._common import _restrictions_beyond
-from ._cost_records import cost_record_spec
+from ._cost_records import cost_count_spec, cost_record_spec
 from ._records import produced_keys
 
 
@@ -321,11 +321,22 @@ def _lower_where_x_recorded(
             node=node,
         )
     if node.definition.source not in (produced | _records_within(inner)):
-        raise LoweringError(
-            f"back-reference to {node.definition.source!r} with no producer in "
-            "this effect",
-            node=node,
-        )
+        # "{T}, Exile any number of cards from your graveyard: …, where X is
+        # the number of cards exiled this way." No *step* wrote the record, and
+        # the ability's own cost did (CR 601.2h): the same words about the
+        # other side of the colon, answered off the payment path's record.
+        paid = cost_count_spec(node.definition.source, produced)
+        if paid is None:
+            raise LoweringError(
+                f"back-reference to {node.definition.source!r} with no producer "
+                "in this effect",
+                node=node,
+            )
+        if not _mentions_x(inner):
+            raise LoweringError(
+                "a where-clause defined an X nothing reads", node=node
+            )
+        return _stamp_x_from_count(inner, paid)
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"back_reference": node.definition.source})

@@ -532,6 +532,41 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
         )
         return True, "resolved"
 
+    # "**For each colored mana symbol in the milled card's mana cost**, add one
+    # mana of that color." (Charmed Pendant.) Read off the card the ability's
+    # own cost put into the graveyard — the payment path's record, because by
+    # now it is one card among however many the pile holds (CR 701.17c) — and
+    # off its *printed* mana cost (CR 202.1): one mana per symbol that has a
+    # colour, nothing for a generic, colourless, snow or {X} symbol. A land
+    # has no mana cost and adds nothing, which is the card working.
+    #
+    # A hybrid symbol is one symbol and adds one mana (Scryfall ruling,
+    # 2005-11-01: "you get one of either color mana, not both, for each mana
+    # symbol"). Which of its colours is the player's choice and nothing asks
+    # yet; the first printed is the deterministic default.
+    symbols_key = instruction.payload.get("colored_symbols_of_record")
+    if symbols_key:
+        import re
+
+        recorded = (context.choices or {}).get(str(symbols_key)) or ()
+        added: list[str] = []
+        for recorded_card in recorded:
+            printed = getattr(recorded_card, "mana_cost", "") or ""
+            for symbol in re.findall(r"\{([^}]+)\}", printed):
+                colours = [
+                    part for part in symbol.upper().split("/")
+                    if part in ("W", "U", "B", "R", "G")
+                ]
+                if colours:
+                    added.append(colours[0])
+        for symbol in added:
+            caster.mana_pool[symbol] = caster.mana_pool.get(symbol, 0) + 1
+        game.log.append(
+            f"{card.name} produced " + "".join("{" + symbol + "}" for symbol in added)
+            if added else f"{card.name} produced no mana"
+        )
+        return True, "resolved"
+
     count_key = instruction.payload.get("count_from_trigger")
     if count_key:
         symbol = str(instruction.payload.get("symbol", "C"))
