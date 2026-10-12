@@ -648,6 +648,57 @@ def test_w1g5_delaying_shield_stores_damage_as_counters_even_when_it_cant_be_pre
     assert _w1g5_dealt(game, bob, 2, catalog_by_name["Lightning Bolt"], 1) == 2
 
 
+def test_w1g5_three_damage_effects_contend_and_the_prompt_names_what_is_on_the_table(
+    catalog_by_name, set_pool,
+):
+    """CR 616.1: a Sphere of Law, a Delaying Shield and a Nefarious Lich all
+    want one Lightning Bolt, and the affected player chooses which applies
+    first. A seat nobody asks takes them in registration order — the Sphere's
+    two points, then the Shield's one counter, and the Lich is owed nothing.
+    A person is asked, and the options name what is on the table: the Sphere's
+    reads as what the effect is, where it used to read "Urza's Armor", the
+    first card to print the sentence and a card that was not there. Choosing
+    the Lich first sends all three points to the graveyard and leaves the
+    other two nothing to modify (CR 616.1f re-asks over an event that is no
+    longer damage)."""
+    def table(interactive):
+        game = _w1g5_table(
+            catalog_by_name, set_pool, hand1=["Lightning Bolt"],
+            interactive=interactive,
+        )
+        shield = _w1g5_put(game, 0, "Delaying Shield")
+        _w1g5_put(game, 0, "Nefarious Lich")
+        _w1g5_put(game, 0, "Sphere of Law")
+        game.players[0].graveyard = [catalog_by_name["Forest"]] * 5
+        game.active_player_index = 1
+        assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+        return game, shield
+
+    game, shield = table(())
+    _w1g5_resolve_stack(game)
+    alice = game.players[0]
+    assert (alice.life, _w1g5_delay_counters(shield), len(alice.exile)) == (20, 1, 0)
+
+    game, shield = table({0})
+    alice = game.players[0]
+    [prompt] = game.pending_choices
+    assert (prompt.kind, prompt.player_index) == ("effect_order", 0)
+    options = list(prompt.data["options"])
+    assert options == ["A static prevention", "Delaying Shield", "Nefarious Lich"]
+    assert len(game.stack) == 1, "the Bolt waits for the answer (CR 608.2)"
+
+    assert game.resolve_pending_choice(
+        "effect_order", 0, option_index=options.index("Nefarious Lich"),
+    )
+    assert [(c.kind, c.data["count"]) for c in game.pending_choices] == [
+        ("graveyard_exile_pick", 3),
+    ]
+    assert game.confirm_graveyard_exile_pick(0, [0, 1, 2])
+    _w1g5_resolve_stack(game)
+    assert (alice.life, _w1g5_delay_counters(shield), len(alice.exile)) == (20, 0, 3)
+    assert game.stack == [] and game.pending_choices == []
+
+
 @_w1g5_pytest.mark.parametrize("plains, answers, life, untapped", [
     (0, (), 17, 0),                       # nothing to pay with: three life
     (4, (True, False, True), 19, 0),      # pay, decline, pay

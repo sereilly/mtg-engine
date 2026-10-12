@@ -2146,8 +2146,13 @@ def _applies_static_points(game, event: dict) -> bool:
 
 @prevention_effect(STATIC_POINTS, applies=_applies_static_points)
 def _prevent_static_points(game, event: dict) -> PreventionOutcome | None:
-    """Urza's Armor: "If a source would deal damage to you, prevent 1 of that
-    damage."
+    """A static prevention: "If a source would deal damage to you, prevent 1 of
+    that damage." (Urza's Armor; the five Spheres print it over one colour.)
+
+    The words before the colon are the option a player is shown when CR 616.1
+    asks which effect applies first, so they name what the effect *is* rather
+    than the first card that printed it — with a Sphere of Law on the table the
+    prompt offered "Urza's Armor", a card that was not there.
 
     Every event, from every source, for as long as the permanent printing it is
     on the battlefield — and never used up, which is what makes it a static
