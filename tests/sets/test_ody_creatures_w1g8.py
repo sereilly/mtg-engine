@@ -1,19 +1,22 @@
-"""Odyssey creatures W1G8 drove rather than implemented.
+"""Odyssey creatures, W1G8's section: the ones it drove, then the ones it
+implemented.
 
-Every card here compiled "supported" on the day of the ingest, which is not the
-same as working (SET_PLAYBOOK.md Phase 3: a card is supported when *any* of its
-lines is). Each was given a headless game through its whole text — activated
-with a legal target, an illegal one and none; its cost paid and refused; its
-trigger fired and, where something can respond, answered — and what the game
-showed is pinned here.
+**Driven.** Every card in the first half compiled "supported" on the day of
+the ingest, which is not the same as working (SET_PLAYBOOK.md Phase 3: a card
+is supported when *any* of its lines is). Each was given a headless game
+through its whole text — activated with a legal target, an illegal one and
+none; its cost paid and refused; its trigger fired and, where something can
+respond, answered — and what the game showed is pinned here. One of them did
+not work: **Shifty Doppelganger** never came back. It is first.
 
-One of them did not work: **Shifty Doppelganger** never came back. It is first.
+**Implemented.** Junk Golem, Mad Dog, Savage Firecat and Whipkeeper, in the
+second half, under the `_w1g8_` names they were written with.
 
 In a file of the group's own rather than in `test_ody_creatures.py`'s W1G8
-section, so that file keeps its room for the groups still to land (it stood at
-2,185 of 2,600 lines when this was written, with four sections empty). The
-split is by section, which is the axis `tests/sets/README.md` names once the
-type axis has run out.
+section: together the two halves are some 900 lines, and that file stood at
+2,185 of 2,600 with four sections still empty. The split is along a section
+boundary, which is the axis `tests/sets/README.md` names once the printed type
+has run out, so every section stays whole.
 """
 
 from __future__ import annotations
@@ -516,3 +519,394 @@ def test_patron_wizard_may_tap_itself_the_turn_it_arrives(set_pool):
     assert game.players[0].life == 20, "nothing to pay with: the Bolt is countered"
     assert w1g8.pile(game, 1) == ["Lightning Bolt"]
     assert not _crack(game, "Patron Wizard").supported, "an empty stack"
+
+
+# ============================================================================
+# The creatures the group implemented.
+# ============================================================================
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Junk Golem -------------------------------------------------------------
+# "At the beginning of your upkeep, sacrifice this creature unless you remove a
+# +1/+1 counter from it." The toll's seventh currency: the removal is the
+# offer's action, so the `may` every "unless" already is asks for it and the
+# takeability gate decides whether there is anything to ask about.
+
+def test_w1g8_junk_golem_pays_a_counter_each_upkeep_until_it_has_none(set_pool):
+    game = _w1g8.table(set_pool)
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    assert _w1g8.pt(golem) == (3, 3), "enters with three +1/+1 counters"
+
+    sizes = []
+    for _ in range(3):
+        _w1g8.upkeep(game)
+        sizes.append(_w1g8.pt(golem) if game.is_on_battlefield(golem) else None)
+
+    # The third counter leaves a 0/0, which state-based actions take.
+    assert sizes == [(2, 2), (1, 1), None]
+    assert _w1g8.pile(game, 0) == ["Junk Golem"]
+
+
+@_w1g8_pytest.mark.parametrize("accept, left", [(True, (2, 2)), (False, None)])
+def test_w1g8_junk_golem_asks_its_controller_and_obeys_the_answer(
+    set_pool, accept, left
+):
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.active_player_index = 0
+    game.resolve_upkeep(0)
+
+    assert _w1g8.owed(game) == [("optional_pay", 0)]
+    assert game.stack, "the ability waits on the stack for its answer (CR 608.2)"
+    assert game.confirm_optional_pay(0, accept=accept)
+    _w1g8.settle(game)
+
+    if left is None:
+        assert _w1g8.pile(game, 0) == ["Junk Golem"]
+        assert "Junk Golem was sacrificed" in game.log
+    else:
+        assert _w1g8.pt(golem) == left
+
+
+def test_w1g8_junk_golem_with_no_counter_is_not_offered_the_price(set_pool):
+    """Kept alive at no counters by an anthem, the Golem has nothing to pay
+    with: no prompt, and the sacrifice stands (CR 118.12a — the "unless" is an
+    offer, and an action nobody can take is not offered)."""
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    _w1g8.put(game, set_pool, 0, "Glorious Anthem")
+    for _ in range(3):
+        game.active_player_index = 0
+        game.resolve_upkeep(0)
+        assert game.confirm_optional_pay(0, accept=True)
+        _w1g8.settle(game)
+    assert _w1g8.pt(golem) == (1, 1), "the anthem alone"
+
+    game.resolve_upkeep(0)
+    assert _w1g8.owed(game) == []
+    _w1g8.settle(game)
+
+    assert _w1g8.names(game, 0) == ["Glorious Anthem"]
+    assert _w1g8.pile(game, 0) == ["Junk Golem"]
+
+
+def test_w1g8_junk_golem_gone_in_response_is_asked_nothing(set_pool):
+    """Counters are not retained across a zone change (CR 122.2), so a Golem
+    destroyed with its trigger on the stack has none to remove: nobody is
+    asked, and there is nothing left to sacrifice."""
+    game = _w1g8.table(set_pool, interactive=(0,))
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.active_player_index = 0
+    game.resolve_upkeep(0, defer_priority=True)
+    assert [item.card.name for item in game.stack] == ["Junk Golem"]
+
+    _w1g8.leave(game, golem)
+    _w1g8.settle(game)
+
+    assert _w1g8.owed(game) == []
+    assert not any("Removed a +1/+1 counter" in line for line in game.log)
+
+
+def test_w1g8_junk_golem_grows_for_one_mana_and_a_card_and_is_refused_without(
+    set_pool,
+):
+    game = _w1g8.table(set_pool, hand=["Forest"], enforce=True)
+    golem = _w1g8.put(game, set_pool, 0, "Junk Golem")
+    game.players[0].mana_pool["C"] = 2
+
+    used = game.activate_permanent_ability(0, "Junk Golem")
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert _w1g8.pt(golem) == (4, 4)
+    assert _w1g8.pile(game, 0) == ["Forest"] and not game.players[0].hand
+
+    refused = game.activate_permanent_ability(0, "Junk Golem")
+    assert not refused.supported and "discard" in refused.details
+    assert game.players[0].mana_pool["C"] == 1, "a refused activation spends nothing"
+    assert _w1g8.pt(golem) == (4, 4)
+
+
+@_w1g8_pytest.mark.parametrize(
+    "price",
+    [
+        "remove all +1/+1 counters from it",        # a quantity nobody asks "can you?" of
+        "remove a +1/+1 counter from target creature",  # a target is not a price
+        "remove two +1/+1 counters from it",        # one handler, one counter
+    ],
+)
+def test_w1g8_a_counter_removal_price_is_one_counter_off_the_source(price):
+    """The refusing gate's refusal test: a price the offer cannot ask about is
+    refused whole, never read as "remove one from this"."""
+    from tests.helpers import _mk_card
+
+    probe = _mk_card(
+        "Probe Golem", "Artifact Creature — Golem",
+        f"At the beginning of your upkeep, sacrifice this creature unless you {price}.",
+    )
+    assert not _w1g8_compile(probe).supported
+
+
+# --- Mad Dog ----------------------------------------------------------------
+# "At the beginning of your end step, if this creature didn't attack or come
+# under your control this turn, sacrifice it." One negation over two records
+# of the turn: an intervening-if (CR 603.4), so on a turn it attacked or
+# arrived the ability does not trigger at all.
+
+def _w1g8_end_step(game, seat):
+    """*seat*'s end step, settled; returns the lines it logged."""
+    before = len(game.log)
+    game.resolve_end_step(seat)
+    _w1g8.settle(game)
+    return game.log[before:]
+
+
+def _w1g8_next_turn(game, seat):
+    game.turn += 1
+    game.start_turn(seat)
+
+
+def test_w1g8_mad_dog_stays_the_turn_it_arrives_and_dies_the_turn_it_idles(set_pool):
+    game = _w1g8.table(set_pool, hand=["Mad Dog"])
+    _w1g8_next_turn(game, 0)
+    assert game.cast_from_hand(0, "Mad Dog").supported
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 0)), (
+        "it came under your control this turn, so nothing triggered"
+    )
+    _w1g8_next_turn(game, 1)
+    _w1g8_end_step(game, 1)
+    assert _w1g8.names(game, 0) == ["Mad Dog"], "an opponent's end step is not yours"
+
+    _w1g8_next_turn(game, 0)
+    assert "Mad Dog was sacrificed" in _w1g8_end_step(game, 0)
+    assert _w1g8.pile(game, 0) == ["Mad Dog"]
+
+
+def test_w1g8_mad_dog_that_attacked_is_kept(set_pool):
+    game = _w1g8.table(set_pool)
+    dog = _w1g8.put(game, set_pool, 0, "Mad Dog")
+    _w1g8_next_turn(game, 0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    declared, why = game.declare_attackers(0, [0])
+    assert declared, why
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 0))
+    assert game.is_on_battlefield(dog)
+
+
+def test_w1g8_mad_dog_changing_hands_is_coming_under_control(set_pool):
+    """Erg Raiders' 2018-03-16 ruling: a creature "comes under your control"
+    if it enters under your control *or* you gain control of it while it is
+    already on the battlefield. The thief keeps the Dog that turn and loses it
+    the next one it sits out."""
+    from engine.control import change_control
+
+    game = _w1g8.table(set_pool)
+    dog = _w1g8.put(game, set_pool, 0, "Mad Dog")
+    _w1g8_next_turn(game, 0)
+    _w1g8_next_turn(game, 1)
+    change_control(dog, 1, source="a test's theft")
+    game._sync_control()
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 1))
+    _w1g8_next_turn(game, 0)
+    _w1g8_end_step(game, 0)
+    assert _w1g8.names(game, 1) == ["Mad Dog"], "its old controller's end step is not 'yours'"
+
+    _w1g8_next_turn(game, 1)
+    assert "Mad Dog was sacrificed" in _w1g8_end_step(game, 1)
+    assert _w1g8.pile(game, 0) == ["Mad Dog"], "to its owner's graveyard"
+
+
+def test_w1g8_came_under_control_this_turn_is_only_read_on_your_own_turn():
+    """The refusing gate's refusal test. The record is CR 302.6's, carried
+    across other players' turns, so under "each end step" it could not tell
+    this turn from the last one — the clause refuses there instead."""
+    from tests.helpers import _mk_card
+
+    def dog(step):
+        return _mk_card(
+            "Probe Dog", "Creature — Dog",
+            f"At the beginning of {step}, if this creature didn't attack or "
+            "come under your control this turn, sacrifice it.",
+        )
+
+    assert _w1g8_compile(dog("your end step")).supported
+    assert not _w1g8_compile(dog("each end step")).supported
+
+
+# --- Savage Firecat ---------------------------------------------------------
+# "Whenever you tap a land for mana, remove a +1/+1 counter from this
+# creature." The third seat the tap-for-mana event prints ("a player", "an
+# opponent", "you"), narrowed at the tap seam against the Firecat's controller.
+#
+# Like every non-mana trigger under this event the removal is resolved at the
+# tap seam rather than put on the stack (Manabarbs' convention; CR 603.3 and
+# Manabarbs' own 2009-10-01 ruling say stack — measured and reported, not
+# changed here: it is seven shipped cards' behaviour, not this one's).
+
+def _w1g8_tap(game, seat, land):
+    return game.tap_land_for_mana(seat, land.card.name, permanent_id=land.permanent_id)
+
+
+def test_w1g8_savage_firecat_loses_a_counter_for_each_land_its_controller_taps(set_pool):
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    mine = [_w1g8.put(game, set_pool, 0, "Mountain") for _ in range(3)]
+    theirs = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+    assert _w1g8.pt(cat) == (7, 7), "a 0/0 with seven +1/+1 counters"
+
+    assert _w1g8_tap(game, 0, mine[0]) and _w1g8_tap(game, 0, mine[1])
+    assert _w1g8.pt(cat) == (5, 5)
+    assert game.players[0].mana_pool["R"] == 2, "the mana is still made"
+
+    assert _w1g8_tap(game, 1, theirs)
+    assert _w1g8.pt(cat) == (5, 5), "\"you\" is the Firecat's controller, not any player"
+
+    game.become_tapped(mine[2])
+    assert _w1g8.pt(cat) == (5, 5), "tapped, but not for mana"
+
+
+def test_w1g8_savage_firecat_follows_its_controller(set_pool):
+    """CR 109.5: "you" is whoever controls the Firecat now. Stolen, it counts
+    the thief's taps and stops counting its owner's."""
+    from engine.control import change_control
+
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    mine = _w1g8.put(game, set_pool, 0, "Mountain")
+    theirs = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+    change_control(cat, 1, source="a test's theft")
+    game._sync_control()
+
+    assert _w1g8_tap(game, 0, mine)
+    assert _w1g8.pt(cat) == (7, 7)
+    assert _w1g8_tap(game, 1, theirs)
+    assert _w1g8.pt(cat) == (6, 6)
+
+
+def test_w1g8_savage_firecat_tapped_down_to_nothing_dies(set_pool):
+    game = _w1g8.table(set_pool)
+    cat = _w1g8.put(game, set_pool, 0, "Savage Firecat")
+    lands = [_w1g8.put(game, set_pool, 0, "Mountain") for _ in range(8)]
+    game.start_turn(0)
+
+    for land in lands[:7]:
+        assert _w1g8_tap(game, 0, land)
+    game.check_state_based_actions()
+    assert _w1g8.pile(game, 0) == ["Savage Firecat"]
+    assert _w1g8_tap(game, 0, lands[7]), "with the Firecat gone a land is just a land"
+
+
+# --- Whipkeeper -------------------------------------------------------------
+# "{T}: This creature deals damage to target creature equal to the damage
+# already dealt to it this turn." A history of the *target*, read off the
+# turn's damage ledger. The card's two 2004-10-04 rulings are the reading:
+# damage a regeneration wiped still counts, and prevented damage never does —
+# so it is not the damage marked on the creature.
+
+def _w1g8_whip(set_pool, victim="Shivan Dragon", hand=("Lightning Bolt",)):
+    game = _w1g8.table(set_pool, hand=list(hand))
+    whip = _w1g8.put(game, set_pool, 0, "Whipkeeper")
+    creature = _w1g8.put(game, set_pool, 1, victim)
+    game.start_turn(0)
+    return game, whip, creature
+
+
+def _w1g8_crack(game, creature):
+    used = game.activate_permanent_ability(
+        0, "Whipkeeper", target_permanent_ids=[creature.permanent_id]
+    )
+    assert used.supported, used.details
+    _w1g8.settle(game)
+
+
+def test_w1g8_whipkeeper_doubles_the_damage_a_creature_has_taken_this_turn(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert dragon.damage_marked == 3
+
+    _w1g8_crack(game, dragon)
+
+    assert whip.tapped
+    assert _w1g8.pile(game, 1) == ["Shivan Dragon"], "3 + 3 on a 5/5"
+
+
+def test_w1g8_whipkeeper_deals_nothing_to_an_unhurt_creature(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+
+    _w1g8_crack(game, dragon)
+
+    assert dragon.damage_marked == 0 and game.is_on_battlefield(dragon)
+
+
+def test_w1g8_whipkeeper_counts_damage_a_regeneration_wiped_and_not_prevented_damage(
+    set_pool,
+):
+    """Both rulings at once. The Bolt's 3 is cut to 2 by a prevention shield
+    (so 2 was *dealt*), then the marked damage is wiped as a regeneration
+    would wipe it (CR 120.6): the history is still 2."""
+    game, whip, dragon = _w1g8_whip(set_pool)
+    _w1g8.put(game, set_pool, 1, "Samite Healer")
+    shield = game.activate_permanent_ability(
+        1, "Samite Healer", target_permanent_ids=[dragon.permanent_id]
+    )
+    assert shield.supported, shield.details
+    _w1g8.settle(game)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert dragon.damage_marked == 2, "one of the three was prevented"
+    dragon.damage_marked = 0
+
+    _w1g8_crack(game, dragon)
+
+    assert dragon.damage_marked == 2
+
+
+def test_w1g8_whipkeeper_reads_this_turn_only_and_needs_a_creature(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+
+    at_a_land = game.activate_permanent_ability(
+        0, "Whipkeeper", target_permanent_ids=[forest.permanent_id]
+    )
+    assert not at_a_land.supported and not whip.tapped
+
+    game.turn += 1
+    game.start_turn(1)
+    game.turn += 1
+    game.start_turn(0)
+    dragon.damage_marked = 0
+    _w1g8_crack(game, dragon)
+    assert dragon.damage_marked == 0, "last turn's damage is not this turn's"
+
+
+def test_w1g8_a_damage_history_amount_needs_the_one_creature_it_is_about():
+    """The refusing gate's refusal test: "it" is the sentence's own target,
+    so a sweep or a player has no history for the clause to read."""
+    from tests.helpers import _mk_card
+
+    def keeper(recipient):
+        return _mk_card(
+            "Probe Keeper", "Creature — Dwarf",
+            f"{{T}}: This creature deals damage to {recipient} equal to the "
+            "damage already dealt to it this turn.",
+        )
+
+    assert _w1g8_compile(keeper("target creature")).supported
+    assert not _w1g8_compile(keeper("each creature")).supported
+    assert not _w1g8_compile(keeper("target player")).supported
