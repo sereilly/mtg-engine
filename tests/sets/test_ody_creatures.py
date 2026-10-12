@@ -2461,6 +2461,112 @@ def test_w1g8_savage_firecat_tapped_down_to_nothing_dies(set_pool):
     assert _w1g8.pile(game, 0) == ["Savage Firecat"]
     assert _w1g8_tap(game, 0, lands[7]), "with the Firecat gone a land is just a land"
 
+
+# --- Whipkeeper -------------------------------------------------------------
+# "{T}: This creature deals damage to target creature equal to the damage
+# already dealt to it this turn." A history of the *target*, read off the
+# turn's damage ledger. The card's two 2004-10-04 rulings are the reading:
+# damage a regeneration wiped still counts, and prevented damage never does —
+# so it is not the damage marked on the creature.
+
+def _w1g8_whip(set_pool, victim="Shivan Dragon", hand=("Lightning Bolt",)):
+    game = _w1g8.table(set_pool, hand=list(hand))
+    whip = _w1g8.put(game, set_pool, 0, "Whipkeeper")
+    creature = _w1g8.put(game, set_pool, 1, victim)
+    game.start_turn(0)
+    return game, whip, creature
+
+
+def _w1g8_crack(game, creature):
+    used = game.activate_permanent_ability(
+        0, "Whipkeeper", target_permanent_ids=[creature.permanent_id]
+    )
+    assert used.supported, used.details
+    _w1g8.settle(game)
+
+
+def test_w1g8_whipkeeper_doubles_the_damage_a_creature_has_taken_this_turn(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert dragon.damage_marked == 3
+
+    _w1g8_crack(game, dragon)
+
+    assert whip.tapped
+    assert _w1g8.pile(game, 1) == ["Shivan Dragon"], "3 + 3 on a 5/5"
+
+
+def test_w1g8_whipkeeper_deals_nothing_to_an_unhurt_creature(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+
+    _w1g8_crack(game, dragon)
+
+    assert dragon.damage_marked == 0 and game.is_on_battlefield(dragon)
+
+
+def test_w1g8_whipkeeper_counts_damage_a_regeneration_wiped_and_not_prevented_damage(
+    set_pool,
+):
+    """Both rulings at once. The Bolt's 3 is cut to 2 by a prevention shield
+    (so 2 was *dealt*), then the marked damage is wiped as a regeneration
+    would wipe it (CR 120.6): the history is still 2."""
+    game, whip, dragon = _w1g8_whip(set_pool)
+    _w1g8.put(game, set_pool, 1, "Samite Healer")
+    shield = game.activate_permanent_ability(
+        1, "Samite Healer", target_permanent_ids=[dragon.permanent_id]
+    )
+    assert shield.supported, shield.details
+    _w1g8.settle(game)
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+    assert dragon.damage_marked == 2, "one of the three was prevented"
+    dragon.damage_marked = 0
+
+    _w1g8_crack(game, dragon)
+
+    assert dragon.damage_marked == 2
+
+
+def test_w1g8_whipkeeper_reads_this_turn_only_and_needs_a_creature(set_pool):
+    game, whip, dragon = _w1g8_whip(set_pool)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    assert game.cast_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[dragon.permanent_id]
+    ).supported
+
+    at_a_land = game.activate_permanent_ability(
+        0, "Whipkeeper", target_permanent_ids=[forest.permanent_id]
+    )
+    assert not at_a_land.supported and not whip.tapped
+
+    game.turn += 1
+    game.start_turn(1)
+    game.turn += 1
+    game.start_turn(0)
+    dragon.damage_marked = 0
+    _w1g8_crack(game, dragon)
+    assert dragon.damage_marked == 0, "last turn's damage is not this turn's"
+
+
+def test_w1g8_a_damage_history_amount_needs_the_one_creature_it_is_about():
+    """The refusing gate's refusal test: "it" is the sentence's own target,
+    so a sweep or a player has no history for the clause to read."""
+    from tests.helpers import _mk_card
+
+    def keeper(recipient):
+        return _mk_card(
+            "Probe Keeper", "Creature — Dwarf",
+            f"{{T}}: This creature deals damage to {recipient} equal to the "
+            "damage already dealt to it this turn.",
+        )
+
+    assert _w1g8_compile(keeper("target creature")).supported
+    assert not _w1g8_compile(keeper("each creature")).supported
+    assert not _w1g8_compile(keeper("target player")).supported
+
 # ==== end W1G8 ======================================================
 
 

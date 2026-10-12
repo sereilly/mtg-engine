@@ -738,6 +738,25 @@ def _parse_equal_to_body(stream: TokenStream) -> ast.Amount | None:
         return ast.ThatMuch(None)
     stream.reset(mark_that)
 
+    # "…deals damage to target creature equal to **the damage already dealt
+    # to it this turn**." (Whipkeeper.) A *history* of the creature the
+    # sentence targeted — the amount, where "a creature that has been dealt
+    # damage this turn" one family over reads the same history as a yes/no.
+    # Whipkeeper's two 2004-10-04 rulings are what make it a history and not a
+    # read of the board: damage a regeneration wiped still counts, and damage
+    # that was prevented never does. So it is the turn's damage ledger
+    # (:class:`ast.DamageDealtThisTurn`), aimed at the sentence's target and
+    # narrowed by no source.
+    #
+    # In front of "the damage dealt" below, which is its prefix after one word
+    # and names a different number: what *this effect* dealt.
+    mark_history = stream.mark()
+    if stream.accept_phrase(
+        "damage", "already", "dealt", "to", "it", "this", "turn"
+    ):
+        return ast.DamageDealtThisTurn(recipient="target", source_name=None)
+    stream.reset(mark_history)
+
     if stream.accept_phrase("damage", "dealt"):
         # "…equal to the damage dealt **this way**" (Syphon Soul). "This way"
         # says the number is the one *this effect* produced rather than any
