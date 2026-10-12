@@ -197,4 +197,23 @@ def test_mirari_copies_the_x_and_the_creature_a_spell_was_aimed_at(set_pool):
     _w1g9_resolve_stack(game)
     assert game.players[0].life == 28
 
+
+def test_mirari_copies_a_spell_that_was_countered_before_the_trigger_resolved(set_pool):
+    """The ruling of 2004-10-04: "If the spell is countered before the
+    triggered ability resolves, then the ability will make a copy of how the
+    spell looked right before it was countered." (CR 608.2h, last known
+    information.) The Bolt never resolves; its copy does."""
+    game = _w1g9_duel(set_pool, hand0=["Lightning Bolt"], bf0=["Mirari"])
+    game.players[0].mana_pool.update({"C": 3})
+    assert game.queue_from_hand(0, "Lightning Bolt", target_player_index=1).supported
+    bolt = game.stack[0]
+    game.counter_stack_object(bolt)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True)
+    assert [(i.card.name, i.is_copy) for i in game.stack if not i.is_ability] == [
+        ("Lightning Bolt", True),
+    ]
+    _w1g9_resolve_stack(game)
+    assert game.players[1].life == 17
+
 # ==== end W1G9 ======================================================

@@ -30,20 +30,32 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
     """"Copy that spell. You may choose new targets for the copy."
     (Double Vision.)
 
-    "That spell" is the one the trigger fired on. Located on the stack by the
-    object the event recorded (``triggering_spell``) — not by taking the
-    topmost instant or sorcery, which is the same object only while nothing has
-    been cast in response, and not by the card it was cast from, which every
-    other copy of that card on the stack shares.
+    "That spell" is the one the trigger fired on: the object the event
+    recorded (``cast_item``) — not the topmost instant or sorcery, which is
+    the same object only while nothing has been cast in response, and not the
+    card it was cast from, which every other copy of that card on the stack
+    shares.
 
-    A spell that has already left the stack is copied by nothing: CR 707.10
-    copies an object, and by then there is none. That is the honest outcome
-    rather than reaching for whatever else is up there — which the card lookup
-    did: with the first Bolt of the turn countered in response, the copy was of
-    an opponent's Bolt underneath it.
+    **A spell that has left the stack is still copied**, as it last existed
+    there (CR 608.2h: an effect that needs information from an object no
+    longer in the zone it was expected in uses its last known information).
+    Both cards printing the sentence are ruled so — Double Vision
+    (2020-06-23): "A copy is created even if the spell that caused Double
+    Vision's ability to trigger has been countered by the time that ability
+    resolves"; Mirari (2004-10-04): "the ability will make a copy of how the
+    spell looked right before it was countered". This handler copied nothing
+    then, which was the right answer to a different mistake: the lookup it
+    replaced went by card, so with the first Bolt of the turn countered in
+    response it copied an opponent's Bolt underneath. The frozen object is
+    what answers both - it is that spell and no other, on the stack or off.
+
+    A trigger whose event froze no spell copies nothing: there is no "that
+    spell" for the words to name.
     """
     caster = context.caster
     copied = triggering_spell(game, context)
+    if copied is None:
+        copied = (context.trigger_context or {}).get("cast_item")
     if copied is None:
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
