@@ -1728,6 +1728,20 @@ class DividedShape:
     #: is the only choice it has, and a filter bounding that list to one
     #: player's board is the card making it.
     whole_board: bool = False
+    #: One side per printed target, for the division whose targets are **not
+    #: interchangeable** — "The next X damage that would be dealt to target
+    #: creature, planeswalker, or player this turn is dealt to **another**
+    #: target … instead" (Captain's Maneuver): entry 0 is spared and entry 1
+    #: takes what it was spared. Empty for every other division in the pool,
+    #: whose targets all receive the same thing and so share :attr:`side`.
+    #:
+    #: Read off ``_SLOT_ROLE_SIDES``, the table the several-target channel
+    #: already answers "what does this kind do to each slot" from (Kor Chant is
+    #: this sentence with a chosen source), and only where the description
+    #: prints exactly that many targets. With one side for both ends the policy
+    #: announced two opposing objects: it shielded an opponent and sent the
+    #: damage to another thing of theirs.
+    slot_sides: tuple[str | None, ...] = ()
 
 
 def divided_shape(program, instructions=None) -> DividedShape | None:
@@ -1761,6 +1775,9 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
         side = "you" if sum(deltas) > 0 else "opponent" if sum(deltas) < 0 else None
     else:
         side = activation_target_side(instruction)
+    slot_sides = _SLOT_ROLE_SIDES.get(instruction.kind, ())
+    if described.get("target_count") != len(slot_sides):
+        slot_sides = ()
     return DividedShape(
         side=side,
         thresholded=category == "damage",
@@ -1768,6 +1785,7 @@ def divided_shape(program, instructions=None) -> DividedShape | None:
             described.get("division") != CHOSEN
             and bool((described.get("filter") or {}).get("controller"))
         ),
+        slot_sides=slot_sides,
     )
 
 
@@ -1827,6 +1845,13 @@ _SLOT_ROLE_SIDES: dict[str, tuple[str | None, ...]] = {
     # permanent**" (Legerdemain). One is given and one is taken; two of the
     # caster's own is an exchange of nothing.
     "exchange_control_of_targets": ("you", "opponent"),
+    # "The next X damage that would be dealt to target creature, planeswalker,
+    # or player this turn is dealt to **another target** creature,
+    # planeswalker, or player instead" (Captain's Maneuver). Kor Chant's two
+    # ends without the chosen source, announced on the divided channel
+    # (``target_count: 2``) rather than the several-target one — so it is
+    # :func:`divided_shape` that reads this row, as ``DividedShape.slot_sides``.
+    "redirect_next_damage_between_targets_until_eot": ("you", "opponent"),
 }
 
 #: Steps that act on a recorded group (``permanents_from``) and whose category

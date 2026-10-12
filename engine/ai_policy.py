@@ -3986,6 +3986,18 @@ def choose_divided_targets(
     # too small to fill the count is no legal announcement at all, which is what
     # `()` means here.
     exact = _card_divided_target_count(spec, x_value)
+    if exact is not None and len(shape.slot_sides) == exact:
+        # The targets are not interchangeable (Captain's Maneuver: the first is
+        # spared, the second takes the damage), so each is taken from the board
+        # its own slot names — `ai_valuation.DividedShape.slot_sides`. Which
+        # candidate on that board is this module's weight, and it is the one
+        # every divided spell has: the first the enumeration offers, a player's
+        # face where the printed noun admits one. So the caster's own face is
+        # what is spared and an opponent's is where the damage goes.
+        picked = _divided_slot_picks(candidates, shape.slot_sides, caster_index)
+        return [] if picked is None else [
+            (entry["seat"], entry.get("index")) for entry in picked
+        ]
     if exact is not None:
         return (
             [] if len(wanted) < exact
@@ -4009,6 +4021,28 @@ def choose_divided_targets(
         else (entry["seat"], entry.get("index"), share)
         for entry, share in zip(chosen, shares)
     ]
+
+
+def _divided_slot_picks(candidates, slot_sides, caster_index: int):
+    """One enumerated target per printed slot, each from the board its slot
+    names ("you" the caster's, "opponent" anybody else's, None either), no
+    target twice — or None when some slot has nothing to name, which is no
+    legal announcement (CR 601.2c) rather than one to fill from the wrong
+    board."""
+    picked: list = []
+    for side in slot_sides:
+        offered = [
+            entry for entry in candidates
+            if not any(entry is taken for taken in picked)
+            and (
+                side is None
+                or (_divided_candidate_seat(entry) == caster_index) == (side == "you")
+            )
+        ]
+        if not offered:
+            return None
+        picked.append(offered[0])
+    return picked
 
 
 def _card_divided_target_count(spec: dict, x_value: int | None) -> int | None:

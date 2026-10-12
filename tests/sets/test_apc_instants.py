@@ -1482,6 +1482,104 @@ def test_w2g4_shimmering_mirage_for_a_seat_nobody_asks_still_does_both(
     assert [card.name for card in chooser.graveyard] == ["Shimmering Mirage"]
     assert game.pending_choices == [] and not game.effect_suspended
 
+
+# -- item 7: a two-ended redirect is announced with two sides -----------------
+
+
+def _w2g4_maneuver_table(set_pool, catalog_by_name):
+    """Seat 0 holds Captain's Maneuver with a Grizzly Bears; seat 1 has a Hill
+    Giant and a Lightning Bolt in hand."""
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Captain's Maneuver"], interactive=(),
+    )
+    bears = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Grizzly Bears"]))
+    giant = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Hill Giant"]))
+    game._put_permanent_onto_battlefield(0, bears, 0)
+    game._put_permanent_onto_battlefield(1, giant, 1)
+    game.players[1].hand.append(catalog_by_name["Lightning Bolt"])
+    return game, bears, giant  # W2G4: the Maneuver table
+
+
+def test_w2g4_the_ai_spares_itself_and_sends_captains_maneuvers_damage_across(
+    set_pool, catalog_by_name
+):
+    """"The next X damage that would be dealt to target creature, planeswalker,
+    or player this turn is dealt to another target creature, planeswalker, or
+    player instead." The announcement's first entry is spared and its second
+    takes the damage. Read as one side for both, the AI named two opposing
+    objects — it shielded its opponent's face and sent the damage to their
+    creature. It names its own face and theirs now, and the announcement does
+    what the card prints: of a Bolt aimed at the caster, two go across."""
+    from engine.ai_policy import choose_divided_targets
+
+    game, _bears, _giant = _w2g4_maneuver_table(set_pool, catalog_by_name)
+    maneuver = set_pool("APC")["Captain's Maneuver"]
+
+    announced = choose_divided_targets(game, 0, maneuver, x_value=2)
+    assert announced == [(0, None), (1, None)]
+
+    assert game.cast_from_hand(
+        0, "Captain's Maneuver", x_value=2, divided_targets=announced,
+    ).supported
+    assert (
+        "Captain's Maneuver: the next 2 damage that would be dealt to Chooser "
+        "this turn is dealt to Other instead"
+    ) in game.log
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert [player.life for player in game.players] == [19, 18]
+
+
+def test_w2g4_captains_maneuver_is_not_proposed_with_nobody_to_send_the_damage_to(
+    set_pool, catalog_by_name
+):
+    """A slot with nothing on its own board to name is no announcement, rather
+    than one filled from the other board: with the opponent untargetable and
+    no opposing permanent, the second end has no taker and the card is not
+    announced at all."""
+    from engine.ai_policy import choose_divided_targets
+
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Captain's Maneuver"], interactive=(),
+    )
+    ivory = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Ivory Mask"]))
+    game._put_permanent_onto_battlefield(1, ivory, 1)
+    game._recompute_continuous_effects()
+    maneuver = set_pool("APC")["Captain's Maneuver"]
+    offered = game.cast_target_spec(0, maneuver)["valid_targets"]
+    assert not any(entry["seat"] == 1 for entry in offered), offered
+
+    assert choose_divided_targets(game, 0, maneuver, x_value=2) == []
+
+
+def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
+    """Whole games with the card pinned into both decks: every Maneuver that
+    resolves moves damage off the seat that cast it."""
+    from engine.ai_simulator import run_ai_simulation
+    from engine.card_loader import manifest_set_path
+
+    redirects = []
+    for seed in (7, 11, 1337):
+        report = run_ai_simulation(
+            cards_path=[manifest_set_path("APC", include_measured=True)],
+            games=4, seed=seed, max_turns=18, required_cards=["Captain's Maneuver"],
+        )
+        assert report.ok, report.issues[:3]
+        caster = None
+        for line in report.log_lines:
+            if " cast Captain's Maneuver" in line:
+                caster = line.split(" cast ")[0].split()[-1]
+            elif line.strip().startswith("Captain's Maneuver: the next "):
+                spared = line.split("would be dealt to ")[1].split(" this turn")[0]
+                taker = line.split("is dealt to ")[1].split(" instead")[0]
+                redirects.append((caster, spared, taker))
+        if redirects:
+            break
+
+    assert redirects, "no seed cast a Captain's Maneuver"
+    for caster, spared, taker in redirects:
+        assert spared == caster and taker != caster, redirects
+
+
 # ==== end W2G4 ========================================================
 
 # ==== W2G5 ============================================================
