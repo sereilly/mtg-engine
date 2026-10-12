@@ -1,30 +1,65 @@
-"""Parsing the hidden-zone flows: search, look-at, and the library's top.
+"""Parsing a **look** (CR 701.20e) — the private half of a reveal.
 
-The mirror of ``lowering/library.py``, which carries the same family on the
-other side — "search, reveal, look-at, and exile linkage". It split off
-``effects/cards.py`` when The Dark pushed that module past the 1,000-line
-guard, and it reuses the lowering side's family name rather than inventing one,
-so the two halves stay mirrored (CLAUDE.md: "if an ``effects/`` module ever
-splits, reuse these names so the mirror re-forms instead of forking").
+The mirror of ``lowering/library.py``, and named as that module is for the pile
+most of these sentences open: the top of a library, looked at and then picked
+from, put back in an order, cycled or split into piles — and a hand looked at.
+It split off ``effects/cards.py`` when The Dark pushed that module past the
+1,000-line guard, and it reuses the lowering side's family name rather than
+inventing one, so the two halves stay mirrored (CLAUDE.md: "if an ``effects/``
+module ever splits, reuse these names so the mirror re-forms instead of
+forking").
 
-The cut is where the call graph already fell apart: nothing here calls anything
-left in ``cards.py`` and nothing there calls anything here, so neither module
-imports the other — which is what the layering guard requires of two families
-in one package. Drawing, discarding, milling, scrying and the hand reveals stay
-in ``cards.py``: they name a *card moving*, where everything here names a
-*pile being looked through*.
+**The first line read "the hidden-zone flows: search, look-at, and the
+library's top" until the Phase 0 before Odyssey — three cuts after it stopped
+being true.** ``search`` left at Alliances, the moves nobody looks through
+(``zones``) at Mirage and the reveals (``reveal``) at Tempest; and the lowering
+side's first line, quoted here as "search, reveal, look-at, and exile linkage",
+had stopped saying so at Invasion. What each cut left behind is the line this
+docstring has always ended on: drawing, discarding, milling, scrying and the
+hand reveals name a *card moving* and stay in ``cards.py``, where everything
+here names a *pile being looked through*. Nothing here calls anything in
+``cards.py`` and nothing there calls anything here, so neither module imports
+the other — which is what the layering guard requires of two families in one
+package.
+
+Two things left at that Phase 0, with this module 21 lines under the guard.
+
+* ``parse_graveyard_top_to_library`` (Guiding Spirit) went to ``zones``. It was
+  "the library's top" by the stale first line and never by the line above:
+  nobody looks through anything — a graveyard is public (CR 400.2) — and a card
+  is put on a library. It was written here at Visions, a set after ``zones``
+  took that subject, called nothing here and was called by nothing here.
+* The tail of a look at **another player's** library went to
+  ``_other_libraries``, the floor ``search`` was first cut along the same fork
+  to make: behind the verb comes a possessive, "your" is everything below, and
+  anything else is two seats and is read there. ``_parse_look_statement`` is
+  its one caller and nothing there calls back.
+
+What stays is one entry point — ``_parse_look_at_hand``, reached from the
+imperative dispatcher and named for the oldest sentence it reads — with the
+tails it tries, and three sentences that print their looker
+(``parse_player_*``, reached from ``player_verbs``).
+
+**One lodger, named so the next cut can find it.** ``_accept_look_and_choose``
+(Mind Warp) is a look by its verb alone: it builds ``RevealHandAndChoose``,
+whose node is ``ast/cards.py``'s, whose other production (Duress) is
+``cards.py``'s and whose lowering is ``lowering/reveal.py``'s. It stays because
+``cards`` and ``reveal``, the two parse modules it could join, both sit nearer
+the guard than this module now does, and because it is a tail of the one entry
+point, so leaving means a floor. The half that grows with the pool is the
+own-library sorting sentence in ``_parse_look_statement``.
 """
 
 
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
-from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
 from ..phrases import _parse_card_alternatives, _parse_mana_payment
 from ..vocabulary import CARD_TYPES
 from ..where_x import parse_where_x_definition
+from ._other_libraries import _parse_look_other_library_tail
 
 
 
@@ -363,140 +398,6 @@ def parse_look_top_cycle_tail(
     return ast.LookTopCycleForLife(count, life_cost)
 
 
-def _accept_that_library(stream: TokenStream) -> bool:
-    """Consume a back-reference to the library the look already named.
-
-    Three printed spellings for one thing — "that library", "the library",
-    "that player's library" — and Ransack prints two of them in one sentence
-    ("on the bottom of **that library** … the rest on top of **the library**").
-    Read as one because they are one: the look named the pile, and a sentence
-    that meant a *different* library would have to say which.
-    """
-    if stream.accept_phrase("that", "player", "'s", "library"):
-        return True
-    return stream.accept_phrase("that", "library") or stream.accept_phrase(
-        "the", "library"
-    )
-
-
-def _parse_look_other_library_tail(
-    stream: TokenStream, count, owner: ast.PlayerRef
-) -> ast.Statement:
-    """The rest of "Look at the top five cards of target player's library. You
-    may then have that player shuffle that library." (Visions.)
-
-    The shuffle sentence is read here rather than as a statement of its own
-    because "that library" is the one the look just named — parsed apart it
-    would have to guess a player, and guessing which library gets shuffled is
-    the one mistake this card can make. The tail is optional: a card that only
-    looks is this same effect without its offer, and refusing it would refuse a
-    shape the node already represents.
-    """
-    mark = stream.mark()
-    if stream.accept_punct(".") and stream.accept_phrase(
-        "you", "may", "then", "have", "that", "player", "shuffle", "that", "library"
-    ):
-        return ast.LookAtLibraryTop(count, owner, may_shuffle=True)
-    stream.reset(mark)
-    # "**You may put that card on the bottom of that player's library.**"
-    # (Coral Fighters.) The other offer this template prints, and the other
-    # direction: Visions offers a shuffle, which the looker takes when the top
-    # is bad, and this offers the one card itself.
-    #
-    # "That player" is read as the very player the look named rather than as a
-    # fresh reference — parsed apart it would have to guess a seat, which is
-    # this production's whole reason for reading the tail at all.
-    bottomed = stream.mark()
-    if stream.accept_punct("."):
-        # "…library. **If you do,** you may put that card on the bottom…"
-        # (Precognition.) The join the *optional* printing needs and Coral
-        # Fighters' mandatory one does not: there the look always happens, so
-        # there is no condition for the offer to hang on. Consumed and dropped
-        # rather than modelled, because it states exactly what the enclosing
-        # "you may look" already means — the offer behind a look nobody took is
-        # an offer over no card, which is what the handler finds anyway.
-        if stream.accept_phrase("if", "you", "do"):
-            stream.accept_punct(",")
-        if stream.accept_phrase(
-            "you", "may", "put", "that", "card", "on", "the", "bottom", "of",
-            "that", "player", "'s", "library",
-        ):
-            return ast.LookAtLibraryTop(count, owner, may_bottom=True)
-    stream.reset(bottomed)
-    # "**Put any number of them on the bottom of that library in any order and
-    # the rest on top of the library in any order.**" (Ransack.) The same offer
-    # Coral Fighters prints, at a size where the words have to change: with one
-    # card looked at there is nothing to count and nothing to order, so that
-    # card says "that card" and this one says "any number of them". The
-    # decision is one decision either way — which of the looked-at cards go to
-    # the bottom, and in what order the rest go back — which is why both reach
-    # ``may_bottom`` rather than one of them growing a second flag that lowers
-    # to the same instruction.
-    counted_bottom = stream.mark()
-    if (
-        stream.accept_punct(".")
-        and stream.accept_phrase(
-            "put", "any", "number", "of", "them", "on", "the", "bottom", "of",
-        )
-        and _accept_that_library(stream)
-        and stream.accept_phrase(
-            "in", "any", "order", "and", "the", "rest", "on", "top", "of",
-        )
-        and _accept_that_library(stream)
-        and stream.accept_phrase("in", "any", "order")
-    ):
-        return ast.LookAtLibraryTop(count, owner, may_bottom=True)
-    stream.reset(counted_bottom)
-    # "**Exile one of those cards and put the rest back on top of that player's
-    # library in any order.**" (Sealed Fate.) The look-and-pick template over
-    # somebody else's pile: the cards are the opponent's and every decision
-    # about them is the caster's, which is the one thing ``looker`` cannot say
-    # (there the seat answers both questions at once). So it produces the pick
-    # node with ``pile_owner`` set rather than a second node — the procedure is
-    # the same one, over a library that is not the chooser's.
-    #
-    # Every word of both destinations, for this family's standing reason: where
-    # the taken card goes and where the rest go are the whole of what separates
-    # these cards, and a wording that sorted them elsewhere would be a
-    # different card wearing this one's head.
-    exiled = stream.mark()
-    if stream.accept_punct(".") and stream.accept_phrase(
-        "exile", "one", "of", "those", "cards", "and", "put", "the", "rest",
-        "back", "on", "top", "of", "that", "player", "'s", "library",
-        "in", "any", "order",
-    ):
-        return ast.LookTopPickToHand(
-            count,
-            pick_destination="exile",
-            rest_destination="library_top",
-            pile_owner=owner,
-        )
-    stream.reset(exiled)
-    # "…, **then put them back in any order**." (Natural Selection, Portent.)
-    # The looker rearranges the cards they saw, which is the other handler —
-    # and the optional shuffle after it is printed shorter here than Visions
-    # prints it, so both spellings are read rather than one being normalized
-    # into the other.
-    #
-    # This was a name-keyed hook on Natural Selection, and Portent prints the
-    # identical sentence: `card_hooks`' entry bar is that no second card shares
-    # the shape, and a second card did.
-    if stream.accept_punct(",") and stream.accept_phrase(
-        "then", "put", "them", "back", "in", "any", "order"
-    ):
-        shuffle_mark = stream.mark()
-        if stream.accept_punct(".") and stream.accept_phrase(
-            "you", "may", "have", "that", "player", "shuffle"
-        ):
-            return ast.LookAtLibraryTop(
-                count, owner, may_shuffle=True, may_reorder=True
-            )
-        stream.reset(shuffle_mark)
-        return ast.LookAtLibraryTop(count, owner, may_reorder=True)
-    stream.reset(mark)
-    return ast.LookAtLibraryTop(count, owner)
-
-
 def _accept_unchosen_cards(
     stream: TokenStream, count: ast.Amount, picks: ast.Amount
 ) -> bool:
@@ -585,7 +486,7 @@ def _parse_look_statement(stream: TokenStream, defined: list) -> ast.Statement:
         # **cards**". The singular prints no number at all, so a reader that
         # went straight to `parse_amount` refused the line at the noun — the
         # same one-line gap `_parse_exile_top_of_library` already answers this
-        # way two productions down.
+        # way, in `zones` since that module took the moves at Mirage.
         if stream.accept_word("card"):
             count: ast.Amount = ast.Fixed(1)
         else:
@@ -924,56 +825,3 @@ def _with_where_x(node, definition):
     cannot come to read the same printed clause differently.
     """
     return node if definition is None else ast.WhereX(node, definition)
-
-
-def parse_graveyard_top_to_library(stream: TokenStream) -> "ast.Statement | None":
-    """``If the top card of <player>'s graveyard is a <filter>, put that card on
-    top of that player's library.`` (Guiding Spirit.)
-
-    The whole printed sentence, read as one production for the reason
-    :class:`ast.GraveyardTopToLibrary` records: both halves name the top card of
-    one graveyard, and neither half can name it alone. Read among the other
-    whole-sentence "If …" productions in ``statements.py`` and, like them,
-    **refusing without consuming**, so every other conditional keeps its reading.
-
-    The possessive is read through the shared player parser rather than matched
-    as words, so "target player's", "that player's" and "each opponent's" all
-    reach the lowering, which is what decides which of them has a flow — the
-    same split every other whose-zone clause in this package makes.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("if", "the", "top", "card", "of"):
-        stream.reset(mark)
-        return None
-    owner = parse_player_ref(stream)
-    if owner is None or not stream.accept_phrase("'s", "graveyard", "is"):
-        stream.reset(mark)
-        return None
-    stream.accept_word("a", "an")
-    try:
-        found = parse_object_filter(stream)
-    except GrammarError:
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    # The move half. Every word is required: a sentence that named a different
-    # destination, or a different card, is a different effect and must fail the
-    # line rather than reach this node.
-    if not stream.accept_phrase("put", "that", "card", "on", "top", "of"):
-        stream.reset(mark)
-        return None
-    destination = parse_player_ref(stream)
-    if destination is None or not stream.accept_phrase("'s", "library"):
-        stream.reset(mark)
-        return None
-    # "…of **that player's** library" — the same seat the graveyard belonged to.
-    # Consumed and compared rather than dropped: a card sending the top of one
-    # player's graveyard to *another* player's library is a different sentence,
-    # and reading the second possessive as decoration is how it would silently
-    # become this one.
-    if destination.kind not in ("that_player", owner.kind):
-        stream.reset(mark)
-        return None
-    return ast.GraveyardTopToLibrary(owner, found)
-
-

@@ -17,17 +17,31 @@ duplicated under a new word.
 
 That paragraph was true at Mirage and is not now. The shuffles left
 ``lowering/zones.py`` for ``lowering/shuffles.py`` at Urza's Destiny, so of the
-ten nodes built here exactly one — ``ExileGraveyardPosition`` — still lowers in
-the module this one is named for; the other two exiles lower in
-``linked_exile`` and the two puts in ``hand`` and ``library``. The five shuffle
-nodes are ``ast/shuffles.py`` since Planeshift's Phase 0, under the lowering
-side's word, because over there a shuffle is not a zone change; only this
-module's first line still files it as a move.
+eleven nodes built here exactly one — ``ExileGraveyardPosition`` — still lowers
+in the module this one is named for; the other two exiles lower in
+``linked_exile`` and the three puts in ``hand`` and ``library``. The five
+shuffle nodes are ``ast/shuffles.py`` since Planeshift's Phase 0, under the
+lowering side's word, because over there a shuffle is not a zone change; only
+this module's first line still files it as a move.
+
+**The eleventh came across at the Phase 0 before Odyssey**, with ``library``
+21 lines under the guard: ``parse_graveyard_top_to_library`` (Guiding Spirit),
+"If the top card of target player's graveyard is a creature card, put that card
+on top of that player's library". It was written there at Visions, a set after
+this module took the moves, and it is one of them by the first paragraph's own
+list — "a card put on a library", with nobody looking through anything: a
+graveyard is public (CR 400.2). It called nothing in ``library`` and nothing
+there called it. Its lowering stays in ``lowering/library.py`` beside
+``PutLibraryTopIntoHand``'s, under that module's "a card moved onto the top or
+off it with nobody choosing", so the asymmetry it joins is one this module
+already had.
 
 The cut is where the call graph already fell apart: every name here is reached
-from ``imperatives``, ``statements`` or ``subject_verb`` and from nothing left in
-``library``, and nothing here calls anything there. Neither module imports the
-other, which is what the layering guard requires of two families in one package.
+from ``imperative_verbs``, ``player_verbs``, ``statements`` or ``if_openings``
+(``imperatives``, ``statements`` and ``subject_verb`` when the cut was made,
+before two of those were split) and from nothing left in ``library``, and
+nothing here calls anything there. Neither module imports the other, which is
+what the layering guard requires of two families in one package.
 """
 
 
@@ -551,3 +565,54 @@ def parse_put_library_top_into_hand(
         stream.reset(mark)
         return None
     return ast.PutLibraryTopIntoHand(count)
+
+
+def parse_graveyard_top_to_library(stream: TokenStream) -> "ast.Statement | None":
+    """``If the top card of <player>'s graveyard is a <filter>, put that card on
+    top of that player's library.`` (Guiding Spirit.)
+
+    The whole printed sentence, read as one production for the reason
+    :class:`ast.GraveyardTopToLibrary` records: both halves name the top card of
+    one graveyard, and neither half can name it alone. Read among the other
+    whole-sentence "If …" productions in ``if_openings.py`` and, like them,
+    **refusing without consuming**, so every other conditional keeps its reading.
+
+    The possessive is read through the shared player parser rather than matched
+    as words, so "target player's", "that player's" and "each opponent's" all
+    reach the lowering, which is what decides which of them has a flow — the
+    same split every other whose-zone clause in this package makes.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("if", "the", "top", "card", "of"):
+        stream.reset(mark)
+        return None
+    owner = parse_player_ref(stream)
+    if owner is None or not stream.accept_phrase("'s", "graveyard", "is"):
+        stream.reset(mark)
+        return None
+    stream.accept_word("a", "an")
+    try:
+        found = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    stream.accept_punct(",")
+    # The move half. Every word is required: a sentence that named a different
+    # destination, or a different card, is a different effect and must fail the
+    # line rather than reach this node.
+    if not stream.accept_phrase("put", "that", "card", "on", "top", "of"):
+        stream.reset(mark)
+        return None
+    destination = parse_player_ref(stream)
+    if destination is None or not stream.accept_phrase("'s", "library"):
+        stream.reset(mark)
+        return None
+    # "…of **that player's** library" — the same seat the graveyard belonged to.
+    # Consumed and compared rather than dropped: a card sending the top of one
+    # player's graveyard to *another* player's library is a different sentence,
+    # and reading the second possessive as decoration is how it would silently
+    # become this one.
+    if destination.kind not in ("that_player", owner.kind):
+        stream.reset(mark)
+        return None
+    return ast.GraveyardTopToLibrary(owner, found)
