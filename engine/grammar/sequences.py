@@ -82,6 +82,7 @@ from .sentence_rebinding import (
 from .repeats import (_attach_repeat_for_types,
                       _attach_repeat_optional_process,
                       _attach_repeat_this_process,
+                      _attach_repeat_until_condition,
                       _attach_repeat_until_pile_chosen,
                       _attach_repeat_while_condition)
 from .riders import (_attach_destroyed_this_way, _attach_flip_stakes_to_loop,
@@ -459,6 +460,14 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             # and after them only because it declines without consuming, like
             # every one of them.
             if _attach_repeat_until_pile_chosen(stream, steps):
+                continue
+            # "Repeat this process until you put a card into your hand or you
+            # exile two cards with the same name, whichever comes first."
+            # (Tainted Pact.) The seventh — a loop that ends on conditions
+            # asked once the round is over. Behind the two "until" clauses
+            # above, whose tails are not conditions, and declining without
+            # consuming like every one of them.
+            if _attach_repeat_until_condition(stream, steps):
                 continue
             # "For each blocking creature, flip a coin. **If you win the
             # flip, prevent all combat damage that would be dealt by that

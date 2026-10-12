@@ -3366,9 +3366,13 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
         # reading for the same reason as the two repeats beside it: both
         # targets are announced once as the ability is activated (CR 602.2b),
         # and every round spends the ones the announcement chose.
+        # "Repeat this process until …" (Tainted Pact's wrapper) is the fifth,
+        # listed for the reason the others are and before any card needs it: a
+        # targeted round inside it announces once (CR 601.2c), and a wrapper
+        # this did not open would derive no spec — the Roots class again.
         if instruction.kind in (
             "sequence", "repeat_optional_process", "repeat_process_while",
-            "repeat_process_on_request",
+            "repeat_process_on_request", "repeat_process_until",
         ):
             nested = _first_described_slot(instruction.payload.get("steps") or ())
             if chosen(nested) is not None:

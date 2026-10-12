@@ -115,6 +115,9 @@ WRAPPER_KINDS: dict[str, tuple[str, ...]] = {
     # repeat that is a wrapper, and the same reason once more: what the round
     # *does* is the steps it carries, and asking for another is not an effect.
     "repeat_process_on_request": ("steps",),
+    # A process repeated until a condition about its rounds holds (Tainted
+    # Pact). The fifth repeat that is a wrapper, and the same reason again.
+    "repeat_process_until": ("steps",),
 }
 
 

@@ -1002,6 +1002,22 @@ _MANA_TOKEN_RE = re.compile(r"\{([^}]+)\}")
 SEARCHED_PERMANENTS = "searched_permanents"
 
 EXILED_THIS_WAY = "exiled_this_way"
+
+#: "…until **you put a card into your hand**" (Tainted Pact). The cards a step
+#: of this effect put into a hand out of exile — a record because a hand does
+#: not say which of its cards an effect added. Here for ``EXILED_THIS_WAY``'s
+#: reason: ``handlers/zones.put_exiled_cards_into_zone`` writes it and a
+#: lowering gates on it.
+PUT_INTO_HAND_THIS_WAY = "put_into_hand_this_way"
+
+#: What the **earlier rounds** of a repeated process recorded, as
+#: ``{record key: [values…]}`` (Tainted Pact). A round's own records are
+#: cleared as the next begins — "that card" is this round's — and "another
+#: card exiled **this way**" is the whole process's, so the loop files each
+#: round's lists here before clearing them and the name relation reads both.
+#: Written by ``handlers/control_flow.repeat_process_until`` alone; absent
+#: outside a loop, where "this way" is simply the one record.
+PROCESS_ROUNDS_SO_FAR = "process_rounds_so_far"
 #: What the exile step took, as objects. Written by every exile that a later
 #: sentence asks a question *about* rather than a number of.
 #:

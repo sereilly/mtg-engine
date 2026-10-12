@@ -49,6 +49,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
                             PER_OBJECT_SEAT_RECORDS,
+                            PUT_INTO_HAND_THIS_WAY,
                             SWEPT_OWNER_SEATS,
                             X_FROM_COUNT_PER_RECIPIENT)
 from ..oracle_types import OracleInstruction as _OracleInstruction
@@ -9580,6 +9581,11 @@ def put_exiled_cards_into_zone(game: Game, instruction: OracleInstruction, conte
             f"battlefield under {returned_to}'s control ({context.card.name})"
         )
     elif moved:
+        if destination == "hand":
+            # "…until **you put a card into your hand**" (Tainted Pact). What
+            # this step put there, for a stopping clause to ask about — see
+            # ``oracle_types.PUT_INTO_HAND_THIS_WAY``.
+            context.results[PUT_INTO_HAND_THIS_WAY] = list(moved)
         names = ", ".join(card.name for card in moved)
         # "…return it to its **owner's** hand" (Psychic Theft, Planeswalker's
         # Mischief) lands in the hand of the seat whose exile held it, which is

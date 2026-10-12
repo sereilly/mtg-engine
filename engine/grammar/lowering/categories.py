@@ -860,6 +860,13 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # asked of another seat, so GRAMMAR_CATEGORIES is unchanged: what differs is
     # who is offered the cost and which branch the effect sits on.
     "unless_player_pays": "optional",
+    # The end of one round of "repeat this process until …" (Tainted Pact):
+    # the step ``lowering/repeats._with_round_end`` puts on every way out of a
+    # round's last sentence. With the offers because that is where a round
+    # that needs it ends — on an answer — and for the reason the repeat marker
+    # two tables up sits with the flip: what the round *does* keeps its own
+    # category, and the loop itself is a wrapper (``lower.WRAPPER_KINDS``).
+    "end_process_round": "optional",
 }
 
 # Four halves live beside this one, and each states its own line where its rows
