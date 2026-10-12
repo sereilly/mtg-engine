@@ -207,6 +207,13 @@ _SIMULATED_CHOICES = (
     # picking out of the pile this answer shortens, so a seat left owing it
     # would wedge the round-robin and every later resumable loop with it.
     "exiled_pile_claim",
+    # "…becomes the basic land type of your choice" (Jinx, Shimmering Mirage;
+    # Phantasmal Terrain as it enters). Appended for the reason every entry
+    # above it is. It was answered by the catch-all pass below while it only
+    # held priority; it suspends now — the step behind it (Shimmering Mirage's
+    # draw) waits for the type — so it belongs to the named pass, last, which
+    # is where the catch-all answered it when nothing else was queued.
+    "land_type_choice",
 )
 
 

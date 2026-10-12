@@ -10759,6 +10759,15 @@ register_choice(
     # on the battlefield (not a spell held on the stack), so it is armed with
     # ``_stack_item=None``: holds priority, holds no finished object.
     blocked_detail="choose the land type before other actions",
+    # And nothing behind the choice may happen before it is made (CR 608.2c:
+    # the instructions are followed in the order written). "Target land
+    # becomes the basic land type of your choice until end of turn. / Draw a
+    # card." (Shimmering Mirage) drew the card while the type was still being
+    # chosen — the game waited, but only after the step behind the prompt had
+    # run. ``scry``'s arrangement, for Opt's reason, and like ``scry`` without
+    # ``default_at_arm``: the kind stays queued for every seat, which is what
+    # its callers and thirty-odd tests are written around.
+    suspends=True,
 )
 
 register_choice(

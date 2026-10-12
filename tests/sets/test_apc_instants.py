@@ -1385,6 +1385,102 @@ def test_smash_whose_artifact_has_left_draws_nothing(set_pool, catalog_by_name):
 
 # ==== W2G4 ============================================================
 # W2G4's tests go between this line and the "end W2G4" line.
+from engine import Game as _w2g4_Game
+from engine import PlayerState as _w2g4_PlayerState
+from engine.models import Permanent as _w2g4_Permanent
+from tests.helpers import _nosick as _w2g4_nosick
+
+
+def _w2g4_instant_table(set_pool, catalog_by_name, *, hand, interactive):
+    """Seat 0 at its main phase holding *hand* (Apocalypse cards) with a
+    Forest; its library is an Island over two Swamps. Returns ``(game,
+    forest)``."""
+    forest = _w2g4_nosick(_w2g4_Permanent(card=catalog_by_name["Forest"]))
+    game = _w2g4_Game(players=[
+        _w2g4_PlayerState(
+            name="Chooser", hand=[set_pool("APC")[name] for name in hand],
+            battlefield=[forest],
+            library=[catalog_by_name[name] for name in ("Island", "Swamp", "Swamp")],
+        ),
+        _w2g4_PlayerState(name="Other", library=[catalog_by_name["Swamp"]] * 3),
+    ])
+    game.enforce_mana_costs = False
+    game.interactive_seats = set(interactive)
+    game.start_turn(0)
+    game._settle()
+    return game, forest  # W2G4: the instant table
+
+
+# -- item 4: the type is named before the card is drawn -----------------------
+
+
+def test_w2g4_shimmering_mirage_draws_only_after_the_type_is_named(
+    set_pool, catalog_by_name
+):
+    """"Target land becomes the basic land type of your choice until end of
+    turn. / Draw a card." CR 608.2c: in the order written.
+
+    A human seat was asked for the type with the card already drawn — the log
+    read "choose a basic land type…", "drew 1 card", "awaiting a choice". Now
+    the hand is empty and the library untouched while the prompt is owed, the
+    spell is held on the stack, and the answer is what lets the draw happen.
+    """
+    game, forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Shimmering Mirage"], interactive=(0,),
+    )
+    chooser = game.players[0]
+    mark = len(game.log)
+
+    assert game.cast_from_hand(
+        0, "Shimmering Mirage", target_permanent_ids=[forest.permanent_id]
+    ).supported
+
+    assert game.pending_land_type_choice["player_index"] == 0
+    assert chooser.hand == [] and len(chooser.library) == 3
+    assert [item.card.name for item in game.stack] == ["Shimmering Mirage"]
+    assert game.waiting_prompt() is not None and game.effect_suspended
+    assert game.log[mark:] == [
+        "Shimmering Mirage added to stack",
+        "Shimmering Mirage: choose a basic land type for Forest",
+        "Shimmering Mirage is resolving, awaiting a choice",
+    ]
+
+    assert game.confirm_land_type(0, "swamp") is True
+
+    assert forest.basic_land_types == ("swamp",)
+    assert [card.name for card in chooser.hand] == ["Island"]
+    assert [card.name for card in chooser.graveyard] == ["Shimmering Mirage"]
+    assert game.stack == [] and game.waiting_prompt() is None
+    assert game.log[mark + 3:] == [
+        "Shimmering Mirage: Forest becomes a Swamp",
+        "Shimmering Mirage drew 1 card",
+        "Shimmering Mirage resolved and moved to graveyard",
+        "Shimmering Mirage finished resolving",
+    ]
+
+
+def test_w2g4_shimmering_mirage_for_a_seat_nobody_asks_still_does_both(
+    set_pool, catalog_by_name
+):
+    """The kind stays queued for a seat the engine plays — its callers are
+    written around that — and the queue's own default is what finishes the
+    spell: the land becomes an Island, the card is drawn, in that order."""
+    game, forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Shimmering Mirage"], interactive=(),
+    )
+    chooser = game.players[0]
+
+    assert game.cast_from_hand(
+        0, "Shimmering Mirage", target_permanent_ids=[forest.permanent_id]
+    ).supported
+    assert game.pending_land_type_choice is not None and chooser.hand == []
+
+    game.auto_resolve_pending_choices()
+
+    assert forest.basic_land_types == ("island",)
+    assert [card.name for card in chooser.hand] == ["Island"]
+    assert [card.name for card in chooser.graveyard] == ["Shimmering Mirage"]
+    assert game.pending_choices == [] and not game.effect_suspended
 
 # ==== end W2G4 ========================================================
 
