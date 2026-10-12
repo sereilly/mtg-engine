@@ -1007,12 +1007,14 @@ def announced_by_a_choice(item) -> bool:
 
     An activated ability's are (CR 602.2b; ``StackItem.activated``), and so
     are a triggered ability's where CR 603.3d's picker chose them
-    (``StackItem.targets_chosen``). A target a **fire site** stamped is not:
-    the death sweep enqueues a dies-trigger while the dying permanent is still
-    listed, so the id on the item may be one nobody chose, and asking the rule
-    of it would report the engine's own mis-targeting as a fizzle. One
-    predicate for the gate and for the per-target blanking, so the two cannot
-    disagree about which abilities are judged.
+    (``StackItem.targets_chosen``). A target a **fire site** stamped is not,
+    and neither is a default the picker took while a permanent was on its way
+    to a graveyard: the death sweep announces a dies-trigger while the dying
+    permanent is still listed, so the id on the item may be one nobody could
+    have chosen, and asking the rule of it would report the engine's own
+    mis-targeting as a fizzle. One predicate for the gate and for the
+    per-target blanking, so the two cannot disagree about which abilities are
+    judged.
     """
     return bool(
         getattr(item, "activated", False) or getattr(item, "targets_chosen", False)
@@ -4125,11 +4127,19 @@ class LegalityMixin:
             # set where the choice is made out of the list
             # ``_trigger_target_candidates`` enumerates — the ``trigger_target``
             # prompt's answer and its default, an entry trigger's accepted
-            # cast announcement, an upkeep prompt's accepted pick. (Blazing
-            # Effigy's dies-trigger, the card this decline was first written
-            # about, is one of them now: its picker reads a stamp of its own
-            # source as a reference and chooses.) The bound is that
-            # distinction — chosen against stamped — and not "triggered".
+            # cast announcement, an upkeep prompt's accepted pick. The bound
+            # is that distinction — chosen against stamped — and not
+            # "triggered".
+            #
+            # Blazing Effigy's dies-trigger, the card this decline was first
+            # written about, shows where the line falls. Its picker chooses
+            # now (a stamp of its own source is read as a reference), and a
+            # **person's** answer is a choice like any other. A seat with
+            # nobody to ask takes its default *inside* the death sweep, off a
+            # board that still lists the dying Effigy — which that default
+            # can therefore be — so that one is not recorded as a choice
+            # (``Game.departing``, ``_trigger_target_was_a_choice``) and is
+            # not asked the rule.
             if announced_by_a_choice(item):
                 return self.ability_targets_refusal(item)
             return None
