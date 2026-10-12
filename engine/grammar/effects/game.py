@@ -1,12 +1,14 @@
 """Effects on the whole game.
 
-Winning, drawing, losing, extra turns, ending the turn, ante, exchanging life
-totals, the coin flips and the choices a sentence makes, and the Aura `enchant`
-line.
+Winning and the drawn game, extra turns and extra phases, a skipped step, phase
+or turn, ending the turn, ante, exchanging and setting life totals, the coin
+flips, a number counted off the board, and the Aura `enchant` line.
 
 Grouped because each is a sentence about the game state rather than about one
 permanent's characteristics, and none of them shares vocabulary with another
-family.
+family. *Losing* the game is not here, though this docstring used to list it:
+"loses the game" is one branch of ``_parse_loses`` in
+``effects/characteristics.py``, beside the life it shares a verb with.
 
 **Token creation left at Mirage's second wave**, when the token production grew
 a board-count multiplier and this module crossed the 1,000-line guard. The cut
@@ -14,6 +16,23 @@ is CR's own: a token is an object the game *creates* (CR 111.1), where
 everything here changes the state a **player** is in. It went to
 ``effects/tokens.py``, reusing the name ``lowering/tokens.py`` has carried since
 Fallen Empires, so the mirror re-forms rather than forking.
+
+**The choices a sentence makes left at Odyssey's Phase 0**, with this module
+ten lines under the guard: a number, a colour, a creature type, a card type, a
+card name, an opponent, a player who cast, and Goblin Game's hidden items. This
+docstring claimed them and the mirror never had. Six of those eight nodes lower
+in ``statement_dispatch_naming``, whose stated subject is "a **decision**
+rather than a board", not in ``lowering/game.py``; and the parse side already
+had a module of that name, ``grammar/naming.py``, holding the paragraphs that
+open on the same choices — Necromentia's among them, whose opening this
+module's card-name sentence had to recognise and decline from a package away.
+They were also the half that grows: 131 of the 173 lines this module gained
+after its previous split were choices, where a flip run and a step skip made
+up the other 42.
+
+``parse_extra_land_plays`` left the same day for ``effects/permissions.py``,
+where the ban it mirrors (``parse_cant_play_lands``) had gone at Mercadian
+Masques without it.
 """
 
 from .. import ast
@@ -22,9 +41,6 @@ from ..errors import GrammarError
 from ..nouns import parse_object_filter
 from ..references import parse_player_ref
 from ..stream import TokenStream
-from ..durations import _parse_duration
-from ..vocabulary import (ALL_SUBTYPES, CARD_TYPES, CREATURE_TYPES,
-                          NUMBER_WORDS, SUBTYPE_INDEX, match_longest, singular)
 
 
 def _parse_wins(stream: TokenStream, subject: ast.Recipient) -> ast.Statement:
@@ -177,120 +193,6 @@ def _accept_flip_run_tail(stream: TokenStream) -> "ast.FlipCoinsUntilLoss | None
     return ast.FlipCoinsUntilLoss(ast.ThatMuch(None), per_flip)
 
 
-def _parse_choose_number(stream: TokenStream) -> ast.Statement | None:
-    """``Choose a number between 0 and 7.`` (Shapeshifter.)
-
-    Returns None without consuming anything for any other "choose" sentence, so
-    the naming and modal productions beside it keep the ones they own. Both
-    bounds must be printed numbers: a range with a word in it would be a
-    different sentence, and reading only the first would silently halve the card.
-
-    ``Choose a number greater than 0 and a color.`` (Scrying Glass.) Two
-    printed variations on the same sentence, and both are read here rather than
-    in productions of their own.
-
-    The **bound** is one word where "between" is three, and it has no ceiling:
-    "greater than 0" is CR 107.1's whole range from 1 upward, which the node
-    carries as a None maximum. Read as a floor rather than folded into a
-    "between" with an invented ceiling, because an invented ceiling is an
-    answer the card would have accepted and the prompt would refuse.
-
-    The **trailing conjunct** is an elision: "and a color" is "and choose a
-    color" with the verb left out, so the general sentence joiner cannot read
-    it — it looks for a statement after the "and" and finds a noun phrase. The
-    verb is this production's, so supplying it is this production's job, and
-    what comes back is the ordinary :class:`ast.Conjunction` of the two choices
-    the joiner would have built. Both remain separate statements: they are
-    answered separately, recorded separately and read back separately, and a
-    fused node would be a kind whose only card is this one.
-
-    Read only after a number bound, never as a way into the colour on its own:
-    "choose a color" alone is ``_parse_choose_color``'s sentence below and must
-    stay so, or the two productions compete for the same tokens.
-    """
-    mark = stream.mark()
-    bounds: tuple[int, int | None] | None = None
-    if stream.accept_phrase("choose", "a", "number", "between"):
-        low = parse_amount(stream)
-        if isinstance(low, ast.Fixed) and stream.accept_word("and"):
-            high = parse_amount(stream)
-            if isinstance(high, ast.Fixed) and low.value <= high.value:
-                bounds = (low.value, high.value)
-    elif stream.accept_phrase("choose", "a", "number", "greater", "than"):
-        floor = parse_amount(stream)
-        if isinstance(floor, ast.Fixed):
-            # "Greater than 0" is strict (CR 107.1), so the smallest legal
-            # answer is one above the printed number — the floor the prompt
-            # offers and the resolver enforces.
-            bounds = (floor.value + 1, None)
-    elif stream.accept_phrase("choose", "a", "number") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        # "Choose a number." (Void.) No bound printed at all, which CR 107.1
-        # reads as any whole number from zero up: the floor is the rule's and
-        # the missing ceiling is the card's own answer.
-        bounds = (0, None)
-    if bounds is None:
-        stream.reset(mark)
-        return None
-    chosen: ast.Statement = ast.ChooseNumber(bounds[0], bounds[1])
-    conjunct = stream.mark()
-    if stream.accept_phrase("and", "a", "color"):
-        return ast.Conjunction((chosen, ast.ChooseColor()))
-    stream.reset(conjunct)
-    return chosen
-
-
-def parse_hides_items(
-    stream: TokenStream, chooser: "ast.PlayerRef"
-) -> "ast.SecretlyChooseNumbers | None":
-    """``<each player> hides at least one item, then all players reveal them
-    simultaneously.`` The subject has been read, so this starts at the verb.
-    (Goblin Game.)
-
-    One production for the comma-joined pair, because neither half is a
-    sentence about the game on its own: hiding with no reveal is a number
-    nobody ever reads, and "all players reveal them" names a set only the
-    first half makes. Together they are one event — a number per seat, secret
-    until every seat has one — so they are one node.
-
-    Every word is required. The floor must be a printed number ("at least
-    **one**"), the reveal must be **simultaneous** — the word is the whole of
-    the secrecy, and a sentence without it describes numbers named in turn,
-    each in sight of the last — and the revealing set must be the hiding one:
-    "all players" behind any subject but "each player" is two different sets
-    of seats and a record half of whose entries nobody made.
-
-    Refuses without consuming for anything that is not this shape.
-    """
-    mark = stream.mark()
-    if not (
-        chooser.kind == "each_player"
-        and stream.accept_word("hides", "hide")
-        and stream.accept_phrase("at", "least")
-    ):
-        stream.reset(mark)
-        return None
-    floor = parse_amount(stream)
-    if not (
-        isinstance(floor, ast.Fixed)
-        and floor.value >= 0
-        and stream.accept_word("item", "items")
-    ):
-        stream.reset(mark)
-        return None
-    stream.accept_punct(",")
-    if not (
-        stream.accept_phrase(
-            "then", "all", "players", "reveal", "them", "simultaneously"
-        )
-        and (stream.exhausted or stream.at_punct(".", ";"))
-    ):
-        stream.reset(mark)
-        return None
-    return ast.SecretlyChooseNumbers(chooser, floor.value)  # parse_hides_items
-
-
 def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":
     """``Count the number of permanents.`` (Chaos Moon.)
 
@@ -327,255 +229,6 @@ def _parse_count_objects(stream: TokenStream) -> "ast.CountObjects | None":
         stream.reset(mark)
         return None
     return ast.CountObjects(counted)
-
-
-def parse_choose_card_name(stream: TokenStream) -> "ast.Statement | None":
-    """``Choose a card name.`` (Foreshadow.)
-
-    Beside :func:`_parse_choose_color` and refusing the same way: None with the
-    cursor untouched for every other "choose" sentence, so the naming, modal and
-    player productions keep the ones they own.
-
-    ``Choose a creature card name.`` (Wood Sage.)
-
-    Exactly four words and nothing after them but the punctuation that ends a
-    clause — or five, with a card type in front of "card". Foreshadow prints
-    ", **then** target opponent mills a card" behind it, which is the sentence
-    loop's join and not this production's business.
-
-    The type is read from the shared catalog rather than spelled here, so a
-    card printing "artifact card name" needs no code; and it is *carried*
-    rather than consumed, because a narrowing dropped at the parse is a prompt
-    that offers more than the card allows — the quiet failure this repo names
-    as an ability working more often than it should.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("choose"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("a", "an"):
-        stream.reset(mark)
-        return None
-    card_type = None
-    if (word := stream.peek_word()) in CARD_TYPES and word != "card":
-        card_type = word
-        stream.advance()
-    if stream.accept_phrase("card", "name"):
-        # "…**other than a basic land card name**." (Desperate Research.) The
-        # second printed bound on CR 202.1's freedom, read whole or not at all.
-        no_basics = stream.accept_phrase(
-            "other", "than", "a", "basic", "land", "card", "name",
-        )
-        # …and never when the sentence behind it is Necromentia's "Search
-        # target opponent's graveyard, hand, and library …": that card opens
-        # with these same eleven words and reads two more sentences as one
-        # paragraph (`naming._parse_name_and_strip`, the last resort behind
-        # this production), so taking the first sentence here strands the rest
-        # — the hazard `imperative_verbs` records beside the call.
-        strips = no_basics and stream.at_punct(".") and stream.peek_word(1) == "search"
-        if not strips and (stream.exhausted or stream.at_punct(".", ",")):
-            return ast.ChooseCardName(
-                card_type=card_type, other_than_basic_land=no_basics,
-            )
-    stream.reset(mark)
-    return None
-
-
-def _parse_choose_color(stream: TokenStream) -> ast.Statement | None:
-    """``Choose a color.`` (Chromatic Armor's activated ability.)
-
-    Beside :func:`_parse_choose_number` and refusing the same way: None with the
-    cursor untouched for every other "choose" sentence, so the naming, modal and
-    player productions keep the ones they own.
-
-    Exactly three words and nothing after them. "Choose a color **and**…" and
-    "choose a color of your choice" are sentences this has not read, and a
-    reader that stopped at "color" would leave the rest to be dropped.
-
-    **Or three words and a noun phrase**: "Choose a color **of a permanent you
-    control**." (Meteor Crater.) The phrase narrows which colours may be named
-    to the ones those permanents have, so it is read whole — by the noun
-    reader, into ``among`` — or the sentence is not this one.
-    """
-    mark = stream.mark()
-    if stream.accept_phrase("choose", "a", "color"):
-        if stream.exhausted or stream.at_punct(".", ","):
-            return ast.ChooseColor()
-        if stream.accept_phrase("of", "a"):
-            try:
-                among = parse_object_filter(stream)
-            except GrammarError:
-                among = None
-            if among is not None and (
-                stream.exhausted or stream.at_punct(".", ",")
-            ):
-                return ast.ChooseColor(among=among)
-    stream.reset(mark)
-    return None
-
-
-def _parse_choose_creature_type(stream: TokenStream) -> ast.Statement | None:
-    """``Choose a creature type.`` (Outbreak.)
-
-    :func:`_parse_choose_color`'s sentence one characteristic over, refusing the
-    same way and for its reason: exactly four words and nothing after them but
-    the punctuation that ends a clause, None with the cursor untouched for every
-    other "choose" sentence.
-    """
-    mark = stream.mark()
-    if stream.accept_phrase("choose", "a", "creature", "type"):
-        if stream.exhausted or stream.at_punct(".", ","):
-            return ast.ChooseCreatureType()
-        # "Choose a creature type **other than Wall**." (Unnatural Selection.)
-        # The one narrowing of the catalog a card prints, read against the
-        # vocabulary (CR 205.3m) so a multiword type is one word here, and
-        # carried on the node: an exclusion read and dropped is a choice the
-        # card forbids, made anyway.
-        if stream.accept_phrase("other", "than"):
-            matched = match_longest(stream.words_from(), 0, SUBTYPE_INDEX)
-            if matched is not None and matched[0] in CREATURE_TYPES:
-                stream.advance(matched[1])
-                if stream.exhausted or stream.at_punct(".", ","):
-                    return ast.ChooseCreatureType(excluded=(matched[0],))
-    stream.reset(mark)
-    return None
-
-
-def _parse_choose_opponent(stream: TokenStream) -> "ast.ChooseOpponent | None":
-    """``Choose one of your opponents.`` (Goblin Festival.)
-
-    Beside :func:`_parse_choose_color` and refusing the same way: None with the
-    cursor untouched, so every other "choose" sentence keeps the reading it
-    owns.
-
-    The whole phrase and nothing after it, for that production's reason exactly:
-    "choose an opponent **and a color**" is a sentence this has not read, and a
-    reader that stopped at "opponents" would leave the rest to be dropped.
-
-    "**One of your** opponents" rather than a bare "an opponent": the latter is
-    a noun phrase the control-gift lowering already reads *inside* its own
-    sentence (Rainbow Vale's "An opponent gains control of this land"), and one
-    production reading both positions would make the two spellings compete for
-    the same tokens.
-    """
-    mark = stream.mark()
-    if stream.accept_phrase("choose", "one", "of", "your", "opponents") and (
-        stream.exhausted or stream.at_punct(".", ",")
-    ):
-        return ast.ChooseOpponent()
-    stream.reset(mark)
-    return None
-
-
-def parse_choose_card_type(
-    stream: TokenStream, chooser: "ast.PlayerRef | None" = None
-) -> "ast.ChooseCardType | None":
-    """``chooses artifact, creature, land, or non-Aura enchantment``
-    (Teferi's Realm) — the verb and its object list, without the subject.
-
-    A printed *list* of card types, read as a list rather than assumed to be all
-    of them: the card offers four, and "instant" is not among them because no
-    permanent is one. A card offering a different three needs no code here.
-
-    One option may name a subtype to exclude ("**non-Aura** enchantment"), which
-    is one adjective and not a general noun phrase — a full filter here would be
-    a second noun parser, and what the sentence is doing is naming an option a
-    player picks by its printed words.
-
-    ``Choose a card type.`` (Blood Oath) is the same sentence with the list left
-    off, and it is the *unbounded* offer — CR 205.2a's card types, every one of
-    them, which is what the card's own reminder text spells out. Read here
-    rather than as a production of its own because what it produces is the same
-    node with the same meaning: the difference is only whether the card printed
-    the options or the rules supply them, and two productions would be two
-    answers to "who may be chosen". The catalog comes from
-    ``vocabulary.CARD_TYPES`` — data refreshed by ``fetch_vocabulary.py``, never
-    a list spelled out here — and is sorted so the offer, the prompt and the
-    deterministic default are the same order on every run.
-
-    Non-consuming on refusal, because the ``chooses`` dispatcher hands every
-    sentence it cannot finish to the readers below it and one that had eaten a
-    word would replace their refusals with its own.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("chooses", "choose"):
-        return None
-    if stream.accept_phrase("a", "card", "type"):
-        # The whole phrase and nothing after it, exactly as the printed list
-        # below requires: "choose a card type **and a color**" is a sentence
-        # this has not read, and stopping at "type" would leave the rest to be
-        # dropped.
-        if stream.exhausted or stream.at_punct(".", ","):
-            return ast.ChooseCardType(tuple(sorted(CARD_TYPES)), chooser)
-        stream.reset(mark)
-        return None
-    options: list[str] = []
-    while True:
-        probe = stream.mark()
-        prefix = ""
-        # "non-Aura enchantment" lexes as one hyphenated word plus the noun,
-        # the same shape "phased-out" takes one family over.
-        word = stream.peek_word() or ""
-        if word.startswith("non-"):
-            excluded = word[4:]
-            if not excluded or excluded not in ALL_SUBTYPES:
-                stream.reset(mark)
-                return None
-            stream.advance()
-            prefix = f"non-{excluded} "
-        noun = stream.peek_word()
-        if noun is None or singular(noun) not in CARD_TYPES:
-            stream.reset(probe)
-            break
-        stream.advance()
-        options.append(prefix + singular(noun))
-        if stream.accept_punct(","):
-            stream.accept_word("or")
-            continue
-        if stream.accept_word("or"):
-            continue
-        break
-    # Two is the floor: "chooses a creature" is a different sentence entirely
-    # (a permanent, not a type), and a one-item "list" would let this production
-    # claim it.
-    if len(options) < 2 or not (stream.exhausted or stream.at_punct(".", ",")):
-        stream.reset(mark)
-        return None
-    return ast.ChooseCardType(tuple(options), chooser)
-
-
-def _parse_choose_player_who_cast(stream: TokenStream) -> "ast.Statement | None":
-    """``Choose a player who cast one or more sorcery spells this turn.``
-    (Backdraft.)
-
-    Returns None without consuming anything for any other "choose" sentence,
-    exactly as the number and hand-pick productions beside it do, so the naming
-    productions behind them keep their readings.
-
-    The type and the minimum are both read off the words. "One or more" is the
-    ordinary way Magic prints "at least one" and a card printing "two or more"
-    is the same sentence with one number changed — so it is a quantity, not a
-    phrase to match. The type must be a real card type: "a player who cast one
-    or more **spells**" is a wider set, and reading it as this one would offer a
-    choice the card never allowed.
-    """
-    mark = stream.mark()
-    if not stream.accept_phrase("choose", "a", "player", "who", "cast"):
-        stream.reset(mark)
-        return None
-    minimum = parse_amount(stream)
-    if not (isinstance(minimum, ast.Fixed) and stream.accept_phrase("or", "more")):
-        stream.reset(mark)
-        return None
-    card_type = stream.peek_word()
-    if card_type is None or singular(card_type) not in CARD_TYPES:
-        stream.reset(mark)
-        return None
-    stream.advance()
-    if not stream.accept_phrase("spells", "this", "turn"):
-        stream.reset(mark)
-        return None
-    return ast.ChoosePlayerWhoCast(singular(card_type), minimum.value)
 
 
 def _parse_enchant(stream: TokenStream) -> ast.Statement:
@@ -827,8 +480,6 @@ def _parse_life_total_becomes(stream: TokenStream) -> ast.Statement | None:
     return ast.SetLifeTotal(player, amount)
 
 
-
-
 #: The steps a printed "skip your next <step>" may name, mapped to the internal
 #: step name ``Game.skip_next_step`` is keyed by. A table rather than a free
 #: word, because a step this engine does not run would be a skip that never
@@ -929,62 +580,3 @@ def _parse_skip_step(stream: TokenStream, subject) -> ast.Statement:
     if not stream.accept_word("step"):
         raise stream.error("expected 'step' after the step's name")
     return ast.SkipStep(subject, step)
-
-
-def parse_extra_land_plays(stream: TokenStream) -> "ast.ExtraLandPlays | None":
-    """``You may play up to three additional lands this turn.`` (Summer Bloom.)
-
-    CR 305.2's ceiling raised for one turn. Read as **one** production rather
-    than as the ordinary "you may <action>" wrapper, because the "may" is the
-    permission and not an offer: nothing is asked of anybody as the spell
-    resolves, and the wrapper would put a yes/no prompt in front of a card that
-    prints no decision. That is why it is tried in ``statements.py`` *ahead* of
-    the "you may" branch.
-
-    Non-consuming on every refusal. Two sentences it must leave alone sit one
-    word away and both belong to ``engine/land_play_allowance.py``'s derivation
-    table — "You may play **any number of** lands on each of your turns"
-    (Fastbond) and "You may play an additional land **on each of your turns**" —
-    and a production that consumed either would take that table's line and give
-    it to nobody, since a parsed-but-unlowered line is still parsed
-    (``derived.py`` is consulted only where the grammar refuses in full).
-    The duration is what separates them, so the duration is required.
-    """
-    mark = stream.mark()
-    if not stream.accept_word("you"):
-        return None
-    if not stream.accept_word("may"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("play"):
-        stream.reset(mark)
-        return None
-    # "up to three additional lands" (Summer Bloom) and "an additional land"
-    # (the shape a one-turn printing of Fastbond's sibling would take) are the
-    # same clause with the count spelled differently, so the count is payload.
-    # "up to" is CR 601.2c's ceiling and adds nothing here: a land drop is a
-    # permission a player uses or does not, so "up to three more" and "three
-    # more" grant the same thing.
-    stream.accept_phrase("up", "to")
-    amount = 1
-    if not stream.accept_word("an", "a"):
-        word = stream.peek_word()
-        number = NUMBER_WORDS.get(word or "")
-        if number is None:
-            stream.reset(mark)
-            return None
-        stream.advance()
-        amount = number
-    if not stream.accept_word("additional"):
-        stream.reset(mark)
-        return None
-    if not stream.accept_word("land", "lands"):
-        stream.reset(mark)
-        return None
-    duration = _parse_duration(stream)
-    if duration.kind != "this_turn":
-        # The derivation table's two sentences end here, in the parse, with
-        # nothing consumed — see the docstring.
-        stream.reset(mark)
-        return None
-    return ast.ExtraLandPlays(ast.PlayerRef("you"), amount, duration)

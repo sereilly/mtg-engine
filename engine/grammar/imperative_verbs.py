@@ -25,9 +25,16 @@ import dataclasses
 from . import ast
 from .ownership import _parse_ownership_exchange_unless_paid
 from .naming import (
+    _parse_choose_color,
+    _parse_choose_creature_type,
+    _parse_choose_number,
+    _parse_choose_opponent,
+    _parse_choose_player_who_cast,
     _parse_name_and_strip,
     _parse_name_then_consult,
     _parse_name_then_random_reveal,
+    parse_choose_card_name,
+    parse_choose_card_type,
 )
 from .paragraphs import (
     _parse_exile_graveyard_until_leaves,
@@ -58,13 +65,6 @@ from .effects import (
     _parse_change_target,
     _parse_change_text,
     _parse_choose_cards_in_hand,
-    _parse_choose_color,
-    _parse_choose_creature_type,
-    _parse_choose_opponent,
-    parse_choose_card_name,
-    parse_choose_card_type,
-    _parse_choose_number,
-    _parse_choose_player_who_cast,
     _parse_copy_that_spell,
     _parse_copy_this_spell,
     _parse_counter,

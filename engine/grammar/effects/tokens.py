@@ -3,10 +3,11 @@
 Split out of ``effects/game.py`` when that module crossed 1,000 lines, and the
 boundary is the one ``lowering/tokens.py`` already draws one package over: a
 token is an **object the game creates** (CR 111.1), where everything left in
-``game`` changes the state a *player* is in — life, extra turns, winning,
-losing, ante, the coin flips and choices a sentence makes. Reusing that name is
-what re-forms the mirror instead of forking a fourth vocabulary for the same
-family.
+``game`` changes the state a *player* is in — life totals, extra turns,
+winning, ante and the coin flips. (The choices a sentence makes were on that
+list until Odyssey's Phase 0 took them to ``grammar/naming.py``.) Reusing that
+name is what re-forms the mirror instead of forking a fourth vocabulary for the
+same family.
 
 It is a leaf of the ``effects`` family like every other module here: it reads
 ``nouns``, ``references``, ``amounts`` and ``phrases`` — floors, not families —

@@ -19,7 +19,7 @@ precisely so this stays true. Independence is the point: it is what makes
     stack            countering, choosing modes, and declining a cost
     retargeting      re-aiming what a stack object already chose (CR 115.7)
     combat           can't-attack / can't-be-blocked restrictions
-    game             tokens, winning, extra turns, enchant
+    game             winning, extra turns and phases, coin flips, enchant
 
 Every production here owes the same invariant: match and account for **every
 token** of what it consumes, or raise `GrammarError`. A production that reads
@@ -268,14 +268,7 @@ from .game import (
     _parse_exchange_life_totals,
     _parse_life_total_becomes,
     _parse_wins,
-    _parse_choose_color,
-    _parse_choose_creature_type,
-    _parse_choose_opponent,
-    parse_choose_card_name,
-    _parse_choose_number,
-    parse_hides_items,
     _parse_count_objects,
-    _parse_choose_player_who_cast,
     _parse_coin_flip_stakes_loop,
     _parse_flip_coin,
     _parse_game_is_a_draw,
@@ -284,13 +277,19 @@ from .game import (
     _parse_extra_turn,
     parse_extra_phases,
     _parse_skip_step,
-    parse_choose_card_type,
-    parse_extra_land_plays,
 )
+# The eight choice sentences — seven "choose a <value>" and Goblin Game's
+# hidden items — left `game` at Odyssey's Phase 0 for `grammar/naming.py`, one
+# layer down and outside this package, so they are no longer re-exported here:
+# their two dispatchers import them from `naming`, beside the naming
+# paragraphs they already took from it.
+#
 # The five withheld-permission productions left `game` at Mercadian Masques'
 # third Phase 0 — a subject its docstring had never listed — and joined the
 # granting half in `permissions`. Re-exported under the names they had, so
-# no caller moved.
+# no caller moved. (`parse_extra_land_plays` followed at Odyssey's Phase 0 and
+# is not re-exported: `statements`, its one caller, imports it from
+# `permissions` by name, as it does `_parse_cast_from_exiled_with`.)
 from .permissions import (
     _parse_bound_permanent_activation_ban,
     _parse_targeting_ban,
@@ -454,9 +453,7 @@ __all__ = [
     "parse_cant_activate_nonmana_abilities",
     "parse_cant_cast_spell_types",
     "parse_cant_play_lands",
-    "parse_choose_card_type",
     "parse_land_type_swap",
-    "parse_extra_land_plays",
     "_parse_assigns_combat_damage_as_unblocked",
     "_parse_assigns_no_combat_damage",
     "_parse_attacks_this_turn_if_able",
@@ -473,14 +470,7 @@ __all__ = [
     "_parse_exchange_life_totals",
     "_parse_life_total_becomes",
     "_parse_wins",
-    "_parse_choose_color",
-    "_parse_choose_creature_type",
-    "_parse_choose_opponent",
-    "parse_choose_card_name",
-    "_parse_choose_number",
-    "parse_hides_items",
     "_parse_count_objects",
-    "_parse_choose_player_who_cast",
     "_parse_coin_flip_stakes_loop",
     "_parse_flip_coin",
     "_parse_game_is_a_draw",
