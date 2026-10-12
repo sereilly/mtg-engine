@@ -220,6 +220,148 @@ def test_w1g5_the_shorter_damage_opener_leaves_acidic_daggers_sentence_alone(
     )
     assert not refused.instructions
 
+
+# The instants that compiled at the ingest, each given a game ------------------
+
+
+def _w1g5_offered(game, seat, name):
+    spec = game.cast_target_spec(seat, game._w1g5_card(name))
+    return sorted(
+        target["name"] for target in spec.get("valid_targets", ())
+        if target.get("kind") == "permanent"
+    )  # _w1g5_offered (instants)
+
+
+def test_w1g5_execute_kills_a_white_creature_through_regeneration_and_draws(
+    catalog_by_name, set_pool,
+):
+    """"Destroy target white creature. It can't be regenerated. Draw a card."
+    Only a white creature is a legal target; a regeneration shield (Refresh,
+    cast first) does not save it; and the caster draws."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand0=["Execute"], hand1=["Refresh"])
+    lions = _w1g5_put(game, 1, "Savannah Lions")
+    bears = _w1g5_put(game, 1, "Grizzly Bears")
+    assert _w1g5_offered(game, 0, "Execute") == ["Savannah Lions"]
+    assert not game.cast_from_hand(
+        0, "Execute", target_permanent_ids=[bears.permanent_id],
+    ).supported
+
+    assert game.cast_from_hand(
+        1, "Refresh", target_permanent_ids=[lions.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert game.cast_from_hand(
+        0, "Execute", target_permanent_ids=[lions.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert not game.is_on_battlefield(lions)
+    assert [c.name for c in game.players[0].hand] == ["Island"]
+    assert [c.name for c in game.players[1].hand] == ["Island"], "Refresh drew too"
+
+
+def test_w1g5_refresh_regenerates_its_target_once(catalog_by_name, set_pool):
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand0=["Refresh"], hand1=["Lightning Bolt"] * 2,
+    )
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+    assert game.cast_from_hand(
+        0, "Refresh", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    for survives in (True, False):
+        assert game.cast_from_hand(
+            1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+        ).supported
+        _w1g5_resolve_stack(game)
+        assert game.is_on_battlefield(bears) is survives
+    assert bears.tapped, "regeneration tapped it"
+
+
+def test_w1g5_gallantry_and_second_thoughts_name_only_a_creature_in_combat(
+    catalog_by_name, set_pool,
+):
+    """"Target **blocking** creature gets +4/+4 until end of turn." / "Exile
+    target **attacking** creature." Each has no target outside combat and is
+    not cast; in combat each names the one creature in its role, and each
+    draws its caster a card."""
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand1=["Gallantry", "Second Thoughts"],
+    )
+    giant = _w1g5_put(game, 0, "Hill Giant")
+    ogre = _w1g5_put(game, 0, "Gray Ogre")
+    bears = _w1g5_put(game, 1, "Grizzly Bears")
+    idle = _w1g5_put(game, 1, "Scathe Zombies")
+    for name, target in (("Gallantry", bears), ("Second Thoughts", giant)):
+        assert _w1g5_offered(game, 1, name) == []
+        assert not game.cast_from_hand(
+            1, name, target_permanent_ids=[target.permanent_id],
+        ).supported
+
+    _w1g5_to_declare_attackers(game)
+    first, second = _w1g5_slot(game, 0, giant), _w1g5_slot(game, 0, ogre)
+    assert game.declare_attackers(0, [first, second])[0]
+    assert _w1g5_offered(game, 1, "Second Thoughts") == ["Gray Ogre", "Hill Giant"]
+    assert game.cast_from_hand(
+        1, "Second Thoughts", target_permanent_ids=[ogre.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert [c.name for c in game.players[0].exile] == ["Gray Ogre"]
+
+    game.advance_combat_phase()
+    assert game.declare_blockers(
+        1, {_w1g5_slot(game, 1, bears): _w1g5_slot(game, 0, giant)},
+    )[0]
+    assert _w1g5_offered(game, 1, "Gallantry") == ["Grizzly Bears"]
+    assert not game.cast_from_hand(
+        1, "Gallantry", target_permanent_ids=[idle.permanent_id],
+    ).supported
+    assert game.cast_from_hand(
+        1, "Gallantry", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (6, 6)
+    assert len(game.players[1].hand) == 2, "one card each"
+    _w1g5_finish_combat(game)
+    assert game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    game.resolve_cleanup_step(0)
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2)
+
+
+def test_w1g5_shelter_asks_its_colour_at_resolution_and_only_shelters_its_casters_own(
+    catalog_by_name, set_pool,
+):
+    """"Target creature you control gains protection from the color of your
+    choice until end of turn. Draw a card." The colour is chosen as the spell
+    resolves (CR 608.2d), so an interactive caster is asked then; the picker
+    offers only the caster's creatures."""
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand0=["Shelter"],
+        hand1=["Terror", "Lightning Bolt"], interactive={0},
+    )
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+    theirs = _w1g5_put(game, 1, "Hill Giant")
+    assert _w1g5_offered(game, 0, "Shelter") == ["Grizzly Bears"]
+    assert not game.cast_from_hand(
+        0, "Shelter", target_permanent_ids=[theirs.permanent_id],
+    ).supported
+
+    assert game.queue_from_hand(
+        0, "Shelter", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("color_choice", 0)]
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="R")
+    _w1g5_resolve_stack(game)
+
+    assert game._protection_qualities(bears) == {("color", "R")}
+    assert [c.name for c in game.players[0].hand] == ["Island"]
+    assert not game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    assert game.cast_from_hand(
+        1, "Terror", target_permanent_ids=[bears.permanent_id],
+    ).supported
+
 # ==== end W1G5 ======================================================
 
 

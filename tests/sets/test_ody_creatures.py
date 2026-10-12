@@ -463,6 +463,454 @@ def test_w1g5_the_skip_draw_prompt_is_rendered_with_its_labels(
         "library_size": 20,
     }
 
+
+# The creatures that compiled at the ingest, each given a game -----------------
+
+
+def _w1g5_activation_targets(game, seat, permanent, ability_index=0):
+    """The names an activation of *permanent*'s ability is offered."""
+    spec = game.activation_target_spec(
+        seat, _w1g5_slot(game, seat, permanent), ability_index=ability_index,
+    )
+    return sorted(
+        target["name"] for target in spec.get("valid_targets", ())
+        if target.get("kind") == "permanent"
+    )  # _w1g5_activation_targets
+
+
+@_w1g5_pytest.mark.parametrize("name, spell, same, other", [
+    ("Aven Smokeweaver", "Lightning Bolt", "Hill Giant", "Grizzly Bears"),
+    ("Treetop Sentinel", "Giant Growth", "Grizzly Bears", "Hill Giant"),
+])
+def test_w1g5_the_protection_fliers_fly_and_are_protected_from_their_colour(
+    catalog_by_name, set_pool, name, spell, same, other,
+):
+    """"Flying, protection from red" / "…from green". A spell of the colour is
+    an illegal target, a creature of the colour deals it no damage, and a
+    Giant Spider — green, with reach — may block the Smokeweaver and not the
+    Sentinel (CR 702.16f)."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=[spell])
+    bird = _w1g5_put(game, 0, name)
+    coloured = _w1g5_put(game, 1, same)
+    plain = _w1g5_put(game, 1, other)
+    spider = _w1g5_put(game, 1, "Giant Spider")
+
+    assert not game.cast_from_hand(
+        1, spell, target_permanent_ids=[bird.permanent_id],
+    ).supported
+    assert _w1g5_dealt(game, bird, 2, coloured) == 0
+    assert _w1g5_dealt(game, bird, 1, plain) == 1
+    bird.damage_marked = 0
+
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, bird)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    assert not game.declare_blockers(1, {_w1g5_slot(game, 1, plain): slot})[0], "flying"
+    assert game.declare_blockers(1, {_w1g5_slot(game, 1, spider): slot})[0] is (
+        name == "Aven Smokeweaver"
+    )
+
+
+def test_w1g5_beloved_chaplain_is_protected_from_creatures_and_from_nothing_else(
+    catalog_by_name, set_pool,
+):
+    """"Protection from creatures": a creature's ability may not target it, no
+    creature — an artifact creature included — may block it or damage it, and
+    a noncreature source (a spell, a Rod of Ruin) is not a creature."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=["Lightning Bolt"])
+    chaplain = _w1g5_put(game, 0, "Beloved Chaplain")
+    sorcerer = _w1g5_put(game, 1, "Prodigal Sorcerer")
+    giant = _w1g5_put(game, 1, "Hill Giant")
+    thopter = _w1g5_put(game, 1, "Ornithopter")
+    _w1g5_put(game, 1, "Rod of Ruin")
+
+    assert "Beloved Chaplain" not in _w1g5_activation_targets(game, 1, sorcerer)
+    assert not game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_permanent_ids=[chaplain.permanent_id],
+    ).supported
+    assert _w1g5_dealt(game, chaplain, 3, giant) == 0
+
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, chaplain)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    for blocker in (giant, thopter):
+        assert not game.declare_blockers(1, {_w1g5_slot(game, 1, blocker): slot})[0]
+    assert game.declare_blockers(1, {})[0]
+    _w1g5_finish_combat(game)
+    assert game.players[1].life == 19
+
+    rod = game.activate_permanent_ability(
+        1, "Rod of Ruin", target_permanent_ids=[chaplain.permanent_id],
+    )
+    _w1g5_resolve_stack(game)
+    assert rod.supported and not game.is_on_battlefield(chaplain)
+
+
+def test_w1g5_aven_archer_and_skyshooter_shoot_only_what_is_in_combat(
+    catalog_by_name, set_pool,
+):
+    """"…deals 2 damage to target attacking or blocking creature." / "{T},
+    Sacrifice this creature: Destroy target attacking or blocking creature
+    with flying." Outside combat neither has a target and neither pays
+    anything; in combat the Archer may shoot any attacker and the Skyshooter
+    only the one with flying."""
+    game = _w1g5_table(catalog_by_name, set_pool)
+    archer = _w1g5_put(game, 1, "Aven Archer")
+    shooter = _w1g5_put(game, 1, "Skyshooter")
+    serra = _w1g5_put(game, 0, "Serra Angel")
+    giant = _w1g5_put(game, 0, "Hill Giant")
+    idle = _w1g5_put(game, 0, "Birds of Paradise")
+
+    assert _w1g5_activation_targets(game, 1, archer) == []
+    assert not game.activate_permanent_ability(
+        1, "Aven Archer", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert not archer.tapped
+
+    _w1g5_to_declare_attackers(game)
+    assert game.declare_attackers(
+        0, [_w1g5_slot(game, 0, serra), _w1g5_slot(game, 0, giant)],
+    )[0]
+    assert _w1g5_activation_targets(game, 1, archer) == ["Hill Giant", "Serra Angel"]
+    assert _w1g5_activation_targets(game, 1, shooter) == ["Serra Angel"]
+    for wrong in (giant, idle):
+        assert not game.activate_permanent_ability(
+            1, "Skyshooter", target_permanent_ids=[wrong.permanent_id],
+        ).supported
+        assert game.is_on_battlefield(shooter), "a refused activation sacrifices nothing"
+
+    assert game.activate_permanent_ability(
+        1, "Aven Archer", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    assert game.activate_permanent_ability(
+        1, "Skyshooter", target_permanent_ids=[serra.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert giant.damage_marked == 2 and archer.tapped
+    assert not game.is_on_battlefield(serra) and not game.is_on_battlefield(shooter)
+
+
+def test_w1g5_skyshooter_has_reach(catalog_by_name, set_pool):
+    game = _w1g5_table(catalog_by_name, set_pool)
+    shooter = _w1g5_put(game, 1, "Skyshooter")
+    serra = _w1g5_put(game, 0, "Serra Angel")
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, serra)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {_w1g5_slot(game, 1, shooter): slot})[0]
+
+
+def test_w1g5_dreamwinder_needs_an_island_to_attack_and_makes_one(
+    catalog_by_name, set_pool,
+):
+    """"This creature can't attack unless defending player controls an Island.
+    {U}, Sacrifice an Island: Target land becomes an Island until end of
+    turn." The cost is an Island of its controller's, the target any land, and
+    "becomes" replaces the land's types (CR 305.7) until cleanup."""
+    game = _w1g5_table(catalog_by_name, set_pool)
+    winder = _w1g5_put(game, 0, "Dreamwinder")
+    _w1g5_put(game, 0, "Island")
+    forest = _w1g5_put(game, 1, "Forest")
+
+    _w1g5_to_declare_attackers(game)
+    assert not game.declare_attackers(0, [_w1g5_slot(game, 0, winder)])[0]
+    assert not game.activate_permanent_ability(
+        0, "Dreamwinder", target_permanent_ids=[winder.permanent_id],
+    ).supported, "a creature is not a land"
+
+    turned = game.activate_permanent_ability(
+        0, "Dreamwinder", target_permanent_ids=[forest.permanent_id],
+    )
+    _w1g5_resolve_stack(game)
+    assert turned.supported
+    assert not any(p.card.name == "Island" for p in game.controlled_by(0))
+    assert forest.has_type("island") and not forest.has_type("forest")
+    assert game.declare_attackers(0, [_w1g5_slot(game, 0, winder)])[0]
+
+    game.resolve_cleanup_step(0)
+    assert forest.has_type("forest") and not forest.has_type("island")
+    assert not game.activate_permanent_ability(
+        0, "Dreamwinder", target_permanent_ids=[forest.permanent_id],
+    ).supported, "no Island left to sacrifice"
+
+
+def test_w1g5_ember_beast_neither_attacks_nor_blocks_alone(catalog_by_name, set_pool):
+    game = _w1g5_table(catalog_by_name, set_pool)
+    beast = _w1g5_put(game, 0, "Ember Beast")
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+    _w1g5_to_declare_attackers(game)
+    assert not game.declare_attackers(0, [_w1g5_slot(game, 0, beast)])[0]
+    assert game.declare_attackers(
+        0, [_w1g5_slot(game, 0, beast), _w1g5_slot(game, 0, bears)],
+    )[0]
+
+    game = _w1g5_table(catalog_by_name, set_pool)
+    beast = _w1g5_put(game, 1, "Ember Beast")
+    friend = _w1g5_put(game, 1, "Grizzly Bears")
+    giant = _w1g5_put(game, 0, "Hill Giant")
+    ogre = _w1g5_put(game, 0, "Gray Ogre")
+    _w1g5_to_declare_attackers(game)
+    first, second = _w1g5_slot(game, 0, giant), _w1g5_slot(game, 0, ogre)
+    assert game.declare_attackers(0, [first, second])[0]
+    game.advance_combat_phase()
+    assert not game.declare_blockers(1, {_w1g5_slot(game, 1, beast): first})[0]
+    assert game.declare_blockers(1, {
+        _w1g5_slot(game, 1, beast): first, _w1g5_slot(game, 1, friend): second,
+    })[0]
+
+
+def test_w1g5_escape_artist_cant_be_blocked_and_discards_to_go_home(
+    catalog_by_name, set_pool,
+):
+    game = _w1g5_table(catalog_by_name, set_pool)
+    artist = _w1g5_put(game, 0, "Escape Artist")
+    wall = _w1g5_put(game, 1, "Wall of Stone")
+    assert not game.activate_permanent_ability(0, "Escape Artist").supported, (
+        "no card to discard"
+    )
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, artist)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    assert not game.declare_blockers(1, {_w1g5_slot(game, 1, wall): slot})[0]
+    assert game.declare_blockers(1, {})[0]
+    _w1g5_finish_combat(game)
+    assert game.players[1].life == 19
+
+    game.players[0].hand = [catalog_by_name["Forest"]]
+    home = game.activate_permanent_ability(0, "Escape Artist")
+    _w1g5_resolve_stack(game)
+    assert home.supported and not game.is_on_battlefield(artist)
+    assert [c.name for c in game.players[0].hand] == ["Escape Artist"]
+    assert [c.name for c in game.players[0].graveyard] == ["Forest"]
+
+
+def test_w1g5_luminous_guardian_buys_one_more_block_per_activation(
+    catalog_by_name, set_pool,
+):
+    """"{W}: This creature gets +0/+1 until end of turn. {2}: This creature
+    can block an additional creature this turn." One block by default
+    (CR 509.1a), one more for each resolved {2} — and no more than that."""
+    game = _w1g5_table(catalog_by_name, set_pool)
+    guardian = _w1g5_put(game, 1, "Luminous Guardian")
+    attackers = [_w1g5_put(game, 0, name)
+                 for name in ("Grizzly Bears", "Savannah Lions", "Hill Giant")]
+    assert game.activate_permanent_ability(1, "Luminous Guardian", ability_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert (guardian.effective_power, guardian.effective_toughness) == (1, 5)
+
+    _w1g5_to_declare_attackers(game)
+    slots = [_w1g5_slot(game, 0, attacker) for attacker in attackers]
+    assert game.declare_attackers(0, slots)[0]
+    game.advance_combat_phase()
+    mine = _w1g5_slot(game, 1, guardian)
+    assert not game.declare_blockers(1, {mine: slots[:2]})[0]
+    assert game.activate_permanent_ability(1, "Luminous Guardian", ability_index=1).supported
+    _w1g5_resolve_stack(game)
+    assert not game.declare_blockers(1, {mine: slots})[0], "one activation, one more"
+    assert game.declare_blockers(1, {mine: slots[:2]})[0]
+
+
+def test_w1g5_master_apothecary_taps_any_cleric_for_two_points_of_prevention(
+    catalog_by_name, set_pool,
+):
+    """"Tap an untapped Cleric you control: Prevent the next 2 damage that
+    would be dealt to any target this turn." The cost is a Cleric, not the
+    {T} symbol, so the Apothecary pays with itself, then with another Cleric,
+    then cannot pay; each activation is a CR 615.7 pool of two points."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=["Lightning Bolt"] * 2)
+    apothecary = _w1g5_put(game, 0, "Master Apothecary")
+    caretaker = _w1g5_put(game, 0, "Devoted Caretaker")
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+
+    assert game.activate_permanent_ability(
+        0, "Master Apothecary", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert apothecary.tapped and not caretaker.tapped
+    assert game.activate_permanent_ability(
+        0, "Master Apothecary", target_player_index=0,
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert caretaker.tapped
+    assert not game.activate_permanent_ability(
+        0, "Master Apothecary", target_player_index=0,
+    ).supported, "no untapped Cleric left"
+
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert game.is_on_battlefield(bears) and bears.damage_marked == 1
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert game.players[0].life == 19
+
+
+def test_w1g5_patchwork_gnomes_discards_to_regenerate(catalog_by_name, set_pool):
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=["Shatter", "Lightning Bolt"])
+    gnomes = _w1g5_put(game, 0, "Patchwork Gnomes")
+    assert not game.activate_permanent_ability(0, "Patchwork Gnomes").supported
+    game.players[0].hand = [catalog_by_name["Forest"]]
+    assert game.activate_permanent_ability(0, "Patchwork Gnomes").supported
+    _w1g5_resolve_stack(game)
+    assert [c.name for c in game.players[0].graveyard] == ["Forest"]
+
+    assert game.cast_from_hand(
+        1, "Shatter", target_permanent_ids=[gnomes.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert game.is_on_battlefield(gnomes) and gnomes.tapped, "regenerated"
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[gnomes.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert not game.is_on_battlefield(gnomes), "the shield was one use"
+
+
+def test_w1g5_phantom_whelp_goes_home_at_end_of_combat_only_if_it_is_still_there(
+    catalog_by_name, set_pool,
+):
+    """"When this creature attacks or blocks, return it to its owner's hand at
+    end of combat. (Return it only if it's on the battlefield.)" An unblocked
+    attack deals its 2 and comes home; a Whelp that died in the block stays in
+    the graveyard."""
+    game = _w1g5_table(catalog_by_name, set_pool)
+    whelp = _w1g5_put(game, 0, "Phantom Whelp")
+    _w1g5_to_declare_attackers(game)
+    assert game.declare_attackers(0, [_w1g5_slot(game, 0, whelp)])[0]
+    _w1g5_resolve_stack(game)
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    _w1g5_finish_combat(game)
+    assert game.players[1].life == 18 and not game.is_on_battlefield(whelp)
+    assert [c.name for c in game.players[0].hand] == ["Phantom Whelp"]
+
+    game = _w1g5_table(catalog_by_name, set_pool)
+    whelp = _w1g5_put(game, 1, "Phantom Whelp")
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, bears)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {_w1g5_slot(game, 1, whelp): slot})[0]
+    _w1g5_resolve_stack(game)
+    _w1g5_finish_combat(game)
+    assert [c.name for c in game.players[1].graveyard] == ["Phantom Whelp"]
+    assert game.players[1].hand == []
+
+
+def test_w1g5_pianna_pumps_the_attackers_and_only_them(catalog_by_name, set_pool):
+    game = _w1g5_table(catalog_by_name, set_pool)
+    pianna = _w1g5_put(game, 0, "Pianna, Nomad Captain")
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+    home = _w1g5_put(game, 0, "Hill Giant")
+    _w1g5_to_declare_attackers(game)
+    assert game.declare_attackers(
+        0, [_w1g5_slot(game, 0, pianna), _w1g5_slot(game, 0, bears)],
+    )[0]
+    _w1g5_resolve_stack(game)
+    assert (pianna.effective_power, bears.effective_power, home.effective_power) == (3, 3, 3)
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    _w1g5_finish_combat(game)
+    assert game.players[1].life == 14
+    game.resolve_cleanup_step(0)
+    assert bears.effective_power == 2
+
+
+@_w1g5_pytest.mark.parametrize("name, spell, source", [
+    ("Pilgrim of Justice", "Lightning Bolt", "Hill Giant"),
+    ("Pilgrim of Virtue", "Terror", "Scathe Zombies"),
+])
+def test_w1g5_a_pilgrim_is_sacrificed_to_stop_one_source_of_its_colour_whoever_it_hits(
+    catalog_by_name, set_pool, name, spell, source,
+):
+    """"Protection from red. {W}, Sacrifice this creature: The next time a red
+    source of your choice would deal damage this turn, prevent that damage."
+    No recipient is printed (CR 615.8 names only the source), so the chosen
+    source's next damage is prevented whether it was headed for the Pilgrim's
+    controller, one of their creatures or the opponent — and only the next."""
+    for recipient in ("me", "mine", "theirs"):
+        game = _w1g5_table(catalog_by_name, set_pool, hand1=[spell])
+        pilgrim = _w1g5_put(game, 0, name)
+        wurm = _w1g5_put(game, 0, "Craw Wurm")
+        threat = _w1g5_put(game, 1, source)
+        assert not game.cast_from_hand(
+            1, spell, target_permanent_ids=[pilgrim.permanent_id],
+        ).supported, "protection from its colour"
+
+        armed = game.activate_permanent_ability(
+            0, name, target_permanent_ids=[threat.permanent_id],
+        )
+        _w1g5_resolve_stack(game)
+        assert armed.supported and not game.is_on_battlefield(pilgrim)
+        hit = {"me": game.players[0], "mine": wurm, "theirs": game.players[1]}[recipient]
+        assert _w1g5_dealt(game, hit, 3, threat) == 0, recipient
+        assert _w1g5_dealt(game, hit, 3, threat) == 3, "the next time, once"
+
+
+def test_w1g5_rabid_elephant_grows_for_each_blocker(catalog_by_name, set_pool):
+    game = _w1g5_table(catalog_by_name, set_pool)
+    elephant = _w1g5_put(game, 0, "Rabid Elephant")
+    bears = _w1g5_put(game, 1, "Grizzly Bears")
+    ogre = _w1g5_put(game, 1, "Gray Ogre")
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, elephant)
+    assert game.declare_attackers(0, [slot])[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {
+        _w1g5_slot(game, 1, bears): slot, _w1g5_slot(game, 1, ogre): slot,
+    })[0]
+    _w1g5_resolve_stack(game)
+    assert (elephant.effective_power, elephant.effective_toughness) == (7, 8)
+
+    game.advance_combat_phase()
+    assert game.resolve_all_combat_damage(0, attacker_damage={slot: {
+        _w1g5_slot(game, 1, bears): 3, _w1g5_slot(game, 1, ogre): 4,
+    }})[0]
+    assert sorted(c.name for c in game.players[1].graveyard) == ["Gray Ogre", "Grizzly Bears"]
+    assert game.is_on_battlefield(elephant) and elephant.damage_marked == 4
+
+
+def test_w1g5_resilient_wanderer_discards_and_is_asked_its_colour_as_it_resolves(
+    catalog_by_name, set_pool,
+):
+    """"First strike. Discard a card: This creature gains protection from the
+    color of your choice until end of turn." With an empty hand the activation
+    is refused — which is what the pool-wide colour-choice guard was reporting
+    as a failure of the card. With a card, the named one is discarded and the
+    colour is asked at resolution (CR 608.2d), after any response."""
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand1=["Terror", "Lightning Bolt"],
+        interactive={0},
+    )
+    wanderer = _w1g5_put(game, 0, "Resilient Wanderer")
+    assert game._has_keyword(wanderer, "first strike")
+    assert not game.activate_permanent_ability(0, "Resilient Wanderer").supported
+
+    game.players[0].hand = [catalog_by_name["Forest"], catalog_by_name["Island"]]
+    assert game.queue_permanent_ability(
+        0, "Resilient Wanderer", cost_hand_index=1,
+    ).supported
+    assert [c.name for c in game.players[0].graveyard] == ["Island"]
+    game.resolve_top_of_stack()
+    assert [(c.kind, c.player_index) for c in game.pending_choices] == [("color_choice", 0)]
+    assert game._protection_qualities(wanderer) == set()
+    assert game.resolve_pending_choice("color_choice", 0, mana_color="B")
+    _w1g5_resolve_stack(game)
+
+    assert game._protection_qualities(wanderer) == {("color", "B")}
+    assert not game.cast_from_hand(
+        1, "Terror", target_permanent_ids=[wanderer.permanent_id],
+    ).supported
+    assert game.cast_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[wanderer.permanent_id],
+    ).supported
+
 # ==== end W1G5 ======================================================
 
 
