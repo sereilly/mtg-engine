@@ -49,6 +49,7 @@ from ..named_counters import add_counters as add_named_counters
 from ..named_counters import counters_on
 from ..cast_costs import KICKED, KICKED_WITH
 from ..color_changes import add_derived_color_change, clear_derived_color_changes
+from ..granted_abilities import bind_granter
 from ..keywords import grant_ability_line, grant_keyword
 from ..tokens import make_token_card
 from ..keywords import (add_derived_ability_line, add_derived_grant,
@@ -2458,6 +2459,33 @@ class PermanentStateMixin:
                     applied is found for applied in reach.get(id(found.payload), ())
                 ))
         self._refresh_land_animation(all_permanents, reach)
+        # "As long as there are seven or more cards in your graveyard, this
+        # creature **is white** …" (Repentant Vampire; Wayward Angel's "is
+        # black"). CR 613 layer 5 of a static, so a *derived* contribution on
+        # the channel the animator's colour just above uses — and written
+        # here, straight after that refresh, because it is what clears the
+        # channel. Stamped with the permanent the ability is on (CR 613.7a):
+        # the moment it entered, not the moment its condition last became
+        # true, so a Lace cast at the creature afterwards still wins and a
+        # Darkest Hour that was already there still loses.
+        for cs_seat, cs_perm in self.permanents_with_controller():
+            for cs in compile_card_oracle(cs_perm.effective_card).instructions:
+                if cs.kind != "conditional_static" or not cs.payload.get("colors"):
+                    continue
+                if not conditional_static_holds(
+                    self, cs_seat, cs_perm, cs.payload.get("condition") or {}
+                ):
+                    continue
+                recipient = cs_perm
+                if cs.payload.get("subject") == "attached":
+                    recipient = attached_host(self, cs_perm, last_known=False)
+                    if recipient is None:
+                        continue
+                add_derived_color_change(
+                    recipient, list(cs.payload["colors"]),
+                    timestamp=cs_perm.timestamp,
+                    label=f"conditional colour ({cs_perm.card.name})",
+                )
         for perm in all_permanents:
             reached_by = reach.get(id(perm), ())
             # **A static's own source is not exempt.** The scope is whatever
@@ -4132,7 +4160,18 @@ class PermanentStateMixin:
                 if cs.kind != "conditional_static":
                     continue
                 cs_keywords = cs.payload.get("keywords") or ()
-                if not cs_keywords:
+                # …and the *sentence* half of the same layer: an ability the
+                # static hands over as a printed line — "…this creature has
+                # "At the beginning of your upkeep, sacrifice a creature.""
+                # (Wayward Angel), "…and can't block" (Childhood Horror, read
+                # as the sentence it abbreviates). On the derived-ability
+                # channel the quoted lord grant in pass 2a and the Aura's
+                # criterion grant in step 4 already use, and here for this
+                # step's own reason: the pass owns that channel's clear and
+                # rebuild, so the line is gone with the condition (CR 611.3a)
+                # and there is nothing to undo.
+                cs_lines = cs.payload.get("ability_lines") or ()
+                if not (cs_keywords or cs_lines):
                     continue
                 if not conditional_static_holds(
                     self, cs_seat, cs_perm, cs.payload.get("condition") or {}
@@ -4166,6 +4205,16 @@ class PermanentStateMixin:
                         continue
                 for keyword in cs_keywords:
                     add_derived_grant(recipient, keyword)
+                for line in cs_lines:
+                    if recipient is not cs_perm:
+                        # An Aura's quote on its host names the Aura as the
+                        # one object granting it (CR 201.5a) — the binding
+                        # ``aura_granted_ability_lines`` makes for the
+                        # unconditional quote.
+                        line = bind_granter(
+                            line, _eff_card(cs_perm).name, cs_perm.permanent_id
+                        )
+                    add_derived_ability_line(recipient, line)
 
         # Step 3b: the keywords a land animator gives the lands it animates —
         # "Lands you control are 2/2 creatures **with first strike**." (Natural

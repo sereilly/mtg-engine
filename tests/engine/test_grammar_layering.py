@@ -912,8 +912,18 @@ PARSE_LAYERS = [
 # groups about to land arms is the "shared module" case SET_PLAYBOOK.md says to
 # pre-split. Below `statement_dispatch`, which calls it and continues its chain
 # on a None — the contract `by_node` already has one layer further down.
+# `static_conditions` is `statics`' own split, taken in round by Odyssey's
+# threshold group when a quoted ability, a colour and a static sentence went
+# behind an "as long as" and took that module to the guard. The seam is the
+# one `statics`' docstring drew when it called its other half a *round trip*
+# through `engine/lord_buffs.py`: nothing that left makes one. What left is
+# the condition — which kinds may gate a continuous effect, and the
+# `conditional_static` one permanent carries while its condition holds — and
+# what stayed is the anthem and the dispatch. Below `statics`, which imports
+# three names from it, and above `lowering`, which is all it reads. No mirror
+# to re-form: `static_lines` is the parse side of both halves.
 LOWER_LAYERS = [
-    "lowering", "statics", "by_node",
+    "lowering", "static_conditions", "statics", "by_node",
     "statement_dispatch_naming", "statement_dispatch", "lower",
 ]
 

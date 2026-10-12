@@ -142,6 +142,7 @@ from .production_changes import (
     parse_turn_mana_change,
 )
 from .exile import (
+    _parse_counted_graveyard_cards,
     _parse_exile_bound_card,
     parse_exile_graveyard_arrivals_this_turn,
     _parse_exile_cost_sacrifices,
@@ -391,6 +392,7 @@ __all__ = [
     "_parse_cast_permission",
     "_parse_play_with_top_revealed",
     "_parse_exile_bound_card",
+    "_parse_counted_graveyard_cards",
     "parse_claims_one_exiled_card",
     "parse_exile_graveyard_arrivals_this_turn",
     "_parse_bin_unplayed_exiled_card",

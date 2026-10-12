@@ -42,10 +42,51 @@ no ``exile``" from Tempest's third wave, which gave it one, until this split.)
 """
 
 from .. import ast
-from ..phrases import _parse_zone
+from ..errors import GrammarError
+from ..nouns import parse_object_filter
+from ..phrases import _accept_number, _parse_zone
 from ..readers import _parse_entering_counters
 from ..references import parse_player_ref, parse_recipient
 from ..stream import TokenStream
+
+
+def _parse_counted_graveyard_cards(stream: TokenStream) -> "ast.TargetSpec | None":
+    """``…two cards from your graveyard`` behind "exile" — a printed number of
+    cards out of **your** graveyard with no "target", or None with nothing
+    consumed.
+
+    "At the beginning of your end step, exile two cards from your graveyard."
+    (The ability Bloodcurdler has with threshold.) The plural of "exile **a**
+    card from your graveyard" (Decaying Soil, Forgotten Harvest), which the
+    recipient parser reads through its article: nothing is announced, the
+    controller picks as the effect resolves, and the only difference is how
+    many. That parser has no untargeted count — "two <noun>" is a target
+    quantifier everywhere else it is printed — so the number is read here and
+    the phrase comes back as the same untargeted reference with a count on it.
+
+    Your graveyard only. Another player's pile is a choice made *against*
+    somebody, and every printing of that is a target or a seat's own action
+    (``_parse_player_exiles_pile``).
+    """
+    mark = stream.mark()
+    count = _accept_number(stream)
+    if count is None or count < 2 or stream.at_word("target"):
+        stream.reset(mark)
+        return None
+    try:
+        described = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (
+        described.zone == "graveyard"
+        and described.is_card
+        and described.zone_owner is not None
+        and described.zone_owner.kind == "you"
+    ):
+        stream.reset(mark)
+        return None
+    return ast.TargetSpec("a", described, count=count)
 
 
 def _parse_exile_bound_card(stream: TokenStream) -> "ast.ExileBoundCard | None":

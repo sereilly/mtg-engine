@@ -551,11 +551,18 @@ def _lower_exile(
     # (Forgotten Harvest.) The same pile with no "target": the card is picked
     # as the effect resolves, so the payload carries no ``targets`` description
     # and the handler prompts rather than reading announced slots.
+    #
+    # "…exile **two** cards from your graveyard" (Bloodcurdler's threshold
+    # grant) is the same sentence with a number where the article was, and the
+    # prompt has always taken one: ``arm_graveyard_exile_pick`` reads
+    # ``count``, which this wrote as a literal 1.
     if (
         isinstance(subject, ast.TargetSpec)
         and subject.quantifier in ("a", "an")
         and not subject.targeted
-        and subject.count == 1
+        and subject.count >= 1
+        and not subject.count_from_x
+        and subject.count_amount is None
         and subject.filter.zone == "graveyard"
         and subject.filter.is_card
         and subject.filter.zone_owner is not None
@@ -570,7 +577,7 @@ def _lower_exile(
                 "the chosen graveyard exile reads one card type", node=node
             )
         chosen: dict[str, object] = {
-            "count": 1, "graveyard_owner": "you", "up_to": False,
+            "count": int(subject.count), "graveyard_owner": "you", "up_to": False,
         }
         if filt.card_types:
             chosen["card_type"] = filt.card_types[0]

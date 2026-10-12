@@ -308,7 +308,19 @@ def _parse_put_counter(stream: TokenStream) -> ast.Statement:
             )
     stream.reset(move_mark)
     up_to = stream.accept_phrase("up", "to")
-    count = parse_amount(stream)
+    # "…you may put **another** +1/+1 counter on this creature." (The ability
+    # Chlorophant has with threshold, printed beside "…you may put a +1/+1
+    # counter on this creature".) A count of one, written as a comparison with
+    # what the ability above it places. It is one more counter and not a
+    # different kind of placement — the store is additive — so it reads as the
+    # number, exactly as "the player gets another poison counter" does for a
+    # player one family over. Read here and not in `parse_amount`, where the
+    # word means "not this one" about an object and never a quantity; a word
+    # behind it that is not a counter kind still refuses two lines down.
+    if not up_to and stream.accept_word("another"):
+        count: ast.Amount = ast.Fixed(1)
+    else:
+        count = parse_amount(stream)
 
     token = _expect_counter_kind(stream)
     if token.kind == PT and not is_pt_counter(token.text):

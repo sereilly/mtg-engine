@@ -50,13 +50,29 @@ def granted_ability_supported(text: str, self_name: str | None = None) -> bool:
     grammar's lowering asks this: at import time that is a cycle, at call time
     it is not.
     """
-    line = " ".join((text or "").split())
-    if not line:
+    probe = _probe_card(text, self_name)
+    if probe is None:
         return False
-    from .models import CardDefinition
     from .oracle import compile_card_oracle
 
-    probe = CardDefinition(
+    return bool(compile_card_oracle(probe).supported)
+
+
+def _probe_card(text: str, self_name: str | None):
+    """A card that says *text* and nothing else, or None for no text.
+
+    The one probe both questions in this module are asked of, so "does it
+    compile?" and "what did it compile to?" cannot be about two cards. It
+    builds the card and stops: each caller names the compiler itself, because
+    ``tests/engine/test_front_end_safety.py`` decides which caches hold a
+    compiled answer by reading their own bodies for one.
+    """
+    line = " ".join((text or "").split())
+    if not line:
+        return None
+    from .models import CardDefinition
+
+    return CardDefinition(
         # The name the *quoted sentence* calls itself by, when it names itself
         # at all. "Johan can't attack" is only an ability on a card called
         # Johan: compiled under any other name the self-reference is a proper
@@ -74,7 +90,68 @@ def granted_ability_supported(text: str, self_name: str | None = None) -> bool:
         produced_mana=(),
         raw={},
     )
-    return bool(compile_card_oracle(probe).supported)
+
+
+#: The **static** sentences a derived grant may hand a permanent, by the
+#: instruction kind the sentence compiles to — "This creature can't block.",
+#: "This creature attacks each combat if able.", "All creatures able to block
+#: this creature do so."
+#:
+#: A triggered or an activated ability handed over as a line needs no list: the
+#: trigger scans and the activation enumerator read every ability off
+#: ``Permanent.effective_card``, which is the whole reason the channel exists.
+#: A *static* sentence is only as good as its one reader, and "the card
+#: compiles" does not say that reader asks the effective card at the moment
+#: the question arises — an entry-state phrase ("enters tapped") is read once,
+#: as the permanent arrives, and handed over later it would be a line that
+#: compiles, reports supported and does nothing. So each kind here names a
+#: reader that was checked: ``declare_blockers_step`` reads ``cant_block`` and
+#: ``must_be_blocked_by_all_able`` off the blocker's and the attacker's
+#: effective card at the declaration, and ``_must_attack_if_able`` reads
+#: ``must_attack_each_combat`` the same way. Adding a kind is a claim about its
+#: reader; ``tests/regressions/test_ody_w1g1_conditional_grants.py`` drives
+#: each one through a declaration.
+DERIVABLE_STATIC_KINDS: frozenset[str] = frozenset(
+    {"cant_block", "must_attack_each_combat", "must_be_blocked_by_all_able"}
+)
+
+
+@compilation_cache
+@lru_cache(maxsize=None)
+def derived_line_supported(text: str, self_name: str | None = None) -> bool:
+    """Whether a permanent handed *text* on the **derived** channel
+    (``keywords.DERIVED_ABILITY_LINES``) behaves as the sentence prints.
+
+    The gate for a grant that comes and goes with a condition — "As long as
+    there are seven or more cards in your graveyard, this creature gets +2/+2
+    **and can't block**" (Childhood Horror), "…has **"At the beginning of your
+    upkeep, sacrifice a creature."**" (Wayward Angel). Stricter than
+    :func:`granted_ability_supported`, which it asks first: the line must
+    compile, and every part of what it compiles to must be either an ability
+    the board scans find (triggered, activated) or a static sentence in
+    :data:`DERIVABLE_STATIC_KINDS`. A keyword line, an entry-state phrase and
+    a line some text-keyed registry claims without an instruction are all
+    refused — each has its own channel or its own moment, and this is neither.
+    """
+    if not granted_ability_supported(text, self_name):
+        return False
+    from .oracle import compile_card_oracle
+
+    program = compile_card_oracle(_probe_card(text, self_name))
+    carried = {
+        id(part.instruction)
+        for part in (*program.triggered_abilities, *program.activated_abilities)
+        if part.instruction is not None
+    }
+    sentences = [
+        instruction for instruction in program.instructions
+        if id(instruction) not in carried
+    ]
+    if not sentences:
+        return bool(carried)
+    return all(
+        instruction.kind in DERIVABLE_STATIC_KINDS for instruction in sentences
+    )
 
 
 #: The possessive pronoun a granted ability opens with when the granting
@@ -173,11 +250,13 @@ def bind_granter(
 
 
 __all__ = [
+    "DERIVABLE_STATIC_KINDS",
     "GRANTER_PHRASE_HEAD",
     "GRANTER_PHRASE_TAIL",
     "GRANTER_PROBE_ID",
     "bind_chosen_player",
     "bind_granter",
+    "derived_line_supported",
     "granted_ability_supported",
     "granter_phrase",
 ]

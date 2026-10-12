@@ -2079,7 +2079,19 @@ def create_token(game: Game, instruction: OracleInstruction, context: OracleExec
     # "that many" — a delayed attack trigger's batch count (Basri Ket's −2),
     # carried in the firing event's trigger context.
     raw_count = payload.get("count", 1)
-    if raw_count == "trigger_count":
+    if raw_count == "trigger_count" and payload.get("amount_from_trigger") is not None:
+        # "Whenever this creature is dealt damage, … create **that many** …
+        # tokens." (Saber Ants, Druid's Call.) The firing event's own number,
+        # out of the context its fire site froze (CR 603.10) — the channel
+        # `add_counter_to_self` reads for Light of Promise, and never the
+        # scratchpad, which for a sentence with no earlier step of its own is
+        # a key nothing writes.
+        count = int(
+            (context.trigger_context or {}).get(
+                str(payload["amount_from_trigger"]), 0
+            ) or 0
+        )
+    elif raw_count == "trigger_count":
         tctx = context.trigger_context or {}
         count = int(tctx.get("trigger_count", context.results.get("trigger_count", 0)))
     elif isinstance(raw_count, dict) and "source_record" in raw_count:
