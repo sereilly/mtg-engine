@@ -118,6 +118,7 @@ from .destruction import (
 )
 from .attachments import (
     _parse_attach,
+    _parse_pronoun_attach_rider,
     parse_excess_choice_paragraph,
     parse_player_chooses_permanent,
 )
@@ -365,6 +366,7 @@ __all__ = [
     "_parse_tap_untap",
     "_parse_untap_chosen_by_paying",
     "_parse_attach",
+    "_parse_pronoun_attach_rider",
     "_parse_exchange_control",
     "_parse_draw",
     "_parse_choose_cards_in_hand",

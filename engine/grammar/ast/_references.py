@@ -546,6 +546,14 @@ class ObjectFilter:
     # sentence's other clause named. Only a lowering knowing that object can
     # resolve it; one that does not must refuse.
     of_bound_type: bool = False
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase that says nothing about the host except that it is a permanent -
+    # CR 303.4: an Aura may be attached to an object or to a player, and this
+    # is the half the words name. Its own flag rather than an empty
+    # ``attached_to_filter``, which is "no host phrase at all" to every
+    # reader: an empty nested filter is falsy, so the matcher would skip the
+    # question and an Aura on nothing would be a legal target.
+    attached_to_permanent: bool = False
     # "that's one or more colors" (Ugin, the Spirit Dragon's −X): the object
     # has at least one color, read off its effective colors.
     colored: bool = False

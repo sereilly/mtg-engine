@@ -631,4 +631,121 @@ def test_a_typed_cast_ban_reads_only_the_window_it_can_keep(line, supported):
     card = _w1g9_mk_card("Truce Probe", "{W}", "Instant", line)
     assert _w1g9_compile(card).supported is supported
 
+
+# --- Aura Graft: take an Aura and move it to something else it can enchant --
+
+def _w1g9_enchant(game, set_pool, seat, aura_name, host):
+    from engine.auras import attach_aura
+
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    aura = _w1g9_Permanent(card=pool[aura_name])
+    game._put_permanent_onto_battlefield(seat, aura, None)
+    attach_aura(aura, host)
+    game._recompute_continuous_effects()
+    return aura
+
+
+def _w1g9_where(game, aura):
+    """``(who controls the Aura, the permanent it is on)``."""
+    return game.controller_index_of(aura), aura.metadata.get("attached_to")
+
+
+def test_aura_graft_takes_an_aura_and_moves_it_to_another_permanent(set_pool):
+    """"Gain control of target Aura that's attached to a permanent. Attach it
+    to another permanent it can enchant." The opponent's Weakness comes off
+    my Bears, becomes mine, and goes onto their Ogre."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Aura Graft"], bf0=["Grizzly Bears"], bf1=["Gray Ogre"],
+    )
+    bears, ogre = _w1g9_on(game, 0, "Grizzly Bears"), _w1g9_on(game, 1, "Gray Ogre")
+    weakness = _w1g9_enchant(game, set_pool, 1, "Weakness", bears)
+    spec = game.cast_target_spec(0, game.players[0].hand[0])
+    assert [t["name"] for t in spec["valid_targets"]] == ["Weakness"]
+    assert game.queue_from_hand(
+        0, "Aura Graft", target_permanent_ids=[weakness.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    controller, host = _w1g9_where(game, weakness)
+    assert controller == 0 and host is ogre
+
+
+def test_aura_graft_asks_its_caster_for_the_new_host_and_offers_legal_ones(set_pool):
+    """The host is chosen as the spell resolves (no second "target"), by the
+    caster, among the *other* permanents the Aura can enchant: the two
+    creatures across the table, not the Bears it is on and not a Forest."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Aura Graft"], bf0=["Grizzly Bears"],
+        bf1=["Gray Ogre", "Hill Giant", "Forest"],
+    )
+    game.interactive_seats = {0, 1}
+    bears, giant = _w1g9_on(game, 0, "Grizzly Bears"), _w1g9_on(game, 1, "Hill Giant")
+    weakness = _w1g9_enchant(game, set_pool, 1, "Weakness", bears)
+    assert game.queue_from_hand(
+        0, "Aura Graft", target_permanent_ids=[weakness.permanent_id]
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    prompt = game.pending_choice_of("permanent_choice")
+    assert prompt is not None and prompt.player_index == 0
+    offered = {p.card.name for p in game.live_permanent_choices(prompt)}
+    assert offered == {"Gray Ogre", "Hill Giant"}
+    assert game.confirm_permanent_choice(0, permanent_id=giant.permanent_id)
+    _w1g9_resolve_stack(game)
+    assert _w1g9_where(game, weakness) == (0, giant)
+
+
+def test_aura_graft_keeps_an_aura_it_has_nowhere_to_move(set_pool):
+    """The ruling of 2004-10-04: "If there is no legal place to move the
+    enchantment, then it doesn't move but you still control it."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Aura Graft"], bf0=["Grizzly Bears"], bf1=["Forest"],
+    )
+    bears = _w1g9_on(game, 0, "Grizzly Bears")
+    weakness = _w1g9_enchant(game, set_pool, 1, "Weakness", bears)
+    assert game.queue_from_hand(
+        0, "Aura Graft", target_permanent_ids=[weakness.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_where(game, weakness) == (0, bears)
+
+
+def test_aura_graft_moves_an_aura_its_caster_already_controls(set_pool):
+    """The ruling of 2007-07-15: "You can target an Aura you already control
+    just to move that Aura to a new permanent." And the Aura's own enchant
+    line is what decides where: a land Aura goes to a land."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Aura Graft"], bf0=["Forest", "Grizzly Bears"],
+        bf1=["Forest"],
+    )
+    mine, theirs = _w1g9_on(game, 0, "Forest"), _w1g9_on(game, 1, "Forest")
+    growth = _w1g9_enchant(game, set_pool, 0, "Wild Growth", mine)
+    assert game.queue_from_hand(
+        0, "Aura Graft", target_permanent_ids=[growth.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_where(game, growth) == (0, theirs)
+
+
+def test_aura_graft_needs_an_aura_to_aim_at(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Aura Graft"], bf1=["Crusade"])
+    crusade = _w1g9_on(game, 1, "Crusade")
+    for ids in ([crusade.permanent_id], None):
+        assert not game.queue_from_hand(
+            0, "Aura Graft", target_permanent_ids=ids
+        ).supported
+    assert _w1g9_names(game.players[0].hand) == ["Aura Graft"]
+
+
+@_w1g9_pytest.mark.parametrize("text, supported", [
+    ("Gain control of target Aura that's attached to a permanent. Attach it "
+     "to another permanent it can enchant.", True),
+    ("Destroy target Aura that's attached to a permanent.", True),
+    # "It" after a sentence that chose an object is that object: attaching it
+    # to a second *target* is a pair of targets nothing here reads, and it
+    # compiled as the spell attaching itself.
+    ("Gain control of target Aura. Attach it to target creature.", False),
+])
+def test_the_attach_pronoun_names_what_the_sentence_in_front_took(text, supported):
+    card = _w1g9_mk_card("Graft Probe", "{U}", "Instant", text)
+    assert _w1g9_compile(card).supported is supported
+
 # ==== end W1G9 ======================================================

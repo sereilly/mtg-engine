@@ -779,6 +779,9 @@ _COVERED_ELSEWHERE = {
     # --- APC W1G9 ---
     "in_combat_with_source":
         "test_apc_w1g9_in_combat_with_source_is_the_union_of_both_block_relations",
+    # --- ODY W1G9 ---
+    "attached_to_permanent":
+        "test_ody_w1g9_attached_to_a_permanent_rejects_an_attachment_on_nothing",
 }
 
 
@@ -786,6 +789,32 @@ def _r30_attach(aura, host):
     from engine.auras import attach_aura
 
     attach_aura(aura, host)
+
+
+def test_ody_w1g9_attached_to_a_permanent_rejects_an_attachment_on_nothing(pool):
+    """"Target Aura **that's attached to a permanent**" (Aura Graft).
+
+    The host phrase that says nothing about the host. Its own demonstration
+    for ``attached_to_filter``'s reason: every row of ``_REJECTIONS`` rejects
+    a bare permanent, and here the bare one *is* the rejected case while the
+    accepted one has to be attached first. An empty ``attached_to_filter``
+    could not have said this - it is falsy, so the matcher skips it and the
+    loose Aura below would pass.
+    """
+    host = Permanent(card=pool["Grizzly Bears"])
+    attached = Permanent(card=pool["Holy Strength"])
+    loose = Permanent(card=pool["Holy Strength"])
+    game = Game(players=[
+        PlayerState(name="P1", battlefield=[host, attached, loose]),
+        PlayerState(name="P2"),
+    ])
+    _r30_attach(attached, host)
+
+    assert subject_matches(game, attached, {"attached_to_permanent": True})
+    assert not subject_matches(game, loose, {"attached_to_permanent": True})
+    assert subject_matches(game, loose, {"attached_to_filter": {}}), (
+        "the empty nested filter is the question nobody asks"
+    )
 
 
 def test_not_enchanted_rejects_a_permanent_carrying_an_aura(pool):

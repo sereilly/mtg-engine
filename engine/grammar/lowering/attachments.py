@@ -96,6 +96,14 @@ def _lower_attach(
     """
     if isinstance(node.subject, ast.TargetSpec) and _is_target(node.subject):
         return _lower_attach_chosen(node)
+    if node.host_it_can_enchant:
+        # "…it can enchant" is tested only by the chosen-host pick above,
+        # which offers legal hosts and nothing else (CR 303.4j). Anywhere else
+        # the words would be read and dropped.
+        raise LoweringError(
+            "nothing tests that the host is one the attachment can enchant",
+            node=node,
+        )
     if not isinstance(node.subject, ast.TargetSpec) or not _is_source(node.subject):
         raise LoweringError(
             "no handler attaches anything but the source itself", node=node

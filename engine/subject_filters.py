@@ -298,6 +298,10 @@ TESTABLE_SUBJECT_FILTER_KEYS = frozenset({
     # naming something untestable refuses the whole line, because a dropped
     # host narrowing is an Aura sweep taking every Aura on the board.
     "attached_to_filter",
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase that describes nothing about the host: readable off the
+    # attachment alone, like the two state words above.
+    "attached_to_permanent",
     # "target creature **it's blocking**" (Goblin Snowman, Tinder Wall) and
     # "target creature **that's attacking you**" (Ice Floe, Snow Fortress,
     # Giant Trap Door Spider). Both are relations rather than characteristics,

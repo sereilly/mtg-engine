@@ -55,6 +55,7 @@ from .effects import (
     _parse_x_spend_restriction,
     _parse_cost_x_definition,
     _parse_damage_rider_sentence,
+    _parse_pronoun_attach_rider,
     _parse_unpaid_penalty_sentence,
 )
 from .errors import GrammarError
@@ -612,6 +613,12 @@ def _statements_from_sentences(stream: TokenStream) -> ast.Statement:
             pronoun_counter = _parse_pronoun_counter_rider(stream, steps)
             if pronoun_counter is not None:
                 steps.append(pronoun_counter)
+                continue
+            # "…Attach **it** to another permanent it can enchant." (Aura
+            # Graft.) The attach's own pronoun, for the counter's reason.
+            pronoun_attach = _parse_pronoun_attach_rider(stream, steps)
+            if pronoun_attach is not None:
+                steps.append(pronoun_attach)
                 continue
             # "It loses "enchant creature" and gains "…"." (Takklemaggot.) The
             # quoted half, read before the keyword rider below, whose "It

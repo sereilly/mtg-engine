@@ -2290,6 +2290,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         attached = perm.metadata.get("attached_to")
         if attached is None or not permanent_matches_filter(attached, attached_host):
             return False
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase with nothing to test the host against: it has to be there.
+    if payload.get("attached_to_permanent") and perm.metadata.get("attached_to") is None:
+        return False
 
     # "target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.
     # The attachment record this engine keeps is shared with Equipment

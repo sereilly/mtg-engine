@@ -154,6 +154,9 @@ _PAYLOAD_HONOURED_FILTER_FIELDS = frozenset({
     "supertypes", "excluded_supertypes",
     "not_enchanted",
     "enchanted_only",
+    # "…that's attached to a permanent" (Aura Graft): emitted whenever set
+    # and tested by ``permanent_matches_filter``.
+    "attached_to_permanent",
     # "…tapped this turn to pay for its abilities" (Vodalian War Machine).
     # ``to_payload`` emits it unconditionally and ``subject_matches`` tests it,
     # so it is honoured in the same sense every state word here is — what it

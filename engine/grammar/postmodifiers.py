@@ -456,6 +456,16 @@ def _parse_postmodifiers(
         if had is False:
             break
         if stream.at_word("that"):
+            # "target Aura **that's** attached to a permanent" (Aura Graft).
+            # The relative pronoun in front of a participle this loop already
+            # reads bare ("target Aura attached to a creature", Enchantment
+            # Alteration): consumed only when that participle follows, so
+            # every other "that's …" keeps its own reader.
+            relative = stream.mark()
+            if stream.accept_phrase("that", "'s") and stream.at_word("attached"):
+                continue
+            stream.reset(relative)
+        if stream.at_word("that"):
             # "…**that isn't the target of an ability from another creature
             # named ~**" (Goblin Artisans). A guard against two copies aiming
             # their abilities at the same spell, printed as a restriction on the
@@ -757,15 +767,32 @@ def _parse_postmodifiers(
                 except GrammarError:
                     host = None
                 # Any narrowing at all is a host phrase; none at all is not.
-                # "attached to a permanent" says only "attached", which the
-                # filter already has a word for (``is_enchanted``) — and an
-                # empty nested filter would read as "attached to anything",
+                # An empty nested filter would read as "attached to anything",
                 # widening the sweep to every Aura rather than narrowing it. So
                 # the phrase has to have said *something*: "permanents you
                 # control" says a seat, "a creature or land" says two types.
                 if host is not None and host != ast.ObjectFilter():
                     d.attached_to_filter = host
                     continue
+                # "target Aura that's **attached to a permanent**" (Aura
+                # Graft). The one host phrase that narrows nothing about the
+                # host and still says something: a permanent, not a player
+                # and not nothing (CR 303.4). The bare generic noun is what
+                # parses to the empty filter, so it is carried as its own
+                # fact - which the matcher tests - rather than as an empty
+                # nested filter, which it would skip.
+                # Held to exactly those words: the cursor has to stand where
+                # "a permanent" alone would leave it.
+                if host is not None:
+                    read_to = stream.mark()
+                    stream.reset(nested)
+                    stream.accept_word("a", "an")
+                    if (
+                        stream.accept_word("permanent", "permanents")
+                        and stream.mark() == read_to
+                    ):
+                        d.attached_to_permanent = True
+                        continue
                 stream.reset(nested)
             stream.reset(probe)
             break
