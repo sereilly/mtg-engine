@@ -826,7 +826,7 @@ def _buyback_mana_is_spare(
     for other_index, other in hand_spells(player):
         if from_zone == "hand" and other_index == hand_index:
             continue
-        if other.primary_type == "land" or cast_announces_x(other):
+        if other.primary_type == "land" or cast_announces_x(other, from_zone="hand"):
             continue
         # A card in *hand*, priced as one: a deck repeats one definition per
         # copy, so the hand's copy of the spell being weighed from a graveyard
@@ -6173,7 +6173,7 @@ def _pick_x_value(
     too high is a bound and not an announcement.
     """
     if "{X}" not in card.mana_cost.upper():
-        if not cast_announces_x(card):
+        if not cast_announces_x(card, from_zone=_cast_zone(card)):
             return None
         seat = next(
             (i for i, seated in enumerate(game.players) if seated is player), 0

@@ -12,6 +12,7 @@ from .ai_policy import (cast_announcement, choose_activation_action,
                         choose_hand_activation_action, choose_land_drop,
                         spell_being_cast, tap_planned_lands,
                         zone_being_cast_from)
+from .ai_valuation import permitted_casts
 from .card_loader import load_cards
 from .faces import whole_card
 from .game import Game
@@ -955,6 +956,16 @@ def _play_casts(
         _play_land_drops(game, active, report, game_index, turn)
 
 
+def _casts_on_loan(game: Game, seat: int) -> frozenset:
+    """Which casts from outside its hand *seat* is offered right now
+    (`ai_valuation.permitted_casts`), as ``(zone, pile's seat, spell name)`` —
+    so the main loop can tell when an activation has opened a new one."""
+    return frozenset(
+        (permitted.zone, permitted.owner_seat, permitted.spell.name)
+        for permitted in permitted_casts(game, seat)
+    )
+
+
 def _play_activations(
     game: Game, active: int, report: SimulationReport, game_index: int, turn: int
 ) -> None:
@@ -1317,7 +1328,20 @@ def run_ai_simulation(
             # untapped. See `_play_land_drops` and `_play_casts`.
             _play_land_drops(game, active, report, game_index, turn)
             _play_casts(game, active, report, game_index, turn)
+            lent = _casts_on_loan(game, active)
             _play_activations(game, active, report, game_index, turn)
+            # An activation can **lend** the seat a card: "{3}, {T}: Exile the
+            # top card of your library. Until the beginning of your next
+            # upkeep, you may play that card." (Elkin Bottle; Aerial Caravan,
+            # Temporal Aperture, Bösium Strip, Grinning Totem.) The casts were
+            # asked before the activations, so the card it bought was never
+            # played — and the permission ends before this seat's next main
+            # phase. Asked again, and only when an activation opened a cast
+            # that was not there before it, so a turn in which none did is
+            # the turn it always was.
+            if not game.is_game_over() and _casts_on_loan(game, active) - lent:
+                _play_land_drops(game, active, report, game_index, turn)
+                _play_casts(game, active, report, game_index, turn)
 
             # CR 506-511, the half of a turn this loop did not have. It went
             # main phase -> cast -> activate -> next seat, so no simulated
