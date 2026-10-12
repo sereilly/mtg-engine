@@ -8667,6 +8667,7 @@ class PendingChoicesMixin:
         item.target_permanent_id = named
         item.target_permanent_index = None
         item.target_player_index = self.announced_target_seat(named)
+        item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(
             f"{choice.data.get('card_name', 'Ability')}: targets "
             + ", ".join(permanent.card.name for permanent in permanents)
@@ -8734,6 +8735,7 @@ class PendingChoicesMixin:
             item.target_player_index = seat
             item.target_permanent_index = None
             item.target_permanent_id = None
+            item.targets_chosen = self._trigger_target_was_a_choice()
             self.log.append(f"{card_name}: targets {self.players[seat].name}")
             self._announce_answered_targets(item, choice, queued)
             return True
@@ -8755,9 +8757,31 @@ class PendingChoicesMixin:
         item.target_player_index = controller
         item.target_permanent_index = self.battlefield_index_of(perm)
         item.target_permanent_id = permanent_id
+        item.targets_chosen = self._trigger_target_was_a_choice()
         self.log.append(f"{card_name}: targets {perm.card.name}")
         self._announce_answered_targets(item, choice, queued)
         return True
+
+    def _trigger_target_was_a_choice(self) -> bool:
+        """Whether the target a triggered ability has just been given counts
+        as **chosen** for CR 608.2b (``StackItem.targets_chosen``).
+
+        Yes, with one exception: an answer given while a permanent is on its
+        way to a graveyard (``Game.departing``). The death sweep announces a
+        dies-trigger while the dying permanent is still listed, so the list
+        the picker offered then is the board *before* the event the trigger is
+        about — Blazing Effigy's "it deals X damage to target creature" is
+        offered the dying Effigy, and a seat with nobody to ask takes its
+        default there and then. CR 603.3d would never have offered that
+        permanent, and asking CR 608.2b of it would counter the ability for a
+        target the engine mis-chose: the decline ROADMAP has carried since
+        Nemesis, and it stands for exactly this moment and no wider.
+
+        A **person's** answer is given after the sweep has finished, names a
+        permanent that is still there (the answer is refused otherwise), and
+        counts.
+        """
+        return not self.departing
 
     def _choice_is_queued(self, choice: PendingChoice) -> bool:
         """Whether *choice* is sitting on the queue rather than being answered

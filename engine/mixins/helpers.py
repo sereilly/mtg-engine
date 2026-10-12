@@ -1157,7 +1157,22 @@ class GameHelpersMixin:
         return bool(consumed)
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
-        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
+        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead.
+
+        Recorded on ``Game.departing`` for the duration: the dies-triggers this
+        announces go on the stack — and a non-interactive seat's picker takes
+        its default target — while *permanent* is still listed on its
+        battlefield, and ``StackItem.targets_chosen`` has to know that such a
+        default was not a choice off the board the trigger will resolve on.
+        """
+        self.departing.append(permanent)
+        try:
+            self._move_permanent_to_graveyard(player, permanent)
+        finally:
+            self.departing.pop()
+
+    def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
+        """:meth:`_permanent_to_graveyard`'s body."""
         if "Aura" in permanent.card.type_line:
             self._remove_aura_effects(permanent)
         # CR 614 would-die replacements (Disintegrate's "exile it instead"):
@@ -2763,6 +2778,17 @@ class GameHelpersMixin:
             item.target_permanent_id = None
             item.target_stack_item = None
             announced_at_cast = False
+        elif announced_at_cast and self._trigger_target_candidates(
+            item, announced=True
+        ) is not None:
+            # …and a pre-answer that **was** held to the trigger's own list
+            # and passed is a target chosen for this ability (CR 603.3d), by
+            # the same list the prompt would have offered — so it is one CR
+            # 608.2b may be asked about as the ability resolves
+            # (``StackItem.targets_chosen``). Not where the picker had no list
+            # to hold the announcement to: that one rides the object unjudged,
+            # at the push and at resolution alike.
+            item.targets_chosen = True
         self._stack_push_object(item, announce=not announced_at_cast)
         self._choose_trigger_mode(
             item, targets_already_chosen=targets_already_chosen or announced_at_cast

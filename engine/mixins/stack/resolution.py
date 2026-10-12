@@ -323,6 +323,12 @@ class StackResolutionMixin:
         # this creature enters, counter target spell", Mystic Snake). By
         # identity, as ``StackItem.target_stack_item`` always is.
         target_stack_item: StackItem | None = None,
+        # The target fields above are a **choice** its controller made out of
+        # the ability's own list before the object existed — the upkeep step's
+        # target prompt, answered ahead of ``resolve_upkeep`` and held there to
+        # ``_upkeep_trigger_legal_targets``. See ``StackItem.targets_chosen``;
+        # False for every fire site that stamps what its event was about.
+        targets_chosen: bool = False,
     ) -> None:
         """Put a single triggered ability onto the stack as a StackItem (CR 603.3).
 
@@ -354,6 +360,7 @@ class StackResolutionMixin:
                 x_value=x_value,
                 announced_at_cast=announced_at_cast,
                 target_stack_item=target_stack_item,
+                targets_chosen=targets_chosen,
             ))
             return
         stack_card = card if card is not None else (source_permanent.card if source_permanent is not None else None)
@@ -388,6 +395,7 @@ class StackResolutionMixin:
                     captured_results=dict(captured_results or {}),
                     hook_key=hook_key,
                     hook_event=hook_event,
+                    targets_chosen=targets_chosen,
                 ),
                 announced_at_cast=announced_at_cast,
             )
@@ -1394,6 +1402,23 @@ class StackResolutionMixin:
         else:
             self.log.append(f"{item.card.name} ability resolved")
 
+    def _intervening_if_is_no_longer_true(self, item: StackItem) -> bool:
+        """CR 608.2a / CR 603.4: whether *item* is a triggered ability whose
+        intervening-if condition is false as it resolves.
+
+        False for everything that has none — a spell, an activated ability, a
+        hook-keyed object (which resolves through its hook and never asked),
+        and a trigger whose line prints no "if". Scoped by the payload key,
+        as :meth:`trigger_condition_holds` is at the other end of the rule.
+        """
+        instruction = item.ability_instruction
+        if instruction is None or item.hook_key is not None:
+            return False
+        gate = (instruction.payload or {}).get("intervening_if")
+        if gate is None:
+            return False
+        return not evaluate_condition(self, self._ability_execution_context(item), gate)
+
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
         # the zone with no identity to fall back on, so what ``_stack_push``
@@ -1427,6 +1452,25 @@ class StackResolutionMixin:
             )
             if first is not None:
                 item.target_player_index = first.seat
+        # CR 608.2a, which the rule puts **before** 608.2b ("The steps
+        # described in rules 608.2a and 608.2b are followed first"): CR 603.4's
+        # **second** check. An intervening-if is asked again as the ability
+        # resolves, and the ability is removed from the stack and does nothing
+        # if it is false. 102 supported cards compile the key; the comment that
+        # stood beside this check said no card in the shipped pool did, which
+        # was the reason the rule's *first* check went unbuilt for as long as
+        # it did.
+        #
+        # It stood *below* the target gates, which did not matter while those
+        # gates answered for spells (no spell has an intervening-if) and
+        # matters now that a trigger's chosen target is asked too: Ana
+        # Sanctuary's only blue permanent leaving is "its condition is no
+        # longer true" whether or not that permanent was also what it targeted.
+        if self._intervening_if_is_no_longer_true(item):
+            self.log.append(
+                f"{item.card.name} ability did nothing: its condition is no longer true"
+            )
+            return
         # CR 608.2b, asked once for the whole object before any of it runs.
         # This module's docstring has claimed since it was written that a
         # resolution re-checks its targets, and until now nothing did: each
@@ -1465,6 +1509,15 @@ class StackResolutionMixin:
                     verb="was countered by the rules",
                 )
             return
+        # …and the rule's last sentences, for the object that does resolve:
+        # "Illegal targets, if any, won't be affected by parts of a resolving
+        # spell's effect for which they're illegal." Asked of the announcement,
+        # once, here — each slot the gate above judged illegal is rewritten to
+        # name nothing before any instruction runs, so every handler meets it
+        # as the departed target it already knows how to leave alone, and none
+        # of them has to re-ask whether a permanent it found can still be
+        # *targeted* (which none of them did).
+        self.blank_illegal_resolution_targets(item)
         # A triggered ability with a name-keyed resolve-time hook (Rod/Cup/Sphere,
         # Verduran Enchantress, Guardian Angel deferred onto the stack).
         if item.hook_key is not None:
@@ -1476,19 +1529,10 @@ class StackResolutionMixin:
                 self._log_ability_outcome(item, True, "")
             return
         if item.ability_instruction is not None:
+            # CR 603.4's second check was made at the top of this method (CR
+            # 608.2a); the context is built here, after the illegal slots were
+            # blanked, so the instructions read the announcement as it stands.
             context = self._ability_execution_context(item)
-            # CR 603.4's **second** check: an intervening-if is asked again as
-            # the ability resolves, and the ability is removed from the stack
-            # and does nothing if it is false. 102 supported cards compile the
-            # key; the comment that stood here said no card in the shipped pool
-            # did, which was the reason the rule's *first* check went unbuilt
-            # for as long as it did.
-            gate = (item.ability_instruction.payload or {}).get("intervening_if")
-            if gate is not None and not evaluate_condition(self, context, gate):
-                self.log.append(
-                    f"{item.card.name} ability did nothing: its condition is no longer true"
-                )
-                return
             state_machine = OracleStateMachine(self, context)
             supported, details = state_machine.run(
                 self._chosen_trigger_instruction(item)

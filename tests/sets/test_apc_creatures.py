@@ -2033,7 +2033,12 @@ def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
     """CR 608.2b at the other end: the trigger is on the stack naming the
     Shock, and the Shock leaves in response. The trigger's only target is gone,
     so it counters nothing — it used to fall back to the top of the stack and
-    counter the Lightning Bolt nobody had named, which here resolves."""
+    counter the Lightning Bolt nobody had named, which here resolves.
+
+    (W2G3: the Shock was named as the Snake was cast and the trigger's own
+    list accepted it, so it is a chosen target and the rule's gate removes the
+    trigger above its instructions — the line asserted is the gate's, where it
+    was the counter handler's own "…is no longer on the stack".)"""
     apc, lea, sth = set_pool("APC"), set_pool("LEA"), set_pool("STH")
     game, _mine, _theirs = _w1g5_duel(
         hand0=[apc["Mystic Snake"]], hand1=[lea["Lightning Bolt"], sth["Shock"]], active=1,
@@ -2046,7 +2051,10 @@ def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
     assert game.stack[-1].target_stack_item is shock
     game.counter_stack_object(shock)
     _w1g5_resolve_stack(game)
-    assert "Mystic Snake: the spell it would counter is no longer on the stack" in game.log
+    assert (
+        "Mystic Snake ability was removed from the stack: "
+        "every target is illegal (608.2b)"
+    ) in game.log
     assert not any("was countered by Mystic Snake" in line for line in game.log)
     assert game.players[0].life == 17   # the Bolt was never the Snake's target
 
@@ -2195,6 +2203,140 @@ def test_w2g2_a_seat_nobody_asks_still_takes_the_topmost_opposing_spell(set_pool
 
 # ==== W2G3 ============================================================
 # W2G3's tests go between this line and the "end W2G3" line.
+
+from engine import Game as _w2g3_Game, PlayerState as _w2g3_PlayerState
+from engine.models import Permanent as _w2g3_Permanent
+from tests.helpers import resolve_stack as _w2g3_resolve_stack
+
+#: Where the borrowed cards were first printed; every other name is Apocalypse's.
+_W2G3_HOMES = {"Swamp": "LEA", "Hill Giant": "LEA", "Grizzly Bears": "LEA"}
+
+#: The line CR 608.2b's gate writes when an activated ability's every target
+#: has become illegal (``legality.ability_targets_refusal``).
+_W2G3_FIZZLE = (
+    "Savage Gorilla ability was removed from the stack: "
+    "every target is illegal (608.2b)"
+)
+
+
+def _w2g3_gorilla_table(set_pool, *names_for_seat_1):
+    """Seat 0 controls a Savage Gorilla it can pay for, with five Swamps to
+    draw from; seat 1 controls *names_for_seat_1*. Returns the game, the
+    Gorilla and seat 1's permanents in order."""
+    swamp = set_pool("LEA")["Swamp"]
+    game = _w2g3_Game(players=[
+        _w2g3_PlayerState(name="P0", library=[swamp] * 5),
+        _w2g3_PlayerState(name="P1", library=[swamp] * 5),
+    ])
+    game.enforce_mana_costs = True
+    game.interactive_seats = set()
+    game.players[0].mana_pool.update({"U": 3, "B": 3})
+    gorilla = _w2g3_Permanent(card=set_pool("APC")["Savage Gorilla"])
+    game._put_permanent_onto_battlefield(0, gorilla, None)
+    gorilla.metadata["summoning_sickness_turn"] = -99
+    theirs = []
+    for name in names_for_seat_1:
+        perm = _w2g3_Permanent(card=set_pool(_W2G3_HOMES.get(name, "APC"))[name])
+        game._put_permanent_onto_battlefield(1, perm, None)
+        perm.metadata["summoning_sickness_turn"] = -99
+        theirs.append(perm)
+    return game, gorilla, theirs
+
+
+def _w2g3_zone_names(cards) -> list:
+    return [card.name for card in cards]
+
+
+def test_w2g3_savage_gorilla_draws_no_card_when_its_target_has_left(set_pool):
+    """"{U}{B}, {T}, Sacrifice this creature: Target creature gets -3/-3 until
+    end of turn. Draw a card." Its ruling (2004-10-04): "You do not get to draw
+    a card if the target is not legal on resolution." CR 608.2b — with every
+    target illegal the ability does not resolve, so the sentence printed
+    *behind* the targeted one does not happen either. The cost stays paid, and
+    the creature standing beside the departed target is not shrunk in its
+    place."""
+    game, _gorilla, (giant, bears) = _w2g3_gorilla_table(
+        set_pool, "Hill Giant", "Grizzly Bears"
+    )
+
+    queued = game.queue_permanent_ability(
+        0, "Savage Gorilla", target_permanent_ids=[giant.permanent_id],
+    )
+    assert queued.supported and queued.details == "queued", queued
+    # In response the Giant leaves the battlefield.
+    game.remove_from_battlefield(giant)
+    game.players[1].graveyard.append(giant.card)
+    _w2g3_resolve_stack(game)
+
+    assert _W2G3_FIZZLE in game.log, game.log[-5:]
+    assert game.players[0].hand == [], "no card: the ability did not resolve"
+    assert len(game.players[0].library) == 5
+    assert _w2g3_zone_names(game.players[0].graveyard) == ["Savage Gorilla"], (
+        "the sacrifice was a cost, and a cost is not refunded"
+    )
+    assert (bears.effective_power, bears.effective_toughness) == (2, 2), (
+        "the creature beside the target is nobody's target"
+    )
+    assert not game.stack
+
+
+def test_w2g3_savage_gorilla_aimed_at_itself_is_sacrificed_and_draws_nothing(set_pool):
+    """The Gorilla is a creature, so it is a legal target for its own ability
+    as that ability is announced (CR 601.2c comes before CR 601.2h) — and the
+    cost then sacrifices it. By the time the ability resolves its one target is
+    in a graveyard: illegal, so no card (CR 608.2b)."""
+    game, gorilla, _theirs = _w2g3_gorilla_table(set_pool)
+
+    queued = game.queue_permanent_ability(
+        0, "Savage Gorilla", target_permanent_ids=[gorilla.permanent_id],
+    )
+    assert queued.supported and queued.details == "queued", queued
+    assert _w2g3_zone_names(game.players[0].graveyard) == ["Savage Gorilla"]
+    _w2g3_resolve_stack(game)
+
+    assert _W2G3_FIZZLE in game.log, game.log[-5:]
+    assert game.players[0].hand == []
+    assert len(game.players[0].library) == 5
+
+
+def test_w2g3_savage_gorilla_does_nothing_to_a_target_that_gained_protection(set_pool):
+    """The rule's own second example: "if the creature has gained protection
+    from [the source's colour] or left the battlefield". The Gorilla is green,
+    so a target given protection from green in response is no longer one its
+    ability could name — it is not shrunk, and no card is drawn. The target is
+    still on the battlefield, which is what no handler's own "is it still
+    there?" could have noticed."""
+    game, _gorilla, (giant,) = _w2g3_gorilla_table(set_pool, "Hill Giant")
+
+    assert game.queue_permanent_ability(
+        0, "Savage Gorilla", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    giant.metadata["protection_from_green"] = True
+    _w2g3_resolve_stack(game)
+
+    assert _W2G3_FIZZLE in game.log, game.log[-5:]
+    assert (giant.effective_power, giant.effective_toughness) == (3, 3)
+    assert game.is_on_battlefield(giant)
+    assert game.players[0].hand == []
+
+
+def test_w2g3_savage_gorilla_still_shrinks_and_draws_when_its_target_is_legal(set_pool):
+    """The other direction, through the same queue-then-resolve path: nothing
+    happened in response, the target is exactly what was announced, and both
+    printed sentences happen."""
+    game, _gorilla, (giant,) = _w2g3_gorilla_table(set_pool, "Hill Giant")
+
+    assert game.queue_permanent_ability(
+        0, "Savage Gorilla", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    _w2g3_resolve_stack(game)
+    game.check_state_based_actions()
+
+    assert _W2G3_FIZZLE not in game.log
+    assert _w2g3_zone_names(game.players[0].hand) == ["Swamp"]
+    assert _w2g3_zone_names(game.players[1].graveyard) == ["Hill Giant"], (
+        "a 3/3 given -3/-3 dies (CR 704.5f)"
+    )
 
 # ==== end W2G3 ========================================================
 

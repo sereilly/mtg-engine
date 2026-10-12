@@ -338,6 +338,25 @@ class StackItem:
     # a trigger — a trigger's target is stamped at its fire site, which is the
     # bug ROADMAP's CR 608.2b entry declines the rule over.
     activated: bool = False
+    # CR 603.3d: this **triggered** ability's targets were *chosen for it* as
+    # it was put on the stack — out of the list ``_trigger_target_candidates``
+    # enumerates, by the ``trigger_target`` prompt's answer or its default —
+    # rather than stamped by the fire site that announced it. The other half
+    # of ``activated`` above, and positive for the same reason: a fire site's
+    # stamp may be a slot nobody chose (the death sweep records the dying
+    # permanent itself), so "has a target on it" says nothing about whether a
+    # player picked it. Set by the two answers that record a chosen target
+    # (``_resolve_trigger_target`` / ``_resolve_trigger_targets`` — unless the
+    # answer is a default taken while a permanent was on its way to a
+    # graveyard, ``Game.departing``, when the picker's list was the board
+    # before the event), by
+    # ``_stack_push`` for an entry trigger whose permanent spell named the
+    # target and whose own list accepted it (``cast_announcement_fault``), by
+    # the upkeep step for a pick made at its target prompt and accepted the
+    # same way (``_enqueue_triggered_ability(targets_chosen=)``), and by
+    # nothing else; what CR 608.2b may be asked of is
+    # ``activated or targets_chosen`` (``legality.announced_by_a_choice``).
+    targets_chosen: bool = False
 
     def __post_init__(self) -> None:
         if self.owner_index is None:

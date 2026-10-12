@@ -1024,6 +1024,26 @@ def _role_object_key(obj) -> tuple:
     return ("graveyard", obj.seat, id(obj.card), obj.ordinal)
 
 
+def announced_by_a_choice(item) -> bool:
+    """Whether the **ability** *item*'s recorded targets are an announcement a
+    player made — the bound on everything CR 608.2b asks of an ability.
+
+    An activated ability's are (CR 602.2b; ``StackItem.activated``), and so
+    are a triggered ability's where CR 603.3d's picker chose them
+    (``StackItem.targets_chosen``). A target a **fire site** stamped is not,
+    and neither is a default the picker took while a permanent was on its way
+    to a graveyard: the death sweep announces a dies-trigger while the dying
+    permanent is still listed, so the id on the item may be one nobody could
+    have chosen, and asking the rule of it would report the engine's own
+    mis-targeting as a fizzle. One predicate for the gate and for the
+    per-target blanking, so the two cannot disagree about which abilities are
+    judged.
+    """
+    return bool(
+        getattr(item, "activated", False) or getattr(item, "targets_chosen", False)
+    )
+
+
 class LegalityMixin:
     """Backend legality queries surfaced to the web UI. Composed onto ``Game``."""
 
@@ -4250,10 +4270,15 @@ class LegalityMixin:
         (Topple): every narrowing the picker enforced is re-enforced here
         without being re-read. The shapes that question does not cover are
         named in :func:`_resolution_rechecks_description`. A spell with several
-        targets still resolves while **any** one is legal; the illegal ones are
-        each left alone by their handler's own resolver (608.2b's last
-        sentence), which is what the census over the pool's multi-target spells
-        found every one of them already doing.
+        targets still resolves while **any** one is legal, and the illegal ones
+        are blanked out of its announcement before any instruction runs
+        (:meth:`blank_illegal_resolution_targets`, 608.2b's last sentence).
+        This paragraph used to say each was "left alone by its handler's own
+        resolver, which is what the census over the pool's multi-target spells
+        found every one of them already doing" — true of a target that had
+        *left* or stopped answering a description the handler re-read, and
+        never asked of one that had merely become untargetable: 42 of the 48
+        acted on a first target given shroud in response.
 
         **A spell that can target a player is answered too** — "any target", a
         divided one, a player-targeted one — through
@@ -4296,15 +4321,43 @@ class LegalityMixin:
             # id recorded on a spell is a choice that was legal when it was
             # made and this rule is exactly the question to ask of it later.
             #
-            # A triggered ability's are stamped at its fire site, and the death
-            # sweep enqueues a dies-trigger *while the dying permanent is still
-            # listed* (``_destroy_swept_permanents``) — so Blazing Effigy's
-            # "it deals 3 damage to target creature" records the dying Effigy
-            # itself, a permanent CR 603.3d would never have offered. Asking
-            # 608.2b of that id counters an ability the engine mis-targeted and
-            # reports it as a rules-correct fizzle, which buries the targeting
-            # bug under a rule. The fire sites have to choose targets after the
-            # permanent has left before this can widen; see ROADMAP.
+            # A triggered ability's may be **stamped at its fire site**: the
+            # object its event was about, threaded through the target fields
+            # so the resolution can find it again, and the death sweep
+            # enqueues a dies-trigger *while the dying permanent is still
+            # listed* (``_destroy_swept_permanents``). An id like that is one
+            # nobody chose — CR 603.3d would never have offered it — and
+            # asking 608.2b of it counters an ability the engine mis-targeted
+            # and reports that as a rules-correct fizzle, which buries the
+            # targeting bug under a rule.
+            #
+            # **An activated ability has no such excuse**, and is asked. Its
+            # targets were chosen by the player who activated it (CR 602.2b),
+            # held to the picker's list before a cost was paid and recorded on
+            # the item, and ``StackItem.activated`` is the positive mark that
+            # tells the two apart — set by the three activation paths and by
+            # nothing else.
+            #
+            # **Nor has a triggered ability whose target was chosen for it**
+            # (CR 603.3d) rather than stamped: ``StackItem.targets_chosen``,
+            # set where the choice is made out of the list
+            # ``_trigger_target_candidates`` enumerates — the ``trigger_target``
+            # prompt's answer and its default, an entry trigger's accepted
+            # cast announcement, an upkeep prompt's accepted pick. The bound
+            # is that distinction — chosen against stamped — and not
+            # "triggered".
+            #
+            # Blazing Effigy's dies-trigger, the card this decline was first
+            # written about, shows where the line falls. Its picker chooses
+            # now (a stamp of its own source is read as a reference), and a
+            # **person's** answer is a choice like any other. A seat with
+            # nobody to ask takes its default *inside* the death sweep, off a
+            # board that still lists the dying Effigy — which that default
+            # can therefore be — so that one is not recorded as a choice
+            # (``Game.departing``, ``_trigger_target_was_a_choice``) and is
+            # not asked the rule.
+            if announced_by_a_choice(item):
+                return self.ability_targets_refusal(item)
             return None
         if card.primary_type not in ("instant", "sorcery"):
             # The same reason the announcement gate is instants and sorceries
@@ -4414,11 +4467,21 @@ class LegalityMixin:
         )]
 
     def _announcement_target_legality(
-        self, item, program, spec, holder, mode_index
+        self, item, program, spec, holder, mode_index, *,
+        addresses: "list | None" = None,
     ) -> "list[bool] | None":
         """Whether each target one announcement of *item* recorded is still
         legal (CR 608.2b) — or None when "every target" cannot be answered for
         the whole object, and it must simply resolve.
+
+        *addresses*, where a caller passes a list, is filled in step with the
+        verdicts: for each one, ``(kind, channel, position, permanent_id)`` —
+        where on *holder* that target is recorded — or None for a target no
+        caller rewrites (a graveyard stamp, a stack object).
+        :meth:`blank_illegal_resolution_targets` is the reader, and it is an
+        out-parameter rather than a second walk so that "which targets are
+        illegal" and "which slots to blank" cannot be two readings of one
+        announcement.
 
         The body :meth:`illegal_targets_refusal` had, asked once per
         announcement so a modal spell is judged against **the mode that was
@@ -4441,7 +4504,7 @@ class LegalityMixin:
             # object has a target this loop cannot read" — and the reading it
             # lacked exists now: see :meth:`_player_target_legality`.
             return self._player_target_legality(
-                item, program, spec, holder, mode_index
+                item, program, spec, holder, mode_index, addresses=addresses,
             )
         if spec_is_a_cost(spec):
             # …and the second spelling of "does not target at all": a spell
@@ -4502,7 +4565,9 @@ class LegalityMixin:
         )
         offered: set[tuple[int, int]] | None = None
         ids = getattr(holder, "target_permanent_id", None)
-        for permanent_id in (ids if isinstance(ids, (list, tuple)) else [ids]):
+        for position, permanent_id in enumerate(
+            ids if isinstance(ids, (list, tuple)) else [ids]
+        ):
             if not isinstance(permanent_id, int):
                 continue
             target = self.permanent_by_id(permanent_id)
@@ -4538,6 +4603,8 @@ class LegalityMixin:
                     self.battlefield_index_of(target),
                 ) in offered
             legality.append(legal)
+            if addresses is not None:
+                addresses.append(("permanent", "item", position, permanent_id))
         # A graveyard stamp is recorded on the item alone — a "choose one or
         # more" mode carries no such field — so it is read for the item's own
         # announcement and for nothing else.
@@ -4550,6 +4617,8 @@ class LegalityMixin:
             # docstring above. While a copy survives, `graveyard_index_of`
             # answers a slot (clamping where it must) and the target is legal.
             legality.append(self.graveyard_index_of(stamp) is not None)
+            if addresses is not None:
+                addresses.append(None)
         stack_target = getattr(holder, "target_stack_item", None)
         if stack_target is not None and (
             not program.modes
@@ -4583,10 +4652,13 @@ class LegalityMixin:
                         obj is stack_target for obj in admitted
                     )
             legality.append(still_there)
+            if addresses is not None:
+                addresses.append(None)
         return legality
 
     def _player_target_legality(
-        self, item, program, spec, holder, mode_index
+        self, item, program, spec, holder, mode_index, *,
+        addresses: "list | None" = None,
     ) -> "list[bool] | None":
         """CR 608.2b for an announcement whose target **may be a player** —
         "target player", "any target", "player or planeswalker", a division —
@@ -4654,6 +4726,7 @@ class LegalityMixin:
             (t["seat"], t["index"]) for t in offered if t.get("kind") == "permanent"
         }
         legality: list[bool] = []
+        found: list = []
         for target in chosen:
             if target.kind == "player":
                 legality.append(target.seat in faces)
@@ -4672,6 +4745,11 @@ class LegalityMixin:
                 # kinds describe; an announcement carrying one is not one this
                 # can count.
                 return None
+            found.append(
+                (target.kind, target.channel, target.position, target.permanent_id)
+            )
+        if addresses is not None:
+            addresses.extend(found)
         return legality
 
     def stale_comparison_refusal(self, item) -> str | None:
@@ -4802,6 +4880,245 @@ class LegalityMixin:
             f"{item.card.name} ability was removed from the stack: its target "
             "is no longer in the graveyard (608.2b)"
         )
+
+    def ability_target_verdicts(self, item) -> "list[tuple] | None":
+        """Every target the **ability** *item* announced, each paired with
+        whether it is still legal as the ability resolves (CR 608.2b) — or
+        None where "is every target illegal?" cannot be answered for the whole
+        object, and it must simply resolve as it always has.
+
+        ``[(ChosenTarget, legal), …]`` in announcement order. Which targets
+        there are is ``stack_targets``' answer, the one reader of what a stack
+        object announced; whether each is legal is **the announcement's own
+        question, asked again** — still among what ``_enumerate_targets`` would
+        offer this ability now, through the instruction's own narrowing, with
+        its source (CR 608.2b: "if the source of an ability has left the zone
+        it was in, its last known information is used") and for the card the
+        activation gate enumerated it for. That is the list
+        :meth:`activation_target_refusal` held the announcement to and the
+        list the browser's picker was handed, so a target is illegal here by
+        exactly the predicate that would have refused naming it: it has left,
+        it gained shroud or protection from the source, it stopped being the
+        printed noun, colour, tapped state or controller, it left the combat
+        the phrase names, its player gained shroud or left the game, the spell
+        it named has left the stack or stopped answering the phrase.
+
+        The shapes this declines, each named:
+
+        * an object ``stack_targets`` cannot read (a hook-keyed one) or whose
+          legal targets cannot be enumerated (``_candidates`` answers None: a
+          "that player controls" with no frozen seat, a triggered ability's
+          controller narrowing the spec does not carry);
+        * an ability that prints **more than one instance** of the word and is
+          not a roles announcement (Keeper of the Dead: "Choose target opponent
+          … Destroy target nonblack creature that player controls"). The spec
+          describes the first slot only and the second is the handler's pick as
+          it resolves, so "every target" is not something the stack object
+          records — :meth:`stale_comparison_refusal` leaves the same card alone
+          for the same reason;
+        * a **roles** announcement with a role that is not a permanent (Goblin
+          Welder's graveyard card), for the reason the spell side gives of a
+          player role. A roles announcement of permanents is judged the way a
+          roles *spell* is — still there and still targetable; each role's
+          description and relation is ``handlers/_common.roles_still_legal``'s.
+
+        A **graveyard** target is legal while any copy of the chosen card is
+        left in that pile, the deliberately ambiguous case
+        ``Game.graveyard_index_of`` documents.
+        """
+        from .stack_targets import (_candidates, _printed_target_instances,
+                                    _read, announcements)
+
+        announced = announcements(item)
+        if announced is None:
+            return None
+        source = getattr(item, "source_permanent", None)
+        verdicts: list[tuple] = []
+        for announcement in announced:
+            targets = _read(self, item, announcement)
+            if not targets:
+                continue
+            spec = announcement.spec
+            if spec.get("kind") == ROLES_TARGET_KIND:
+                if any(target.kind != "permanent" for target in targets):
+                    return None
+                # The card the announcement was enumerated for: an activation
+                # reads its permanent's **effective** card (a Clone's abilities
+                # are the copied creature's, CR 707.2), a trigger the card on
+                # its stack object — ``stack_targets._candidates`` draws the
+                # same line for the flat announcement below.
+                card = item.card
+                if getattr(item, "activated", False):
+                    card = getattr(source, "effective_card", None) or item.card
+                role_specs = spec_roles(spec)
+                for target in targets:
+                    permanent = self.permanent_by_id(target.permanent_id)
+                    role = (
+                        role_specs[target.position]
+                        if 0 <= target.position < len(role_specs) else None
+                    )
+                    verdicts.append((target, bool(
+                        permanent is not None
+                        and self.is_on_battlefield(permanent)
+                        and self._can_be_targeted(
+                            permanent, card, caster_index=item.caster_index,
+                            ability_source=source, source_spec=role,
+                        )
+                    )))
+                continue
+            instances = _printed_target_instances(item)
+            if instances is not None and instances != 1:
+                return None
+            candidates = _candidates(self, item, announcement, targets[0])
+            if candidates is None:
+                return None
+            for target in targets:
+                if target.kind == "graveyard":
+                    legal = self.graveyard_index_of(target.stamp) is not None
+                else:
+                    legal = any(candidate.same_object(target) for candidate in candidates)
+                verdicts.append((target, legal))
+        return verdicts
+
+    def ability_targets_refusal(self, item) -> str | None:
+        """CR 608.2b for an **ability whose targets were chosen**: the reason
+        it leaves the stack without resolving, or None.
+
+        :meth:`illegal_targets_refusal`'s answer for the abilities whose
+        targets are an announcement (:func:`announced_by_a_choice`): an
+        **activated** one — chosen by a player as the ability was activated
+        (CR 602.2b), held to the picker's list by
+        :meth:`activation_target_refusal` before any cost was paid, recorded on
+        the stack item and marked (``StackItem.activated``) — and a
+        **triggered** one whose own picker chose them as it went on the stack
+        (CR 603.3d, ``StackItem.targets_chosen``). The reason that method gives
+        for declining a trigger's *stamped* target — a fire site records an id
+        nobody chose — is not true of either, so the rule's two halves are
+        both asked of them:
+
+        * **every** target illegal → the ability does not resolve. Nothing
+          printed behind the targeted sentence happens ("Target creature gets
+          -3/-3 until end of turn. **Draw a card.**" — Savage Gorilla's ruling:
+          no card), nothing is acted on that has become illegal, and nothing
+          that was not named is acted on in its place. Costs stay paid; the
+          rule refunds nothing.
+        * some target still legal → it resolves, and the illegal ones are
+          blanked out of the announcement first
+          (:meth:`blank_illegal_resolution_targets`).
+
+        "Legal" is :meth:`ability_target_verdicts`. An ability that named no
+        target — a bare activation, the headless caller's standing convention,
+        or an "up to one" that chose none — has nothing to judge and resolves
+        on its handler's pick.
+
+        A bare activation whose only recorded target is the **default seat** a
+        player-targeted ability resolves at is judged like any other target:
+        the default is the target (``stack_targets``' reading), and a seat
+        that could not have been named is not one the ability may reach.
+        """
+        verdicts = self.ability_target_verdicts(item)
+        if not verdicts or any(legal for _target, legal in verdicts):
+            return None
+        if all(target.kind == "graveyard" for target, _legal in verdicts):
+            # Every target was a card in a graveyard and none is left there:
+            # :meth:`vanished_graveyard_target_refusal` is asked one call
+            # later and says so in its own words. The same answer from the
+            # same reader (``graveyard_index_of``); left to the gate that has
+            # been giving it so its log line stays the one players and tests
+            # already read.
+            return None
+        return (
+            f"{item.card.name} ability was removed from the stack: "
+            "every target is illegal (608.2b)"
+        )
+
+    def blank_illegal_resolution_targets(self, item) -> int:
+        """Rewrite each **illegal** slot of an object that is about to resolve
+        so that it names nothing, and return how many were rewritten.
+
+        CR 608.2b's last sentences, applied to the announcement once instead of
+        being left to each handler: "Illegal targets, if any, won't be affected
+        by parts of a resolving spell's effect for which they're illegal … If
+        part of the effect requires information about an illegal target, it
+        fails to determine any such information."
+        :meth:`illegal_targets_refusal` has already let the object through, so
+        at least one target is legal and what is left to decide is the rest.
+
+        The verdicts are the ones that gate read — this method asks the same
+        two readers for the same object (:meth:`_announcement_target_legality`
+        for a spell, :meth:`ability_target_verdicts` for an ability),
+        so "illegal enough to be left out" and "illegal enough to count toward
+        every target" are one opinion.
+
+        The same bounds as the gate, for the same reasons: an instant or a
+        sorcery, or an ability whose targets were chosen
+        (:func:`announced_by_a_choice`). A target a fire site stamped is not
+        judged, and an announcement the readers decline is left exactly as it
+        is.
+        """
+        from .stack_targets import (ChosenTarget, blank_illegal_targets,
+                                    names_several_targets)
+
+        # An object that named one target has nothing left to blank: the gate
+        # either removed it or found that target legal. Asked first, off the
+        # item's own fields, so the common resolution pays for one enumeration
+        # and not two.
+        #
+        # **Unless the object prints the exception** ("This ability still
+        # resolves if its target becomes illegal", Gilded Drake). The gate let
+        # it through *with* its one target illegal, so that target is exactly
+        # what is left to blank: the sentence waives the fizzle, not the
+        # target's illegality, and "if you don't or can't make an exchange,
+        # sacrifice this creature" is printed for the resolution in which the
+        # exchange cannot be made. Unblanked, the Drake swapped itself for a
+        # creature given shroud in response — or, when its target had left,
+        # for whichever creature had slid into that battlefield slot.
+        if not names_several_targets(item) and not resolves_with_illegal_targets(
+            item.card, item.ability_text
+        ):
+            return 0
+        illegal: list = []
+        if item.ability_instruction is not None:
+            if not announced_by_a_choice(item):
+                return 0
+            verdicts = self.ability_target_verdicts(item)
+            if not verdicts:
+                return 0
+            illegal = [target for target, legal in verdicts if not legal]
+        else:
+            # A spell, so the card *is* the object and its printed type is the
+            # question — the bound ``illegal_targets_refusal`` draws in the
+            # same words, for the reason it gives.
+            card = item.card
+            if card.primary_type not in ("instant", "sorcery"):
+                return 0
+            program = compile_card_oracle(card)
+            chosen_modes = tuple(getattr(item, "chosen_modes", ()) or ())
+            for spec, holder, mode_index in self._resolving_announcements(item, program):
+                addresses: list = []
+                verdict = self._announcement_target_legality(
+                    item, program, spec, holder, mode_index, addresses=addresses,
+                )
+                if verdict is None or len(addresses) != len(verdict):
+                    continue
+                mode = next(
+                    (
+                        position for position, chosen in enumerate(chosen_modes)
+                        if chosen is holder
+                    ),
+                    None,
+                )
+                for address, legal in zip(addresses, verdict):
+                    if legal or address is None:
+                        continue
+                    kind, channel, position, permanent_id = address
+                    illegal.append(ChosenTarget(
+                        kind, permanent_id=permanent_id, channel=channel,
+                        position=position, mode=mode,
+                    ))
+        if not illegal:
+            return 0
+        return blank_illegal_targets(item, illegal)
 
     # -- Target enumeration ------------------------------------------------
     def _enumerate_targets(

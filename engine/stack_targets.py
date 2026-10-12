@@ -134,6 +134,13 @@ _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 #: damage to target player").
 #:
 #: * "can't be the target(s) of …" — a prohibition on somebody else's object;
+#: * "can be the target of" — the permission that lifts one ("Autumn Willow
+#:   can be the target of spells and abilities controlled by **target player**
+#:   as though it didn't have shroud"). Only the phrase is erased, never the
+#:   rest of its sentence, because the one card printing it makes its own
+#:   choice *behind* the phrase: read as a second instance of the word, the
+#:   ability was one whose targets CR 608.2b and CR 115.7 both declined to
+#:   read;
 #: * "becomes the target of …" — a trigger condition (CR 603.2);
 #: * "(spells|abilities) … that target(s) …" / "that targets only …" — a
 #:   description of somebody else's object;
@@ -152,6 +159,7 @@ _QUOTED_ABILITY = re.compile("[\"“][^\"”]*[\"”]")
 #:   erase.
 _NOT_A_CHOICE = re.compile(
     r"can't be the targets? of[^.;]*"
+    r"|can be the targets? of"
     r"|becomes? the targets? of[^,.;]*"
     r"|(?:spells?|abilit(?:y|ies))[^.,;]*? that (?:can )?targets?(?: only)?[^.,;]*"
     r"|that targets? only[^.,;]*"
@@ -662,6 +670,13 @@ def _candidates(
     controller the spec does not carry as a flag is a phrase the enumerator
     would ignore, and a list wider than the card prints is the one thing a
     change must never be offered from.
+
+    An **activated** ability is enumerated for its source's *effective* card,
+    which is the card ``legality.activation_target_refusal`` enumerated its
+    announcement for (a Clone's abilities are the copied creature's, CR
+    707.2). The rule that re-asks this list as the ability resolves (CR
+    608.2b, ``legality.ability_target_verdicts``) reads it here, and has to be
+    asking about the same card the announcement was.
     """
     from .legality import targeting_instruction
     from .mixins.stack.resolution import _controller_narrowing_is_in
@@ -682,8 +697,12 @@ def _candidates(
             return None
         if triggered and not _controller_narrowing_is_in(spec, instruction):
             return None
+    card = item.card
+    if is_ability and getattr(item, "activated", False):
+        source = getattr(item, "source_permanent", None)
+        card = getattr(source, "effective_card", None) or item.card
     entries = game._enumerate_targets(
-        item.caster_index, item.card, spec,
+        item.caster_index, card, spec,
         for_cast=not is_ability,
         ability_instruction=(
             targeting_instruction(instruction) if is_ability and instruction is not None else None
@@ -776,6 +795,141 @@ def change_slots(game: "Game", item: "StackItem") -> "list[ChangeSlot] | str":
             tuple(candidate for candidate in candidates if not candidate.same_object(current)),
         ))
     return slots
+
+
+# ---------------------------------------------------------------------------
+# CR 608.2b — an announced slot whose target is illegal as the object resolves
+# ---------------------------------------------------------------------------
+
+
+def illegal_target_id(permanent_id) -> int | None:
+    """The id an announced slot holds once CR 608.2b has judged its target
+    **illegal**: a recorded id that names no permanent.
+
+    Permanent ids count up from 1 (``models.next_permanent_id``), so the
+    negative of one resolves to nothing and never will. That is the whole of
+    the mechanism, and it is the one the engine already has: every resolver
+    reads "an id was recorded and no longer resolves" as *the target is gone*
+    (``handlers/_common.pick_target_permanent``'s step 0b,
+    ``resolve_target_permanents``, ``resolve_role_permanent``), so a slot
+    rewritten to this id is treated exactly as a departed target is — not
+    acted on, and **not replaced** by a scan, because a scan is what an id
+    that was *never recorded* gets.
+
+    The negative rather than a shared sentinel so two blanked slots of one
+    announcement stay two different things (CR 115.3's "another" compares
+    ids), and so what was chosen can still be read back off the object.
+    Idempotent: blanking a blanked slot changes nothing.
+    """
+    if isinstance(permanent_id, bool) or not isinstance(permanent_id, int):
+        return None
+    return -abs(permanent_id)
+
+
+def names_several_targets(item: "StackItem") -> bool:
+    """Whether *item*'s recorded announcement can hold **more than one**
+    object target — the only shape in which one target can be illegal while
+    the object still resolves (CR 608.2b).
+
+    A cheap read of the fields themselves, deliberately not of what they
+    mean: it is asked on every resolution to decide whether the per-target
+    question is worth an enumeration, and a wrong "yes" costs one. Several
+    ids on one holder, several entries of a division, or several chosen modes
+    each with a holder of its own.
+    """
+    modes = tuple(getattr(item, "chosen_modes", ()) or ())
+    if len(modes) > 1:
+        return True
+    if len((getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS) or ()) > 1:
+        return True
+    return any(
+        sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int)) > 1
+        for holder in (item, *modes)
+    )
+
+
+def _blank_at(value, position: int, new):
+    """*value* with *new* at *position*, keeping its scalar-or-list shape —
+    and leaving a scalar alone for any slot but the first, which is the only
+    one a scalar can be about."""
+    if isinstance(value, (list, tuple)):
+        if not 0 <= position < len(value):
+            return value
+        updated = list(value)
+        updated[position] = new
+        return updated
+    return new if position == 0 else value
+
+
+def blank_illegal_targets(item: "StackItem", targets) -> int:
+    """Rewrite every slot in *targets* — :class:`ChosenTarget` descriptors of
+    *item*'s own announcement — so that it names nothing. Returns how many
+    slots were rewritten.
+
+    CR 608.2b's last sentences, for an object that **still resolves** because
+    another of its targets is legal: "Illegal targets, if any, won't be
+    affected by parts of a resolving spell's effect for which they're illegal
+    … If part of the effect requires information about an illegal target, it
+    fails to determine any such information." Each handler used to be left to
+    apply that to its own slot, and what a handler re-checks is whether the
+    permanent is still *there* and (some of them) still answers the printed
+    noun — never whether it can still be **targeted**. So of two creatures
+    named for Reckless Spite, the one given protection from black in response
+    was destroyed beside the other.
+
+    Applied to the announcement instead, once, before any instruction runs,
+    so no handler has to know: the id becomes :func:`illegal_target_id` and
+    the **index beside it becomes None**, which is the half that stops
+    ``Game.chosen_permanent`` and the plural resolvers falling back to
+    whatever sits in the slot now. A divided announcement's entry is dropped,
+    a face included: a share the caster announced for it is simply not dealt,
+    and an *even* division is made among the targets that are left — which is
+    Fireball's ruling (2017-11-17: "The division involves only targets that
+    are still legal as Fireball resolves") and what the handlers already did
+    for a target that had left.
+
+    Only a ``permanent`` slot and a ``divided`` entry are rewritten. A
+    graveyard stamp with no surviving copy already answers None
+    (``Game.chosen_graveyard_index``), a stack object that has left is found
+    gone by identity, and a lone player is the whole-object rule's.
+    """
+    blanked = 0
+    dropped: list[int] = []
+    for target in targets:
+        if target.channel == "divided":
+            dropped.append(target.position)
+            continue
+        if target.kind != "permanent" or target.channel not in ("item", "role"):
+            continue
+        holder = item
+        if target.mode is not None:
+            modes = tuple(getattr(item, "chosen_modes", ()) or ())
+            if not 0 <= target.mode < len(modes):
+                continue
+            holder = modes[target.mode]
+        ids = getattr(holder, "target_permanent_id", None)
+        several = isinstance(ids, (list, tuple))
+        current = (
+            ids[target.position]
+            if several and 0 <= target.position < len(ids)
+            else ids if not several and target.position == 0
+            else None
+        )
+        tombstone = illegal_target_id(current)
+        if tombstone is None:
+            continue
+        holder.target_permanent_id = _blank_at(ids, target.position, tombstone)
+        holder.target_permanent_index = _blank_at(
+            getattr(holder, "target_permanent_index", None), target.position, None
+        )
+        blanked += 1
+    if dropped:
+        divided = list((getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS) or ())
+        kept = [entry for position, entry in enumerate(divided) if position not in set(dropped)]
+        if len(kept) != len(divided):
+            item.choices[DIVIDED_TARGETS] = kept
+            blanked += len(divided) - len(kept)
+    return blanked
 
 
 def _completable(slots, picks: list, position: int) -> bool:
