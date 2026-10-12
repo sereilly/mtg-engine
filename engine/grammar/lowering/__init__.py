@@ -264,6 +264,7 @@ from .control_changes import (
 from .exchanges import (
     _lower_exchange_control,
     _lower_exchange_greatest_mana_value,
+    _lower_exchange_chosen_sets,
     _lower_mutual_control_of_sets,
 )
 from .separations import _lower_separate_into_piles
@@ -574,6 +575,7 @@ __all__ = [
     "_lower_choose_permanents",
     "_lower_exchange_control",
     "_lower_exchange_greatest_mana_value",
+    "_lower_exchange_chosen_sets",
     "_lower_mutual_control_of_sets",
     "_lower_pay_or_sacrifice_greatest_mana_value",
     "_lower_regenerate",

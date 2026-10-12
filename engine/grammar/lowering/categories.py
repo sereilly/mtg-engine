@@ -495,6 +495,9 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # category, so GRAMMAR_CATEGORIES is unchanged — what a control change is
     # about does not depend on how many permanents it moves.
     "exchange_control_of_sets_until_eot": "control",
+    # Cultural Exchange: two sets earlier steps chose, exchanged for good
+    # (CR 701.12a-b). The bound exchange above with lists where it has ids.
+    "exchange_control_of_chosen_sets": "control",
     # A printed text change (CR 612). Its own category rather than "recolor":
     # the Lace cycle makes an object a colour, while this replaces a *word*
     # wherever the object's text uses it, and one of the two modes does not
