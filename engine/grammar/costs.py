@@ -641,6 +641,23 @@ def _parse_costs(stream: TokenStream) -> tuple[ast.Cost, ...]:
                     exiled, count=counted or ast.Fixed(1), same_zone=same_zone
                 )
             )
+            # "Exile two cards from your graveyard **and this creature**"
+            # (Zombie Assassin). One printed verb naming a chosen set and the
+            # source, so it becomes two entries — the sacrifice's "two lands
+            # and this artifact" one verb over, and read by the charger through
+            # one reader for both (``oracle._split_conjoined_self``). Only the
+            # source may follow: a second *chosen* exile has no field to be
+            # charged from, so anything else is left unconsumed and refuses.
+            tail = stream.mark()
+            if stream.accept_word("and"):
+                try:
+                    also = _parse_cost_object(stream, "exile")
+                except GrammarError:
+                    also = None
+                if also is not None and also.is_source:
+                    costs.append(ast.ExileSelf())
+                else:
+                    stream.reset(tail)
             stream.accept_punct(",")
             continue
         if stream.at_word("pay"):

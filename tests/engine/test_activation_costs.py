@@ -120,6 +120,28 @@ def test_every_admitted_cost_clause_is_charged(pool):
                     and not charged.sacrifice_attached
                 ):
                     unpaid.append(f"{card.name}: {ability.source_line}")
+            # **The source itself**, under either verb. "{T}, Sacrifice two
+            # lands **and this artifact**" (Sandstone Deadfall) parses to a
+            # counted sacrifice and a sacrifice of the source, and the charger
+            # read neither — but for as long as this guard compared only the
+            # *chosen* clauses, a charger that read the lands and dropped the
+            # artifact would have passed it. The source is a clause like any
+            # other: printed, admitted, and owed.
+            source_sacrificed = any(
+                isinstance(cost, ast.SacrificeCost) and cost.filter.is_source
+                for cost in node.costs
+            )
+            if source_sacrificed != bool(charged.sacrifice_self):
+                unpaid.append(
+                    f"{card.name}: charged sacrifice_self="
+                    f"{charged.sacrifice_self} for {source_sacrificed}"
+                )
+            source_exiled = any(isinstance(cost, ast.ExileSelf) for cost in node.costs)
+            if source_exiled != bool(charged.exile_self):
+                unpaid.append(
+                    f"{card.name}: charged exile_self={charged.exile_self} "
+                    f"for {source_exiled}"
+                )
             chosen_sacrifices = [
                 cost for cost in node.costs
                 if isinstance(cost, ast.SacrificeCost)

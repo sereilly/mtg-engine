@@ -1854,6 +1854,12 @@ class AbilityActivationMixin:
                     self, perm, described,
                     observer=controller_index, source=permanent,
                 )
+                # "Sacrifice two lands **and this artifact**" (Sandstone
+                # Deadfall). The source is its own entry in the printed cost,
+                # so it cannot also be one of the chosen ones: a Deadfall that
+                # had become a land would otherwise pay for itself and one
+                # land, two objects for a cost that prints three.
+                and not (ability.cost.sacrifice_self and perm is permanent)
             ]
             if not candidates:
                 details = (
@@ -3723,8 +3729,36 @@ class AbilityActivationMixin:
         # ability is on the stack — so an effect that looks at the hand during
         # resolution does not see the card that paid for it.
         del controller.hand[index]
-        self._discard_card(controller, card)
-        self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+        if ability.cost.exile_self and not ability.cost.discard_self:
+            # "**Exile this card from your hand**: Add {G}." (Elvish Spirit
+            # Guide.) The other cost that names a hand, and not a discard: the
+            # card goes to exile, so nothing watching a discard sees one and
+            # nothing can bring it back from a graveyard.
+            controller.exile.append(card)
+            self.log.append(
+                f"{controller.name} exiled {card.name} from their hand to "
+                "activate its ability"
+            )
+        else:
+            self._discard_card(controller, card)
+            self.log.append(f"{controller.name} discarded {card.name} to activate its ability")
+
+        if is_mana_ability(ability):
+            # CR 605.3b: an activated mana ability does not use the stack,
+            # wherever its source is — the battlefield path's own rule, asked
+            # through the same predicate. The Guide's {G} arrives now, which
+            # is what lets it pay for the spell being cast.
+            supported, details = OracleStateMachine(
+                self,
+                OracleExecutionContext(
+                    # A mana ability targets nothing (CR 605.1a), so the
+                    # context's player slot names nobody; it is the activator
+                    # rather than None so a handler reading it meets a seat.
+                    caster=controller, target=controller, card=card,
+                    source_permanent=None,
+                ),
+            ).run(ability.instruction)
+            return SimulationResult(card.name, supported, ability.effect_kind, details)
 
         self._stack_push(
             # CR 602.2b: an activated ability's targets were chosen when it
