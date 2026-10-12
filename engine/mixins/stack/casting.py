@@ -4266,10 +4266,18 @@ class SpellCastingMixin:
             if cost.exile_graveyard_filter is not None:
                 owed = cost.exiled_from_graveyard(x_value)
                 if cost_graveyard_indices is not None:
+                    # Only slots this cost could take, each once, and no more
+                    # than it charges: the gate has already held the set to
+                    # exactly that, and the payment does not lean on it — a
+                    # caller that reached here past the gate still cannot
+                    # exile a card the cost does not name, and whatever the
+                    # set falls short by is taken by the default below rather
+                    # than left unpaid.
+                    payable = self._graveyard_exile_candidates(caster_index, cost)
                     named = [
-                        slot for slot in cost_graveyard_indices
-                        if 0 <= slot < len(caster.graveyard)
-                    ]
+                        slot for slot in dict.fromkeys(cost_graveyard_indices)
+                        if slot in payable
+                    ][:owed]
                     cards_by_slot = {slot: caster.graveyard[slot] for slot in named}
                     for slot in sorted(named, reverse=True):
                         caster.graveyard.pop(slot)
@@ -4279,9 +4287,7 @@ class SpellCastingMixin:
                             f"{caster.name} exiled {cards_by_slot[slot].name} "
                             f"from their graveyard to cast {card.name}"
                         )
-                    # The set was the whole payment (the gate held it to the
-                    # count), so the default below has nothing left to take.
-                    owed = 0
+                    owed -= len(named)
                 for _ in range(owed):
                     candidates = self._graveyard_exile_candidates(
                         caster_index, cost

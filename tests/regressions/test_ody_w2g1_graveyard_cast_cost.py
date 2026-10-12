@@ -298,3 +298,31 @@ def test_these_are_the_pools_graveyard_exile_cast_costs():
         and any(cost.exile_graveyard_filter is not None for cost in additional_costs(unit))
     )
     assert found == sorted(_CARDS), found
+
+
+@pytest.mark.parametrize("name", _CARDS)
+def test_with_the_gate_off_the_payment_still_takes_only_what_the_cost_names(
+    name, monkeypatch,
+):
+    """The second sweep, the other way: the payment now trusts a list the gate
+    checked, so the gate is taken away and the payment is handed what the
+    gate would have refused — a slot twice, a slot past the end, one too many,
+    one too few and (for Haunting Misery) a card that is not a creature. It
+    must exile exactly X cards, every one of them a card the cost could take."""
+    payable = _PAYABLE[name]
+    monkeypatch.setattr(
+        Game, "_named_graveyard_cost_refusal", lambda self, *args, **kwargs: None,
+    )
+    for slots in ([0, 0], [0, 99], [0, 2, 3], [0], [1, 4], []):
+        game = _board(name)
+        result = _cast(game, name, 2, slots)
+        assert result.supported, (slots, result.details)
+        exiled = _exiled(game)
+        assert len(exiled) == 2, (slots, exiled)
+        assert sorted(exiled + _pile(game)) == sorted(list(_PILE) + [name]), slots
+        if name == "Haunting Misery":
+            assert set(exiled) <= {"Grizzly Bears", "Black Knight"}, (slots, exiled)
+        # A named slot the cost could take is among what went.
+        for slot in dict.fromkeys(slots):
+            if slot in payable and list(dict.fromkeys(slots)).index(slot) < 2:
+                assert _PILE[slot] in exiled, (slots, exiled)
