@@ -318,8 +318,16 @@ class _Board:
             moved = False
             for choice in list(game.pending_choices):
                 if choice.kind == "land_type_choice" and "land_type" in answers:
+                    # A setter may print which types it can make ("becomes a
+                    # Plains or an Island", Tundra Kavu - the first in the pool
+                    # to, and the census answered every prompt "swamp" until it
+                    # shipped). The answer is one the prompt offers, asked of
+                    # the engine's own reader; what the land then is, the
+                    # census reads off the land.
+                    offered = game.land_type_choice_options(choice)
+                    wanted = answers["land_type"]
                     assert game.confirm_land_type(
-                        choice.player_index, answers["land_type"]
+                        choice.player_index, wanted if wanted in offered else offered[0]
                     )
                 elif choice.kind == "land_type_swap" and "swap" in answers:
                     assert game.confirm_land_type_swap(

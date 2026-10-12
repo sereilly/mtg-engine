@@ -4,16 +4,16 @@ Cards the engine resolves through the same code paths, differing only in values 
 
 A card whose class contains a **verified** card needs no separate manual pass: it exercises no engine path that card didn't. This is weaker than checking the card — it inherits its peer's correctness, and cannot catch a card whose data breaks a generic path.
 
-- Cards in the catalog: **4781**
-- Distinct behaviours: **4324**
-- Cards sharing a behaviour with another: **658** in **201** classes
-- Unverified cards covered by a verified peer: **182**
+- Cards in the catalog: **4924**
+- Distinct behaviours: **4457**
+- Cards sharing a behaviour with another: **675** in **208** classes
+- Unverified cards covered by a verified peer: **185**
 
 | Size | Cards |
 | --- | --- |
 | 70 | Balduvian Barbarians, Balduvian Bears, Barbary Apes, Barktooth Warbeard, Blanchwood Treefolk, Coral Merfolk, **Craw Wurm**, Crimson Kobolds, Crookshank Kobolds, Durkwood Boars, Dwarven Trader, Eager Cadet, **Earth Elemental**, Elvish Ranger, Femeref Scouts, **Fire Elemental**, Fresh Volunteers, Garruk's Gorehorn, Giant Cockroach, Giant Octopus, Goblin Hero, Gorilla Warrior, **Gray Ogre**, **Grizzly Bears**, Headless Horseman, **Hill Giant**, Horned Turtle, **Hurloon Minotaur**, **Ironroot Treefolk**, Jasmine Boreal, Jedit Ojanen, Jerrard of the Closed Fist, Kasimir the Lone Wolf, Keepers of the Faith, Knight Errant, Kobolds of Kher Keep, Lady Orca, Lowland Giant, **Merfolk of the Pearl Trident**, **Mons's Goblin Raiders**, Moss Monster, Onakke Ogre, Panther Warriors, **Pearled Unicorn**, Python, Raging Bull, Redwood Treefolk, Regal Unicorn, **Savannah Lions**, Scaled Wurm, Scarwood Goblins, **Scathe Zombies**, Sir Shandlar of Eberyn, Sivitri Scarzam, Spined Wurm, Squire, Staunch Shieldmate, The Lady of the Mountain, Tobias Andrion, Tor Giant, Torsten Von Ursus, Trained Armodon, Trained Orgg, Viashino Warrior, Vizzerdrix, Vodalian Soldiers, Walking Corpse, **Water Elemental**, Wild Jhovall, Wishcoin Crab |
 | 16 | Abbey Gargoyles, Cerulean Wyvern, Duskrider Falcon, Freewind Falcon, Hazerider Drake, Melesse Spirit, Nightwind Glider, Sea Sprite, Thermal Glider, Voice of Duty, Voice of Grace, Voice of Law, Voice of Reason, Voice of Truth, Weatherseed Faeries, Windreaper Falcon |
-| 15 | **Air Elemental**, Armored Pegasus, Azure Drake, **Bird Maiden**, Concordia Pegasus, Feral Shadow, Fighting Drake, **Flying Men**, Misshapen Fiend, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Tormented Angel, Willow Faerie, Wind Drake |
+| 16 | **Air Elemental**, Armored Pegasus, Azure Drake, **Bird Maiden**, Concordia Pegasus, Feral Shadow, Fighting Drake, **Flying Men**, Gaea's Skyfolk, Misshapen Fiend, **Phantom Monster**, **Roc of Kher Ridges**, **Scryb Sprites**, Tormented Angel, Willow Faerie, Wind Drake |
 | 12 | Death Speakers, Galina's Knight, Guma, Ihsan's Shade, Karoo Meerkat, Llanowar Knight, Oraxid, **Repentant Blacksmith**, Scalebane's Elite, Shivan Zombie, Vodalian Zombie, Yavimaya Barbarian |
 | 11 | Anaconda, Bog Raiders, Bog Smugglers, **Bog Wraith**, Lost Soul, Marsh Boa, Marsh Goblins, Moor Fiend, Plague Beetle, Pygmy Allosaurus, Warthog |
 | 9 | Argothian Swine, Crash of Rhinos, Goliath Beetle, Iron Tusk Elephant, Jhovall Rider, **Moorish Cavalry**, Pygmy Razorback, **War Mammoth**, Wild Elephant |
@@ -30,6 +30,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 6 | Drowned, Metathran Zombie, Phyrexian Monitor, Restless Dead, Unworthy Dead, Walking Dead |
 | 5 | Adventurers' Guildhouse, Cathedral of Serra, Mountain Stronghold, Seafarer's Quay, Unholy Citadel |
 | 5 | Aerathi Berserker, Frost Giant, Hunding Gjornersen, Marhault Elsdragon, Wolverine Pack |
+| 5 | Angelfire Crusader, Firescreamer, Flame Spirit, Ridgeline Rager, Storm Shaman |
 | 5 | Black Scarab, Blue Scarab, Green Scarab, Red Scarab, White Scarab |
 | 5 | **Black Ward**, **Blue Ward**, **Green Ward**, **Red Ward**, **White Ward** |
 | 5 | Canopy Spider, Giant Mantis, **Giant Spider**, Plated Spider, Rib Cage Spider |
@@ -50,10 +51,10 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 4 | Ekundu Griffin, Sabertooth Wyvern, Sky Spirit, Thunder Spirit |
 | 4 | Endoskeleton, Spirit Shield, Tawnos's Weaponry, Zelyon Sword |
 | 4 | Firefly, **Granite Gargoyle**, Hellkite Punisher, **Shivan Dragon** |
-| 4 | Firescreamer, Flame Spirit, Ridgeline Rager, Storm Shaman |
 | 4 | Goblin Chariot, Lightning Elemental, Raging Goblin, Thundering Giant |
 | 4 | Laccolith Grunt, Laccolith Titan, Laccolith Warrior, Laccolith Whelp |
 | 4 | Metallic Sliver, **Obsianus Golem**, Phyrexian Hulk, Phyrexian Walker |
+| 4 | **Prodigal Sorcerer**, Razorfin Hunter, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Ardent Militia, Jhovall Queen, Standing Troops |
 | 3 | **Army of Allah**, Morale, Trumpet Blast |
 | 3 | Bog Imp, **Mahamoti Djinn**, Storm Crow |
@@ -72,7 +73,6 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Killer Whale, Manta Riders, Whiptongue Frog |
 | 3 | Lone Wolf, Pride of Lions, Thorn Elemental |
 | 3 | Metathran Soldier, Phantom Warrior, Tidal Kraken |
-| 3 | **Prodigal Sorcerer**, Rootwater Hunter, Zuran Spellcaster |
 | 3 | Ramosian Commander, Ramosian Lieutenant, Ramosian Sergeant |
 | 2 | About Face, Transmutation |
 | 2 | Absolute Grace, Absolute Law |
@@ -99,6 +99,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Blizzard Elemental, Vigilant Drake |
 | 2 | **Blue Elemental Blast**, **Red Elemental Blast** |
 | 2 | Boa Constrictor, Llanowar Vanguard |
+| 2 | Bog Gnarr, Glade Gnarr |
 | 2 | Bog Rats, Rampart Crawler |
 | 2 | Branded Brawlers, Veteran Brawlers |
 | 2 | Brassclaw Orcs, **Ironclaw Orcs** |
@@ -112,6 +113,8 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Charging Rhino, Stalking Tiger |
 | 2 | Civic Guildmage, Sunscape Apprentice |
 | 2 | Clay Statue, Diabolic Machine |
+| 2 | Coalition Honor Guard, Standard Bearer |
+| 2 | Consume Strength, Steal Strength |
 | 2 | Crazed Skirge, Volcanic Dragon |
 | 2 | Crimson Acolyte, Obsidian Acolyte |
 | 2 | **Dandân**, **Sea Serpent** |
@@ -122,6 +125,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Deepwood Wolverine, Snorting Gahr |
 | 2 | Defender of Chaos, Defender of Law |
 | 2 | Defiant Falcon, Ramosian Sky Marshal |
+| 2 | **Desert Twister**, Vindicate |
 | 2 | Dromosaur, Raging Gorilla |
 | 2 | Dwarven Miner, Trench Wurm |
 | 2 | Dwarven Nomad, **Dwarven Warriors** |
@@ -170,7 +174,9 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Lawbringer, Lightbringer |
 | 2 | Lim-Dûl's High Guard, Sanguine Guard |
 | 2 | Living Plane, Nature's Revolt |
+| 2 | Llanowar Dead, Riven Turnbull |
 | 2 | Mana Leech, Mole Worms |
+| 2 | Mask of Law and Grace, Shield of Duty and Reason |
 | 2 | Mawcor, Thornwind Faeries |
 | 2 | Merfolk Traders, Vodalian Merchant |
 | 2 | Mesa Falcon, Pearl Dragon |
@@ -194,6 +200,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Plated Rootwalla, Rootwalla |
 | 2 | Razortooth Rats, Squirming Mass |
 | 2 | Reckless Ogre, Rogue Kavu |
+| 2 | Reef Shaman, Sea Snidd |
 | 2 | Revitalize, Reviving Dose |
 | 2 | Rishadan Cutpurse, Rishadan Footpad |
 | 2 | Rock Basilisk, **Thicket Basilisk** |

@@ -31,7 +31,7 @@
       "parsed_pct": 95.1
     },
     "<pool>": {
-      "executed_pct": 61.5,
+      "executed_pct": 61.7,
       "lowered_pct": 90.0,
       "parsed_pct": 90.6
     },
@@ -39,6 +39,11 @@
       "executed_pct": 70.5,
       "lowered_pct": 90.0,
       "parsed_pct": 90.4
+    },
+    "APC": {
+      "executed_pct": 69.6,
+      "lowered_pct": 90.0,
+      "parsed_pct": 91.2
     },
     "ARN": {
       "executed_pct": 55.6,

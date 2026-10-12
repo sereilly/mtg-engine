@@ -40,6 +40,11 @@
       "hooked_cards_pct_of_supported": 0.0,
       "hooked_lines_pct_of_supported": 0.0
     },
+    "APC": {
+      "entries_per_100_supported_cards": 0.0,
+      "hooked_cards_pct_of_supported": 0.0,
+      "hooked_lines_pct_of_supported": 0.0
+    },
     "ARN": {
       "entries_per_100_supported_cards": 24.4,
       "hooked_cards_pct_of_supported": 21.8,

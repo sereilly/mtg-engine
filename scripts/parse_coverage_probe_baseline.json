@@ -93,6 +93,13 @@
   ]
  },
  {
+  "card": "Ana Sanctuary",
+  "clause": "if you control a blue or black permanent, target creature gets +1/+1 until end of turn. if you control a blue permanent and a black permanent, that creature gets +5/+5 until end of turn instead",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Anaba Ancestor",
   "clause": "another target minotaur creature gets +1/+1 until end of turn",
   "ignored": [
@@ -305,6 +312,27 @@
   ]
  },
  {
+  "card": "Bloodfire Dwarf",
+  "clause": "it deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Bloodfire Infusion",
+  "clause": "this aura deals damage equal to the sacrificed creature's power to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Bloodfire Kavu",
+  "clause": "it deals 2 damage to each creature",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Blossoming Wreath",
   "clause": "you gain life equal to the number of creature cards in your graveyard",
   "ignored": [
@@ -472,6 +500,13 @@
   "clause": "remove an omen counter from this enchantment. if there are no omen counters on this enchantment, the player with the highest life total wins the game. if two or more players are tied for highest life total, the game is a draw",
   "ignored": [
    "enchantment,"
+  ]
+ },
+ {
+  "card": "Ceta Sanctuary",
+  "clause": "if you control a red or green permanent, draw a card, then discard a card. if you control a red permanent and a green permanent, instead draw two cards, then discard a card",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -666,6 +701,13 @@
   ]
  },
  {
+  "card": "Dega Sanctuary",
+  "clause": "if you control a black or red permanent, you gain 2 life. if you control a black permanent and a red permanent, you gain 4 life instead",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Deranged Hermit",
   "clause": "if this permanent came under your control since the beginning of your last upkeep, sacrifice it unless you pay {3}{g}{g}",
   "ignored": [
@@ -677,6 +719,22 @@
   "clause": "counter target spell. if an artifact or creature spell is countered this way, put that card onto the battlefield under your control instead of into its owner's graveyard",
   "ignored": [
    "spell"
+  ]
+ },
+ {
+  "card": "Desolation Angel",
+  "clause": "destroy all lands you control. if it was kicked, destroy all lands instead",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
+  "card": "Desolation Giant",
+  "clause": "destroy all other creatures you control. if it was kicked, destroy all other creatures instead",
+  "ignored": [
+   "all",
+   "all"
   ]
  },
  {
@@ -805,6 +863,13 @@
   "clause": "if this land is tapped, put a storage counter on it",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Dwarven Landslide",
+  "clause": "destroy target land. if this spell was kicked, destroy another target land",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -1599,6 +1664,14 @@
   ]
  },
  {
+  "card": "Illuminate",
+  "clause": "illuminate deals x damage to target creature. if this spell was kicked with its {2}{r} kicker, it deals x damage to that creature's controller. if this spell was kicked with its {3}{u} kicker, you draw x cards",
+  "ignored": [
+   "spell",
+   "spell"
+  ]
+ },
+ {
   "card": "Impending Disaster",
   "clause": "if there are seven or more lands on the battlefield, sacrifice this enchantment and destroy all lands",
   "ignored": [
@@ -1673,6 +1746,13 @@
   "clause": "untap all creatures defending player controls",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Jilt",
+  "clause": "return target creature to its owner's hand. if this spell was kicked, it deals 2 damage to another target creature",
+  "ignored": [
+   "spell"
   ]
  },
  {
@@ -1881,6 +1961,13 @@
   "clause": "if this creature's power is 1 or more, it gets -1/-0 until end of turn and put a -0/-1 counter on target creature blocking or blocked by this creature",
   "ignored": [
    "creature"
+  ]
+ },
+ {
+  "card": "Life // Death",
+  "clause": "all lands you control become 1/1 creatures until end of turn. they're still lands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -2233,6 +2320,13 @@
   ]
  },
  {
+  "card": "Necra Sanctuary",
+  "clause": "if you control a green or white permanent, target player loses 1 life. if you control a green permanent and a white permanent, that player loses 3 life instead",
+  "ignored": [
+   "or"
+  ]
+ },
+ {
   "card": "Needle Storm",
   "clause": "needle storm deals 4 damage to each creature with flying",
   "ignored": [
@@ -2404,6 +2498,13 @@
   ]
  },
  {
+  "card": "Orim's Thunder",
+  "clause": "destroy target artifact or enchantment. if this spell was kicked, it deals damage equal to that permanent's mana value to target creature",
+  "ignored": [
+   "spell"
+  ]
+ },
+ {
   "card": "Orim's Touch",
   "clause": "prevent the next 2 damage that would be dealt to any target this turn. if this spell was kicked, prevent the next 4 damage that would be dealt to that permanent or player this turn instead",
   "ignored": [
@@ -2457,6 +2558,13 @@
   "clause": "destroy all green creatures. they can't be regenerated",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Pernicious Deed",
+  "clause": "destroy each artifact, creature, and enchantment with mana value x or less",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -2518,6 +2626,13 @@
  {
   "card": "Planar Collapse",
   "clause": "if there are four or more creatures on the battlefield, sacrifice this enchantment and destroy all creatures. they can't be regenerated",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Planar Despair",
+  "clause": "all creatures get -1/-1 until end of turn for each basic land type among lands you control",
   "ignored": [
    "all"
   ]
@@ -2662,6 +2777,13 @@
   "clause": "each player may tap any number of untapped white creatures they control. for each creature tapped this way, that player chooses up to two plains. then destroy all plains that weren't chosen this way by any player",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Raka Sanctuary",
+  "clause": "if you control a white or blue permanent, this enchantment deals 1 damage to target creature. if you control a white permanent and a blue permanent, this enchantment deals 3 damage instead",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -3476,6 +3598,14 @@
   ]
  },
  {
+  "card": "Strength of Night",
+  "clause": "creatures you control get +1/+1 until end of turn. if this spell was kicked, zombie creatures you control get an additional +2/+2 until end of turn",
+  "ignored": [
+   "spell",
+   "creatures"
+  ]
+ },
+ {
   "card": "Stromgald Spy",
   "clause": "you may have defending player play with their hand revealed for as long as this creature remains on the battlefield. if you do, this creature assigns no combat damage this turn",
   "ignored": [
@@ -3506,6 +3636,13 @@
  {
   "card": "Sunder",
   "clause": "return all lands to their owners' hands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Suppress",
+  "clause": "target player exiles all cards from their hand face down. at the beginning of the end step of that player's next turn, that player returns those cards to their hand",
   "ignored": [
    "all"
   ]
@@ -3736,6 +3873,13 @@
  {
   "card": "Tranquil Grove",
   "clause": "destroy all other enchantments",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Tranquil Path",
+  "clause": "destroy all enchantments",
   "ignored": [
    "all"
   ]
@@ -4207,6 +4351,13 @@
   "clause": "search your library for a dragon permanent card, put that card onto the battlefield, then shuffle. that dragon gains haste until end of turn. exile it at the beginning of the next end step",
   "ignored": [
    "permanent"
+  ]
+ },
+ {
+  "card": "Zombie Boa",
+  "clause": "choose a color. whenever this creature becomes blocked by a creature of that color this turn, destroy that creature",
+  "ignored": [
+   "creature"
   ]
  },
  {

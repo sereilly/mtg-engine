@@ -98,6 +98,7 @@
     "Feral Shadow",
     "Fighting Drake",
     "Flying Men",
+    "Gaea's Skyfolk",
     "Misshapen Fiend",
     "Phantom Monster",
     "Roc of Kher Ridges",
@@ -252,6 +253,13 @@
     "Wolverine Pack"
   ],
   [
+    "Angelfire Crusader",
+    "Firescreamer",
+    "Flame Spirit",
+    "Ridgeline Rager",
+    "Storm Shaman"
+  ],
+  [
     "Black Scarab",
     "Blue Scarab",
     "Green Scarab",
@@ -384,12 +392,6 @@
     "Shivan Dragon"
   ],
   [
-    "Firescreamer",
-    "Flame Spirit",
-    "Ridgeline Rager",
-    "Storm Shaman"
-  ],
-  [
     "Goblin Chariot",
     "Lightning Elemental",
     "Raging Goblin",
@@ -406,6 +408,12 @@
     "Obsianus Golem",
     "Phyrexian Hulk",
     "Phyrexian Walker"
+  ],
+  [
+    "Prodigal Sorcerer",
+    "Razorfin Hunter",
+    "Rootwater Hunter",
+    "Zuran Spellcaster"
   ],
   [
     "Ardent Militia",
@@ -496,11 +504,6 @@
     "Metathran Soldier",
     "Phantom Warrior",
     "Tidal Kraken"
-  ],
-  [
-    "Prodigal Sorcerer",
-    "Rootwater Hunter",
-    "Zuran Spellcaster"
   ],
   [
     "Ramosian Commander",
@@ -608,6 +611,10 @@
     "Llanowar Vanguard"
   ],
   [
+    "Bog Gnarr",
+    "Glade Gnarr"
+  ],
+  [
     "Bog Rats",
     "Rampart Crawler"
   ],
@@ -660,6 +667,14 @@
     "Diabolic Machine"
   ],
   [
+    "Coalition Honor Guard",
+    "Standard Bearer"
+  ],
+  [
+    "Consume Strength",
+    "Steal Strength"
+  ],
+  [
     "Crazed Skirge",
     "Volcanic Dragon"
   ],
@@ -698,6 +713,10 @@
   [
     "Defiant Falcon",
     "Ramosian Sky Marshal"
+  ],
+  [
+    "Desert Twister",
+    "Vindicate"
   ],
   [
     "Dromosaur",
@@ -892,8 +911,16 @@
     "Nature's Revolt"
   ],
   [
+    "Llanowar Dead",
+    "Riven Turnbull"
+  ],
+  [
     "Mana Leech",
     "Mole Worms"
+  ],
+  [
+    "Mask of Law and Grace",
+    "Shield of Duty and Reason"
   ],
   [
     "Mawcor",
@@ -986,6 +1013,10 @@
   [
     "Reckless Ogre",
     "Rogue Kavu"
+  ],
+  [
+    "Reef Shaman",
+    "Sea Snidd"
   ],
   [
     "Revitalize",

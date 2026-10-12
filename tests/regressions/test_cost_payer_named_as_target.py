@@ -107,19 +107,31 @@ def test_a_cost_only_spell_resolves_with_its_payer_named_on_the_target_channel(n
     ]
     assert payers, f"the rig holds nothing that pays for {name}"
     payer = game.permanent_at(payers[0]["seat"], payers[0]["index"])
+    # A counted cost names as many payers as it takes ("sacrifice five lands",
+    # Gaea's Balance - the first cost-only spell in the pool to count, and a
+    # named list shorter than the price is refused since CR 601.2h's "partial
+    # payments are not allowed" was held to a named payer). The count is the
+    # picker's own; the first payer is still the one on the target channel.
+    owed = int(game.cast_target_spec(0, card).get("count") or 1)
+    assert len(payers) >= owed, f"the rig holds {len(payers)} of {owed} payers for {name}"
+    paying = [
+        game.permanent_at(entry["seat"], entry["index"]) for entry in payers[:owed]
+    ]
 
     result = game.cast_from_hand(
         0, name, target_player_index=0,
         target_permanent_index=payers[0]["index"],
         target_permanent_ids=[payer.permanent_id],
         cost_permanent_index=payers[0]["index"],
-        cost_permanent_ids=[payer.permanent_id],
+        cost_permanent_ids=[permanent.permanent_id for permanent in paying],
         x_value=1 if "{X}" in (card.mana_cost or "") else None,
     )
     assert result.supported, result.details
     resolve_stack(game)
 
-    assert not game.is_on_battlefield(payer), "the cost was paid"
+    assert not any(game.is_on_battlefield(permanent) for permanent in paying), (
+        "the cost was paid"
+    )
     assert not any("every target is illegal" in line for line in game.log), [
         line for line in game.log if name in line
     ]

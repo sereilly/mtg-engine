@@ -15,9 +15,9 @@ Alliances (144), Mirage (335), Visions (167), Fifth Edition (434),
 Weatherlight (167), Tempest (335), Stronghold (143), Exodus (143),
 Urza's Saga (335), Urza's Legacy (143), Classic Sixth Edition (335),
 Urza's Destiny (143), Mercadian Masques (335), Nemesis (143), Prophecy (143),
-Invasion (335), Planeshift (143), Seventh Edition (335) and Core Set 2021
-(285), 4,781 unique cards, all classified as supported.
-**Thirty-one sets, and their sizes are the whole spread**: 4ED and 5ED are pure
+Invasion (335), Planeshift (143), Seventh Edition (335), Apocalypse (143)
+and Core Set 2021 (285), 4,924 unique cards, all classified as supported.
+**Thirty-two sets, and their sizes are the whole spread**: 4ED and 5ED are pure
 reprint sets, every one of their cards already in the pool, so they are the two
 sets that ship without implementing a card, and **6ED is the third of that shape
 and the first where it is only *almost* true** — 333 of its 335 were already
@@ -43,7 +43,8 @@ fourth — 167 of 167 new, sharing not one oracle_id with *any* set in the pool.
 seventh, Nemesis the eighth and Prophecy the ninth**, and all five are clean the same way: 167 of
 167, 143 of 143, 143 of 143, 143 of 143 and 143 of 143 new, each sharing with every set before it not one oracle_id **and
 not one card name**. **Planeshift is one card short of a tenth**: 142 of its 143 are new, and the one that is not is
-the whole of its promotion story (below). `set_progress.json` records UDS with 142 new cards and it
+the whole of its promotion story (below). **Apocalypse is the tenth**: 143 of 143 new, sharing
+not one oracle_id and not one card name with the thirty-one sets before it. `set_progress.json` records UDS with 142 new cards and it
 brought 143, for 6ED's reason one column over — that number counts against the
 whole release line and this manifest is a subset of it. **Mirage breaks that run** — 313 of its 335 are new and 22 were
 already here, which makes it the
@@ -112,6 +113,21 @@ the prefix guard green, the printing-order guard failing at index 29 and
 nothing else. Rehearsed at the ingest and again at the promotion with the
 promotion's own script; `test_7ed_cards.py` asserts the eighteen cards that
 originate in the set, seventeen new ones and that one.
+
+**Apocalypse is Exodus's shape again - clean, and measured rather than
+inferred.** It is the third set of Invasion's block and shares nothing with
+the pool at all, so its index (30) can move no card's origin; that was
+computed at the ingest and rehearsed at both ends at the promotion, where
+the wrong-end insert turned red the printing-order guard and nothing else.
+It arrived at 65.7% supported, Planeshift's number to the decimal, for
+Planeshift's reason: a block-mate inherits mechanics and not templates. It
+brought no machinery. What it brought is three questions about an
+*announcement* that the engine could not ask: a target an opponent **must**
+choose (the Flagbearers, `engine/target_requirements.py`), a spell named
+*beside* a permanent in one cast (Suffocating Blast, a roles announcement
+with a stack slot) or *instead of* one (Illusion's "target spell or
+permanent"), and which of two kickers a permanent was kicked **with** as it
+enters (the five Volvers).
 What Planeshift brought is the *second half* of what Invasion built: a kicker
 whose cost is not mana, two kickers on one card (CR 702.33b) and the question
 "which one was paid" (CR 702.33f), domain sizing a *cost*, and no machinery
@@ -128,7 +144,7 @@ Rehearsed at the wrong end before the real promotion, the prefix guard passed
 and `test_the_shipped_sets_are_in_printing_order` failed at index 20 — which is
 exactly the division of labour those two guards are documented to have, observed
 rather than assumed. Which is why
-the per-set totals sum to far more than 4,781 — they are printings (7,263 of
+the per-set totals sum to far more than 4,924 — they are printings (7,406 of
 them). Alliances was the
 first set to reach 100% with **zero name-keyed hooks**, across all 144, Visions
 is the second across all 167, **Weatherlight is the third** across all 167
@@ -169,8 +185,19 @@ object modes), 268 of 278 entry triggers resolved inline where CR 603.3 puts
 them on the stack, colour effects ordered by what kind they were rather than by
 timestamp (CR 613.7), a castable highlight that glowed over 3,543 unpayable
 land-and-cost pairs, and 28 shipped "as this enters, choose…" cards whose
-prompt a human player could not answer in the browser at all.
-Reliance is **1.1% of supported cards**, 52 of 4,781, down from 53 of 3,715 —
+prompt a human player could not answer in the browser at all — and
+**Apocalypse is the thirteenth**, 143 of 143 across nine parallel groups in
+one wave and four in a second, adding none. Wave 1 landed 48 of its 49
+cards and drove every one of the 94 that arrived compiling, nine of which
+mis-played; wave 2 took the one card left with its neighbour and spent
+three groups on what wave 1 had measured: CR 608.2b never asked of an
+ability (479 of 622 single-target activations acted wrongly once their
+target was illegal, 185 of them on a bystander), five prompts the set's own
+cards armed and a person could not answer in the browser, and seven
+shipped defects each with a card of the set standing on it (a named cost
+permanent silently replaced on 43 of 43 spells; a cast trigger finding its
+spell by card rather than by stack object).
+Reliance is **1.1% of supported cards**, 52 of 4,924, down from 53 of 3,715 —
 and Mercadian Masques is the first set in four to move the numerator, *down*:
 Food Chain is the second card to print Metamorphosis' cost-record-plus-spend-
 restriction pair, which that hook's own comment said no second card printed.
@@ -202,7 +229,7 @@ Dark at 47.9%, Fourth Edition at 100%, Ice Age at 49.3%, Fallen Empires at
 67.6%, Homelands at 66.1%, Fifth Edition at 100%, Alliances at 43.1%, Mirage
 at 54.9%, Visions at 59.3%, Weatherlight at 59.9%, Tempest at 67.8%,
 Stronghold at 67.8% again, Exodus at 63.6%, Classic Sixth Edition at 100%,
-Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7% and Seventh Edition at 99.4%, and all twenty-three were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
+Urza's Destiny at 69.9%, Nemesis at 66.4%, Prophecy at 58.0%, Invasion at 66.0%, Planeshift at 65.7%, Seventh Edition at 99.4% and Apocalypse at 65.7%, and all twenty-four were promoted to `sets` once every card was, which is the role working as designed rather than a role nobody uses. 4ED is the degenerate case that shows what the role is
 *for* rather than an exception to it: it entered `measured` fully supported and
 left the same day, and the ingest still paid — a guard proved itself unable to
 tell the roles apart for an all-reprint set, which is a finding only the
@@ -664,6 +691,16 @@ adding entries, not editing dispatch**:
   `tests/engine/test_draw_seam.py`, whose allow-list holds only the pregame
   draws (CR 103.4: no battlefield, so no replacement can exist) and names them
   with that reason.
+- **Discarding is one seam, and the event says who caused it.**
+  `Game._discard_card` raises the CR 614 `discard` event and announces the
+  discard; the event carries `cause_seat` (`discard_cause_seat`: the seat
+  resolving, or the one a prompt recorded when it was armed), because "a
+  spell or ability an opponent controls causes you to discard this card"
+  (Dodecapod's replacement, Psychic Purge's trigger) is a question about the
+  cause and a seat answering a prompt is no longer resolving anything. Seven
+  shipped ways of discarding went round it until Apocalypse — Megrim never
+  fired for Wand of Ith, Sirocco or Balance's hand half, and Psychic Purge
+  never triggered off Coercion.
 - `engine/mana_payment.py` — **whether a cost can be paid from the board, and
   how**. Two different questions: casting and activating spend the *pool*
   (`_pay_mana_cost`), because producing mana is the player's own prior action;
@@ -672,7 +709,13 @@ adding entries, not editing dispatch**:
   augmenting-path matching of coloured pips to lands, because a greedy pick
   under-reports a board that could pay and CR 601.2h asks what a player is
   *able* to do). A cost is a symbol dict everywhere — `generic_cost(n)` is the
-  one line that turns a legacy number into one.
+  one line that turns a legacy number into one. **The planner is told who is
+  paying** (`plan_payment(..., payer=)`): a seat holding a CR 106.6 spending
+  permission (Celestial Dawn, Sunglasses of Urza, False Dawn's turn-long
+  one) is planned by one matching over floating units and lands, and an AST
+  guard fails a planner call that names no payer — under Celestial Dawn
+  1,559 of 2,054 payable effect costs were refused while the castable
+  highlight said yes.
 - `engine/pending_choices.py` — every *other* decision a seat owes part-way
   through a spell, an ability or a turn step (a discard, a library search,
   Balance's removals, Power Sink's payment). One `PendingChoice` queue on
@@ -701,6 +744,16 @@ adding entries, not editing dispatch**:
   to the resolution scratchpad and nowhere else — no log line, no payload
   field for any other viewer — and a test serialises the state for the other
   seat, a spectator and the answering seat between answers.
+  **A private look stays private in the log, and its owner orders what it
+  puts back.** Every viewer is sent the whole log, so a line names a card a
+  look kept or a search found only where the table may know it
+  (`Game.find_is_public`: a printed reveal, a public destination) — ten
+  looks and seven tutors had told the opponent which card went to hand.
+  And "the rest on the bottom of your library in any order" is the looker's
+  order to choose (CR 401.4): `Game.offer_library_bottom_order` arms the
+  `reorder_library` prompt with `position: "bottom"` for an interactive
+  seat, for the look-and-pick family and the Apocalypse recruiters alike.
+  Abundance's is the one still not asked; ROADMAP has why.
 - `engine/commander.py` — CR 903, the Commander variant and its Brawl option
   (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
   `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is
@@ -807,7 +860,18 @@ adding entries, not editing dispatch**:
   rather than a bool. `target_was_kicked` asks the question of the **targeted**
   spell: Ertai's Trickery ("Counter target spell if it was kicked") compiled
   supported and asked whether *it* had been kicked, so it never countered
-  anything.
+  anything. **"Kicked with its {1}{U} kicker" is also an entry state**
+  (`enter_effects.kicked_entry`, the five Volvers): a keyed line applies only
+  when its key is in `KICKED_WITH`, two such lines may both apply, and a
+  copy of a kicked Volver was not kicked (CR 707.2). A kicker's `{X}` may
+  carry a spend restriction (`OptionalManaCost.x_one_of_each_color`,
+  Emblazoned Golem), enforced by setting aside one real unit of each colour
+  — and a card printing that sentence over an X nothing charges that way is
+  refused by the support gate. **A permanent named to pay an additional
+  cost pays it, or the spell is not cast** (CR 601.2h;
+  `casting._named_cast_cost_refusal`, the cast-side twin of the activation
+  gate's `_named_cost_refusal`): 43 of 43 spells had substituted a default
+  for an illegal named payer. A bare cast still chooses one.
 - `engine/cast_prohibitions.py` — **may this card be cast at all** (CR 601.3):
   the run of refusals the cast path makes before any cost, as one table in the
   order it logs them, behind `cast_prohibition(game, seat, card)`. Three
@@ -923,10 +987,50 @@ adding entries, not editing dispatch**:
   accepted a seat the picker does not offer, a Lightning Bolt reached a
   player behind an Ivory Mask — on a decline ROADMAP carried for a reason
   (`target_player_index` is ambiguous) that `stack_targets` had answered two
-  sets earlier. Both are instants and sorceries only, and the shapes they
-  still decline — a triggered ability's targets, an Aura or an ambiguous
-  graveyard target, a roles spell's player at resolution — are in
-  `ROADMAP.md` with the reason each is a separate round.
+  sets earlier. The announcement gates are a spell's; **the resolution gate
+  is asked of every object whose targets somebody chose** — a spell, an
+  activated ability (`StackItem.activated`) and a triggered ability whose
+  target was chosen through its own picker (`StackItem.targets_chosen`),
+  the last two through `ability_target_verdicts`, the activation picker's
+  list asked again. It was spells only until Apocalypse: 479 of 622
+  single-target activations did something wrong with an illegal target
+  (Savage Gorilla drew its card; 185 hit a bystander). **And each target is
+  judged separately in an object that still resolves** —
+  `legality.blank_illegal_resolution_targets` rewrites every illegal slot
+  before any instruction runs, so a handler meets a departed target rather
+  than a stale index (42 of 48 multi-target spells had acted on a target
+  given shroud in response). A trigger target *stamped* by a fire site, or
+  defaulted while a permanent is on its way to a graveyard
+  (`Game.departing`), is not marked and not judged; that and the other
+  declines — an ability printing "target" twice with one derived slot, a
+  roles slot that is not a permanent, an Aura or an ambiguous graveyard
+  target — are in `ROADMAP.md` with the reason each is a separate round.
+  **A spell may be one slot of several.** "Counter target spell and … deals
+  3 damage to target creature" (Suffocating Blast) is a roles announcement
+  with a stack role (`targeting.role_is_stack`): both targets are owed at
+  the cast, each half survives the other's target becoming illegal, and
+  the wire carries `target_role_refs` with a `stack_index`. "Target spell
+  or permanent" is one slot in either zone (`spell_or_permanent`, the
+  Laces' picker — the noun phrase used to keep only the permanent). A
+  stack target named for an object that targets nothing on the stack is
+  refused (`legality.stray_stack_target_refusal`; it was accepted and
+  ignored by 888 of 888 casts). And **a slot list of two printed targets
+  is a count, not a ceiling** (`targeting.slot_list_is_exact`).
+- `engine/target_requirements.py` — **a target an opponent must choose**
+  (the Flagbearers: "…that player must choose at least one Flagbearer on
+  the battlefield if able"). A text-keyed table whose noun is payload, and
+  two gates over a *whole announcement*
+  (`Game.cast_target_requirement_refusal`,
+  `activation_target_requirement_refusal`), asked before anything is paid.
+  Deliberately **not** a narrowing inside `_enumerate_targets`: that list
+  also serves resolution, retargets, copies and every trigger, all of which
+  the card's ruling exempts. "If able" is the un-narrowed list, so
+  protection, shroud, a wrong type and a player-only spell bind nothing. A
+  one-slot picker is narrowed to the Flagbearers; a several-slot, divided
+  or roles picker keeps its list and carries `required_targets`, which the
+  client shows and holds its confirm on. The AI asks the same gate, so it
+  re-aims burn at the Flagbearer and does not propose a pump it would have
+  to gift. Held by `tests/engine/test_target_requirement_census.py`.
 - `engine/stack_targets.py` — **which targets a stack object chose**, and how
   they may be changed (CR 115.7). `chosen_targets(item)` reads every
   announcement channel a `StackItem` carries against the object's derived
@@ -966,6 +1070,18 @@ adding entries, not editing dispatch**:
   defender and a Magical Hack rewrote a word nothing then read; that guard
   ratchets both fields too, and a keyword additionally wants `_has_keyword`,
   which asks layer 6 as well.
+  **Its folds are memoised by what the card *is*, never by `id()`.** A card
+  with lines granted, struck or stripped is built once and kept, keyed by
+  `copies.card_identity` — the card's printed fields. Four of those memos
+  were keyed by `id(card)` until Apocalypse, and CPython hands a freed
+  object's address to the next allocation: a creature given an ability by
+  an Aura read as *another creature* — its name, its power, its toughness —
+  whenever a card object freed earlier in the process had been granted the
+  same words. The catalog's definitions never die; a token, a token copy
+  and a test's invented card do. It surfaced as one "flaky" test in a full
+  run and was named by replaying that test's scenario after every other
+  test. `tests/regressions/test_derived_card_memo_identity.py` fails any
+  module-level dict under `engine/` keyed by an `id()`.
   **Layer 5 is ordered by timestamp (CR 613.7), and a colour is written through
   one API.** `engine/color_changes.change_color` puts the stamp inside the
   write, and `Permanent.timestamp` (CR 613.7d; re-stamped on attach, 613.7e)
@@ -1231,6 +1347,14 @@ adding entries, not editing dispatch**:
   sites. Where a draw, a life gain or a sacrifice has no single call site, the
   announcement goes on the **state-based sweep** over the record every path
   already feeds (`mixins/game_ending.py`), not on the call sites.
+- **A cast trigger's "it" is a stack object, not a card.** A deck repeats one
+  immutable `CardDefinition` per copy, so with two copies of one spell on
+  the stack a trigger that looked its spell up by card found the first: the
+  cast events carry `cast_item` beside `cast_card`, and
+  `handlers/_common.triggering_spell` is the one reader ("counter it", the
+  copy handler, Ice Cave's price). Eight of nine such cards acted on the
+  earlier spell. The class is the hand's and the graveyard's identity
+  problem, found on the stack.
 - **A permanent's entry trigger is a stack object** (CR 603.3), on every road
   onto the battlefield: `resolution._entry_trigger_triggers` goes through
   `_enqueue_triggered_ability` like every other trigger. It was resolved
