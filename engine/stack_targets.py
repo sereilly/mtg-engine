@@ -647,7 +647,6 @@ def _is_triggered(item: "StackItem") -> bool:
 
 def _candidates(
     game: "Game", item: "StackItem", announcement: _Announcement, current: ChosenTarget,
-    *, card=None,
 ) -> "list[ChosenTarget] | None":
     """Every target *current*'s slot could legally have been (CR 115.7a), read
     through ``_enumerate_targets`` — the one list the picker and the two
@@ -663,11 +662,12 @@ def _candidates(
     would ignore, and a list wider than the card prints is the one thing a
     change must never be offered from.
 
-    *card* is the card the announcement was enumerated for, where that is not
-    the object's own: ``legality.activation_target_refusal`` reads a
-    permanent's **effective** card (a Clone's abilities are the copied
-    creature's, CR 707.2), and the rule that re-asks that list as the ability
-    resolves (CR 608.2b) has to ask about the same one.
+    An **activated** ability is enumerated for its source's *effective* card,
+    which is the card ``legality.activation_target_refusal`` enumerated its
+    announcement for (a Clone's abilities are the copied creature's, CR
+    707.2). The rule that re-asks this list as the ability resolves (CR
+    608.2b, ``legality.ability_target_verdicts``) reads it here, and has to be
+    asking about the same card the announcement was.
     """
     from .legality import targeting_instruction
     from .mixins.stack.resolution import _controller_narrowing_is_in
@@ -688,8 +688,12 @@ def _candidates(
             return None
         if triggered and not _controller_narrowing_is_in(spec, instruction):
             return None
+    card = item.card
+    if is_ability and getattr(item, "activated", False):
+        source = getattr(item, "source_permanent", None)
+        card = getattr(source, "effective_card", None) or item.card
     entries = game._enumerate_targets(
-        item.caster_index, item.card if card is None else card, spec,
+        item.caster_index, card, spec,
         for_cast=not is_ability,
         ability_instruction=(
             targeting_instruction(instruction) if is_ability and instruction is not None else None

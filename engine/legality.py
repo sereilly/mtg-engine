@@ -4674,14 +4674,6 @@ class LegalityMixin:
         if announced is None:
             return None
         source = getattr(item, "source_permanent", None)
-        # The card each announcement was enumerated for. An activation reads
-        # its permanent's **effective** card (``activation_target_refusal``:
-        # a Clone's abilities are the copied creature's, CR 707.2); a trigger
-        # was enumerated for the card on its stack object
-        # (``_trigger_target_candidates``).
-        card = item.card
-        if getattr(item, "activated", False):
-            card = getattr(source, "effective_card", None) or item.card
         verdicts: list[tuple] = []
         for announcement in announced:
             targets = _read(self, item, announcement)
@@ -4691,6 +4683,14 @@ class LegalityMixin:
             if spec.get("kind") == ROLES_TARGET_KIND:
                 if any(target.kind != "permanent" for target in targets):
                     return None
+                # The card the announcement was enumerated for: an activation
+                # reads its permanent's **effective** card (a Clone's abilities
+                # are the copied creature's, CR 707.2), a trigger the card on
+                # its stack object — ``stack_targets._candidates`` draws the
+                # same line for the flat announcement below.
+                card = item.card
+                if getattr(item, "activated", False):
+                    card = getattr(source, "effective_card", None) or item.card
                 role_specs = spec_roles(spec)
                 for target in targets:
                     permanent = self.permanent_by_id(target.permanent_id)
@@ -4710,7 +4710,7 @@ class LegalityMixin:
             instances = _printed_target_instances(item)
             if instances is not None and instances != 1:
                 return None
-            candidates = _candidates(self, item, announcement, targets[0], card=card)
+            candidates = _candidates(self, item, announcement, targets[0])
             if candidates is None:
                 return None
             for target in targets:
