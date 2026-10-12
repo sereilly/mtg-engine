@@ -77,6 +77,7 @@ from .lowering.loops import (
     _lower_for_each,
     _lower_for_each_cost_paid,
     _lower_for_each_counters_placed,
+    _lower_for_each_counter_removed,
     _lower_for_each_life_lost,
     _lower_for_each_matching,
     _lower_for_each_player,
@@ -595,6 +596,13 @@ def lower_statement(
         # exactly as the three object-shaped ones are.
         if isinstance(statement.iterator, ast.CountersPlacedThisWay):
             return _lower_for_each_counters_placed(
+                statement, repeated(), produced
+            )
+        # "For each **delay counter removed this way**" (Delaying Shield) — a
+        # count off this resolution's scratchpad, refused without the step
+        # that wrote it.
+        if isinstance(statement.iterator, ast.CountersRemovedThisWay):
+            return _lower_for_each_counter_removed(
                 statement, repeated(), produced
             )
         # "For each **card less than two a player draws this way**" (Truce) —

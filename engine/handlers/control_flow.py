@@ -4744,8 +4744,17 @@ def for_each(game: Game, instruction: OracleInstruction, context: OracleExecutio
     # is the only thing that can answer. Read beside the two counted forms
     # above, before either branch that wants a board to scan.
     repeat_cost = filters.get("repeat_from_cost")
+    # "For each **delay counter removed this way**" (Delaying Shield) — the
+    # fourth number, and the plainest: a count an earlier step of this same
+    # effect wrote into the resolution scratchpad, with no seat and no base.
+    # Read once, before the first repetition, for the snapshot rule above: a
+    # body that removed more counters must not lengthen its own loop.
+    repeat_result = filters.get("repeat_from_result")
     seat_set = filters.get("players")
-    if repeat_cost is not None:
+    if repeat_result is not None:
+        times = int(context.results.get(str(repeat_result), 0) or 0)
+        matched = [_A_REPETITION] * max(0, times)
+    elif repeat_cost is not None:
         paid = (context.choices or {}).get("additional_costs_paid") or {}
         times = int(paid.get(str(repeat_cost), 0) or 0)
         matched = [_A_REPETITION] * max(0, times)

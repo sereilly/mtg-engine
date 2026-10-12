@@ -39,7 +39,8 @@ from typing import Union
 
 from .conditions import Condition
 from .conditions import (ChosenThisWay, DiedThisTurn, DiedThisWay,
-                         CountersPlacedThisWay, EachAdditionalCostPaid,
+                         CountersPlacedThisWay, CountersRemovedThisWay,
+                         EachAdditionalCostPaid,
                          EachLifeLost, ExiledThisWay)
 from .costs import Cost
 from ._core import (
@@ -725,7 +726,8 @@ class ForEach:
     """
     iterator: (ObjectFilter | PlayerRef | DiedThisTurn | DiedThisWay
                 | ExiledThisWay | ChosenThisWay | EachLifeLost
-                | EachAdditionalCostPaid | CountersPlacedThisWay)
+                | EachAdditionalCostPaid | CountersPlacedThisWay
+                | CountersRemovedThisWay)
     effect: "Statement"
 
 

@@ -488,6 +488,207 @@ def test_w1g5_ground_seal_draws_and_stops_every_way_of_targeting_a_graveyard_car
     _w1g5_resolve_stack(game)
     assert returned.supported and bears in game.players[0].hand
 
+
+# Nefarious Lich ---------------------------------------------------------------
+
+
+def _w1g5_lich_table(catalog_by_name, set_pool, interactive=()):
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand1=["Lightning Bolt"] * 3,
+        interactive=interactive,
+    )
+    lich = _w1g5_put(game, 0, "Nefarious Lich")
+    game.players[0].graveyard = [
+        catalog_by_name[name]
+        for name in ("Grizzly Bears", "Hill Giant", "Forest", "Sol Ring", "Island")
+    ]
+    game.active_player_index = 1
+    return game, lich  # _w1g5_lich_table
+
+
+def test_w1g5_nefarious_lich_turns_damage_into_cards_exiled_from_its_controllers_graveyard(
+    catalog_by_name, set_pool,
+):
+    """"If damage would be dealt to you, exile that many cards from your
+    graveyard instead. If you can't, you lose the game." Implemented by
+    nothing at the ingest — the card compiled supported and its controller
+    simply took the damage. A CR 614 substitution: no life is lost and three
+    cards go; with two cards left against three damage the player loses on the
+    spot (CR 104.3e). "To **you**" is the Lich's controller, so the opponent's
+    face is an ordinary face."""
+    game, _lich = _w1g5_lich_table(catalog_by_name, set_pool)
+    alice, bob = game.players
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert alice.life == 20
+    assert sorted(card.name for card in alice.exile) == [
+        "Forest", "Grizzly Bears", "Hill Giant",
+    ], "a seat nobody asks gives up the first three in pile order"
+    assert [card.name for card in alice.graveyard] == ["Sol Ring", "Island"]
+    assert not alice.lost
+
+    assert _w1g5_dealt(game, bob, 3, catalog_by_name["Lightning Bolt"], 1) == 3
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert alice.lost and alice.life == 20
+    assert any("could not exile 3 card(s)" in line and "104.3e" in line
+               for line in game.log)
+
+
+def test_w1g5_nefarious_lich_asks_which_cards_and_holds_the_spell_until_answered(
+    catalog_by_name, set_pool,
+):
+    """Which cards go is the player's choice, and in this block it matters. An
+    interactive seat is asked through the existing "exile N cards from that
+    graveyard" pick; the Lightning Bolt stays on the stack until it is
+    answered (CR 608.2), a short answer is refused, and the chosen three are
+    the three exiled."""
+    game, _lich = _w1g5_lich_table(catalog_by_name, set_pool, interactive={0})
+    alice = game.players[0]
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert [(c.kind, c.player_index, c.data["count"]) for c in game.pending_choices] == [
+        ("graveyard_exile_pick", 0, 3),
+    ]
+    assert len(game.stack) == 1 and game.waiting_prompt() is not None
+    assert alice.life == 20 and len(alice.graveyard) == 5
+
+    assert not game.confirm_graveyard_exile_pick(0, [0, 1]), "three are owed"
+    assert game.confirm_graveyard_exile_pick(0, [4, 2, 0])
+    assert [card.name for card in alice.graveyard] == ["Hill Giant", "Sol Ring"]
+    assert sorted(card.name for card in alice.exile) == [
+        "Forest", "Grizzly Bears", "Island",
+    ]
+    _w1g5_resolve_stack(game)
+    assert game.stack == [] and game.pending_choices == []
+
+
+def test_w1g5_nefarious_lich_pays_only_for_what_a_shield_let_through_and_counts_what_it_owes(
+    catalog_by_name, set_pool,
+):
+    """CR 616.1: prevention and the Lich contend for one event, and the
+    default order is the one its controller would choose — the shield first,
+    so the graveyard pays only for the remainder. And two events before an
+    answer must not both count the same cards: with five cards in the pile and
+    a pick of three already owed, three more damage cannot be paid."""
+    from engine.shields import END_OF_TURN, PREVENT_NEXT_N, Shield, shields_on
+
+    game, _lich = _w1g5_lich_table(catalog_by_name, set_pool)
+    alice = game.players[0]
+    shields_on(alice).append(
+        Shield(kind=PREVENT_NEXT_N, amount=2, lifetime=END_OF_TURN)
+    )
+    assert _w1g5_dealt(game, alice, 3, catalog_by_name["Lightning Bolt"], 1) == 0
+    assert len(alice.exile) == 1 and len(alice.graveyard) == 4
+
+    game, _lich = _w1g5_lich_table(catalog_by_name, set_pool, interactive={0})
+    alice = game.players[0]
+    bolt = catalog_by_name["Lightning Bolt"]
+    assert _w1g5_dealt(game, alice, 3, bolt, 1) == 0
+    assert not alice.lost and len(game.pending_choices) == 1
+    assert _w1g5_dealt(game, alice, 3, bolt, 1) == 0
+    assert alice.lost, "three of the five cards were already spoken for"
+
+
+def test_w1g5_nefarious_lich_draws_for_life_and_loses_when_it_leaves(
+    catalog_by_name, set_pool,
+):
+    """The two lines that already worked, driven: "If you would gain life,
+    draw that many cards instead." and "When this enchantment leaves the
+    battlefield, you lose the game." — leaves, not dies, so a bounce is
+    enough."""
+    game, lich = _w1g5_lich_table(catalog_by_name, set_pool)
+    game.players[1].hand = [game._w1g5_card("Boomerang")]
+    alice = game.players[0]
+
+    game._gain_life(alice, 3, source_name="a test")
+    assert alice.life == 20 and len(alice.hand) == 3
+
+    assert game.cast_from_hand(
+        1, "Boomerang", target_permanent_ids=[lich.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert alice.lost
+    assert game._w1g5_card("Nefarious Lich") in alice.hand
+
+
+# Delaying Shield --------------------------------------------------------------
+
+
+def _w1g5_delay_counters(permanent) -> int:
+    from engine.named_counters import counters_on
+
+    return counters_on(permanent, "delay")  # _w1g5_delay_counters
+
+
+def test_w1g5_delaying_shield_stores_damage_as_counters_even_when_it_cant_be_prevented(
+    catalog_by_name, set_pool,
+):
+    """"If damage would be dealt to you, put that many delay counters on this
+    enchantment instead." A replacement, not a prevention — the card's ruling:
+    "the damage is replaced and is not 'prevented'. This means it can replace
+    damage that 'can't be prevented'." So an event locked against prevention
+    still becomes counters, and an opponent's damage to *their own* face is
+    not this Shield's business."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=["Lightning Bolt"])
+    shield = _w1g5_put(game, 0, "Delaying Shield")
+    alice, bob = game.players
+    game.active_player_index = 1
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert alice.life == 20 and _w1g5_delay_counters(shield) == 3
+
+    dealt = game._deal_damage_to_player(
+        alice, 4, catalog_by_name["Lightning Bolt"], cant_be_prevented=True,
+    )
+    assert dealt == 0 and alice.life == 20 and _w1g5_delay_counters(shield) == 7
+    assert _w1g5_dealt(game, bob, 2, catalog_by_name["Lightning Bolt"], 1) == 2
+
+
+@_w1g5_pytest.mark.parametrize("plains, answers, life, untapped", [
+    (0, (), 17, 0),                       # nothing to pay with: three life
+    (4, (True, False, True), 19, 0),      # pay, decline, pay
+    (6, (True, True, True), 20, 0),       # pay for all three
+    (6, (False, False, False), 17, 6),    # decline all three
+])
+def test_w1g5_delaying_shield_asks_once_per_counter_at_upkeep(
+    catalog_by_name, set_pool, plains, answers, life, untapped,
+):
+    """"At the beginning of your upkeep, remove all delay counters from this
+    enchantment. For each delay counter removed this way, you lose 1 life
+    unless you pay {1}{W}." One offer per counter — each its own payment,
+    tapped out of the board — and a counter nobody can pay for is a life with
+    no question asked."""
+    game = _w1g5_table(catalog_by_name, set_pool, interactive={0})
+    shield = _w1g5_put(game, 0, "Delaying Shield")
+    for _ in range(plains):
+        _w1g5_put(game, 0, "Plains")
+    alice = game.players[0]
+    assert _w1g5_dealt(game, alice, 3, catalog_by_name["Lightning Bolt"], 1) == 0
+    assert _w1g5_delay_counters(shield) == 3
+
+    game.enforce_mana_costs = True
+    game.turn = 3
+    game.resolve_upkeep(0)
+    game.resolve_top_of_stack()
+    assert _w1g5_delay_counters(shield) == 0
+    assert [c.kind for c in game.pending_choices] == ["optional_pay"] * len(answers)
+    for accept in answers:
+        assert game.resolve_pending_choice(
+            "optional_pay", 0, accept=accept, card_name="Delaying Shield",
+        )
+    _w1g5_resolve_stack(game)
+
+    assert alice.life == life
+    assert sum(
+        1 for p in game.controlled_by(0)
+        if p.card.name == "Plains" and not p.tapped
+    ) == untapped
+    assert game.pending_choices == [] and game.stack == []
+
 # ==== end W1G5 ======================================================
 
 

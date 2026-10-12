@@ -394,6 +394,25 @@ class CountersPlacedThisWay:
     """
     counter: str
 @dataclass(frozen=True)
+class CountersRemovedThisWay:
+    """"**For each delay counter removed this way,** you lose 1 life unless you
+    pay {1}{W}." (Delaying Shield.)
+
+    :class:`EachLifeLost`'s shape — an iterator that is a *number*, not a set —
+    with the number read off this resolution's scratchpad: how many counters
+    the sentence in front of it took off ("remove all delay counters from this
+    enchantment"). One repetition per counter, so each is its own offer and
+    its own payment.
+
+    Not :class:`CountersPlacedThisWay`, which walks the *objects* a placement
+    put counters on and binds each one; nothing is bound here — the body means
+    what it would mean written once, run again.
+
+    ``counter`` is the printed kind. The lowering refuses the loop without a
+    producer, as every back-reference in this grammar is refused.
+    """
+    counter: str
+@dataclass(frozen=True)
 class EachAdditionalCostPaid:
     """"**For each additional {1}{R} you paid**, destroy another target
     artifact." (Primitive Justice, Taste of Paradise.)
