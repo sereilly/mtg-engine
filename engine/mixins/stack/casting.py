@@ -3319,12 +3319,13 @@ class SpellCastingMixin:
         play unblocked. A named id that is not a candidate — another seat's
         creature, an already-tapped one, a land the phrase does not name — is a
         refusal with nothing spent, never a slide onto a legal neighbour; so is
-        an id named twice, or more ids than the cost takes. Fewer than the cost
-        takes is a partial naming, and the payment fills the rest by the
-        default rule. (The counted *additional* cost did the same until
-        ``_named_cast_cost_refusal``, which refuses a short list — CR 601.2h
-        allows no partial payment. This path still tops one up; it is the same
-        question and a separate change.)
+        an id named twice, or more ids than the cost takes — **or fewer**.
+        CR 601.2h: "Partial payments are not allowed." A caster who names one
+        of Gush's two Islands has announced half a payment, and filling the
+        other half from the default pick returns an Island they did not name:
+        the same substitution as replacing the one they did. This path topped a
+        short list up until the counted *additional* cost's twin
+        (``_named_cast_cost_refusal``) had been refusing one for a set.
         """
         if not named_ids:
             return [], None
@@ -3339,6 +3340,12 @@ class SpellCastingMixin:
             return [], (
                 f"{card.name} can't be cast: its alternative cost takes "
                 f"{count} permanent(s), each named once (CR 601.2b)"
+            )
+        if len(named_ids) < count:
+            return [], (
+                f"{card.name} can't be cast: its alternative cost takes "
+                f"{count} permanent(s) to {verb} and {len(named_ids)} "
+                f"were named (CR 601.2h)"
             )
         candidates = self._additional_cost_candidates(
             caster_index, cost, giving_up=verb
