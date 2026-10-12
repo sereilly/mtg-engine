@@ -191,3 +191,102 @@ def test_the_shipped_guide_reads_the_same_way(catalog_by_name):
     guide = catalog_by_name["Elvish Spirit Guide"]
     ability = compile_card_oracle(guide).activated_abilities[0]
     assert ability.cost.exile_self and ability_functions_from(ability) == HAND
+
+
+# -- a mill cost, and what it makes of the ability ----------------------------
+
+def test_a_mill_cost_is_read_by_both_readers_and_refused_past_the_noun():
+    line = "{T}, Mill two cards: Draw a card."
+    parse_line(line)
+    assert parse_activated_ability_cost(line).mill_cards == 2
+    assert parse_activated_ability_cost("{T}, Mill a card: Add {C}.").mill_cards == 1
+    # "Mill a card from target player's library" is not this cost.
+    with pytest.raises(GrammarError):
+        parse_line("{T}, Mill a card from target player's library: Add {C}.")
+
+
+def test_only_a_loyalty_cost_or_a_mill_cost_takes_an_ability_out_of_cr_605_1a(
+    all_compiled_abilities,
+):
+    """``is_mana_ability`` asks the *effect* (CR 605.1a) and, of the cost, two
+    things only: a loyalty cost, and — on Millikin's ruling of 2026-08-05 — a
+    mill. Over every activated ability in both manifest roles, the answer for
+    the ability differs from the answer for its bare instruction on exactly
+    those. A third reason appearing here is a reading somebody added without
+    saying which rule it was."""
+    from engine.mana_payment import is_mana_ability
+
+    differing = [
+        (name, ability)
+        for name, ability in all_compiled_abilities
+        if is_mana_ability(ability) != is_mana_ability(ability.instruction)
+    ]
+    assert len(all_compiled_abilities) > 2000, len(all_compiled_abilities)
+    assert differing, "Chandra, Heart of Fire's loyalty mana ability is in the pool"
+    for name, ability in differing:
+        assert not is_mana_ability(ability), name
+        assert ability.cost.is_loyalty or ability.cost.mill_cards, name
+
+
+@pytest.fixture(scope="module")
+def all_compiled_abilities():
+    from engine.card_loader import load_cards, manifest_set_paths
+    from engine.faces import compilation_units
+
+    seen, found = set(), []
+    for card in compilation_units(load_cards(manifest_set_paths(include_measured=True))):
+        if card.name in seen:
+            continue
+        seen.add(card.name)
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        found.extend(
+            (card.name, ability) for ability in program.activated_abilities
+            if ability.instruction is not None
+        )
+    return found
+
+
+# -- a look that bins the rest is a move out of a library ---------------------
+
+def test_the_rest_of_a_look_reaches_the_graveyard_from_the_library(catalog_by_name):
+    """"Look at the top two cards of your library. Put one of them into your
+    hand and the other into your graveyard." (Waker of Waves.) The unchosen
+    card left a library, and the graveyard seam was not told so — so a watcher
+    of "put into your graveyard from your library" never saw it. Asked with an
+    invented watcher carrying that printed condition."""
+    watcher = _card(
+        "Test Archivist", "Enchantment",
+        "Whenever a land card is put into your graveyard from your library, "
+        "you gain 2 life.",
+    )
+    waker = catalog_by_name["Waker of Waves"]
+    forest, bolt = catalog_by_name["Forest"], catalog_by_name["Lightning Bolt"]
+    game = Game(players=[
+        PlayerState(
+            name="P1", battlefield=[Permanent(card=watcher)], hand=[waker],
+            # Both looked-at cards are lands, so whichever is kept the other
+            # one is a land card reaching the graveyard from the library.
+            library=[forest, forest, bolt], life=20,
+        ),
+        PlayerState(name="P2", life=20),
+    ])
+    game.enforce_mana_costs = False
+    game.start_turn(0)
+
+    activated = game.activate_from_hand(0, "Waker of Waves")
+    assert activated.supported, activated.details
+    for _ in range(6):
+        if game.stack:
+            game.resolve_top_of_stack()
+        if not game.stack and not game.pending_choices:
+            break
+        game.auto_resolve_pending_choices()
+
+    # One Forest is in hand; the other went to the graveyard from the library,
+    # beside the Waker — which was *discarded* there, and is no land.
+    binned = [c.name for c in game.players[0].graveyard if c.name != "Waker of Waves"]
+    assert binned == ["Forest"]
+    assert [c.name for c in game.players[0].hand] == ["Forest"]
+    assert game.players[0].life == 22
