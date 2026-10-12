@@ -336,10 +336,11 @@ def test_an_announced_kicker_or_buyback_is_charged_under_a_waiver():
     assert not free, f"cast under a waiver with the offer's mana unpaid: {free}"
     assert not refused_wrongly, refused_wrongly
     assert not kept_change, kept_change
-    # Measured: 73 buyback and kicker cards print a plain mana offer; 61 are
-    # castable, kicked, on this board (the rest have nothing to target).
+    # Measured: 73 buyback and kicker cards print a plain mana offer; 62 are
+    # castable, kicked, on this board (the rest have nothing to target, or
+    # print an {X} a waiver is not taken for by default).
     assert len(population) >= 73, len(population)
-    assert len(paid_for) >= 61, len(paid_for)
+    assert len(paid_for) >= 62, len(paid_for)
 
 
 @pytest.mark.cr("118.9d")

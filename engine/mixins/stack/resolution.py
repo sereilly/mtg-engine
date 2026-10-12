@@ -22,6 +22,7 @@ from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
 from ...faces import whole_card
+from ...flashback import leaves_stack_to_exile
 from ...game_types import OracleExecutionContext, OracleStateMachine, StackItem
 from ...handlers.control_flow import evaluate_condition
 from ...models import CardDefinition, Permanent
@@ -185,7 +186,8 @@ class StackResolutionMixin:
 
     def _bin_spell_card(
         self, owner, card: CardDefinition, *, exile_instead: bool, verb: str,
-        hand_instead: bool = False,
+        hand_instead: bool = False, exile_is_final: bool = False,
+        chooser_index: int | None = None,
     ) -> None:
         """Where a spell's card goes as it leaves the stack (CR 608.2n): the
         owner's graveyard, unless the cast carried the "if that spell would be
@@ -206,17 +208,31 @@ class StackResolutionMixin:
         through" seam) — a commander bought back returns to the command zone if
         its owner says so.
 
-        **Order when two of these apply.** ``exile_instead`` covers two things:
-        an opponent's "exile it instead of putting it into its owner's
-        graveyard" rider, and CR 724.1b's end-the-turn exile, which is not a
-        replacement at all — it removes the object from the stack, so the
-        resolution buyback's clause is about never finishes and the exile has to
-        win. Between buyback and the *rider*, CR 616.1 makes it the affected
-        object's controller's choice, and the buyback payer is that controller
-        and has just paid for the return; taking it for them is the only reading
-        that does not make the payment pointless. The end-the-turn half reaches
-        here with ``hand_instead`` False, because the resolution never got as
-        far as asking.
+        **Order when two of these apply**, which is why ``exile_instead`` is
+        not asked alone: it is true for three different reasons and buyback
+        stands differently to each. *exile_is_final* says which.
+
+        * CR 702.34a's flashback exile is "instead of putting it **anywhere
+          else**", and CR 724.1b's end-the-turn exile is not a replacement at
+          all — it removes the object from the stack, so the resolution
+          buyback's clause is about never finishes. Against either the hand is
+          not on offer: *exile_is_final*.
+        * The rider "if that spell would be put into your graveyard, exile it
+          instead" (Bösium Strip; Chandra, Flame's Catalyst) replaces exactly
+          the event buyback replaces, and so does a board-wide "if a card would
+          be put into your graveyard from anywhere, exile that card instead"
+          (Forbidden Crypt, Yawgmoth's Will). Two replacement effects over one
+          event are CR 616.1's, and the choice is the affected object's
+          controller's — *chooser_index*, the spell's controller. Yawgmoth's
+          Will's own ruling says it in as many words: "there will be two
+          effects trying to replace where the card goes. You get to choose if
+          the Buyback returns the card to your hand or the card gets exiled."
+          See :meth:`_bin_bought_back_spell`.
+
+        This function used to answer the second case two ways and ask about
+        neither: the rider always won (a Capsize bought back off a Bösium Strip
+        was exiled, its {3} paid for nothing) and the board-wide effect always
+        lost.
         """
         # CR 709.4: the *spell* was one half of a split card and the card that
         # leaves the stack is the whole of it. ``card`` stays the half for the
@@ -224,13 +240,11 @@ class StackResolutionMixin:
         # lands in a zone. The hand and graveyard seams ask the same question
         # themselves; exile has no seam, so it is asked here.
         leaving = whole_card(card)
-        if hand_instead and not exile_instead:
-            arrived = self.put_card_into_hand(owner, leaving)
-            if arrived:
-                self.log.append(
-                    f"{card.name} {verb} and returned to its owner's hand "
-                    "(buyback) instead of going to the graveyard"
-                )
+        if hand_instead and not (exile_instead and exile_is_final):
+            self._bin_bought_back_spell(
+                owner, card, leaving, rider=exile_instead, verb=verb,
+                chooser_index=chooser_index,
+            )
             return
         if exile_instead:
             owner.exile.append(leaving)
@@ -243,6 +257,127 @@ class StackResolutionMixin:
             # False is "the card did not arrive", and this line used to
             # announce an arrival regardless.
             self.log.append(f"{card.name} {verb}")
+
+    #: The event a bought-back spell's last step is, for CR 616.1e's record
+    #: (``Game.effect_order_answers``) and the ``effect_order`` prompt's
+    #: ``event_kind``.
+    BOUGHT_BACK_EVENT = "bought_back_spell"
+
+    def _bin_bought_back_spell(
+        self, owner, card: CardDefinition, leaving, *, rider: bool, verb: str,
+        chooser_index: int | None,
+    ) -> None:
+        """CR 616.1 over the last step of a spell whose buyback cost was paid.
+
+        CR 608.2n puts a resolved instant or sorcery into its owner's
+        graveyard, and CR 702.27a's second static ability replaces that: "put
+        this spell into its owner's hand instead of into that player's
+        graveyard as it resolves". It is one contender. The others are whatever
+        else would replace the same move — the *rider* this cast was made under
+        ("if that spell would be put into your graveyard, exile it instead")
+        and each board-wide effect the graveyard seam would apply to this card
+        (``replacements`` kind ``put_into_graveyard``: Forbidden Crypt,
+        Yawgmoth's Will), asked through the registry's own pure predicates
+        over the event that seam would raise.
+
+        With nothing else in contention the card goes to the hand, which is
+        every bought-back spell on an ordinary board. Otherwise CR 616.1e gives
+        the choice to the spell's controller: an interactive seat is asked
+        through the ``effect_order`` prompt every other contended event uses
+        (the spell stays on the stack until it is answered — CR 608.2n is the
+        *last* part of the resolution), and every other seat takes the lowest
+        order, which is the buyback: the payer has just paid for the return.
+
+        One application ends it (CR 616.1f): once the card is headed for a
+        hand it is no longer headed for a graveyard, so nothing that replaces
+        "would be put into a graveyard" still applies, and once it is exiled
+        buyback's "instead of into that player's graveyard" has nothing to
+        replace. Declining the buyback in favour of a board-wide effect is the
+        card going where it was going — through ``put_card_into_graveyard``,
+        which is where that effect lives.
+
+        Nothing has moved when the prompt is armed, so answering re-runs this
+        step whole (``engine/effect_ordering.py``): the restart is
+        :meth:`_bin_spell_card` with the arguments it was first handed.
+        """
+        from ...effect_ordering import Candidate, apply_in_order
+        from ...replacements import order_prompt_asker, replacement_candidates
+
+        seat = chooser_index if chooser_index is not None else self._owner_seat(owner)
+        kind = self.BOUGHT_BACK_EVENT
+        # The event the graveyard seam would raise for this card, for the
+        # registry's predicates: the card as it lands (CR 709.4), bound for its
+        # owner's pile, from no zone a card names.
+        bound_for_graveyard = {
+            "player": owner, "card": leaving, "from_zone": None, "permanent": None,
+        }
+
+        def unsettled(_game, event: dict) -> bool:
+            return not event.get("settled")
+
+        def to_hand(game, event: dict) -> None:
+            event["settled"] = True
+            if game.put_card_into_hand(owner, leaving):
+                game.log.append(
+                    f"{card.name} {verb} and returned to its owner's hand "
+                    "(buyback) instead of going to the graveyard"
+                )
+
+        def to_exile(game, event: dict) -> None:
+            event["settled"] = True
+            owner.exile.append(leaving)
+            game.log.append(
+                f"{card.name} {verb} and was exiled instead of going to the graveyard"
+            )
+
+        def to_graveyard(game, event: dict) -> None:
+            event["settled"] = True
+            if game.put_card_into_graveyard(owner, leaving):
+                game.log.append(f"{card.name} {verb} and moved to graveyard")
+            else:
+                game.log.append(f"{card.name} {verb}")
+
+        contenders = [
+            Candidate(
+                key="buyback", order=0, applies=unsettled, apply=to_hand,
+                label=f"Buyback: return {card.name} to its owner's hand",
+            )
+        ]
+        if rider:
+            contenders.append(Candidate(
+                key="cast_rider_exile", order=1, applies=unsettled, apply=to_exile,
+                label=(
+                    f"Exile {card.name} instead (the effect it was cast under)"
+                ),
+            ))
+        for position, registered in enumerate(
+            replacement_candidates("put_into_graveyard")
+        ):
+            contenders.append(Candidate(
+                key=registered.key, order=2 + position,
+                applies=lambda game, event, registered=registered: (
+                    not event.get("settled")
+                    and registered.applies(game, bound_for_graveyard)
+                ),
+                apply=to_graveyard,
+                label=(
+                    f"Put {card.name} into the graveyard, as replaced there "
+                    f"({registered.label or registered.key})"
+                ),
+            ))
+
+        def restart() -> None:
+            self._bin_spell_card(
+                owner, card, exile_instead=rider, verb=verb, hand_instead=True,
+                chooser_index=chooser_index,
+            )
+
+        trace = apply_in_order(
+            self, {}, contenders, chooser_index=seat,
+            ask=order_prompt_asker(kind, restart),
+        )
+        if not trace.suspended:
+            self.effect_order_answers.pop((kind, seat), None)
 
     def _default_opposing_seat(self, caster_index: int) -> int:
         """The seat a triggered ability affects when nothing chose one.
@@ -1583,6 +1718,7 @@ class StackResolutionMixin:
             choices=item.choices,
             trigger_context=item.trigger_context,
             owner_index=item.owner_index,
+            leaves_to_exile=leaves_stack_to_exile(item),
         )
         return
     def _resolve_card(
@@ -1619,6 +1755,13 @@ class StackResolutionMixin:
         # zones as it leaves the stack (CR 400.3, CR 608.2n), and a permanent
         # it becomes is this seat's card under the caster's control.
         owner_index: int | None = None,
+        # CR 702.34a: the flashback cost was paid, so this card is exiled
+        # "instead of putting it anywhere else" as it leaves the stack. Beside
+        # ``exile_instead_of_graveyard`` (which a flashback cast carries too)
+        # because the two are different sentences and one reader has to tell
+        # them apart: a paid buyback contends with the graveyard rider
+        # (CR 616.1) and loses to this (``_bin_spell_card``).
+        leaves_to_exile: bool = False,
     ) -> None:
         caster = self.players[caster_index]
         owner_seat = caster_index if owner_index is None else owner_index
@@ -2025,6 +2168,12 @@ class StackResolutionMixin:
                 # the announcement this cast made, which by now survives only on
                 # the stack item's own record (CR 500.5 emptied the pool).
                 hand_instead=buyback_paid(card, choices),
+                # Which exile this is, for the one case where it matters: a
+                # flashback cast and a turn that ended take the card whatever
+                # was paid; a graveyard rider is one of two replacements over
+                # the same move, and the spell's controller chooses (CR 616.1).
+                exile_is_final=bool(leaves_to_exile or first_pass["ends_turn"]),
+                chooser_index=caster_index,
             )
 
         # CR 608.2n puts the card into the graveyard as the *last* part of
