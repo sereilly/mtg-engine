@@ -62,8 +62,9 @@ from .effects import (_parse_damage_becomes_counter_removal,
                       _parse_bound_permanent_activation_ban,
                       _parse_targeting_ban)
 from .sacrifices import _parse_counted_sacrifice
-from .effects.game import parse_extra_land_plays, parse_extra_phases
-from .effects.permissions import _parse_cast_from_exiled_with
+from .effects.game import parse_extra_phases
+from .effects.permissions import (_parse_cast_from_exiled_with,
+                                  parse_extra_land_plays)
 
 
 from .sentence_clauses import (

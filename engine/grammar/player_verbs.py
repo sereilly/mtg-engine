@@ -39,7 +39,12 @@ import dataclasses
 from . import ast
 from .errors import GrammarError
 from .nouns import parse_object_filter
-from .naming import _parse_name_then_reveal_top, parse_reveal_chosen_hand_cards
+from .naming import (
+    _parse_name_then_reveal_top,
+    parse_choose_card_type,
+    parse_hides_items,
+    parse_reveal_chosen_hand_cards,
+)
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
@@ -58,7 +63,6 @@ from .effects import (
     _parse_extra_turn,
     _parse_mill,
     parse_choose_each_then_return,
-    parse_hides_items,
     parse_keep_then_sacrifice_rest,
     _parse_play_with_hand_revealed,
     _parse_player_adds_mana,
@@ -80,7 +84,6 @@ from .effects import (
     _parse_simultaneous_untap_and_tap,
     _parse_skip_step,
     _parse_tap_untap,
-    parse_choose_card_type,
     parse_claims_one_exiled_card,
     parse_exile_random_card_from_hand,
     parse_player_exiles_cards_from_hand,

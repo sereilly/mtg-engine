@@ -348,6 +348,19 @@ PARSE_LAYERS = [
     # chooses it — and not `choices`, which probes the sentence after a "Choose …"
     # through `parse_statement`. Everything here reads its own words to the
     # end, so it sits beside `paragraphs` and for its reason.
+    #
+    # The bare sentences joined the paragraphs at Odyssey's Phase 0, pre-split
+    # out of `effects/game.py` ten lines under the guard below: "Choose a
+    # number / a color / a creature type / a card type / a card name / one of
+    # your opponents / a player who cast …" and Goblin Game's hidden items —
+    # the same choice with its check printed as a separate sentence. `game`'s
+    # docstring listed them and the mirror never had: six of their eight nodes
+    # lower in `statement_dispatch_naming`, not `lowering/game.py`, and they
+    # were 131 of the 173 lines `game` had gained since its previous split.
+    # No list in this file changed for it — both ends were already declared,
+    # this entry and `game` in `EFFECT_FAMILIES` — and no edge was added:
+    # `naming` already read every module the arrivals import, and its two
+    # callers (`imperative_verbs`, `player_verbs`) already imported it.
     "naming",
     # Reading a keyword-ability list off a printed line. Split out of `phrases`
     # at the guard below, reusing the name `lowering/keywords.py` has carried
@@ -993,7 +1006,8 @@ LOWER_LAYERS = [
 # than forking, the same move `exile`, `prevention` and `counters` each made.
 # The boundary is CR's: a token is an **object the game creates** (CR 111.1),
 # where everything left in `game` changes the state a *player* is in — life,
-# extra turns, winning, losing, ante, the choices a sentence makes.
+# extra turns, winning, losing, ante, the choices a sentence makes. (The
+# choices left in turn at Odyssey's Phase 0, for `naming` above.)
 
 # `destruction` joined the parse side the fifth time `effects/board.py` reached
 # the size guard, reusing the name `lowering/destruction.py` has carried since
