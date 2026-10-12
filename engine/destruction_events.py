@@ -72,6 +72,7 @@ held on the ledger and released when nothing is resolving any more.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -130,6 +131,9 @@ class DestructionLedger:
     #: How deep the instruction that began that event was running
     #: (``len(Game.resolving_seats)``): the event ends when it returns.
     depth: int = 0
+    #: How many effects have said "I am still destroying" from outside a
+    #: resolution — see :func:`holding_destruction_triggers`.
+    holds: int = 0
 
 
 def cause_seat(game: "Game", cause=RESOLVING) -> int | None:
@@ -253,9 +257,53 @@ def destruction_finished(game: "Game") -> None:
     ledger = game.destruction
     if not (ledger.held or ledger.departed):
         return
-    if game.resolving_seats or game.resolving_items:
+    if (
+        game.resolving_seats
+        or game.resolving_items
+        or ledger.holds
+        # A resolution that stopped to ask is being carried on from the answer
+        # (``_answer_pending_choice``): still one resolution, CR 608.2.
+        or game.resolving_stack_item is not None
+    ):
         return
     _release(game)
+
+
+def begin_destruction_hold(game: "Game") -> None:
+    """An effect is about to destroy over **several** seam calls and may be
+    doing so after a player's answer, when nothing is resolving any more.
+
+    ``Game.resolving_seats`` is what says "still resolving" for an effect
+    handler, and it is empty once a resolution has stopped to ask: the rest of
+    the effect runs from the prompt's answer (``engine/resumption.py``). An
+    effect whose destructions are spread across such answers — "For each land,
+    destroy that land unless any player pays 1 life" (Cleansing) — would
+    otherwise put each land's trigger on the stack as that land went, and a
+    Karmic Justice would be choosing among lands the same spell has not judged
+    yet. So the effect says where it starts and where it ends.
+
+    Paired with :func:`end_destruction_hold`; a loop that can suspend calls the
+    second from its own final step, which is the only place such a loop may
+    put work it owes (``resumption``'s standing rule).
+    """
+    game.destruction.holds += 1
+
+
+def end_destruction_hold(game: "Game") -> None:
+    """The effect that called :func:`begin_destruction_hold` has finished."""
+    ledger = game.destruction
+    ledger.holds = max(0, ledger.holds - 1)
+    destruction_finished(game)
+
+
+@contextmanager
+def holding_destruction_triggers(game: "Game"):
+    """The same pair for an effect that destroys inside one Python call."""
+    begin_destruction_hold(game)
+    try:
+        yield
+    finally:
+        end_destruction_hold(game)
 
 
 def instruction_finished(game: "Game") -> None:
@@ -282,9 +330,12 @@ __all__ = [
     "PERMANENT_DESTROYED",
     "RESOLVING",
     "announce_destroyed",
+    "begin_destruction_hold",
     "cause_seat",
     "delayed_destruction_cause",
     "destruction_finished",
+    "end_destruction_hold",
+    "holding_destruction_triggers",
     "instruction_finished",
     "mark_delayed_destruction",
 ]

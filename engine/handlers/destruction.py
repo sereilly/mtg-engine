@@ -7,7 +7,9 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..object_colors import share_a_color
-from ..destruction_events import mark_delayed_destruction
+from ..destruction_events import (begin_destruction_hold,
+                                  end_destruction_hold,
+                                  mark_delayed_destruction)
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
@@ -1751,9 +1753,25 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
         for permanent_id in targets
         for seat in [*offered, None]
     ]
+    # Whose spell or ability this is (CR 109.5), read now and handed to every
+    # destruction below. A verdict reached after a human seat's answer runs
+    # when nothing is resolving any more — the loop is resumed from the prompt
+    # — so "whatever is resolving" would be nobody, and a land an opponent's
+    # Cleansing destroyed would have been destroyed by no one.
+    destroyer = game.players.index(context.caster)
+    # …and the whole loop is one effect, however many answers it stops for:
+    # what its destructions trigger waits for the last verdict (CR 603.3b), so
+    # the final step — the only place a resumable loop may put work it owes —
+    # is what lets them go.
+    _FINISHED = object()
+    steps.append((_FINISHED, None))
+    begin_destruction_hold(game)
 
     def _step(item) -> None:
         permanent_id, seat = item
+        if permanent_id is _FINISHED:
+            end_destruction_hold(game)
+            return
         permanent = game.permanent_by_id(permanent_id)
         if permanent is None or permanent_id in saved:
             return
@@ -1765,6 +1783,7 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
                 game.players[controller],
                 lambda candidate, target=permanent: candidate is target,
                 allow_regeneration=allow_regeneration,
+                cause=destroyer,
             )
             game.log.append(
                 f"{context.card.name} destroyed {permanent.card.name} "

@@ -254,6 +254,19 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "permanent_returned_to_hand": (
         "whenever a permanent is returned to a player's hand"
     ),
+    # Karmic Justice. CR 701.8's keyword action as an event, and its own kind
+    # rather than a spelling of the deaths above: a sacrifice and a state-based
+    # "put into the graveyard" are deaths and are not this. Two spellings, so
+    # the noun phrase is seen to be payload — the second is no printed card.
+    # Neither is a prefix of, or prefixed by, the two "…an opponent controls
+    # **causes**…" rows (Sacred Ground's, Spiritual Focus'): the verb is the
+    # fork, and the example is what holds that.
+    "permanent_destroyed": (
+        "whenever a spell or ability an opponent controls destroys a "
+        "noncreature permanent you control",
+        "whenever a spell or ability an opponent controls destroys a "
+        "creature you control",
+    ),
     "one_or_more_attack": "whenever one or more creatures you control attack",
     # Both printed seats, because one pattern names both and the narrowing is
     # payload: an example per spelling is what the shadowing guard needs to see

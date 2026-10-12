@@ -30,6 +30,7 @@ from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
 from ...grammar.phrases import BASIC_LAND_WORDS
 from ...color_changes import change_color
+from ...destruction_events import destruction_finished
 from ...continuous import next_timestamp
 from ...enter_effects import LIFE_PAID_AS_ENTERED
 from ...land_types import CHOSEN_LAND_TYPES, change_land_type
@@ -356,6 +357,12 @@ class PendingChoicesMixin:
             self.resolving_stack_item = previous
         if item is not None:
             self._release_stack_item(item)
+        if item is None or not item.resolution_held:
+            # The resolution this answer belonged to is over — or there was
+            # none to hold — so what its destructions triggered goes on the
+            # stack now (CR 603.3b). While the object is still held on a later
+            # prompt they keep waiting. See engine/destruction_events.py.
+            destruction_finished(self)
         return answered
 
     def resolve_pending_choice(self, kind: str, player_index: int, **response) -> bool:

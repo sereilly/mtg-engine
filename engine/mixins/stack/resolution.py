@@ -1349,9 +1349,6 @@ class StackResolutionMixin:
         finally:
             self.resolving_items.pop()
             self.resolving_stack_item = previous_resolving
-            # What the object destroyed has triggered abilities that were
-            # waiting for it to finish (CR 603.3b); it has.
-            destruction_finished(self)
         # Power Sink armed a pending "pay {X} or be countered" for the targeted
         # spell's controller. On the human priority path leave it for the prompt;
         # headless/AI resolves it deterministically (pay if able, else countered).
@@ -1365,7 +1362,14 @@ class StackResolutionMixin:
         if self.choices_for_stack_item(item):
             item.resolution_held = True
             self.stack.append(item)
+            # …and what it has destroyed so far keeps waiting with it: the
+            # abilities that triggered go on the stack when the last answer
+            # arrives (`_answer_pending_choice`), not under an object that is
+            # still resolving.
             return True
+        # The resolution is over, so the abilities its destructions triggered
+        # stop waiting for it (CR 603.3b). See engine/destruction_events.py.
+        destruction_finished(self)
         # Word of Command pauses mid-resolution for the caster's card choice
         # (CR 608.2: the spell is still resolving). Keep it on the stack until
         # confirm_word_of_command finishes the resolution and removes it. The

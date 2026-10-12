@@ -309,12 +309,19 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     # value, for this table's rule that a narrowing is listed once the pool
     # prints it.
     #
+    # "**Another**" stands where the article does, as it does on the entry and
+    # departure rows: the noun parser folds it into the filter's own exclusion,
+    # and the watcher is then not one of the permanents it watches. The grammar
+    # reads that spelling whether or not this table does, and a condition only
+    # one front end names compiles to a bare instruction on a permanent — so it
+    # is listed although no card prints it.
+    #
     # Neither a prefix of the two "…an opponent controls **causes**…" rows nor
     # prefixed by them — the verb is the fork — so the position is
     # documentation: beside the deaths it must not be confused with.
     ("permanent_destroyed",
      r"whenever a spell or ability (?P<destroyed_cause>an opponent) controls "
-     r"destroys (?P<destroyed_subject>an? [^,]+)"),
+     r"destroys (?P<destroyed_subject>(?:an?|another) [^,]+)"),
     # "Whenever **another card** is put into **a** graveyard **from anywhere**."
     # (Planar Void.) Not a death and not the row above it: the object is a
     # *card*, the source zone is unnamed, and the pile is anybody's — so nothing
