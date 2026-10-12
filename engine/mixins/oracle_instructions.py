@@ -242,7 +242,16 @@ class OracleInstructionsMixin:
             self, "self_cast", subject=card,
             caster_index=caster_index, cast_card=card, cast_item=item,
         )
-        emit(self, "you_cast_spell", subject=card, caster_index=caster_index)
+        # "Whenever you cast an instant or sorcery spell, you may pay {3}. If
+        # you do, **copy that spell**." (Mirari.) The spell's own stack object
+        # rides this event as it rides the any-player and opponent-scoped ones
+        # below: it was the one cast event of the three that froze nothing, so
+        # a trigger on it that acts on its spell resolved for "that spell is no
+        # longer on the stack" - Mirari took its {3} and copied nothing.
+        emit(
+            self, "you_cast_spell", subject=card, caster_index=caster_index,
+            cast_card=card, cast_item=item,
+        )
         # "When **you play a card**" (Juju Bubble). CR 701.18b: casting a card
         # as a spell is one of the two ways to play it, so this is announced
         # here — the other way, playing it as a land, is announced from the

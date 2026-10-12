@@ -8467,7 +8467,20 @@ class PendingChoicesMixin:
         if copy_item is None or not targets:
             self.discard_pending_choice(choice)
             return
-        if copy_item.target_permanent_index is None:
+        from ...stack_targets import chosen_targets
+
+        # What the copy is aimed at **now**, through the one reader of a stack
+        # object's announcement. An original announced by id alone - the
+        # wire's spelling, ``target_permanent_id=[id]`` with no slot - read
+        # off its missing slot as a *player* target, so "keep the original"
+        # re-aimed the copy of a spell pointed at a creature at that
+        # creature's controller: the answer that changes nothing moved the
+        # copy (Chain Lightning, 3 to the face where it had been aimed at a
+        # creature).
+        held_now = chosen_targets(self, copy_item) or ()
+        if len(held_now) == 1 and held_now[0].kind == "permanent":
+            current = {"permanent_id": held_now[0].permanent_id}
+        elif copy_item.target_permanent_index is None:
             current = {"seat": copy_item.target_player_index}
         else:
             # The id is what the answer is checked against, and a cast that

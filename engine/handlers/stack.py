@@ -48,27 +48,64 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
     caster_index = game.players.index(caster)
-    game._stack_push(
-        # CR 707.10: a copy has the original's targets (or the ones the
-        # copying effect changed them to). It does not choose again.
-        targets_already_chosen=True,
-        item=StackItem(
-            card=copied.card,
-            caster_index=caster_index,
-            target_player_index=copied.target_player_index,
-            target_permanent_index=copied.target_permanent_index,
-            x_value=copied.x_value,
-            # CR 707.10: the copy has the original's choices. New targets are
-            # the copy controller's option and are not chosen here — the AI and
-            # the headless path keep the original's, which is the legal default.
-            choices=dict(copied.choices),
-            chosen_mode_index=copied.chosen_mode_index,
-            target_stack_item=copied.target_stack_item,
-            is_copy=True,
-        )
+    copy = StackItem(
+        card=copied.card,
+        caster_index=caster_index,
+        target_player_index=copied.target_player_index,
+        target_permanent_index=copied.target_permanent_index,
+        # **The identity travels with the copy** (CR 707.10: "all decisions
+        # made for it, including … targets") - Fork's lesson one handler down,
+        # which this one had not been given. An original announced by
+        # ``permanent_id`` alone, which is how the web layer announces every
+        # target, has no slot: the copy arrived holding a seat and no object,
+        # and a copied Lightning Bolt aimed at a creature dealt its 3 to that
+        # creature's controller. The graveyard card and the several modes of a
+        # "choose one or more" are the same decisions in their own channels.
+        target_permanent_id=copied.target_permanent_id,
+        target_graveyard_card=copied.target_graveyard_card,
+        x_value=copied.x_value,
+        # CR 707.10: the copy has the original's choices.
+        choices=dict(copied.choices),
+        chosen_mode_index=copied.chosen_mode_index,
+        chosen_modes=copied.chosen_modes,
+        target_stack_item=copied.target_stack_item,
+        is_copy=True,
     )
+    # CR 707.10: a copy has the original's targets (or the ones the copying
+    # effect changed them to). It does not choose again.
+    game._stack_push(targets_already_chosen=True, item=copy)
     game.log.append(f"{context.card.name} copied {copied.card.name}")
+    # "**You may choose new targets for the copy.**" (CR 707.10c.) The
+    # sentence is part of this production - the parse requires it - and it was
+    # consumed and never offered. Asked through the prompt Chain Lightning's
+    # copy already uses, which re-aims **one** permanent-or-player target of
+    # a spell with one mode: a copy that chose anything else (several targets,
+    # a spell, a card in a graveyard, a mode other than the first) keeps the
+    # original's, which is the offer declined rather than a list for the wrong
+    # slot. A seat that is not asked keeps the original's too.
+    if _copy_reaim_is_one_slot(game, copy):
+        game.arm_copy_spell_target(caster_index, copy)
     return True, "resolved"
+
+
+def _copy_reaim_is_one_slot(game: Game, copy: StackItem) -> bool:
+    """Whether *copy* chose exactly one target ``arm_copy_spell_target`` can
+    re-aim: a permanent or a player, on a spell that announced no mode.
+
+    Read off ``stack_targets.chosen_targets``, the one reader of what a stack
+    object announced, so "one target" is what the object says rather than a
+    count of the channels this handler happens to know.
+    """
+    from ..stack_targets import chosen_targets
+
+    if copy.chosen_mode_index is not None or copy.chosen_modes:
+        return False
+    chosen = chosen_targets(game, copy)
+    return (
+        chosen is not None
+        and len(chosen) == 1
+        and chosen[0].kind in ("permanent", "player")
+    )
 
 
 @effect_handler("copy_top_stack_spell")

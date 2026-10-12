@@ -130,6 +130,13 @@ def _stacked(by_name, reader, kind):
     not cast the later spell holds one of each basic land, for the one price
     somebody *else* pays (Ice Cave), and a card of the spell's name is in a
     graveyard for the one reader that asks (Bazaar of Wonders).
+
+    The later spell's **caster** holds floating mana, for the one price that
+    is theirs to pay *for* the effect: "you may pay {3}. If you do, copy that
+    spell" (Mirari), whose trigger read "nothing" here whatever the engine
+    did while nobody on its side could pay. Mana in the pool and not lands,
+    because a land in that seat is also what Mana Vortex's caster would
+    sacrifice to keep the spell - a price this census declines.
     """
     spells = [reader] if kind == "self_cast" else [by_name[name] for name in _SPELLS]
     for spell in spells:
@@ -168,6 +175,7 @@ def _stacked(by_name, reader, kind):
             if later is None or len(fired) != 1 or game.stack[-1] is not fired[0]:
                 continue
             assert earlier.card is later.card, "the look-alike is the point"
+            game.players[second_seat].mana_pool["C"] = 5
             return game, earlier, later, fired[0]
     return None
 
