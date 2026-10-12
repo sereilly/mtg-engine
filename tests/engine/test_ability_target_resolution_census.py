@@ -85,6 +85,20 @@ from tests.helpers import _mk_card, _nosick, resolve_stack
 #: from the stack" by CR 608.2b.
 _REMOVED = "removed from the stack"
 
+#: …and what CR 608.2a logs for a **trigger** whose intervening "if" is false
+#: as it resolves. The rule asks that before it asks about targets ("The steps
+#: described in rules 608.2a and 608.2b are followed first"), so a change that
+#: makes a trigger's target illegal *and* its condition false is answered by
+#: this line — Ana Sanctuary's chosen creature leaving, when it was also the
+#: only blue permanent its controller had.
+_CONDITION_GONE = "did nothing: its condition is no longer true"
+
+
+def _removed_by_the_rules(said) -> bool:
+    """Whether a trigger left the stack without resolving, by either of the
+    two checks CR 608.2 makes first."""
+    return any(_REMOVED in line or _CONDITION_GONE in line for line in said)
+
 _POOL: dict = {}
 # `compilation_units`: a split card is its halves, each with a program of its
 # own. Read whole it compiles to nothing and is never swept.
@@ -1018,7 +1032,7 @@ def _drive_entry_triggers(only=None, roads=("cast",)) -> dict:
                     if moved & {"illegal target", "bystander"}:
                         findings.append(f"{label} [{arm}]: resolved onto {sorted(moved)} — {said[-3:]}")
                     continue
-                if not any(_REMOVED in line for line in said):
+                if not _removed_by_the_rules(said):
                     findings.append(f"{label} [{arm}]: not removed by the rule — {said[-3:]}")
                 elif "illegal target" in moved or (alone and moved):
                     findings.append(f"{label} [{arm}]: removed, but {sorted(moved)} moved — {said[-3:]}")
@@ -1139,11 +1153,11 @@ def _drive_printed_trigger_targets(only=None) -> dict:
                 except Exception:  # a handler that wanted the event it was not given
                     continue
                 said = game.log[mark:]
-                removed = any(_REMOVED in line for line in said)
                 if change is None:
-                    if removed:
+                    if any(_REMOVED in line for line in said):
                         findings.append(f"{label}: removed with its target still legal — {said[-2:]}")
                     continue
+                removed = _removed_by_the_rules(said)
                 arms += 1
                 moved = _moved(
                     before, _fingerprint(game),
