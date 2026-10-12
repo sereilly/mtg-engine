@@ -4974,6 +4974,13 @@ _TRIGGER_PREFIX = re.compile(
     r"^\s*(?:until [^,]{1,40}, )?(when|whenever|at the beginning)\b"
 )
 _TARGET_WORD = re.compile(r"\btargets?\b")
+#: The one delayed line that *is* a cast target: a stated window, then an
+#: opener whose own subject is "target <noun>". The window is required — a bare
+#: "whenever target creature …" on a spell is an activated ability's effect
+#: (Acidic Dagger), which ``_cast_lines`` has already split away from its cost.
+_DELAY_OPENER_CHOOSES_ITS_TARGET = re.compile(
+    r"^\s*until [^,]{1,40}, (?:when|whenever) target\b", re.I
+)
 
 # Line shapes whose target is not a *cast* target, each excluded for the reason
 # the trigger prefix above is. `legality._cast_lines` cannot drop them: it
@@ -5052,6 +5059,18 @@ def line_names_a_cast_target(line: str) -> bool:
     """
     if not _TARGET_WORD.search(line):
         return False
+    if _DELAY_OPENER_CHOOSES_ITS_TARGET.match(line):
+        # "Until end of turn, whenever **target creature** deals damage, you
+        # gain that much life." (Spiritualize.) The trigger prefix below is
+        # right about every delayed line whose target sits *behind* the
+        # opener's comma — that one is chosen when the delayed ability fires —
+        # and wrong about this one: the object the ability watches is named by
+        # the opener itself, so it is chosen as the spell is cast (CR 601.2c)
+        # and bound as the ability is created (CR 603.7c). Read first, because
+        # the veto below would otherwise make the spell an object with no
+        # target at all: nothing announced it, and CR 608.2b had nothing to
+        # re-check.
+        return True
     if (
         _TRIGGER_PREFIX.match(line)
         or _LOYALTY_PREFIX.match(line)

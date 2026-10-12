@@ -766,12 +766,15 @@ def test_w1g5_aegis_of_honor_covers_a_sorcery_ignores_its_controllers_own_spell_
 
 
 def _w1g5_rig_coin(monkeypatch, won: bool) -> None:
-    """Every coin lands as *won* says. The flip is one function
-    (``handlers._common.flip_coin``), and the seam that announces a win calls
-    it through its module, so one patch rigs every flip a player can win."""
-    from engine.handlers import _common
+    """Every coin lands as *won* says. Each handler module flips the
+    ``flip_coin`` it imported — the name every coin test in this repo rigs —
+    and hands it to the seam that announces a win, so the two modules these
+    cards flip in are the two patched: ``control_flow`` (the ordinary "flip a
+    coin") and ``damage`` (Mana Clash's pair)."""
+    from engine.handlers import control_flow, damage
 
-    monkeypatch.setattr(_common, "flip_coin", lambda win_probability=0.5: won)
+    for module in (control_flow, damage):
+        monkeypatch.setattr(module, "flip_coin", lambda win_probability=0.5: won)
 
 
 def _w1g5_attack(game, attacker, blocker=None):

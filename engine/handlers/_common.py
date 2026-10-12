@@ -1545,7 +1545,7 @@ def flip_coin(win_probability: float = 0.5) -> bool:
     return random.random() < win_probability
 
 
-def flip_coin_for(game: Game, flipper, win_probability: float = 0.5) -> bool:
+def flip_coin_for(game: Game, flipper, *, flip=None) -> bool:
     """A coin flip *flipper* **wins or loses** (CR 705.2), announced.
 
     The seam for every flip a player can win. CR 705.2 draws the line this
@@ -1561,8 +1561,15 @@ def flip_coin_for(game: Game, flipper, win_probability: float = 0.5) -> bool:
     seeded game replays the flips it always did. The trigger goes on the stack
     behind the object that is resolving, as every event announced part-way
     through a resolution does.
+
+    *flip* is the **caller's own coin** — each handler module passes the
+    ``flip_coin`` it imported. That is not decoration: a module's ``flip_coin``
+    is the name a dozen tests rig ("engine.handlers.control_flow.flip_coin"),
+    and a seam that drew from its own module's coin instead would have made
+    every one of those rigs a patch on a name nothing calls. A name a test
+    patches is an interface, exactly as a log line is.
     """
-    won = flip_coin(win_probability)
+    won = (flip or flip_coin)()
     if won and flipper is not None:
         seat = next(
             (index for index, player in enumerate(game.players) if player is flipper),

@@ -18,6 +18,16 @@ graveyards (like the one Tormod's Crypt has) can still affect those cards." A
 cost paid out of a graveyard, a mass exile and an untargeted return are tested
 by name below.
 
+**What this does not hold, and why.** Two shipped cards make an *untargeted*
+graveyard choice through the graveyard target kind — Experimental Overload (a
+spell) and Harvest Wurm (an entry trigger) — because the lowering of a
+graveyard return keeps no record of whether the sentence said "target". Under
+the Seal their effect still happens (the handler's own pick), but the picker
+that would let a person choose *which* card is the enumeration, and it offers
+nothing. Both are left out of the sweeps rather than asserted either way; the
+fix is a record in ``lowering/returns.py``, in the graveyard-target group's
+lane.
+
 **Validated backwards.** ``test_the_census_names_every_case_without_the_seal``
 switches the Seal's one reader off — the tree as it stood before the card was
 implemented — and requires every examined case to be reported. A census that
@@ -32,6 +42,7 @@ from engine import Game, PlayerState, faces
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
+from engine.stack_targets import _target_instances
 from engine.targeting import (GRAVEYARD_TARGET_KIND, spec_is_a_cost,
                               usable_activated_abilities)
 from tests.helpers import _nosick, resolve_stack
@@ -45,7 +56,7 @@ _YARD = (
     "Holy Strength", "Forest", "Mishra's Factory",
 )
 
-#: Floors, set well inside what the pool measures today (45 targeting spells,
+#: Floors, set well inside what the pool measures today (44 targeting spells,
 #: 36 activations, 14 entry triggers at Odyssey's ingest) for the reason every
 #: floor in this repo is: an ordinary ingest must not move them, and a census
 #: that stopped examining anything must not pass.
@@ -131,6 +142,16 @@ def _sweep_casts(pool, by_name) -> tuple[int, list]:
         # trigger is the third sweep's.
         if face.primary_type not in ("instant", "sorcery") and "Aura" not in face.type_line:
             continue
+        # A graveyard choice the card never calls a target is not one, and the
+        # Seal does not reach it — the ruling's own edge. One shipped spell
+        # derives the graveyard *target* kind for such a choice (Experimental
+        # Overload: "you may return an instant or sorcery card from your
+        # graveyard to your hand"), because the lowering drops the word: a
+        # targeted and an untargeted return compile to one payload. This sweep
+        # must not bless that card's picker going empty under the Seal, so it
+        # asks the printed line, as ``sealed_graveyard_target_refusal`` does.
+        if "Aura" not in face.type_line and not _target_instances(face.oracle_text or ""):
+            continue
         game, _ = _board(by_name, sealed=False, hand=[card])
         spec = game.cast_target_spec(0, face)
         if spec.get("kind") != GRAVEYARD_TARGET_KIND or spec_is_a_cost(spec):
@@ -206,7 +227,6 @@ def _sweep_entry_triggers(pool, by_name) -> tuple[int, list]:
     sealed, none does — and the cast itself was accepted both times, because
     a permanent spell targets nothing.
     """
-    from engine.stack_targets import _target_instances
     from engine.targeting import derive_instruction_spec
 
     examined, failures = 0, []

@@ -7,6 +7,7 @@ from ._common import (recorded_permanent_ids,
     attached_host,
     bound_permanent,
     block_pair_permanents,
+    flip_coin,
     flip_coin_for,
     resolve_own_combatant,
     resolve_role_permanent,
@@ -56,7 +57,7 @@ def coin_flip_remove_attacker_and_tap(game: Game, instruction: OracleInstruction
     if combatant is None:
         return True, "resolved"
     controller, idx, permanent = combatant
-    if flip_coin_for(game, controller):
+    if flip_coin_for(game, controller, flip=flip_coin):
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     # Through the one transition rather than by popping the attacker map.
@@ -84,7 +85,7 @@ def coin_flip_remove_blocker(game: Game, instruction: OracleInstruction, context
     if combatant is None:
         return True, "resolved"
     controller, idx, _permanent = combatant
-    if flip_coin_for(game, controller):
+    if flip_coin_for(game, controller, flip=flip_coin):
         game.log.append(f"{context.card.name} won the coin flip")
         return True, "resolved"
     controller_index = game.players.index(controller)

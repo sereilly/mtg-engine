@@ -198,6 +198,38 @@ def test_w1g5_spiritualize_watches_an_opponents_creature_and_combat_damage_too(
     assert bob.life == 20
 
 
+def test_w1g5_spiritualize_targets_as_it_is_cast_and_fizzles_without_its_target(
+    catalog_by_name, set_pool,
+):
+    """The creature is a **cast** target (CR 601.2c) although the word sits in
+    a delayed trigger's opener: the stack-target reader lists it, and a spell
+    whose only target is gone by resolution is removed from the stack whole
+    (CR 608.2b) — no ability is created and no card is drawn. The pool-wide
+    stack-target census named this card until ``line_names_a_cast_target``
+    learned that an opener may choose its own subject."""
+    from engine.stack_targets import chosen_targets
+
+    game = _w1g5_table(
+        catalog_by_name, set_pool, hand0=["Spiritualize"], hand1=["Unsummon"],
+    )
+    sorcerer = _w1g5_put(game, 0, "Prodigal Sorcerer")
+    assert game.queue_from_hand(
+        0, "Spiritualize", target_permanent_ids=[sorcerer.permanent_id],
+    ).supported
+    assert [target.permanent_id for target in chosen_targets(game, game.stack[-1])] == [
+        sorcerer.permanent_id
+    ]
+
+    assert game.cast_from_hand(
+        1, "Unsummon", target_permanent_ids=[sorcerer.permanent_id],
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert [c.name for c in game.players[0].hand] == ["Prodigal Sorcerer"], "no draw"
+    assert game.delayed_triggers == []
+    assert any("Spiritualize was removed from the stack: every target is illegal"
+               in line for line in game.log)
+
+
 def test_w1g5_the_shorter_damage_opener_leaves_acidic_daggers_sentence_alone(
     catalog_by_name,
 ):
