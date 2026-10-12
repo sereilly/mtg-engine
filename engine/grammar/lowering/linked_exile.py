@@ -31,9 +31,12 @@ title is one clause out of date and this file is the other clause of it.
 The name is `engine/linked_exile.py`'s — the record every shape here pivots on
 — so the mirror re-forms rather than forking a third word for one subject, the
 same reuse `untap_restrictions` and `base_pt` make of their engine modules.
-`effects/` and `ast/` have no `linked_exile`, for `permissions`' reason: the
-guard fired on the lowerings, and the nodes are cards in a zone that sit
-perfectly well beside the other card ones.
+`ast/` has no `linked_exile`, for `permissions`' reason: the nodes are cards in
+a zone that sit perfectly well beside the other card ones. `effects/` had none
+either, because the guard had fired on the lowerings — until the Phase 0 before
+Odyssey, when it fired on the productions and `effects/linked_exile.py` took
+this module's line from the other side: every node its productions build is
+lowered here.
 
 A family rather than a floor: nothing in `lowering/` reads these, `by_node` and
 `statement_dispatch_naming` reach them through the package's flat re-export, and

@@ -1139,7 +1139,27 @@ EFFECT_FAMILIES = ["damage", "characteristics", "base_pt", "types", "board", "ca
                    # them. Phyrexian Portal's face-down split stays in
                    # `library`, which is where a pile somebody *looks through*
                    # belongs.
-                   "separations"]
+                   "separations",
+                   # `linked_exile` arrived on the parse side at Odyssey's
+                   # Phase 0; the lowering side had split it off
+                   # `lowering/exile.py` at Tempest's — the mirror re-forming
+                   # under a name that already existed, as `permissions` did.
+                   # `effects/exile.py` stood 38 lines under the guard below
+                   # with a graveyard set's nine groups about to open on it,
+                   # and its first line named two subjects: "Cards moving
+                   # **into and out of exile** (CR 406), and back again." What
+                   # left is the pile that is **already there** — "exiled with
+                   # this artifact", "exiled this way", "the exiled cards" —
+                   # and where it goes next, which is the lowering module's own
+                   # stated line and holds node for node: all six nodes these
+                   # ten productions build lower in
+                   # `lowering/linked_exile.py`, and none of the five built by
+                   # the six that stayed does. `exile` keeps an object *going*
+                   # to the zone. The module's five internal call edges were
+                   # all inside the half that left, so there is no import
+                   # between the two in either direction, and the block moved
+                   # byte-identically, so no compiled program moves.
+                   "linked_exile"]
 # `redirection` arrived on the parse side at Visions' first wave, a set after
 # the lowering side split it off `lowering/damage.py` — the mirror re-forming
 # rather than a new vocabulary, which is what this file asks a split to do.
@@ -1495,10 +1515,14 @@ LOWERING_FAMILIES = [
      # The name is `engine/linked_exile.py`'s, the record every shape here
      # pivots on, so the mirror re-forms rather than forking a third word for
      # one subject, the reuse `untap_restrictions` and `base_pt` make of their
-     # engine modules. `effects/` and `ast/` have no `linked_exile`, for
-     # `permissions`' reason: the guard fired on the lowerings, and the nodes
-     # are cards in a zone that sit beside the other card ones.
-     "linked_exile",
+     # engine modules. `ast/` has no `linked_exile`, for `permissions`' reason:
+     # the nodes are cards in a zone that sit beside the other card ones.
+     # `effects/` had none either, on the grounds that the guard had fired on
+     # the lowerings — until Odyssey's Phase 0, when it fired on the
+     # productions. So the family is no longer appended here: it arrives from
+     # `EFFECT_FAMILIES` above, as `base_pt`, `permissions` and `requirements`
+     # came to, and naming it twice would be a list disagreeing with itself.
+     #
      # The mirror of `grammar/repeats.py`, and it left `lowering/game.py` the
      # moment the family had a second member: `_lower_repeat_process` had been
      # a section of one there, with its parse half in `parser.py` and no mirror
@@ -1726,6 +1750,14 @@ AST_FAMILIES = [
         # this a parse family fired on the productions; the node inventory
         # never crossed anything.
         "permissions",
+        # `linked_exile` is that reason beside it. Four of the six nodes its
+        # productions build are in `ast/exile.py`, which is cut by **subject**
+        # rather than by reader on purpose (see under the list), and the other
+        # two sit with theirs — `PutExiledPileOnLibrary` in `ast/library.py`,
+        # `EachPlayerClaimsExiledCard` in `ast/cards.py`. The guard that made
+        # this a parse family fired on the productions (`effects/exile.py` at
+        # 962); `ast/exile.py` is 431 lines and crossed nothing.
+        "linked_exile",
         # `requirements` is `permissions`' reason one family over:
         # `AttacksThisTurnIfAble`, `BlocksThisTurnIfAble` and
         # `DestroyChosenThatDidntAttack` are facts about a **combat** and live

@@ -51,8 +51,8 @@ from .effects import (_parse_bound_targeting_prevention,
                       _parse_produces_instead,
                       _parse_tapper_produces_instead,
                       parse_graveyard_top_to_library)
-from .effects.exile import (_parse_bin_unplayed_exiled_card,
-                            parse_exile_graveyard_arrivals_this_turn)
+from .effects.exile import parse_exile_graveyard_arrivals_this_turn
+from .effects.linked_exile import _parse_bin_unplayed_exiled_card
 from .effects.retargeting import _parse_conditional_retarget
 from .effects.stack import _parse_destroy_countered_ability_source
 from .errors import GrammarError
