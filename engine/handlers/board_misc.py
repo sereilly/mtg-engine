@@ -2343,7 +2343,7 @@ def add_named_counter_to_target(game: Game, instruction: OracleInstruction, cont
         # (Freyalise's Winds.) Nothing was chosen: the object is the one the
         # event was about, read by the id the announcement froze (CR 603.10) —
         # by resolution the permanent may have moved, and a board search would
-        # find a look-alike. Kudzu's destroy reads the same key.
+        # find a look-alike. Mine Layer's destroy reads the same key.
         subject_id = (context.trigger_context or {}).get(
             "event_subject_permanent_id"
         )

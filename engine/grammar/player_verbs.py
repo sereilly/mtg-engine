@@ -56,6 +56,7 @@ from .stream import TokenStream
 from .effects import (
     _parse_activates_each_lands_mana_ability,
     _parse_ante,
+    _parse_attach,
     _parse_bid_life_for_control,
     _parse_discard,
     _parse_discard_revealed_unless_pay_life,
@@ -95,6 +96,18 @@ from .effects import (
 )
 
 
+def _host_is_their_choice(attached: "ast.Attach") -> bool:
+    """Whether *attached* names its host as "a <noun> **of their choice**" —
+    an untargeted pick by the seat the sentence is about."""
+    host = attached.host
+    return (
+        isinstance(host, ast.TargetSpec)
+        and not host.targeted
+        and host.quantifier in ("a", "an")
+        and host.filter.their_choice
+    )
+
+
 def parse_player_subject_verb(
     stream: TokenStream,
     token,
@@ -129,6 +142,22 @@ def parse_player_subject_verb(
             return tapped_out
     if token.text in ("draws", "draw") and isinstance(source_spec, ast.PlayerRef):
         return _parse_draw(stream, source_spec)
+    # "**That player attaches** this Aura to a land of their choice." (Steam
+    # Vines.) CR 701.3's keyword action performed by a seat the sentence
+    # names, which is the whole of what the subject adds: who picks the host.
+    # Only where the host really is that seat's pick — "of their choice" —
+    # because every other attach chooses its host by targeting (CR 601.2c),
+    # and that is the ability's controller's to do whoever the sentence
+    # mentions. Rewound on anything else, so the line keeps its own refusal.
+    if token.text == "attaches" and isinstance(source_spec, ast.PlayerRef):
+        mark_attach = stream.mark()
+        try:
+            attached = _parse_attach(stream)
+        except GrammarError:
+            attached = None
+        if isinstance(attached, ast.Attach) and _host_is_their_choice(attached):
+            return dataclasses.replace(attached, chooser=source_spec)
+        stream.reset(mark_attach)
     # "**Each player hides at least one item, then all players reveal them
     # simultaneously.**" (Goblin Game.) A number per seat, named in secret.
     # Dispatched on the verb like every other player action; the production
@@ -678,6 +707,14 @@ def parse_player_subject_verb(
             ):
                 return dataclasses.replace(
                     action, gained_by=source_spec, offered=True
+                )
+            # "That land's controller **may** attach this Aura to a land **of
+            # their choice**." (Kudzu.) The same fold for the same reason: the
+            # offer and the pick are one decision by one seat — choose one of
+            # those lands, or none.
+            if isinstance(action, ast.Attach) and _host_is_their_choice(action):
+                return dataclasses.replace(
+                    action, chooser=source_spec, optional=True
                 )
             # "**That player** may draw a card." (Soldevi Sentry.) The
             # action's subject is elided and it is the *offer's* subject,

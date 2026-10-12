@@ -312,28 +312,49 @@ class TestKudzuReattach:
 
     def _tap_and_resolve(self, game):
         game.tap_land_for_mana(0, "Forest", chosen_color="G", permanent_index=0)
-        game.resolve_top_of_stack()
+        game.resolve_top_of_stack(pause_for_choices=bool(game.interactive_seats))
+
+    def _owed(self, game):
+        return [(choice.kind, choice.player_index) for choice in game.pending_choices]
+
+    # The prompt is the general "choose a permanent" one since the card's line
+    # began compiling from the grammar (Odyssey's Steam Vines prints the same
+    # sentence): answered by the land's id rather than a battlefield index, and
+    # offering every land the Aura could enchant rather than the chooser's own.
 
     def test_deferred_tap_arms_pending_choice(self, cards):
-        game, _, kudzu, forest, _, _ = self._setup(cards, interactive=(0,))
+        game, p1, kudzu, forest, _, _ = self._setup(cards, interactive=(0,))
         assert kudzu.metadata.get("attached_to") is forest
         self._tap_and_resolve(game)
-        # Land destroyed; Aura detached and awaiting the controller's choice.
-        assert game.pending_kudzu_reattach is not None
-        assert kudzu.metadata.get("attached_to") is None
+        # Land destroyed; the Aura is on nothing and awaits its land's
+        # controller's choice, with its ability still resolving (CR 608.2).
+        assert self._owed(game) == [("permanent_choice", 0)]
+        assert not game.is_on_battlefield(forest)
+        assert kudzu in p1.battlefield
+        assert [item.card.name for item in game.stack] == ["Kudzu"]
 
     def test_confirm_attaches_to_chosen_land(self, cards):
         game, p1, kudzu, _, _, plains = self._setup(cards, interactive=(0,))
         self._tap_and_resolve(game)
-        # Battlefield is now [Island, Plains, Kudzu]; pick Plains (index 1).
-        assert game.confirm_kudzu_reattach(0, 1) is True
+        assert game.confirm_permanent_choice(0, game.permanent_id_of(plains)) is True
         assert kudzu.metadata.get("attached_to") is plains
-        assert game.pending_kudzu_reattach is None
+        assert self._owed(game) == []
+
+    def test_declining_puts_the_aura_in_the_graveyard(self, cards):
+        """"…**may** attach": the pick may be declined, and an Aura on nothing
+        is put into its owner's graveyard (CR 704.5m). The old prompt had no
+        way to say no."""
+        game, p1, kudzu, _, _, _ = self._setup(cards, interactive=(0,))
+        self._tap_and_resolve(game)
+        assert game.confirm_permanent_choice(0, None) is True
+        game.check_state_based_actions()
+        assert kudzu not in p1.battlefield
+        assert [card.name for card in p1.graveyard] == ["Forest", "Kudzu"]
 
     def test_headless_path_auto_attaches_first_land(self, cards):
         game, _, kudzu, _, island, _ = self._setup(cards)
         self._tap_and_resolve(game)
-        assert game.pending_kudzu_reattach is None
+        assert self._owed(game) == []
         assert kudzu.metadata.get("attached_to") is island
 
     def test_it_fires_when_the_land_is_tapped_by_anything(self, cards):

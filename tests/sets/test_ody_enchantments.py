@@ -1596,6 +1596,101 @@ def test_w1g8_that_players_turn_needs_an_event_that_names_a_player():
     assert _w1g8_compile(under_a_tap).supported
     assert not _w1g8_compile(under_an_attack).supported
 
+
+# --- Steam Vines ------------------------------------------------------------
+# "When enchanted land becomes tapped, destroy it and this Aura deals 1 damage
+# to that land's controller. That player attaches this Aura to a land of their
+# choice." Kudzu's sentence with damage in it and no "may" — the second card of
+# a shape Kudzu held a name-keyed hook for, so it is a production now and the
+# hook is retired (`tests/regressions/test_ody_w1g8_shipped_cards.py`).
+#
+# The host is picked as the ability resolves, by the destroyed land's
+# controller, among every land the Aura could enchant. The card's rulings:
+# moving it "does not target the land" (2004-10-04); with no land to move to
+# it goes to the graveyard (2005-08-01); and if the Aura left before its
+# trigger resolved, the land is still destroyed and the damage dealt, but
+# nothing brings it back (2004-10-04).
+
+def _w1g8_vines(set_pool, interactive=(), lands=True):
+    """Seat 0's Steam Vines on seat 1's Forest, on seat 1's turn."""
+    from engine.auras import attach_aura
+
+    game = _w1g8.table(set_pool, interactive=interactive)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    vines = _w1g8.put(game, set_pool, 0, "Steam Vines")
+    attach_aura(vines, forest)
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain") if lands else None
+    swamp = _w1g8.put(game, set_pool, 1, "Swamp") if lands else None
+    game.start_turn(1)
+    return game, vines, forest, mountain, swamp
+
+
+def _w1g8_host(aura):
+    host = aura.metadata.get("attached_to")
+    return None if host is None else host.card.name
+
+
+def test_w1g8_steam_vines_destroys_burns_and_moves_where_its_victim_says(set_pool):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool, interactive=(0, 1))
+
+    assert _w1g8_tap(game, 1, forest)
+    assert [item.card.name for item in game.stack] == ["Steam Vines"], (
+        "\"becomes tapped\" is not a mana ability: it uses the stack"
+    )
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.pile(game, 1) == ["Forest"] and game.players[1].life == 19
+    assert _w1g8.owed(game) == [("permanent_choice", 1)], "that land's controller chooses"
+    assert game.is_on_battlefield(vines), "the Aura waits for its new land"
+
+    assert not game.confirm_permanent_choice(1, None), "no \"may\": it must go somewhere"
+    assert game.confirm_permanent_choice(1, mountain.permanent_id), (
+        "any land, its own controller's included"
+    )
+    _w1g8.settle(game)
+    assert _w1g8_host(vines) == "Mountain"
+
+    # …and it is still Steam Vines on the land it moved to.
+    game.turn += 1
+    game.start_turn(0)
+    assert _w1g8_tap(game, 0, mountain)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.players[0].life == 19 and _w1g8.pile(game, 0) == ["Mountain"]
+    assert _w1g8.owed(game) == [("permanent_choice", 0)]
+
+
+def test_w1g8_steam_vines_moved_by_a_seat_nobody_asks_goes_to_somebody_elses_land(
+    set_pool,
+):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool)
+
+    game.become_tapped(forest)      # tapped by anything, not only for mana
+    _w1g8.settle(game)
+
+    assert _w1g8_host(vines) == "Mountain", "not the chooser's own Swamp"
+
+
+def test_w1g8_steam_vines_with_no_land_to_move_to_is_put_in_the_graveyard(set_pool):
+    game, vines, forest, _, _ = _w1g8_vines(set_pool, lands=False)
+
+    assert _w1g8_tap(game, 1, forest)
+    _w1g8.settle(game)
+
+    assert game.players[1].life == 19
+    assert _w1g8.pile(game, 0) == ["Steam Vines"]
+
+
+def test_w1g8_steam_vines_gone_in_response_still_destroys_and_burns(set_pool):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool)
+
+    assert _w1g8_tap(game, 1, forest)
+    _w1g8.leave(game, vines)
+    _w1g8.settle(game)
+
+    assert _w1g8.pile(game, 1) == ["Forest"] and game.players[1].life == 19
+    assert _w1g8.pile(game, 0) == ["Steam Vines"], "and it does not come back"
+    assert _w1g8.names(game, 0) == ["Mountain"]
+
 # ==== end W1G8 ======================================================
 
 

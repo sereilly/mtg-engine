@@ -238,10 +238,21 @@ class Attach:
     recipients rather than one, because "Attach target Equipment you control
     to target creature you control" is a real sentence (Brass Squire) and a
     node with one slot would have to be replaced rather than extended.
+
+    *chooser* and *optional* are for the host nobody targeted: "**That player
+    attaches** this Aura to a land **of their choice**." (Steam Vines.) "That
+    land's controller **may** attach this Aura to a land of their choice."
+    (Kudzu.) The seat the sentence names picks the host as the ability
+    resolves (CR 115.10 — nothing was targeted), and "may" with "of their
+    choice" is one decision by one seat, so it folds onto the node as the
+    pick being declinable rather than wrapping it in an offer: two nodes
+    would be two prompts to the same player.
     """
 
     subject: Recipient
     host: Recipient
+    chooser: "PlayerRef | None" = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)

@@ -749,15 +749,6 @@ def _action_confirm_mana_payment(session, req, seat_type):
     if not ok:
         raise HTTPException(status_code=400, detail="no mana payment pending for you")
 
-@action_handler("kudzu_reattach_confirm")
-def _action_kudzu_reattach_confirm(session, req, seat_type):
-    # Kudzu: the controller picks which land to re-enchant (battlefield index).
-    if req.target_permanent_index is None:
-        raise HTTPException(status_code=400, detail="target_permanent_index is required")
-    ok = session.game.confirm_kudzu_reattach(req.seat, req.target_permanent_index)
-    if not ok:
-        raise HTTPException(status_code=400, detail="invalid Kudzu reattach selection")
-
 @action_handler("flip_again_confirm")
 def _action_flip_again_confirm(session, req, seat_type):
     # Game of Chaos: the player the last flip favoured says whether it happens

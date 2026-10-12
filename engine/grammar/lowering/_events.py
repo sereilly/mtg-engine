@@ -95,10 +95,10 @@ from ._frozen_seats import (  # noqa: F401
 #:
 #: Membership is a claim about the fire site, and the site is what makes it
 #: true: ``become_tapped`` stamps the id (CR 400.7 — an index is not an
-#: identity, and by resolution the permanent may have moved). Kudzu's "destroy
-#: it" already reads the same key from its own handler.
+#: identity, and by resolution the permanent may have moved). Mine Layer's
+#: "destroy it" reads the same key.
 _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
-    "permanent_becomes_tapped",         # Freyalise's Winds, Kudzu
+    "permanent_becomes_tapped",         # Freyalise's Winds, Mine Layer
     # "Whenever a Djinn or Efreet enters, **destroy it**." (Suleiman's Legacy.)
     # The entering permanent, stamped by the one entry transition
     # (`_put_permanent_onto_battlefield`) — every path onto a battlefield goes

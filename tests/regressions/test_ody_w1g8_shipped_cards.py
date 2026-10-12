@@ -167,6 +167,60 @@ def test_erg_raiders_compiles_from_the_grammar_and_spares_a_thief_for_a_turn(set
     assert end_of_turn(1) == [18, 18], "the thief's next idle turn"
 
 
+# --- Kudzu, without its hook ---------------------------------------------------
+
+def _kudzu(set_pool, own_other_land, opposing_land):
+    game = w1g8.table(set_pool)
+    forest = w1g8.put(game, set_pool, 1, "Forest")
+    kudzu = w1g8.put(game, set_pool, 0, "Kudzu")
+    attach_aura(kudzu, forest)
+    if own_other_land:
+        w1g8.put(game, set_pool, 1, "Swamp")
+    if opposing_land:
+        w1g8.put(game, set_pool, 0, "Mountain")
+    game.start_turn(1)
+    assert game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
+    w1g8.settle(game)
+    host = kudzu.metadata.get("attached_to")
+    return game, kudzu, (None if host is None else host.card.name)
+
+
+def test_kudzu_compiles_from_the_grammar_and_may_cross_the_table(set_pool):
+    """"That land's controller may attach this Aura to a land of their
+    choice." Kudzu's 2004-10-04 ruling: "You can move it to any other player's
+    land whenever you get to move it." Its hook's own prompt offered the
+    chooser's own lands alone; the composed program offers every land the Aura
+    could enchant, and a seat nobody asks takes somebody else's first."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+    from engine.oracle import compile_card_oracle
+
+    assert "Kudzu" not in CARD_LINE_INSTRUCTIONS
+    kinds = [
+        step.kind for step in compile_card_oracle(
+            set_pool("LEA")["Kudzu"]
+        ).triggered_abilities[0].instruction.payload["steps"]
+    ]
+    assert kinds == [
+        "destroy_attached_permanent", "choose_permanent", "attach_source_to_target",
+    ]
+
+    game, kudzu, host = _kudzu(set_pool, own_other_land=True, opposing_land=True)
+    assert host == "Mountain"
+    game, kudzu, host = _kudzu(set_pool, own_other_land=False, opposing_land=True)
+    assert host == "Mountain", "it used to stay where it was, on nothing"
+
+
+def test_kudzu_with_no_land_to_move_to_is_put_in_the_graveyard(set_pool):
+    """CR 704.5m. The hook kept the Aura out of that sweep while its prompt was
+    owed by deleting its attachment record — and with no land to offer, armed
+    no prompt, so the record stayed deleted and Kudzu sat on the battlefield
+    attached to nothing for the rest of the game."""
+    game, kudzu, host = _kudzu(set_pool, own_other_land=False, opposing_land=False)
+
+    assert not game.is_on_battlefield(kudzu)
+    assert w1g8.pile(game, 0) == ["Kudzu"]
+
+
 # --- a lethal toll -------------------------------------------------------------
 
 def test_toll_valuation_prices_the_spells_own_target(set_pool):

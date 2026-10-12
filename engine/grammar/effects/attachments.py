@@ -43,8 +43,12 @@ def _parse_attach(stream: TokenStream) -> ast.Statement:
     is read by the noun phrase every other production already uses rather than
     by anything here. The whole line must be consumed: a trailing clause this
     does not read is a refusal, never a silent partial attach.
+
+    "attaches" is the same verb behind a printed player ("**That player
+    attaches** this Aura to a land of their choice", Steam Vines), which only
+    the player-subject dispatch reaches; it puts the seat on the node.
     """
-    stream.expect_word("attach")
+    stream.expect_word("attach", "attaches")
     subject = parse_recipient(stream)
     if subject is None:
         raise stream.error("expected what to attach")
