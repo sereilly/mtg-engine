@@ -164,7 +164,9 @@ def _activation_sweep(catalog, *, only=None):
     by_name = {card.name: card for card in catalog}
     examined = 0
     accepted: list[str] = []
-    for card in catalog:
+    # Face by face, as the cast sweep reads them: a split card compiled whole
+    # is a supported program with nothing in it.
+    for card in compilation_units(catalog):
         if card.primary_type in ("instant", "sorcery"):
             continue
         if only is not None and card.name not in only:

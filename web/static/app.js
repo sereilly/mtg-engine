@@ -2169,9 +2169,16 @@ function activatedAbilityDestroyPermanentColor(card) {
 // side has answered this kind since the Laces (`cardRequiresTargetPermanent`);
 // no activation branch read it, so the ability fell to the cascade's tail and
 // was sent with no target at all.
+//
+// …and "target **planeswalker**" (Sparkhunter Masticore's "{1}: This creature
+// deals 1 damage to target planeswalker"), the one activation kind in the pool
+// that names a permanent type no branch below read. It took the same tail:
+// a cost prompt, a bare activation, and the server's "this ability needs a
+// target". The backend's list is planeswalkers alone, so the permanent prompt
+// offers exactly those.
 function activatedAbilityRequiresTargetPermanent(card) {
   const k = specKind(card);
-  return k === "permanent" || k === "spell_or_permanent";
+  return k === "permanent" || k === "spell_or_permanent" || k === "planeswalker";
 }
 // Aladdin: "Gain control of target artifact for as long as you control this creature."
 function activatedAbilityRequiresTargetArtifact(card) { return specKind(card) === "artifact"; }
@@ -12214,12 +12221,15 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     // on the stack (also_stack), so it stays activatable when only a stack source exists.
     // Blind Seer's "target spell or permanent" is the same two zones as a *target*.
     const spellOrPermanent = cardRequiresTargetSpellOrPermanent(card);
-    const alsoStack = spellOrPermanent || !!targetSpecOf(card).also_stack;
+    const chosenSource = !!targetSpecOf(card).also_stack;
+    const alsoStack = spellOrPermanent || chosenSource;
     if (fields.validKeys.size === 0 && !(alsoStack && fields.validStackIndices.size > 0)) {
+      // The source wording is Circle of Protection's alone; every other
+      // ability reaching this branch is looking for a target.
       updateActionHint(
-        spellOrPermanent
-          ? `No valid target for ${cardName}.`
-          : `No valid source for ${cardName} — nothing of that color to prevent.`,
+        chosenSource
+          ? `No valid source for ${cardName} — nothing of that color to prevent.`
+          : `No valid target for ${cardName}.`,
         true,
       );
       return;
@@ -21175,11 +21185,20 @@ function handlePlayerPillClick(targetSeat, event) {
     boardTargeting.onPlayer(targetSeat);
     return;
   }
+  // The prompts a face can answer. **A roles walk is one of them** — while it
+  // stands on a player role the pill is that role's answer ("target creature
+  // and … target player or planeswalker", Shower of Sparks; "target player
+  // gains control of target permanent", Donate), and `handlePlayerTargetClick`
+  // has had the branch that hands the click to the walk since Donate. This
+  // gate did not list the kind, so the click never reached it: both pills
+  // glowed, neither answered, and every roles spell with a seat in it could be
+  // started in the browser and never finished. Found by driving one.
   if (
     !pendingCastTarget ||
     (pendingCastTarget.targetKind !== "player" &&
       pendingCastTarget.targetKind !== "any" &&
-      pendingCastTarget.targetKind !== "divided")
+      pendingCastTarget.targetKind !== "divided" &&
+      pendingCastTarget.targetKind !== "roles")
   )
     return;
   event?.preventDefault();

@@ -230,3 +230,70 @@ def test_unsubstantiate_keeps_its_own_union(catalog_by_name):
     assert sorted(c.name for c in game.players[1].hand) == [
         "Grizzly Bears", "Lightning Bolt",
     ]
+
+
+# --- under a targeting ban: a spell is neither a player nor a permanent -----
+
+
+def _under_peace_talks(game, catalog_by_name):
+    """Seat 0 resolves Peace Talks: "players and permanents can't be the
+    targets of spells or activated abilities"."""
+    game.players[0].hand = [catalog_by_name["Peace Talks"]]
+    assert game.cast_from_hand(0, "Peace Talks").supported, game.log
+    assert game.targeting_bans
+
+
+def test_a_counterspells_picker_still_offers_the_spell_under_peace_talks(
+    catalog_by_name,
+):
+    """The gate has always let a stack target through the ban and the picker
+    answered with an empty list — so the cast was legal and no human seat could
+    make it. One list now, and it is the gate's."""
+    game = _duel()
+    _under_peace_talks(game, catalog_by_name)
+    game.players[1].hand = [catalog_by_name["Grizzly Bears"]]
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    counterspell = catalog_by_name["Counterspell"]
+    game.players[0].hand = [counterspell]
+
+    offered = game.cast_target_spec(0, counterspell)["valid_targets"]
+    assert [(entry["kind"], entry["name"]) for entry in offered] == [
+        ("stack", "Grizzly Bears"),
+    ]
+
+    assert game.queue_from_hand(0, "Counterspell", target_stack_index=0).supported
+    resolve_stack(game)
+    assert [card.name for card in game.players[1].graveyard] == ["Grizzly Bears"]
+
+
+def test_a_spell_or_permanent_picker_offers_only_its_spells_under_the_ban(
+    catalog_by_name,
+):
+    """Blind Seer under Peace Talks: the spell half of its one target stands,
+    the permanent half is banned — offered, accepted and refused accordingly."""
+    game = _duel()
+    seer = _put(game, 0, catalog_by_name["Blind Seer"])
+    bears = _put(game, 1, catalog_by_name["Grizzly Bears"])
+    _under_peace_talks(game, catalog_by_name)
+    # A creature spell targets nothing, so the ban does not stop it being cast.
+    game.players[1].hand = [catalog_by_name["Hill Giant"]]
+    assert game.queue_from_hand(1, "Hill Giant").supported
+    giant = game.stack[-1]
+
+    assert seer is game.players[0].battlefield[0]
+    offered = game.activation_target_spec(0, 0)["valid_targets"]
+    assert [(entry["kind"], entry["name"]) for entry in offered] == [
+        ("stack", "Hill Giant"),
+    ]
+
+    at_a_permanent = game.queue_permanent_ability(
+        0, "Blind Seer", permanent_index=0,
+        target_permanent_ids=[bears.permanent_id],
+    )
+    assert not at_a_permanent.supported
+
+    at_the_spell = game.queue_permanent_ability(
+        0, "Blind Seer", permanent_index=0, target_stack_index=0,
+    )
+    assert at_the_spell.supported, at_the_spell.details
+    assert game.stack[-1].target_stack_item is giant

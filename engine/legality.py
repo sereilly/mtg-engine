@@ -4788,7 +4788,21 @@ class LegalityMixin:
         # sacrifice cost keeps enumerating while the ban is up. Every cost flag
         # (``spec_is_a_cost``), not the three this once listed: an exile, a
         # discard or an untap paid under Peace Talks targets nothing either.
+        #
+        # **A spell on the stack is neither a player nor a permanent**, so the
+        # ban does not reach it — which both gates in front of this list have
+        # always said (``_UNBANNABLE_CAST_KINDS``, and the activation path's own
+        # copy of it) and this list did not: Counterspell was castable under
+        # Peace Talks and its picker offered nothing, so the engine accepted a
+        # named spell that no human seat could name. The stack half of the list
+        # stands, and only that half — "target spell or permanent" (the Laces,
+        # Illusion, Blind Seer) is offered the spells and none of the permanents.
         if self.targeting_bans and not triggered and not spec_is_a_cost(spec):
+            if spec.get("kind") in _STACK_TARGET_KINDS:
+                return self._enumerate_stack_targets(
+                    caster_index, card, spec,
+                    source=ability_source or source_permanent,
+                )
             return []
         # "…**defending player controls**" (Floral Spuzzem, Kukemssa Pirates,
         # Yare). Not relative to the seat choosing but to a combat, and which

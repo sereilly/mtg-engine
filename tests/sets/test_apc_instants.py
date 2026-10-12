@@ -1002,6 +1002,30 @@ def test_suffocating_blast_counters_the_spell_and_burns_the_creature(
     assert ring in p1.battlefield and giant.damage_marked == 0
 
 
+def test_suffocating_blast_reads_back_both_of_its_targets(set_pool, catalog_by_name):
+    """``stack_targets.chosen_targets`` — what "becomes the target of a spell"
+    and CR 115.7's retargets ask — reads one target per role off the channel
+    each travels on: the spell from the stack channel, the creature by id."""
+    from engine.stack_targets import chosen_targets
+
+    game, p0, p1 = _w2g1_duel()
+    bears = _w2g1_put(game, 1, catalog_by_name["Grizzly Bears"])
+    bolt = _w2g1_spell_from(game, 1, catalog_by_name["Lightning Bolt"], target_player_index=0)
+    p0.hand = [set_pool("APC")["Suffocating Blast"]]
+    assert game.queue_from_hand(
+        0, "Suffocating Blast", target_stack_index=0,
+        target_permanent_ids=[None, bears.permanent_id],
+    ).supported
+
+    read = chosen_targets(game, game.stack[-1])
+
+    assert [(target.kind, target.channel, target.position) for target in read] == [
+        ("stack", "role", 0), ("permanent", "role", 1),
+    ]
+    assert read[0].stack_item is bolt
+    assert read[1].permanent_id == bears.permanent_id
+
+
 def test_suffocating_blast_whose_spell_has_left_still_burns_the_creature(
     set_pool, catalog_by_name
 ):

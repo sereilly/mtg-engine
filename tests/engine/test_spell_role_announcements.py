@@ -159,3 +159,37 @@ def test_a_narrowed_spell_role_offers_and_admits_only_the_spells_it_names(
     assert game.resolve_top_of_stack()
     assert target.damage_marked == 3
     assert [item.card.name for item in game.stack] == ["Lightning Bolt"]
+
+
+def test_roles_still_legal_asks_a_spell_role_whether_its_spell_is_still_there(
+    catalog_by_name,
+):
+    """CR 608.2b for a lowering that keeps its roles on one instruction and
+    asks ``roles_still_legal`` itself: a spell role is legal while its spell is
+    on the stack and still one the role's own description admits — the stack
+    picker's list for that slot, asked again."""
+    from engine.game_types import OracleExecutionContext
+    from engine.handlers._common import roles_still_legal
+
+    game, _djinn, bears = _table(catalog_by_name)
+    bolt = game.stack[-1]
+
+    def legal(spell_role):
+        payload = {"targets": {"kind": "roles", "roles": [
+            spell_role,
+            {"kind": "object", "role": "creature", "count": 1,
+             "filter": {"type_filter": "creature"}},
+        ]}}
+        context = OracleExecutionContext(
+            caster=game.players[0], target=game.players[1], card=_DJINN,
+            target_permanent_id=[None, bears.permanent_id], stack_target=bolt,
+        )
+        return roles_still_legal(game, context, payload, observer=0)
+
+    assert legal({"kind": "spell", "role": "spell"})
+    # An instant is not "target creature spell".
+    assert not legal(
+        {"kind": "spell", "role": "spell", "stack_card_types": ["creature"]}
+    )
+    game.counter_stack_object(bolt)
+    assert not legal({"kind": "spell", "role": "spell"})

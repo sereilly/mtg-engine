@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..card_hooks import ON_SPELL_COUNTERED
+from ..color_changes import forget_spell_color_change, recolor_spell
 from ..counter_conditions import cant_be_countered
 from ..divided_damage import DIVIDED_TARGETS, divided_entry, stamped_entry
 from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
@@ -131,6 +132,14 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
             is_copy=True,
         )
     )
+    # "…**except that the copy is red.**" CR 707.9b: a characteristic the copy
+    # effect sets is the copy's own. It was the one rider of Fork's line nothing
+    # did — a Forked Ancestral Recall was a blue spell — and the copy also kept
+    # whatever colour an *effect* had given the original (a Lace's record rides
+    # ``choices``, which is copied whole): CR 707.2 copies the printed values
+    # and the decisions made in casting, not other effects on the object.
+    forget_spell_color_change(game.stack[-1])
+    recolor_spell(game.stack[-1], "R")
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
     if context.target_permanent_index is not None:
         # CR 707.10c: "You may choose new targets for the copy" — and this

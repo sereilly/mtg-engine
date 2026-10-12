@@ -199,6 +199,18 @@ def recolor_spell(item: Any, color: Any, *, until_eot: bool = False) -> int:
     return stamp
 
 
+def forget_spell_color_change(item: Any) -> None:
+    """Drop every colour effect recorded on the spell *item*.
+
+    For a **copy**: the record rides ``StackItem.choices``, which a copy takes
+    whole (CR 707.10: the decisions made for the spell), and an effect that
+    recoloured the original is not one of them — CR 707.2 copies the printed
+    values, "other effects … are not copied".
+    """
+    item.choices.pop(COLOR_OVERRIDE, None)
+    item.choices.pop(SPELL_COLOR_EFFECT, None)
+
+
 def spell_color_change(item: Any) -> tuple[str, ...] | None:
     """The colours an effect made the spell *item*, or None where none did.
 
@@ -327,5 +339,6 @@ __all__ = [
     "COLOR_OVERRIDE_UNTIL_EOT_TIMESTAMP", "DERIVED_COLOR_CHANGES",
     "SPELL_COLOR_EFFECT", "UNTIL_EOT_KEYS", "add_derived_color_change",
     "carry_spell_color_change", "change_color", "clear_derived_color_changes",
-    "color_changes", "recolor_spell", "spell_color_change",
+    "color_changes", "forget_spell_color_change", "recolor_spell",
+    "spell_color_change",
 ]

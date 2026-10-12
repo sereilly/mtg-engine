@@ -208,3 +208,56 @@ def test_400_7a_an_instant_takes_its_record_with_it(catalog_by_name):
     assert game.players[0].life == 17
     assert game._effective_colors(bystander) == {"G"}
     assert [card.name for card in game.players[1].graveyard] == ["Lightning Bolt"]
+
+
+# --- a copy of a spell: what it takes of the original's colour --------------
+
+
+def _forked(game, catalog_by_name, name, **announcement):
+    """Seat 1 casts *name*; seat 0 Forks it. Returns (original, copy)."""
+    game.players[1].hand = [catalog_by_name[name]]
+    assert game.queue_from_hand(1, name, **announcement).supported
+    original = game.stack[-1]
+    game.players[0].hand = [catalog_by_name["Fork"]]
+    assert game.queue_from_hand(0, "Fork", target_stack_index=0).supported
+    assert game.resolve_top_of_stack()
+    (copy,) = [item for item in game.stack if item.is_copy]
+    return original, copy
+
+
+@pytest.mark.cr("707.9b")
+def test_forks_copy_is_red_whatever_the_original_is(catalog_by_name):
+    """"Copy target instant or sorcery spell, **except that the copy is red**."
+    The rider nothing did: a Forked Ancestral Recall was a blue spell, to
+    protection from blue and to "counter target red spell" alike."""
+    game = _duel()
+
+    original, copy = _forked(
+        game, catalog_by_name, "Ancestral Recall", target_player_index=1
+    )
+
+    assert game._stack_item_colors(original) == ("U",)
+    assert game._stack_item_colors(copy) == ("R",)
+
+
+@pytest.mark.cr("707.2")
+def test_a_copy_does_not_take_an_effect_that_recoloured_the_original(
+    catalog_by_name,
+):
+    """A Lace on the original is an effect on that object, not a copiable value
+    — and the record rides the choices a copy takes whole. The original stays
+    what the Lace made it; the copy is what Fork makes it."""
+    game = _duel()
+    game.players[1].hand = [catalog_by_name["Lightning Bolt"]]
+    assert game.queue_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    bolt = game.stack[-1]
+    recolor_spell(bolt, "U")
+    recolor_spell(bolt, "G", until_eot=True)
+    game.players[0].hand = [catalog_by_name["Fork"]]
+    assert game.queue_from_hand(0, "Fork", target_stack_index=0).supported
+    assert game.resolve_top_of_stack()
+    (copy,) = [item for item in game.stack if item.is_copy]
+
+    assert spell_color_change(bolt) == ("G",)
+    assert spell_color_change(copy) == ("R",)
+    assert set(copy.choices["color_effect"]) == {"indefinite"}

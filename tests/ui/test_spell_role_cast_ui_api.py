@@ -227,3 +227,25 @@ def test_the_activation_cascade_reaches_the_spell_or_permanent_prompt():
     cascade = app_js_function_body("startActivationPrompt")
     assert "cardRequiresTargetSpellOrPermanent(card)" in cascade
     assert "const alsoStack = spellOrPermanent ||" in cascade
+
+
+def test_suffocating_blast_glows_only_while_a_spell_and_a_creature_can_be_named():
+    """The castable highlight asks the picker's own walk: with an empty stack,
+    or with a spell there and no creature anywhere, the hand card is dark —
+    and with both it is offered."""
+    from web.state_view import _compute_playable_hand_indices
+
+    sid, game = _session()
+    session = store.get(sid)
+    game.players[0].hand = [_APC["Suffocating Blast"]]
+    game.priority_player_index = 0
+
+    _put(game, 1, _LEA["Grizzly Bears"])
+    assert _compute_playable_hand_indices(session, 0) == []
+
+    _opposing_bolt(game)
+    game.priority_player_index = 0
+    assert _compute_playable_hand_indices(session, 0) == [0]
+
+    game.remove_from_battlefield(game.players[1].battlefield[0])
+    assert _compute_playable_hand_indices(session, 0) == []
