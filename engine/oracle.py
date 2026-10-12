@@ -4389,9 +4389,15 @@ def _protection_quality_word(word: str) -> bool:
     One reader, so what is admitted here and what a shield answers to cannot come
     apart again.
     """
-    from .keywords import protection_quality
+    from .keywords import protection_qualities_named
 
-    return protection_quality(word) is not None
+    # The shorthand reader (CR 702.16h/i), which answers every single-quality
+    # word exactly as ``protection_quality`` does and additionally reads the
+    # members that stand for several abilities — "each color" (Iridescent
+    # Angel). It is the function ``_protection_qualities`` builds a
+    # permanent's qualities with, so the delegation above is unchanged: one
+    # reader, one vocabulary.
+    return protection_qualities_named(word) is not None
 
 
 def _protection_clause_modelled(clause: str) -> bool:

@@ -109,8 +109,18 @@ _COLORS = "white|blue|black|red|green"
 #: *set*, and here the set is read off a board — so it is a third alternative
 #: beside a printed colour and a chosen one, resolved by the reader that holds
 #: the Aura (:data:`AMONG_CONTROLLED_PROTECTION_COLORS`).
+#:
+#: "…protection from **enchantments**" (Tattoo Ward). The check behind this
+#: alternation widened to every quality CR 702.16a names when the damage half
+#: and the state-based sweep moved onto ``_protection_qualities``, so the four
+#: permanent card types join the colours: the reader maps each printed word
+#: through ``keywords.protection_qualities_named``, the one vocabulary a
+#: printed line and a lord's grant are read with. Listed rather than `[a-z]+`
+#: for the reason the colours were: a word nothing answers stays unclaimed.
+_PROTECTION_CARD_TYPES = "artifacts|creatures|enchantments|lands"
 _PROTECTION_QUALITY = (
-    rf"(?:{_COLORS}|the chosen color|each color among permanents you control)"
+    rf"(?:{_COLORS}|{_PROTECTION_CARD_TYPES}"
+    r"|the chosen color|each color among permanents you control)"
 )
 _PROTECTION_QUALITIES = rf"{_PROTECTION_QUALITY}(?: and from {_PROTECTION_QUALITY})*"
 

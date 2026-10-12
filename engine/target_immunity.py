@@ -243,6 +243,14 @@ class BoardTargetImmunity:
 
     filter: dict
     spell_class: str
+    #: Which of the two separately targeted things this conjunct stops
+    #: (CR 115.1a for a spell, CR 115.1c/d for an ability). Dense Foliage names
+    #: spells and nothing else; "Creatures you control can't be the targets of
+    #: blue spells **or abilities from blue sources**." (Spellbane Centaur)
+    #: prints one conjunct of each kind, and *spell_class* is then the class of
+    #: **source** the ability half names — the string
+    #: :func:`source_is_in_class` reads.
+    source_kind: str = SPELL_SOURCE
 
 
 #: The plural of :data:`_TARGET_IMMUNITY`'s sentence, and the plural is not
@@ -280,16 +288,54 @@ def board_target_immunities(line: str) -> tuple[BoardTargetImmunity, ...]:
     spell_class = next(
         (value for phrase, value in _SPELL_CLASSES if printed == phrase), None
     )
-    if spell_class is None:
-        return ()
+    if spell_class is not None:
+        classes: tuple[tuple[str, str], ...] = ((SPELL_SOURCE, spell_class),)
+    else:
+        # "…of **blue spells or abilities from blue sources**" (Spellbane
+        # Centaur). The source-class body Raiding Party prints about itself,
+        # here about a described set — the same conjuncts, read by the same
+        # pattern, and all or nothing for :func:`source_class_immunities`'
+        # reason: half a narrowed shroud is strictly more permissive than the
+        # card prints.
+        found = []
+        for part in printed.split(" or "):
+            part_match = _SOURCE_CLASS_PART.match(part.strip())
+            if part_match is None:
+                return ()
+            colour = part_match.group("spell_color")
+            if colour is not None:
+                found.append(
+                    (SPELL_SOURCE, COLOR_CLASS_PREFIX + _COLOR_WORDS[colour])
+                )
+                continue
+            source = part_match.group("ability_class")
+            found.append((
+                ABILITY_SOURCE,
+                COLOR_CLASS_PREFIX + _COLOR_WORDS[source]
+                if source in _COLOR_WORDS else source,
+            ))
+        classes = tuple(found)
     described = subject_filter_payload(match.group("subject"), plural=True)
     if not described:
         return ()
-    return (BoardTargetImmunity(described, spell_class),)
+    return tuple(
+        BoardTargetImmunity(described, named, source_kind)
+        for source_kind, named in classes
+    )
 
 
-def board_target_immunity_classes(game, permanent) -> frozenset[str]:
+def board_target_immunity_classes(
+    game, permanent, source_kind: str = SPELL_SOURCE,
+) -> frozenset[str]:
     """Every class of spell that may not target *permanent*, read off the board.
+
+    *source_kind* asks the other half instead: with :data:`ABILITY_SOURCE` the
+    answer is every class of **source** whose abilities may not target it
+    ("…or abilities from blue sources", Spellbane Centaur), the strings
+    :func:`source_is_in_class` reads. One scan for both halves, because they
+    are conjuncts of one printed sentence about one described set — and a
+    spell and an ability are separately targeted (CR 115.1a, CR 115.1c/d), so
+    neither half may answer for the other.
 
     The board-wide sibling of :func:`spell_target_immunity_classes`, and it
     takes the *game* because that is the whole difference: the clause is printed
@@ -309,7 +355,7 @@ def board_target_immunity_classes(game, permanent) -> frozenset[str]:
     for seat, source in game.permanents_with_controller():
         for line in _lines_of(source.effective_card):
             for found in board_target_immunities(line):
-                if found.spell_class in classes:
+                if found.source_kind != source_kind or found.spell_class in classes:
                     continue
                 if subject_matches(
                     game, permanent, dict(found.filter),

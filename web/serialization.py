@@ -182,6 +182,11 @@ def _protection_quality_word(kind: str, value: str) -> str:
         return _SYMBOL_TO_COLOR_WORD.get(value, value)
     if kind == "multicolored":
         return "multicolored"
+    if kind == "spell_type":
+        # "protection from **instant spells**" (Devoted Caretaker): the type
+        # narrowed to spells, spelled as printed. Falling through to the rule
+        # below would badge it "instants", which is a wider protection.
+        return f"{value} spells"
     # A card type or a creature subtype: printed plural, stored singular. The
     # supertyped form ("legendary creature", Tsabo Tavoc) ends in that same
     # noun, so the one rule spells it too — "legendary creatures".

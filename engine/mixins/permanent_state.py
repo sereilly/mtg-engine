@@ -3387,7 +3387,9 @@ class PermanentStateMixin:
                 return False
         return True
 
-    def _protection_qualities(self, permanent: Permanent) -> set[tuple[str, str]]:
+    def _protection_qualities(
+        self, permanent: Permanent, *, ignoring_aura: Permanent | None = None,
+    ) -> set[tuple[str, str]]:
         """The qualities this permanent has protection from (CR 702.16).
 
         Sourced from a printed "protection from [quality]" line (static or
@@ -3395,18 +3397,40 @@ class PermanentStateMixin:
         from a ``protection_from_<color>`` metadata flag. A word naming no
         modelled quality contributes nothing — but such a line never compiles
         in the first place: the keyword gate refuses it with the clause named.
+
+        *ignoring_aura* leaves one attached Aura's own grant out of the
+        answer. It exists for CR 702.16n and has one caller, the state-based
+        sweep: "this effect doesn't remove this Aura" exempts the Aura from
+        the protection **it** grants and from no other instance, so the sweep
+        asks what the creature is protected from without it.
         """
         qualities: set[tuple[str, str]] = set()
         program = compile_card_oracle(permanent.effective_card)
+        from ..keywords import EACH_OF_ITS_COLORS, protection_qualities_named
+
+        def _named(word: str) -> None:
+            # One member of a clause, which may itself be shorthand for
+            # several abilities: "each color" (CR 702.16h, Iridescent Angel)
+            # is five, and "each of its colors" (CR 702.16i, Earnest
+            # Fellowship) is one per colour **this** permanent has — read
+            # through layer 5 now, so a creature a Lace turned red has
+            # protection from red and no longer from what it was.
+            #
+            # The colours are computed only for the member that asks: every
+            # other word is answered without touching the layers.
+            held = None
+            if " ".join(str(word).lower().split()) == EACH_OF_ITS_COLORS:
+                held = self._effective_colors(permanent)
+            qualities.update(
+                protection_qualities_named(word, holder_colors=held) or ()
+            )
 
         def _absorb(clause: str) -> None:
             # CR 702.16g/h/i: "protection from [A] and from [B]" (and comma
             # separated variants) is shorthand for several separate protection
             # abilities.
             for word in re.split(r",|\band from\b|\band\b", clause):
-                quality = self._protection_quality_of(word)
-                if quality is not None:
-                    qualities.add(quality)
+                _named(word)
 
         for instr in program.instructions:
             if instr.kind == "static_line" and instr.value.startswith("protection from "):
@@ -3436,6 +3460,12 @@ class PermanentStateMixin:
         # nothing having to remove it. That grant used to be stamped into the
         # metadata channel below and cleaned up by name on removal.
         for aura in auras_attached_to(permanent):
+            if aura is ignoring_aura:
+                # CR 702.16n's question — "does this creature have **other**
+                # instances of protection from the same quality?" — asked by
+                # the state-based sweep of the one Aura whose own grant says
+                # it doesn't remove that Aura.
+                continue
             for word in aura_protection_colors(aura.effective_card.oracle_text):
                 if word == AMONG_CONTROLLED_PROTECTION_COLORS:
                     # "…protection from **each color among permanents you
@@ -3471,6 +3501,11 @@ class PermanentStateMixin:
                     symbol = aura.metadata.get("chosen_color")
                 else:
                     symbol = _COLOR_WORD_TO_SYMBOL.get(word)
+                    if symbol is None:
+                        # "…protection from **enchantments**" (Tattoo Ward):
+                        # a quality that is not a colour, through the reader
+                        # every printed clause goes through.
+                        _named(word)
                 if symbol:
                     qualities.add(("color", symbol))
         # A lord's grant ("Other Cats you control … have protection from Dogs",
@@ -3498,9 +3533,11 @@ class PermanentStateMixin:
                 if not self._lord_buff_matches(permanent, lord, buff):
                     continue
                 for word in buff.protection_from:
-                    quality = self._protection_quality_of(word)
-                    if quality is not None:
-                        qualities.add(quality)
+                    # Through the shorthand reader, so "Each creature has
+                    # protection from each of its colors." (Earnest
+                    # Fellowship) is computed per creature reached — *its*
+                    # colours, not the lord's.
+                    _named(word)
         # A **conditional** self-grant: "As long as an opponent controls a
         # creature with protection from white …, this creature has protection
         # from white." (Escaped Shapeshifter.) Derived, exactly as the Aura and
@@ -3561,9 +3598,7 @@ class PermanentStateMixin:
         # printed one.
         for key in permanent.metadata:
             if key.startswith("protection_from_"):
-                quality = self._protection_quality_of(key[len("protection_from_"):])
-                if quality is not None:
-                    qualities.add(quality)
+                _named(key[len("protection_from_"):])
         # No Sleight of Mind step here: the clause above was read off
         # ``effective_card``, whose text layer 3 has already rewritten, so
         # "protection from blue" already reads "protection from red". Remapping
@@ -3609,6 +3644,12 @@ class PermanentStateMixin:
             # widening the rewrite to a quality nothing exercises would be a
             # claim with nothing behind it.
             return len(self._effective_colors(source)) >= 2
+        if kind == "spell_type":
+            # "protection from **instant spells**" (Devoted Caretaker). A
+            # permanent is not a spell (CR 111.1 / CR 110.1: a spell is a card
+            # on the stack), so nothing on the battlefield has this quality —
+            # no blocker, no Aura, no Equipment, and no ability's source.
+            return False
         if kind in ("card_type", "subtype"):
             # has_type resolves through the layer system, so a granted or
             # layer-4 type counts exactly as a printed one.
@@ -3672,6 +3713,15 @@ class PermanentStateMixin:
             from ..object_colors import card_colors
 
             return len(set(card_colors(self, card, seat))) >= 2
+        if kind == "spell_type":
+            # "protection from **instant spells**" (Devoted Caretaker): the
+            # card type of a **spell**. Every caller hands this method a card
+            # for one of two reasons — a spell choosing a target
+            # (``_can_be_targeted``, which asks only when no ability is
+            # choosing) or a spell as a damage source (CR 109.5) — so the type
+            # is the whole question here. The printed line, as for the
+            # card-type arm below: a spell has no layer-4 effect in this pool.
+            return value in (card.type_line or "").lower().split()
         if kind in ("card_type", "subtype"):
             return value in (card.type_line or "").lower().split()
         if kind == "typed":
@@ -3719,7 +3769,7 @@ class PermanentStateMixin:
 
     def _is_protected_from(
         self, victim: Permanent, source, *, as_damage_source: bool = False,
-        seat: int | None = None,
+        seat: int | None = None, ignoring_aura: Permanent | None = None,
     ) -> bool:
         """True if *victim* has protection from a quality *source* has
         (CR 702.16e/f).
@@ -3746,7 +3796,9 @@ class PermanentStateMixin:
             self._source_has_quality(
                 source, quality, as_damage_source=as_damage_source, seat=seat,
             )
-            for quality in self._protection_qualities(victim)
+            for quality in self._protection_qualities(
+                victim, ignoring_aura=ignoring_aura
+            )
         )
 
     def _can_be_targeted(
@@ -3846,13 +3898,22 @@ class PermanentStateMixin:
                 return False
         if ability_source is not None:
             from ..target_immunity import (
+                ABILITY_SOURCE,
                 ability_source_immunity_classes,
+                board_target_immunity_classes,
                 source_is_in_class,
             )
 
+            # The board-wide subject beside the relational ones, exactly as the
+            # spell branch above unions them: "Creatures you control can't be
+            # the targets of blue spells **or abilities from blue sources**."
+            # (Spellbane Centaur) is printed on some other permanent entirely.
             if any(
                 source_is_in_class(self, ability_source, source_class)
-                for source_class in ability_source_immunity_classes(target)
+                for source_class in (
+                    ability_source_immunity_classes(target)
+                    | board_target_immunity_classes(self, target, ABILITY_SOURCE)
+                )
             ):
                 return False
         # "…can't be the target of spells that can target only Walls or of
@@ -3912,6 +3973,11 @@ class PermanentStateMixin:
         if source_card is not None and any(
             self._card_has_quality(source_card, quality, seat=caster_index)
             for quality in qualities
+            # "…from instant **spells**" is asked of a spell alone: when an
+            # ability is choosing, *source_card* is the card of the object
+            # whose ability it is, and an ability is not a spell (CR 113.1)
+            # whatever its source's type line says.
+            if not (quality[0] == "spell_type" and ability_source is not None)
         ):
             return False
         if caster_index is not None and caster_index != self.controller_index_of(target):
