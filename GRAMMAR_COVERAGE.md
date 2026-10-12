@@ -47,7 +47,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PLS | 143 | 255 | 91.0% | 90.6% | 67.8% | 126 |
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| APC *(measured)* | 143 | 240 | 77.1% | 73.3% | 55.4% | 97 |
+| APC *(measured)* | 143 | 240 | 80.8% | 77.1% | 57.5% | 101 |
 | **All (shipped)** | **7263** | **10637** | **90.6%** | **90.0%** | **61.5%** | **5567** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -60,9 +60,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 573 | 275 | expected a subject |  |
-| 160 | 79 | unrecognized effect verb |  |
-| 140 | 73 | unconsumed text |  |
+| 566 | 270 | expected a subject |  |
+| 159 | 78 | unrecognized effect verb |  |
+| 139 | 72 | unconsumed text |  |
 | 57 | 39 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -1366,6 +1366,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Ceta Disciple**
   - `{R}, {T}: Target creature gets +2/+0 until end of turn.`
   - `{G}, {T}: Add one mana of any color.`
+- **Ceta Sanctuary**
+  - `At the beginning of your upkeep, if you control a red or green permanent, draw a card, then discard a card. If you control a red permanent and a green permanent, instead draw two cards, then discard a card.`
 - **Chain Lightning**
   - `Chain Lightning deals 3 damage to any target. Then that player or that permanent's controller may pay {R}{R}. If the player does, they may copy this spell and may choose a new target for that copy.`
 - **Chain Stasis**
@@ -2574,6 +2576,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{R}, {T}: Destroy target nonbasic land.`
 - **Dwarven Nomad**
   - `{T}: Target creature with power 2 or less can't be blocked this turn.`
+- **Dwarven Patrol**
+  - `Whenever you cast a nonred spell, untap this creature.`
 - **Dwarven Pony**
   - `{1}{R}, {T}: Target Dwarf creature gains mountainwalk until end of turn. (It can't be blocked as long as defending player controls a Mountain.)`
 - **Dwarven Ruins**
@@ -3563,6 +3567,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {B}{G}.`
 - **Gerrard Capashen**
   - `At the beginning of your upkeep, you gain 1 life for each card in target opponent's hand.`
+  - `{3}{W}: Tap target creature. Activate only if Gerrard Capashen is attacking.`
 - **Gerrard's Battle Cry**
   - `{2}{W}: Creatures you control get +1/+1 until end of turn.`
 - **Gerrard's Command**
@@ -5580,6 +5585,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, target creature you control gains "{0}: The next 1 damage that would be dealt to target creature, planeswalker, or player this turn is dealt to this creature instead." Only you may activate this ability.`
 - **Martyrs' Tomb**
   - `Pay 2 life: Prevent the next 1 damage that would be dealt to target creature this turn.`
+- **Mask of Intolerance**
+  - `At the beginning of each player's upkeep, if there are four or more basic land types among lands that player controls, this artifact deals 3 damage to that player.`
 - **Mask of the Mimic**
   - `Search your library for a card with the same name as target nontoken creature, put that card onto the battlefield, then shuffle.`
 - **Masked Blackguard**
@@ -6059,6 +6066,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Necra Disciple**
   - `{G}, {T}: Add one mana of any color.`
   - `{W}, {T}: Prevent the next 1 damage that would be dealt to any target this turn.`
+- **Necra Sanctuary**
+  - `At the beginning of your upkeep, if you control a green or white permanent, target player loses 1 life. If you control a green permanent and a white permanent, that player loses 3 life instead.`
 - **Necratog**
   - `Exile the top creature card of your graveyard: this creature gets +2/+2 until end of turn.`
 - **Necrite**
