@@ -38,6 +38,7 @@ from .faces import castable_faces
 from .search_filters import card_has_type
 
 if TYPE_CHECKING:
+    from .alternative_costs import AlternativeCost
     from .models import CardDefinition
 
 
@@ -113,6 +114,25 @@ class CastPermission:
     #: exactly as many words. The two compose because nothing has to schedule
     #: the second, the same way ``while_exiled`` needs no sweep.
     position: str | None = None
+    #: **The alternative cost this permission requires** (CR 118.9b: "An
+    #: effect that allows you to cast a spell may require a certain
+    #: alternative cost to be paid"), as an
+    #: :class:`~engine.alternative_costs.AlternativeCost`, or None for a
+    #: permission that leaves the price alone.
+    #:
+    #: Flashback is the card that needs it (CR 702.34a: "You may cast this card
+    #: from your graveyard … by paying [cost] rather than paying its mana
+    #: cost"), printed on the card (``flashback.flashback_permission``) or
+    #: granted to one (Recoup). Its own field rather than a reading of
+    #: ``free``: a waiver is *one* alternative cost, of nothing, and this is
+    #: any other — the cast path pays it where it would have paid the mana
+    #: cost, and CR 118.9a then refuses a second one beside it.
+    #:
+    #: Two permissions may cover one card — a flashback card under Yawgmoth's
+    #: Will — and they are two different casts at two different prices. Which
+    #: one a cast uses is the caster's announcement (CR 601.2b), which
+    #: :func:`permission_for` takes as ``costed``.
+    cost: "AlternativeCost | None" = None
 
     @property
     def zone_seat(self) -> int:
@@ -376,11 +396,22 @@ def board_graveyard_play(game, player_index: int) -> str | None:
 
 def permission_for(
     game, player_index: int, card, zone: str, *, as_land: bool = False, spell=None,
+    costed: bool | None = None,
 ) -> CastPermission | None:
     """The first live grant letting *player_index* cast/play *card* from
     *zone*, or None. ``zone == "hand"`` answers only cost-waiver grants — the
     ordinary permission to cast from hand is a rule, not an effect, and the
     caller must not gate it on this seam.
+
+    *costed* is which **kind** of permission is being asked for, when a card
+    may be covered by more than one (a flashback card under Yawgmoth's Will):
+    ``True`` is only a permission that requires an alternative cost
+    (:attr:`CastPermission.cost`, CR 118.9b — flashback), ``False`` only one
+    that requires none, and ``None`` the first of either, in the order below.
+    That order asks the card's own flashback **last**, for the reason its own
+    static permission was already asked last: a granted permission may open a
+    wider zone or charge the ordinary cost, and answering with the narrower
+    one first would hide it.
 
     *card* is the card as its zone holds it — what a grant's identity list,
     a pile's top and "your graveyard" are about. *spell* is what it is being
@@ -391,12 +422,27 @@ def permission_for(
     and judged by it Burn // Grow is a five-mana instant-and-sorcery to a
     waiver its one-mana instant half is entitled to. Omitted, the card is
     its own spell, which is every card with one face."""
+    for permission in _permissions_for(
+        game, player_index, card, zone, as_land=as_land, spell=spell,
+    ):
+        if costed is None or (permission.cost is not None) is costed:
+            return permission
+    return None
+
+
+def _permissions_for(
+    game, player_index: int, card, zone: str, *, as_land: bool, spell,
+):
+    """Every live permission :func:`permission_for` could answer with, in the
+    order it answers — a generator, so the one question "which kind" (its
+    ``costed``) is asked of one list rather than threaded through each
+    source."""
     spell = card if spell is None else spell
     for permission in game.cast_permissions:
         if permission.player_index != player_index:
             continue
         if _covers(game, permission, card, zone, as_land=as_land, spell=spell):
-            return permission
+            yield permission
     # "You may cast Goblin spells from the top of your library." (Conspicuous
     # Snoop.) A static permission of a *permanent*, read off its text for as
     # long as it is in play — so it is derived rather than stored, exactly as
@@ -406,11 +452,11 @@ def permission_for(
         from .library_top import top_castable
 
         if top_castable(game, player_index, card):
-            return CastPermission(
+            yield CastPermission(
                 player_index=player_index, zone="library", mode="play",
                 cards=[card], duration=None, source_name="top of library",
             )
-        return None
+        return
     # "Any player may cast creature spells with mana value 3 or less without
     # paying their mana costs …" (Aluren.) A *board* permission rather than one
     # this seat was granted, so it is derived on demand for the reason the
@@ -420,7 +466,7 @@ def permission_for(
     if zone == "hand" and not as_land:
         source = board_free_cast(game, spell)
         if source is not None:
-            return CastPermission(
+            yield CastPermission(
                 player_index=player_index, zone="hand", mode="cast",
                 cards=[card], free=True, duration=None, source_name=source,
             )
@@ -434,7 +480,7 @@ def permission_for(
     ):
         source = board_graveyard_play(game, player_index)
         if source is not None:
-            return CastPermission(
+            yield CastPermission(
                 player_index=player_index, zone="graveyard", mode="play",
                 cards=[card], duration=None, source_name=source,
             )
@@ -448,11 +494,22 @@ def permission_for(
         and self_permission_zone(spell) == zone
         and any(entry is card for entry in getattr(game.players[player_index], zone))
     ):
-        return CastPermission(
+        yield CastPermission(
             player_index=player_index, zone=zone, mode="cast", cards=[card],
             duration=None, source_name=getattr(card, "name", ""),
         )
-    return None
+    # "Flashback {4}{R}" (CR 702.34a): the card's own permission to be cast
+    # from its owner's graveyard, **for its flashback cost**. The same kind of
+    # derived, card-printed permission as the one above and asked after it for
+    # the reason that one is asked after the grants — this is the only
+    # permission here that names a price, and a caster whose graveyard another
+    # effect has opened is not thereby made to pay it.
+    if zone == "graveyard" and not as_land:
+        from .flashback import flashback_permission
+
+        own = flashback_permission(game, player_index, card, spell)
+        if own is not None:
+            yield own
 
 
 def consume(game, permission: CastPermission, card) -> None:
@@ -643,6 +700,20 @@ def playable_from_zones(game, player_index: int) -> list[dict]:
                     # grant but the cross-seat one, so a client reading only
                     # `zone`/`index` keeps working.
                     "owner_seat": owner_seat,
+                    # The alternative cost the permission requires, as a
+                    # player would read it ("pay {4}{R}"), its mana, and which
+                    # keyword it is the price of — so a client can badge the
+                    # card "Flashback {4}{R}" rather than offer it at its
+                    # printed cost. Absent for a permission that names no
+                    # price, so every entry a client already read is unchanged.
+                    **(
+                        {
+                            "cost": permission.cost.describe(),
+                            "cost_mana": permission.cost.mana,
+                            "cost_keyword": permission.cost.keyword,
+                        }
+                        if permission.cost is not None else {}
+                    ),
                 })
     # CR 903.8's command zone. The question this function answers is "what may
     # this seat play from a non-hand zone right now", and a commander is one of

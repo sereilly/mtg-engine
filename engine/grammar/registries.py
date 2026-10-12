@@ -67,6 +67,7 @@ from ..draw_step_modifiers import draw_step_bonus_for, skips_own_draw_step
 from ..enter_effects import enter_effect_line
 from ..named_counters import CAP_CLAIM, counter_cap_line
 from ..extra_triggers import extra_trigger_line
+from ..flashback import FLASHBACK_CLAIM, flashback_claims_line
 from ..land_play_allowance import land_play_line
 from ..landwalk import landwalk_per_type_spec
 from ..life_prohibitions import life_gain_ban_line
@@ -386,6 +387,16 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # the scan those two use.
     if cost_modifier_claims_line(line):
         return "cost_modifiers"
+
+    # engine/flashback.py — CR 702.34a's first static ability, which is what a
+    # flashback keyword line has been rewritten into by the time a line reaches
+    # here: "You may cast this card from your graveyard by paying {4}{R} rather
+    # than paying its mana cost." A permission and a price, derived off the
+    # card's text by `cast_permissions.permission_for` at every cast — no
+    # instruction to lower. Claimed through the reader that charges the cost,
+    # so a cost it cannot read stays unclaimed.
+    if flashback_claims_line(line):
+        return FLASHBACK_CLAIM
 
     # engine/land_play_allowance.py — CR 305.2/505.6b extra land plays
     # (Fastbond), derived from the permanent's own text by the land-drop path in

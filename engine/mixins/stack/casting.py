@@ -42,10 +42,12 @@ from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...faces import choose_a_face_refusal, holds_spell_named, spell_named
 from ...classifier import classify_card
 from ...cost_modifiers import (
-    CostReduction, buyback_cost_reduction, cost_reduction_for_cast, reduce_cost,
+    CostReduction, buyback_cost_reduction, cost_reduction_for_cast,
+    keyword_cost_modifiers, reduce_cost,
     sacrifice_taxes, self_per_target_tax, spell_cost_tax, spell_life_tax,
     spell_symbol_tax,
 )
+from ...flashback import is_flashback
 from ...game_types import SimulationResult, StackItem, chosen_damage_source
 from ...handlers._common import graveyard_card_matches
 from ...models import CardDefinition, Permanent, PlayerState
@@ -1002,27 +1004,44 @@ class SpellCastingMixin:
             ]
             source_zone = getattr(caster, from_zone)
             hand_index = None
-            for seat in seats:
-                pile = getattr(self.players[seat], from_zone)
-                for i, candidate in enumerate(pile):
-                    if not holds_spell_named(candidate, card_name):
-                        continue
-                    if hand_index is None and seat == caster_index:
-                        # The fallback that names the refusal below, and only
-                        # out of the caster's own pile: "no effect allows
-                        # playing that card from *your* exile" is what the
-                        # player asked about.
-                        hand_index = i
-                    grant = permission_for(
-                        self, caster_index, candidate, from_zone,
-                        as_land=candidate.primary_type == "land",
-                        # Judged as the spell it is being cast as — the
-                        # named half of a split card (CR 709.3a).
-                        spell=spell_named(candidate, card_name),
-                    )
-                    if grant is not None and grant.zone_seat == seat:
-                        source_zone, hand_index, permission = pile, i, grant
-                        source_seat = seat
+            # **Which permission**, when a card is covered by more than one
+            # (CR 601.2b). A flashback card under Yawgmoth's Will may be cast
+            # for its mana cost under the Will or for its flashback cost under
+            # its own keyword, and those are two casts: the caster who
+            # announces an alternative cost is asking for the permission that
+            # *requires* one (CR 118.9b, `CastPermission.cost`), so that kind
+            # is looked for first and across every pile. Finding none, the
+            # announcement is about the card's own printed alternative cost
+            # (Force of Will out of an opened graveyard) and the ordinary
+            # lookup stands. A caster who announces nothing gets the first
+            # permission of either kind, which for a card only its own
+            # flashback covers is the flashback — there is no other way to
+            # cast it, so there is nothing to choose.
+            for wanted in ((True, None) if alternative_cost else (None,)):
+                for seat in seats:
+                    pile = getattr(self.players[seat], from_zone)
+                    for i, candidate in enumerate(pile):
+                        if not holds_spell_named(candidate, card_name):
+                            continue
+                        if hand_index is None and seat == caster_index:
+                            # The fallback that names the refusal below, and
+                            # only out of the caster's own pile: "no effect
+                            # allows playing that card from *your* exile" is
+                            # what the player asked about.
+                            hand_index = i
+                        grant = permission_for(
+                            self, caster_index, candidate, from_zone,
+                            as_land=candidate.primary_type == "land",
+                            # Judged as the spell it is being cast as — the
+                            # named half of a split card (CR 709.3a).
+                            spell=spell_named(candidate, card_name),
+                            costed=wanted,
+                        )
+                        if grant is not None and grant.zone_seat == seat:
+                            source_zone, hand_index, permission = pile, i, grant
+                            source_seat = seat
+                            break
+                    if permission is not None:
                         break
                 if permission is not None:
                     break
@@ -1414,6 +1433,11 @@ class SpellCastingMixin:
                 taking_it=alternative_cost,
                 named_hand_index=alternative_cost_hand_index,
                 spell_hand_index=hand_index if from_zone == "hand" else None,
+                # CR 118.9b: the permission this cast is made under may
+                # *require* an alternative cost — flashback's (CR 702.34a).
+                # Then that cost is the announcement, whatever the caller
+                # said, and CR 118.9a leaves no room for a second.
+                required=permission.cost if permission is not None else None,
             )
         )
         if alternative_denial is None:
@@ -2006,14 +2030,72 @@ class SpellCastingMixin:
             # CR 118.9c is what this branch does *not* do: nothing here touches
             # `card.mana_cost`, so the taxes above, the commander tax and every
             # "with mana value X" reader still see the printed cost.
-            if "{X}" in card.mana_cost.upper():
+            alternative_mana = chosen_alternative.mana
+            if "{X}" in card.mana_cost.upper() and "{X}" not in (
+                alternative_mana or ""
+            ).upper():
                 # CR 107.3b: X is 0 when neither the mana cost nor an
-                # alternative cost that includes X is paid. No card in the pool
-                # prints both an {X} and an alternative cost; this is the rule's
-                # answer rather than a guess at one.
+                # alternative cost that includes X is paid. The one alternative
+                # cost that *does* include it is a granted flashback "equal to
+                # its mana cost" (Recoup) over an X spell, whose X is then the
+                # one the caster announced.
                 resolved_x_value = 0
+            if alternative_mana is not None and self.enforce_mana_costs:
+                # **An alternative cost paid in mana** (CR 702.34a: flashback's
+                # "by paying [cost] rather than paying its mana cost"). Charged
+                # where the mana cost would have been and by the same payment,
+                # because CR 118.9d keeps every additional cost, increase and
+                # reduction in force on top of it: the taxes and the discounts
+                # gathered above for this cast apply to *this* total — "start
+                # with the mana cost or alternative cost you're paying, add any
+                # cost increases, then apply any cost reductions".
+                if not alternative_mana.strip():
+                    # A flashback cost "equal to its mana cost" over a card
+                    # that has none (CR 118.6): unpayable, never free.
+                    details = (
+                        f"{card.name} has no mana cost, so its "
+                        f"{chosen_alternative.keyword or 'alternative'} cost "
+                        f"is unpayable (CR 118.6)"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+                keyword_more, keyword_less, keyword_names = (
+                    keyword_cost_modifiers(
+                        self, caster_index, chosen_alternative.keyword
+                    )
+                )
+                paid = self._pay_cast_cost(
+                    caster, card, resolved_x_value, x_colors,
+                    extra_generic=extra_generic_tax + keyword_more,
+                    reduction=CostReduction(
+                        cost_reduction.generic + keyword_less,
+                        cost_reduction.colored,
+                    ),
+                    extra_pips=extra_pip_tax,
+                    offer_x_colorings=offer_x_colorings,
+                    mana_cost=alternative_mana,
+                )
+                if paid is None:
+                    details = (
+                        f"insufficient mana for {card.name}'s "
+                        f"{chosen_alternative.keyword or 'alternative'} cost "
+                        f"({alternative_mana})"
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
+                x_mana_spent = paid
+                if keyword_names:
+                    self.log.append(
+                        f"{card.name}'s {chosen_alternative.keyword} cost is "
+                        f"changed by {', '.join(sorted(set(keyword_names)))}"
+                    )
             self.log.append(
-                f"{card.name} cast for its alternative cost "
+                f"{card.name} cast for its "
+                f"{chosen_alternative.keyword or 'alternative'} cost "
                 f"({chosen_alternative.describe()})"
             )
         elif free_grant is not None and card.primary_type != "land":
@@ -2183,6 +2265,13 @@ class SpellCastingMixin:
                     exile_instead_of_graveyard=bool(
                         permission is not None and permission.exile_instead
                     ),
+                    # CR 702.34a: "If the flashback cost was paid, exile this
+                    # card instead of putting it anywhere else any time it
+                    # would leave the stack." Whether it was paid is this
+                    # cast's own fact — the cost it was announced under — and
+                    # the stack object is the only thing that outlives the
+                    # announcement to say so.
+                    flashback=is_flashback(chosen_alternative),
                     choices={
                         "divided_targets": divided_targets,
                         "new_color": new_color,
@@ -3003,8 +3092,16 @@ class SpellCastingMixin:
         taking_it: bool | None,
         named_hand_index: int | None,
         spell_hand_index: int | None,
+        required: "AlternativeCost | None" = None,
     ) -> "tuple[AlternativeCost | None, CardDefinition | None, str | None]":
         """CR 601.2b's announcement: ``(cost taken, card that pays it, refusal)``.
+
+        *required* is the alternative cost the **permission** this cast is
+        made under demands (CR 118.9b; flashback, CR 702.34a). It is not an
+        offer and is not looked up among the card's printed ones: it *is* the
+        cost of this cast, so ``taking_it`` has nothing to decide, and the
+        card's own printed alternative cost is not also available (CR 118.9a:
+        "only one alternative cost can be applied to any one spell").
 
         Three answers rather than a boolean, because the announcement decides
         three things at once and every one of them has to survive the spell
@@ -3023,24 +3120,28 @@ class SpellCastingMixin:
         additional costs' gate at CR 601.2h, after X and the targets are
         announced, and asking it twice would be two answers to one question.
         """
-        printed = self.applicable_alternative_costs(caster_index, card)
-        if not taking_it:
-            return None, None, None
-        if not printed:
-            return None, None, (
-                f"{card.name} can't be cast that way: it prints no alternative "
-                f"cost (CR 118.9)"
-            )
-        if len(printed) > 1:
-            # CR 118.9a: only one alternative cost may be applied. No card in
-            # the pool prints two, so rather than invent a choice nobody has to
-            # make, the cast is refused and names the rule — a silent "take the
-            # first" would be this engine picking which price the player pays.
-            return None, None, (
-                f"{card.name} prints more than one alternative cost and only "
-                f"one may be applied (CR 118.9a)"
-            )
-        cost = printed[0]
+        if required is not None:
+            cost = required
+        else:
+            printed = self.applicable_alternative_costs(caster_index, card)
+            if not taking_it:
+                return None, None, None
+            if not printed:
+                return None, None, (
+                    f"{card.name} can't be cast that way: it prints no alternative "
+                    f"cost (CR 118.9)"
+                )
+            if len(printed) > 1:
+                # CR 118.9a: only one alternative cost may be applied. No card
+                # in the pool prints two, so rather than invent a choice nobody
+                # has to make, the cast is refused and names the rule — a
+                # silent "take the first" would be this engine picking which
+                # price the player pays.
+                return None, None, (
+                    f"{card.name} prints more than one alternative cost and only "
+                    f"one may be applied (CR 118.9a)"
+                )
+            cost = printed[0]
         if cost.exile_from_hand is None and cost.discard_from_hand is None:
             return cost, None, None
         payable = self._alternative_cost_payers(
@@ -5085,8 +5186,16 @@ class SpellCastingMixin:
         reduction: CostReduction | None,
         extra_pips: dict[str, int] | None = None,
         offer_x_colorings: tuple[tuple[str, ...], ...] = ((),),
+        mana_cost: str | None = None,
     ) -> dict[str, int] | None:
         """Pay *card*'s mana cost, and report what X was paid with.
+
+        *mana_cost* is the printed run of symbols to charge **in its place**:
+        an alternative cost that is paid in mana (CR 118.9, CR 702.34a's
+        flashback cost). Everything else about the payment is the cast's own —
+        the increases, the reductions and the purpose a restricted bucket is
+        asked about — because CR 118.9d applies them to an alternative cost
+        exactly as it would have to the mana cost. None is the card's own.
 
         None when the pool cannot pay it under **any** split of X, and then
         nothing has been spent: ``_pay_mana_cost`` leaves the pool untouched on
@@ -5121,7 +5230,8 @@ class SpellCastingMixin:
             ):
                 cost = reduce_cost(
                     self._parse_mana_cost(
-                        card.mana_cost, x_value=x_value,
+                        card.mana_cost if mana_cost is None else mana_cost,
+                        x_value=x_value,
                         extra_generic=extra_generic, x_allocation=allocation,
                         extra_pips=extra_pips,
                     ),

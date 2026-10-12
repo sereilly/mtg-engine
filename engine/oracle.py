@@ -51,6 +51,8 @@ from .oracle_types import (
 from .characteristic_defining import dynamic_pt_for
 from .auras import aura_claim, unclaimed_aura_lines
 from .cycling import expand_cycling_lines, unread_cycling_line
+from .flashback import (FLASHBACK_CLAIM, expand_flashback_lines,
+                        flashback_claims_line, unread_flashback_line)
 from .fading import unread_fading_line
 from .equipment import expand_equip_lines, has_equip_ability, is_equip_line
 from .alternative_costs import (
@@ -6457,6 +6459,18 @@ def expand_ability_lines(
     # appends cleanly where a nested argument collides. Order is free here —
     # no other rewrite produces a cycling line and none consumes one.
     oracle_text = expand_cycling_lines(oracle_text)
+    # CR 702.34a's, for cycling's reason and with its freedom of order: a whole
+    # flashback keyword line in, the rule's own first sentence out ("You may
+    # cast this card from your graveyard by paying [cost] rather than paying
+    # its mana cost."), read by none of the rewrites around it
+    # (``engine/flashback.py``). From there it is a CR 601.3 permission that
+    # requires a CR 118.9 alternative cost, to ``cast_permissions`` and to the
+    # cast path, neither of which knows the word. The rule's *second* static
+    # ability — the card is exiled instead of going anywhere else as it leaves
+    # the stack — has no sentence to rewrite into, for the reason buyback's
+    # second half has none: it is a fact about one cast, stamped on the stack
+    # object.
+    oracle_text = expand_flashback_lines(oracle_text)
     return expand_same_is_true_lines(
         expand_static_then_trigger_lines(expand_conjoined_trigger_lines(
             expand_buyback_lines(
@@ -7195,6 +7209,17 @@ def _derived_static_claims(
 
     if any(library_top_line(line) for line in oracle_text.splitlines()):
         claims.append("library_top")
+    # "You may cast this card from your graveyard by paying {4}{R} rather than
+    # paying its mana cost." — CR 702.34a's first static ability, which is what
+    # a flashback keyword line is by the time this reads it
+    # (``expand_ability_lines``). A permission and a price rather than an
+    # effect, derived off the card's own text by ``cast_permissions`` at every
+    # cast, so there is no instruction — and the claim is asked of the reader
+    # that charges the cost, so a cost it cannot read is not claimed (and is
+    # refused by name above). Not evidence the card *does* anything: see
+    # ``_TIMING_ONLY_CLAIMS``.
+    if any(flashback_claims_line(line) for line in oracle_text.splitlines()):
+        claims.append(FLASHBACK_CLAIM)
     return claims
 
 
@@ -7231,8 +7256,14 @@ _EFFECT_HANDLER_KINDS: frozenset[str] | None = None
 #:   Credited as behaviour it read **supported** while reanimating nothing —
 #:   the debt Mirage's promotion rehearsal found on eleven cards, arriving from
 #:   the gate rather than from a whitelist word.
+#: * ``flashback`` — "You may cast this card from your graveyard by paying
+#:   {4}{R} rather than paying its mana cost" (CR 702.34a). *From where* and
+#:   *for what* rather than when, and the same kind of clause: it is about how
+#:   the card may be cast and says nothing about what the spell does. A
+#:   flashback sorcery whose effect line nothing reads must stay unsupported
+#:   however well it can be cast twice.
 _TIMING_ONLY_CLAIMS: frozenset[str] = frozenset({
-    "activation_restrictions", "cast_timing",
+    "activation_restrictions", "cast_timing", FLASHBACK_CLAIM,
 })
 
 
@@ -7393,6 +7424,20 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"unimplemented fading ability: {unread_fading}",
+            normalized_text,
+        )
+    # …and a **flashback** line the CR 702.34a rewrite could not read
+    # (``engine/flashback.py``) — a cost with an {X} in it, or a clause the
+    # alternative-cost reader cannot charge. The case this gate exists for is
+    # the one the keyword was in before the rewrite: an instant or sorcery
+    # whose *other* line compiles reports supported with the keyword dropped,
+    # and 27 of Odyssey's 28 flashback cards did exactly that.
+    unread_flashback = unread_flashback_line(oracle_text)
+    if unread_flashback is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"unimplemented flashback cost: {unread_flashback}",
             normalized_text,
         )
 

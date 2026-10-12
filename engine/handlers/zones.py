@@ -8723,6 +8723,17 @@ def return_spell_or_creature_to_hand(game: Game, instruction: OracleInstruction,
         # "to its **owner's** hand" (CR 108.3) — the stack object's owner, who
         # is not its caster when it was cast out of another player's zone.
         owner = game.players[chosen.owner_index]
+        from ..flashback import leaves_stack_to_exile
+
+        if leaves_stack_to_exile(chosen):
+            # CR 702.34a: a spell whose flashback cost was paid is exiled
+            # "instead of putting it anywhere else any time it would leave the
+            # stack" — a hand included.
+            game._bin_spell_card(
+                owner, chosen.card, exile_instead=True,
+                verb=f"was returned by {context.card.name}",
+            )
+            return True, "resolved"
         game.put_card_into_hand(owner, chosen.card)
         game.log.append(
             f"{context.card.name} returned {chosen.card.name} from the stack "
