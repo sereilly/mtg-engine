@@ -45,6 +45,7 @@ from .naming import (
     parse_hides_items,
     parse_reveal_chosen_hand_cards,
 )
+from .paragraphs import _parse_repeated_graveyard_pick
 from .phrases import (
     _accept_life_alternative,
     _accept_mana_alternatives,
@@ -75,7 +76,6 @@ from .effects import (
     _parse_put_exiled_card_on_stack_as_copy,
     _parse_put_counter,
     _parse_put_exiled_this_way,
-    _parse_repeated_graveyard_pick,
     _parse_return,
     _parse_reveal_hand,
     _parse_sacrifice,

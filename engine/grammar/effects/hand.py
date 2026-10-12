@@ -1,29 +1,46 @@
-"""A hand emptying onto a library — the sentences that move cards the other way.
+"""A hand emptying — the cards taken out of one, and where they go.
 
 Split from ``cards`` at the thousand-line guard, along the seam that module's
 docstring had already implied: what stays in ``cards`` is a card *arriving*
-(drawing, milling, searching, revealing) or *leaving for a graveyard*
-(discarding), and what left is the one family that moves cards **out of a hand
-and into a library** — Brainstorm, Conch Horn, Dream Cache, Stunted Growth,
-Jester's Mask, Teferi's Puzzle Box. CR 402 is the zone they all name and
-``hand`` is what the rules call it.
+(drawing, milling, scrying), a hand *revealed*, or a card *leaving for a
+graveyard* (discarding), and what left was the one family that moves cards
+**out of a hand and into a library** — Brainstorm, Conch Horn, Dream Cache,
+Stunted Growth, Jester's Mask, Teferi's Puzzle Box. CR 402 is the zone they all
+name and ``hand`` is what the rules call it.
+
+**Three productions followed at the Phase 0 before Odyssey**, with ``cards`` 45
+lines under that guard, and until then this docstring opened "A hand emptying
+onto a library". They are the last three below: Sylvan Library's pick ("choose
+two cards in your hand drawn this turn", which its next sentence puts on a
+library or buys back), Elkin Lair's "exiles a card at random from their hand"
+and Mind Swords' "exiles two cards from their hand". The line is the lowering
+side's, which opens "a hand emptying: the cards chosen out of one, and where
+they go" and took the pick in the round this module was cut and the random
+exile when it was written; the counted exile's node defines itself by the
+other two. None of the three was called from ``cards`` or called anything in
+it. A hand's discard and its reveal are still that module's on this side, and
+its docstring says what holds them there.
 
 Asymmetric, like ``types``, ``exile`` and ``destruction`` before it: the nodes
 stay in ``ast/cards.py``, because the guard fired on the *productions* and one
 node in a family of its own with both of its readers elsewhere is worse than the
 asymmetry. (The lowerings left ``lowering/cards.py`` for ``lowering/hand.py`` in
 the same round; the discard's lowering followed them later, and its productions
-stayed in ``cards``.)
+stayed in ``cards``.) The two exiles' nodes are ``ast/exile.py``'s, which is cut
+by the zone a node names and not by its reader, and Mind Swords' lowering is
+``lowering/exile.py``'s.
 
-The two destination readers are the reason the family is worth naming. Every
-production here ends by asking one of them where the cards land, so the top, the
-bottom and Dream Cache's either-end offer are decided in one place and cannot
-come apart card by card.
+The two destination readers are the reason the family was worth naming. Every
+production that puts cards on a library ends by asking one of them where they
+land, so the top, the bottom and Dream Cache's either-end offer are decided in
+one place and cannot come apart card by card.
 """
 
 from .. import ast
 from ..amounts import parse_amount
 from ..errors import GrammarError
+from ..nouns import parse_object_filter
+from ..phrases import accept_a_card_at_random_from_hand
 from ..stream import TokenStream
 
 
@@ -277,3 +294,90 @@ def _parse_player_puts_whole_hand_on_library(
         player, ast.Fixed(0), whole_hand=True,
         destination=destination, then_draw=then_draw,
     )
+
+
+def _parse_choose_cards_in_hand(stream: TokenStream) -> "ast.ChooseCardsInHand | None":
+    """``choose two cards in your hand drawn this turn`` (Sylvan Library).
+
+    Refuses without consuming, so every other sentence opening with "choose"
+    keeps the reading it already had.
+
+    The noun phrase goes through the shared object parser, which is what makes
+    "choose two **creature** cards in your hand" the same production; only the
+    zone is required, because a pick out of anywhere else is a different
+    sentence with different hidden-information rules (CR 400.2).
+    """
+    mark = stream.mark()
+    if not stream.accept_word("choose"):
+        return None
+    try:
+        count = parse_amount(stream)
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if not (filt.is_card and filt.zone == "hand"):
+        stream.reset(mark)
+        return None
+    # "…**drawn this turn**". A provenance rather than a characteristic — see
+    # ``ast.ChooseCardsInHand`` — so it rides the node, not the filter.
+    drawn = bool(stream.accept_phrase("drawn", "this", "turn"))
+    return ast.ChooseCardsInHand(count=count, filter=filt, drawn_this_turn=drawn)
+
+
+def parse_exile_random_card_from_hand(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.ExileRandomFromHand | None":
+    """``<player> exiles a card at random from their hand`` (Elkin Lair).
+
+    The verb is consumed here rather than by the caller, so a refusal leaves the
+    stream where it found it — "that player exiles all cards from their library"
+    is read by the production beside this one and must keep its own words.
+    """
+    mark = stream.mark()
+    stream.expect_word("exiles", "exile")
+    if accept_a_card_at_random_from_hand(stream):
+        return ast.ExileRandomFromHand(player)
+    stream.reset(mark)
+    return None
+
+
+def parse_player_exiles_cards_from_hand(
+    stream: TokenStream, player: ast.PlayerRef
+) -> "ast.ExileCardsFromHand | None":
+    """``<player> exiles <N> cards from their hand`` (Mind Swords: "Each player
+    exiles two cards from their hand.")
+
+    The random exile above with the player choosing, so it is tried after that
+    one — "a card **at random**" is the narrower reading and must keep its
+    words — and after the pile reader, whose "all cards from their hand"
+    (Memory Jar) is no count at all. The noun phrase goes through the shared object parser, which is what
+    makes "two **nonland** cards" the same production; the zone is required,
+    and the hand must be the subject's own ("their" under a seat subject, "your"
+    under "you"), because a pick out of somebody else's hand is a different
+    sentence with different hidden-information rules (CR 400.2).
+
+    Refuses without consuming, so "that player exiles all cards from their
+    library" and the graveyard sweep beside it keep their own readers.
+    """
+    mark = stream.mark()
+    stream.expect_word("exiles", "exile")
+    try:
+        count = parse_amount(stream)
+        filt = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    owner = filt.zone_owner
+    if not (
+        # A printed number: "**all** cards from their hand" is a pile, which
+        # ``_parse_player_exiles_pile`` reads with its own handler.
+        isinstance(count, ast.Fixed)
+        and filt.is_card
+        and filt.zone == "hand"
+        and owner is not None
+        and (owner.kind == "owner" or owner.kind == player.kind == "you")
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExileCardsFromHand(player, count, filt)
