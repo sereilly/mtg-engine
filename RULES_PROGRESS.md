@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2801 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2824 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -149,7 +149,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 105. Colors
 
 - [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(5 tests)*
-- [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(8 tests, subrules abc)*
+- [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(10 tests, subrules abc)*
 - [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(4 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
 - [ ] **105.5** If an effect refers to a color pair, it means exactly two of the five colors. There are ten color...
@@ -489,7 +489,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **400.4** Cards with certain card types can’t enter certain zones.
 - [x] **400.5** The order of objects in a library, in a graveyard, or on the stack can’t be changed except when e... *(2 tests)*
 - [ ] **400.6** If an object would move from one zone to another, determine what event is moving the object. If t...
-- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(22 tests)*
+- [x] **400.7** An object that moves from one zone to another becomes a new object with no memory of, or relation... *(27 tests, subrules a)*
 - [ ] **400.8** If an object in the exile zone is exiled, it doesn’t change zones, but it becomes a new object th...
 - [ ] **400.9** If a face-up object in the command zone is turned face down, it becomes a new object.
 - [ ] **400.10** If an object in the command zone is put into the command zone, it doesn’t change zones, but it be...
@@ -501,7 +501,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **401.1** When a game begins, each player’s deck becomes their library. *(1 tests)*
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(2 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
-- [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(3 tests)*
+- [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(6 tests)*
 - [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(2 tests)*
 - [ ] **401.6** If an effect causes a player to play with the top card of their library revealed, and that partic...
 - [ ] **401.7** If an effect causes a player to put a card into a library “Nth from the top,” and that library ha...
@@ -677,7 +677,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(15 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(57 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(58 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
 - [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(42 tests, subrules ace)*
@@ -686,7 +686,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
-- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(89 tests, subrules bcd)*
+- [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(91 tests, subrules bcd)*
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(22 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(123 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(134 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -759,7 +759,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(50 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(51 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(57 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
@@ -783,7 +783,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **613.4** Within layer 7, apply effects in a series of sublayers in the order described below. Within each ... *(76 tests, subrules abcd)*
 - [x] **613.5** The application of continuous effects as described by the layer system is continually and automat... *(2 tests)*
 - [x] **613.6** If an effect should be applied in different layers and/or sublayers, the parts of the effect each... *(5 tests)*
-- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(57 tests, subrules abde)*
+- [x] **613.7** Within a layer or sublayer, determining which order effects are applied in is usually done using ... *(59 tests, subrules abde)*
 - [x] **613.8** Within a layer or sublayer, determining which order effects are applied in is sometimes done usin... *(30 tests, subrules abc)*
 - [x] **613.9** One continuous effect can override another. Sometimes the results of one effect determine whether... *(6 tests)*
 - [x] **613.10** Some continuous effects affect players rather than objects. For example, an effect might give a p... *(1 tests)*
@@ -886,9 +886,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.12** Indestructible *(3 tests, subrules b)*
 - [x] **702.14** Landwalk *(17 tests, subrules abc)*
 - [x] **702.15** Lifelink *(11 tests, subrules b)*
-- [x] **702.16** Protection *(57 tests, subrules abcdefgmn)*
+- [x] **702.16** Protection *(58 tests, subrules abcdefgmn)*
 - [x] **702.17** Reach *(3 tests, subrules b)*
-- [x] **702.18** Shroud *(9 tests, subrules a)*
+- [x] **702.18** Shroud *(11 tests, subrules a)*
 - [x] **702.19** Trample *(11 tests, subrules bdf)*
 - [x] **702.20** Vigilance *(2 tests, subrules b)*
 - [x] **702.22** Banding *(37 tests, subrules abcdefghjk)*
@@ -932,14 +932,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 707. Copying Objects
 
 - [ ] **707.1** Some objects become or turn another object into a “copy” of a spell, permanent, or card. Some eff...
-- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(31 tests, subrules abc)*
+- [x] **707.2** When copying an object, the copy acquires the copiable values of the original object’s characteri... *(32 tests, subrules abc)*
 - [x] **707.3** The copy’s copiable values become the copied information, as modified by the copy’s status (see r... *(2 tests)*
 - [x] **707.4** Some effects cause a permanent that’s copying a permanent to copy a different object while remain... *(2 tests)*
 - [x] **707.5** An object that enters the battlefield “as a copy” or “that’s a copy” of another object becomes a ... *(13 tests)*
 - [ ] **707.6** When copying a permanent, any choices that have been made for that permanent aren’t copied. Inste...
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
-- [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(14 tests, subrules abc)*
+- [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
 - [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(8 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
