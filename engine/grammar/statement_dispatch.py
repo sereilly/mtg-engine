@@ -145,6 +145,7 @@ from .lowering import (
     _lower_condition,
     announces_target_pair,
     pronoun_target_referent,
+    targets_one_graveyard_card,
 )
 from .statement_dispatch_naming import lower_naming_statement
 # The four registries `lower_statement` reads before its chain — see
@@ -839,6 +840,7 @@ def lower_statement(
                         statement.condition, produced, event,
                         referent=pronoun_target_referent(body),
                         target_pair=announces_target_pair(body),
+                        graveyard_target=targets_one_graveyard_card(body),
                     ),
                     "then": then,
                     "else": otherwise,

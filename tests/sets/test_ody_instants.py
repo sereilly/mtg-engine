@@ -172,6 +172,82 @@ def test_w1g6_skeletal_scrying_pays_x_in_mana_as_well_as_in_cards(set_pool):
     _w1g6_resolve_stack(game)
     assert game.players[0].life == 18 and len(game.players[0].hand) == 2
 
+
+# --- Ghastly Demise ---------------------------------------------------------
+# "Destroy target nonblack creature if its toughness is less than or equal to
+# the number of cards in your graveyard." The target is legal whatever its
+# toughness (Scryfall ruling 2020-11-10: "Ghastly Demise can target any
+# nonblack creature. Compare the creature's toughness to the number of cards
+# in your graveyard as Ghastly Demise resolves"); the comparison is CR 608.2c's
+# trailing "if", against a count taken as it resolves.
+
+def _w1g6_demise(set_pool, yard_size, target="Hill Giant"):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        hand=[ody["Ghastly Demise"]],
+        theirs=[lea["Hill Giant"], lea["Drudge Skeletons"], lea["Grizzly Bears"]],
+        yard=[lea["Forest"]] * yard_size,
+    )
+    game.start_turn(0)
+    aimed = _w1g6_named(game, 1, target)
+    cast = game.queue_from_hand(
+        0, "Ghastly Demise", target_permanent_ids=[aimed.permanent_id]
+    )
+    return game, cast  # _w1g6_demise
+
+
+@_w1g6_pytest.mark.parametrize(
+    "yard_size, destroyed", [(3, True), (4, True), (2, False), (0, False)]
+)
+def test_w1g6_ghastly_demise_compares_toughness_with_the_graveyard(
+    set_pool, yard_size, destroyed
+):
+    game, cast = _w1g6_demise(set_pool, yard_size)  # Hill Giant: toughness 3
+    # Castable either way: the condition is not a targeting restriction.
+    assert cast.supported, cast.details
+    _w1g6_resolve_stack(game)
+
+    assert ("Hill Giant" in _w1g6_names(game, 1)) is not destroyed
+    assert ("Hill Giant" in _w1g6_pile(game.players[1])) is destroyed
+    # The spell resolves and goes to the graveyard whether or not it destroyed.
+    assert _w1g6_pile(game.players[0])[-1] == "Ghastly Demise"
+
+
+def test_w1g6_ghastly_demise_does_not_count_itself(set_pool):
+    """Ruling 2020-11-10: "Because Ghastly Demise isn't put into your graveyard
+    until it's finished resolving, it won't be counted". A 2/2 against one
+    card in the graveyard survives; the Demise makes two only afterwards."""
+    game, cast = _w1g6_demise(set_pool, 1, target="Grizzly Bears")
+    assert cast.supported
+    _w1g6_resolve_stack(game)
+
+    assert "Grizzly Bears" in _w1g6_names(game, 1)
+    assert len(game.players[0].graveyard) == 2
+
+
+def test_w1g6_ghastly_demise_counts_as_it_resolves(set_pool):
+    lea = set_pool("LEA")
+    game, cast = _w1g6_demise(set_pool, 2)
+    assert cast.supported
+    # A third card arrives while the spell is on the stack.
+    game.players[0].graveyard.append(lea["Forest"])
+    _w1g6_resolve_stack(game)
+
+    assert "Hill Giant" not in _w1g6_names(game, 1)
+
+
+def test_w1g6_ghastly_demise_cannot_be_aimed_at_a_black_creature_or_at_nothing(
+    set_pool,
+):
+    game, refused = _w1g6_demise(set_pool, 5, target="Drudge Skeletons")
+    assert not refused.supported
+    assert _w1g6_pile(game.players[0], "hand") == ["Ghastly Demise"]
+
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    empty = _w1g6_game(hand=[ody["Ghastly Demise"]], yard=[lea["Forest"]] * 5)
+    empty.start_turn(0)
+    assert not empty.queue_from_hand(0, "Ghastly Demise").supported
+
 # ==== end W1G6 ======================================================
 
 

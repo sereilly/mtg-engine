@@ -30,7 +30,7 @@ import dataclasses
 
 from . import ast
 from .errors import GrammarError
-from .references import parse_player_ref
+from .references import parse_player_ref, parse_target_spec
 from .stream import TokenStream
 from .phrases import (_accept_life_alternative, _parse_mana_payment,
                       _parse_pay_life, _parse_per_each_objects)
@@ -350,6 +350,13 @@ def _accept_price_action(
         except GrammarError:
             stream.reset(mark)
             return None
+    # "…unless you **exile a card from your graveyard**" (Rotting Giant). The
+    # sixth currency, see :func:`accept_graveyard_exile_price`.
+    if stream.at_word("exiles", "exile"):
+        exiled = accept_graveyard_exile_price(stream, payer)
+        if exiled is None:
+            stream.reset(mark)
+        return exiled
     # "…unless the player **puts a -1/-1 counter on a creature they control**"
     # (Thelon's Chant, Tourach's Chant). Another printed currency beside mana
     # and a discard, and the same decomposition for the same reason.
@@ -375,6 +382,60 @@ def _accept_price_action(
             return None
         return placement
     return None
+
+
+def accept_graveyard_exile_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.Exile | None":
+    """``exile[s] a <card phrase> from <the payer's own> graveyard`` as a
+    **price** — or None with the cursor unmoved.
+
+    "Whenever this creature attacks or blocks, sacrifice it **unless you exile
+    a card from your graveyard**." (Rotting Giant.) A cost mana cannot express,
+    decomposed the way the discard and the sacrifice beside it are: the exile
+    is the offer's *action*, so it reaches the same :class:`ast.May`, the same
+    prompt and the same takeability gate ("you may exile a land card from your
+    graveyard", Forgotten Harvest, is this very node read as an offer) — a
+    payer whose graveyard holds no such card is not offered the price and the
+    penalty stands.
+
+    **One chosen card, out of the payer's own pile, and nothing else.** A
+    *target* is not a price (CR 601.2b's cost against CR 601.2c's target), a
+    count has no reading here, and somebody else's graveyard is not a resource
+    the payer gives up — each refuses rather than being read as this.
+
+    The pile is rewritten to the payer the toll named, so the node means one
+    thing whether the card printed "unless **you** exile a card from **your**
+    graveyard" or "unless **that player** exiles a card from **their**
+    graveyard": the seat that pays is the seat whose graveyard it is.
+
+    Public (no underscore) because it is the reader a sibling currency is
+    expected to stand beside: "sacrifice it unless you **remove a +1/+1 counter
+    from it**" is the same sentence with the next price.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("exiles", "exile"):
+        return None
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        spec = None
+    owner = None if spec is None else spec.filter.zone_owner
+    own_pile = owner is not None and (
+        owner.kind == "you" if payer.kind == "you"
+        # "their graveyard", which the noun parser spells as the owner's.
+        else owner.kind in ("owner", payer.kind)
+    )
+    if (
+        spec is None or spec.targeted or spec.quantifier not in ("a", "an")
+        or spec.count != 1 or spec.filter.zone != "graveyard"
+        or not spec.filter.is_card or not own_pile
+    ):
+        stream.reset(mark)
+        return None
+    return ast.Exile(dataclasses.replace(
+        spec, filter=dataclasses.replace(spec.filter, zone_owner=payer),
+    ))
 
 
 def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":

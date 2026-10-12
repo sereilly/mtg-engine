@@ -63,6 +63,54 @@ _COMPARISON_WORDS = {
     "fewer": "le",
 }
 
+#: The same comparisons spelled out in front of the amount instead of behind
+#: it: "its toughness is **less than or equal to** the number of cards in your
+#: graveyard" (Ghastly Demise). Longest first — "less than" opens "less than or
+#: equal to", and read in the other order the strict form would take those two
+#: words and leave "or equal to" unconsumed.
+_SPELLED_COMPARISONS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("less", "than", "or", "equal", "to"), "le"),
+    (("greater", "than", "or", "equal", "to"), "ge"),
+    (("less", "than"), "lt"),
+    (("greater", "than"), "gt"),
+    (("equal", "to"), "eq"),
+)
+
+
+def accept_spelled_comparison(stream: TokenStream) -> "ast.Comparison | None":
+    """``less than or equal to <amount>`` and its four siblings — or None with
+    the cursor unmoved.
+
+    :func:`parse_comparison`'s other word order, and a separate reader because
+    the amount behind it need not be a printed number: a spelled-out comparison
+    is how a card compares against a **count** ("the number of cards in your
+    graveyard"), which the postfix "N or less" form has no room for. Whether a
+    caller can evaluate a bound that is not a number is that caller's question
+    — this reads what is printed and hands the amount back as parsed.
+    """
+    from .amounts import _parse_equal_to_body
+    from .errors import GrammarError
+
+    mark = stream.mark()
+    for words, op in _SPELLED_COMPARISONS:
+        if not stream.accept_phrase(*words):
+            continue
+        # A printed number first, then the definitions "equal to …" reads —
+        # the same reader, so "the number of cards in your graveyard" means
+        # here what it means behind a damage amount.
+        bound_at = stream.mark()
+        try:
+            return ast.Comparison(op, parse_amount(stream))
+        except GrammarError:
+            stream.reset(bound_at)
+        bound = _parse_equal_to_body(stream)
+        if bound is not None:
+            return ast.Comparison(op, bound)
+        stream.reset(mark)
+        return None
+    return None
+
+
 def parse_comparison(stream: TokenStream) -> ast.Comparison:
     """Parse "N or less" / "N or greater" / "N" following power/toughness."""
     amount = parse_amount(stream)

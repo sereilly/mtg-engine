@@ -68,6 +68,28 @@ def pronoun_target_referent(instructions) -> str | None:
     return _PRONOUN_REFERENTS.get(described.get("kind"))
 
 
+def targets_one_graveyard_card(instructions) -> bool:
+    """Whether the effect a clause guards targets **one card in a graveyard**
+    — what "it" names in "…if it shares a card type with the card exiled this
+    way" (Holistic Wisdom).
+
+    :func:`pronoun_target_referent`'s question for a third kind of object, and
+    asked separately rather than as a third referent word for the reason
+    :func:`announces_target_pair` is: two readers of that word pass any
+    non-None answer straight to an evaluator that knows a spell and a
+    permanent, so a new value there would be answered about the wrong object.
+
+    Read off the target derivation itself rather than off a list of kinds, so
+    what the picker offers and what this vouches for are one answer.
+    """
+    if len(instructions) != 1:
+        return False
+    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
+
+    spec = derive_instruction_spec(instructions) or {}
+    return spec.get("kind") == GRAVEYARD_TARGET_KIND and not spec.get("count")
+
+
 def announces_target_pair(instructions) -> bool:
     """Whether the effect a clause guards announced **exactly two** permanents
     (CR 601.2c) — what "either one" and "the other" name between them.
@@ -151,6 +173,7 @@ def _lower_condition(
     event_subject=None,
     *,
     target_pair: bool = False,
+    graveyard_target: bool = False,
 ) -> dict[str, object]:
     """*produced* names the scratchpad values earlier steps of this same effect
     recorded. It defaults to empty, which is what refuses a coin-flip condition
@@ -618,13 +641,21 @@ def _lower_condition(
             payload["of_each_color"] = True
         return payload
     if isinstance(condition, ast.SubjectCharacteristicIs):
-        # The bound must be a printed number: the evaluator compares an integer,
-        # and an X or a board count would be compared against a node. Refused
-        # rather than coerced, so the day a card prints one the gate is visibly
-        # missing instead of silently answering about the wrong quantity.
-        if not isinstance(condition.comparison.value, ast.Fixed):
+        # The bound is a printed number or a **count** ("…less than or equal
+        # to the number of cards in your graveyard", Ghastly Demise) — the two
+        # things the evaluator can turn into an integer. The count rides as the
+        # ``x_from_count`` spec every other counted amount carries and is
+        # taken when the condition is asked (CR 608.2c), through the same
+        # evaluator. An X or any other amount would be compared against a
+        # node, and is refused rather than coerced.
+        bound = condition.comparison.value
+        bound_count = count_spec(bound.filter, condition) if isinstance(
+            bound, ast.CountOf
+        ) else None
+        if bound_count is None and not isinstance(bound, ast.Fixed):
             raise LoweringError(
-                "a characteristic gate compares against a printed number",
+                "a characteristic gate compares against a printed number or a "
+                "count",
                 node=condition,
             )
         # Which object is asked is payload, and only two answers exist because
@@ -677,8 +708,10 @@ def _lower_condition(
             "subject": asked,
             "characteristic": condition.characteristic,
             "op": condition.comparison.op,
-            "count": condition.comparison.value.value,
+            "count": 0 if bound_count is not None else bound.value,
         }
+        if bound_count is not None:
+            payload["count_from"] = bound_count
         if pronoun_referent is not None:
             # Which half of the resolution context holds the target. Written
             # only by the pronoun spelling: a clause that announced its own
@@ -917,4 +950,7 @@ def _lower_condition(
     # has with `_described_returns`, so one call still covers every condition
     # and no caller learns which side of the cut a node landed on. The refusal
     # this line used to carry moved with them and is unchanged.
-    return lower_record_condition(condition, produced, event, referent, event_subject)
+    return lower_record_condition(
+        condition, produced, event, referent, event_subject,
+        graveyard_target=graveyard_target,
+    )

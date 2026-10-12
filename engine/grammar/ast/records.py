@@ -768,6 +768,24 @@ class CostObjectWas:
     channel: str
     filter: "ObjectFilter"
 @dataclass(frozen=True)
+class SharesCardTypeWithCostCard:
+    """"…**if it shares a card type with the card exiled this way**." (Holistic
+    Wisdom.)
+
+    :class:`CostObjectWas`'s sibling, and a different question about the same
+    record: that one asks what the cost's object *was*, this one compares it
+    with the **target** of the effect the clause guards. Two cards, neither on
+    the battlefield, so what is compared is their printed card types
+    (CR 205.2a; CR 613.1 gives a card in a zone no computed ones) — and a card
+    may have several, any one of which answers.
+
+    ``channel`` is the participle the sentence prints, as it is on
+    :class:`CostObjectWas`, so the lowering can demand the cost that writes
+    the record it names.
+    """
+
+    channel: str
+@dataclass(frozen=True)
 class HadPlus1Counter:
     """"if it had a +1/+1 counter on it" (Basri's Lieutenant, CR 603.4).
 

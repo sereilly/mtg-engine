@@ -42,7 +42,7 @@ from .categories import INSTRUCTION_CATEGORIES
 from ._cost_records import _COST_PRODUCES
 from .where_x import lower_where_x
 from .conditions import (_lower_condition, announces_target_pair,
-                         pronoun_target_referent)
+                         pronoun_target_referent, targets_one_graveyard_card)
 from ._events import (CREATED_TOKEN, 
     _BLOCK_PAIR_EVENTS,
     binds_block_pair,
@@ -435,6 +435,7 @@ __all__ = [
     "_lower_condition",
     "announces_target_pair",
     "pronoun_target_referent",
+    "targets_one_graveyard_card",
     "INSTRUCTION_CATEGORIES",
     "_COST_PRODUCES",
     "_mentions_x",

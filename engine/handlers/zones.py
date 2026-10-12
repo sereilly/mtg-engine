@@ -5027,6 +5027,21 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     # prints no "target", so nothing was announced: the lowering emits no
     # ``targets`` description and the controller picks as it resolves, through
     # the same prompt the other two piles use.
+    if owner == "offered_player" and not instruction.payload.get("targets"):
+        # "Target opponent may exile a card from **their** graveyard."
+        # (Gravestorm.) The seat the offer was made to — which the offer left
+        # in ``context.target`` — picks out of its own pile. Nobody recorded
+        # is not a pile to exile from.
+        seat = next(
+            (index for index, player in enumerate(game.players)
+             if player is context.target),
+            None,
+        )
+        if seat is None:
+            game.log.append(f"{context.card.name}: no player was offered the exile")
+            return True, "resolved"
+        game.arm_graveyard_exile_pick(seat, seat, dict(instruction.payload), context)
+        return True, "resolved"
     if owner == "you" and not instruction.payload.get("targets"):
         game.arm_graveyard_exile_pick(
             caster_index, caster_index, dict(instruction.payload), context
@@ -5048,13 +5063,22 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
             + f" from {context.caster.name}'s graveyard"
         )
         return True, "resolved"
-    if owner != "defending_player":
+    # The two seats a firing event froze, each read off the key its fire site
+    # stamps: CR 506.2's defender, and — "target card from **that player's**
+    # graveyard" on a damage trigger (Zombie Cannibal) — the player the damage
+    # was dealt to, which is the key ``mill_target_player`` reads for the same
+    # words.
+    seat_key = {
+        "defending_player": "trigger_defending_player_index",
+        "damaged_player": "defending_player_index",
+    }.get(owner)
+    if seat_key is None:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
-    seat = (context.trigger_context or {}).get("trigger_defending_player_index")
+    seat = (context.trigger_context or {}).get(seat_key)
     if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
         game.log.append(
-            f"{context.card.name}: no defending player was recorded"
+            f"{context.card.name}: no {owner.replace('_', ' ')} was recorded"
         )
         return True, "resolved"
     game.arm_graveyard_exile_pick(

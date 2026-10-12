@@ -41,6 +41,7 @@ from ..errors import LoweringError
 from ._bound_exiles import (_entering_counter_payload, lower_pronoun_exile,
                             lower_restated_noun_exile)
 from ._events import EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS
+from ._frozen_seats import frozen_seat_record
 from ._sweeps import lower_exile_sweep
 from ._common import (
     _PAYLOAD_HONOURED_FILTER_FIELDS, _amount_payload,
@@ -71,6 +72,19 @@ _GRAVEYARD_PILE_SEATS = frozenset({"defending_player", "you"})
 #: It is not in the set above for exactly that reason: nothing the parse can
 #: read names it, so it cannot arrive by the same route.
 _CHOSEN_GRAVEYARD_PILE = "chosen"
+
+#: Whose pile an **unannounced** pick of one card comes out of — the seat
+#: performing the exile picks from its own graveyard: ``{printed owner: payload
+#: value}``. "You may exile a land card from **your** graveyard" (Forgotten
+#: Harvest) is the resolution's controller; "**target opponent** may exile a
+#: card from their graveyard" (Gravestorm) is the seat the offer was made to,
+#: which the offer leaves in ``context.target``. A different value rather than
+#: "you" for that seat, because the handler reads "you" as the caster.
+_OWN_PILE_SEATS = {
+    "you": "you",
+    "target_opponent": "offered_player",
+    "target_player": "offered_player",
+}
 
 
 def _is_hand_card_exile(subject: "ast.Recipient") -> bool:
@@ -559,7 +573,7 @@ def _lower_exile(
         and subject.filter.zone == "graveyard"
         and subject.filter.is_card
         and subject.filter.zone_owner is not None
-        and subject.filter.zone_owner.kind == "you"
+        and subject.filter.zone_owner.kind in _OWN_PILE_SEATS
     ):
         filt = subject.filter
         leftover = _restrictions_beyond(
@@ -570,7 +584,8 @@ def _lower_exile(
                 "the chosen graveyard exile reads one card type", node=node
             )
         chosen: dict[str, object] = {
-            "count": 1, "graveyard_owner": "you", "up_to": False,
+            "count": 1, "up_to": False,
+            "graveyard_owner": _OWN_PILE_SEATS[subject.filter.zone_owner.kind],
         }
         if filt.card_types:
             chosen["card_type"] = filt.card_types[0]
@@ -642,6 +657,9 @@ def _lower_exile(
 
     filt = subject.filter
     if filt.zone == "graveyard" and filt.is_card:
+        frozen = _frozen_pile_exile(node, subject, event)
+        if frozen is not None:
+            return frozen
         if filt.zone_owner is not None or filt.subtypes or filt.colors:
             # The picker this lowers onto enumerates every graveyard. Whose pile
             # it may read, and a subtype or colour narrowing, are still shapes
@@ -688,6 +706,57 @@ def _lower_exile(
     exile_payload = _filter_payload(filt)
     _describe_targets(exile_payload, subject)
     return (OracleInstruction("exile_target_permanent", "", exile_payload),)
+
+
+def _frozen_pile_exile(
+    node: "ast.Exile", subject: "ast.TargetSpec", event: str | None
+) -> "tuple[OracleInstruction, ...] | None":
+    """"Whenever this creature deals combat damage to a player, you may exile
+    **target card from that player's graveyard**." (Zombie Cannibal.) — or None
+    when the pile is not one the firing event froze a seat for.
+
+    One card out of one *named* pile, where the plain single-card branch reads
+    whichever graveyard the announcement pointed into. The seat is the one the
+    event recorded (``frozen_seat_record`` — the damaged player for "that
+    player", CR 506.2's defender for "defending player"), so the card cannot
+    come out of anybody else's graveyard however the choice is made.
+
+    Lowered onto the counted exile's own instruction with a count of one, and
+    for that branch's stated reason: this engine chooses a triggered ability's
+    graveyard target as it resolves, so the controller is *asked* — a prompt
+    over exactly that pile — rather than handed the handler's first card.
+    Rysorian Badger's "up to two target creature cards from defending player's
+    graveyard" is the same sentence with a count and a type.
+
+    Refuses a narrowing the pick cannot test, as that branch does.
+    """
+    filt = subject.filter
+    owner = filt.zone_owner
+    # "that player's graveyard" and "their graveyard" reach here as the
+    # noun parser's ``owner`` (``zones.accept_zone_possessive`` reads the two
+    # as one node), so the word asked of the event is "that player".
+    word = {"owner": "that_player"}.get(
+        getattr(owner, "kind", None), getattr(owner, "kind", None)
+    )
+    record = None if word is None else frozen_seat_record(word, event)
+    if record is None:
+        return None
+    if len(filt.card_types) > 1 or _restrictions_beyond(
+        filt, frozenset({"card_types", "zone", "zone_owner", "is_card"})
+    ) or node.counters:
+        raise LoweringError(
+            "the graveyard pick out of a recorded player's pile reads one card "
+            "type",
+            node=node,
+        )
+    pile: dict[str, object] = {
+        "count": 1, "up_to": False, "graveyard_owner": record,
+    }
+    if filt.card_types:
+        pile["card_type"] = filt.card_types[0]
+    else:
+        pile["any_card"] = True
+    return (OracleInstruction("exile_cards_from_graveyard", "", pile),)
 
 
 def _lower_for_each_exiled(

@@ -147,6 +147,169 @@ def test_w1g6_screams_of_the_damned_pings_everything_for_one_card(set_pool):
     assert not refused.supported
     assert (game.players[0].life, game.players[1].life) == (19, 19)
 
+
+# --- Holistic Wisdom --------------------------------------------------------
+# "{2}, Exile a card from your hand: Return target card from your graveyard to
+# your hand if it shares a card type with the card exiled this way." The
+# target is any card (CR 601.2c precedes the cost, CR 601.2h); the comparison
+# is made as the ability resolves, between two cards' printed types.
+
+def _w1g6_wisdom(set_pool, hand, yard):
+    ody = set_pool("ODY")
+    game = _w1g6_game(mine=[ody["Holistic Wisdom"]], hand=hand, yard=yard)
+    game.start_turn(0)
+    return game  # _w1g6_wisdom
+
+
+@_w1g6_pytest.mark.parametrize(
+    "exiled, wanted, returned",
+    [
+        ("Grizzly Bears", "Craw Wurm", True),        # creature / creature
+        ("Grizzly Bears", "Lightning Bolt", False),  # creature / instant
+        ("Forest", "Island", True),                  # land / land
+        ("Ornithopter", "Sol Ring", True),           # artifact creature / artifact
+        ("Ornithopter", "Craw Wurm", True),          # artifact creature / creature
+        ("Sol Ring", "Craw Wurm", False),            # artifact / creature
+    ],
+)
+def test_w1g6_holistic_wisdom_returns_a_card_that_shares_a_type(
+    set_pool, exiled, wanted, returned
+):
+    lea = set_pool("LEA")
+    cards = {**lea, "Ornithopter": set_pool("ATQ")["Ornithopter"]}
+    game = _w1g6_wisdom(
+        set_pool, hand=[cards[exiled]], yard=[lea["Mountain"], cards[wanted]],
+    )
+
+    used = game.activate_permanent_ability(
+        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=1,
+        cost_hand_index=0,
+    )
+
+    # The cost is paid either way: the card from hand is exiled.
+    assert used.supported, used.details
+    assert _w1g6_pile(game.players[0], "exile") == [exiled]
+    assert _w1g6_pile(game.players[0], "hand") == ([wanted] if returned else [])
+    assert _w1g6_pile(game.players[0]) == (
+        ["Mountain"] if returned else ["Mountain", wanted]
+    )
+
+
+def test_w1g6_holistic_wisdom_refusals_pay_nothing(set_pool):
+    lea = set_pool("LEA")
+    # An empty hand cannot pay.
+    game = _w1g6_wisdom(set_pool, hand=[], yard=[lea["Craw Wurm"]])
+    refused = game.activate_permanent_ability(
+        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=0
+    )
+    assert not refused.supported and _w1g6_pile(game.players[0]) == ["Craw Wurm"]
+
+    # No card in your graveyard: nothing to target, and the hand is not eaten.
+    game = _w1g6_wisdom(set_pool, hand=[lea["Grizzly Bears"]], yard=[])
+    refused = game.activate_permanent_ability(0, "Holistic Wisdom", cost_hand_index=0)
+    assert not refused.supported
+    assert _w1g6_pile(game.players[0], "hand") == ["Grizzly Bears"]
+
+    # An opponent's graveyard is not yours.
+    game = _w1g6_game(
+        mine=[set_pool("ODY")["Holistic Wisdom"]], hand=[lea["Grizzly Bears"]],
+        their_yard=[lea["Craw Wurm"]],
+    )
+    game.start_turn(0)
+    refused = game.activate_permanent_ability(
+        0, "Holistic Wisdom", target_player_index=1, target_permanent_index=0,
+        cost_hand_index=0,
+    )
+    assert not refused.supported
+    assert _w1g6_pile(game.players[0], "hand") == ["Grizzly Bears"]
+
+
+def test_w1g6_holistic_wisdom_does_nothing_once_its_target_has_left(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_wisdom(
+        set_pool, hand=[lea["Grizzly Bears"]],
+        yard=[lea["Craw Wurm"], lea["Hill Giant"]],
+    )
+    queued = game.queue_permanent_ability(
+        0, "Holistic Wisdom", target_player_index=0, target_permanent_index=0,
+        cost_hand_index=0,
+    )
+    assert queued.details == "queued"
+    game.players[0].graveyard.pop(0)   # the Wurm leaves in response
+    _w1g6_resolve_stack(game)
+
+    # CR 608.2b: no other creature card is taken in its place.
+    assert _w1g6_pile(game.players[0]) == ["Hill Giant"]
+    assert not game.players[0].hand
+
+
+# --- Gravestorm -------------------------------------------------------------
+# "At the beginning of your upkeep, target opponent may exile a card from
+# their graveyard. If that player doesn't, you may draw a card." The offer is
+# the opponent's, the pile is the opponent's, and the pick is the opponent's.
+
+def _w1g6_gravestorm(set_pool, their_yard):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Gravestorm"]], their_yard=their_yard, yard=[lea["Mountain"]],
+        library=[lea["Island"]] * 5,
+    )
+    game.interactive_seats = {0, 1}
+    game.start_turn(0)
+    choice = game.pending_choices[0]
+    assert choice.kind == "trigger_target" and choice.player_index == 0
+    assert game.confirm_trigger_target(0, seat=1)
+    game.resolve_top_of_stack()
+    return game  # _w1g6_gravestorm
+
+
+def test_w1g6_gravestorm_the_opponent_exiles_a_card_of_their_choice(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_gravestorm(set_pool, [lea["Forest"], lea["Hill Giant"]])
+
+    offer = game.pending_choices[0]
+    assert (offer.kind, offer.player_index) == ("optional_pay", 1)
+    assert game.confirm_optional_pay(1, accept=True)
+    pick = game.pending_choices[0]
+    assert (pick.kind, pick.player_index, pick.data["owner_index"]) == (
+        "graveyard_exile_pick", 1, 1,
+    )
+    # The pick is the opponent's: the Gravestorm's controller cannot answer it.
+    assert not game.confirm_graveyard_exile_pick(0, [1])
+    assert game.confirm_graveyard_exile_pick(1, [1])
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pile(game.players[1]) == ["Forest"]
+    assert _w1g6_pile(game.players[1], "exile") == ["Hill Giant"]
+    # The opponent did: no draw is offered, and your own graveyard is untouched.
+    assert not game.pending_choices and not game.players[0].hand
+    assert _w1g6_pile(game.players[0]) == ["Mountain"]
+
+
+def test_w1g6_gravestorm_a_declining_opponent_lets_you_draw(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_gravestorm(set_pool, [lea["Forest"]])
+
+    assert game.confirm_optional_pay(1, accept=False)
+    draw = game.pending_choices[0]
+    assert (draw.kind, draw.player_index) == ("optional_pay", 0)
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pile(game.players[1]) == ["Forest"] and not game.players[1].exile
+    assert _w1g6_pile(game.players[0], "hand") == ["Island"]
+
+
+def test_w1g6_gravestorm_an_opponent_with_no_graveyard_is_not_asked(set_pool):
+    game = _w1g6_gravestorm(set_pool, [])
+
+    # Nothing to exile is not an offer: it goes straight to "you may draw".
+    draw = game.pending_choices[0]
+    assert (draw.kind, draw.player_index) == ("optional_pay", 0)
+    assert game.confirm_optional_pay(0, accept=False)
+    _w1g6_resolve_stack(game)
+    assert not game.players[0].hand and len(game.players[0].library) == 5
+
 # ==== end W1G6 ======================================================
 
 

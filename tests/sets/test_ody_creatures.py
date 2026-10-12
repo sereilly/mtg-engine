@@ -421,6 +421,206 @@ def test_w1g6_cabal_patriarch_exiles_a_creature_card_and_no_other(set_pool):
     assert _w1g6_names(game, 0) == ["Cabal Patriarch"]
     assert _w1g6_names(game, 1) == []
 
+
+# --- combat helpers ---------------------------------------------------------
+
+def _w1g6_slot(game, seat, permanent):
+    return next(
+        index for index, held in enumerate(game.controlled_by(seat))
+        if held is permanent
+    )  # _w1g6_slot
+
+
+def _w1g6_to_declare_attackers(game, seat):
+    game.start_turn(seat)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    assert game.current_step == "declare_attackers", game.current_step
+
+
+def _w1g6_answer(game, *, accept, pick=None):
+    """Resolve the stack, answering each prompt it stops for: a "may" by
+    *accept*, a graveyard pick with *pick*."""
+    for _ in range(12):
+        if game.stack:
+            game.resolve_top_of_stack()
+        if not game.pending_choices:
+            if not game.stack:
+                return
+            continue
+        choice = game.pending_choices[0]
+        if choice.kind == "optional_pay":
+            assert game.confirm_optional_pay(choice.player_index, accept=accept)
+        elif choice.kind == "graveyard_exile_pick":
+            assert game.confirm_graveyard_exile_pick(choice.player_index, [pick])
+        else:
+            raise AssertionError(f"unexpected prompt {choice.kind}")
+    raise AssertionError("the stack did not settle")  # _w1g6_answer
+
+
+# --- Rotting Giant ----------------------------------------------------------
+# "Whenever this creature attacks or blocks, sacrifice it unless you exile a
+# card from your graveyard." A toll whose price is an action
+# (``tolls.accept_graveyard_exile_price``): offered only where it can be paid.
+
+def _w1g6_giant_attacks(set_pool, yard):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Rotting Giant"]], theirs=[lea["Grizzly Bears"]], yard=yard,
+    )
+    game.interactive_seats = {0, 1}
+    _w1g6_to_declare_attackers(game, 0)
+    giant = _w1g6_named(game, 0, "Rotting Giant")
+    assert game.declare_attackers(0, [_w1g6_slot(game, 0, giant)])[0]
+    assert len(game.stack) == 1 and game.stack[0].is_ability
+    return game  # _w1g6_giant_attacks
+
+
+def test_w1g6_rotting_giant_stays_when_its_controller_exiles_a_card(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_giant_attacks(set_pool, [lea["Forest"], lea["Lightning Bolt"]])
+
+    _w1g6_answer(game, accept=True, pick=1)
+
+    assert _w1g6_names(game, 0) == ["Rotting Giant"]
+    assert _w1g6_pile(game.players[0]) == ["Forest"]
+    assert _w1g6_pile(game.players[0], "exile") == ["Lightning Bolt"]
+
+
+def test_w1g6_rotting_giant_is_sacrificed_when_the_price_is_declined(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_giant_attacks(set_pool, [lea["Forest"]])
+
+    _w1g6_answer(game, accept=False)
+
+    assert _w1g6_names(game, 0) == []
+    assert _w1g6_pile(game.players[0]) == ["Forest", "Rotting Giant"]
+    assert not game.players[0].exile
+
+
+def test_w1g6_rotting_giant_with_an_empty_graveyard_is_not_offered_the_price(
+    set_pool,
+):
+    game = _w1g6_giant_attacks(set_pool, [])
+
+    game.resolve_top_of_stack()
+
+    # Nothing to exile is not a choice: no prompt, and the penalty stands.
+    assert not game.pending_choices
+    assert _w1g6_names(game, 0) == []
+    assert _w1g6_pile(game.players[0]) == ["Rotting Giant"]
+
+
+def test_w1g6_rotting_giant_owes_the_same_toll_when_it_blocks(set_pool):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Rotting Giant"]], theirs=[lea["Grizzly Bears"]],
+        yard=[lea["Forest"]],
+    )
+    game.interactive_seats = {0, 1}
+    _w1g6_to_declare_attackers(game, 1)
+    bears = _w1g6_named(game, 1, "Grizzly Bears")
+    assert game.declare_attackers(1, [_w1g6_slot(game, 1, bears)])[0]
+    game.advance_combat_phase()
+    giant = _w1g6_named(game, 0, "Rotting Giant")
+    blocked = game.declare_blockers(
+        0, {_w1g6_slot(game, 0, giant): _w1g6_slot(game, 1, bears)}
+    )
+    assert blocked[0], blocked
+
+    _w1g6_answer(game, accept=True, pick=0)
+
+    assert _w1g6_names(game, 0) == ["Rotting Giant"]
+    assert not game.players[0].graveyard
+    assert _w1g6_pile(game.players[0], "exile") == ["Forest"]
+
+
+# --- Zombie Cannibal --------------------------------------------------------
+# "Whenever this creature deals combat damage to a player, you may exile
+# target card from that player's graveyard." One card out of the pile the
+# damage event named, picked by the Cannibal's controller as it resolves.
+
+def _w1g6_cannibal_connects(set_pool, their_yard, *, blocked=False):
+    lea, ody = set_pool("LEA"), set_pool("ODY")
+    game = _w1g6_game(
+        mine=[ody["Zombie Cannibal"]], theirs=[lea["Grizzly Bears"]],
+        yard=[lea["Craw Wurm"]], their_yard=their_yard,
+    )
+    game.interactive_seats = {0, 1}
+    _w1g6_to_declare_attackers(game, 0)
+    cannibal = _w1g6_named(game, 0, "Zombie Cannibal")
+    assert game.declare_attackers(0, [_w1g6_slot(game, 0, cannibal)])[0]
+    game.advance_combat_phase()
+    blocks = (
+        {_w1g6_slot(game, 1, _w1g6_named(game, 1, "Grizzly Bears")):
+         _w1g6_slot(game, 0, cannibal)}
+        if blocked else {}
+    )
+    assert game.declare_blockers(1, blocks)[0]
+    for _ in range(4):
+        if game.stack or game.pending_choices or game.current_step == "postcombat_main":
+            break
+        game.advance_combat_phase()
+    return game  # _w1g6_cannibal_connects
+
+
+def test_w1g6_zombie_cannibal_exiles_a_chosen_card_from_the_damaged_players_pile(
+    set_pool,
+):
+    lea = set_pool("LEA")
+    game = _w1g6_cannibal_connects(
+        set_pool, [lea["Forest"], lea["Hill Giant"], lea["Lightning Bolt"]]
+    )
+    assert game.players[1].life == 19
+
+    offer = game.pending_choices[0]
+    assert (offer.kind, offer.player_index) == ("optional_pay", 0)
+    assert game.confirm_optional_pay(0, accept=True)
+    pick = game.pending_choices[0]
+    assert (pick.kind, pick.player_index, pick.data["owner_index"]) == (
+        "graveyard_exile_pick", 0, 1,
+    )
+    assert game.confirm_graveyard_exile_pick(0, [1])
+    _w1g6_resolve_stack(game)
+
+    assert _w1g6_pile(game.players[1]) == ["Forest", "Lightning Bolt"]
+    assert _w1g6_pile(game.players[1], "exile") == ["Hill Giant"]
+    # Never the Cannibal's own graveyard.
+    assert _w1g6_pile(game.players[0]) == ["Craw Wurm"]
+
+
+def test_w1g6_zombie_cannibal_may_decline_and_asks_nothing_of_an_empty_pile(
+    set_pool,
+):
+    lea = set_pool("LEA")
+    declined = _w1g6_cannibal_connects(set_pool, [lea["Forest"]])
+    assert declined.confirm_optional_pay(0, accept=False)
+    _w1g6_resolve_stack(declined)
+    assert _w1g6_pile(declined.players[1]) == ["Forest"]
+    assert not declined.players[1].exile
+
+    # Their graveyard is empty and the Cannibal's own is not: there is no
+    # legal card, so nothing is offered and nothing is taken from anywhere.
+    empty = _w1g6_cannibal_connects(set_pool, [])
+    _w1g6_resolve_stack(empty)
+    assert empty.players[1].life == 19
+    assert not empty.pending_choices
+    assert _w1g6_pile(empty.players[0]) == ["Craw Wurm"] and not empty.players[0].exile
+
+
+def test_w1g6_zombie_cannibal_blocked_deals_no_damage_to_a_player(set_pool):
+    lea = set_pool("LEA")
+    game = _w1g6_cannibal_connects(set_pool, [lea["Forest"]], blocked=True)
+    for _ in range(6):
+        if game.current_step == "postcombat_main":
+            break
+        game.advance_combat_phase()
+        _w1g6_resolve_stack(game)
+
+    assert game.players[1].life == 20 and not game.pending_choices
+    assert _w1g6_pile(game.players[1]) == ["Forest"]
+
 # ==== end W1G6 ======================================================
 
 
