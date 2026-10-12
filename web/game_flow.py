@@ -323,6 +323,19 @@ def _advance_ai_turn(session: Session) -> None:
         game = session.game
         step = game.current_step
 
+        # **An AI step never advances a human's turn**, and the place that is
+        # true by construction is here rather than at each caller. This loop
+        # read `prev_turn` below, *inside* itself, so a caller that had already
+        # crossed the turn boundary handed it the next player's precombat main
+        # phase and it walked that into combat: `ai_step` at the AI's end step
+        # (reached whenever the human passed priority in the AI's second main
+        # phase) did exactly that, and the human's turn began at Declare
+        # Attackers. The caller now checks the turn it stepped as well, which
+        # is the precise statement for two AI seats in a row; this is the
+        # backstop no later caller can forget.
+        if _seat_type(session, session.current_turn) != "ai":
+            return
+
         if _ai_should_hold(session, step):
             # Resolve the active player's turn-based action (declaring attackers)
             # before handing priority to the human.

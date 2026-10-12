@@ -830,6 +830,18 @@ def do_action(session_id: str, req: GameActionRequest):
 
     spec.handler(session, req, seat_type)
 
+    # A human's answer can arm a prompt an AI seat now owes — "…then **that
+    # player** looks at the top three cards of your library" (Tahngarth's
+    # Glare), a pile the other seat chooses. The drain above ran *before* the
+    # handler, so that prompt used to ride out in the response with the object
+    # still on the stack and priority apparently the human's; the client's
+    # auto-pass answered it, the next request's preamble finished the spell,
+    # and the pass was then applied to the empty stack that followed — both
+    # players had passed, and the human's main phase was over. Answered here,
+    # the resolution finishes in the request that caused it and the state a
+    # client reads is one it may act on.
+    _auto_resolve_ai_pending(session)
+
     # A turn step that stopped on a decision picks up here, once nothing is
     # owed. In the tail rather than in the handler that answers the prompt,
     # because *which* prompt paused the phase is not something the answering

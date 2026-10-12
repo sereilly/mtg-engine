@@ -63,7 +63,7 @@ from engine.targeting import (derive_cast_spec, spec_roles,
                               usable_activated_abilities)
 from engine.untap_restrictions import permanent_in_limited_scope
 
-from .prompts import PromptContext, render_prompts
+from .prompts import PromptContext, blocking_prompt, render_prompts
 from .session_store import Session
 
 from .presence import seat_is_connected
@@ -891,6 +891,15 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # diffs by id to float the revealed faces over the board.
         "reveal_events": _serialize_reveal_events(session.game),
         "winner": win,
+        # Whether a `pass_priority` from this viewer would be refused because a
+        # decision is owed — `blocking_prompt`, the action gate's own question,
+        # so the two cannot disagree. The client's auto-pass asks this instead
+        # of its own list of prompt kinds, which had 49 of the registry's 86
+        # blocking kinds: with any of the other 37 open it sent a pass the
+        # server refused.
+        "waiting_on_prompt": viewer_seat is not None and blocking_prompt(
+            session.game, viewer_seat, "pass_priority", frozenset(),
+        ) is not None,
         "rematch": _build_rematch_info(session, viewer_seat),
         "cleanup_discard": cleanup_info,
         "untap_land_selection": untap_info,

@@ -413,6 +413,11 @@ def _action_island_sanctuary_skip(session, req, seat_type):
 def _action_ai_step(session, req, seat_type):
     if _seat_type(session, session.current_turn) != "ai":
         raise HTTPException(status_code=400, detail="current turn is not AI")
+    # The turn this step belongs to. Everything below may advance *it* and no
+    # other: `_advance_phase` from the AI's end step runs the cleanup and the
+    # next player's whole beginning phase, and whatever turn that leaves is not
+    # this request's to walk any further.
+    stepped_turn = session.current_turn
     if _ai_step(session):
         # The AI finished acting in the current step. Hold here if the human
         # flagged this (main) step; otherwise leave it and advance the turn,
@@ -424,4 +429,5 @@ def _action_ai_step(session, req, seat_type):
             _hold_priority_for_human(session)
         else:
             _advance_phase(session)
-            _advance_ai_turn(session)
+            if session.current_turn == stepped_turn:
+                _advance_ai_turn(session)

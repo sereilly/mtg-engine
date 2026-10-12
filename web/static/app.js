@@ -1213,6 +1213,14 @@ function combatDamageAssignmentPending(state = currentState) {
 }
 
 function hasBlockingPromptForAutoPass(state = currentState) {
+  // The server's own answer first: `waiting_on_prompt` is "a pass_priority
+  // from this seat would be refused because a decision is owed", read off the
+  // choice registry. The list below is the hand-written one it backs up — it
+  // named 49 of the registry's 86 blocking kinds, so with a library reorder, a
+  // search, a look-and-pick, a trigger's target or any of 33 others open, the
+  // auto-pass sent a pass the server refused (and, crossing the answer on the
+  // wire, one it then accepted on the empty stack that followed).
+  if (state?.waiting_on_prompt) return true;
   if (getCleanupDiscardInfo(state) || getUntapLandSelectionInfo(state) || getOptionalUntapInfo(state) || getUpkeepPayInfo(state) || getOptionalTriggerInfo(state) || getUpkeepPreventionInfo(state) || getDiscardSelectInfo(state) || getHandToLibraryInfo(state) || getLengDiscardInfo(state) || getOptionalDamageRedirectInfo(state) || getDrawBecomesCounterInfo(state) || getRevealUntilKindInfo(state) || getEntryDiscardTollInfo(state) || getCommanderZoneChangeInfo(state) || getBalanceSelectInfo(state) || getSacrificeSelectInfo(state) || getPayLifeToSaveInfo(state) || getDiscardUnlessPayLifeInfo(state) || getColorSetChoiceInfo(state) || getRevealedDrawBuyoutInfo(state) || getOptionalPayInfo(state) || getOpponentDamageInfo(state) || getLampDrawInfo(state) || getOutsideGameDrawInfo(state) || getLandTypeChoiceInfo(state) || getDrawUpToInfo(state) || getPayAnyAmountInfo(state) || getNumberChoiceInfo(state) || getSecretNumberInfo(state) || getEffectOrderInfo(state) || getBodyChoiceInfo(state) || getEntryExileInfo(state) || getPlayerChoiceInfo(state) || getGraveyardPileChoiceInfo(state) || getLibraryEndChoiceInfo(state) || getAggregateSacrificeInfo(state) || getTextChangeVocabularyInfo(state) || getCastChoiceInfo(state) || getRetargetChoiceInfo(state) || getManaPaymentInfo(state) || getBandBlockerInfo(state) || getMultiblockInfo(state) || getKudzuReattachInfo(state) || getFaceDownCastInfo(state) || getFlipAgainInfo(state) || getRepeatProcessInfo(state) || getExileFromHandInfo(state) || getExileHandPileInfo(state) || getLibraryPileSplitInfo(state) || getPileExileInfo(state) || getOpponentPicksRevealedInfo(state) || getPileSearchInfo(state) || getLibraryCycleInfo(state) || getLinkedExileReturnInfo(state) || getPutFromHandInfo(state) || getChooseCardsInHandInfo(state) || getTimeVaultInfo(state) || getWordOfCommandInfo(state) || getRagingRiverInfo(state) || getCamouflageInfo(state) || getIslandSanctuaryInfo(state) || combatDamageAssignmentPending(state)) return true;
   return !!(pendingActivation || pendingCastTarget || pendingCastX || pendingManaColor || pendingModalChoice || pendingDiscardCost || pendingPermanentCost || pendingAbilityChoice || pendingChannel || pendingAttackTarget);
 }
@@ -1241,7 +1249,15 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
     return;
   }
 
-  if (state.priority_player !== seat) {
+  // Nobody has priority while the active player owes the declaration
+  // (CR 508.1), so the branch below that declares no attackers was unreachable
+  // behind this check whenever there was a creature to attack with: End Turn
+  // stopped at Declare Attackers and waited for OK. Only for the player's own
+  // attack — a block is the other player's turn, and is still asked.
+  const owesOwnAttack =
+    autoPassMode === "self" && isCombatStep(state, "declare_attackers")
+    && seat === state.current_turn && !getCombatState(state)?.attackers_locked;
+  if (state.priority_player !== seat && !owesOwnAttack) {
     return;
   }
 
@@ -1993,6 +2009,15 @@ function cardRequiresSeveralTargets(card) {
   // question every cast cascade asks rather than by the five later ones that
   // would each have had to learn about it — and `startCastSeveralTargetsPrompt`
   // is then the one place that sends it through the X prompt first.
+  //
+  // **Never a divided spell.** "…2 damage divided as you choose among one or
+  // two targets" (Fire; Arc Lightning, Contagion, Elven Rite, Flameshot,
+  // Bounty of the Hunt) carries `max_targets` too, as the bound on its
+  // division — and every cascade asks this question before it asks for a
+  // division, so those six took the several-permanents picker: no life pill,
+  // no division, and "Choosing none is legal". Answered here rather than by
+  // reordering the five cascades that ask, so there is one place to be right.
+  if (specKind(card) === "divided") return false;
   return severalTargetMaximum(card) !== null || cardNamesXTargets(card);
 }
 function cardRequiresTargetStackSpell(card) { return specKind(card) === "stack"; }
@@ -2274,6 +2299,23 @@ function getDualLandColors(card) {
   if (!card || typeof card === "string") return null;
   const produced = Array.isArray(card.produced_mana) ? card.produced_mana.map((s) => s.toUpperCase()) : [];
   return produced.length >= 2 ? produced : null;
+}
+
+// The colours the ability *chosen from the menu* can make. A land with two
+// mana abilities reports everything it can produce (a painland: C, and its two
+// colours), and asking that of the one line picked put a Blue/Red fan in front
+// of "{T}: Add {C}." — a question whose answer the engine then ignored. Where
+// the line prints its symbols, only those are offered; a line that prints none
+// ("any color") keeps the permanent's list.
+function abilityManaColors(card) {
+  const produced = getDualLandColors(card);
+  if (!produced || !Number.isInteger(card?.__abilityIndex)) return produced;
+  const line = String(card.oracle_text || "");
+  const added = line.slice(Math.max(0, line.toLowerCase().indexOf("add")));
+  const printed = new Set([...added.matchAll(/\{([WUBRGC])\}/gi)].map((m) => m[1].toUpperCase()));
+  if (!printed.size) return produced;
+  const own = produced.filter((symbol) => printed.has(symbol));
+  return own.length >= 2 ? own : null;
 }
 
 function xSpendColorForCard(card) {
@@ -5780,7 +5822,12 @@ function applyNumberChoicePrompt(info) {
 
   const cardName = info.card_name || "";
   title.textContent = "Choose a number";
-  body.textContent = `${cardName}: choose a number between ${info.minimum} and ${info.maximum}.`;
+  // `maximum` is null where the card prints no ceiling ("Choose a number.",
+  // Squee's Revenge; "greater than 0", Scrying Glass) — the buttons below are
+  // the server's offer, not a rule.
+  body.textContent = Number.isInteger(info.maximum)
+    ? `${cardName}: choose a number between ${info.minimum} and ${info.maximum}.`
+    : `${cardName}: choose a number (${info.minimum} or more).`;
   const buttons = info.options
     .map(
       (n) =>
@@ -11355,7 +11402,8 @@ function renderActivationPrompt() {
       body.textContent = dividedSlotRows.length
         ? "This spell's targets are not interchangeable: each click fills the next slot below. "
           + "Click a creature on the battlefield or a player's life pill; click a chosen one again to release it. Then confirm."
-        : "Click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm to choose X.";
+        : "Click creatures to split the damage among them, or click a player's life pill to hit their face. "
+          + (hasXCost(pendingCastTarget.card) ? "Then confirm to choose X." : "Then confirm.");
       const n = dividedTargetCount();
       // A Flagbearer requirement holds the confirm until a pick answers it.
       const dividedOwesRequired = !targetRequirementMet(
@@ -11468,6 +11516,20 @@ function renderActivationPrompt() {
         `<div class="prompt-choice-row">${targetButtons}</div>`,
       ].join("");
     }
+    // One slot under a Flagbearer. The pickers that collect several targets
+    // print the requirement beside their confirm; this one sends on the first
+    // click and so said nothing, glowing a single permanent with no reason
+    // given — and, for "any target", still inviting a click on a life pill
+    // that was no longer legal.
+    if (!pendingCastTarget.__costOnly) {
+      const owed = targetRequirementRowsHtml(pendingCastTarget.card, []);
+      if (owed.length) {
+        steps.insertAdjacentHTML("beforeend", owed.join(""));
+        if (pendingCastTarget.targetKind === "any" && !(pendingCastTarget.validPlayerSeats?.size > 0)) {
+          body.textContent = "Click a glowing permanent on the battlefield to choose the target.";
+        }
+      }
+    }
     okBtn.disabled = true;
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -11564,7 +11626,12 @@ function renderActivationPrompt() {
       }
       const xColor = xSpendColorForCard(pendingCastX.card);
       const xColorName = xColor ? { W: "white", U: "blue", B: "black", R: "red", G: "green" }[xColor] : null;
-      body.textContent = !xLivesInManaCost(pendingCastX.card)
+      // An *ability's* {X} is in its activation cost (Pernicious Deed's
+      // "{X}, Sacrifice…"), which the card's mana cost says nothing about.
+      const xIsPaidInMana = pendingCastX.castAction === "activate"
+        ? /\{x\}/i.test(pendingCastX.costString || "")
+        : xLivesInManaCost(pendingCastX.card);
+      body.textContent = !xIsPaidInMana
         // CR 107.3a: the X is in an *additional* cost (Fire Covenant pays X
         // life, Infernal Harvest returns X Swamps), so no amount of tapping
         // raises it and the ceiling came off a life total or a board. Saying
@@ -12649,7 +12716,7 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  const dualColors = getDualLandColors(card);
+  const dualColors = abilityManaColors(card);
   if (dualColors) {
     const colorOptions = MANA_COLOR_OPTIONS.filter((o) => dualColors.includes(o.symbol));
     pendingManaColor = {
@@ -14222,8 +14289,18 @@ function dividedExtraTargetTax(card, count) {
 // A click past that is refused here rather than counted and refused at the
 // confirm: with named slots there is no slot for it to fill.
 function dividedPicksAreFull(p) {
-  const printed = targetSpecOf(p?.card)?.divided_target_count;
-  return Number.isInteger(printed) && dividedTargetCount() >= printed;
+  const ceiling = dividedPickCeiling(p?.card);
+  return ceiling !== null && dividedTargetCount() >= ceiling;
+}
+
+// The most targets a divided announcement may name: the printed count where
+// the card names its slots ("two target…", `divided_target_count`), else the
+// printed bound on the division ("among one or two targets", `max_targets`).
+// Null for "any number of targets".
+function dividedPickCeiling(card) {
+  const spec = targetSpecOf(card);
+  if (Number.isInteger(spec?.divided_target_count)) return spec.divided_target_count;
+  return Number.isInteger(spec?.max_targets) ? spec.max_targets : null;
 }
 
 // One line per named slot of the divided prompt: what the position is and
@@ -14788,7 +14865,12 @@ function dividedTargetsHint() {
     if (n >= slotRoles.length) return `${cardName}: every target chosen — confirm, or click one to release it.`;
     return `Choose the ${slotRoles[n]} for ${cardName} (${n + 1} of ${slotRoles.length}).`;
   }
-  if (n === 0) return "No targets chosen yet.";
+  const ceiling = dividedPickCeiling(pendingCastTarget?.card);
+  if (n === 0) {
+    return ceiling !== null
+      ? `No targets chosen yet — ${pendingCastTarget.cardName} names up to ${ceiling}.`
+      : "No targets chosen yet.";
+  }
   // The per-target mana tax only applies to Fireball-style splits, not to a
   // count-based selection (Volcanic Eruption, where X = the number chosen).
   const xEqualsTargets = !!targetSpecOf(pendingCastTarget?.card)?.x_equals_targets;
