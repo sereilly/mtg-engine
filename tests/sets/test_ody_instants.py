@@ -748,4 +748,146 @@ def test_the_attach_pronoun_names_what_the_sentence_in_front_took(text, supporte
     card = _w1g9_mk_card("Graft Probe", "{U}", "Instant", text)
     assert _w1g9_compile(card).supported is supported
 
+
+# --- The instants that compiled on arrival, each given a game ---------------
+
+def _w1g9_settle(game, answer=None):
+    """Resolve the stack one object at a time, answering what each leaves
+    owed before the next resolves. *answer* is offered every prompt first and
+    returns True when it has dealt with it; the rest take their default.
+
+    Not `resolve_stack`: an offer made to a seat nobody is sitting in does not
+    hold the stack, so that helper resolves the spell underneath before the
+    offer is answered - which for Divert is the whole card.
+    """
+    for _ in range(40):
+        if game.pending_choices:
+            choice = game.pending_choices[0]
+            if answer is None or not answer(choice):
+                game.take_choice_default(choice)
+            continue
+        if not game.stack:
+            return
+        game.resolve_top_of_stack(pause_for_choices=True)
+    raise AssertionError("the stack never settled")
+
+
+def test_afflict_shrinks_a_creature_and_draws(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Afflict"], bf1=["Llanowar Elves", "Forest"])
+    elves, forest = _w1g9_on(game, 1, "Llanowar Elves"), _w1g9_on(game, 1, "Forest")
+    assert not game.queue_from_hand(
+        0, "Afflict", target_permanent_ids=[forest.permanent_id]
+    ).supported
+    assert game.queue_from_hand(
+        0, "Afflict", target_permanent_ids=[elves.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    game.check_state_based_actions()
+    assert _w1g9_names(game.players[1].graveyard) == ["Llanowar Elves"]
+    assert len(game.players[0].hand) == 1
+
+
+def test_afflict_draws_nothing_once_its_only_target_is_gone(set_pool):
+    """CR 608.2b: every target illegal, so the spell does not resolve - the
+    second line is not a consolation prize."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Afflict"], hand1=["Unsummon"], bf1=["Grizzly Bears"],
+    )
+    bears = _w1g9_on(game, 1, "Grizzly Bears")
+    assert game.queue_from_hand(
+        0, "Afflict", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    assert game.queue_from_hand(
+        1, "Unsummon", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert game.players[0].hand == []
+
+
+def test_peek_shows_its_caster_a_hand_without_telling_the_table(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Peek"], hand1=["Grizzly Bears", "Forest"])
+    game.interactive_seats = {0, 1}
+    assert game.queue_from_hand(0, "Peek", target_player_index=1).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    shown = game.pending_choices[0]
+    assert (shown.kind, shown.player_index) == ("hand_reveal", 0)
+    assert len(game.players[0].hand) == 1, "and it drew"
+    assert not any("Grizzly Bears" in line for line in game.log), game.log
+
+
+def test_vivify_makes_a_land_a_creature_that_is_still_a_land(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Vivify"], bf0=["Forest", "Grizzly Bears"])
+    forest, bears = _w1g9_on(game, 0, "Forest"), _w1g9_on(game, 0, "Grizzly Bears")
+    assert not game.queue_from_hand(
+        0, "Vivify", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    assert game.queue_from_hand(
+        0, "Vivify", target_permanent_ids=[forest.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert forest.is_creature and forest.has_type("land") and forest.has_type("forest")
+    assert (forest.effective_power, forest.effective_toughness) == (3, 3)
+    assert game.tap_land_for_mana(0, "Forest", permanent_id=forest.permanent_id)
+    assert len(game.players[0].hand) == 1
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert not forest.is_creature
+
+
+def _w1g9_divert_table(set_pool, payer_mana):
+    game = _w1g9_duel(
+        set_pool, hand0=["Divert"], hand1=["Lightning Bolt"],
+        bf0=["Grizzly Bears"], bf1=["Gray Ogre"], costs=True,
+    )
+    game.interactive_seats = {0, 1}
+    game.players[0].mana_pool.update({"U": 1})
+    game.players[1].mana_pool.update({"R": 1 + payer_mana})
+    bears, ogre = _w1g9_on(game, 0, "Grizzly Bears"), _w1g9_on(game, 1, "Gray Ogre")
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    assert game.queue_from_hand(0, "Divert", target_stack_index=0).supported
+    return game, bears, ogre
+
+
+def test_divert_turns_a_spell_onto_the_target_its_caster_names(set_pool):
+    """"Change the target of target spell with a single target unless that
+    spell's controller pays {2}." Unpaid, Divert's controller chooses among the
+    *other* legal targets (CR 115.7a) and the Bolt lands there."""
+    game, bears, ogre = _w1g9_divert_table(set_pool, payer_mana=2)
+
+    def answer(choice):
+        if choice.kind == "optional_pay":
+            assert choice.player_index == 1, "the Bolt's controller is asked"
+            return game.confirm_optional_pay(1, accept=False)
+        if choice.kind == "retarget_choice":
+            assert choice.player_index == 0
+            names = [option["name"] for option in choice.data["options"]]
+            assert "Grizzly Bears" not in names and "Gray Ogre" in names
+            return game.confirm_retarget_choice(0, names.index("Gray Ogre"))
+        return False
+
+    _w1g9_settle(game, answer)
+    game.check_state_based_actions()
+    assert bears in game.all_permanents() and ogre not in game.all_permanents()
+    assert game.players[1].mana_pool["R"] == 2
+
+
+def test_divert_does_nothing_to_a_spell_whose_controller_pays(set_pool):
+    game, bears, _ogre = _w1g9_divert_table(set_pool, payer_mana=2)
+    _w1g9_settle(
+        game,
+        lambda c: c.kind == "optional_pay" and game.confirm_optional_pay(1, accept=True),
+    )
+    game.check_state_based_actions()
+    assert bears not in game.all_permanents()
+    assert game.players[1].mana_pool["R"] == 0
+
+
+def test_divert_cannot_be_aimed_at_a_spell_with_no_target(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Divert"], hand1=["Wrath of God"])
+    assert game.queue_from_hand(1, "Wrath of God").supported
+    assert not game.queue_from_hand(0, "Divert", target_stack_index=0).supported
+    assert _w1g9_names(game.players[0].hand) == ["Divert"]
+
 # ==== end W1G9 ======================================================

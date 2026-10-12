@@ -1128,4 +1128,75 @@ def test_that_players_opponents_is_read_only_where_a_seat_was_frozen(text, suppo
     card = _w1g9_mk_card("Truce Probe", "{U}", "Enchantment", text)
     assert _w1g9_compile(card).supported is supported
 
+
+# --- The enchantments that compiled on arrival, each given a game -----------
+
+def test_still_life_is_a_centaur_until_end_of_turn_and_dies_like_one(set_pool):
+    """"{G}{G}: This enchantment becomes a 4/3 Centaur creature in addition to
+    its other types until end of turn." Layer 4 and 7b: an enchantment creature
+    that 3 damage destroys, and an enchantment again at cleanup."""
+    game = _w1g9_table(
+        set_pool, hands=((), ("Lightning Bolt",)), boards=(("Still Life",), ()),
+        costs=True,
+    )
+    still = _w1g9_on(game, 0, "Still Life")
+    assert not game.activate_permanent_ability(0, "Still Life").supported
+    game.players[0].mana_pool.update({"G": 2})
+    assert game.activate_permanent_ability(0, "Still Life").supported
+    _w1g9_resolve_stack(game)
+    assert still.is_creature and still.has_type("centaur") and still.has_type("enchantment")
+    assert (still.effective_power, still.effective_toughness) == (4, 3)
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert not still.is_creature
+
+    game.players[0].mana_pool.update({"G": 2})
+    game.players[1].mana_pool.update({"R": 1})
+    assert game.activate_permanent_ability(0, "Still Life").supported
+    _w1g9_resolve_stack(game)
+    assert game.queue_from_hand(
+        1, "Lightning Bolt", target_permanent_ids=[still.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    game.check_state_based_actions()
+    assert [c.name for c in game.players[0].graveyard] == ["Still Life"]
+
+
+def test_testament_of_faith_is_as_big_as_the_x_paid_for_it(set_pool):
+    game = _w1g9_table(set_pool, boards=(("Testament of Faith",), ()), costs=True)
+    testament = _w1g9_on(game, 0, "Testament of Faith")
+    game.players[0].mana_pool.update({"W": 3})
+    assert game.activate_permanent_ability(
+        0, "Testament of Faith", x_value=3
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert (testament.effective_power, testament.effective_toughness) == (3, 3)
+    assert testament.has_type("wall") and game._has_keyword(testament, "defender")
+    assert sum(game.players[0].mana_pool.values()) == 0
+    assert not game.activate_permanent_ability(
+        0, "Testament of Faith", x_value=2
+    ).supported, "nothing left to pay {2} with"
+
+
+def test_unifying_theory_offers_the_caster_a_card_for_two(set_pool):
+    """"Whenever a player casts a spell, that player may pay {2}. If the
+    player does, they draw a card." Asked of whoever cast - an opponent too -
+    and the card goes to the one who paid."""
+    game = _w1g9_table(
+        set_pool, hands=(("Grizzly Bears",), ("Grizzly Bears",)),
+        boards=(("Unifying Theory",), ()), costs=True,
+    )
+    game.interactive_seats = {0, 1}
+    for seat, accept in ((1, True), (0, False)):
+        game.players[seat].mana_pool.update({"G": 4})
+        assert game.queue_from_hand(seat, "Grizzly Bears").supported
+        game.resolve_top_of_stack(pause_for_choices=True)
+        offer = game.pending_choices[0]
+        assert (offer.kind, offer.player_index) == ("optional_pay", seat)
+        assert offer.data["cost"] == {"generic": 2}
+        assert game.confirm_optional_pay(seat, accept=accept)
+        assert len(game.players[seat].hand) == (1 if accept else 0)
+        assert game.players[seat].mana_pool["G"] == (0 if accept else 2)
+        _w1g9_resolve_stack(game)
+
 # ==== end W1G9 ======================================================

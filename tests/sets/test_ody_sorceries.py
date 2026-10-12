@@ -423,4 +423,87 @@ def test_extract_exiles_a_card_from_the_library_of_the_player_it_names(set_pool)
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
 
+
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_duel(set_pool, *, hand0=(), hand1=(), bf0=(), bf1=()):
+    """A two-seat game built from card names (Odyssey first, then Alpha),
+    costs off, ten Forests in each library, nobody summoning-sick."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name=f"P{seat}", life=20, hand=[pool[n] for n in hand],
+            library=[pool["Forest"]] * 10,
+        )
+        for seat, hand in enumerate((hand0, hand1))
+    ])
+    game.enforce_mana_costs = False
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            permanent = _w1g9_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game  # _w1g9_duel (sorceries)
+
+
+# --- The sorceries that compiled on arrival, each given a game --------------
+
+def test_overrun_pumps_the_creatures_its_caster_has_as_it_resolves(set_pool):
+    """+3/+3 and trample until end of turn, for the set fixed as the spell
+    resolves (CR 611.2c): a creature that arrives afterwards gets neither."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Overrun"], bf0=["Grizzly Bears", "Llanowar Elves"],
+        bf1=["Gray Ogre"],
+    )
+    assert game.queue_from_hand(0, "Overrun").supported
+    _w1g9_resolve_stack(game)
+    late = _w1g9_Permanent(card=set_pool("LEA")["Grizzly Bears"])
+    game._put_permanent_onto_battlefield(0, late, None)
+    game._recompute_continuous_effects()
+    mine = [p for p in game.controlled_by(0) if p is not late]
+    assert [(p.effective_power, p.effective_toughness) for p in mine] == [(5, 5), (4, 4)]
+    assert all(game._has_keyword(p, "trample") for p in mine)
+    theirs = next(iter(game.controlled_by(1)))
+    assert (theirs.effective_power, game._has_keyword(theirs, "trample")) == (2, False)
+    assert (late.effective_power, game._has_keyword(late, "trample")) == (2, False)
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert mine[0].effective_power == 2 and not game._has_keyword(mine[0], "trample")
+
+
+def test_time_stretch_gives_its_target_the_next_two_turns(set_pool):
+    for target, expected in ((0, [0, 0, 0, 1]), (1, [0, 1, 1, 1])):
+        game = _w1g9_duel(set_pool, hand0=["Time Stretch"])
+        assert game.cast_target_spec(0, game.players[0].hand[0])["kind"] == "player"
+        assert game.queue_from_hand(
+            0, "Time Stretch", target_player_index=target
+        ).supported
+        _w1g9_resolve_stack(game)
+        game.start_turn(0)
+        order = []
+        for _ in range(4):
+            order.append(game.active_player_index)
+            game.start_next_turn()
+        assert order == expected, target
+
+
+def test_upheaval_returns_every_permanent_to_its_owners_hand(set_pool):
+    """"…to their owners' hands": a creature its controller does not own goes
+    back to the player who does."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Upheaval"], bf0=["Grizzly Bears", "Hill Giant"],
+        bf1=["Gray Ogre", "Forest"],
+    )
+    stolen = next(p for p in game.controlled_by(0) if p.card.name == "Hill Giant")
+    stolen.metadata["owner_player_index"] = 1
+    assert game.queue_from_hand(0, "Upheaval").supported
+    _w1g9_resolve_stack(game)
+    assert list(game.all_permanents()) == []
+    assert [sorted(c.name for c in p.hand) for p in game.players] == [
+        ["Grizzly Bears"], ["Forest", "Gray Ogre", "Hill Giant"],
+    ]
+
 # ==== end W1G9 ======================================================

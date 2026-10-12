@@ -1492,4 +1492,146 @@ def test_a_land_type_with_no_printed_window_outlives_its_source(set_pool):
     game._permanent_to_graveyard(game.players[0], permanent)
     assert _w1g9_land_types(plains) == ["forest"]
 
+
+# --- The cards that compiled on arrival, each given a game ------------------
+
+def _w1g9_pt(permanent):
+    return permanent.effective_power, permanent.effective_toughness
+
+
+def test_aven_fisher_offers_its_controller_a_card_when_it_dies(set_pool):
+    game = _w1g9_duel(set_pool, hand0=["Lightning Bolt"], bf1=["Aven Fisher"])
+    game.interactive_seats = {0, 1}
+    fisher = _w1g9_on(game, 1, "Aven Fisher")
+    assert game.queue_from_hand(
+        0, "Lightning Bolt", target_permanent_ids=[fisher.permanent_id]
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    game.check_state_based_actions()
+    assert _w1g9_names(i.card for i in game.stack) == ["Aven Fisher"]
+    game.resolve_top_of_stack(pause_for_choices=True)
+    offer = game.pending_choices[0]
+    assert (offer.kind, offer.player_index) == ("optional_pay", 1)
+    assert game.confirm_optional_pay(1, accept=True)
+    assert len(game.players[1].hand) == 1
+
+
+def test_cephalid_retainer_taps_only_a_creature_without_flying(set_pool):
+    """The picker leaves the flyer out, a flyer named anyway is refused with
+    nothing paid, and an Ogre given flying in response is not tapped."""
+    game = _w1g9_duel(
+        set_pool, hand1=["Jump"], bf0=["Cephalid Retainer"],
+        bf1=["Air Elemental", "Gray Ogre"], costs=True,
+    )
+    game.players[0].mana_pool.update({"U": 4})
+    air, ogre = _w1g9_on(game, 1, "Air Elemental"), _w1g9_on(game, 1, "Gray Ogre")
+    offered = {t["name"] for t in game.activation_target_spec(0, 0)["valid_targets"]}
+    assert offered == {"Cephalid Retainer", "Gray Ogre"}
+    assert not game.queue_permanent_ability(
+        0, "Cephalid Retainer", target_permanent_ids=[air.permanent_id]
+    ).supported
+    assert game.players[0].mana_pool["U"] == 4
+
+    game.players[1].mana_pool.update({"U": 1})
+    assert game.queue_permanent_ability(
+        0, "Cephalid Retainer", target_permanent_ids=[ogre.permanent_id]
+    ).supported
+    assert game.queue_from_hand(
+        1, "Jump", target_permanent_ids=[ogre.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert not ogre.tapped, "it has flying as the ability resolves (CR 608.2b)"
+
+
+def test_the_nantuko_druids_pump_and_make_mana(set_pool):
+    game = _w1g9_duel(
+        set_pool, costs=True,
+        bf0=["Nantuko Disciple", "Nantuko Elder", "Nantuko Mentor", "Grizzly Bears"],
+    )
+    game.players[0].mana_pool.update({"G": 2, "C": 2})
+    bears = _w1g9_on(game, 0, "Grizzly Bears")
+    assert game.activate_permanent_ability(
+        0, "Nantuko Disciple", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_pt(bears) == (4, 4)
+    # "+X/+X, where X is that creature's power" - read as the ability
+    # resolves, off the 4 the Disciple just made it.
+    assert game.activate_permanent_ability(
+        0, "Nantuko Mentor", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_pt(bears) == (8, 8)
+    assert sum(game.players[0].mana_pool.values()) == 0
+    # "{T}: Add {C}{G}." A mana ability: no stack object.
+    assert game.activate_permanent_ability(0, "Nantuko Elder").supported
+    assert not game.stack
+    pool = game.players[0].mana_pool
+    assert (pool["C"], pool["G"]) == (1, 1)
+
+
+def test_puppeteer_taps_an_untapped_creature_and_untaps_a_tapped_one(set_pool):
+    """"You may tap or untap target creature": decided as it resolves (the
+    ruling of 2004-10-04), and the engine reads which off the creature."""
+    game = _w1g9_duel(set_pool, bf0=["Puppeteer"], bf1=["Gray Ogre"])
+    puppeteer, ogre = _w1g9_on(game, 0, "Puppeteer"), _w1g9_on(game, 1, "Gray Ogre")
+    for expected in (True, False):
+        puppeteer.tapped = False
+        assert game.activate_permanent_ability(
+            0, "Puppeteer", target_permanent_ids=[ogre.permanent_id]
+        ).supported
+        _w1g9_resolve_stack(game)
+        game.auto_resolve_pending_choices()
+        assert ogre.tapped is expected
+
+
+def test_seton_taps_a_druid_for_green_mana(set_pool):
+    """"Tap an untapped Druid you control: Add {G}." The cost taps *another*
+    permanent, so the Druid is its controller's to name, a creature that is no
+    Druid pays nothing, and a Druid that arrived this turn can pay (CR 302.6
+    is about the {T} symbol)."""
+    game = _w1g9_duel(
+        set_pool,
+        bf0=["Seton, Krosan Protector", "Nantuko Elder", "Grizzly Bears"],
+    )
+    seton = _w1g9_on(game, 0, "Seton, Krosan Protector")
+    elder, bears = _w1g9_on(game, 0, "Nantuko Elder"), _w1g9_on(game, 0, "Grizzly Bears")
+    elder.metadata["summoning_sickness_turn"] = game.turn
+    assert game._is_summoning_sick(elder)
+    assert game.activate_permanent_ability(
+        0, "Seton, Krosan Protector", cost_permanent_ids=[elder.permanent_id]
+    ).supported
+    assert (seton.tapped, elder.tapped) == (False, True) and not game.stack
+    assert game.players[0].mana_pool["G"] == 1
+    assert not game.activate_permanent_ability(
+        0, "Seton, Krosan Protector", cost_permanent_ids=[bears.permanent_id]
+    ).supported
+    assert not bears.tapped
+    # Seton is a Druid itself: the last one left.
+    assert game.activate_permanent_ability(0, "Seton, Krosan Protector").supported
+    assert seton.tapped and game.players[0].mana_pool["G"] == 2
+    assert not game.activate_permanent_ability(0, "Seton, Krosan Protector").supported
+
+
+def test_blessed_orator_and_the_two_firebreathers(set_pool):
+    game = _w1g9_duel(
+        set_pool, costs=True,
+        bf0=["Blessed Orator", "Aven Flock", "Whispering Shade"], bf1=["Grizzly Bears"],
+    )
+    game.players[0].mana_pool.update({"W": 2, "B": 1})
+    orator = _w1g9_on(game, 0, "Blessed Orator")
+    flock, shade = _w1g9_on(game, 0, "Aven Flock"), _w1g9_on(game, 0, "Whispering Shade")
+    game._recompute_continuous_effects()
+    # "Other creatures you control get +0/+1": not itself, not theirs.
+    assert _w1g9_pt(orator) == (1, 4) and _w1g9_pt(flock) == (2, 4)
+    assert _w1g9_pt(_w1g9_on(game, 1, "Grizzly Bears")) == (2, 2)
+    for name in ("Aven Flock", "Aven Flock", "Whispering Shade"):
+        assert game.activate_permanent_ability(0, name).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_pt(flock) == (2, 6) and _w1g9_pt(shade) == (2, 3)
+    assert not game.activate_permanent_ability(0, "Aven Flock").supported
+    game.resolve_cleanup_step(0)
+    game._recompute_continuous_effects()
+    assert _w1g9_pt(flock) == (2, 4) and _w1g9_pt(shade) == (1, 2)
+
 # ==== end W1G9 ======================================================
