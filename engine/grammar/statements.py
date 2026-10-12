@@ -64,6 +64,7 @@ from .effects import (_parse_damage_becomes_counter_removal,
 from .sacrifices import _parse_counted_sacrifice
 from .effects.game import parse_extra_phases
 from .effects.permissions import (_parse_cast_from_exiled_with,
+                                  _parse_gains_flashback,
                                   parse_extra_land_plays)
 
 
@@ -441,6 +442,17 @@ def _parse_statement_body(stream: TokenStream) -> ast.Statement:
         permission = _parse_cast_permission(stream)
         if permission is not None:
             return permission
+    # "Target sorcery card in your graveyard **gains flashback** until end of
+    # turn. The flashback cost is equal to its mana cost." (Recoup.) The same
+    # permission granted as a keyword (CR 702.34a), read here beside the
+    # sentence it is a spelling of and before the subject-verb reader, whose
+    # keyword grant answers "gains flashback" for a permanent and can only
+    # refuse it. Gated on the opening word and refusing without consuming, so
+    # every other "target …" sentence keeps its reading and its refusal site.
+    if stream.at_word("target"):
+        flashback_grant = _parse_gains_flashback(stream)
+        if flashback_grant is not None:
+            return flashback_grant
 
     # "Players and permanents can't be the targets of spells or activated
     # abilities." (Peace Talks.) Read here rather than by the subject-verb

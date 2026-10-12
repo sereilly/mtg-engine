@@ -271,6 +271,16 @@ class StackItem:
     # permission grant; every place a spell's card leaves the stack for the
     # graveyard — resolution, countering — routes on it.
     exile_instead_of_graveyard: bool = False
+    # CR 702.34a: this spell's **flashback cost was paid** — "exile this card
+    # instead of putting it *anywhere else* any time it would leave the stack."
+    # Wider than the rider above, which speaks only of a graveyard: a countered
+    # spell a card sends to its owner's library (Memory Lapse) or hand
+    # (Unsubstantiate) is neither, and a flashed-back one goes to exile all the
+    # same. Stamped at cast time beside that rider (a flashback cast carries
+    # both, so every site that bins to a graveyard is already right) and read
+    # through ``flashback.leaves_stack_to_exile`` by the sites that send a
+    # card somewhere else. Never set on a copy: CR 707.10, a copy is not cast.
+    flashback: bool = False
     # For a triggered ability on the stack: event data captured at fire time that the
     # effect handler reads at resolution (e.g. the dead creature's name, the damage
     # amount, the player who was dealt damage, an optional-pay cost).

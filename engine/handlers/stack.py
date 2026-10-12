@@ -11,6 +11,7 @@ from ..exiled_records import (EXILE_RECORD_KEY, EXILED_SPELL_CONTROLLER_KEY,
                               record_in_context)
 from ..game_types import StackItem
 from ..faces import is_face, spell_named, whole_card
+from ..flashback import leaves_stack_to_exile
 from ..mana_payment import mana_cost_label, total_pips
 from ..oracle_types import (COUNTERED_ABILITY_SOURCE, COUNTERED_SPELL_CONTROLLER,
                             COUNTERED_SPELL_NAME)
@@ -1091,6 +1092,21 @@ def _redirect_countered_card(
     another player's zone (Psychic Theft, Grinning Totem).
     """
     owner = game.players[countered.owner_index]
+    if leaves_stack_to_exile(countered):
+        # CR 702.34a: "If the flashback cost was paid, exile this card instead
+        # of putting it **anywhere else** any time it would leave the stack."
+        # Two replacements want the same event — this card's own, and the
+        # counterspell's "put it on top of its owner's library instead" — and
+        # whichever is applied first, the other then finds the card bound for
+        # somewhere that is not a graveyard and still sends it to exile
+        # (CR 616.1: flashback's applies to *any* destination, the
+        # counterspell's only to the graveyard). So the answer does not depend
+        # on the order and is asked here, ahead of every destination below.
+        game._bin_spell_card(
+            owner, countered.card, exile_instead=True,
+            verb=f"was countered by {card.name}",
+        )
+        return
     if destination == "battlefield_your_control":
         # "…put that card onto the battlefield **under your control** instead
         # of into its owner's graveyard." (Desertion.) The one destination on

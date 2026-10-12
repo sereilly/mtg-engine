@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...flashback import FLASHBACK
 from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
@@ -439,6 +440,36 @@ def lower_exile_sweep(
     # ``to_payload`` cannot carry a *variable* mana-value bound, and
     # dropping the bound would widen the sweep to every mana value.
     filt = subject.filter
+    # "…exiles all cards **with flashback** from their graveyard." (Tombfire.)
+    # The one keyword a card in a graveyard is asked about, because it is the
+    # one that *functions* there (CR 702.34a) — and it can be granted there
+    # too (Recoup), which no reading of the printed card can see. So it is
+    # lifted off the filter and carried **beside** it, the split the sweep
+    # bounce makes for ``attached_to``: inside the filter it would reach the
+    # card matcher, which answers a printed type line and a name (CR 613.1)
+    # and would have to refuse it. The sweep is then lowered as the sentence
+    # without the phrase — whichever pile it names, by whichever pairing below
+    # — and the key is added to what that produced, so this reads no pile and
+    # no seat of its own. Any other keyword stays on the filter and is refused
+    # there: "cards with flying" in a graveyard is a question no handler here
+    # answers.
+    if (
+        filt.zone == "graveyard" and filt.is_card
+        and filt.with_keywords == (FLASHBACK,)
+    ):
+        (unnarrowed,) = lower_exile_sweep(
+            node,
+            dataclasses.replace(
+                subject, filter=dataclasses.replace(filt, with_keywords=())
+            ),
+            event,
+        )
+        return (
+            OracleInstruction(
+                unnarrowed.kind, unnarrowed.value,
+                {**unnarrowed.payload, "with_keyword": FLASHBACK},
+            ),
+        )
     # "Exile **all creature cards from your graveyard**." (Zombie Mob.) A
     # sweep over a pile of *cards* rather than over the battlefield, so it
     # is its own instruction: CR 613.1 gives a card in a graveyard no

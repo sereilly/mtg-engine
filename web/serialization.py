@@ -673,6 +673,42 @@ def _gloom_white_tax(card, game: Game | None) -> int:
     return 3 if has_gloom else 0
 
 
+def _required_zone_cost(card, game, caster_index, from_zone: str) -> str | None:
+    """The mana a cast of *card* out of *from_zone* is charged **instead of**
+    its mana cost, as printed symbols — or None when it is charged its own.
+
+    The permission a bare cast would be made under
+    (``cast_permissions.permission_for`` in its own order, which is the one
+    ``Game._cast_onto_stack`` takes when the caster announces nothing) and the
+    alternative cost that permission requires (CR 118.9b). Flashback is the
+    card: CR 702.34a's "by paying [cost] rather than paying its mana cost".
+
+    With what a board changes about that cost folded in — "Flashback costs you
+    pay cost {2} less" (Catalyst Stone) — through the reader and the
+    arithmetic the cast path charges with, so the number shown is the number
+    paid. A cost this cannot spell as plain symbols (an {X}) is passed through
+    as printed.
+    """
+    if game is None or caster_index is None or from_zone != "graveyard":
+        return None
+    from engine.cast_permissions import permission_for
+    from engine.cost_modifiers import (CostReduction, keyword_cost_modifiers,
+                                       reduce_cost)
+    from engine.mana_payment import mana_cost_from_symbols, mana_cost_label
+
+    permission = permission_for(game, caster_index, card, from_zone)
+    cost = permission.cost if permission is not None else None
+    if cost is None or cost.mana is None:
+        return None
+    symbols = mana_cost_from_symbols(cost.mana)
+    if symbols is None:
+        return cost.mana
+    more, less, _names = keyword_cost_modifiers(game, caster_index, cost.keyword)
+    symbols = dict(symbols)
+    symbols["generic"] = symbols.get("generic", 0) + more
+    return mana_cost_label(reduce_cost(symbols, CostReduction(generic=less)))
+
+
 def _serialize_card(
     card,
     game: Game | None = None,
@@ -691,7 +727,18 @@ def _serialize_card(
     # Stand // Deliver read `{W}{5}{U}` under Gloom, the white half's tax on
     # the blue half's cost. Each face below is taxed as the spell it is.
     tax = 0 if face_cards(card) else _gloom_white_tax(card, game)
-    effective_cost = _apply_generic_tax_to_cost(card.mana_cost, tax)
+    # CR 118.9b, CR 702.34a: a copy in a graveyard that this seat may cast only
+    # by paying an alternative cost — its flashback cost — is charged *that*,
+    # and "the cost the UI shows and auto-taps for" is what this field is. The
+    # client reads it for three things, and the printed cost is wrong for each:
+    # which lands the insufficient-mana prompt taps (Firebolt's {R} where the
+    # cast charges {4}{R}, so the retry was refused again), what the prompt
+    # says the cast costs, and whether to ask for an X (an X spell flashed back
+    # for a cost with no X in it has X = 0, CR 107.3b).
+    zone_cost = _required_zone_cost(card, game, caster_index, from_zone)
+    effective_cost = _apply_generic_tax_to_cost(
+        card.mana_cost if zone_cost is None else zone_cost, tax
+    )
     serialized = _card_preview(card)
     serialized.update({
         "mana_cost": effective_cost,

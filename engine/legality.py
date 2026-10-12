@@ -44,7 +44,7 @@ from .cast_costs import (buyback_cost, cast_announces_x, costs_charged_from,
                          kicker_costs)
 from .cast_restrictions import timing_fixed_seat
 from .divided_damage import divided_entry
-from .faces import is_multi_face
+from .faces import is_multi_face, whole_card
 from .combat_restrictions import restriction_condition_holds
 from .cost_x_definitions import (caps_cast_x, cast_x_ceiling,
                                  cast_x_value, defines_cast_x)
@@ -60,11 +60,13 @@ from .modal_triggers import modal_trigger_mode_spec, modal_trigger_modes
 from .target_requirements import (announcement_refusal, cast_is_bound,
                                   narrow_offer, requirements_binding)
 from .targeting import (
+    CAST_FROM_GRAVEYARD,
     GRAVEYARD_TARGET_KIND,
     ROLES_TARGET_KIND,
     _nested_steps,
     activation_target_slot,
     announced_mode_instructions,
+    as_cast_from,
     cast_announced_entry_trigger,
     cast_target_slot,
     derive_activation_spec,
@@ -79,6 +81,31 @@ from .targeting import (
     spec_roles,
     usable_activated_abilities,
 )
+
+
+def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
+    """The slot of *graveyard* the spell being cast out of it occupies, or
+    None when this spec is not such a cast's.
+
+    ``handlers/_common.excluded_graveyard_slot``'s shape, for the other reason
+    one slot of a pile is not a candidate: there the printed word "another"
+    rules out an ability's own source, here CR 601.2a has already moved the
+    card to the stack. A **slot** for that function's reason too — two copies
+    of one card in one graveyard are one ``CardDefinition`` object, so
+    excluding by identity would take both where the cast takes one. The first
+    matching slot is the one the cast path itself takes
+    (``_cast_onto_stack`` walks the pile from the bottom).
+
+    The card as the zone holds it: a split card is held whole and cast as a
+    half (CR 709.4), so the half is widened before it is looked for.
+    """
+    if not (spec or {}).get(CAST_FROM_GRAVEYARD) or spell is None:
+        return None
+    held = whole_card(spell)
+    return next(
+        (index for index, entry in enumerate(graveyard) if entry is held),
+        None,
+    )
 
 
 def _iter_instruction_tree(instruction):
@@ -3454,6 +3481,7 @@ class LegalityMixin:
         optional_cost_payments: dict | None = None,
         x_value: int | None = None,
         mode_index: int | None = None,
+        from_zone: str = "hand",
     ) -> str | None:
         """CR 601.2c's first half: a spell that must announce a target cannot
         be cast while **no legal target exists**. Returns the refusal, or None.
@@ -3508,6 +3536,11 @@ class LegalityMixin:
         )
         if spec is None or spec.get("kind") == "stack":
             return None
+        # *from_zone*: a spell cast out of a graveyard is not itself a card in
+        # that graveyard by the time targets are chosen (CR 601.2a), so it is
+        # not what makes "a legal target exists" true. Read onto the spec by
+        # the reader ``derive_cast_spec`` uses, so this list is the picker's.
+        spec = as_cast_from(spec, from_zone)
         offered = self._enumerate_targets(
             caster_index, card, dict(spec), for_cast=True,
             optional_cost_payments=optional_cost_payments,
@@ -6064,8 +6097,18 @@ class LegalityMixin:
             # what stops this picker offering a card resolution then declines.
             # Per pile, because a slot number means nothing without the seat.
             excluded = excluded_graveyard_slot(spec, player.graveyard, source_card)
+            # The card being cast, when the cast is out of this very pile
+            # (CR 601.2a: it is on the stack before CR 601.2c chooses anything —
+            # see ``targeting.CAST_FROM_GRAVEYARD``). The caster's own pile
+            # only: a deck repeats one immutable definition per copy and both
+            # decks may hold it, so the same object in an opponent's graveyard
+            # is a different card and a legal target.
+            leaving = (
+                _cast_from_graveyard_slot(spec, player.graveyard, source_card)
+                if seat == caster_index else None
+            )
             for idx, card in enumerate(player.graveyard):
-                if idx != excluded and eligible(card):
+                if idx != excluded and idx != leaving and eligible(card):
                     targets.append({"kind": "graveyard", "seat": seat, "index": idx, "name": card.name})
         return targets
 

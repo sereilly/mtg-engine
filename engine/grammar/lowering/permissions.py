@@ -304,20 +304,32 @@ def _lower_cast_permission(
                 + ", ".join(leftover),
                 node=node,
             )
-        return (
-            OracleInstruction(
-                "grant_cast_permission", "",
-                {
-                    "zone": "graveyard",
-                    "mode": "cast",
-                    "target_graveyard_card": True,
-                    "card_types": tuple(filt.card_types),
-                    "colors": tuple(filt.colors),
-                    "exile_instead": node.exile_instead,
-                    "duration": "end_of_turn" if node.until_end_of_turn else None,
-                },
-            ),
-        )
+        granted: dict[str, object] = {
+            "zone": "graveyard",
+            "mode": "cast",
+            "target_graveyard_card": True,
+            "card_types": tuple(filt.card_types),
+            "colors": tuple(filt.colors),
+            "exile_instead": node.exile_instead,
+            "duration": "end_of_turn" if node.until_end_of_turn else None,
+        }
+        if node.flashback_cost is not None:
+            # "…**gains flashback** until end of turn. The flashback cost is
+            # equal to its mana cost." (Recoup.) The same grant with CR
+            # 702.34a's two riders on it, carried as the spelling of the price
+            # — the handler builds the cost off the chosen card, which is not
+            # known until the ability resolves.
+            #
+            # Emitted only when the sentence grants the keyword, so every
+            # earlier targeted grant keeps the payload it had. The duration is
+            # demanded because nothing else ends this one: a flashback granted
+            # for ever is a different card, and the parse reads no other.
+            if not node.until_end_of_turn:
+                raise LoweringError(
+                    "a granted flashback states when it ends", node=node
+                )
+            granted["flashback"] = node.flashback_cost
+        return (OracleInstruction("grant_cast_permission", "", granted),)
 
     if node.what == "spells_from_hand":
         if node.grantee is not None:

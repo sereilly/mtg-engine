@@ -565,6 +565,21 @@ class CastPermission:
     #: castable, which is a card nobody printed. None means the whole zone,
     #: which is what every other grant here means.
     position: str | None = None
+    #: **The price the permission is granted at**, when the sentence grants it
+    #: as *flashback*: "Target sorcery card in your graveyard gains flashback
+    #: until end of turn. The flashback cost is equal to its mana cost."
+    #: (Recoup.) CR 702.34a makes "gains flashback" exactly this node — a
+    #: permission to cast one named card from its owner's graveyard — with two
+    #: things a bare permission lacks: an alternative cost it *requires*
+    #: (CR 118.9b), and exile wherever the spell would go as it leaves the
+    #: stack. ``"mana_cost"`` is the one spelling the pool prints; None is
+    #: every other grant here, which charges the card's ordinary cost.
+    #:
+    #: A field rather than a node of its own because nothing else differs: the
+    #: target, the zone, the duration and the grantee are read by the code that
+    #: reads Chandra's, and a second node would be a second lowering for one
+    #: sentence shape.
+    flashback_cost: str | None = None
 
 
 @dataclass(frozen=True)

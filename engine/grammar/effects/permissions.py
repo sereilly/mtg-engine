@@ -391,6 +391,62 @@ def _parse_cast_permission(stream: TokenStream) -> ast.Statement | None:
     return None
 
 
+def _parse_gains_flashback(stream: TokenStream) -> "ast.CastPermission | None":
+    """``Target sorcery card in your graveyard gains flashback until end of
+    turn. The flashback cost is equal to its mana cost.`` (Recoup.)
+
+    CR 702.34a defines flashback as a permission — "You may cast this card
+    from your graveyard … by paying [cost] rather than paying its mana cost" —
+    so a sentence *granting* it is a cast permission over one targeted card,
+    which is :class:`ast.CastPermission`'s ``target_card`` reading with a
+    price on it. That is why it is read here and not by the keyword-grant
+    production, which answers the same four words ("… gains flashback until
+    end of turn") for a *permanent* and whose lowering can only refuse them:
+    flashback is not a characteristic a layer could carry, it is a way to cast
+    a card.
+
+    **Both sentences, read whole.** The second states the price, and a grant
+    with no price is not a sentence any card prints — "gains flashback" alone
+    would leave nothing to pay. So the pair is one production: the full stop
+    between them is consumed here, and a printing that stated the cost any
+    other way ("The flashback cost is {2}.") is refused with the cursor
+    exactly where it was, so the line keeps its own refusal rather than being
+    lowered as a grant at a price the card does not name.
+
+    The duration is required for the reason every targeted grant states one or
+    is bounded by its card's zone: CR 611.2a, and the cleanup sweep is the
+    only thing that ends this one.
+    """
+    mark = stream.mark()
+    try:
+        spec = parse_target_spec(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if spec is None or spec.quantifier != "target" or not spec.filter.is_card:
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("gains", "flashback"):
+        stream.reset(mark)
+        return None
+    if _parse_duration(stream).kind != "until_end_of_turn":
+        stream.reset(mark)
+        return None
+    if not (
+        stream.accept_punct(".")
+        and stream.accept_phrase(
+            "the", "flashback", "cost", "is", "equal", "to", "its", "mana",
+            "cost",
+        )
+    ):
+        stream.reset(mark)
+        return None
+    return ast.CastPermission(
+        mode="cast", what="target_card", target=spec,
+        until_end_of_turn=True, flashback_cost="mana_cost",
+    )
+
+
 #: "Play with the top card of your library revealed", in the tokens the grammar
 #: reads it in — **derived from the implementing module's own sentence**
 #: (``engine/library_top.REVEALED_TEXT``) rather than spelled again here.

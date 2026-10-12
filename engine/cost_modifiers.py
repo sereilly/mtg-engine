@@ -470,6 +470,36 @@ _KEYWORD_ABILITY_REDUCTION = re.compile(
     r"less to activate"
 )
 
+#: "**Flashback costs you pay cost {2} less.**" / "**Flashback costs your
+#: opponents pay cost {2} more.**" (Catalyst Stone.) CR 601.2f applied to one
+#: keyword's **alternative cost** (CR 702.34a, CR 118.9d: "any additional
+#: costs, cost increases, and cost reductions that affect that spell are
+#: applied to that alternative cost").
+#:
+#: ``_BUYBACK_REDUCTION``'s shape two fields wider, and both are printed: this
+#: one names *who is paying* ("you" is the permanent's controller, CR 109.5;
+#: "your opponents" is everybody that controller is not) and runs in both
+#: directions. Like that row it carries no colour and no card type — it has no
+#: opinion about the spell at all, only about which cost is being paid for
+#: it — so it gets its own ``applies_to`` rather than riding "cast", where an
+#: unnarrowed modifier would change every spell's **mana cost**.
+#:
+#: The keyword is captured rather than spelled into the pattern for
+#: ``_KEYWORD_ABILITY_REDUCTION``'s reason: the refusal needs something to
+#: name. Only a keyword the cast path can recognise a cost *by*
+#: (``AlternativeCost.keyword``) is admitted.
+_KEYWORD_COST_MODIFIER = re.compile(
+    r"(?P<keyword>[a-z]+) costs (?P<payer>you|your opponents) pay cost "
+    r"\{(?P<amount>\d+)\} (?P<direction>less|more)"
+)
+
+#: The keywords :data:`_KEYWORD_COST_MODIFIER` may name: the ones whose cost
+#: the cast path pays as a keyworded alternative cost and can therefore tell
+#: apart from the mana cost it replaces. One entry, and the set is what makes
+#: the refusal loud — a card naming any other keyword matches the pattern,
+#: produces no modifier, is claimed by no line and reports unsupported.
+_MODIFIABLE_COST_KEYWORDS = frozenset({"flashback"})
+
 #: The ability keywords :data:`_KEYWORD_ABILITY_REDUCTION` may name. One entry,
 #: and the set is what makes the refusal loud: a card naming any other keyword
 #: matches the pattern, produces no modifier, is claimed by no line and is
@@ -495,6 +525,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         # out before any pattern is tried and reports unsupported, which is a
         # gate failing silently in the direction of doing nothing.
         and "less" not in text
+        # "Flashback costs your opponents pay cost {2} more." (Catalyst
+        # Stone.) The same early exit asked of a single line: its sentence
+        # ends at "more" with no "to <verb>" behind it either.
+        and "pay cost" not in text
     ):
         return ()
     modifiers: list[CostModifier] = []
@@ -557,6 +591,10 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
                 reduces=True,
             )
         )
+    for match in _KEYWORD_COST_MODIFIER.finditer(text):
+        modifier = _keyword_cost_modifier(match)
+        if modifier is not None:
+            modifiers.append(modifier)
     for match in _SACRIFICE_SYMBOL_TAX.finditer(text):
         modifier = _sacrifice_symbol_modifier(match)
         if modifier is not None:
@@ -566,6 +604,31 @@ def cost_modifiers_for(oracle_text: str) -> tuple[CostModifier, ...]:
         if modifier is not None:
             modifiers.append(modifier)
     return tuple(modifiers)
+
+
+def _keyword_cost_modifier(match: "re.Match[str]") -> CostModifier | None:
+    """The modifier :data:`_KEYWORD_COST_MODIFIER` matched, or None when the
+    keyword it names is one the cast path cannot recognise a cost by.
+
+    Split out for ``_keyword_ability_reduction``'s reason: a pattern that
+    matches and then produces no modifier must also not *claim* the line, and
+    both questions are asked by calling this.
+
+    ``applies_to`` is the keyword itself, which is what keeps this out of the
+    two readers that would misapply it: ``_tax`` filters on "cast" and
+    "activate" by equality, so a spell's mana cost never sees a flashback
+    modifier, and :func:`keyword_cost_modifiers` below is the only reader that
+    asks for one.
+    """
+    keyword = match.group("keyword")
+    if keyword not in _MODIFIABLE_COST_KEYWORDS:
+        return None
+    return CostModifier(
+        amount=int(match.group("amount")),
+        applies_to=keyword,
+        reduces=match.group("direction") == "less",
+        controller="you" if match.group("payer") == "you" else "opponents",
+    )
 
 
 def _keyword_ability_reduction(match: "re.Match[str]") -> CostModifier | None:
@@ -778,6 +841,16 @@ def cost_modifier_claims_line(line: str) -> bool:
         keyword_ability is not None
         and keyword_ability.end() == len(text)
         and _keyword_ability_reduction(keyword_ability) is not None
+    ):
+        return True
+    # Claimed only when the keyword is one the cast path pays a cost *by*, for
+    # the same reason: "Madness costs you pay cost {2} less" matches the
+    # pattern and nothing would charge it.
+    keyword_cost = _KEYWORD_COST_MODIFIER.match(text)
+    if (
+        keyword_cost is not None
+        and keyword_cost.end() == len(text)
+        and _keyword_cost_modifier(keyword_cost) is not None
     ):
         return True
     # Claimed only when the halves pair, for `_sacrifice_symbol_modifier`'s
@@ -2024,6 +2097,51 @@ def reduce_cost(required: dict[str, int], reduction: CostReduction) -> dict[str,
             cost["generic"] = max(0, cost.get("generic", 0) - spill)
     cost["generic"] = max(0, cost.get("generic", 0) - reduction.generic)
     return cost
+
+
+def keyword_cost_modifiers(
+    game, payer_index: int, keyword: str | None,
+) -> tuple[int, int, list[str]]:
+    """``(generic added, generic taken off, by whom)`` for the *keyword*
+    alternative cost *payer_index* is paying — "Flashback costs you pay cost
+    {2} less." / "Flashback costs your opponents pay cost {2} more."
+    (Catalyst Stone.)
+
+    CR 601.2f over CR 702.34a's cost. Its own reader rather than a call into
+    :func:`_tax`, for :func:`buyback_cost_reduction`'s reason: that function
+    asks ``_matches`` about the *card being cast*, and these modifiers have no
+    opinion about the card — only about which cost is being paid and by whom.
+    The two numbers are returned apart because the cast path adds an increase
+    before it applies a reduction (CR 601.2f), and a reduction touches only
+    the generic component and stops at zero (CR 118.7a, :func:`reduce_cost`);
+    netting them here would let a {2} increase be eaten by a {2} reduction
+    that the cost's generic part was too small to take.
+
+    One application per permanent printing it, over every battlefield — two
+    Catalyst Stones take {4} off their controller's flashback costs. Read off
+    ``effective_card`` for :func:`_tax`'s reason. ``(0, 0, [])`` for a cost
+    that is the price of no keyword, which is every cast but a flashback.
+
+    "**You** pay" is the permanent's controller (CR 109.5) and "your
+    opponents pay" every seat that controller is not, asked of the control
+    seam so a Stone that changes hands taxes its old controller.
+    """
+    if not keyword:
+        return 0, 0, []
+    more = less = 0
+    names: list[str] = []
+    for seat, permanent in game.permanents_with_controller():
+        for modifier in cost_modifiers_for(permanent.effective_card.oracle_text):
+            if modifier.applies_to != keyword:
+                continue
+            if (modifier.controller == "you") != (seat == payer_index):
+                continue
+            if modifier.reduces:
+                less += modifier.amount
+            else:
+                more += modifier.amount
+            names.append(permanent.card.name)
+    return more, less, names
 
 
 def buyback_cost_reduction(game) -> tuple[int, list[str]]:

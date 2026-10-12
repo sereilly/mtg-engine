@@ -293,6 +293,25 @@ class AlternativeCost:
     #: the offer the picker shows, the announcement's check, the CR 601.2h gate
     #: and the payment cannot disagree about whether there is an offer at all.
     condition: "CostCondition | None" = None
+    #: "…by paying **{4}{R}** rather than paying its mana cost." (CR 702.34a,
+    #: flashback.) The mana an alternative cost charges, as the printed run of
+    #: symbols -- the one resource no alternative cost in the pool was paid in
+    #: before Odyssey, where every one of them is paid in nothing else.
+    #:
+    #: ``None`` is "no mana", which is every cost above: CR 118.9 replaces the
+    #: mana cost whole, so a sacrifice or a life payment charges none. A string
+    #: is charged **as the mana cost would have been** -- through the same
+    #: payment, with the cost increases and reductions CR 118.9d keeps in
+    #: force on top of it -- and the empty string is CR 118.6's unpayable cost
+    #: (a granted flashback over a card with no mana cost), never "free".
+    mana: "str | None" = None
+    #: Which keyword this cost is the price of, when it is one: ``"flashback"``
+    #: (``engine/flashback.py``). Not a second description of the cost -- two
+    #: other rules ask *which kind of cost was paid* rather than what it was:
+    #: CR 702.34a's "if the flashback cost was paid, exile this card", and a
+    #: modifier scoped to the keyword ("Flashback costs you pay cost {2} less",
+    #: Catalyst Stone).
+    keyword: "str | None" = None
 
     def describe(self) -> str:
         """The cost as a player would say it, for a log line and a prompt label.
@@ -310,6 +329,8 @@ class AlternativeCost:
             # read back as the sentence the player is being offered.
             return "cast it without paying its mana cost"
         parts = []
+        if self.mana is not None:
+            parts.append(f"pay {self.mana or 'a cost it does not have'}")
         if self.pay_life:
             parts.append(f"pay {self.pay_life} life")
         if self.discard_from_hand is not None:
