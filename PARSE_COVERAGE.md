@@ -25,18 +25,10 @@ Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
 set nobody has implemented fires on its composition rather than on
 anything anyone did, and every ingest would arrive red.
 
-**5 unclaimed sentence(s) across 5 supported card(s).**
+**1 unclaimed sentence(s) across 1 supported card(s).**
 
 - **Cease-Fire**
   - `target player can't cast creature spells this turn`
-- **Chance Encounter**
-  - `whenever you win a coin flip, put a luck counter on this enchantment`
-- **Ground Seal**
-  - `cards in graveyards can't be the targets of spells or abilities`
-- **Nefarious Lich**
-  - `if damage would be dealt to you, exile that many cards from your graveyard instead`
-- **Spiritualize**
-  - `until end of turn, whenever target creature deals damage, you gain that much life`
 
 ## Acknowledged simplifications
 
@@ -677,7 +669,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 4793 |
+| parse rule | 4794 |
 | activation cost | 2083 |
 | trigger table | 1479 |
 | static-line table | 1151 |
@@ -685,7 +677,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | aura enchant noun (oracle_instructions attach) | 328 |
 | cast_costs.py | 144 |
 | activation_restrictions.py | 138 |
-| card_hooks CARD_LINE_INSTRUCTIONS (this printed line) | 76 |
+| card_hooks CARD_LINE_INSTRUCTIONS (this printed line) | 75 |
 | alternative_costs.py | 51 |
 | cost_modifiers.py | 43 |
 | oracle.py (modal trigger head) | 37 |

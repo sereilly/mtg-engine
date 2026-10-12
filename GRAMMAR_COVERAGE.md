@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 79.7% | 79.1% | 61.1% | 258 |
+| ODY *(measured)* | 335 | 507 | 85.6% | 85.2% | 65.1% | 276 |
 | **All (shipped)** | **7406** | **10877** | **90.6%** | **90.0%** | **61.7%** | **5693** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,16 +61,15 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 617 | 315 | expected a subject |  |
-| 168 | 87 | unrecognized effect verb |  |
-| 149 | 81 | unconsumed text |  |
+| 605 | 299 | expected a subject |  |
+| 164 | 83 | unrecognized effect verb |  |
+| 144 | 76 | unconsumed text |  |
 | 63 | 44 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
 | 7 | 1 | no lowering for RawEffect |  |
-| 6 | 2 | expected 'card' |  |
 | 6 | 1 | no handler for this battlefield entry |  |
 | 6 | 1 | a counted redirect off the source moves the damage onto one chosen target |  |
 | 6 | 1 | unsupported life-loss target 'owner' |  |
@@ -79,13 +78,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
-| 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'of' |  |
+| 3 | 3 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'top' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 | 2 | 2 | expected 'a' |  |
+| 2 | 2 | an Aura's continuous grant is derived by engine/auras.py |  |
 
 ## Cards executing through the grammar
 
@@ -180,6 +180,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{B}{R}{G}, {T}: Return target creature card from your graveyard to your hand.`
 - **Advance Scout**
   - `{W}: Target creature gains first strike until end of turn.`
+- **Aegis of Honor**
+  - `{1}: The next time an instant or sorcery spell would deal damage to you this turn, that spell deals that damage to its controller instead.`
 - **Aegis of the Meek**
   - `{1}, {T}: Target 1/1 creature gets +1/+2 until end of turn.`
 - **Aeolipile**
@@ -691,6 +693,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Search your library for an Island or Swamp card, put it onto the battlefield, then shuffle.`
 - **Baki's Curse**
   - `Baki's Curse deals 2 damage to each creature for each Aura attached to that creature.`
+- **Balancing Act**
+  - `Each player chooses a number of permanents they control equal to the number of permanents controlled by the player who controls the fewest, then sacrifices the rest. Each player discards cards the same way.`
 - **Balduvian Conjurer**
   - `{T}: Target snow land becomes a 2/2 creature until end of turn. It's still a land.`
 - **Balduvian Dead**
@@ -719,8 +723,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Balm of Restoration**
   - `• You gain 2 life.`
   - `• Prevent the next 2 damage that would be dealt to any target this turn.`
+- **Balshan Beguiler**
+  - `Whenever this creature deals combat damage to a player, that player reveals the top two cards of their library. You choose one of those cards and put it into their graveyard.`
 - **Balshan Griffin**
   - `{1}{U}, Discard a card: Return this creature to its owner's hand.`
+- **Bamboozle**
+  - `Target player reveals the top four cards of their library. You choose two of those cards and put them into that player's graveyard. Put the rest on top of their library in any order.`
 - **Bandage**
   - `Prevent the next 1 damage that would be dealt to any target this turn.`
   - `Draw a card.`
@@ -814,6 +822,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target creature gains haste until end of turn.`
 - **Battle Strain**
   - `Whenever a creature blocks, this enchantment deals 1 damage to that creature's controller.`
+- **Battle of Wits**
+  - `At the beginning of your upkeep, if you have 200 or more cards in your library, you win the game.`
 - **Battle-Rattle Shaman**
   - `At the beginning of combat on your turn, you may have target creature get +2/+0 until end of turn.`
 - **Battlefield Forge**
@@ -1484,6 +1494,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Chambered Nautilus**
   - `Whenever this creature becomes blocked, you may draw a card.`
 - **Chance Encounter**
+  - `Whenever you win a coin flip, put a luck counter on this enchantment.`
   - `At the beginning of your upkeep, if this enchantment has ten or more luck counters on it, you win the game.`
 - **Chandler**
   - `{R}{R}{R}, {T}: Destroy target artifact creature.`
@@ -1830,6 +1841,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `All creatures have haste.`
 - **Cone of Flame**
   - `Cone of Flame deals 1 damage to any target, 2 damage to another target, and 3 damage to a third target.`
+- **Confessor**
+  - `Whenever a player discards a card, you may gain 1 life.`
 - **Confound**
   - `Counter target spell that targets a creature.`
   - `Draw a card.`
@@ -2320,6 +2333,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, {T}: Target creature gets +2/+0 until end of turn.`
 - **Dega Sanctuary**
   - `At the beginning of your upkeep, if you control a black or red permanent, you gain 2 life. If you control a black permanent and a red permanent, you gain 4 life instead.`
+- **Delaying Shield**
+  - `At the beginning of your upkeep, remove all delay counters from this enchantment. For each delay counter removed this way, you lose 1 life unless you pay {1}{W}.`
 - **Delif's Cone**
   - `{T}, Sacrifice this artifact: This turn, when target creature you control attacks and isn't blocked, you may gain life equal to its power. If you do, it assigns no combat damage this turn.`
 - **Delif's Cube**
@@ -2405,6 +2420,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Destroy target artifact with mana value X. It can't be regenerated. Detonate deals X damage to that artifact's controller.`
 - **Devastate**
   - `Destroy target land. Devastate deals 1 damage to each creature and each player.`
+- **Devoted Caretaker**
+  - `{W}, {T}: Target permanent you control gains protection from instant spells and from sorcery spells until end of turn.`
 - **Devouring Strossus**
   - `At the beginning of your upkeep, sacrifice a creature.`
   - `Sacrifice a creature: Regenerate this creature.`
@@ -2805,6 +2822,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target player untaps all basic lands they control.`
   - `Target player untaps all basic lands they control.`
   - `Target player untaps all basic lands they control.`
+- **Earnest Fellowship**
+  - `Each creature has protection from each of its colors.`
 - **Earth Rift**
   - `Destroy target land.`
 - **Earthcraft**
@@ -4692,6 +4711,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature attacks this turn if able.`
 - **Impulse**
   - `Look at the top four cards of your library. Put one of them into your hand and the rest on the bottom of your library in any order.`
+- **Impulsive Maneuvers**
+  - `Whenever a creature attacks, flip a coin. If you win the flip, the next time that creature would deal combat damage this turn, it deals double that damage instead. If you lose the flip, the next time that creature would deal combat damage this turn, prevent that damage.`
 - **In the Eye of Chaos**
   - `Whenever a player casts an instant spell, counter it unless that player pays {X}, where X is its mana value.`
 - **Incendiary**
@@ -5337,6 +5358,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice any number of Mountains. Landslide deals that much damage to target player or planeswalker.`
 - **Lapis Lazuli Talisman**
   - `Whenever a player casts a blue spell, you may pay {3}. If you do, untap target permanent.`
+- **Laquatus's Creativity**
+  - `Target player draws cards equal to the number of cards in their hand, then discards that many cards.`
 - **Larceny**
   - `Whenever a creature you control deals combat damage to a player, that player discards a card.`
 - **Lashknife Barrier**
@@ -5346,6 +5369,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Last Caress**
   - `Target player loses 1 life and you gain 1 life.`
   - `Draw a card.`
+- **Last Rites**
+  - `Discard any number of cards. Target player reveals their hand, then you choose a nonland card from it for each card discarded this way. That player discards those cards.`
 - **Last Stand**
   - `Target opponent loses 2 life for each Swamp you control. Last Stand deals damage to target creature equal to the number of Mountains you control. Create a 1/1 green Saproling creature token for each Forest you control. You gain 2 life for each Plains you control. Draw a card for each Island you control, then discard that many cards.`
 - **Last-Ditch Effort**
@@ -6482,6 +6507,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
   - `{1}, {T}: Destroy all artifacts, creatures, and enchantments.`
+- **New Frontiers**
+  - `Each player may search their library for up to X basic land cards and put them onto the battlefield tapped. Then each player who searched their library this way shuffles.`
 - **Niall Silvain**
   - `{G}{G}{G}{G}, {T}: Regenerate target creature.`
 - **Niambi, Esteemed Speaker**
@@ -7991,8 +8018,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}, {T}: Tap target land.`
 - **Rising Waters**
   - `At the beginning of each player's upkeep, that player untaps a land they control.`
+- **Rites of Initiation**
+  - `Discard any number of cards at random. Creatures you control get +1/+0 until end of turn for each card discarded this way.`
 - **Rites of Refusal**
   - `Discard any number of cards. Counter target spell unless its controller pays {3} for each card discarded this way.`
+- **Rites of Spring**
+  - `Discard any number of cards. Search your library for up to that many basic land cards, reveal them, put them into your hand, then shuffle.`
 - **Rith's Attendant**
   - `{1}, Sacrifice this creature: Add {R}{G}{W}.`
 - **Rith's Charm**
@@ -8199,6 +8230,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You gain 4 life.`
 - **Sacred Prey**
   - `Whenever this creature becomes blocked, you gain 1 life.`
+- **Sacred Rites**
+  - `Discard any number of cards. Creatures you control get +0/+1 until end of turn for each card discarded this way.`
 - **Sacrifice**
   - `Add an amount of {B} equal to the sacrificed creature's mana value.`
   - `Add an amount of {B} equal to the sacrificed creature's mana value.`
@@ -9299,6 +9332,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Spiritual Sanctuary**
   - `At the beginning of each player's upkeep, if that player controls a Plains, they gain 1 life.`
 - **Spiritualize**
+  - `Until end of turn, whenever target creature deals damage, you gain that much life.`
   - `Draw a card.`
 - **Spite // Malice**
   - `Counter target noncreature spell.`
@@ -9976,6 +10010,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Thieving Magpie**
   - `Whenever this creature deals damage to an opponent, draw a card.`
   - `Whenever this creature deals damage to an opponent, draw a card.`
+- **Think Tank**
+  - `At the beginning of your upkeep, surveil 1. (Look at the top card of your library. You may put that card into your graveyard.)`
 - **Thirst**
   - `When this Aura enters, tap enchanted creature.`
   - `At the beginning of your upkeep, sacrifice this Aura unless you pay {U}.`
@@ -10312,6 +10348,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Sacrifice an artifact. If you do, search your library for an artifact card. If that card's mana value is less than or equal to the sacrificed artifact's mana value, put it onto the battlefield. If it's greater, you may pay {X}, where X is the difference. If you do, put it onto the battlefield. If you don't, put it into its owner's graveyard. Then shuffle.`
 - **Trap Runner**
   - `{T}: Target unblocked attacking creature becomes blocked. Activate only during combat after blockers are declared. (This ability works on creatures that can't be blocked.)`
+- **Traumatize**
+  - `Target player mills half their library, rounded down.`
 - **Traveler's Cloak**
   - `When this Aura enters, draw a card.`
 - **Traveling Plague**
