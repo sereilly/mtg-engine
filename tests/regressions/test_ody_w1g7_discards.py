@@ -25,7 +25,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
-from engine.oracle import compile_card_oracle
+from engine.oracle import compile_card_oracle, compiled_units
 from engine.oracle_types import X_FROM_COUNT
 from tests.helpers import _mk_card, resolve_stack
 
@@ -100,21 +100,38 @@ def test_an_up_to_discard_no_prompt_can_offer_is_refused(text):
     assert not _program(text).supported
 
 
+def _kinds(value):
+    """Every instruction kind in *value*, however deeply it is nested."""
+    if hasattr(value, "kind") and hasattr(value, "payload"):
+        yield value.kind
+        yield from _kinds(value.payload)
+    elif isinstance(value, dict):
+        for inner in value.values():
+            yield from _kinds(inner)
+    elif isinstance(value, (list, tuple)):
+        for inner in value:
+            yield from _kinds(inner)
+
+
 def test_no_shipped_card_prints_a_bare_up_to_discard():
-    """The census behind the change: the two pool cards that print "up to" on
-    a discard reach it through other lowerings, so nothing shipped moved."""
+    """The census behind the change: the two shipped cards that print "up to"
+    on a discard reach it through other lowerings (a fused discard-then-draw,
+    an each-player offer), so nothing shipped moved when the two handlers this
+    change touched began to carry a ceiling."""
     import re
 
-    printers = sorted(
-        card.name for card in load_catalog()
-        if re.search(r"discards? up to", card.oracle_text or "", re.I)
-    )
-    assert printers == ["Kinetic Augur", "Mind Bomb"]
-    for card in load_catalog():
-        if card.name in printers:
-            kinds = [i.kind for i in compile_card_oracle(card).instructions]
-            assert "discard_target_cards" not in kinds
-            assert "discard_controller_cards" not in kinds
+    printers: dict[str, set[str]] = {}
+    for unit, program in compiled_units(load_catalog()):
+        if not re.search(r"discards? up to", unit.oracle_text or "", re.I):
+            continue
+        roots = list(program.instructions)
+        roots += [ability.instruction for ability in program.triggered_abilities]
+        roots += [ability.instruction for ability in program.activated_abilities]
+        printers[unit.name] = set(_kinds(roots))
+    assert sorted(printers) == ["Kinetic Augur", "Mind Bomb"]
+    for name, kinds in printers.items():
+        assert kinds, name
+        assert not kinds & {"discard_target_cards", "discard_controller_cards"}, name
 
 
 # --- "that many" after a draw the count itself depends on ----------------------

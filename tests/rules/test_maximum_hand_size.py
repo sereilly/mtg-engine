@@ -16,6 +16,7 @@ import pytest
 
 from engine import Game, PlayerState
 from engine.card_loader import load_catalog
+from engine.faces import compilation_units
 from engine.hand_size import (DEFAULT_MAXIMUM_HAND_SIZE, hand_size_effect,
                               hand_size_line, maximum_hand_size)
 from engine.models import Permanent
@@ -132,11 +133,13 @@ def test_613_11_every_ordered_pair_of_the_pools_hand_size_permanents():
     """The census the fix was measured with, kept: every ordered pair of the
     shipped permanents that print a hand-size sentence, against the order the
     rule gives. Read backwards against the old reader it names seven pairs."""
-    catalog = {card.name: card for card in load_catalog()}
-    printers = sorted(
-        name for name, card in catalog.items()
-        if any(hand_size_line(line) for line in (card.oracle_text or "").splitlines())
-    )
+    # Through ``compilation_units``: the question is about printed text, and a
+    # multi-face card read whole has none.
+    catalog = {
+        unit.name: unit for unit in compilation_units(load_catalog())
+        if any(hand_size_line(line) for line in (unit.oracle_text or "").splitlines())
+    }
+    printers = sorted(catalog)
     assert len(printers) >= 5, printers
 
     def effect_of(card):
