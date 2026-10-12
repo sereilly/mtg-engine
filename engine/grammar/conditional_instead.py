@@ -82,6 +82,7 @@ from . import ast
 from .amounts import parse_amount
 from .conditions import _parse_condition
 from .errors import GrammarError
+from .lexer import PUNCT, WORD
 from .sentence_rebinding import restates_target
 from .statements import parse_statement
 from .stream import TokenStream
@@ -106,7 +107,7 @@ def _parse_conditional_instead_rider(
         return False
     mark = stream.mark()
     if not stream.accept_word("if"):
-        return False
+        return _parse_trailing_if_instead(stream, steps, last, last_guard, replaced)
     try:
         condition = _parse_condition(stream)
     except GrammarError:
@@ -163,6 +164,75 @@ def _parse_conditional_instead_rider(
         return False
     if guard is not None:
         replacement = ast.Conditional(guard, replacement)
+    steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
+    return True
+
+
+def _says_instead_if(stream: TokenStream) -> bool:
+    """Whether the sentence under the cursor prints "instead if" before it
+    ends — a look, with the cursor unmoved.
+
+    The trailing spelling has no opening word to recognise it by, so without
+    this every sentence behind a replaceable step would be parsed twice: once
+    here to find out it is not a replacement, once by the loop. Asking for the
+    two words first is also the narrower admission — the sentence must *say*
+    it replaces before anything is read as one.
+    """
+    offset = 0
+    while True:
+        token = stream.peek(offset)
+        if token is None or (token.kind == PUNCT and token.text == "."):
+            return False
+        if token.kind == WORD and token.text == "instead":
+            after = stream.peek(offset + 1)
+            return after is not None and after.kind == WORD and after.text == "if"
+        offset += 1
+
+
+def _parse_trailing_if_instead(
+    stream: TokenStream, steps: list[ast.Statement], last, last_guard, replaced
+) -> bool:
+    """``Thermal Blast deals 3 damage to target creature. Thermal Blast deals
+    5 damage instead if there are seven or more cards in your graveyard.``
+
+    The rider with its condition printed *behind* the sentence it gates rather
+    than in front of it — the spelling Odyssey's threshold spells use, and the
+    one hellbent and metalcraft print after it ("…deals 4 damage instead if
+    you control three or more artifacts"). One pair, one fold: the same
+    agreement between the arms (``_same_shape``, ``_instead_inherits_subject``)
+    and the same ``Conditional``, read from the other end. It is the sentence
+    loop's trailing "if" (``sequences._statements_from_sentences``) with the
+    word that makes the sentence a replacement in front of it, which is why
+    that reader cannot take it: it would hang the condition on a *second*
+    step, and Thermal Blast would deal 3 and then 5.
+
+    A replaced sentence carrying a guard of its own ("Counter target spell if
+    its mana value is 2 or less") is refused: the replacement would need two
+    trailing "if"s, and no card prints which one is which.
+    """
+    if last_guard is not None or not _says_instead_if(stream):
+        return False
+    mark = stream.mark()
+    try:
+        replacement = parse_statement(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not stream.accept_phrase("instead", "if"):
+        stream.reset(mark)
+        return False
+    try:
+        condition = _parse_condition(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return False
+    if not _same_shape(replaced, replacement):
+        stream.reset(mark)
+        return False
+    replacement = _instead_inherits_subject(replaced, replacement)
+    if replacement is None:
+        stream.reset(mark)
+        return False
     steps[-1] = ast.Conditional(condition, then=replacement, otherwise=last)
     return True
 
@@ -240,12 +310,34 @@ def _accept_resized_this_way(stream: TokenStream, replaced):
 #: **instead** draw two cards, then discard a card." (Ceta Sanctuary). The
 #: second is the first pair whose replaced sentence is *two* actions, which is
 #: `_is_replaceable`'s other arm rather than a row here.
+#:
+#: `Sacrifice` joined them for Odyssey's Epicenter -- "Target player sacrifices
+#: a land of their choice. **Each player** sacrifices all lands they control
+#: instead if there are seven or more cards in your graveyard." -- the first
+#: pair whose second sentence names somebody *else* outright rather than
+#: pointing back, which `_instead_subject` has always kept as written. The
+#: spell still announces its target player whichever arm resolves (CR 601.2c:
+#: the choice is made as it is cast, when nobody knows which sentence will
+#: run), and both arms are what the cast spec is derived from.
 _REPLACEABLE = (
     ast.GainLife, ast.AddMana, ast.DealDamage,
     ast.Discard, ast.Pump, ast.PreventDamage,
     ast.CounterSpell, ast.Destroy, ast.SearchLibrary,
-    ast.LoseLife, ast.Draw,
+    ast.LoseLife, ast.Draw, ast.Sacrifice,
 )
+
+#: What a replacement may go on to do **after** it has said the replaced
+#: sentence again: "Destroy all creatures. … If there are seven or more cards
+#: in your graveyard, instead destroy all creatures, **then create two 1/1
+#: white Spirit creature tokens with flying**." (Kirtar's Wrath.) The first
+#: step is the replaced sentence over again, held to its kind like every other
+#: replacement; what follows "then" is something only the replacing arm does.
+#:
+#: A closed set for `_REPLACEABLE`'s reason, and held to effects that announce
+#: nothing: the replaced sentence is what the spell's targets were chosen for
+#: (CR 601.2c), and a continuation naming a target of its own would be an
+#: announcement only one arm could use.
+_CONTINUATIONS = (ast.CreateToken,)
 
 
 def _is_replaceable(statement) -> bool:
@@ -272,6 +364,8 @@ def _same_shape(replaced, replacement) -> bool:
     sequence replacing a sequence of another length, or with one step of
     another kind, is a different sentence standing in for this one.
     """
+    if _continues(replaced, replacement):
+        return True
     if type(replacement) is not type(replaced):
         return False
     if not isinstance(replaced, ast.Sequence):
@@ -279,6 +373,31 @@ def _same_shape(replaced, replacement) -> bool:
     return len(replacement.steps) == len(replaced.steps) and all(
         type(new) is type(old)
         for new, old in zip(replacement.steps, replaced.steps)
+    )
+
+
+def _continues(replaced, replacement) -> bool:
+    """Whether *replacement* is *replaced* said again **and then more**: a
+    "…, then …" sentence whose first step is the replaced sentence's kind and
+    whose every later step is one of ``_CONTINUATIONS``, made by the spell's
+    own controller.
+
+    Only a single replaced sentence is continued. A replaced "…, then …" is
+    already compared step for step, and letting it grow a tail as well would
+    make "the same sentence, longer" and "a different sentence" one test.
+    """
+    if isinstance(replaced, ast.Sequence) or not isinstance(replacement, ast.Sequence):
+        return False
+    head, *tail = replacement.steps
+    return (
+        type(head) is type(replaced)
+        and bool(tail)
+        and all(
+            isinstance(step, _CONTINUATIONS)
+            and step.recipient is None
+            and step.recipient_players is None
+            for step in tail
+        )
     )
 
 
@@ -319,6 +438,7 @@ _INSTEAD_SUBJECT_FIELDS = {
     ast.Destroy: "subject",
     ast.LoseLife: "player",
     ast.Draw: "player",
+    ast.Sacrifice: "player",
 }
 
 #: The object back-references: a pronoun, a demonstrative, and the marker
@@ -440,6 +560,14 @@ def _instead_inherits_subject(replaced, replacement):
         if any(step is None for step in resolved_steps):
             return None
         return ast.Sequence(resolved_steps)
+    if isinstance(replacement, ast.Sequence):
+        # A continued replacement (``_continues``): its first step restates
+        # *replaced* and is resolved against it; the steps behind "then" name
+        # nobody the first sentence could have.
+        head = _instead_inherits_subject(replaced, replacement.steps[0])
+        if head is None:
+            return None
+        return ast.Sequence((head, *replacement.steps[1:]))
     field = _INSTEAD_SUBJECT_FIELDS.get(type(replaced))
     if field is None:
         return replacement
