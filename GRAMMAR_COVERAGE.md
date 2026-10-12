@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 75.1% | 73.4% | 55.8% | 241 |
+| ODY *(measured)* | 335 | 507 | 79.7% | 79.1% | 61.1% | 258 |
 | **All (shipped)** | **7406** | **10877** | **90.6%** | **90.0%** | **61.7%** | **5693** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,11 +61,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 633 | 331 | expected a subject |  |
+| 617 | 315 | expected a subject |  |
 | 168 | 87 | unrecognized effect verb |  |
-| 152 | 84 | unconsumed text |  |
+| 149 | 81 | unconsumed text |  |
 | 63 | 44 | granted ability in quotes | phase 3 (quoted abilities) |
-| 36 | 36 | unrecognized activation cost |  |
+| 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
 | 21 | 15 | a conditional static bonus about your own board is derived by engine/static_bonuses.py |  |
 | 20 | 18 | expected 'unless defending player controls' |  |
@@ -732,6 +732,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{R}, Sacrifice this creature: It deals 2 damage to target creature.`
 - **Barbarian Ring**
   - `{T}: Add {R}. This land deals 1 damage to you.`
+  - `Threshold — {R}, {T}, Sacrifice this land: It deals 2 damage to any target. Activate only if there are seven or more cards in your graveyard.`
 - **Barbed Foliage**
   - `Whenever a creature attacks you, it loses flanking until end of turn.`
   - `Whenever a creature without flying attacks you, this enchantment deals 1 damage to it.`
@@ -1257,11 +1258,14 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Untap target permanent.`
 - **Bösium Strip**
   - `{3}, {T}: Until end of turn, you may cast instant and sorcery spells from the top of your graveyard. If a spell cast this way would be put into a graveyard, exile it instead.`
+- **Cabal Inquisitor**
+  - `Threshold — {1}{B}, {T}, Exile two cards from your graveyard: Target player discards a card. Activate only as a sorcery and only if there are seven or more cards in your graveyard.`
 - **Cabal Patriarch**
   - `{2}{B}, Sacrifice a creature: Target creature gets -2/-2 until end of turn.`
   - `{2}{B}, Exile a creature card from your graveyard: Target creature gets -2/-2 until end of turn.`
 - **Cabal Pit**
   - `{T}: Add {B}. This land deals 1 damage to you.`
+  - `Threshold — {B}, {T}, Sacrifice this land: Target creature gets -2/-2 until end of turn. Activate only if there are seven or more cards in your graveyard.`
 - **Cabal Shrine**
   - `Whenever a player casts a spell, that player discards X cards, where X is the number of cards in all graveyards with the same name as that spell.`
 - **Cackling Fiend**
@@ -1447,10 +1451,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: This creature deals 1 damage to target creature with flying.`
 - **Centaur Garden**
   - `{T}: Add {G}. This land deals 1 damage to you.`
+  - `Threshold — {G}, {T}, Sacrifice this land: Target creature gets +3/+3 until end of turn. Activate only if there are seven or more cards in your graveyard.`
 - **Cephalid Broker**
   - `{T}: Target player draws two cards, then discards two cards.`
 - **Cephalid Coliseum**
   - `{T}: Add {U}. This land deals 1 damage to you.`
+  - `Threshold — {U}, {T}, Sacrifice this land: Target player draws three cards, then discards three cards. Activate only if there are seven or more cards in your graveyard.`
 - **Cephalid Looter**
   - `{T}: Target player draws a card, then discards a card.`
 - **Cephalid Retainer**
@@ -1474,6 +1480,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `You may tap or untap target creature. Then that creature's controller may pay {2}{U}. If the player does, they may copy this spell and may choose a new target for that copy.`
 - **Chainflinger**
   - `{1}{R}, {T}: This creature deals 1 damage to any target.`
+  - `Threshold — {2}{R}, {T}: This creature deals 2 damage to any target. Activate only if there are seven or more cards in your graveyard.`
 - **Chambered Nautilus**
   - `Whenever this creature becomes blocked, you may draw a card.`
 - **Chance Encounter**
@@ -1529,6 +1536,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, {T}, Discard a card: The next time a source of your choice would deal damage to target creature this turn, prevent that damage.`
 - **Charmed Griffin**
   - `When this creature enters, each other player may put an artifact or enchantment card onto the battlefield from their hand.`
+- **Charmed Pendant**
+  - `{T}, Mill a card: For each colored mana symbol in the milled card's mana cost, add one mana of that color. (Activate only as an instant. For example, if the card's mana cost is {3}{U}{U}{B}, you add {U}{U}{B}.)`
 - **Chatter of the Squirrel**
   - `Create a 1/1 green Squirrel creature token.`
 - **Chieftain en-Dal**
@@ -3805,6 +3814,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Gerrard's Wisdom**
   - `You gain 2 life for each card in your hand.`
   - `You gain 2 life for each card in your hand.`
+- **Ghastly Demise**
+  - `Destroy target nonblack creature if its toughness is less than or equal to the number of cards in your graveyard.`
 - **Ghazbán Ogre**
   - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
   - `At the beginning of your upkeep, if a player has more life than each other player, the player with the most life gains control of this creature.`
@@ -4102,6 +4113,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature enters, you may return target creature card from your graveyard to your hand.`
   - `When this creature enters, you may return target creature card from your graveyard to your hand.`
   - `When this creature enters, you may return target creature card from your graveyard to your hand.`
+- **Gravestorm**
+  - `At the beginning of your upkeep, target opponent may exile a card from their graveyard. If that player doesn't, you may draw a card.`
 - **Gravity Sphere**
   - `All creatures lose flying.`
 - **Great Defender**
@@ -4195,6 +4208,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}: Return target nonsnow land you control to its owner's hand.`
 - **Hallowed Healer**
   - `{T}: Prevent the next 2 damage that would be dealt to any target this turn.`
+  - `Threshold — {T}: Prevent the next 4 damage that would be dealt to any target this turn. Activate only if there are seven or more cards in your graveyard.`
 - **Hammer Mage**
   - `{X}{R}, {T}, Discard a card: Destroy all artifacts with mana value X or less.`
 - **Hammer of Bogardan**
@@ -4421,6 +4435,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura enters, draw a card.`
 - **Hobblefiend**
   - `{1}, Sacrifice another creature: Put a +1/+1 counter on this creature.`
+- **Holistic Wisdom**
+  - `{2}, Exile a card from your hand: Return target card from your graveyard to your hand if it shares a card type with the card exiled this way. (Artifact, battle, creature, enchantment, kindred, instant, land, planeswalker, and sorcery are card types.)`
 - **Hollow Dogs**
   - `Whenever this creature attacks, it gets +2/+0 until end of turn.`
   - `Whenever this creature attacks, it gets +2/+0 until end of turn.`
@@ -4698,6 +4714,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Target attacking creature gets +1/+1 until end of turn.`
 - **Infected Vermin**
   - `{2}{B}: This creature deals 1 damage to each creature and each player.`
+  - `Threshold — {3}{B}: This creature deals 3 damage to each creature and each player. Activate only if there are seven or more cards in your graveyard.`
 - **Infernal Contract**
   - `Draw four cards. You lose half your life, rounded up.`
   - `Draw four cards. You lose half your life, rounded up.`
@@ -5238,6 +5255,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{R}, {T}, Discard a card: This creature deals 1 damage to any target.`
 - **Krosan Archer**
   - `{G}, Discard a card: This creature gets +0/+2 until end of turn.`
+- **Krosan Avenger**
+  - `Threshold — {1}{G}: Regenerate this creature. Activate only if there are seven or more cards in your graveyard.`
 - **Krosan Beast**
   - `Threshold — This creature gets +7/+7 as long as there are seven or more cards in your graveyard.`
 - **Krovikan Elementalist**
@@ -6013,6 +6032,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Target creature gets +7/+7 until end of turn.`
 - **Mightstone**
   - `Attacking creatures get +1/+0.`
+- **Millikin**
+  - `{T}, Mill a card: Add {C}. (Activate only as an instant. To mill a card, put the top card of your library into your graveyard.)`
 - **Millstone**
   - `{2}, {T}: Target player mills two cards.`
   - `{2}, {T}: Target player mills two cards.`
@@ -6295,6 +6316,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}, {T}: Return this creature to its owner's hand and return target Griffin card from your graveyard to your hand. Activate only during your upkeep.`
 - **Mtenda Lion**
   - `Whenever this creature attacks, defending player may pay {U}. If that player does, prevent all combat damage that would be dealt by this creature this turn.`
+- **Mudhole**
+  - `Target player exiles all land cards from their graveyard.`
 - **Mudslide**
   - `At the beginning of each player's upkeep, that player may choose any number of tapped creatures without flying they control and pay {2} for each creature chosen this way. If the player does, untap those creatures.`
 - **Mulch**
@@ -6514,8 +6537,10 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, return to its owner's hand each creature that player controls with power greater than the number of cards in their hand.`
 - **Nomad Decoy**
   - `{W}, {T}: Tap target creature.`
+  - `Threshold — {W}{W}, {T}: Tap two target creatures. Activate only if there are seven or more cards in your graveyard.`
 - **Nomad Stadium**
   - `{T}: Add {W}. This land deals 1 damage to you.`
+  - `Threshold — {W}, {T}, Sacrifice this land: You gain 4 life. Activate only if there are seven or more cards in your graveyard.`
 - **Nomadic Elf**
   - `{1}{G}: Add one mana of any color.`
 - **Nomads en-Kor**
@@ -6768,6 +6793,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Pain // Suffering**
   - `Target player discards a card.`
   - `Destroy target land.`
+- **Painbringer**
+  - `{T}, Exile any number of cards from your graveyard: Target creature gets -X/-X until end of turn, where X is the number of cards exiled this way.`
 - **Painful Memories**
   - `Look at target opponent's hand and choose a card from it. Put that card on top of that player's library.`
   - `Look at target opponent's hand and choose a card from it. Put that card on top of that player's library.`
@@ -6870,6 +6897,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{W}: This creature gets +0/+1 until end of turn.`
 - **Peat Bog**
   - `{T}, Remove a depletion counter from this land: Add {B}{B}. If there are no depletion counters on this land, sacrifice it.`
+- **Pedantic Learning**
+  - `Whenever a land card is put into your graveyard from your library, you may pay {1}. If you do, draw a card.`
 - **Peek**
   - `Look at target player's hand.`
   - `Draw a card.`
@@ -7057,6 +7086,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {B} or {G}. This land deals 1 damage to you.`
 - **Pious Warrior**
   - `Whenever this creature is dealt combat damage, you gain that much life.`
+- **Piper's Melody**
+  - `Shuffle any number of target creature cards from your graveyard into your library.`
 - **Pirate Ship**
   - `This creature can't attack unless defending player controls an Island.`
   - `{T}: This creature deals 1 damage to any target.`
@@ -7667,6 +7698,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Reconstruction**
   - `Return target artifact card from your graveyard to your hand.`
   - `Return target artifact card from your graveyard to your hand.`
+- **Recoup**
+  - `Target sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to its mana cost. (Mana cost includes color.)`
 - **Recover**
   - `Return target creature card from your graveyard to your hand.`
   - `Draw a card.`
@@ -8071,6 +8104,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature deals combat damage to a player, you may pay {2}. If you do, search that player's library for a card and exile it, then the player shuffles.`
 - **Roterothopter**
   - `{2}: This creature gets +1/+0 until end of turn. Activate no more than twice each turn.`
+- **Rotting Giant**
+  - `Whenever this creature attacks or blocks, sacrifice it unless you exile a card from your graveyard.`
 - **Rouse**
   - `Target creature gets +2/+0 until end of turn.`
 - **Rousing Read**
@@ -8751,6 +8786,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, all creatures gain "{T}: Tap target creature."`
 - **Show and Tell**
   - `Each player may put an artifact, creature, enchantment, or land card from their hand onto the battlefield.`
+- **Shower of Coals**
+  - `Shower of Coals deals 2 damage to each of up to three targets.`
 - **Shower of Sparks**
   - `Shower of Sparks deals 1 damage to target creature and 1 damage to target player or planeswalker.`
 - **Shriek of Dread**
@@ -10157,6 +10194,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tolarian Winds**
   - `Discard all the cards in your hand, then draw that many cards.`
   - `Discard all the cards in your hand, then draw that many cards.`
+- **Tombfire**
+  - `Target player exiles all cards with flashback from their graveyard.`
 - **Tombstone Stairwell**
   - `At the beginning of each upkeep, if this enchantment is on the battlefield, each player creates a 2/2 black Zombie creature token with haste named Tombspawn for each creature card in their graveyard.`
 - **Tonic Peddler**
@@ -10277,6 +10316,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this Aura enters, draw a card.`
 - **Traveling Plague**
   - `At the beginning of each upkeep, put a plague counter on this Aura.`
+  - `When enchanted creature leaves the battlefield, that creature's controller returns this Aura from its owner's graveyard to the battlefield.`
 - **Treachery**
   - `When this Aura enters, untap up to five lands.`
 - **Treasure Hunter**
@@ -11304,8 +11344,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}{W}: This creature gains first strike until end of turn.`
 - **Zirilan of the Claw**
   - `{1}{R}{R}, {T}: Search your library for a Dragon permanent card, put that card onto the battlefield, then shuffle. That Dragon gains haste until end of turn. Exile it at the beginning of the next end step.`
+- **Zombie Assassin**
+  - `{T}, Exile two cards from your graveyard and this creature: Destroy target nonblack creature. It can't be regenerated.`
 - **Zombie Boa**
   - `{1}{B}: Choose a color. Whenever this creature becomes blocked by a creature of that color this turn, destroy that creature. Activate only as a sorcery.`
+- **Zombie Cannibal**
+  - `Whenever this creature deals combat damage to a player, you may exile target card from that player's graveyard.`
 - **Zombie Infestation**
   - `Discard two cards: Create a 2/2 black Zombie creature token.`
 - **Zombie Master**

@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2824 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2860 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -298,9 +298,9 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
-- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(6 tests, subrules abc)*
+- [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(16 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(21 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
@@ -667,8 +667,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(303 tests, subrules abcdefghi)*
-- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(29 tests, subrules a)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(314 tests, subrules abcdefghi)*
+- [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
 - [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
@@ -677,10 +677,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 602. Activating Activated Abilities
 
 - [x] **602.1** Activated abilities have a cost and an effect. They are written as “[Cost]: [Effect.] [Activation... *(15 tests, subrules ab)*
-- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(58 tests, subrules ab)*
+- [x] **602.2** To activate an ability is to put it onto the stack and pay its costs, so that it will eventually ... *(59 tests, subrules ab)*
 - [x] **602.3** Some abilities specify that one of their controller’s opponents does something the controller wou... *(3 tests)*
 - [ ] **602.4** Activating an ability that alters costs won’t affect spells and abilities that are already on the...
-- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(42 tests, subrules ace)*
+- [x] **602.5** A player can’t begin to activate an ability that’s prohibited from being activated. *(49 tests, subrules acde)*
 
 ### 603. Handling Triggered Abilities
 
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(134 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(142 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -759,7 +759,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 611. Continuous Effects
 
 - [x] **611.1** A continuous effect modifies characteristics of objects, modifies control of objects, or affects ... *(3 tests)*
-- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(51 tests, subrules abc)*
+- [x] **611.2** A continuous effect may be generated by the resolution of a spell or ability. *(52 tests, subrules abc)*
 - [x] **611.3** A continuous effect may be generated by the static ability of an object. *(57 tests, subrules abc)*
 
 ### 612. Text-Changing Effects
@@ -791,7 +791,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 614. Replacement Effects
 
-- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(47 tests, subrules abcd)*
+- [x] **614.1** Some continuous effects are replacement effects. Like prevention effects (see rule 615), replacem... *(48 tests, subrules abcd)*
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
@@ -853,7 +853,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(11 tests, subrules ab)*
+- [x] **701.6** Counter *(13 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(5 tests, subrules ac)*
@@ -896,7 +896,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.24** Cumulative Upkeep *(32 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(19 tests, subrules adfgim)*
-- [x] **702.27** Buyback *(7 tests, subrules a)*
+- [x] **702.27** Buyback *(8 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(15 tests, subrules abef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
@@ -940,7 +940,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
-- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(8 tests, subrules ac)*
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(9 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...
@@ -1015,4 +1015,5 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 ## Cited outside tracked scope (consider widening SCOPE)
 
 - **702.33** Keyword Abilities (12 tests)
+- **702.34** Keyword Abilities (21 tests)
 - **723.5** Controlling Another Player (3 tests)
