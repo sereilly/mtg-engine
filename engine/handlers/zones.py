@@ -4805,17 +4805,6 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         seats = list(range(len(game.players)))
     elif who == "you":
         seats = [game.players.index(context.caster)]
-    elif who in ("target_player", "target_opponent"):
-        # "**Target player** exiles all land cards from their graveyard."
-        # (Mudhole.) The one pile the announcement chose (CR 601.2c), which
-        # the resolution carries as its target player.
-        seats = [
-            index for index, player in enumerate(game.players)
-            if player is context.target
-        ]
-        if not seats:
-            game.log.append(f"{context.card.name}: no player was targeted")
-            return True, "resolved"
     else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"

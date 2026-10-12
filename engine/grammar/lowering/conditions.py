@@ -68,28 +68,6 @@ def pronoun_target_referent(instructions) -> str | None:
     return _PRONOUN_REFERENTS.get(described.get("kind"))
 
 
-def targets_one_graveyard_card(instructions) -> bool:
-    """Whether the effect a clause guards targets **one card in a graveyard**
-    — what "it" names in "…if it shares a card type with the card exiled this
-    way" (Holistic Wisdom).
-
-    :func:`pronoun_target_referent`'s question for a third kind of object, and
-    asked separately rather than as a third referent word for the reason
-    :func:`announces_target_pair` is: two readers of that word pass any
-    non-None answer straight to an evaluator that knows a spell and a
-    permanent, so a new value there would be answered about the wrong object.
-
-    Read off the target derivation itself rather than off a list of kinds, so
-    what the picker offers and what this vouches for are one answer.
-    """
-    if len(instructions) != 1:
-        return False
-    from ...targeting import GRAVEYARD_TARGET_KIND, derive_instruction_spec
-
-    spec = derive_instruction_spec(instructions) or {}
-    return spec.get("kind") == GRAVEYARD_TARGET_KIND and not spec.get("count")
-
-
 def announces_target_pair(instructions) -> bool:
     """Whether the effect a clause guards announced **exactly two** permanents
     (CR 601.2c) — what "either one" and "the other" name between them.

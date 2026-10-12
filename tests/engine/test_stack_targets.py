@@ -706,6 +706,13 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # that card back and the trigger returns it — Gravedigger's shape and
     # Gravedigger's gap, one card type over.
     "Auramancer#0",
+    # Odyssey, W1G6. "…you may exile target card from **that player's**
+    # graveyard": both reasons at once — a card in a graveyard, out of a pile
+    # only the damage event names. Rysorian Badger's shape with a count of one
+    # (which is "up to two" and so reads as announcing nothing here): the
+    # controller is asked which card as the ability resolves, out of exactly
+    # that player's pile, and is not asked at all over an empty one.
+    "Zombie Cannibal#0",
     # narrowed by a seat only the firing event knows
     "Heart of Bogardan#1", "Oath of Lieges#0", "Oath of Scholars#0",
     "Oath of Ghouls#0", "Oath of Mages#0", "Oath of Druids#0",

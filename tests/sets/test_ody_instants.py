@@ -248,53 +248,6 @@ def test_w1g6_ghastly_demise_cannot_be_aimed_at_a_black_creature_or_at_nothing(
     empty.start_turn(0)
     assert not empty.queue_from_hand(0, "Ghastly Demise").supported
 
-
-# --- Mudhole ----------------------------------------------------------------
-# "Target player exiles all land cards from their graveyard." The exile sweep
-# over the one pile the spell's announcement chose.
-
-@_w1g6_pytest.mark.parametrize("seat", [0, 1])
-def test_w1g6_mudhole_empties_the_targeted_players_graveyard_of_lands(
-    set_pool, seat
-):
-    lea, ody = set_pool("LEA"), set_pool("ODY")
-    piles = [
-        [lea["Forest"], lea["Hill Giant"], lea["Island"]],
-        [lea["Forest"], lea["Lightning Bolt"], lea["Forest"]],
-    ]
-    game = _w1g6_game(hand=[ody["Mudhole"]], yard=piles[0], their_yard=piles[1])
-    game.start_turn(0)
-    spec = game.cast_target_spec(0, ody["Mudhole"])
-    assert spec["kind"] == "player" and spec["requires_target"]
-
-    cast = game.queue_from_hand(0, "Mudhole", target_player_index=seat)
-    assert cast.supported, cast.details
-    _w1g6_resolve_stack(game)
-
-    other = 1 - seat
-    kept = ["Hill Giant"] if seat == 0 else ["Lightning Bolt"]
-    assert [c for c in _w1g6_pile(game.players[seat]) if c != "Mudhole"] == kept
-    assert len(game.players[seat].exile) == 2
-    # The other player's lands are not touched.
-    assert [c for c in _w1g6_pile(game.players[other]) if c != "Mudhole"] == [
-        card.name for card in piles[other]
-    ]
-    assert not game.players[other].exile
-
-
-def test_w1g6_mudhole_against_a_pile_with_no_land_exiles_nothing(set_pool):
-    lea, ody = set_pool("LEA"), set_pool("ODY")
-    game = _w1g6_game(
-        hand=[ody["Mudhole"]], yard=[lea["Forest"]], their_yard=[lea["Hill Giant"]],
-    )
-    game.start_turn(0)
-
-    assert game.queue_from_hand(0, "Mudhole", target_player_index=1).supported
-    _w1g6_resolve_stack(game)
-
-    assert _w1g6_pile(game.players[1]) == ["Hill Giant"] and not game.players[1].exile
-    assert _w1g6_pile(game.players[0]) == ["Forest", "Mudhole"]
-
 # ==== end W1G6 ======================================================
 
 

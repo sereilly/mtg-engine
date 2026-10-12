@@ -2582,13 +2582,6 @@ _KIND_TO_SPEC_FROM_PAYLOAD = {
     # exactly the Auras the resolution will take.
     "reanimate_aura_onto_source": _graveyard_aura_spec,
     "exile_target_graveyard_card": _graveyard_exile_spec,
-    # "**Target player** exiles all land cards from their graveyard."
-    # (Mudhole.) The sweep describes its cards and nobody picks one; what the
-    # spell announces is the seat whose pile it is, and only where the
-    # sentence chose one — "your" and "each player" answer None.
-    "exile_graveyard_cards": lambda payload: player_pronoun_spec(
-        payload.get("graveyard_owner")
-    ),
     # The counted twin beside it, and a spec only for the pile whose seat is
     # known at announcement — see the builder for why the other two are None.
     "exile_cards_from_graveyard": _graveyard_exile_pile_spec,
