@@ -5241,7 +5241,17 @@ def _grammar_static_creature_instructions(
     kind — a line that lowered to one of these *and* something else is not a
     static contribution and keeps its refusal.
     """
-    compiled = compile_grammar_line(normalize_creature_line(line), card_name=card_name)
+    # A line carrying a **quoted ability** goes to the grammar as printed:
+    # 'As long as …, this creature has "{T}: Destroy target black creature."'
+    # (Repentant Vampire) hands the quote over as text the compiler reads
+    # again and the table shows a player, and the normalised spelling would
+    # make that "{t}: destroy target black creature". The grammar strips the
+    # ability word and the reminder text itself; nothing else here printed a
+    # quote the grammar could read, so no other line changes spelling.
+    compiled = compile_grammar_line(
+        line if '"' in line else normalize_creature_line(line),
+        card_name=card_name,
+    )
     if not compiled.usable or not compiled.instructions:
         return ()
     if any(

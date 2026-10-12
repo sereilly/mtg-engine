@@ -71,7 +71,8 @@ from .registries import registry_for_line
 # nobody pulls as the stale binding a move leaves behind. A re-export is for a
 # caller that exists, not for one that might.
 from .sequences import _statements_from_sentences
-from .static_lines import (_looks_static, _parse_leading_static_condition_line,
+from .static_lines import (_looks_static, _parse_conditional_grant_line,
+                           _parse_leading_static_condition_line,
                            _parse_static_condition_line,
                            _parse_turn_scoped_static_line)
 from .stream import TokenStream
@@ -326,6 +327,15 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
             if isinstance(token_line, ast.TriggeredAbilityNode):
                 return token_line
             return ast.SpellEffectLine(token_line)
+        # "As long as <condition>, this creature has "<ability>"." (Odyssey's
+        # threshold grants.) A static whose effect is a quoted ability, so it
+        # can never reach the static productions below this guard — tried
+        # here, last, where every other quoted shape has already declined.
+        conditional_grant = _parse_conditional_grant_line(
+            TokenStream(body, lexed.source)
+        )
+        if conditional_grant is not None:
+            return conditional_grant
         raise GrammarError("granted ability in quotes", line=line)
 
     body = lexed.tokens[start:]
@@ -403,6 +413,15 @@ def _parse_line(line: str, *, card_name: str | None = None) -> ast.AbilityNode:
     leading_condition = _parse_leading_static_condition_line(stream)
     if leading_condition is not None:
         return leading_condition
+    stream.reset(0)
+
+    # Either word order again, for the clause neither production above can
+    # read: one whose effect is a colour, a static sentence ("…and can't
+    # block") or "an additional" delta. After both, so every line they read
+    # still reaches them.
+    conditional_grant = _parse_conditional_grant_line(stream)
+    if conditional_grant is not None:
+        return conditional_grant
     stream.reset(0)
 
     # The same whole-line shape with the condition printed *first* as a timing

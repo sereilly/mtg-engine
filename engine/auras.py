@@ -1273,7 +1273,20 @@ def aura_static_pt_grant(oracle_text: str) -> tuple[int, int] | None:
         # decline above exists for. The conditional grant lowers to a
         # ``conditional_static`` instruction instead (grammar/statics.py) and
         # the P/T refresh asks the condition on every recompute.
-        if re.match(r"(?:for )?as long as\b", tail):
+        #
+        # **Wherever on the line the condition is printed**, outside any quoted
+        # ability — the lesson the duration check above already paid for. This
+        # asked only the words straight after the numbers, so "gets +1/+1
+        # **and can't block** as long as …" and the fronted "As long as …,
+        # enchanted creature gets +1/+1 …" both slipped past it. No card
+        # printed either while the grammar could not read them, and the round
+        # that taught it to (Odyssey's threshold grants,
+        # ``static_lines._parse_conditional_grant_line``) would have made each
+        # a +1/+1 from here *on top of* the conditional one. Two readers of one
+        # clause again, and a word between them again.
+        if re.search(
+            r"\bas long as\b", (line[:match.start()] + tail).split('"', 1)[0]
+        ):
             continue
         # "…gets +3/+3 **unless it shares a color with the most common color**
         # …" (Heroic Defiance). "As long as" with the polarity printed the
@@ -2293,7 +2306,23 @@ def aura_keyword_grants(oracle_text: str) -> tuple[str, ...]:
         match = _KEYWORD_GRANT.match(line) or _TYPE_ADDITION_GRANT.match(line)
         if match is not None:
             grants.extend(_keyword_list(match.group("keyword")))
-        elif (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None:
+        elif (
+            (compound := _KEYWORD_GRANT_AND_RESTRICTION.match(line)) is not None
+            # …and only when the restriction half **has** a reader. The
+            # pattern's own note says a tail the table cannot read "leaves the
+            # whole line unmatched", and nothing made that true: "has flying
+            # and can't block **as long as …**" matched, granted flying for
+            # good and dropped the restriction with its condition, on a card
+            # reporting supported. No printing reached it; asked now, the
+            # keyword is not granted and the line is left to a reader of the
+            # whole sentence. Either reader counts: the combat table, or the
+            # attached-restriction one Consecrate Land's "can't be enchanted
+            # by other Auras" is read by.
+            and (
+                aura_combat_restriction(raw_line) is not None
+                or aura_restrictions(raw_line)
+            )
+        ):
             # "…has phasing and can't be blocked except by Walls." The keyword
             # half only; the restriction half is claimed by
             # :func:`aura_combat_restriction` off the same line, exactly as

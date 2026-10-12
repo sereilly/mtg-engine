@@ -88,6 +88,7 @@ from .effects import (
     _parse_life_total_becomes,
     _parse_look_at_hand,
     _parse_exile_bound_card,
+    _parse_counted_graveyard_cards,
     _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
     _parse_put_exiled_pile_top_into_hand,
@@ -435,7 +436,13 @@ def parse_imperative_verb(
         # Safe here because the quantifier is refused by default — no lowering
         # accepts "that" unless it says so — so a sentence that reaches one
         # without a binder fails **by name** rather than failing to parse.
-        subject = _parse_that_object(stream) or parse_recipient(stream)
+        subject = (
+            _parse_that_object(stream)
+            # "…exile **two cards** from your graveyard" — the untargeted
+            # count the recipient parser has no quantifier for.
+            or _parse_counted_graveyard_cards(stream)
+            or parse_recipient(stream)
+        )
         if subject is None:
             # "Create three 2/2 white Knight creature tokens. **Exile them** at
             # the beginning of the next cleanup step." (Waylay.) The plural of
