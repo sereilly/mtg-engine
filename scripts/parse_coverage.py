@@ -142,6 +142,7 @@ from engine.cost_x_definitions import (  # noqa: E402
 from engine.revealed_hands import revealed_hands_line  # noqa: E402
 from engine.enter_effects import enter_effect_line  # noqa: E402
 from engine.extra_triggers import extra_trigger_line  # noqa: E402
+from engine.flashback import flashback_claims_line  # noqa: E402
 from engine.named_protection import named_protection_line  # noqa: E402
 from engine.target_restrictions import target_restriction_line  # noqa: E402
 from engine.land_play_allowance import land_play_line  # noqa: E402
@@ -518,6 +519,15 @@ CHANNELS: tuple[tuple[str, object], ...] = (
     # board rather than printed on the spell. The same table, found by a
     # different question — see ``alternative_costs.granted_alternative_cost``.
     ("alternative_costs.py (granted)", granted_alternative_cost_claims_line),
+    # CR 702.34a: "You may cast this card from your graveyard by paying {4}{R}
+    # rather than paying its mana cost." — what a flashback keyword line is by
+    # the time this census reads it (`oracle.expand_ability_lines`). A CR 601.3
+    # permission that requires a CR 118.9 alternative cost: no instruction,
+    # carried out by `cast_permissions.permission_for` and the cast path. The
+    # row this report was asking for on 27 Odyssey cards, each of which compiled
+    # on its other line with the keyword dropped. Asked of the reader that
+    # charges the cost, so a cost it cannot read stays unclaimed.
+    ("flashback.py", flashback_claims_line),
     # "This creature can't be destroyed by lethal damage unless lethal damage
     # dealt by a single source is marked on it." (Ogre Enforcer.) CR 704.5g
     # narrowed by the permanent's own text — a state-based action, so there is
