@@ -2074,7 +2074,11 @@ def test_layers_only_import_downward(layers):
         # `_record_definitions` joins at the Phase 0 before Odyssey: the
         # where-clause definitions that read a record, which `where_x` now
         # imports as one call.
-        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions"), ()),
+        #
+        # `_discards` joins at Odyssey's wave 1: the four whole readings of a
+        # discard (every matching card, the whole hand, each player, the
+        # effect's own controller), which `hand` now imports as four calls.
+        ("lowering", ("_common", "_filters", "_targets", "_events", "_frozen_seats", "_deaths", "_delays", "_amounts", "_counted_damage", "_counted_pumps", "_bites", "_seats", "_sacrifices", "_chosen_members", "_records", "_sweeps", "_destroy_sweeps", "_conjuncts", "_bound_returns", "_bound_exiles", "_described_returns", "_piles", "_counter_stores", "_plus_one_counters", "_named_counters", "_blankets", "_counted_redirects", "_instance_redirects", "_prevented_riders", "_pump_categories", "_zone_categories", "_combat_categories", "_record_keys", "_record_conditions", "_record_definitions", "_cost_records", "_superlatives", "_recipients", "_collapses", "_declaration_costs", "_counted_life", "categories", "conditions", "_discards"), ()),
         # `costs` is shared beside `_core` rather than a family: a cost is
         # charged on the way to the stack and never lowered, so it has no
         # `effects/` or `lowering/` twin to be a family of — and both
@@ -2558,6 +2562,22 @@ FAMILY_SHARED = {
     # and it reads `_amounts`, `_common` and `_events`, which is a floor
     # reading floors.
     "_counted_pumps",
+    # `lowering/_discards`, split out of `lowering/hand.py` at Odyssey's wave 1,
+    # 25 lines under the guard with the set's four Rites to land. The seam is
+    # the one `hand`'s own docstring drew for the day it came — "cut *inside*
+    # `_lower_discard`, along its per-seat branches, rather than moving the
+    # family out of the zone CR 701.9a names" — so the family did not move:
+    # `_lower_discard` still decides which reading a sentence is and still
+    # holds every seat that has to be *told* (a target, a seat an event froze,
+    # the defending player). What left are the four readings that need no such
+    # telling, each one function where it was one `if`: every matching card,
+    # the whole hand, each player, and the effect's own controller.
+    # A single-importer floor, precedented by `_recipients` and
+    # `_declaration_costs`: `hand` is the only family that asks, and the
+    # module exists because that family crossed the guard. It reads `_common`,
+    # `_amounts`, `_events`, `_cost_records` and `_filters` — a floor reading
+    # floors — and nothing reads back.
+    "_discards",
     # `_counted_life` pre-split out of `lowering/life.py` at the Phase 0 between
     # Invasion's two waves, 21 lines under the guard below and within 35 of it
     # since Prophecy's second wave with no group owning it. The third floor on
