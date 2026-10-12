@@ -1329,7 +1329,7 @@ def _kinds_of(instruction) -> set[str]:
     read here exactly as ``categories_of`` reads them, rather than by a second
     list of wrapper names free to fall behind.
     """
-    from engine.grammar.lowering.control_flow import nested_instructions
+    from engine.grammar.lower import nested_instructions
 
     kinds = {instruction.kind}
     inner = nested_instructions(instruction)

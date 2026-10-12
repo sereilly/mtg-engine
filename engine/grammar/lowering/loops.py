@@ -1,7 +1,7 @@
 """Lowering the loops: one sentence performed once per member of a set.
 
 Split out of `control_flow.py` at the thousand-line guard, along the line that
-module's own docstring already drew. `control_flow` is named after the
+module's own docstring already drew. `control_flow` was then named after the
 *composers* — `sequence`, `may`, `one_of` — the shapes that decide **whether**
 and **in what order** a sentence runs. A loop decides **how many times**, and
 what it iterates is a set: seats (CR 101.4's turn order), permanents the board

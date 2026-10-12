@@ -14,9 +14,10 @@ convention.
 registry, which is what its first paragraph claims and what the split above
 established; a walk over a lowered sequence is not one, and it belongs beside
 the wrapper table it has to consult on every step
-(``lowering/control_flow.nested_instructions``). Its address is unchanged —
-``lowering/__init__`` and ``lower.py`` both re-export it — which is the same
-promise this file's own move made about ``INSTRUCTION_CATEGORIES``.
+(``grammar/lower.nested_instructions``). Its address is unchanged — ``lower.py``
+is where a caller has always found it, as a re-export until the Phase 0 before
+Odyssey and as the definition since — which is the same promise this file's own
+move made about ``INSTRUCTION_CATEGORIES``.
 
 **And which kinds are *zone changes* left for `lowering/zones.py`**, for the
 same reason and by the same move — the third time this table was split at the
@@ -45,14 +46,17 @@ every reader imports is still this one — and no row's value changed in any of
 the moves, because a category names the family a kind migrates with and never
 the module its row is in.
 
-**Which kinds are wrappers is `lowering/control_flow.py`'s**, not this module's.
+**Which kinds are wrappers is `grammar/lower.py`'s**, not this module's.
 The table used to sit at the bottom of this file, and the split came at the
 thousand-line guard: the half that grows with the pool is the registry above,
 and the half that has been stable is the walk over `sequence` / `if_then` /
-`for_each` — which are exactly the kinds that family *produces*. Reusing the
-family name rather than inventing a module for the walk is the same move
-`by_node` recorded at Fallen Empires: the table is a registry either way, and
-what a wrapper carries belongs beside what builds one.
+`for_each`. It went to `lowering/control_flow.py` first, as "exactly the kinds
+that family *produces*" — which that family had stopped producing hours
+earlier, when `sequences` left it as `loops` had before. What a wrapper carries
+belongs beside what builds one, and some twenty modules build one now;
+`lower.py` is the module they all pass through and the only reader of the table
+in the grammar, so it went there at the Phase 0 before Odyssey rather than to a
+module invented for the walk.
 """
 
 from ...lord_buffs import (LORD_BUFF_KIND)
@@ -845,7 +849,7 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     "choose_cast_this_turn": "chosen_players",
     "create_emblem": "tokens",
     # Optional actions. Parsed and lowered, not switched on — see
-    # `control_flow.WRAPPER_KINDS`.
+    # `lower.WRAPPER_KINDS`.
     "may": "optional",
     # "Each player may pay any amount of mana." (Liege of the Hollows.) The
     # collapsed form of a ``may`` made to a set of seats, so it keeps that

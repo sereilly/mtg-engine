@@ -1,7 +1,7 @@
 """Lowering the ``sequence`` composer: what a step records, and whose branch it is.
 
 Split out of ``lowering/control_flow`` at the thousand-line guard, along the
-line that module's own docstring already draws — it names three composers
+line that module's own docstring then drew — it named three composers
 (``sequence``, ``may``, ``one_of``) and ``for_each`` had already left as
 ``lowering/loops``. What stays there is the two *offers*; what moves here is the
 sequence: threading each step's records forward, and folding a step that reads

@@ -39,7 +39,6 @@ cannot do.
 """
 
 from .categories import INSTRUCTION_CATEGORIES
-from .control_flow import categories_of
 from ._cost_records import _COST_PRODUCES
 from .where_x import lower_where_x
 from .conditions import (_lower_condition, announces_target_pair,
@@ -437,7 +436,6 @@ __all__ = [
     "announces_target_pair",
     "pronoun_target_referent",
     "INSTRUCTION_CATEGORIES",
-    "categories_of",
     "_COST_PRODUCES",
     "_mentions_x",
     "_refuse_unfused_distinctness",
