@@ -660,6 +660,10 @@
              prompt's `destination` before the dialog is shown; the defaults
              here name no zone rather than naming the wrong one. -->
         <p id="searchLibrarySubtitle" class="modal-subtitle">Choose a card.</p>
+        <!-- One find per printed description (Gaea's Balance, Guided Passage):
+             each description is a slot here, showing the card chosen for it.
+             Hidden for every other search. -->
+        <div id="searchLibrarySlots" class="search-slot-row hidden"></div>
         <div class="modal-search-row search-controls-row">
           <input id="searchLibraryFilter" type="text" placeholder="Filter by name or type…" autocomplete="off" />
           <label id="searchLibraryShowAllRow" class="modal-checkbox-row hidden">

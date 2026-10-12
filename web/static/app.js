@@ -160,6 +160,9 @@ let searchLibrarySelectedKey = null;
 // A counted search ("up to two basic land cards", Cultivate) multi-selects:
 // the picked "<zone>:<index>" keys, capped at the prompt's max_picks.
 let searchLibrarySelectedMulti = new Set();
+// Why the last click on a one-per-description search (Guided Passage) was not
+// taken, shown under its slot row until the selection next changes.
+let searchLibrarySlotNote = "";
 let searchLibraryFilter = "";
 let searchLibraryShowAll = false;
 // Signature of the search grid as last built. The state poll re-renders the
@@ -3467,6 +3470,8 @@ function getHandRevealInfo(state = currentState) {
 //   selectedKeys   permanents already picked (multi-pick prompts), for the
 //                  canvas' "selected" highlight
 //   onPermanent / onPlayer  what a legal click submits
+//   stackIndices   top-first stack positions that may be clicked (a trigger
+//                  whose target is a spell — Mystic Snake); onStack submits one
 //   fallThroughOnInvalid    true when clicking anything else keeps its normal
 //                  meaning (the backend still allows other actions meanwhile)
 //   invalidHint    message shown for an illegal click that doesn't fall through
@@ -3474,9 +3479,11 @@ function promptTargeting(spec) {
   return {
     permanentKeys: new Set(spec.permanentKeys || []),
     playerSeats: new Set(spec.playerSeats || []),
+    stackIndices: new Set(spec.stackIndices || []),
     selectedKeys: spec.selectedKeys || [],
     onPermanent: spec.onPermanent || (() => {}),
     onPlayer: spec.onPlayer || (() => {}),
+    onStack: spec.onStack || (() => {}),
     fallThroughOnInvalid: !!spec.fallThroughOnInvalid,
     invalidHint: spec.invalidHint || "That isn't a legal choice for this prompt.",
   };
@@ -3702,17 +3709,24 @@ function getPromptBoardTargeting(state = currentState) {
   // the stack (CR 603.3d). A permanent by id and a player by seat, out of one
   // list — "any target" (Pitchburn Devils) offers both at once, and
   // "target opponent" (Teferi's Tutelage) offers nothing but faces.
+  // …and a **spell** by its place on the stack ("When this creature enters,
+  // counter target spell", Mystic Snake): a `stack` candidate carries
+  // `stack_index`, top-first, which is the index the canvas cascade and a
+  // cast's `target_stack_index` already use.
   const triggerTargetInfo = getTriggerTargetInfo(state);
   if (triggerTargetInfo) {
     const byKey = new Map();
     const playerSeats = [];
+    const stackIndices = [];
     for (const c of triggerTargetInfo.candidates || []) {
       if (c.kind === "player") playerSeats.push(Number(c.seat));
+      else if (c.kind === "stack") stackIndices.push(Number(c.stack_index));
       else byKey.set(`${c.seat}-${c.index}`, c.id);
     }
     return promptTargeting({
       permanentKeys: [...byKey.keys()],
       playerSeats,
+      stackIndices,
       onPermanent: (targetSeat, idx) =>
         submitPromptAction({
           seat,
@@ -3724,6 +3738,12 @@ function getPromptBoardTargeting(state = currentState) {
           seat,
           action: "trigger_target_confirm",
           target_seat: targetSeat,
+        }),
+      onStack: (stackIndex) =>
+        submitPromptAction({
+          seat,
+          action: "trigger_target_confirm",
+          target_stack_index: stackIndex,
         }),
       invalidHint: "Only a target the triggered ability could name can be chosen.",
     });
@@ -6661,6 +6681,45 @@ function applyReflexiveTargetPrompt(info) {
     "<div>Action: click one of the highlighted creatures on the battlefield.</div>";
 }
 
+// A triggered ability choosing its target as it goes on the stack (CR 603.3d):
+// Floral Spuzzem's artifact, Teferi's Tutelage's opponent, Mystic Snake's
+// spell. The board, the life pills and the stack cascade are where it is
+// answered (`getPromptBoardTargeting`); this says what to click, from the kinds
+// of candidate the prompt actually carries. It had no panel at all, so the
+// glow was the only sign a decision was owed — and nothing glowed for a spell.
+function applyTriggerTargetPrompt(info) {
+  const panel = q("activationPanel");
+  panel.classList.remove("hidden");
+  q("promptOkBtn").classList.add("hidden");
+  q("promptCustomRow").classList.add("hidden");
+  q("promptCancelBtn").classList.add("hidden");
+  q("promptCancelBtn").disabled = true;
+  q("promptCustomOkBtn").disabled = true;
+  const candidates = info.candidates || [];
+  const kinds = new Set(candidates.map((c) => c.kind || "permanent"));
+  const where = [];
+  if (kinds.has("stack")) where.push("a glowing spell on the stack");
+  if (kinds.has("permanent")) where.push("a highlighted permanent on the battlefield");
+  if (kinds.has("player")) where.push("a highlighted player's life pill");
+  q("promptTitle").textContent = "Choose a target";
+  q("promptBody").textContent =
+    `${info.card_name || "The ability"}: its triggered ability needs a target.`;
+  const rows = [`<div>Action: click ${escapeHtml(where.join(", or "))}.</div>`];
+  // The spells on offer by name, top of the stack first: the cascade overlaps
+  // its cards, and a name is how a player tells two of them apart.
+  const spells = candidates.filter((c) => c.kind === "stack");
+  if (spells.length) {
+    const names = spells
+      .map((c) => {
+        const owner = currentState?.players?.[c.seat]?.name;
+        return owner ? `${c.name} (${owner})` : `${c.name}`;
+      })
+      .join(", ");
+    rows.push(`<div>Spells it can target: ${escapeHtml(names)}.</div>`);
+  }
+  q("promptSteps").innerHTML = rows.join("");
+}
+
 // Chain Lightning: the copy's controller may re-aim it (CR 707.10). Keeping the
 // original target is an answer too — clicking it again is how it is given.
 function applyCopySpellTargetPrompt(info) {
@@ -8581,8 +8640,16 @@ const SEARCH_DESTINATION_WORDS = {
 };
 const SEARCH_DESTINATION_FALLBACK = { into: "", button: "Confirm" };
 
-function searchDestinationWords(destination, entersTapped) {
-  const words = SEARCH_DESTINATION_WORDS[destination] || SEARCH_DESTINATION_FALLBACK;
+function searchDestinationWords(destination, entersTapped, ownerName = null) {
+  let words = SEARCH_DESTINATION_WORDS[destination] || SEARCH_DESTINATION_FALLBACK;
+  // *Whose* hand. A card found in somebody else's library goes to its owner's
+  // hand or graveyard (CR 400.3), not the chooser's: Guided Passage's opponent
+  // was told the three cards they picked for the caster were going "into your
+  // hand". `ownerName` is the prompt's `zone_owner_name`, passed only when the
+  // zones searched are not the viewer's own.
+  if (ownerName && words.into.includes("your ")) {
+    words = { ...words, into: words.into.replace("your ", `${ownerName}'s `) };
+  }
   // "…put it onto the battlefield **tapped**" (Fabled Passage). Part of what the
   // player is agreeing to, so it belongs in the sentence, not just in the result.
   if (entersTapped && words.into) return { ...words, into: `${words.into} tapped` };
@@ -8593,6 +8660,47 @@ function searchDestinationWords(destination, entersTapped) {
 // destination is one this build has no phrasing for.
 function searchSubtitle(lead, words) {
   return words.into ? `${lead} to put ${words.into}.` : `${lead}.`;
+}
+
+// Whether the card at "<zone>:<index>" answers one printed description of a
+// one-per-description search. `slot` is an entry of the prompt's `one_of_each`,
+// which carries the indices that answer it per zone — the server's reading
+// (`search_matches`), never a second one made here.
+function searchSlotAnswers(slot, key) {
+  const [zone, rawIndex] = String(key).split(":");
+  const legal = zone === "graveyard" ? slot.legal_graveyard_indices : slot.legal_indices;
+  return Array.isArray(legal) && legal.includes(Number(rawIndex));
+}
+
+// Which description each picked card fills, in a **largest** assignment:
+// a Map of "<zone>:<index>" -> slot position, with a card left out when no
+// description is free for it. "A land card of each basic land type" (Gaea's
+// Balance) and "a creature card, a land card, and a noncreature, nonland card"
+// (Guided Passage) take one card per description, and a Tropical Island answers
+// two of them — so whether a pick fits depends on the picks beside it, which a
+// first-fit would get wrong. An augmenting path per card, the method the
+// engine's own `slot_assignment` uses, so the dialog refuses exactly the
+// selections the server would.
+function searchSlotAssignment(slots, keys) {
+  const fits = keys.map((key) =>
+    slots.map((slot, position) => (searchSlotAnswers(slot, key) ? position : -1))
+      .filter((position) => position >= 0));
+  const holder = new Map(); // slot position -> index into `keys`
+  const place = (keyIndex, seen) => {
+    for (const position of fits[keyIndex]) {
+      if (seen.has(position)) continue;
+      seen.add(position);
+      if (!holder.has(position) || place(holder.get(position), seen)) {
+        holder.set(position, keyIndex);
+        return true;
+      }
+    }
+    return false;
+  };
+  keys.forEach((_, keyIndex) => place(keyIndex, new Set()));
+  const assigned = new Map();
+  for (const [position, keyIndex] of holder) assigned.set(keys[keyIndex], position);
+  return assigned;
 }
 
 function renderSearchLibraryModal(info) {
@@ -8607,6 +8715,7 @@ function renderSearchLibraryModal(info) {
       modal.classList.add("hidden");
       searchLibrarySelectedKey = null;
       searchLibrarySelectedMulti = new Set();
+      searchLibrarySlotNote = "";
       searchLibraryFilter = "";
       searchLibraryShowAll = false;
       searchLibraryRenderSig = null;
@@ -8675,13 +8784,30 @@ function renderSearchLibraryModal(info) {
   // (CR 701.19b), so say so once rather than per pile.
   const nothingFindable = zones.every((entry) => entry.legal.size === 0);
 
+  // Whose zones these are. The seat choosing is not always the seat searched:
+  // Guided Passage's *opponent* picks out of the caster's library, and the
+  // cards go to that library's owner (`zone_seat` / `zone_owner_name`). Absent
+  // on an older payload, which is the chooser's own zones — every other card.
+  const ownZones = !Number.isInteger(info.zone_seat) || info.zone_seat === seat;
+  const zoneOwnerName = ownZones ? null : (info.zone_owner_name || "that player");
+  // One find per printed description (Gaea's Balance, Guided Passage): the
+  // descriptions, each with its label and the cards that answer it. Empty for
+  // every other search, and everything below that reads it is then inert.
+  const slots = multi && Array.isArray(info.one_of_each) ? info.one_of_each : [];
+  // CR 701.23d: how many the answer must name (0 for "up to" and for a search
+  // nothing can answer). The engine refuses fewer whole, so the confirm waits.
+  const minPicks = multi && Number.isInteger(info.min_picks) ? info.min_picks : 0;
+
   const title = document.getElementById("searchLibraryTitle");
   if (title) {
     // Name the piles this search reads, in the order it reads them — a
     // graveyard-only pick (Recall) is not a library search and must not say so.
-    title.textContent = searchesLibrary
-      ? (searchesGraveyard ? "Search Library and Graveyard" : "Search Library")
-      : "Choose from Graveyard";
+    const piles = searchesLibrary
+      ? (searchesGraveyard ? "Library and Graveyard" : "Library")
+      : "Graveyard";
+    title.textContent = ownZones
+      ? (searchesLibrary ? `Search ${piles}` : "Choose from Graveyard")
+      : `Choose from ${zoneOwnerName}'s ${piles}`;
   }
   // A counted search whose printed slots differ (Cultivate) asks where each
   // find goes as its own prompt, so this one only names the slots when they
@@ -8690,10 +8816,18 @@ function renderSearchLibraryModal(info) {
   const oneDestination = multi
     ? (dests.length && dests.every((d) => d === dests[0]) ? dests[0] : null)
     : (info.destination || "hand");
-  const words = searchDestinationWords(oneDestination, info.enters_tapped);
+  const words = searchDestinationWords(oneDestination, info.enters_tapped, zoneOwnerName);
   const subtitle = document.getElementById("searchLibrarySubtitle");
   if (subtitle) {
-    if (multi) {
+    if (slots.length) {
+      // "Up to" only where the card lets the searcher stop short (Gaea's
+      // Balance may fail to find); Guided Passage's chooser owes one card for
+      // every description the library can answer.
+      const lead = minPicks > 0
+        ? "Choose one card for each description below"
+        : "Choose up to one card for each description below";
+      subtitle.textContent = searchSubtitle(lead, words);
+    } else if (multi) {
       subtitle.textContent = oneDestination
         ? searchSubtitle(`Choose up to ${maxPicks} cards`, words)
         : `Choose up to ${maxPicks} cards. You'll choose where each one goes next.`;
@@ -8730,6 +8864,7 @@ function renderSearchLibraryModal(info) {
   function resetSelectionState() {
     searchLibrarySelectedKey = null;
     searchLibrarySelectedMulti = new Set();
+    searchLibrarySlotNote = "";
     searchLibraryFilter = "";
     searchLibraryShowAll = false;
     searchLibraryRenderSig = null;
@@ -8744,6 +8879,41 @@ function renderSearchLibraryModal(info) {
     searchLibrarySelectedKey,
     [...searchLibrarySelectedMulti].sort(),
   ]);
+
+  // The descriptions as slots: one chip each, naming the card chosen for it.
+  // Which card fills which is the assignment's answer rather than the order
+  // of the clicks — picking a Tropical Island and then a Forest moves the dual
+  // to the Island slot, and the chips say so.
+  function buildSlotRow() {
+    const row = document.getElementById("searchLibrarySlots");
+    if (!row) return;
+    row.classList.toggle("hidden", slots.length === 0);
+    if (!slots.length) {
+      row.innerHTML = "";
+      return;
+    }
+    const assigned = searchSlotAssignment(slots, [...searchLibrarySelectedMulti]);
+    const cardInSlot = new Map([...assigned].map(([key, position]) => [position, key]));
+    const chips = slots.map((slot, position) => {
+      const key = cardInSlot.get(position);
+      const answerable = (slot.legal_indices || []).length
+        + (slot.legal_graveyard_indices || []).length > 0;
+      const label = slot.label || `description ${position + 1}`;
+      const classes = ["search-slot-chip"];
+      let value = "not chosen";
+      if (key !== undefined) {
+        classes.push("filled");
+        value = cardAt(key)?.name || "chosen";
+      } else if (!answerable) {
+        classes.push("unanswerable");
+        value = "none here";
+      }
+      return `<span class="${classes.join(" ")}" data-slot="${position}">`
+        + `${escapeHtml(label)}: ${escapeHtml(value)}</span>`;
+    });
+    row.innerHTML = chips.join("")
+      + `<div class="search-slot-note">${escapeHtml(searchLibrarySlotNote)}</div>`;
+  }
 
   function buildZoneGrid(entry, showHeadings) {
     const grid = document.getElementById(entry.gridId);
@@ -8786,9 +8956,27 @@ function renderSearchLibraryModal(info) {
       if (el.classList.contains("illegal")) return; // visible via Show All, but not a legal find
       el.addEventListener("click", () => {
         if (multi) {
+          searchLibrarySlotNote = "";
           // Toggle, capped at the printed count — "up to two" never takes three.
           if (searchLibrarySelectedMulti.has(key)) searchLibrarySelectedMulti.delete(key);
-          else if (searchLibrarySelectedMulti.size < maxPicks) searchLibrarySelectedMulti.add(key);
+          else if (slots.length) {
+            // One card per description: taken only if every picked card can
+            // still be given a description of its own with this one beside
+            // them. Two creatures are each legal and together a refusal, and
+            // the refusal is said here rather than by the server afterwards.
+            const wanted = [...searchLibrarySelectedMulti, key];
+            if (searchSlotAssignment(slots, wanted).size < wanted.length) {
+              const taken = slots
+                .filter((slot) => searchSlotAnswers(slot, key))
+                .map((slot) => slot.label || "that description");
+              searchLibrarySlotNote = taken.length
+                ? `You already chose ${taken.join(" and ")} — click the chosen card to release it first.`
+                : "That card answers none of the descriptions.";
+              buildSlotRow();
+              return;
+            }
+            searchLibrarySelectedMulti.add(key);
+          } else if (searchLibrarySelectedMulti.size < maxPicks) searchLibrarySelectedMulti.add(key);
           else return;
         } else {
           searchLibrarySelectedKey = key;
@@ -8801,6 +8989,7 @@ function renderSearchLibraryModal(info) {
 
   function buildGrid() {
     searchLibraryRenderSig = renderSig();
+    buildSlotRow();
     // Headings only earn their space when there are two piles to tell apart.
     const showHeadings = zones.length > 1;
     for (const entry of zones) buildZoneGrid(entry, showHeadings);
@@ -8824,14 +9013,23 @@ function renderSearchLibraryModal(info) {
     if (!confirmBtn) return;
     if (multi) {
       const n = searchLibrarySelectedMulti.size;
+      // "Take" is the searcher's own verb; a seat choosing out of somebody
+      // else's library (Guided Passage's opponent) takes nothing.
+      const verb = ownZones ? "Take" : "Choose";
       confirmBtn.textContent = n
-        ? `Take ${n} Card${n === 1 ? "" : "s"}`
-        : `Take Cards`;
-      confirmBtn.disabled = n === 0;
+        ? `${verb} ${n} Card${n === 1 ? "" : "s"}`
+        : `${verb} Cards`;
+      // Short of the floor is an answer the engine refuses whole (CR 701.23d),
+      // so the button says how many are still owed instead of sending it.
+      if (n < minPicks) confirmBtn.textContent = `${verb} ${n} of ${minPicks}`;
+      confirmBtn.disabled = n === 0 || n < minPicks;
     } else {
       confirmBtn.textContent = words.button;
       confirmBtn.disabled = searchLibrarySelectedKey === null;
     }
+    // "Fail to find" is no answer to a search with a floor — the engine
+    // refuses it while a card is owed — so it is not offered beside one.
+    if (declineBtn) declineBtn.classList.toggle("hidden", minPicks > 0);
   }
 
   if (showAllCheckbox && !showAllCheckbox.dataset.bound) {
@@ -9657,13 +9855,29 @@ function renderReorderLibraryModal(info) {
   // sends, so a drag affordance here would promise something that never
   // happens.
   const canReorder = info.may_reorder !== false;
+  // Which end of the library the pile is. "…and the rest on the bottom of your
+  // library in any order" (Goblin Ringleader, Impulse) arms this same prompt
+  // pointed at the other end (`position: "bottom"`, CR 401.4), and the words
+  // here were fixed text about the top — so a person arranging the last cards
+  // they will ever draw was told they were arranging the next ones. The order
+  // on the wire is the same either way: the leftmost card is the uppermost of
+  // the pile, the first of them a draw reaches.
+  const atBottom = info.position === "bottom";
+  const whose = info.target_seat === seat ? "your" : `${info.target_name || "that player"}'s`;
   const titleEl = document.getElementById("reorderLibraryTitle");
-  if (titleEl) titleEl.textContent = canReorder ? "Reorder Top of Library" : "Top of Library";
+  if (titleEl) {
+    titleEl.textContent = !canReorder
+      ? "Top of Library"
+      : atBottom ? "Order the Bottom of Library" : "Reorder Top of Library";
+  }
   const subtitleEl = document.getElementById("reorderLibrarySubtitle");
   if (subtitleEl) {
-    subtitleEl.textContent = canReorder
-      ? "Drag cards to rearrange. The leftmost card will be on top of the library."
-      : `The top ${cards.length} card${cards.length === 1 ? "" : "s"} of ${info.target_name || "that player"}'s library, top first.`;
+    subtitleEl.textContent = !canReorder
+      ? `The top ${cards.length} card${cards.length === 1 ? "" : "s"} of ${info.target_name || "that player"}'s library, top first.`
+      : atBottom
+        ? `These ${cards.length} cards go on the bottom of ${whose} library. Drag cards to rearrange. `
+          + "The leftmost card will be drawn first of them; the rightmost will be the very bottom card."
+        : "Drag cards to rearrange. The leftmost card will be on top of the library.";
   }
 
   const container = document.getElementById("reorderLibraryCards");
@@ -9754,6 +9968,10 @@ function renderReorderLibraryModal(info) {
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
+      // Each answered prompt clears `bound` below, so the next prompt binds a
+      // second listener beside this one. The first to run takes the order and
+      // nulls it; the rest have nothing to send (they used to throw on it).
+      if (!reorderLibraryCurrentOrder) return;
       const order = [...reorderLibraryCurrentOrder];
       reorderLibraryCurrentOrder = null;
       delete confirmBtn.dataset.bound;
@@ -9772,6 +9990,7 @@ function renderReorderLibraryModal(info) {
       if (!shuffleBtn.dataset.bound) {
         shuffleBtn.dataset.bound = "1";
         shuffleBtn.addEventListener("click", async () => {
+          if (!reorderLibraryCurrentOrder) return;
           const order = [...reorderLibraryCurrentOrder];
           reorderLibraryCurrentOrder = null;
           delete shuffleBtn.dataset.bound;
@@ -10349,6 +10568,12 @@ function renderActivationPrompt() {
   const permanentChoicePrompt = getPermanentChoiceInfo();
   if (permanentChoicePrompt) {
     applyPermanentChoicePrompt(permanentChoicePrompt);
+    return;
+  }
+
+  const triggerTargetPrompt = getTriggerTargetInfo();
+  if (triggerTargetPrompt) {
+    applyTriggerTargetPrompt(triggerTargetPrompt);
     return;
   }
 
@@ -11093,13 +11318,26 @@ function renderActivationPrompt() {
         : "Click a creature on the battlefield, or click a player's life pill (glowing yellow) to target them.";
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "divided") {
-      body.textContent =
-        "Click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm to choose X.";
+      // A card whose targets have different jobs (Captain's Maneuver) or
+      // different shares (Cone of Flame) names its slots; the rows below say
+      // which click filled which. Every other divided spell splits one
+      // quantity among interchangeable targets and keeps the old words.
+      const dividedSlotRows = dividedSlotRowsHtml();
+      body.textContent = dividedSlotRows.length
+        ? "This spell's targets are not interchangeable: each click fills the next slot below. "
+          + "Click a creature on the battlefield or a player's life pill; click a chosen one again to release it. Then confirm."
+        : "Click creatures to split the damage among them, or click a player's life pill to hit their face. Then confirm to choose X.";
       const n = dividedTargetCount();
+      // A Flagbearer requirement holds the confirm until a pick answers it.
+      const dividedOwesRequired = !targetRequirementMet(
+        pendingCastTarget.card, pendingCastTarget.dividedTargets,
+      );
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
+        ...dividedSlotRows,
         `<div>${escapeHtml(dividedTargetsHint())}</div>`,
-        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="dividedConfirmBtn"${n === 0 ? " disabled" : ""}>Confirm targets</button></div>`,
+        ...targetRequirementRowsHtml(pendingCastTarget.card, pendingCastTarget.dividedTargets),
+        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="dividedConfirmBtn"${n === 0 || dividedOwesRequired ? " disabled" : ""}>Confirm targets</button></div>`,
       ].join("");
       const confirmBtn = document.getElementById("dividedConfirmBtn");
       if (confirmBtn) confirmBtn.addEventListener("click", confirmDividedTargets);
@@ -11115,6 +11353,7 @@ function renderActivationPrompt() {
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(roleTargetsHint())}</div>`,
+        ...targetRequirementRowsHtml(pendingCastTarget.card, rolePermanentPicks(pendingCastTarget)),
       ].join("");
       cancelBtn.classList.remove("hidden");
       cancelBtn.disabled = false;
@@ -11126,11 +11365,17 @@ function renderActivationPrompt() {
       body.textContent =
         `Click ${severalExact ? "" : "up to "}${pendingCastTarget.maxTargets} valid permanents to choose them, then confirm. ` +
         "Click a chosen one again to deselect it.";
+      // A Flagbearer requirement holds the confirm until a pick answers it —
+      // "up to N" included: naming nobody is no way round it.
+      const severalOwesRequired = !targetRequirementMet(
+        pendingCastTarget.card, pendingCastTarget.severalTargets,
+      );
       steps.innerHTML = [
         `<div>Card: ${escapeHtml(pendingCastTarget.cardName)}</div>`,
         `<div>${escapeHtml(severalTargetsHint())}</div>`,
+        ...targetRequirementRowsHtml(pendingCastTarget.card, pendingCastTarget.severalTargets),
         `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="severalConfirmBtn"`
-          + `${severalExact && severalChosen < pendingCastTarget.maxTargets ? " disabled" : ""}>Confirm targets</button></div>`,
+          + `${(severalExact && severalChosen < pendingCastTarget.maxTargets) || severalOwesRequired ? " disabled" : ""}>Confirm targets</button></div>`,
       ].join("");
       // Disabled only while a card that prints a *number* is short of it:
       // "up to N" may legally choose none (CR 601.2c), so confirming with
@@ -13868,6 +14113,13 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null, 
     targetKind: "divided",
     dividedTargets: [], // [{ seat, idx }] creatures — any mix across both seats
     dividedFaces: [], // [seat, ...] player faces — combinable with creatures
+    // Every pick, creature or face, **in the order it was clicked** — what the
+    // wire carries. The two lists above are the same picks sorted by kind,
+    // which is all an evenly split spell needs; a card whose targets have
+    // different jobs or different shares (Captain's Maneuver, Cone of Flame)
+    // is read by position, and "creatures first, then faces" handed a face
+    // clicked first the second target's role.
+    dividedOrder: [], // [{ seat, idx }] for a creature, [{ seat }] for a face
     // Set only for an activated ability, and carried the whole way to the
     // division confirm — an ability is addressed by its source permanent and
     // never by a card in hand. Serra's Hymn is the pool's first divided
@@ -13882,7 +14134,9 @@ function startCastDividedPrompt(card, castAction = "cast", validTargets = null, 
   updateActionHint(
     landFilter
       ? `Choose the ${landFilter}s for ${cardName} to destroy (click each), then confirm.`
-      : `Choose targets for ${cardName}: click any mix of creatures (either side) and/or player life pills to split the damage among them. Then confirm.`,
+      : dividedSlotRoles(card)
+        ? dividedTargetsHint()
+        : `Choose targets for ${cardName}: click any mix of creatures (either side) and/or player life pills to split the damage among them. Then confirm.`,
   );
 }
 
@@ -13890,6 +14144,144 @@ function dividedTargetCount() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return 0;
   return p.dividedTargets.length + (p.dividedFaces?.length || 0);
+}
+
+// What each position of a divided announcement *is*, where the card gives its
+// targets different jobs — `target_roles` on the spec, in the order the engine
+// reads them. Captain's Maneuver: "target the damage would be dealt to", then
+// "target the damage is dealt to instead". Cone of Flame: the targets that get
+// 1, 2 and 3. Null for every spell whose targets are interchangeable.
+function dividedSlotRoles(card) {
+  const named = targetSpecOf(card)?.target_roles;
+  return Array.isArray(named) && named.length ? named : null;
+}
+
+// The divided prompt's picks in the order they were clicked — creatures as
+// `{ seat, idx }`, faces as `{ seat }`.
+function dividedPicksInOrder(p) {
+  if (Array.isArray(p?.dividedOrder)) return p.dividedOrder;
+  return [
+    ...(p?.dividedTargets || []).map((t) => ({ seat: t.seat, idx: t.idx })),
+    ...(p?.dividedFaces || []).map((faceSeat) => ({ seat: faceSeat })),
+  ];
+}
+
+// How much more mana `count` chosen targets make the spell cost — the card's
+// own "costs {1} more to cast for each target beyond the first" (Fireball),
+// which the server reports as `per_target_tax` from the table the cast path
+// charges. Zero where the card prints no such line: this used to be assumed of
+// every divided spell, so Captain's Maneuver's second target cost its caster a
+// point of X.
+function dividedExtraTargetTax(card, count) {
+  const tax = targetSpecOf(card)?.per_target_tax;
+  if (!tax || tax.life || !Number.isInteger(tax.amount)) return 0;
+  return tax.amount * Math.max(0, tax.beyond_first ? count - 1 : count);
+}
+
+// Whether a card that prints how many targets it has already has them all.
+// A click past that is refused here rather than counted and refused at the
+// confirm: with named slots there is no slot for it to fill.
+function dividedPicksAreFull(p) {
+  const printed = targetSpecOf(p?.card)?.divided_target_count;
+  return Number.isInteger(printed) && dividedTargetCount() >= printed;
+}
+
+// One line per named slot of the divided prompt: what the position is and
+// which target was clicked into it.
+function dividedSlotRowsHtml() {
+  const p = pendingCastTarget;
+  const roles = dividedSlotRoles(p?.card);
+  if (!p || !roles) return [];
+  const picks = dividedPicksInOrder(p);
+  return roles.map((role, position) => {
+    const pick = picks[position];
+    const chosen = pick
+      ? dividedTargetLabel(
+          Number.isInteger(pick.idx) ? { seat: pick.seat, index: pick.idx } : { seat: pick.seat },
+          p.validTargets,
+        )
+      : "not chosen";
+    const next = !pick && position === picks.length ? " ◀" : "";
+    return `<div data-divided-slot="${position}">${position + 1}. The ${escapeHtml(role)}: `
+      + `<strong>${escapeHtml(chosen)}</strong>${next}</div>`;
+  });
+}
+
+// --- "…must choose at least one Flagbearer on the battlefield if able" --------
+//
+// Standard Bearer, Coalition Honor Guard, Coalition Flag (CR 601.2c). The rule
+// is about the whole announcement, so a picker with **one** slot arrives
+// already narrowed to the Flagbearers and needs nothing here. A picker with
+// several — "up to two target creatures", a divided spell, a roles walk —
+// keeps its whole list, because the other slots are free, and the spec says
+// what at least one pick must be (`required_targets`) and why
+// (`target_requirement`). Nothing read either, so the cast went out without a
+// Flagbearer and came back as a 400 for the player to puzzle over. The server
+// is still the authority (`Game.cast_target_requirement_refusal`); this is the
+// same answer given before the round trip.
+
+/** The requirement binding this card's announcement, or null when none does. */
+function targetRequirementOf(card) {
+  const spec = targetSpecOf(card);
+  const required = Array.isArray(spec.required_targets) ? spec.required_targets : [];
+  if (!required.length) return null;
+  return {
+    required,
+    label: spec.target_requirement
+      || "at least one of the required permanents must be chosen as a target",
+  };
+}
+
+/** Whether the battlefield picks so far (`[{ seat, idx, id? }]`) include a
+ * permanent the requirement names. True when nothing binds. */
+function targetRequirementMet(card, picks) {
+  const requirement = targetRequirementOf(card);
+  if (!requirement) return true;
+  return (picks || []).some((pick) => requirement.required.some(
+    (wanted) => (Number.isInteger(pick.id) && pick.id === wanted.id)
+      || (wanted.seat === pick.seat && wanted.index === pick.idx),
+  ));
+}
+
+/** The prompt-panel lines that state the requirement and whether it is met. */
+function targetRequirementRowsHtml(card, picks) {
+  const requirement = targetRequirementOf(card);
+  if (!requirement) return [];
+  const names = [...new Set(requirement.required.map((wanted) => wanted.name).filter(Boolean))];
+  const met = targetRequirementMet(card, picks);
+  const text = requirement.label.charAt(0).toUpperCase() + requirement.label.slice(1);
+  return [
+    `<div class="target-requirement${met ? " met" : ""}" data-requirement-met="${met ? "1" : "0"}">`
+      + `${met ? "✓" : "⚠"} ${escapeHtml(text)}.`
+      + (names.length ? ` It can be: ${escapeHtml(names.join(", "))}.` : "")
+      + "</div>",
+  ];
+}
+
+/** The battlefield permanents a roles walk has chosen — a seat or a card in a
+ * graveyard answers a role and is no permanent, so neither can be the
+ * Flagbearer and neither is counted. */
+function rolePermanentPicks(p) {
+  return (p?.roleChosen || []).filter((t) => !t.zone);
+}
+
+/** A finished roles walk that names none of the required permanents: say so
+ * and start the walk again instead of sending it. Returns true if it did.
+ * The walk ends by sending, so this is its only chance to refuse; the earlier
+ * roles are cleared because the required permanent may answer any of them. */
+function restartRoleWalkForRequirement() {
+  const p = pendingCastTarget;
+  if (!p || p.targetKind !== "roles") return false;
+  if (targetRequirementMet(p.card, rolePermanentPicks(p))) return false;
+  const requirement = targetRequirementOf(p.card);
+  p.roleChosen = [];
+  p.roleOptions = targetSpecOf(p.card).valid_targets || [];
+  Object.assign(p, indexValidTargets(p.roleOptions));
+  renderActivationPrompt();
+  renderBoard(currentState);
+  revealRoleGraveyards();
+  updateActionHint(`${p.cardName}: ${requirement.label}. Choose the targets again.`, true);
+  return true;
 }
 
 // --- "Up to N target ..." ----------------------------------------------------
@@ -14030,6 +14422,7 @@ function advanceRoleWalk(option) {
   const p = pendingCastTarget;
   if (!p) return;
   if (p.roleChosen.length >= p.roles.length) {
+    if (restartRoleWalkForRequirement()) return;
     confirmRoleTargets();
     return;
   }
@@ -14205,9 +14598,11 @@ function severalTargetsHint() {
   const n = p.severalTargets.length;
   const exact = severalTargetsAreExact(p);
   const bound = exact ? `${p.maxTargets}` : `up to ${p.maxTargets}`;
+  // "Choosing none is legal" — unless a Flagbearer requirement binds this
+  // announcement, which naming nobody does not get round.
   return n === 0
     ? `Choose ${bound} targets for ${p.cardName} (click each), then confirm.`
-      + (exact ? "" : " Choosing none is legal.")
+      + (exact || targetRequirementOf(p.card) ? "" : " Choosing none is legal.")
     : `${n} of ${bound} chosen.`;
 }
 
@@ -14243,6 +14638,10 @@ function toggleSeveralTarget(targetSeat, permanentIndex) {
 function confirmSeveralTargets() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "several") return;
+  if (!targetRequirementMet(p.card, p.severalTargets)) {
+    updateActionHint(`${p.cardName}: ${targetRequirementOf(p.card).label}.`, true);
+    return;
+  }
   const { card, cardName, castAction, severalTargets } = p;
   const targetSeat = severalTargets.length ? severalTargets[0].seat : seat;
   // Ids, not indices: a permanent that left the battlefield between the click
@@ -14305,11 +14704,20 @@ function clearPendingCastTargeting() {
 
 function dividedTargetsHint() {
   const n = dividedTargetCount();
+  // Named slots: say which one the next click fills, the sentence a roles
+  // walk uses for the same question (`roleTargetsHint`).
+  const slotRoles = dividedSlotRoles(pendingCastTarget?.card);
+  if (slotRoles) {
+    const cardName = pendingCastTarget.cardName;
+    if (n >= slotRoles.length) return `${cardName}: every target chosen — confirm, or click one to release it.`;
+    return `Choose the ${slotRoles[n]} for ${cardName} (${n + 1} of ${slotRoles.length}).`;
+  }
   if (n === 0) return "No targets chosen yet.";
   // The per-target mana tax only applies to Fireball-style splits, not to a
   // count-based selection (Volcanic Eruption, where X = the number chosen).
   const xEqualsTargets = !!targetSpecOf(pendingCastTarget?.card)?.x_equals_targets;
-  const extra = !xEqualsTargets && n > 1 ? ` (+${n - 1} mana for the extra target${n - 1 === 1 ? "" : "s"})` : "";
+  const taxed = xEqualsTargets ? 0 : dividedExtraTargetTax(pendingCastTarget?.card, n);
+  const extra = taxed > 0 ? ` (+${taxed} mana for the extra target${n - 1 === 1 ? "" : "s"})` : "";
   return `${n} target${n === 1 ? "" : "s"} chosen${extra}.`;
 }
 
@@ -14332,8 +14740,19 @@ function toggleDividedCreatureTarget(targetSeat, permanentIndex) {
   // Any mix of valid targets on both sides (and player faces) is legal — the
   // damage is divided evenly among everything chosen.
   const existing = p.dividedTargets.findIndex((t) => t.seat === targetSeat && t.idx === permanentIndex);
-  if (existing >= 0) p.dividedTargets.splice(existing, 1);
-  else p.dividedTargets.push({ seat: targetSeat, idx: permanentIndex });
+  if (existing >= 0) {
+    p.dividedTargets.splice(existing, 1);
+    p.dividedOrder = dividedPicksInOrder(p).filter(
+      (t) => !(t.seat === targetSeat && t.idx === permanentIndex),
+    );
+  } else {
+    if (dividedPicksAreFull(p)) {
+      updateActionHint(`${p.cardName} has all its targets — click a chosen one to release it.`, true);
+      return;
+    }
+    p.dividedOrder = [...dividedPicksInOrder(p), { seat: targetSeat, idx: permanentIndex }];
+    p.dividedTargets.push({ seat: targetSeat, idx: permanentIndex });
+  }
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(dividedTargetsHint());
@@ -14345,8 +14764,19 @@ function setDividedFaceTarget(targetSeat) {
   if (!Array.isArray(p.dividedFaces)) p.dividedFaces = [];
   // Clicking a face toggles it; faces combine freely with creature targets.
   const existing = p.dividedFaces.indexOf(targetSeat);
-  if (existing >= 0) p.dividedFaces.splice(existing, 1);
-  else p.dividedFaces.push(targetSeat);
+  if (existing >= 0) {
+    p.dividedFaces.splice(existing, 1);
+    p.dividedOrder = dividedPicksInOrder(p).filter(
+      (t) => !(t.seat === targetSeat && !Number.isInteger(t.idx)),
+    );
+  } else {
+    if (dividedPicksAreFull(p)) {
+      updateActionHint(`${p.cardName} has all its targets — click a chosen one to release it.`, true);
+      return;
+    }
+    p.dividedOrder = [...dividedPicksInOrder(p), { seat: targetSeat }];
+    p.dividedFaces.push(targetSeat);
+  }
   renderActivationPrompt();
   renderBoard(currentState);
   updateActionHint(dividedTargetsHint());
@@ -14360,6 +14790,10 @@ function confirmDividedTargets() {
     updateActionHint("Choose at least one target first.", true);
     return;
   }
+  if (!targetRequirementMet(p.card, p.dividedTargets)) {
+    updateActionHint(`${p.cardName}: ${targetRequirementOf(p.card).label}.`, true);
+    return;
+  }
   // "…and 3 damage to **a third target**" (Cone of Flame): the card prints how
   // many targets, and the engine refuses any other number with nothing spent
   // (CR 601.2c). Checked here so the refusal is a hint rather than a round trip.
@@ -14371,11 +14805,13 @@ function confirmDividedTargets() {
     );
     return;
   }
-  // The full cross-seat target list: creatures as {seat, index}, faces as {seat}.
-  const dividedPayload = [
-    ...p.dividedTargets.map((t) => ({ seat: t.seat, index: t.idx })),
-    ...(p.dividedFaces || []).map((faceSeat) => ({ seat: faceSeat })),
-  ];
+  // The full cross-seat target list: creatures as {seat, index}, faces as
+  // {seat} — **in the order they were clicked**, because the engine reads a
+  // card-sized list by position (Cone of Flame's first target takes the 1,
+  // Captain's Maneuver's first is the one protected).
+  const dividedPayload = dividedPicksInOrder(p).map((t) => (
+    Number.isInteger(t.idx) ? { seat: t.seat, index: t.idx } : { seat: t.seat }
+  ));
   const { card, cardName, castAction } = p;
   // Read off the prompt before it is cleared below: an activated ability is
   // addressed by its source permanent, and the division prompt behind this one
@@ -14449,7 +14885,8 @@ function confirmDividedTargets() {
     return;
   }
   startCastDividedXPrompt(
-    card, cardName, dividedPayload, n - 1, castAction || "cast", chosenValidTargets,
+    card, cardName, dividedPayload, dividedExtraTargetTax(card, n),
+    castAction || "cast", chosenValidTargets,
   );
 }
 
@@ -14623,7 +15060,13 @@ function startCastDividedXPrompt(
   };
   renderActivationPrompt();
   const count = dividedPayload.length;
-  updateActionHint(`Choose X for ${cardName} — damage split among ${count} target${count === 1 ? "" : "s"}.`);
+  // "Split among" is an evenly divided spell's sentence; a card whose targets
+  // have named jobs (Captain's Maneuver) divides nothing.
+  updateActionHint(
+    dividedSlotRoles(card)
+      ? `Choose X for ${cardName}.`
+      : `Choose X for ${cardName} — damage split among ${count} target${count === 1 ? "" : "s"}.`,
+  );
 }
 
 function startCastStackSpellPrompt(card, castAction = "cast", validTargets = null) {
@@ -17285,6 +17728,18 @@ function renderStack(stack) {
       : null;
     battlefieldCanvas.needsRedraw = true;
   }
+  // A *prompt* answered on the stack glows the same way: a triggered ability
+  // choosing which spell it targets (Mystic Snake's `trigger_target`). Its own
+  // lines rather than a third arm of the test above, which is about a cast in
+  // progress — and a cast in progress outranks a parked prompt
+  // (`activePromptBoardTargeting` answers null while one is open).
+  const promptStackIndices = activePromptBoardTargeting(currentState)?.stackIndices;
+  if (battlefieldCanvas && promptStackIndices?.size) {
+    battlefieldCanvas.stackTargetableIndices = new Set(
+      [...promptStackIndices].filter((i) => i >= 0 && i < _currentStack.length),
+    );
+    battlefieldCanvas.needsRedraw = true;
+  }
 
   _refreshStackHoldVisuals();
 }
@@ -19927,6 +20382,18 @@ function initBattlefieldCanvas() {
 
     onStackCardClick(info) {
       if (!info) return;
+      // A prompt that picks a spell (a triggered ability choosing its target
+      // as it goes on the stack — Mystic Snake) answers itself here, the way a
+      // prompt that picks a permanent answers itself in `onCardClick`.
+      const promptStackTargeting = activePromptBoardTargeting(currentState);
+      if (promptStackTargeting && promptStackTargeting.stackIndices.size) {
+        if (promptStackTargeting.stackIndices.has(info.index)) {
+          promptStackTargeting.onStack(info.index);
+        } else {
+          updateActionHint(promptStackTargeting.invalidHint, true);
+        }
+        return;
+      }
       // While targeting a spell on the stack (Counterspell, Fork, lace spells…),
       // clicking a spell card in the canvas stack cascade chooses it as the
       // target. The canvas stack index matches the state.stack array index.
@@ -21106,7 +21573,12 @@ function handlePlayerPillClick(targetSeat, event) {
     !pendingCastTarget ||
     (pendingCastTarget.targetKind !== "player" &&
       pendingCastTarget.targetKind !== "any" &&
-      pendingCastTarget.targetKind !== "divided")
+      pendingCastTarget.targetKind !== "divided" &&
+      // A roles walk standing on a player role (Donate, Lunge, Last Stand).
+      // `handlePlayerTargetClick` has answered that since the role existed,
+      // and this gate in front of it never let a click through — the pill
+      // glowed and nothing happened, so the spell could not be cast.
+      pendingCastTarget.targetKind !== "roles")
   )
     return;
   event?.preventDefault();

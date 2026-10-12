@@ -1798,6 +1798,59 @@ def test_vindicate_has_to_be_spent_on_a_flagbearer(set_pool):
 
 # ==== W2G2 ============================================================
 # W2G2's tests go between this line and the "end W2G2" line.
+from engine.oracle import compile_card_oracle as _w2g2_compile
+from engine.oracle_types import OracleInstruction as _w2g2_Instruction
+
+
+def _w2g2_one_of_each(card):
+    """The per-find descriptions *card*'s compiled program arms its search
+    with, wherever in the program they sit."""
+    def walk(value):
+        if isinstance(value, _w2g2_Instruction):
+            yield value
+            for inner in value.payload.values():
+                yield from walk(inner)
+        elif isinstance(value, (list, tuple)):
+            for inner in value:
+                yield from walk(inner)
+        elif isinstance(value, dict):
+            for inner in value.values():
+                yield from walk(inner)
+
+    for instruction in walk(list(_w2g2_compile(card).instructions)):
+        slots = instruction.payload.get("one_of_each") or (
+            instruction.payload.get("restrictions") or {}
+        ).get("one_of_each")
+        if slots:
+            return list(slots)
+    return []  # W2G2 sorceries: no one-of-each search in this program
+
+
+def test_w2g2_gaeas_balance_s_five_descriptions_read_as_five_slots(set_pool):
+    """"Search your library for a land card of each basic land type…" — what
+    the dialog calls each of the five finds, from the slots the card compiles
+    to. A dual land answers two of them, which is why they are shown as slots
+    with a card in each rather than as a count."""
+    from web.prompts import search_slot_label
+
+    slots = _w2g2_one_of_each(set_pool("APC")["Gaea's Balance"])
+
+    assert [search_slot_label(slot) for slot in slots] == [
+        "a Plains land card", "an Island land card", "a Swamp land card",
+        "a Mountain land card", "a Forest land card",
+    ]
+
+
+def test_w2g2_guided_passage_s_three_descriptions_read_as_three_slots(set_pool):
+    """"…a creature card, a land card, and a noncreature, nonland card." The
+    labels are the card's own three phrases, in its order."""
+    from web.prompts import search_slot_label
+
+    slots = _w2g2_one_of_each(set_pool("APC")["Guided Passage"])
+
+    assert [search_slot_label(slot) for slot in slots] == [
+        "a creature card", "a land card", "a noncreature, nonland card",
+    ]
 
 # ==== end W2G2 ========================================================
 

@@ -1359,6 +1359,24 @@ class LegalityMixin:
                     bound if spec.get("max_x") is None
                     else min(int(spec["max_x"]), bound)
                 )
+        # "This spell costs {1} more to cast for each target beyond the first."
+        # (Fireball; Phyrexian Purge charges life.) CR 601.2f prices the spell
+        # by the targets CR 601.2c chose, and the picker sizes its X box from
+        # the same arithmetic — which it did by assuming Fireball's sentence of
+        # every divided spell, so Captain's Maneuver's two targets were taxed a
+        # mana its card does not charge and its X stopped one short of what the
+        # pool could pay. The table the cast path charges from
+        # (``cost_modifiers.self_per_target_tax``), reported rather than
+        # mirrored; absent where no such line is printed.
+        from .cost_modifiers import self_per_target_tax
+
+        per_target = self_per_target_tax(card.oracle_text or "")
+        if per_target is not None:
+            spec["per_target_tax"] = {
+                "amount": per_target.amount,
+                "life": per_target.life,
+                "beyond_first": per_target.beyond_first,
+            }
         # CR 601.2b's *optional* prices, and how many times each is payable
         # against the answer so far. The picker had no shape for an offer at
         # all — it modelled a cost the caster will certainly pay — so every card

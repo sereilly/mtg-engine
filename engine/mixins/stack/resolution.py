@@ -974,21 +974,26 @@ class StackResolutionMixin:
         *candidates* on *item*, or take the ability off the stack when there is
         none.
 
-        **Every seat takes the stated default, and that is a decline with its
-        part named rather than a policy.** The ``trigger_target`` prompt this
-        would otherwise arm carries permanents and players; the client renders
-        nothing for a stack object, so a prompt holding only those would be one
-        a human seat could not answer — the soft-lock ``ENTRY_CHOICES`` already
-        cost 28 cards. A human names the spell the ordinary way, as the
-        permanent is **cast** (the cast picker is a stack picker, and the
-        announcement rides to here); this default is what stands behind a cast
-        that named nothing, an entry nothing cast, and a named spell that left.
+        **It is the ``trigger_target`` prompt, with a third kind of candidate.**
+        Every seat took a stated default here while that prompt carried only
+        permanents and players and the client rendered nothing for a stack
+        object — a prompt a human seat could not answer is a soft-lock, the
+        failure ``ENTRY_CHOICES`` cost 28 cards. The client reads a ``stack``
+        candidate now, so an interactive seat is asked like any other trigger
+        (CR 603.3d): a Snake put onto the battlefield by an effect, a cast that
+        named nothing, a named spell that has since left. A human who *casts*
+        it still names the spell the ordinary way, as the permanent is cast
+        (the cast picker is a stack picker, and the announcement rides to
+        here without this being reached).
 
-        The default is the topmost spell on the side the effect wants
-        (``_default_trigger_target_side``: a counter is aimed at an opponent's
-        spell), and the topmost offered when that side has none — the target
-        is mandatory, so a Snake entering over nothing but its controller's
-        own spell counters it.
+        The candidates carry the stack objects themselves, topmost first: a
+        spell has no stable id, and its position is only true until the stack
+        next moves. The default for a seat nobody asks
+        (``_default_trigger_target``) is what it was: the topmost spell on the
+        side the effect wants (``_default_trigger_target_side``: a counter is
+        aimed at an opponent's spell), and the topmost offered when that side
+        has none — the target is mandatory, so a Snake entering over nothing
+        but its controller's own spell counters it.
         """
         offered = self._stack_objects_offered(candidates)
         if not offered:
@@ -1000,15 +1005,22 @@ class StackResolutionMixin:
                 "it has no legal target (603.3d)"
             )
             return
-        wanted = self._default_trigger_target_side(item, chooser_index)
         order = {id(existing): position for position, existing in enumerate(self.stack)}
         offered.sort(key=lambda existing: order[id(existing)], reverse=True)
-        chosen = next(
-            (existing for existing in offered if existing.caster_index in wanted),
-            offered[0],
+        self.arm_pending_choice(
+            "trigger_target", chooser_index,
+            card_name=item.card.name,
+            targets=[
+                {
+                    "kind": "stack",
+                    "stack_item": existing,
+                    "seat": existing.caster_index,
+                    "name": existing.card.name,
+                }
+                for existing in offered
+            ],
+            _trigger_item=item,
         )
-        item.target_stack_item = chosen
-        self.log.append(f"{item.card.name}: targets {chosen.card.name}")
 
     def _trigger_chooser_seat(self, item: StackItem, chooser: str) -> int | None:
         """Which seat announces *item*'s target when the card names one, or

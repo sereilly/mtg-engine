@@ -228,10 +228,25 @@ def _action_trigger_target_confirm(session, req, seat_type):
         ):
             raise HTTPException(status_code=400, detail="invalid target selection")
         return
+    # ...or a **spell** ("counter target spell", Mystic Snake), named the way a
+    # cast names one: `target_stack_index`, top-first into the stack the client
+    # was shown. Resolved against the prompt's own candidates — a position the
+    # picker did not offer names nothing — and read ahead of the two fields
+    # below, because an answer carrying it is about the stack whatever else it
+    # happens to carry.
+    if req.target_stack_index is not None:
+        named = session.game.trigger_target_stack_item(
+            req.seat, req.target_stack_index
+        )
+        if named is None or not session.game.confirm_trigger_target(
+            req.seat, stack_item=named
+        ):
+            raise HTTPException(status_code=400, detail="invalid target")
+        return
     if req.target_permanent_id is None and req.target_seat is None:
         raise HTTPException(
             status_code=400,
-            detail="target_permanent_id or target_seat is required",
+            detail="target_permanent_id, target_seat or target_stack_index is required",
         )
     # Checked against the list the prompt offered, not against the board:
     # CR 603.3d chose the targets as the ability went on the stack.

@@ -817,11 +817,16 @@ def test_401_4_the_rest_going_on_top_is_arranged_by_their_owner():
 
 
 @pytest.mark.cr("401.4")
-def test_401_4_the_rest_going_to_the_bottom_is_not_asked_about():
-    """The same clause one word over, and no prompt: nothing in the game can
-    observe the order of cards put on the bottom, so asking would be a decision
-    with no consequence. The destination is what decides, which is why it is
-    read off the card rather than defaulted."""
+def test_401_4_the_rest_going_to_the_bottom_is_arranged_by_their_owner():
+    """The same clause one word over — and the same rule. This test used to
+    pin the opposite (``…is_not_asked_about``), on the ground that nothing in
+    the game can observe the order of cards put on the bottom; a deck that
+    runs down to them observes it one draw at a time, which is what
+    ``test_the_order_chosen_is_the_order_the_cards_are_later_drawn_in`` showed
+    for the Apocalypse recruiters. The rest are laid down as they lay and their
+    owner is then asked, through the same ``reorder_library`` prompt pointed at
+    the library's other end; element 0 of the answer is the uppermost of the
+    pile, the first of those cards a draw reaches."""
     game = _look_top_game(["A", "B", "C", "D"])
     game.arm_pending_choice(
         "look_top_pick", 0,
@@ -832,8 +837,71 @@ def test_401_4_the_rest_going_to_the_bottom_is_not_asked_about():
 
     assert game.confirm_look_top_pick(0, 0) is True
 
+    assert [c.name for c in game.players[0].hand] == ["A"]
+    assert [c.name for c in game.players[0].library] == ["D", "B", "C"]
+    prompt = game.pending_choice_of("reorder_library", 0)
+    assert prompt is not None and prompt.data["position"] == "bottom"
+    assert [c.name for c in game.reorder_library_pile(prompt)] == ["B", "C"]
+
+    assert game.confirm_reorder_library(0, [1, 0]) is True
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].library] == ["D", "C", "B"]
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_a_seat_nobody_asks_bottoms_the_rest_as_they_lay():
+    """Only an interactive seat is asked. "As they lay" is one of the orders
+    the rule permits and needs no prompt, so a headless or AI seat queues
+    nothing — which is what keeps every seeded run identical."""
+    game = _look_top_game(["A", "B", "C", "D"])
+    game.interactive_seats = set()
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=3, amount=3, card_name="See the Truth",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_bottom",
+    )
+    game.auto_resolve_pending_choices()
+
     assert game.pending_choices == []
     assert [c.name for c in game.players[0].library] == ["D", "B", "C"]
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_a_single_card_going_to_the_bottom_is_no_arrangement_at_all():
+    """One card has one order (Sleight of Hand's "the other on the bottom"):
+    no prompt, and the resolution is not left waiting on one."""
+    game = _look_top_game(["A", "B", "C"])
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=2, amount=2, card_name="Sleight of Hand",
+        filter={}, filters=(), optional=False,
+        rest_order="any", rest_destination="library_bottom",
+    )
+
+    assert game.confirm_look_top_pick(0, 0) is True
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].library] == ["C", "B"]
+
+
+@pytest.mark.cr("401.4")
+def test_401_4_a_stated_random_order_is_not_the_owners_to_choose():
+    """"…on the bottom of your library **in a random order**" (Garruk's
+    Harbinger) is a stated order, not the owner's freedom: nobody is asked."""
+    game = _look_top_game(["A", "B", "C", "D"])
+    game.arm_pending_choice(
+        "look_top_pick", 0,
+        top_count=3, amount=3, card_name="Garruk's Harbinger",
+        filter={}, filters=(), optional=False,
+        rest_order="random", rest_destination="library_bottom",
+    )
+
+    assert game.confirm_look_top_pick(0, 0) is True
+
+    assert game.pending_choices == []
+    assert [c.name for c in game.players[0].library][0] == "D"
+    assert sorted(c.name for c in game.players[0].library[1:]) == ["B", "C"]
 
 
 @pytest.mark.cr("401.4")

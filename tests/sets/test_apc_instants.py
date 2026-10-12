@@ -573,11 +573,12 @@ def test_w1g3_prophetic_bolt_kills_the_creature_then_digs_four(set_pool):
     three go under the fifth card. The fifth is not an answer: it was never
     looked at. The creature dies when the spell has finished and not before.
 
-    The rest go down **as they lay, unasked**. That is the look-and-pick
-    family's standing convention, shared with Impulse and held by
-    ``test_401_4_the_rest_going_to_the_bottom_is_not_asked_about``; the
-    recruiters in this set do ask (``offer_library_bottom_order``), and the
-    wave reported the difference rather than settling it from one side."""
+    The rest go down as they lay and their owner is then **asked for their
+    order** (CR 401.4), as the recruiters in this set ask. This test pinned the
+    opposite while the look-and-pick family laid them down unasked; wave 2
+    wired the family to ``offer_library_bottom_order``
+    (``tests/engine/test_look_and_pick_bottom_order_census.py``), so the spell
+    stays on the stack for one more answer."""
     game, theirs = _w1g3i_bolt_game(
         set_pool, theirs=[_w1g3i_card("A Bear", "Creature — Bear", "2", "4")],
         interactive={0},
@@ -597,6 +598,12 @@ def test_w1g3_prophetic_bolt_kills_the_creature_then_digs_four(set_pool):
     assert not game.confirm_look_top_pick(0, 4), "the fifth card was never looked at"
 
     assert game.confirm_look_top_pick(0, 2)
+    # The order of the three that went down is still owed, and the spell — and
+    # the Bear — wait on it.
+    assert game.waiting_prompt().kind == "reorder_library"
+    assert [item.card.name for item in game.stack] == ["Prophetic Bolt"]
+    assert game.is_on_battlefield(bear)
+    assert game.confirm_reorder_library(0, [0, 1, 2])
     game._settle()
 
     assert not game.is_on_battlefield(bear), game.log
@@ -1375,6 +1382,95 @@ def test_smash_whose_artifact_has_left_draws_nothing(set_pool, catalog_by_name):
 
 # ==== W2G2 ============================================================
 # W2G2's tests go between this line and the "end W2G2" line.
+from engine import Game as _w2g2_Game, PlayerState as _w2g2_Player
+from engine.models import Permanent as _w2g2_Permanent
+from tests.helpers import _mk_card as _w2g2_mk_card
+
+
+def test_w2g2_prophetic_bolt_s_rest_go_down_in_the_order_the_caster_chose(set_pool):
+    """"…Put one of those cards into your hand and the rest on the bottom of
+    your library in any order." (CR 401.4.)
+
+    Cast at the opponent's face by a seat somebody can ask, over a library of
+    seven named cards: the caster keeps the second card looked at, is asked to
+    arrange the other three, reverses them — and then draws the library down.
+    The three untouched cards come first, as they lay; the bottomed ones follow
+    in the order that was answered, the first of the answer first."""
+    library = [_w2g2_mk_card(name=f"Card {n}", type_line="Land") for n in range(1, 8)]
+    game = _w2g2_Game(players=[
+        _w2g2_Player(name="P0", hand=[set_pool("APC")["Prophetic Bolt"]], library=library),
+        _w2g2_Player(name="P1"),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game.interactive_seats = {0}
+    me = game.players[0]
+
+    assert game.cast_from_hand(0, "Prophetic Bolt", target_player_index=1).supported
+    assert game.players[1].life == 16
+    assert game.confirm_look_top_pick(0, 1)
+
+    prompt = game.pending_choice_of("reorder_library", 0)
+    assert prompt is not None and prompt.data["position"] == "bottom"
+    assert [c.name for c in game.reorder_library_pile(prompt)] == [
+        "Card 1", "Card 3", "Card 4",
+    ]
+    assert [item.card.name for item in game.stack] == ["Prophetic Bolt"]
+    assert game.confirm_reorder_library(0, [2, 1, 0])
+    game._settle()
+
+    assert game.stack == [] and game.pending_choices == []
+    assert [c.name for c in me.hand] == ["Card 2"]
+    drawn = [me.library.pop(0).name for _ in range(len(me.library))]
+    assert drawn == ["Card 5", "Card 6", "Card 7", "Card 4", "Card 3", "Card 1"]
+
+
+def test_w2g2_captains_maneuver_says_which_of_its_two_targets_is_which(set_pool):
+    """"The next X damage that would be dealt to target … is dealt to another
+    target … instead." The two targets are read by position — the first is the
+    one protected — so the spec names the positions for a picker, in that
+    order, in the sentence's own words."""
+    maneuver = set_pool("APC")["Captain's Maneuver"]
+    game = _w2g2_Game(players=[_w2g2_Player(name="P0"), _w2g2_Player(name="P1")])
+
+    spec = game.cast_target_spec(0, maneuver)
+
+    assert spec["kind"] == "divided" and spec["divided_target_count"] == 2
+    assert spec["target_roles"] == [
+        "target the damage would be dealt to",
+        "target the damage is dealt to instead",
+    ]
+    # No per-target increase is printed, and none is reported: a picker that
+    # priced the second target the way Fireball's is priced offered one X fewer
+    # than the pool could pay.
+    assert "per_target_tax" not in spec
+
+
+def test_w2g2_captains_maneuver_protects_the_first_named_and_burdens_the_second(set_pool):
+    """The order of the announcement is the whole of who is protected: the
+    caster's face first and the opposing Giant second moves a Bolt aimed at
+    the caster onto the Giant; the same two targets named the other way round
+    would protect the Giant instead."""
+    lea = set_pool("LEA")
+    giant = _w2g2_Permanent(card=lea["Hill Giant"])
+    game = _w2g2_Game(players=[
+        _w2g2_Player(name="P0", hand=[set_pool("APC")["Captain's Maneuver"]]),
+        _w2g2_Player(name="P1", hand=[lea["Lightning Bolt"]]),
+    ])
+    game.enforce_mana_costs = False
+    game.active_player_index = 0
+    game._put_permanent_onto_battlefield(1, giant, None)
+
+    assert game.cast_from_hand(
+        0, "Captain's Maneuver", x_value=2, divided_targets=[(0, None), (1, 0)],
+    ).supported
+    assert (
+        "Captain's Maneuver: the next 2 damage that would be dealt to P0 this "
+        "turn is dealt to Hill Giant instead" in game.log
+    )
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    assert game.players[0].life == 19 and giant.damage_marked == 2
 
 # ==== end W2G2 ========================================================
 
