@@ -3048,15 +3048,26 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
     """
     caster = context.caster
     card = context.card
-    for index, held in enumerate(caster.graveyard):
+    # "{3}{U}, **Exile this creature**: … return this card to the battlefield."
+    # (Shifty Doppelganger.) The zone is payload: the ability's own cost put
+    # the source in exile, so that is the pile it comes back out of. Absent
+    # means the graveyard, which is what every other card printing the
+    # sentence means. Never both — a card that is not where its ability left
+    # it is a new object (CR 400.7) and is not looked for anywhere else.
+    zone = "exile" if instruction.payload.get("from") == "exile" else "graveyard"
+    pile = caster.exile if zone == "exile" else caster.graveyard
+    for index, held in enumerate(pile):
         if held is card:
-            caster.graveyard.pop(index)
+            pile.pop(index)
             break
     else:
         # CR 603.6: the ability looks for the object in the zone it moves it out
         # of. Gone (exiled in response, shuffled away) means the ability does
         # nothing, rather than conjuring a second copy of the card.
-        game.log.append(f"{card.name} was no longer in the graveyard")
+        game.log.append(
+            f"{card.name} was no longer in "
+            + ("exile" if zone == "exile" else "the graveyard")
+        )
         return True, "resolved"
     # "…to your **hand**." (Whiteout.) The destination is payload rather than a
     # second handler, because everything above it — the object is the ability's
@@ -3075,7 +3086,9 @@ def return_self_from_graveyard(game: Game, instruction: OracleInstruction, conte
         game.players.index(caster), arrived, None
     )
     game.log.append(
-        f"{card.name} returned from the graveyard to the battlefield"
+        f"{card.name} returned from "
+        + ("exile" if zone == "exile" else "the graveyard")
+        + " to the battlefield"
         + (" tapped" if tapped else "")
     )
     # "…**with a +1/+1 counter on it**." (Sand Golem.) CR 121.2 puts the
