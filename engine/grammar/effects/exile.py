@@ -41,6 +41,8 @@ reader for the reason its docstring argues. (This paragraph said "``ast/`` has
 no ``exile``" from Tempest's third wave, which gave it one, until this split.)
 """
 
+from dataclasses import replace
+
 from .. import ast
 from ..phrases import _parse_zone
 from ..readers import _parse_entering_counters
@@ -201,6 +203,29 @@ def _parse_player_exiles_pile(
     # The bare imperative one production over reads the same two words onto the
     # same field.
     face_down = bool(stream.accept_phrase("face", "down"))
+    # "**Target player** exiles all cards with flashback from **their**
+    # graveyard." (Tombfire; Mudhole prints "all land cards".) One chosen seat
+    # emptying its own pile — which is "Exile all … from **target player's**
+    # graveyard" (Haunting Echoes) read from the other end: the same pile, the
+    # same cards, and CR 400.3 sends each to its owner's exile whoever is said
+    # to do the exiling. So it is built as *that* sentence's node — the pile
+    # named by the player, no actor — and the lowering, the target description
+    # and the handler arm that sentence already has are the only ones there
+    # are. A second spelling of the pile would be a second arm in each of them
+    # for one sweep.
+    #
+    # Only where the two halves agree: the possessive behind a singular chosen
+    # subject is the noun parser's "owner" ("their graveyard"). "Target player
+    # exiles all cards from *your* graveyard" keeps its actor and is refused by
+    # the lowering, as one player and somebody else's pile always was.
+    if (
+        player.kind in ("target_player", "target_opponent")
+        and filt.zone == "graveyard" and owner.kind == "owner"
+        and not face_down
+    ):
+        return ast.Exile(
+            replace(subject, filter=replace(filt, zone_owner=player)), actor=None,
+        )
     return ast.Exile(subject, actor=player, face_down=face_down)
 
 

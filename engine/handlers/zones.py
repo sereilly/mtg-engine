@@ -4793,21 +4793,10 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         seats = list(range(len(game.players)))
     elif who == "you":
         seats = [game.players.index(context.caster)]
-    elif who == "target_player":
-        # "**Target player** exiles all cards with flashback from their
-        # graveyard." (Tombfire, Mudhole.) The one seat the announcement chose
-        # (CR 601.2c). No fallback to the caster: a sweep with nobody named is
-        # a different card, and the resolution gate above this handler has
-        # already removed a spell whose only target became illegal.
-        chosen = context.target
-        seat = next(
-            (i for i, player in enumerate(game.players) if player is chosen),
-            None,
-        )
-        if seat is None:
-            game.log.append(f"{context.card.name}: no player was chosen")
-            return True, "resolved"
-        seats = [seat]
+    elif who == "target_player" and context.target in game.players:
+        # "Exile all cards from **target player's** graveyard …" (Haunting
+        # Echoes): the one pile the announcement chose (CR 601.2c).
+        seats = [game.players.index(context.target)]
     else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
