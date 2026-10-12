@@ -97,6 +97,21 @@ def test_w2g4_only_the_looker_is_sent_what_impulse_looked_at_and_kept(catalog_by
     )
     assert answered.status_code == 200, answered.text
 
+    # The rest go to the bottom "in any order", and that order is the looker's
+    # to choose (CR 401.4): W2G2 made the look-and-pick family ask, on a branch
+    # this test was not written against, so the resolution is not over at the
+    # pick. While the order is owed the other seat is still sent none of the
+    # names; the seatless viewer is sent this open prompt as it was sent the
+    # look, for the reason given above.
+    order = _state(session_id, 0)["reorder_library"]
+    assert order["position"] == "bottom"
+    sent = json.dumps(_state(session_id, 1))
+    assert not [name for name in LOOKED_AT if name in sent], "shown to the other seat"
+    ordered = _act(
+        session_id, 0, action="reorder_library_confirm", card_order=[0, 1, 2],
+    )
+    assert ordered.status_code == 200, ordered.text
+
     assert [card.name for card in game.players[0].hand] == [KEPT]
     for viewer in (1, None):
         sent = json.dumps(_state(session_id, viewer))
