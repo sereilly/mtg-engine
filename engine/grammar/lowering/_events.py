@@ -202,8 +202,17 @@ EVENT_SUBJECT_NAMES: frozenset[str] = frozenset({
 #: one sentence position and none in the other two. Membership is a claim
 #: about a stamp, as it is for the table above: an event joins when its emit
 #: carries both keys.
+#:
+#: The three caster-scoped kinds joined together, each read off its own emit in
+#: ``_apply_cast_triggers``. ``you_cast_spell`` was the one cast event that
+#: froze nothing - and "copy **that spell**" was lowered under it all the
+#: same, with no gate at all, so Mirari took its {3} and copied nothing. It
+#: carries both keys now; ``self_cast`` and ``you_cast_first_spell_each_turn``
+#: always did and were simply never listed. "Copy that spell" is gated on
+#: this table like every other reader of the phrase.
 CAST_SPELL_EVENTS: frozenset[str] = frozenset({
     "spell_cast", "opponent_casts_spell",
+    "you_cast_spell", "self_cast", "you_cast_first_spell_each_turn",
 })
 
 

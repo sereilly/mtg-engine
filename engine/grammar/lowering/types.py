@@ -401,9 +401,14 @@ def _lower_change_supertype(node: ast.ChangeSupertype) -> tuple[OracleInstructio
 #: "Until end of turn" (Jinx) is the cleanup step's, swept beside every other
 #: until-end-of-turn record; it is admitted here *because* that sweep exists,
 #: which is the whole rule this table states.
-_LAND_TYPE_DURATIONS = frozenset(
-    {None, "until_controllers_next_untap_step", "until_end_of_turn"}
-)
+#: "Until this creature leaves the battlefield" (Gaea's Liege, Graceful
+#: Antelope) is the leaving transition's: the contribution is keyed on the
+#: source and marked as ending with it, and ``remove_all_from_battlefield``
+#: drops it whichever way the source goes.
+_LAND_TYPE_DURATIONS = frozenset({
+    None, "until_controllers_next_untap_step", "until_end_of_turn",
+    "until_source_leaves",
+})
 
 
 def _lower_change_land_type(node: ast.ChangeLandType) -> tuple[OracleInstruction, ...]:

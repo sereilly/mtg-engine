@@ -521,6 +521,15 @@ def _lower_tap(
                 # handler resolves. Listed here because the split leaves the
                 # field cleared and this gate reads the **unsplit** filter.
                 "of_bound_type",
+                # "Tap all creatures **without flying**." (Deluge; Aboshan,
+                # Cephalid Emperor.) A keyword is CR 613 layer 6, so it is
+                # what the creature has as the sweep resolves: it reaches the
+                # payload as ``without_keywords`` and ``subject_matches`` puts
+                # it to ``Game._has_keyword`` - a creature given flying in
+                # response stays untapped, and one that lost it is tapped.
+                # ``with_keywords`` stays absent on round 43's rule: no card
+                # in the pool sweeps a tap over the creatures that *have* one.
+                "without_keywords",
             }),
         )
         if leftovers:

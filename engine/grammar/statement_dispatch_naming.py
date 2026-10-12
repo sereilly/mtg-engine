@@ -33,7 +33,8 @@ from ..oracle_types import OracleInstruction
 from . import ast
 from .errors import LoweringError
 from .lowering._deaths import BOUND_CARD_EVENTS
-from .lowering._events import CHOSEN_PLAYER, chooser_payload as _chooser_payload
+from .lowering._events import (CAST_SPELL_EVENTS, CHOSEN_PLAYER,
+                               chooser_payload as _chooser_payload)
 from ..subject_filters import untestable_filter_keys
 from .lowering import (
     _amount_payload,
@@ -218,6 +219,17 @@ def lower_naming_statement(
         return _lower_reveal_top_sorting_by_chosen_name(statement, produced)
 
     if isinstance(statement, ast.CopyThatSpell):
+        # "That spell" is the one a cast trigger fired on, found by the stack
+        # object its fire site froze. Under any other event - or none: an
+        # activated ability, a spell's own line - the words name nothing, and
+        # the handler would resolve having copied nothing on a card reporting
+        # itself supported.
+        if event not in CAST_SPELL_EVENTS:
+            raise LoweringError(
+                "'copy that spell' names the spell a cast trigger fired on, "
+                "and this event freezes none",
+                node=statement,
+            )
         return (OracleInstruction("copy_triggering_spell", "", {}),)
 
     if isinstance(statement, ast.CopySpell):

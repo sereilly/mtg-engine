@@ -238,10 +238,17 @@ class Attach:
     recipients rather than one, because "Attach target Equipment you control
     to target creature you control" is a real sentence (Brass Squire) and a
     node with one slot would have to be replaced rather than extended.
+
+    *host_it_can_enchant* is the printed "…another permanent **it can
+    enchant**" (Aura Graft): CR 303.4j's legality, said out loud. Recorded so
+    that a lowering which does not test it refuses - the words consumed and
+    dropped would be an Aura moved onto something its own enchant line
+    forbids.
     """
 
     subject: Recipient
     host: Recipient
+    host_it_can_enchant: bool = False
 
 
 @dataclass(frozen=True)

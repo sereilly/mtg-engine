@@ -75,7 +75,8 @@ def _same_source(recorded: Any, wanted: Any) -> bool:
 
 
 def change_land_type(
-    perm: Permanent, land_type: str, *, source: Any, label: str = ""
+    perm: Permanent, land_type: str, *, source: Any, label: str = "",
+    ends_with_source: bool = False,
 ) -> None:
     """Layer 4: *perm*'s land subtype becomes *land_type* from now (CR 613.7b).
 
@@ -84,6 +85,14 @@ def change_land_type(
     Passing the same source twice replaces its earlier contribution rather than
     stacking a second one, because one effect applies once however often it is
     re-resolved.
+
+    *ends_with_source* is the printed "…until this creature leaves the
+    battlefield" (Gaea's Liege, Graceful Antelope): the contribution is one
+    :func:`end_land_type_changes_tied_to` drops as *source* leaves. Said on
+    the record rather than inferred from the source being a permanent,
+    because a change with **no** printed duration is keyed on its source too
+    and lasts indefinitely (CR 611.2a) - it must outlive the permanent that
+    made it.
     """
     lowered = str(land_type).strip().lower()
     if not lowered:
@@ -93,14 +102,17 @@ def change_land_type(
         for entry in (perm.metadata.get(LAND_TYPE_EFFECTS) or [])
         if not _same_source(entry.get("source"), source)
     ]
-    effects.append(
-        {
-            "land_type": lowered,
-            "source": source,
-            "timestamp": next_timestamp(),
-            "label": label,
-        }
-    )
+    entry = {
+        "land_type": lowered,
+        "source": source,
+        "timestamp": next_timestamp(),
+        "label": label,
+    }
+    # Emitted only when set, so every record written before the window
+    # existed is the record it always was.
+    if ends_with_source:
+        entry["ends_with_source"] = True
+    effects.append(entry)
     perm.metadata[LAND_TYPE_EFFECTS] = effects
 
 
@@ -126,6 +138,33 @@ def end_land_type_change(perm: Permanent, *, source: Any) -> bool:
     else:
         perm.metadata.pop(LAND_TYPE_EFFECTS, None)
     return True
+
+
+def end_land_type_changes_tied_to(lands, source: "Permanent") -> int:
+    """Drop, on each of *lands*, the contribution that lasts "until *source*
+    leaves the battlefield", and report how many went (CR 611.2a).
+
+    The sweep half of that window, called from the one transition a permanent
+    leaves by. It replaced a name-keyed leave hook that ran on the graveyard
+    path alone, so a Gaea's Liege returned to its owner's hand, exiled or
+    put into a library left its lands Forests for the rest of the game; and
+    which lands to revert was a list kept on the Liege, where this reads the
+    lands, so a land that changed hands or a source that was a copy needs
+    nothing extra.
+
+    By identity: the source is a live permanent, and what comes back to the
+    battlefield later is a different object that made no such change
+    (CR 400.7).
+    """
+    dropped = 0
+    for land in lands:
+        tied = any(
+            entry.get("ends_with_source") and entry.get("source") is source
+            for entry in land.metadata.get(LAND_TYPE_EFFECTS) or ()
+        )
+        if tied:
+            dropped += int(end_land_type_change(land, source=source))
+    return dropped
 
 
 def end_land_type_changes_from(perm: Permanent, *, prefix: str) -> int:

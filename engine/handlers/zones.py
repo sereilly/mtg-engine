@@ -48,6 +48,7 @@ from ..oracle_types import (DISCARDED_BY_SEAT, DREW_BY_SEAT, DREW_COUNT,
                             EXILED_THIS_WAY, EXILED_THIS_WAY_OBJECTS,
                             HAND_CARDS_TO_LIBRARY, MILLED_THIS_WAY,
                             DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
+                            OTHER_THAN_EVENT_SUBJECT_PLAYER,
                             PER_OBJECT_SEAT_RECORDS,
                             SWEPT_OWNER_SEATS,
                             X_FROM_COUNT_PER_RECIPIENT)
@@ -82,11 +83,34 @@ def draw_target_cards(game: Game, instruction: OracleInstruction, context: Oracl
     # per iteration of a loop this branch is not inside. Each drawer draws from
     # their own library, which is why it is a loop rather than a shared count.
     recipient = instruction.payload.get("recipient")
-    if recipient in ("each_player", "each_opponent"):
+    if recipient in (
+        "each_player", "each_opponent", OTHER_THAN_EVENT_SUBJECT_PLAYER,
+    ):
         caster_index = game.players.index(context.caster)
         # CR 101.4's order for "each player", and the caster excluded for "each
         # opponent". A seat that has left the game draws nothing (CR 800.4a).
-        if recipient == "each_opponent":
+        if recipient == OTHER_THAN_EVENT_SUBJECT_PLAYER:
+            # "…each of **that player's** opponents draws three cards."
+            # (Standstill.) Every seat but the one the firing event froze -
+            # which includes this ability's own controller whenever somebody
+            # else cast the spell. With no seat recorded the words are
+            # measured from nobody, and nobody draws.
+            named = (context.trigger_context or {}).get("event_subject_player")
+            if not isinstance(named, int):
+                game.log.append(
+                    f"{context.card.name}: nothing recorded which player that was"
+                )
+                return True, "resolved"
+            total = len(game.players)
+            active = game.active_player_index or 0
+            seats = sorted(
+                (
+                    i for i, p in enumerate(game.players)
+                    if i != named and not p.lost
+                ),
+                key=lambda i: ((i - active) % total, i),
+            )
+        elif recipient == "each_opponent":
             seats = [s for s in game.opponents_of(caster_index) if not game.players[s].lost]
         else:
             total = len(game.players)

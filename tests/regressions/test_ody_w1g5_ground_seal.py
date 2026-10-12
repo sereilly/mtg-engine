@@ -126,16 +126,22 @@ def _graveyard_offers(spec: dict) -> list:
 
 
 def _units(pool):
-    for card in pool:
-        for face in (faces.face_cards(card) or [card]):
-            program = compile_card_oracle(face)
-            if program.supported and not program.modes:
-                yield card, face, program
+    # ``faces.compilation_units`` is the one iterator for a census about text
+    # that compiles; ``whole_card`` hands back the card a face is cast from,
+    # which is what goes into the hand.
+    for face in faces.compilation_units(pool):
+        program = compile_card_oracle(face)
+        if program.supported and not program.modes:
+            yield faces.whole_card(face), face, program
 
 
 def _sweep_casts(pool, by_name) -> tuple[int, list]:
     examined, failures = 0, []
-    for card, face, _program in _units(pool):
+    for face in faces.compilation_units(pool):
+        card = faces.whole_card(face)
+        program = compile_card_oracle(face)
+        if not program.supported or program.modes:
+            continue
         # A spell that itself targets: an instant, a sorcery, or an Aura
         # (CR 303.4a). A creature or enchantment spell targets nothing — this
         # engine names its *entry trigger's* target as it is cast, and that

@@ -1007,9 +1007,8 @@ _KIND_TO_SPEC: dict[str, dict] = {
     # `deal_damage`, which takes a player or a permanent; the opponent's half is
     # a pending choice made after resolution, not a target chosen here.
     "deal_damage_and_opponent_choice": {"kind": "any"},
-    # Gaea's Liege and Pyramids' second mode: both resolve through a
-    # `primary_type == "land"` predicate.
-    "change_target_land_type": {"kind": "land"},
+    # Pyramids' second mode resolves through a `primary_type == "land"`
+    # predicate.
     "shield_target_land_from_destruction": {"kind": "land"},
     # Cyclopean Tomb's handler refuses a Swamp outright
     # (`primary_type == "land" and not _is_swamp(p)`), so the exclusion belongs

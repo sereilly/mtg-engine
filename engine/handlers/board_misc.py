@@ -1030,36 +1030,6 @@ def recolor_self_until_eot(game: Game, instruction: OracleInstruction, context: 
     return True, "resolved"
 
 
-@effect_handler("change_target_land_type")
-def change_target_land_type(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    # Honor a specifically chosen land (e.g. a player selected the target land
-    # in the UI). Fall back to the first land the target player controls.
-    target_land = resolve_target_permanent(
-        game, context, predicate=lambda p: p.card.primary_type == "land"
-    )
-    if target_land is not None:
-        land_type = str(instruction.payload.get("land_type", "forest"))
-        # "...until this creature leaves the battlefield." The contribution is
-        # keyed on the source, so the revert hook drops exactly this one and
-        # whatever else says the land is something (an Evil Presence Swamp)
-        # reasserts itself (CR 611.3).
-        source = context.source_permanent
-        change_land_type(
-            target_land, land_type, source=source, label=context.card.name
-        )
-        game.log.append(f"{target_land.card.name} became a Forest")
-        if source is not None:
-            forested = source.metadata.setdefault("forested_lands", [])
-            if not any(land is target_land for land in forested):
-                forested.append(target_land)
-        # Forest count just changed; recompute characteristic-defining P/T now so
-        # Gaea's Liege reflects the new total immediately (not at the next step).
-        game._refresh_dynamic_creatures()
-    else:
-        game.log.append("No target land for Forest effect")
-    return True, "resolved"
-
-
 def _is_swamp(perm: Permanent) -> bool:
     return perm.has_type("swamp")
 
@@ -1337,6 +1307,13 @@ LAND_TYPE_UNTIL_UNTAP = "until_controllers_next_untap_step"
 #: sweep exists.
 LAND_TYPE_UNTIL_EOT = "until_end_of_turn"
 
+#: The window tied to the ability's own source: "Target land becomes a Forest
+#: **until this creature leaves the battlefield**" (Gaea's Liege, Graceful
+#: Antelope). Its sweep is the leaving transition itself
+#: (``Game.remove_all_from_battlefield``), through
+#: ``land_types.end_land_type_changes_tied_to``.
+LAND_TYPE_UNTIL_SOURCE_LEAVES = "until_source_leaves"
+
 
 @effect_handler("animate_target_indefinitely")
 def animate_target_indefinitely(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
@@ -1578,6 +1555,23 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
     )
     land_type = str(instruction.payload.get("land_type", ""))
     duration = str(instruction.payload.get("duration", "permanent"))
+    ends_with_source = duration == LAND_TYPE_UNTIL_SOURCE_LEAVES
+    if ends_with_source:
+        # "…until this creature leaves the battlefield." CR 611.2b: a duration
+        # that has ended before the effect would first be applied means the
+        # effect does nothing - "it doesn't start and immediately stop again,
+        # and it doesn't last forever". Reachable whenever the source can be
+        # removed in response (an activated ability, a combat-damage trigger
+        # with the creature killed before it resolves), and forever is exactly
+        # what a change made then would be: nothing is left to end it. A
+        # phased-out source has not left (CR 702.26d).
+        from ..linked_exile import until_leaves_has_ended
+
+        if until_leaves_has_ended(game, context.source_permanent):
+            game.log.append(
+                f"{context.card.name} has left the battlefield; no land changes"
+            )
+            return True, "resolved"
     if isinstance(maximum, int) and maximum > 1:
         chosen = resolve_target_permanents(game, context, predicate=_eligible)
         if not chosen:
@@ -1590,8 +1584,12 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
             # changing several lands rather than two activations.
             change_land_type(
                 land, land_type,
-                source=f"{duration}:{next_timestamp()}",
+                source=(
+                    context.source_permanent if ends_with_source
+                    else f"{duration}:{next_timestamp()}"
+                ),
                 label=context.card.name,
+                ends_with_source=ends_with_source,
             )
         game._refresh_dynamic_creatures()
         game.log.append(
@@ -1644,6 +1642,7 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
             card_name=context.card.name,
             land_permanent_id=target.permanent_id,
             land_type_source=source,
+            **({"land_type_ends_with_source": True} if ends_with_source else {}),
             **({"options": printed_options} if printed_options else {}),
         )
         game.log.append(
@@ -1655,7 +1654,10 @@ def change_land_type_until(game: Game, instruction: OracleInstruction, context: 
             + f" for {target.card.name}"
         )
         return True, "resolved"
-    change_land_type(target, land_type, source=source, label=context.card.name)
+    change_land_type(
+        target, land_type, source=source, label=context.card.name,
+        ends_with_source=ends_with_source,
+    )
     # A land that became a Forest is one a Forest-scoped static now reaches
     # (Living Lands), and one that became a Mountain is one Conversion does —
     # each of them depends on this effect (CR 613.8a), and where a dependent

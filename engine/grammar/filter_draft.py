@@ -224,6 +224,8 @@ class _FilterDraft:
     attached_to: str | None = None
     attached_to_filter: ast.ObjectFilter | None = None
     attached_to_target: ast.ObjectFilter | None = None
+    # "…that's **attached to a permanent**" - see ``ast.ObjectFilter``.
+    attached_to_permanent: bool = False
     # "…**whose controller controls an Island**" (Seasinger) — see
     # ``ast.ObjectFilter``.
     controller_controls: ast.ObjectFilter | None = None
@@ -378,6 +380,7 @@ def _build_object_filter(d: "_FilterDraft") -> ast.ObjectFilter:
         attached_to=d.attached_to,
         attached_to_filter=d.attached_to_filter,
         attached_to_target=d.attached_to_target,
+        attached_to_permanent=d.attached_to_permanent,
         controller_controls=d.controller_controls,
         of_bound_type=d.of_bound_type,
         in_combat_with_source=d.in_combat_with_source,

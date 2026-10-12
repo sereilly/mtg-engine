@@ -313,7 +313,11 @@ class TestContinuousEffectCleanup:
             0, "Gaea's Liege", permanent_index=0, target_player_index=1, target_permanent_index=0
         )
         assert plains.changed_land_types == ("forest",)
-        p1.battlefield.remove(liege)
+        # Through the one transition out, which is what ends "until this
+        # creature leaves the battlefield" - for every way of leaving, where
+        # the name-keyed hook this used to exercise ran on the way into a
+        # graveyard alone.
+        game.remove_from_battlefield(liege)
         game._permanent_to_graveyard(p1, liege)
         assert plains.changed_land_types == ()
 

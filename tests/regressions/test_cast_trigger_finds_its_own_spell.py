@@ -92,12 +92,17 @@ def test_nether_void_does_not_counter_a_bystander_once_its_spell_is_gone(catalog
     assert "Nether Void: the spell it would counter is no longer on the stack" in game.log
 
 
-def test_double_vision_copies_nothing_when_its_spell_was_countered(catalog_by_name):
+def test_double_vision_copies_its_own_spell_even_once_it_was_countered(catalog_by_name):
     """"Whenever you cast your first instant or sorcery spell each turn, copy
     that spell." An opponent's Bolt is on the stack; seat 0 answers with its
     own first Bolt of the turn, which is countered in response to the copy
-    trigger. There is no spell left to copy — the trigger used to copy the
-    opponent's Bolt underneath, which is the same card."""
+    trigger. The copy is still made, of seat 0's Bolt as it last existed
+    (CR 608.2h; Double Vision's ruling of 2020-06-23: "A copy is created even
+    if the spell that caused Double Vision's ability to trigger has been
+    countered by the time that ability resolves") — and never of the
+    opponent's Bolt underneath, which is the same card and is what the
+    trigger used to copy. For a while it copied nothing at all, which was
+    the look-alike fixed by answering a different question."""
     game = _table(
         catalog_by_name, "Double Vision", hands=(["Lightning Bolt"], ["Lightning Bolt"]),
     )
@@ -110,9 +115,12 @@ def test_double_vision_copies_nothing_when_its_spell_was_countered(catalog_by_na
     game.counter_stack_object(mine)
     game.resolve_top_of_stack()
 
-    assert [item for item in game.stack] == [theirs]
-    assert not any(item.is_copy for item in game.stack)
-    assert "Double Vision: that spell is no longer on the stack" in game.log
+    assert game.stack[0] is theirs
+    (copy,) = [item for item in game.stack if item.is_copy]
+    # Seat 0's Bolt was aimed at seat 1; the look-alike is aimed at seat 0.
+    assert copy.caster_index == 0 and copy.target_player_index == 1
+    resolve_stack(game)
+    assert [player.life for player in game.players] == [17, 17]
 
 
 def test_double_vision_copies_its_own_bolt_over_a_look_alike(catalog_by_name):

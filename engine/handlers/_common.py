@@ -1058,7 +1058,15 @@ def _battlefield_matches(
     # compare against counts nothing extra rather than silently dropping it:
     # the caller that has a source passes one, and the continuous recompute
     # that does not never produces the key.
-    skip = exclude if filt.pop("exclude_self", False) else None
+    #
+    # *exclude* is one permanent or several. An Aura's sentence about its
+    # host has two objects "other" may be measured from - "enchanted creature
+    # gets +1/+1 for each other **creature**" (Vampirism) leaves out the
+    # host, "+2/+2 for each other **enchantment**" (Ancestral Mask) leaves
+    # out the Aura - and the caller that knows both passes both.
+    skipped: tuple = ()
+    if filt.pop("exclude_self", False) and exclude is not None:
+        skipped = tuple(exclude) if isinstance(exclude, (tuple, list)) else (exclude,)
     # "permanents **of the chosen color**" (Psychic Allergy). The colour was
     # picked as *source* entered (CR 614.1c) and lives on that permanent, so
     # it is resolved here — where the source is in hand — into the ordinary
@@ -1089,7 +1097,7 @@ def _battlefield_matches(
 
     matched = [
         perm for perm in scanned
-        if perm is not skip
+        if not any(perm is left_out for left_out in skipped)
         and subject_matches(game, perm, filt, observer=seat, source=source)
     ]
     return matched
@@ -2350,6 +2358,10 @@ def permanent_matches_filter(perm: Permanent, payload: dict) -> bool:
         attached = perm.metadata.get("attached_to")
         if attached is None or not permanent_matches_filter(attached, attached_host):
             return False
+    # "target Aura **that's attached to a permanent**" (Aura Graft). The host
+    # phrase with nothing to test the host against: it has to be there.
+    if payload.get("attached_to_permanent") and perm.metadata.get("attached_to") is None:
+        return False
 
     # "target permanent **that isn't enchanted**" (Time Elemental) — CR 303.4a.
     # The attachment record this engine keeps is shared with Equipment

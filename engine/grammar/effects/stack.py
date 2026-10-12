@@ -240,25 +240,30 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
                 "'instead' replaces an amount an earlier sentence named"
             )
 
+        # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than before
+        # "instead" above because the two clauses are about different things:
+        # "instead" replaces an amount an earlier sentence named, and this
+        # offers a second way to cover *this* one.
+        alternatives = _accept_mana_alternatives(stream)
+        # "…unless its controller pays {X}. **If that spell is countered this
+        # way, exile it instead of putting it into its owner's graveyard.**"
+        # (Syncopate.) The destination tail behind a price: the redirect
+        # applies when the price goes unpaid and the counter happens, which is
+        # the payment prompt's decline path - it carries the destination.
+        zone, position, narrowing = _parse_countered_destination(stream)
         return ast.CounterSpell(
             subject, unless_pays=payment,
             unless_pays_life=payment_life,
             unless_pays_per_recorded=per_recorded,
-            # "…pays {B} **or {3}**" (Thrull Wizard). Read here rather than
-            # before "instead" above because the two clauses are about
-            # different things: "instead" replaces an amount an earlier
-            # sentence named, and this offers a second way to cover *this* one.
-            unless_pays_alternatives=_accept_mana_alternatives(stream),
+            unless_pays_alternatives=alternatives,
             replaces_prior_amount=replaces_prior,
             unless_pays_per_each=per_each,
+            countered_to=zone, countered_to_position=position,
+            countered_filter=narrowing,
         )
 
     # "**If that spell is countered this way, put it on top of its owner's
-    # library instead of into that player's graveyard.**" (Memory Lapse.) Read
-    # here, after every other clause has refused, because a card printing this
-    # tail *and* an "unless … pays" would be a shape no flow performs — the
-    # counter that never happens has no card to redirect — and refusing the
-    # whole line is this grammar's answer to a shape it cannot honour.
+    # library instead of into that player's graveyard.**" (Memory Lapse.)
     zone, position, narrowing = _parse_countered_destination(stream)
     if zone is not None:
         return ast.CounterSpell(

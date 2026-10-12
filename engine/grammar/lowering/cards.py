@@ -9,6 +9,7 @@ a library — in `hand.py`.
 """
 
 from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
+                             OTHER_THAN_EVENT_SUBJECT_PLAYER,
                              PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
                              OracleInstruction)
@@ -179,6 +180,19 @@ def _lower_draw(
         node.player.kind
         if node.player.kind in ("each_player", "each_opponent") else None
     )
+    if node.player.kind == "any_other_player":
+        # "…each of that player's opponents draws three cards." (Standstill.)
+        # A set of seats measured from the one the firing event froze
+        # (CR 603.10), so it rides the same ``recipient`` key under the word
+        # the offer chain already reads for these seats - and refuses where no
+        # event froze one, because the handler would then draw for nobody on
+        # a card reporting itself supported.
+        if event not in _EVENT_SUBJECT_PLAYERS:
+            raise LoweringError(
+                "\"that player's opponents\" are measured from a seat this "
+                "event did not record", node=node,
+            )
+        looped_seats = OTHER_THAN_EVENT_SUBJECT_PLAYER
     halved = (
         halved_count_spec(node.count, node) if isinstance(node.count, ast.Half) else None
     )

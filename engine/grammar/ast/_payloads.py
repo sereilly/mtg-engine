@@ -104,6 +104,8 @@ def object_filter_payload(self: "ObjectFilter") -> dict[str, object]:
         payload["exclude_types"] = list(self.excluded_types)
     if self.attached_to_filter is not None:
         payload["attached_to_filter"] = self.attached_to_filter.to_payload()
+    if self.attached_to_permanent:
+        payload["attached_to_permanent"] = True
     if self.named_as_target is not None:
         payload["named_as_target"] = self.named_as_target.to_payload()
     if self.controller_controls is not None:

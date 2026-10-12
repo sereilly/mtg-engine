@@ -2085,14 +2085,6 @@ class PermanentStateMixin:
             for bonus in prog.instructions:
                 if bonus.kind != "dynamic_pt_bonus":
                     continue
-                # The permanent being refreshed *is* the source of its own
-                # static ability, which is what lets a spec name a relation to
-                # it ("Auras attached to it") rather than only a set of
-                # characteristics.
-                value = evaluate_count(
-                    self, player, bonus.payload.get("x_from_count") or {},
-                    source=permanent,
-                )
                 # "**Enchanted** creature gets +1/+1 for each other creature
                 # you control." (Vampirism.) The Aura's sentence about its
                 # host, on the same instruction and the same count as the one a
@@ -2101,16 +2093,31 @@ class PermanentStateMixin:
                 # split `conditional_static` makes a few lines down, spelled
                 # the same way so one key means one thing across both.
                 #
-                # The count keeps `source=permanent` — the Aura — because
-                # CR 109.5 makes "you" the ability's controller and CR 109's
-                # "other" is relative to the object the ability is on. The
-                # recipient is the **live** record (CR 611.3b: a continuous
+                # The recipient is the **live** record (CR 611.3b: a continuous
                 # effect applies only while the Aura is attached).
                 recipient = permanent
                 if bonus.payload.get("subject") == "attached":
                     recipient = attached_host(self, permanent, last_known=False)
                     if recipient is None:
                         continue
+                # The permanent being refreshed *is* the source of its own
+                # static ability, which is what lets a spec name a relation to
+                # it ("Auras attached to it") rather than only a set of
+                # characteristics - and CR 109.5 makes "you" its controller.
+                #
+                # "…for each **other** <noun>" leaves out the permanent the
+                # count is taken for. Nothing was handed over to leave out, so
+                # the word was read and dropped: Squirrel Mob was 3/3 alone
+                # and Mogg Squad 2/2. Both the source and the recipient,
+                # because an Aura prints the word about either - "each other
+                # creature" (Vampirism, Bravado) can only mean other than the
+                # enchanted creature, "each other enchantment" (Ancestral
+                # Mask) other than the Aura - and for a creature's own line
+                # the two are one permanent.
+                value = evaluate_count(
+                    self, player, bonus.payload.get("x_from_count") or {},
+                    source=permanent, exclude=(permanent, recipient),
+                )
                 _add_static_pt(
                     recipient,
                     resolve_amount(bonus.payload.get("power", 0), value),
@@ -3283,7 +3290,14 @@ class PermanentStateMixin:
         # type is out.
         if any(target_perm.has_type(word) for word in filt.excluded_types):
             return False
-        if filt.other_than_source and target_perm is source_perm:
+        if filt.other_than_source and (
+            target_perm is source_perm
+            # "**Other** creatures you control get -1/-1." (Vampirism.) On an
+            # Aura the word is measured from the creature it enchants - the
+            # Aura is no creature, so there is nothing else for it to mean -
+            # and the host was taking its own Aura's penalty.
+            or target_perm is attached_host(self, source_perm, last_known=False)
+        ):
             return False
         # "Creatures **you control**" / "creatures your opponents control".
         # CR 109.5: "you" is the seat controlling the permanent whose static

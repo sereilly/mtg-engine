@@ -23,6 +23,16 @@ a price read off the spell, a copy of it — and asks two questions:
 Before the change: 8 of 9 readers acted on the earlier spell, and 9 of 9 acted
 on the look-alike once their own spell had gone. The ninth, Double Vision,
 searched from the top and so got the first question right by position.
+
+**A copy is the one effect whose second answer is not "nothing".** A counter
+or a price needs the object; a copy needs what the object *was* (CR 608.2h,
+last known information), and both cards that print "copy that spell" are
+ruled so: Double Vision (2020-06-23) "A copy is created even if the spell
+that caused Double Vision's ability to trigger has been countered by the time
+that ability resolves", Mirari (2004-10-04) "the ability will make a copy of
+how the spell looked right before it was countered". So a copying reader must
+answer "its own" to both questions - still never the look-alike - and which
+readers copy is read off their compiled trigger, not listed.
 """
 
 from __future__ import annotations
@@ -101,6 +111,25 @@ def _acts_on_its_spell(instruction) -> bool:
     return False
 
 
+def _copies_its_spell(instruction) -> bool:
+    """Whether a trigger's effect is a **copy** of the spell it fired on."""
+    return any(step.kind == "copy_triggering_spell" for step in _walk(instruction))
+
+
+def copying_readers(pool) -> set[str]:
+    """The readers whose trigger copies its spell: the ones a departed spell
+    is still copied for (see the module docstring)."""
+    found = set()
+    for card in pool:
+        program = compile_card_oracle(card)
+        if not program.supported:
+            continue
+        for trigger in program.triggered_abilities:
+            if trigger.instruction is not None and _copies_its_spell(trigger.instruction):
+                found.add(card.name)
+    return found
+
+
 def readers(pool) -> list[tuple]:
     """``(card, condition kind)`` for every supported card with such a trigger."""
     found = []
@@ -130,6 +159,13 @@ def _stacked(by_name, reader, kind):
     not cast the later spell holds one of each basic land, for the one price
     somebody *else* pays (Ice Cave), and a card of the spell's name is in a
     graveyard for the one reader that asks (Bazaar of Wonders).
+
+    The later spell's **caster** holds floating mana, for the one price that
+    is theirs to pay *for* the effect: "you may pay {3}. If you do, copy that
+    spell" (Mirari), whose trigger read "nothing" here whatever the engine
+    did while nobody on its side could pay. Mana in the pool and not lands,
+    because a land in that seat is also what Mana Vortex's caster would
+    sacrifice to keep the spell - a price this census declines.
     """
     spells = [reader] if kind == "self_cast" else [by_name[name] for name in _SPELLS]
     for spell in spells:
@@ -168,6 +204,7 @@ def _stacked(by_name, reader, kind):
             if later is None or len(fired) != 1 or game.stack[-1] is not fired[0]:
                 continue
             assert earlier.card is later.card, "the look-alike is the point"
+            game.players[second_seat].mana_pool["C"] = 5
             return game, earlier, later, fired[0]
     return None
 
@@ -255,8 +292,13 @@ def test_a_cast_trigger_acts_on_the_spell_that_fired_it(pool, by_name):
 
     assert len(census["readers"]) >= 9, census["readers"]
     assert census["unreached"] == []
+    copying = copying_readers(pool)
+    assert copying, "the walk found no copying reader; Double Vision is one"
     wrong_later = {name: saw for name, saw in census["later"].items() if saw != "its own"}
-    wrong_gone = {name: saw for name, saw in census["gone"].items() if saw != "nothing"}
+    wrong_gone = {
+        name: saw for name, saw in census["gone"].items()
+        if saw != ("its own" if name in copying else "nothing")
+    }
     assert wrong_later == {}, "resolved for the later of two spells of one card"
     assert wrong_gone == {}, "resolved after its own spell had left the stack"
     assert len(census["later"]) == len(census["gone"]) == len(census["readers"])

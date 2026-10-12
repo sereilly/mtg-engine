@@ -62,6 +62,12 @@ def _parse_cost_object(
     # targeted line in the pool, so the exclusion is read here and carried on
     # the filter's existing `other_than_source` field: CR 602.5c's "another" is
     # a restriction on what may pay, not a different kind of cost.
+    # "{1}{W}, Sacrifice **Lieutenant Kirtar**: …" A legendary permanent
+    # naming itself in a cost (CR 201.5) - the lexer has collapsed the name to
+    # one SELF token, the same reference "this creature" is, and the counter
+    # costs below ("Remove a dream counter from Rasputin") already read it.
+    if stream.accept_kind(SELF) is not None:
+        return ast.ObjectFilter(is_source=True)
     another = bool(stream.accept_word("another"))
     spec = parse_target_spec(stream)
     if spec is None:

@@ -22,7 +22,7 @@ from ..exiled_records import (forget_record, newest_record_for,
 from ..events import Event, collect, emit
 from ..faces import whole_card
 from ..layer_bridge import computed_controller
-from ..land_types import end_land_type_change
+from ..land_types import end_land_type_change, end_land_type_changes_tied_to
 from ..linked_exile import LEAVES, UNTAPPED
 from ..models import Permanent, PlayerState, next_permanent_id
 from ..game_types import GraveyardTarget
@@ -2262,6 +2262,20 @@ class GameHelpersMixin:
                 self._remove_aura_effects(perm)
         for perm in removed:
             self.return_linked_exile(perm, "left the battlefield", LEAVES)
+        # "Target land becomes a Forest **until this creature leaves the
+        # battlefield**." (Gaea's Liege, Graceful Antelope.) The window's
+        # sweep, here for the reason the exile return above is: this is the
+        # one transition out. It was a name-keyed hook on the graveyard path
+        # alone, so a Liege bounced, exiled or tucked left its lands Forests
+        # for good.
+        reverted = 0
+        for perm in removed:
+            reverted += end_land_type_changes_tied_to(self.all_permanents(), perm)
+        if reverted:
+            # Whatever else says those lands are something reasserts itself
+            # (CR 611.3), and every count and static scoped to a land type
+            # has a different board to read.
+            self._refresh_dynamic_creatures()
         return removed
 
     def exile_hand_slots(
