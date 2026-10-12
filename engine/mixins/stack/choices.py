@@ -831,8 +831,12 @@ class PendingChoicesMixin:
             if zone == "library":
                 random.shuffle(caster.library)
             self.put_card_into_library(caster, card, "top")
+            shown = (
+                card.name if self.find_is_public(choice.data, destination, zone)
+                else "a card"
+            )
             self.log.append(
-                f"{caster.name} searched {zone} and put {card.name} "
+                f"{caster.name} searched {zone} and put {shown} "
                 "on top of their library"
             )
             self._record_search_reveal(choice)
@@ -863,8 +867,14 @@ class PendingChoicesMixin:
         # byte-identical.
         searcher = self.players[choice.player_index]
         whose = "" if searcher is caster else f"{caster.name}'s "
+        # Named only where the table may know it (``find_is_public``): a card
+        # that went from a library to a hand unrevealed is "a card".
+        shown = (
+            card.name if self.find_is_public(choice.data, destination, zone)
+            else "a card"
+        )
         self.log.append(
-            f"{searcher.name} searched {whose}{zone} and put {card.name} "
+            f"{searcher.name} searched {whose}{zone} and put {shown} "
             + (
                 "onto the battlefield" if destination == "battlefield"
                 else "into exile" if destination == "exile"
@@ -992,9 +1002,20 @@ class PendingChoicesMixin:
         # they are the same seat the sentence is byte-identical.
         searcher = self.players[choice.player_index]
         whose = "" if searcher is caster else f"{caster.name}'s "
+        # The finds are named only if every one of them is public wherever it
+        # is about to land (``find_is_public``); otherwise the table is told
+        # how many, which it could count for itself.
+        everywhere_public = all(
+            self.find_is_public(choice.data, destination)
+            for destination, _tapped in (slots or [(choice.data.get("destination", "hand"), False)])
+        )
         self.log.append(
             f"{searcher.name} searched {whose}" + " and ".join(zones)
-            + " and found " + ", ".join(card.name for card in cards)
+            + " and found "
+            + (
+                ", ".join(card.name for card in cards) if everywhere_public
+                else f"{len(cards)} card(s)"
+            )
         )
         # The search is over once the finds are named (CR 701.23h): shuffle
         # before the destination question, which happens after the search.
@@ -1309,7 +1330,8 @@ class PendingChoicesMixin:
             else "aside, for the next step to place" if destination == "held"
             else "into hand"
         )
-        self.log.append(f"{caster.name} put {card.name} {where}")
+        shown = card.name if self.find_is_public(data, destination) else "a card"
+        self.log.append(f"{caster.name} put {shown} {where}")
 
     def _resolve_search_destination(self, choice: PendingChoice, assignments: list) -> bool:
         """Apply the finder's answer to "which found card goes where".
@@ -1348,6 +1370,40 @@ class PendingChoicesMixin:
         self._resolve_search_destination(
             choice, list(range(len(choice.data.get("_cards") or ())))
         )
+
+    #: Where a card is face up for the whole table once it arrives (CR 400.2:
+    #: the battlefield, graveyards and exile are public zones) — and "held",
+    #: the pile a search hands the next step of its own resolution, which that
+    #: step then shows or places in one of the other three.
+    _PUBLIC_FIND_ZONES = frozenset({"battlefield", "graveyard", "exile", "held"})
+
+    @classmethod
+    def find_is_public(cls, data: dict | None, destination: str, zone: str | None = None) -> bool:
+        """Whether the table may be told **which** card a search or a look took.
+
+        ``game.log`` is one list and every seat and spectator is sent it, so a
+        line in it is an announcement. CR 701.20e: to look at a card is not to
+        reveal it, and a card that goes from a library to a hand never leaves
+        the hidden zones (CR 400.2) — nobody but the player holding it learns
+        what it was. So a find is named only when something made it public:
+
+        * the card's own sentence showed it — ``reveal`` on a search ("…,
+          reveal it, …"), ``revealed`` on a look ("Reveal the top three
+          cards…"), ``finds_are_public`` where an earlier step of the same
+          effect showed the whole pile (Guided Passage);
+        * it was found in a public zone (a search of a graveyard);
+        * or it arrived in one.
+
+        Impulse's kept card, Demonic Tutor's find and each of Doomsday's five
+        were in the log by name, where the other seat's ``/state`` read them.
+        """
+        data = data or {}
+        if data.get("reveal") or data.get("revealed") or data.get("finds_are_public"):
+            return True
+        zones = (zone,) if zone is not None else tuple(data.get("zones", ("library",)))
+        if zones == ("graveyard",):
+            return True
+        return destination in cls._PUBLIC_FIND_ZONES
 
     def _record_search_reveal(self, choice: PendingChoice) -> None:
         """The showing a printed "reveal it/those cards" performs, made when the
@@ -1698,8 +1754,14 @@ class PendingChoicesMixin:
             else:
                 self.put_card_into_hand(caster, kept)
             self.discard_pending_choice(choice)
+            # W2G4 (log line only): the card is named where the table may know
+            # it — exiled face up, or shown by the card's own sentence — and is
+            # "a card" where it went from a library to a hand unseen.
+            shown = (
+                kept.name if self.find_is_public(choice.data, taken_to) else "a card"
+            )
             self.log.append(
-                f"{caster.name} took {kept.name} "
+                f"{caster.name} took {shown} "
                 + ("into exile " if taken_to == "exile" else "into their hand ")
                 + f"({remaining - 1} more to take)"
             )
@@ -1721,6 +1783,8 @@ class PendingChoicesMixin:
                 pick_destination=choice.data.get("pick_destination", "hand"),
                 remaining=remaining - 1,
                 pile_index=choice.data.get("pile_index"),
+                # Still the same pile, shown or not (W2G4, for the log line).
+                **({"revealed": True} if choice.data.get("revealed") else {}),
             )
             return True
         del caster.library[:top_count]
@@ -1771,8 +1835,19 @@ class PendingChoicesMixin:
             record_context.results[record_key] = int(kept.cmc or 0)
         self.put_card_into_hand(caster, kept)
         self.discard_pending_choice(choice)
+        # W2G4 (log line only): "Look at the top four cards … put one of them
+        # into your hand" (Impulse) shows the card to nobody (CR 701.20e), and
+        # this line is sent to every seat. Named only where the card's own
+        # sentence revealed it — the whole pile (Reviving Vapors, Eye of
+        # Yawgmoth) or the pick ("you may **reveal** a creature card from
+        # among them", which is every pick the prompt narrowed to a type).
+        shown = (
+            kept.name
+            if self.find_is_public(choice.data, "hand") or choice.data.get("filters")
+            else "a card"
+        )
         self.log.append(
-            f"{caster.name} put {kept.name} into their hand and the rest away"
+            f"{caster.name} put {shown} into their hand and the rest away"
         )
         return True
 

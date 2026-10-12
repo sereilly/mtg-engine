@@ -1580,6 +1580,37 @@ def test_w2g4_captains_maneuver_in_a_simulated_game_protects_its_caster():
         assert spared == caster and taker != caster, redirects
 
 
+# -- item 6: a private look names nothing in the log ---------------------------
+
+
+def test_w2g4_prophetic_bolt_keeps_a_card_the_log_does_not_name(set_pool, catalog_by_name):
+    """"Prophetic Bolt deals 4 damage to any target. Look at the top four
+    cards of your library. Put one of those cards into your hand and the rest
+    on the bottom of your library in any order." To look is not to reveal
+    (CR 701.20e): the log, which every seat is sent, used to say "put Island
+    into their hand". The card is in the hand; the line says "a card"."""
+    game, _forest = _w2g4_instant_table(
+        set_pool, catalog_by_name, hand=["Prophetic Bolt"], interactive=(0,),
+    )
+    chooser = game.players[0]
+    chooser.library[:] = [
+        catalog_by_name[name] for name in ("Island", "Serra Angel", "Sol Ring", "Crusade", "Swamp")
+    ]
+    mark = len(game.log)
+
+    assert game.cast_from_hand(0, "Prophetic Bolt", target_player_index=1).supported
+    assert game.players[1].life == 16
+    assert game.pending_choice_of("look_top_pick", 0) is not None
+    assert game.confirm_look_top_pick(0, 1)
+
+    assert [card.name for card in chooser.hand] == ["Serra Angel"]
+    assert [card.name for card in chooser.library] == ["Swamp", "Island", "Sol Ring", "Crusade"]
+    said = game.log[mark:]
+    assert "Chooser put a card into their hand and the rest away" in said
+    assert not any(
+        name in line for line in said for name in ("Island", "Serra Angel", "Sol Ring", "Crusade")
+    ), said
+
 # ==== end W2G4 ========================================================
 
 # ==== W2G5 ============================================================
