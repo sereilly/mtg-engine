@@ -387,4 +387,82 @@ def test_predict_may_mill_its_own_caster(set_pool):
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
 
+import pytest as _w1g9_pytest
+
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from engine.oracle import compile_card_oracle as _w1g9_compile
+from tests.helpers import _mk_card as _w1g9_mk_card
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_duel(set_pool, *, hand0=(), hand1=(), bf0=(), bf1=(), gy0=(),
+               gy1=(), costs=False):
+    """A two-seat game built from card names (Odyssey first, then Alpha),
+    with ten Forests in each library and nobody summoning-sick."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name=f"P{seat}", life=20, hand=[pool[n] for n in hand],
+            graveyard=[pool[n] for n in gy], library=[pool["Forest"]] * 10,
+        )
+        for seat, (hand, gy) in enumerate(((hand0, gy0), (hand1, gy1)))
+    ])
+    game.enforce_mana_costs = costs
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            permanent = _w1g9_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game  # _w1g9_duel (instants)
+
+
+def _w1g9_on(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+def _w1g9_names(cards):
+    return [card.name for card in cards]
+
+
+# --- Deluge: "Tap all creatures without flying." ---------------------------
+
+def test_deluge_taps_every_creature_without_flying_and_nothing_else(set_pool):
+    game = _w1g9_duel(
+        set_pool, hand0=["Deluge"], bf0=["Grizzly Bears"],
+        bf1=["Air Elemental", "Gray Ogre", "Forest", "Mox Pearl"],
+    )
+    assert game.cast_from_hand(0, "Deluge").supported
+    _w1g9_resolve_stack(game)
+    tapped = {p.card.name for p in game.all_permanents() if p.tapped}
+    assert tapped == {"Grizzly Bears", "Gray Ogre"}
+
+
+def test_deluge_asks_what_a_creature_has_as_it_resolves(set_pool):
+    """A keyword is CR 613 layer 6: an Ogre given flying in response is not
+    tapped, and an Air Elemental whose flying is gone is."""
+    game = _w1g9_duel(
+        set_pool, hand0=["Deluge"], hand1=["Jump"],
+        bf1=["Gray Ogre", "Grizzly Bears"],
+    )
+    ogre = _w1g9_on(game, 1, "Gray Ogre")
+    assert game.queue_from_hand(0, "Deluge").supported
+    assert game.queue_from_hand(
+        1, "Jump", target_permanent_ids=[ogre.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert not ogre.tapped
+    assert _w1g9_on(game, 1, "Grizzly Bears").tapped
+
+
+def test_a_tap_sweep_still_refuses_a_keyword_it_was_never_shown(set_pool):
+    """The whitelist grew by the one field the pool prints: "with flying" on
+    a tap sweep is still a refusal, not a sweep of everything."""
+    assert _w1g9_compile(_w1g9_mk_card(
+        "Low Tide", "{U}", "Instant", "Tap all creatures without flying."
+    )).supported
+    assert not _w1g9_compile(_w1g9_mk_card(
+        "High Tide Probe", "{U}", "Instant", "Tap all creatures with flying."
+    )).supported
+
 # ==== end W1G9 ======================================================

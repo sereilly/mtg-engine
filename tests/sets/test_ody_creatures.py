@@ -1115,4 +1115,93 @@ def test_dwarven_recruiter_asks_a_person_for_up_to_every_dwarf(set_pool):
 # ==== W1G9 ==========================================================
 # W1G9's tests go between this line and the "end W1G9" line.
 
+import pytest as _w1g9_pytest
+
+from engine import Game as _w1g9_Game, PlayerState as _w1g9_PlayerState
+from engine.models import Permanent as _w1g9_Permanent
+from engine.oracle import compile_card_oracle as _w1g9_compile
+from tests.helpers import _mk_card as _w1g9_mk_card
+from tests.helpers import resolve_stack as _w1g9_resolve_stack
+
+
+def _w1g9_duel(set_pool, *, hand0=(), hand1=(), bf0=(), bf1=(), gy0=(),
+               gy1=(), costs=False):
+    """A two-seat game built from card names (Odyssey first, then Alpha),
+    with ten Forests in each library and nobody summoning-sick."""
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    game = _w1g9_Game(players=[
+        _w1g9_PlayerState(
+            name=f"P{seat}", life=20, hand=[pool[n] for n in hand],
+            graveyard=[pool[n] for n in gy], library=[pool["Forest"]] * 10,
+        )
+        for seat, (hand, gy) in enumerate(((hand0, gy0), (hand1, gy1)))
+    ])
+    game.enforce_mana_costs = costs
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            permanent = _w1g9_Permanent(card=pool[name])
+            game._put_permanent_onto_battlefield(seat, permanent, None)
+            permanent.metadata["summoning_sickness_turn"] = -99
+    return game  # _w1g9_duel (creatures)
+
+
+def _w1g9_on(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+def _w1g9_names(cards):
+    return [card.name for card in cards]
+
+
+# --- Aboshan, Cephalid Emperor ---------------------------------------------
+
+def test_aboshan_taps_every_creature_without_flying(set_pool):
+    game = _w1g9_duel(
+        set_pool, bf0=["Aboshan, Cephalid Emperor", "Cephalid Retainer"],
+        bf1=["Air Elemental", "Gray Ogre", "Mox Pearl"],
+    )
+    assert game.activate_permanent_ability(
+        0, "Aboshan, Cephalid Emperor", ability_index=1
+    ).supported
+    _w1g9_resolve_stack(game)
+    tapped = {p.card.name for p in game.all_permanents() if p.tapped}
+    assert tapped == {
+        "Aboshan, Cephalid Emperor", "Cephalid Retainer", "Gray Ogre",
+    }
+
+
+def test_aboshan_taps_the_octopus_its_controller_names_to_tap_a_permanent(set_pool):
+    """"Tap an untapped Octopus you control: Tap target permanent." The payer
+    is the activator's choice (CR 601.2h) - another Octopus leaves Aboshan
+    untapped - and a creature that is no Octopus pays nothing."""
+    game = _w1g9_duel(
+        set_pool, bf0=["Aboshan, Cephalid Emperor", "Cephalid Retainer"],
+        bf1=["Gray Ogre", "Mox Pearl"],
+    )
+    aboshan = _w1g9_on(game, 0, "Aboshan, Cephalid Emperor")
+    retainer = _w1g9_on(game, 0, "Cephalid Retainer")
+    mox, ogre = _w1g9_on(game, 1, "Mox Pearl"), _w1g9_on(game, 1, "Gray Ogre")
+    assert game.activate_permanent_ability(
+        0, "Aboshan, Cephalid Emperor", ability_index=0,
+        target_permanent_ids=[mox.permanent_id],
+        cost_permanent_ids=[retainer.permanent_id],
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert (aboshan.tapped, retainer.tapped, mox.tapped) == (False, True, True)
+
+    refused = game.activate_permanent_ability(
+        0, "Aboshan, Cephalid Emperor", ability_index=0,
+        target_permanent_ids=[ogre.permanent_id],
+        cost_permanent_ids=[ogre.permanent_id],
+    )
+    assert not refused.supported
+    assert (aboshan.tapped, ogre.tapped) == (False, False)
+
+    aboshan.tapped = True
+    assert not game.activate_permanent_ability(
+        0, "Aboshan, Cephalid Emperor", ability_index=0,
+        target_permanent_ids=[ogre.permanent_id],
+    ).supported
+    assert not ogre.tapped
+
 # ==== end W1G9 ======================================================
