@@ -274,3 +274,23 @@ def test_the_spec_sizes_a_conditional_division_by_the_board_as_it_stands():
     game, _bears, _giant = _board("Shower of Coals", 0)
     game.players[1].graveyard.extend([_pool()["Forest"]] * 9)
     assert game.cast_target_spec(0, card)["division_total"] == 2
+
+
+def test_a_caller_that_cannot_carry_the_announcement_still_refuses_it():
+    """The gate's half of the rule is opt-in. An object on the stack with no
+    list resolves at a default target, so only a caller that writes the empty
+    list down (the cast path) may be told "nobody" is lawful; any other — the
+    activation path today — keeps the loud refusal."""
+    from engine.divided_damage import division_refusal
+
+    assert division_refusal(2, (), division=EACH, max_targets=3) is not None
+    assert division_refusal(
+        2, (), division=EACH, max_targets=3, carries_no_targets=True,
+    ) is None
+    # …and the allowance is this shape's alone, whoever asks.
+    assert division_refusal(
+        2, (), division="chosen", max_targets=3, carries_no_targets=True,
+    ) is not None
+    assert division_refusal(
+        2, (), division=EACH, exact_targets=2, carries_no_targets=True,
+    ) is not None

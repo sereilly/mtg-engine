@@ -1928,6 +1928,9 @@ class SpellCastingMixin:
                 max_targets=found[1].get("max_targets"),
                 named_targets=named_outside,
                 exact_targets=exact,
+                # The announcement of no targets is written down just below
+                # and read at resolution (``announced_no_targets``).
+                carries_no_targets=True,
             )
             if refusal is not None:
                 self.log.append(f"{card.name}: {refusal}")

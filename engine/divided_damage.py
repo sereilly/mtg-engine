@@ -224,6 +224,7 @@ def stamp_card_shares(entries, amounts) -> list[tuple]:
 def division_refusal(
     total: int, entries, *, division: str, max_targets: int | None = None,
     named_targets: int = 0, exact_targets: int | None = None,
+    carries_no_targets: bool = False,
 ) -> str | None:
     """Why *entries*' announced division is illegal, or None (CR 601.2d).
 
@@ -284,7 +285,7 @@ def division_refusal(
     if not entries:
         if named_targets:
             return None
-        if division == EACH and max_targets is not None:
+        if division == EACH and max_targets is not None and carries_no_targets:
             # "…to each of **up to** three targets" (Shower of Coals). A
             # ceiling on an :data:`EACH` list is the printed "up to", and CR
             # 115.6 lets such a spell choose zero: "A spell or ability that
@@ -293,6 +294,16 @@ def division_refusal(
             # CR 601.2d's "one or more targets" — the floor below — is not this
             # spell's rule. A :data:`CHOSEN` ceiling is "among one, two, or
             # three" and keeps the floor.
+            #
+            # **Only for a caller that says its resolution can carry the
+            # announcement** (*carries_no_targets*). Admitting it is half the
+            # rule: an object on the stack with no list is read by the damage
+            # handler as "nothing was said" and resolved at a default target,
+            # so a caller that does not write the empty list down
+            # (:func:`announced_no_targets` is what reads it) must go on
+            # refusing — loudly — rather than deal damage to a player nobody
+            # named. The cast path writes it; the activation path does not
+            # yet, and no ability in the pool prints the phrase.
             return None
         return "a divided spell must have at least one target (CR 601.2d)"
     if max_targets is not None and len(entries) > max_targets:
