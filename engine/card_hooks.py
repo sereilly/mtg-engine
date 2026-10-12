@@ -43,7 +43,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from .auras import detach_aura
-from .land_types import end_land_type_change
 from .models import next_permanent_id
 from .oracle_types import OracleInstruction
 from .mana_payment import generic_cost, total_pips
@@ -257,12 +256,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "copy target instant or sorcery spell, except that the copy is red. you "
         "may choose new targets for the copy":
             _line("copy_top_stack_spell", "spell_pattern"),
-    },
-    "Gaea's Liege": {
-        '{t}: target land becomes a forest until this creature leaves the '
-        'battlefield':
-            _line('change_target_land_type', 'activated_landtype',
-                land_type='forest'),
     },
     # The first sentence is an ordinary numeric shield the grammar can read; the
     # rest of the line grants an activatable emblem, which is ON_SELF_RESOLVED
@@ -628,27 +621,6 @@ def _consecrate_land_leaves(game: Game, owner: PlayerState, permanent: Permanent
     detach_aura(permanent, land)
 
 
-def _gaeas_liege_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> None:
-    # "{T}: Target land becomes a Forest until this creature leaves the
-    # battlefield." When Gaea's Liege leaves, the lands it forested revert to
-    # their printed type (CR 611.3 — the duration ends).
-    # Dropping this creature's own contribution, not clearing the land's type:
-    # the land goes back to whatever the *remaining* effects say it is, which is
-    # what "the duration ended" means. Reading the stored type back to check it
-    # was still Forest was the bookkeeping this replaces — and it was wrong
-    # whenever something newer had made the land something else, since the
-    # Liege's effect would then have gone on applying invisibly.
-    reverted = 0
-    for land in permanent.metadata.get("forested_lands", []) or []:
-        if end_land_type_change(land, source=permanent):
-            reverted += 1
-    if reverted:
-        game.log.append(
-            f"{permanent.card.name} left the battlefield; {reverted} land(s) reverted from Forest"
-        )
-    game._refresh_dynamic_creatures()
-
-
 def _revert_linked_steal_on_leave(game: Game, owner: PlayerState, permanent: Permanent) -> None:
     # A linked-duration "gain control for as long as you control this" steal
     # (Aladdin's artifact, Old Man of the Sea's creature) ends when its source
@@ -687,7 +659,6 @@ def _oubliette_leaves(game: Game, owner: PlayerState, permanent: Permanent) -> N
 ON_LEAVE_BATTLEFIELD: dict[str, LeaveBattlefieldHook] = {
     "Cyclopean Tomb": _cyclopean_tomb_leaves,
     "Consecrate Land": _consecrate_land_leaves,
-    "Gaea's Liege": _gaeas_liege_leaves,
     "Aladdin": _revert_linked_steal_on_leave,
     "Old Man of the Sea": _revert_linked_steal_on_leave,
     "Oubliette": _oubliette_leaves,

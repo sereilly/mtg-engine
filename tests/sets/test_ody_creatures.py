@@ -1354,4 +1354,142 @@ def test_squirrel_mob_counts_every_other_squirrel_and_not_itself(set_pool):
         (4, 4), (4, 4),
     ]
 
+
+# --- Graceful Antelope: a land type set until the Antelope leaves ----------
+
+def _w1g9_land_types(permanent):
+    return [
+        word for word in ("plains", "island", "swamp", "mountain", "forest")
+        if permanent.has_type(word)
+    ]
+
+
+def _w1g9_antelope_connects(game, land, *, accept=True, before_resolving=None):
+    """Attack with the Antelope (seat 0), unblocked; name *land* for the
+    trigger and answer its "you may". *before_resolving* runs with the
+    trigger on the stack and its target chosen."""
+    _w1g9_to_declare_attackers(game, 0)
+    assert game.declare_attackers(0, [0], defending_player_index=1)[0]
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    for _ in range(6):
+        if game.pending_choices or game.stack:
+            break
+        game.advance_combat_phase()
+    assert game.players[1].life == 19
+    prompt = game.pending_choice_of("trigger_target")
+    assert prompt is not None and prompt.player_index == 0
+    assert game.confirm_trigger_target(0, permanent_id=land.permanent_id)
+    if before_resolving is not None:
+        before_resolving()
+    game.resolve_top_of_stack(pause_for_choices=True)
+    if game.pending_choices:
+        assert game.confirm_optional_pay(0, accept=accept)
+
+
+def _w1g9_antelope_table(set_pool):
+    game = _w1g9_duel(
+        set_pool, bf0=["Graceful Antelope", "Mountain"],
+        bf1=["Forest"],
+    )
+    game.interactive_seats = {0, 1}
+    return game, _w1g9_on(game, 0, "Graceful Antelope"), _w1g9_on(game, 1, "Forest")
+
+
+def test_graceful_antelope_makes_a_land_a_plains_until_it_leaves(set_pool):
+    """"Whenever this creature deals combat damage to a player, you may have
+    target land become a Plains until this creature leaves the battlefield."
+    CR 305.7: the Forest is a Plains and nothing else, taps for {W}, and is a
+    Forest again the moment the Antelope is gone - here, to a hand."""
+    game, antelope, forest = _w1g9_antelope_table(set_pool)
+    _w1g9_antelope_connects(game, forest)
+    assert _w1g9_land_types(forest) == ["plains"]
+    assert game.tap_land_for_mana(1, "Forest", permanent_id=forest.permanent_id)
+    assert game.players[1].mana_pool["W"] == 1 and game.players[1].mana_pool["G"] == 0
+
+    game.remove_from_battlefield(antelope)
+    game.put_card_into_hand(game.players[0], antelope.card)
+    assert _w1g9_land_types(forest) == ["forest"]
+
+
+def test_graceful_antelope_asks_and_takes_no_for_an_answer(set_pool):
+    game, _antelope, forest = _w1g9_antelope_table(set_pool)
+    _w1g9_antelope_connects(game, forest, accept=False)
+    assert _w1g9_land_types(forest) == ["forest"]
+
+
+def test_graceful_antelope_changes_nothing_once_it_has_left(set_pool):
+    """CR 611.2b: the duration ended before the effect would begin, so the
+    effect does nothing - a land changed then would be a Plains for good,
+    with nothing left to end it."""
+    game, antelope, forest = _w1g9_antelope_table(set_pool)
+
+    def kill():
+        game.remove_from_battlefield(antelope)
+        game._permanent_to_graveyard(game.players[0], antelope)
+
+    _w1g9_antelope_connects(game, forest, before_resolving=kill)
+    _w1g9_resolve_stack(game)
+    assert _w1g9_land_types(forest) == ["forest"]
+
+
+def test_graceful_antelope_keeps_its_plains_while_only_phased_out(set_pool):
+    """CR 702.26d: phasing out is not leaving the battlefield."""
+    game, antelope, forest = _w1g9_antelope_table(set_pool)
+    _w1g9_antelope_connects(game, forest)
+    antelope.metadata["phased_out"] = True
+    game.remove_from_battlefield(antelope, zone_change=False)
+    assert _w1g9_land_types(forest) == ["plains"]
+
+
+@_w1g9_pytest.mark.parametrize("leaves", ["hand", "exile", "library", "graveyard"])
+def test_a_land_type_set_until_its_source_leaves_ends_whichever_way_it_goes(
+    set_pool, leaves
+):
+    """The same window on the card that has printed it since Alpha. Gaea's
+    Liege reverted its lands from a name-keyed hook on the graveyard path
+    alone: bounced, exiled or tucked, it left them Forests for the rest of
+    the game."""
+    game = _w1g9_duel(set_pool, bf0=["Gaea's Liege", "Forest"], bf1=["Plains"])
+    liege, plains = _w1g9_on(game, 0, "Gaea's Liege"), _w1g9_on(game, 1, "Plains")
+    assert game.activate_permanent_ability(
+        0, "Gaea's Liege", target_permanent_ids=[plains.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    assert _w1g9_land_types(plains) == ["forest"]
+
+    owner = game.players[0]
+    game.remove_from_battlefield(liege)
+    if leaves == "hand":
+        game.put_card_into_hand(owner, liege.card)
+    elif leaves == "exile":
+        owner.exile.append(liege.card)
+    elif leaves == "library":
+        game.put_card_into_library(owner, liege.card, position="top")
+    else:
+        game._permanent_to_graveyard(owner, liege)
+    assert _w1g9_land_types(plains) == ["plains"]
+
+
+def test_a_land_type_with_no_printed_window_outlives_its_source(set_pool):
+    """The other half of the mark on the record: a change that prints no
+    duration is keyed on its source too, and lasts indefinitely (CR 611.2a)."""
+    shaper = _w1g9_mk_card(
+        "Terraformer", "{G}", "Creature - Druid",
+        "{T}: Target land becomes a Forest.",
+    )
+    assert _w1g9_compile(shaper).supported
+    game = _w1g9_duel(set_pool, bf1=["Plains"])
+    permanent = _w1g9_Permanent(card=shaper)
+    game._put_permanent_onto_battlefield(0, permanent, None)
+    permanent.metadata["summoning_sickness_turn"] = -99
+    plains = _w1g9_on(game, 1, "Plains")
+    assert game.activate_permanent_ability(
+        0, "Terraformer", target_permanent_ids=[plains.permanent_id]
+    ).supported
+    _w1g9_resolve_stack(game)
+    game.remove_from_battlefield(permanent)
+    game._permanent_to_graveyard(game.players[0], permanent)
+    assert _w1g9_land_types(plains) == ["forest"]
+
 # ==== end W1G9 ======================================================

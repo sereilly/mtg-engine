@@ -629,10 +629,12 @@ def test_a_guardian_beast_that_copied_away_stops_protecting(catalog):
 
 
 @pytest.mark.cr("707.2")
-def test_a_clones_leaving_fires_the_copied_cards_leave_hook(catalog):
+def test_a_clones_leaving_ends_the_window_its_copied_text_opened(catalog):
     """The Clone forested the land through Gaea's Liege's copied text, so the
-    Clone's leaving is what ends the effect. The leave-hook lookup keyed on the
-    printed face found no hook for "Clone" and left the Forest standing."""
+    Clone's leaving is what ends the effect. This was a leave hook looked up
+    by the printed face, which found none for "Clone" and left the Forest
+    standing; the window is the contribution's own now, keyed on the
+    permanent that made it, so a copy needs nothing said about it."""
     liege = Permanent(card=catalog["Gaea's Liege"])
     clone = Permanent(card=catalog["Clone"])
     forest = Permanent(card=catalog["Forest"])  # keeps both Lieges at 1/1
@@ -648,7 +650,9 @@ def test_a_clones_leaving_fires_the_copied_cards_leave_hook(catalog):
     )
     assert plains.changed_land_types == ("forest",), game.log
 
-    p1.battlefield.remove(clone)
+    # Through the one transition out, which is what ends "until this creature
+    # leaves the battlefield".
+    game.remove_from_battlefield(clone)
     game._permanent_to_graveyard(p1, clone)
 
     assert plains.changed_land_types == ()

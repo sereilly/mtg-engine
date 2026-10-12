@@ -83,7 +83,6 @@ _BASIC_MANA = {
 #: contribution and is not listed here fails that test, so a setter the next
 #: set prints cannot be left out of the cross by this list going stale.
 _SETTING_KINDS = frozenset({
-    "change_target_land_type",
     "add_mire_counter_to_target_land",
     "change_land_type_until",
     "swap_land_types_until_eot",
@@ -146,13 +145,15 @@ class _Setter:
 
 def _ability_ending(instruction) -> str | None:
     for step in _walk(instruction):
-        if step.kind == "change_target_land_type":
-            # "…until this creature leaves the battlefield." (Gaea's Liege.)
-            return "leaves"
         if step.kind == "swap_land_types_until_eot":
             return "cleanup"
         if step.kind == "change_land_type_until":
             duration = str(step.payload.get("duration") or "")
+            if duration == "until_source_leaves":
+                # "…until this creature leaves the battlefield." (Gaea's
+                # Liege - the window, where it was a kind of its own while a
+                # name-keyed hook carried the card.)
+                return "leaves"
             if duration == "until_end_of_turn":
                 return "cleanup"
             if duration == "until_controllers_next_untap_step":

@@ -239,6 +239,10 @@ def test_611_3_gaeas_liege_leaving_restores_the_aura_type_not_the_printed_one(ca
     )
     assert mountain.basic_land_types == ("forest",)
 
+    # Through the one transition out, which is what ends the window - it was
+    # a hook on the way into a graveyard, and this test called that half
+    # alone with the Liege still on the battlefield.
+    game.remove_from_battlefield(liege)
     game._permanent_to_graveyard(p1, liege)
 
     assert mountain.basic_land_types == ("swamp",)

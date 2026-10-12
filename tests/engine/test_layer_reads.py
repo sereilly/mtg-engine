@@ -392,7 +392,7 @@ _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
     "ai_policy.py": 8,
     "card_hooks.py": 1,
-    "handlers/board_misc.py": 5,
+    "handlers/board_misc.py": 4,
     "handlers/destruction.py": 2,
     "handlers/mana.py": 1,
     "handlers/prevention.py": 1,

@@ -3311,6 +3311,9 @@ class PendingChoicesMixin:
                 land, land_type,
                 source=choice.data.get("land_type_source", choice.data.get("_aura")),
                 label=choice.data["card_name"],
+                ends_with_source=bool(
+                    choice.data.get("land_type_ends_with_source")
+                ),
             )
             self.log.append(
                 f"{choice.data['card_name']}: "
