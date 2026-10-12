@@ -366,7 +366,17 @@ def _parse_leading_recorded_count(
     if not stream.accept_punct(","):
         stream.reset(mark)
         return None
-    return _scale_by_recorded_count(parse_body(stream), counted, stream)
+    body = parse_body(stream)
+    if isinstance(body, ast.StripCardsWithChosenName):
+        # "For each card exiled this way, search that player's library for all
+        # cards with the same name as **that card** and exile them." (Haunting
+        # Echoes.) The body names one turn of a *loop* — "that card" — and
+        # carries no count a rate could replace, so the words in front of it
+        # are the loop's and not this reader's. Handed back unread rather than
+        # refused, so `_parse_leading_for_each` below gets the sentence.
+        stream.reset(mark)
+        return None
+    return _scale_by_recorded_count(body, counted, stream)
 
 
 def _scale_by_recorded_count(

@@ -3382,14 +3382,28 @@ def test_a_random_discard_from_a_seat_nobody_targeted_refuses():
     assert result.parsed and not result.lowered
 
 
-def test_a_variable_discard_that_is_not_random_refuses():
-    """The mirror image: the only variable-count handler takes the cards at
-    random, so lowering a chosen "discards X cards" onto it would take the
-    choice away."""
+def test_a_variable_discard_that_is_not_random_keeps_the_choice():
+    """The mirror image: the random handler takes the cards with
+    ``random.sample``, so lowering a chosen "discards X cards" onto it would
+    take the choice away.
+
+    This refused until Odyssey ("the only variable-count discard handler
+    discards at random"), and the reason had expired: ``discard_target_cards``
+    sizes its prompt through ``resolve_amount``, so the chosen handler reads an
+    X as well as a printed number (Mind Burst, Cabal Shrine). What must still
+    hold is which handler the words reach.
+    """
     result = compile_line("Target player discards X cards.", card_name="Test")
 
-    assert result.parsed and not result.lowered
-    assert "at random" in result.failure_reason
+    assert result.lowered
+    (chosen,) = result.instructions
+    assert chosen.kind == "discard_target_cards"
+    assert chosen.payload["amount"] == "x"
+
+    (random_,) = compile_line(
+        "Target player discards X cards at random.", card_name="Test"
+    ).instructions
+    assert random_.kind == "discard_x_target_cards"
 
 
 

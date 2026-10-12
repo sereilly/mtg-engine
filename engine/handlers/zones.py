@@ -5,6 +5,7 @@ import random
 from typing import TYPE_CHECKING
 
 from ..auras import PUT_ONTO_BATTLEFIELD_BY
+from ..counted_names import cards_sharing_a_name
 from ..faces import has_name
 from ..exiled_records import (record_exiled_card, records_for_cards,
                               source_object)
@@ -3433,6 +3434,15 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
     # counter leaves behind.
     name_record = instruction.payload.get("name_record")
     seat_record = instruction.payload.get("seat_record")
+    names_record = instruction.payload.get("names_record")
+    if names_record is not None:
+        # "For each card exiled this way, search that player's library for all
+        # cards with the same name as that card and exile them." (Haunting
+        # Echoes.) The third place a name is read from, and the one that is a
+        # *pile*: every card the sweep in front of this step exiled.
+        return _strip_by_recorded_cards(
+            game, instruction, context, str(names_record)
+        )
     if name_record is not None:
         seat = context.results.get(seat_record)
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
@@ -3484,6 +3494,71 @@ def strip_cards_with_chosen_name(game: Game, instruction: OracleInstruction, con
     game.log.append(
         f"{target.name} lost {len(taken)} copies of {named} to "
         f"{context.card.name}"
+    )
+    return True, "resolved"
+
+
+def _strip_by_recorded_cards(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    record: str,
+) -> tuple[bool, str]:
+    """The strip by **every name a step of this effect recorded**.
+
+    One walk of the zones for the whole pile, and one shuffle (CR 701.24): the
+    cards that leave are those sharing a name with any recorded card
+    (CR 201.2a — at least one name in common, so a split card matches by
+    either half and both ways). The recorded cards themselves are already in
+    exile; nothing here looks at them again but for their names.
+
+    "That player" is the seat the sentence in front targeted, read off the
+    resolution as the Lobotomy branch reads it. An empty record — the sweep
+    exiled nothing — still searches and still shuffles: the search happened,
+    and found no card it was looking for.
+
+    Every card found is exiled. The card's ruling lets the searcher leave any
+    number of them (CR 701.23b: a search for a stated quality need not find),
+    and no strip in this engine offers that — the five Eradicate-family cards
+    and Lobotomy take the whole set the same way.
+    """
+    from ..faces import card_names
+    from ..search_filters import name_key
+
+    target = context.target
+    if target is None or target not in game.players:
+        game.log.append(f"{context.card.name}: no player to search")
+        return True, "resolved"
+    wanted = {
+        name_key(name)
+        for recorded in (context.results.get(record) or ())
+        for name in card_names(recorded)
+    }
+    wanted.discard("")
+    zones = tuple(instruction.payload.get("zones") or ())
+    taken: list = []
+    for zone in zones:
+        cards = getattr(target, zone, None)
+        if cards is None or not wanted:
+            continue
+        slots = [
+            index for index, card in enumerate(cards)
+            if wanted & {name_key(name) for name in card_names(card)}
+        ]
+        if not slots:
+            continue
+        # By slot, never by value or identity: a library holds several copies
+        # of a card as one object (idiom 11).
+        found = [cards[index] for index in slots]
+        cards[:] = [
+            card for index, card in enumerate(cards) if index not in set(slots)
+        ]
+        target.exile.extend(found)
+        taken.extend(found)
+    if "library" in zones:
+        random.shuffle(target.library)
+    game.log.append(
+        f"{context.card.name} exiled {len(taken)} card(s) from {target.name}'s "
+        + " and ".join(zones)
+        + (": " + ", ".join(card.name for card in taken) if taken else "")
     )
     return True, "resolved"
 
@@ -4335,6 +4410,16 @@ def discard_all_matching_cards(game: Game, instruction: OracleInstruction, conte
                 continue
             if _card_matches_filter(held, filters, game=game, owner=victim):
                 doomed.append(index)
+        if instruction.payload.get("shares_name_in_hand"):
+            # "…all nonland cards **with the same name as another card in their
+            # hand**." (Hint of Insanity.) CR 201.2a over the pile: a card goes
+            # only if some *other* card held beside it shares one of its names.
+            # By position, never by identity — two copies of one card in a hand
+            # are one object — and over the whole hand rather than over the
+            # cards the phrase admits, because the other card is "a card", not
+            # "a nonland card".
+            paired = cards_sharing_a_name(victim.hand)
+            doomed = [index for index in doomed if index in paired]
         for index in reversed(doomed):
             discarded = victim.hand.pop(index)
             game._discard_card(victim, discarded)
@@ -4793,6 +4878,10 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         seats = list(range(len(game.players)))
     elif who == "you":
         seats = [game.players.index(context.caster)]
+    elif who == "target_player" and context.target in game.players:
+        # "Exile all cards from **target player's** graveyard …" (Haunting
+        # Echoes): the one pile the announcement chose (CR 601.2c).
+        seats = [game.players.index(context.target)]
     else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"

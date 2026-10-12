@@ -20,6 +20,7 @@ from ..oracle_types import (BLOCK_PAIR_SUBJECT, SACRIFICED_CARDS_BY_SEAT,
                            SUBJECT_FROM_TRIGGER)
 from ..models import Permanent, PlayerState
 from ..object_colors import is_multicolored
+from ..counted_names import card_answers_to_name
 from ..search_filters import card_has_type, name_key
 
 
@@ -452,6 +453,7 @@ def count_from_payload(
         game, owner, spec,
         exclude=context.source_permanent,
         source=context.source_permanent if source is None else source,
+        effect_spell=resolving_spell_name(context),
     )
     # "…**in excess of** the number of …" (Superior Numbers). The subtrahend is
     # an ordinary count spec of its own, evaluated by re-entering here rather
@@ -922,9 +924,66 @@ def count_spec_in_resolution(spec: dict, context) -> dict:
     sentence means one thing whichever channel carried it.
     """
     described = spec.get("filter")
-    if not isinstance(described, dict) or not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
+    if not isinstance(described, dict):
+        return spec
+    if described.get(NAMED_FROM_KEY):
+        spec = {**spec, "filter": _resolve_named_from(described, context)}
+        described = spec["filter"]
+    if not described.get(COLOR_CHOSEN_THIS_WAY_KEY):
         return spec
     return {**spec, "filter": resolve_color_chosen_in_resolution(described, context)}
+
+
+#: The count-filter key for a name only a resolution knows — "…cards in all
+#: graveyards **with the same name as that spell**" (the five Shrines) — and
+#: the one referent the lowering writes under it
+#: (``grammar/lowering/_amounts.NAMED_FROM_TRIGGERING_SPELL``).
+NAMED_FROM_KEY = "named_from"
+
+
+def _resolve_named_from(described: dict, context) -> dict:
+    """*described* with "the same name as that spell" turned into ``named``.
+
+    CR 201.2a against the spell a cast trigger fired on. The fire site froze
+    its **stack object** (``cast_item``), which is what says *which* spell — a
+    deck repeats one ``CardDefinition`` per copy — and whose card is the half
+    that was cast for a split card (CR 709.3b). Read off the frozen object
+    rather than off the stack, because CR 608.2h gives a spell that has left
+    the stack by now (countered in response) its last known name: it is then a
+    card in a graveyard with that very name, and counts.
+
+    Nothing frozen leaves the key where it is, and ``_card_matches_filter``
+    answers no to it — a count of no card rather than of every card.
+    """
+    frozen = context.trigger_context or {}
+    item = frozen.get("cast_item")
+    card = getattr(item, "card", None) or frozen.get("cast_card")
+    name = getattr(card, "name", None)
+    if not name or described.get(NAMED_FROM_KEY) != "triggering_spell":
+        return described
+    resolved = dict(described)
+    resolved.pop(NAMED_FROM_KEY, None)
+    resolved["named"] = name
+    return resolved
+
+
+def resolving_spell_name(context) -> str | None:
+    """The name of the **spell** whose effect *context* is carrying out, or
+    None when an ability is resolving.
+
+    "…effects from spells named Flame Burst count it as a card named Flame
+    Burst." (Pardic Firecat.) An activated ability carries its printed line, a
+    triggered one its event and an ability of a permanent its source; a spell's
+    resolution — and its announcement, which is asked the same count for an X
+    fixed as it is cast (CR 601.2b) — carries none of the three.
+    """
+    if (
+        context.source_permanent is not None
+        or context.ability_text
+        or context.trigger_context is not None
+    ):
+        return None
+    return getattr(context.card, "name", None) or None
 
 
 def _resolve_chosen_card_type(filt: dict, source) -> dict:
@@ -1063,7 +1122,8 @@ def basic_land_types_among(
 
 
 def evaluate_count(
-    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None
+    game: "Game", owner: "PlayerState", spec: dict, *, exclude=None, source=None,
+    effect_spell: str | None = None,
 ) -> int:
     """How much the amount a card *computes* currently is, for a named owner.
 
@@ -1291,9 +1351,17 @@ def evaluate_count(
         cards = getattr(owner, zone, None)
     if cards is None:
         return 0
+    # *effect_spell* is the name of the spell whose effect is counting, when
+    # one is: "effects from spells named Flame Burst count it as a card named
+    # Flame Burst" (Pardic Firecat) is asked of the name test below, with the
+    # zone the card is in, and by nobody else — a CR 604.3 recompute passes
+    # none and gets CR 201.2a's plain answer.
     matched_cards = [
         card for card in cards
-        if _card_matches_filter(card, filt, game=game, owner=owner)
+        if _card_matches_filter(
+            card, filt, game=game, owner=owner, zone=zone,
+            effect_spell=effect_spell,
+        )
     ]
     if aggregate == "greatest_power":
         # The *printed* power, because a card outside the battlefield has no
@@ -1345,7 +1413,10 @@ def _zone_card_creature_types(
     return frozenset({override}) if override is not None else frozenset(printed)
 
 
-def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
+def _card_matches_filter(
+    card, filt: dict, *, game=None, owner=None, zone: str | None = None,
+    effect_spell: str | None = None,
+) -> bool:
     """Whether a *card* — not a permanent — answers a filter payload.
 
     A card in a zone has no computed characteristics, so the shared matcher
@@ -1532,11 +1603,22 @@ def _card_matches_filter(card, filt: dict, *, game=None, owner=None) -> bool:
 
         if not any(_class_holds(entry) for entry in any_classes):
             return False
+    # "…with the same name as **that spell**" with no resolution behind it: the
+    # name is in a trigger's context, and a reader holding one turns the key
+    # into ``named`` first (``count_spec_in_resolution``). Refused for the
+    # chosen-subtype keys' reason at the top — ignoring it counts every card.
+    if filt.get(NAMED_FROM_KEY):
+        return False
     named = filt.get("named")
     # Through `name_key`, so the parser's rendering of a legendary name
     # ("chandra , flame 's catalyst") and Oracle's spelling of it compare equal —
-    # the same reduction a search's named restriction already uses.
-    return not named or name_key(card.name) == name_key(str(named))
+    # the same reduction a search's named restriction already uses. And through
+    # the one reader of "is this card named N?": CR 709.4a gives a split card
+    # both halves' names, and a card in a graveyard may *count as* a card of a
+    # name it does not have to the spell that is asking (``counted_names``).
+    return not named or card_answers_to_name(
+        card, str(named), zone=zone, effect_spell=effect_spell,
+    )
 
 
 def flip_coin(win_probability: float = 0.5) -> bool:

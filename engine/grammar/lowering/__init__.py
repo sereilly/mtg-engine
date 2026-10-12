@@ -355,6 +355,7 @@ from .search import (
     _lower_search_player_library,
     _lower_search_reveal_opponent_chooses,
     _lower_strip_cards_with_chosen_name,
+    lower_strip_each_exiled,
 )
 from .retargeting import _lower_change_event_targets, _lower_change_target
 from .stack import (
@@ -658,6 +659,7 @@ __all__ = [
     "_lower_search_library",
     "_lower_search_reveal_opponent_chooses",
     "_lower_strip_cards_with_chosen_name",
+    "lower_strip_each_exiled",
     "HELD_SEARCH_PILE",
     "_SEARCH_EXILE_HONOURED",
     "_lower_cast_from_exiled_with",

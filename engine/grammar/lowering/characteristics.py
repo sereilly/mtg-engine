@@ -42,9 +42,9 @@ from ._amounts import (
     _per_each_amount,
     _per_each_offset,
     _static_x_amount,
-    _x_definition_spec,
 )
-from ._counted_pumps import _TARGET_PUMP_DURATIONS, lower_counted_pump
+from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
+                             _x_definition_spec)
 from ._events import (binds_block_pair, _EVENT_SUBJECT_OBJECTS,
                       ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (
@@ -200,7 +200,7 @@ def _lower_pump(
         # nothing, which refuses the shape outright — see
         # ``_x_definition_spec``.
         definition_spec = _x_definition_spec(
-            node.x_definition, node, recorded=produced
+            node.x_definition, node, recorded=produced, event=event
         )
         # Only the characteristics the card writes as X are variable: "+X/+0"
         # pumps power alone, so the literal half stays literal.

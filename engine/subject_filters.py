@@ -611,7 +611,16 @@ CARD_ONLY_FILTER_KEYS = frozenset(
      # battlefield." (Dragon Arch.) CR 105.2b's two-or-more, counted off the
      # same printed colours ``color_filter`` reads (CR 202.2) — so it is
      # testable here for exactly the reason the single colour is.
-     "multicolored"}
+     "multicolored",
+     # "Exile all cards from target player's graveyard **other than basic land
+     # cards**." (Haunting Echoes.) CR 205.4a's Basic supertype on a land,
+     # which ``_card_matches_filter`` has read off the printed type line since
+     # Eye of Singularity — the pair, not the supertype alone — so a card in a
+     # zone answers it for the reason it answers ``supertypes`` above. It was
+     # tested there and not listed here, so every card phrase printing the
+     # exemption refused at this gate for a question the matcher behind it
+     # answers.
+     "exclude_basic_lands"}
 )
 
 

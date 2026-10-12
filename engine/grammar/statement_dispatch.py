@@ -117,6 +117,7 @@ from .lowering import (
     _lower_repeat_until_pile_chosen,
     _lower_for_each_destroyed,
     _lower_for_each_exiled,
+    lower_strip_each_exiled,
     _lower_for_each_tapped,
     _lower_for_each_chosen,
     _lower_for_each_short_of_this_way,
@@ -573,6 +574,13 @@ def lower_statement(
         if isinstance(statement.iterator, ast.DiedThisWay):
             return _lower_for_each_destroyed(statement, repeated(object_loop), produced)
         if isinstance(statement.iterator, ast.ExiledThisWay):
+            # "…search that player's library for all cards with the same name
+            # as **that card** and exile them." (Haunting Echoes.) One strip by
+            # every recorded name rather than a loop of strips — asked before
+            # the body is lowered, because the body alone refuses.
+            stripped = lower_strip_each_exiled(statement, produced)
+            if stripped is not None:
+                return stripped
             return _lower_for_each_exiled(statement, repeated(object_loop), produced)
         # "For each creature **tapped this way**, …" (Raiding Party) — the third
         # "this way" window, over a record whose objects never left the

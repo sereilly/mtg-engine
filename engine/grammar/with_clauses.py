@@ -117,7 +117,9 @@ def accept_with_clause(stream: TokenStream, d, parse_filter) -> bool | None:
         # a literal rather than about a type line. Tried first because both
         # open on words the probes below would take apart, and each
         # consumes its whole phrase or nothing.
-        comparison = accept_name_comparison(stream, tuple(d.card_types))
+        comparison = accept_name_comparison(
+            stream, tuple(d.card_types), is_card=d.is_card
+        )
         if comparison == "another":
             d.shares_name_with_another = True
             return True

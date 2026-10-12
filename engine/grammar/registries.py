@@ -56,6 +56,8 @@ from ..cast_permissions import (BOARD_FREE_CAST_CLAIM,
                                 board_free_cast_line,
                                 board_graveyard_play_line)
 from ..cost_modifiers import cost_modifier_claims_line
+from ..counted_names import CLAIM as COUNTED_NAMES_CLAIM
+from ..counted_names import counts_as_claims_line
 from ..counter_conditions import (CLASS_UNCOUNTERABLE_CLAIM,
                                   UNCOUNTERABLE_CLAIM,
                                   uncounterable_class_line,
@@ -488,6 +490,15 @@ def registry_for_line(line: str, card_name: str | None = None) -> str | None:
     # test leaves the line unclaimed rather than admitted and demanding nothing.
     if must_choose_claims_line(line):
         return TARGET_REQUIREMENTS_CLAIM
+
+    # engine/counted_names.py — "If this card is in a graveyard, effects from
+    # spells named Flame Burst count it as a card named Flame Burst." (Pardic
+    # Firecat, Diligent Farmhand.) A static that functions in the graveyard
+    # (CR 113.6b): the count's own name test reads it off the card it is
+    # testing, so there is nothing to lower. Both names are payload of the one
+    # matcher asked here.
+    if counts_as_claims_line(line):
+        return COUNTED_NAMES_CLAIM
 
     return None
 

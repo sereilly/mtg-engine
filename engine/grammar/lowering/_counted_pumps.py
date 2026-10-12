@@ -33,10 +33,12 @@ from ...oracle_types import MILLED_THIS_WAY, OracleInstruction
 from ...subject_filters import object_only_filter
 from .. import ast
 from ..errors import LoweringError
-from ._amounts import count_spec, _per_each_amount, _per_each_offset
+from ._amounts import (count_spec, counted_definition_spec,
+                       _per_each_amount, _per_each_offset)
 from ._common import (chargeable_card_filter, _describe_targets,
                       _filter_payload, _is_enchanted, _is_source,
-                      _is_target)
+                      _is_target, _restrictions_beyond)
+from ._cost_records import cost_record_spec
 from ._events import _EVENT_SUBJECT_OBJECTS
 
 #: The printed durations a *targeted* pump has a sweep for, mapped to the
@@ -451,3 +453,164 @@ def lower_counted_pump(
                 }),
             )
     return None
+
+
+# ---------------------------------------------------------------------------
+# The X a pump's own where-clause defines.
+#
+# Moved here from ``_amounts`` when that floor crossed the thousand-line guard
+# at Odyssey, along the line this module's docstring already draws: `_amounts`
+# keeps the quantity, and this is a P/T sentence spending one — the clause
+# rides the ``Pump`` node, so it is the one where-clause no ``WhereX`` wraps.
+# What the two forms share is on the floor (``counted_definition_spec``); what
+# is here is what only a pump asks: may a *record* define this X, which a
+# durational pump can read once and a continuous one cannot read again.
+# ---------------------------------------------------------------------------
+def _x_definition_spec(
+    definition: ast.Amount, node, *, recorded: "frozenset[str] | None" = None,
+    event: str | None = None,
+) -> dict:
+    """The spec behind a where-clause's X, whichever aggregate it names.
+
+    *recorded* is the set of scratchpad keys steps of this same effect write,
+    and passing one admits a back-reference — "…, where X is the number of
+    cards **revealed this way**" (Ivy Seer, Nightshade Seer and their two
+    Scents). ``None`` means no back-reference may define an X here at all, and
+    it is the default because the two callers ask different questions of one
+    helper. A **durational** pump is evaluated once, at resolution, where the
+    record the reveal wrote is sitting in the scratchpad; a durationless one is
+    a CR 613 layer 7c contribution the P/T refresh rebuilds on every recompute,
+    and a scratchpad key is not there to be read the second time. A continuous
+    effect sized by a frozen record is the failure
+    ``characteristics._lower_pump_per_milled`` refuses in its own words.
+
+    One parameter rather than a flag beside a set, because the two questions
+    are one: may a record define this X, and which records exist. A caller that
+    answered the first and not the second would admit a clause naming a step
+    nothing performs, which is a pump of zero on a card reporting supported.
+    """
+    # "…, where X is **half** the creature's power, **rounded down**."
+    # (Catacomb Dragon.) The halving rides on the spec rather than on the
+    # definition, so every alternative below carries it without knowing it can
+    # — `_scaled` is the one place that applies it, the same arrangement the
+    # multiplier and the offset already have. Unwrapped first because it is not
+    # a definition at all: it is an arithmetic over whichever one follows.
+    if isinstance(definition, ast.Half):
+        spec = _x_definition_spec(
+            definition.of, node, recorded=recorded, event=event
+        )
+        spec["half"] = definition.rounding
+        # Omitted at 2, so every spec written before fractions existed stays
+        # byte-identical (see `ast.Half`).
+        if definition.divisor != 2:
+            spec["divide_by"] = definition.divisor
+        return spec
+    # An aggregate over a set and the printed arithmetic on it — "3 plus the
+    # number of cards named ~ in all graveyards" (Muscle Burst) — through the
+    # one reader the sentence form asks too. A count taken off a count is read
+    # only where a resolution reads this spec: the durationless caller is a
+    # layer 7c recompute, which asks ``evaluate_count`` and never the function
+    # that subtracts.
+    # *event* reaches the count for the one narrowing that reads it ("…with
+    # the same name as that spell"), and only from the durational caller: a
+    # continuous pump has no trigger whose context could still be read.
+    counted = counted_definition_spec(
+        definition, node, nested=recorded is not None, event=event
+    )
+    if counted is not None:
+        return counted
+    if isinstance(definition, ast.CountersOnSource):
+        # "…, where X is the number of **verse counters on this enchantment**"
+        # (War Dance, and the four other verse cards Urza's Saga prints). Not an
+        # aggregate over a set either: a counter is not an object, so there is
+        # no zone to scan — what the words name is a number sitting on the
+        # ability's own source, which only a resolution knows.
+        #
+        # The same ``source_counters`` spec ``where_x._lower_where_x_counters``
+        # and ``cards._lower_draw`` already build for the identical phrase in
+        # their own word orders, so the one evaluator answers all three and the
+        # spellings cannot count differently. It reaches here rather than there
+        # because a P/T where-clause carries its definition on the ``Pump``
+        # node instead of wrapping the sentence in a ``WhereX``.
+        #
+        # Reading it off a *sacrificed* source is CR 608.2h's last known
+        # information and needs no code: the counters live in the permanent
+        # object's own metadata (``engine/named_counters.py``), and a cost that
+        # sacrificed it took it off the battlefield without destroying the
+        # object the resolution still holds.
+        return {"source_counters": definition.kind}
+    if isinstance(definition, ast.CharacteristicOfSubject):
+        # "…, where X is **its** mana value" (Great Defender, Subdue, Kry
+        # Shield), "…, where X is **its toughness minus 1**" (Blood Lust). Not
+        # an aggregate over a set: the object is the one the sentence already
+        # named, and the resolution reads the characteristic off it — mana
+        # value off the card (CR 202.3), power and toughness through the layers
+        # (CR 613), which is the resolution's business rather than this one's.
+        #
+        # A spelled-out referent may only restate the kind of object ("that
+        # **creature**'s power", Nantuko Mentor). "The **tapped** creature's
+        # power" parses as this node too, and names what a *cost* tapped:
+        # read here it sized the pump by its own target's power. The
+        # sentence form refuses the same phrase (``where_x._referent_role``).
+        if definition.referent is not None and _restrictions_beyond(
+            definition.referent, frozenset({"card_types", "subtypes"})
+        ):
+            raise LoweringError(
+                "a where-clause referent this pump cannot name", node=node
+            )
+        return {
+            "object_characteristic": {
+                "object": "target",
+                "characteristic": definition.characteristic,
+                "offset": definition.offset,
+            }
+        }
+    # "{1}{B}, Discard a creature card: Volrath the Fallen gets +X/+X until end
+    # of turn, where X is **the discarded card's mana value**." A quantity the
+    # ability's own *cost* recorded (CR 601.2h), read off the payment path's
+    # record at resolution — so only where a resolution reads this spec at all
+    # (``recorded`` set): a durationless pump is a layer-7c contribution the
+    # P/T refresh rebuilds with no resolution context, where no payment record
+    # exists to be read.
+    if recorded is not None:
+        paid = cost_record_spec(definition, node)
+        if paid is not None:
+            return paid
+    if recorded is not None and isinstance(definition, ast.ThatMuch):
+        # "…, where X is the number of cards **revealed this way**." The parse
+        # resolved the printed noun and participle against
+        # ``records._THIS_WAY_COUNTS`` and what arrives is the key, so this
+        # reads it onto the ``back_reference`` channel ``count_from_payload``
+        # already answers — the same one the damage and the life gain spend the
+        # identical clause on, so one evaluator answers all three.
+        #
+        # A printed bonus refuses: "…plus one" over a record is arithmetic this
+        # spec has no key for, and dropping it is a pump one smaller than the
+        # card.
+        if definition.source is None or definition.bonus:
+            raise LoweringError(
+                "a recorded X names its producer and carries no bonus", node=node
+            )
+        if definition.source not in recorded:
+            # The gate every back-reference in this grammar carries: with no
+            # step in front of it the words name nothing, and the spec would be
+            # answered 0 — a card that reports supported and pumps by nothing.
+            raise LoweringError(
+                f"back-reference to {definition.source!r} with no producer in "
+                "this effect", node=node,
+            )
+        return {"back_reference": definition.source}
+    if recorded is not None and isinstance(definition, ast.RecordedCardManaValue):
+        # "…gets +X/+X until end of turn, where X is **the revealed card's mana
+        # value**." (Planeswalker's Favor, Scorn.) The spec
+        # ``_record_definitions`` stamps for the same definition wrapped
+        # round a sentence (Infernal Genesis), behind the same producer gate —
+        # it reaches here instead because a P/T where-clause rides the ``Pump``
+        # node. One evaluator answers both.
+        if definition.record not in recorded:
+            raise LoweringError(
+                f"back-reference to {definition.record!r} with no producer in "
+                "this effect", node=node,
+            )
+        return {"recorded_card_mana_value": definition.record}
+    raise LoweringError("only a count or a maximum can define X here", node=node)
