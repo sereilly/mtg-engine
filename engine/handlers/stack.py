@@ -178,6 +178,9 @@ def _stack_announcement(item: StackItem) -> StackAnnouncement:
         target_stack_item=item.target_stack_item,
         choices=dict(item.choices),
         face_name=item.card.name if is_face(item.card) else None,
+        # Through the one reader, so "was the flashback cost paid for this
+        # object" means here what it means to every site that moves it.
+        flashback=leaves_stack_to_exile(item),
     )
 
 
@@ -349,6 +352,15 @@ def put_exiled_card_onto_stack_as_copy(game: Game, instruction: OracleInstructio
         chosen_mode_index=announcement.chosen_mode_index,
         chosen_modes=announcement.chosen_modes,
         target_stack_item=announcement.target_stack_item,
+        # CR 707.10 copies "additional or alternative costs" with the other
+        # decisions, and a paid flashback cost is the one that still has
+        # something to say: CR 702.34a exiles this card "instead of putting it
+        # anywhere else any time it would leave the stack". Both stamps a
+        # flashback cast carries — the wide one every hand-or-library site
+        # asks, and the graveyard rider every bin site routes on — because the
+        # physical card is this object and has somewhere to go.
+        flashback=announcement.flashback,
+        exile_instead_of_graveyard=announcement.flashback,
         # ``cast_from_zone`` is deliberately left at its default. CR 707.10: "a
         # copy of a spell isn't cast" — so the honest answer to "was this spell
         # cast from somewhere other than your hand" is *no*, and that is what
