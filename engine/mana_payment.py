@@ -561,7 +561,7 @@ def carries_an_offer(instruction) -> bool:
     part-way through a payment — because the mana does not exist until every
     seat it asks has answered.
     """
-    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS
+    from .grammar.lower import OFFER_BRANCH_KEYS
 
     if instruction is None or not hasattr(instruction, "kind"):
         return False
@@ -613,11 +613,10 @@ def _every_nested_step(instruction) -> tuple:
     ``_sweeps._per_recipient_multiplier``. That the two tables exist at all is
     the real debt, and it belongs to whoever next needs a third reader.
     """
-    # `control_flow` rather than `categories`: this predicate was written
-    # against the latter's re-export, and the wave-1 split that moved
-    # `categories_of` out took the re-export with it. The name has one home
-    # and this is it.
-    from .grammar.lowering.control_flow import nested_instructions, offer_branches
+    # `grammar.lower` rather than `lowering.categories` or
+    # `lowering.control_flow`: the walk has lived in both, and each move took
+    # the old address with it. The name has one home and this is it.
+    from .grammar.lower import nested_instructions, offer_branches
 
     inner = nested_instructions(instruction)
     # **And an offer's branches**, which the category walk must not open and
@@ -854,7 +853,7 @@ def answer_color_choices(instruction, color: str | None):
     prompt, which is the safe direction. Rebuilt rather than mutated, because a
     compiled instruction is shared by every copy of the card.
     """
-    from .grammar.lowering.control_flow import OFFER_BRANCH_KEYS, WRAPPER_KINDS
+    from .grammar.lower import OFFER_BRANCH_KEYS, WRAPPER_KINDS
     from .oracle_types import OracleInstruction
 
     if not color or instruction is None:
