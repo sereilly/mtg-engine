@@ -12,6 +12,108 @@ unclaimed text. Do not edit by hand.
 - With UNCLAIMED text (must fix or acknowledge): **0**
 - With deletion-probe findings (ignored words): **602**
 
+## Measured sets — reported, not gated
+
+Cards in a `measured` set (see `cards/manifest.json`) that the
+compiler calls **supported** while carrying a printed line nothing
+implements. They are the debt behind that set's progress number, and
+`--hollow-lines` sees only the ones that produced an *ability part* —
+a line yielding nothing at all leaves that probe nothing to find.
+
+Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
+`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
+set nobody has implemented fires on its composition rather than on
+anything anyone did, and every ingest would arrive red.
+
+**44 unclaimed sentence(s) across 42 supported card(s).**
+
+- **Ancestral Tribute**
+  - `flashback {9}{w}{w}{w}`
+- **Barbarian Ring**
+  - `{r}, {t}, sacrifice this land: it deals 2 damage to any target. activate only if there are seven or more cards in your graveyard`
+- **Bash to Bits**
+  - `flashback {4}{r}{r}`
+- **Beast Attack**
+  - `flashback {2}{g}{g}{g}`
+- **Cabal Pit**
+  - `{b}, {t}, sacrifice this land: target creature gets -2/-2 until end of turn. activate only if there are seven or more cards in your graveyard`
+- **Call of the Herd**
+  - `flashback {3}{g}`
+- **Cease-Fire**
+  - `target player can't cast creature spells this turn`
+- **Centaur Garden**
+  - `{g}, {t}, sacrifice this land: target creature gets +3/+3 until end of turn. activate only if there are seven or more cards in your graveyard`
+- **Cephalid Coliseum**
+  - `{u}, {t}, sacrifice this land: target player draws three cards, then discards three cards. activate only if there are seven or more cards in your graveyard`
+- **Chance Encounter**
+  - `whenever you win a coin flip, put a luck counter on this enchantment`
+- **Chatter of the Squirrel**
+  - `flashback {1}{g}`
+- **Coffin Purge**
+  - `flashback {b}`
+- **Decaying Soil**
+  - `as long as there are seven or more cards in your graveyard, this enchantment has "whenever a nontoken creature is put into your graveyard from the battlefield, you may pay {1}`
+  - `if you do, return that card to your hand."`
+- **Deep Reconnaissance**
+  - `flashback {4}{g}`
+- **Dematerialize**
+  - `flashback {5}{u}{u}`
+- **Divine Sacrament**
+  - `white creatures get an additional +1/+1 as long as there are seven or more cards in your graveyard`
+- **Earth Rift**
+  - `flashback {5}{r}{r}`
+- **Elephant Ambush**
+  - `flashback {6}{g}{g}`
+- **Embolden**
+  - `flashback {1}{w}`
+- **Engulfing Flames**
+  - `flashback {3}{r}`
+- **Epicenter**
+  - `each player sacrifices all lands they control instead if there are seven or more cards in your graveyard`
+- **Fervent Denial**
+  - `flashback {5}{u}{u}`
+- **Firebolt**
+  - `flashback {4}{r}`
+- **Ground Seal**
+  - `cards in graveyards can't be the targets of spells or abilities`
+- **Howling Gale**
+  - `flashback {1}{g}`
+- **Kirtar's Wrath**
+  - `if there are seven or more cards in your graveyard, instead destroy all creatures, then create two 1/1 white spirit creature tokens with flying`
+  - `creatures destroyed this way can't be regenerated`
+- **Moment's Peace**
+  - `flashback {2}{g}`
+- **Morbid Hunger**
+  - `flashback {7}{b}{b}`
+- **Morgue Theft**
+  - `flashback {4}{b}`
+- **Nefarious Lich**
+  - `if damage would be dealt to you, exile that many cards from your graveyard instead`
+- **Nomad Stadium**
+  - `{w}, {t}, sacrifice this land: you gain 4 life. activate only if there are seven or more cards in your graveyard`
+- **Ray of Distortion**
+  - `flashback {4}{w}{w}`
+- **Reckless Charge**
+  - `flashback {2}{r}`
+- **Roar of the Wurm**
+  - `flashback {3}{g}`
+- **Scorching Missile**
+  - `flashback {9}{r}`
+- **Seize the Day**
+  - `flashback {2}{r}`
+- **Skull Fracture**
+  - `flashback {3}{b}`
+- **Spiritualize**
+  - `until end of turn, whenever target creature deals damage, you gain that much life`
+- **Sylvan Might**
+  - `flashback {2}{g}{g}`
+- **Thermal Blast**
+  - `thermal blast deals 5 damage instead if there are seven or more cards in your graveyard`
+- **Volcanic Spray**
+  - `flashback {1}{r}`
+- **Volley of Boulders**
+  - `flashback {r}{r}{r}{r}{r}{r}`
+
 ## Acknowledged simplifications
 
 | Card | Sentence | Why it is acceptable |

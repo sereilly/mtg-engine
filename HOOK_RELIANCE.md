@@ -52,7 +52,10 @@ Held at this rate, supporting the 26,113-card release line would need about **30
 | 7ED | 335 | 335 (100.0%) | 0 (0.0%) | 385 | 0 (0.0%) | 0 | 0.0 |
 | APC | 143 | 143 (100.0%) | 0 (0.0%) | 240 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
+| ODY *(measured)* | 335 | 219 (65.4%) | 0 (0.0%) | 331 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **4924** | **4924 (100.0%)** | **52 (1.1%)** | **7655** | **48 (0.6%)** | **58** | **1.2** |
+
+*(measured)* — ODY are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
 
 **Read the rows, not the average.** The base sets are near-identical reprint lists, so five of these rows (LEA, LEB, 2ED, 3ED, 4ED) are one data point wearing five hats — and the ALL row, deduped across reprints, is dominated by it. The independent comparison is between that block and the sets printed to a different brief.
 
