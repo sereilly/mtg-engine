@@ -616,6 +616,36 @@ def conditional_static_holds(
         if str(condition.get("comparison", "exactly")) == "at_least":
             return held >= wanted
         return held == wanted
+    if kind == "cards_in_zones":
+        # "…as long as **there are seven or more cards in your graveyard**"
+        # (Odyssey's threshold, CR 207.2c — an ability word, so the sentence is
+        # the whole rule) and "…as long as there are **no** cards in your
+        # graveyard" (Gorilla Titan). The payload is the one
+        # ``lowering/conditions`` builds for the same words behind a spell's
+        # "if", and it is answered here by the same two functions
+        # ``handlers/control_flow.evaluate_condition`` answers it with: the
+        # count through ``evaluate_count`` — the recompute's own reader, which
+        # needs no resolution — and the printed comparison through
+        # ``_compare_count``. So the phrase is one count and one comparison
+        # whether it gates a spell's sentence or a permanent's static.
+        #
+        # "Your" is *seat*: CR 109.5's controller of the ability, which is the
+        # Aura's controller for an Aura and whoever controls the creature now
+        # for a creature that was stolen. ``graveyard_size`` one branch down is
+        # the other printed sentence about a graveyard ("**an opponent has**
+        # eight or more cards in **their** graveyard"), whose existential seat
+        # this payload cannot say.
+        from .handlers._common import evaluate_count
+        from .handlers.control_flow import _compare_count
+
+        return _compare_count(
+            evaluate_count(
+                game, game.players[seat], dict(condition.get("count") or {}),
+                source=source,
+            ),
+            str(condition.get("op", "")),
+            condition.get("value"),
+        )
     if kind == "graveyard_size":
         # "**An** opponent" is any one of them, not all — so it is an `any` over
         # the opponents rather than a sum, and a game with more than two seats

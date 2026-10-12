@@ -294,6 +294,26 @@ def _lower_anthem_condition_payload(payload: dict, node: ast.StaticAbilityNode) 
     # through `engine/color_census.py`.
     if payload.get("kind") == "color_is_most_common":
         return payload
+    # "…as long as **there are seven or more cards in your graveyard**"
+    # (threshold) / "…there are **no** cards in your graveyard" (Gorilla
+    # Titan). A count of cards in a zone: no seat word and no board noun for
+    # the `controls` gates below to hold to anything. The condition lowering
+    # has already refused a bound that is not a printed number, a pile that is
+    # neither yours nor everybody's, and a narrowing a card in a zone cannot
+    # answer; `conditional_static_holds` answers what is left through
+    # `evaluate_count`, the recompute's own count reader. Only the two
+    # comparisons `_compare_count` is asked with a number for are admitted, so
+    # a parity or a comparison invented later refuses here by name.
+    if payload.get("kind") == "cards_in_zones":
+        if payload.get("op") not in ("ge", "le", "eq") or not isinstance(
+            payload.get("value"), int
+        ):
+            raise LoweringError(
+                "conditional_static_holds compares a card count with a printed "
+                "number, at least, at most or exactly",
+                node=node,
+            )
+        return payload
     # "…as long as **it's blocking and you control a snow land**" (Snow Devil).
     # CR 613 puts no limit on how many clauses a static's criteria have, so each
     # conjunct is checked by *this same gate* rather than by a second, laxer
@@ -548,8 +568,15 @@ def _lower_self_conditional_static(
     # that table has no row for and could not write one for without a second
     # reader of the clause the two census *spells* go through the grammar for.
     # …and the census asked *of the subject* (Heroic Defiance), last below.
+    #
+    # A count of cards in a zone (threshold) is the fifth: "there are seven or
+    # more cards in your graveyard" is about your *graveyard*, not your board,
+    # and the table's only graveyard row reads a different printed sentence
+    # ("<a seat> has N or more cards in their graveyard"), so no printing has
+    # two readers.
     counted = condition.get("kind") in (
         "source_counter_count", "color_is_most_common", "shares_most_common_color",
+        "cards_in_zones",
     )
     if not attached and not counted and condition.get("who") not in (
         "opponent", "each_opponent",
