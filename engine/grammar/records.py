@@ -125,6 +125,13 @@ def accept_added_base(stream: TokenStream) -> int | None:
 
     Returns None with the cursor where it found it, so a definition that does
     not open with a sum keeps the refusal it already had.
+
+    "…where X is **one plus** the number of cards named ~ in all graveyards"
+    (Aether Burst, Mind Burst). The same constant as a number *word*, which is
+    how Oracle spells 1 where it spells every other base as a digit ("2 plus",
+    Flame Burst; "3 plus", Muscle Burst) — so the cycle's two halves were one
+    production apart. The articles are number words too and are deliberately
+    not read here: "a plus" is no quantity.
     """
     mark = stream.mark()
     token = stream.peek()
@@ -132,6 +139,12 @@ def accept_added_base(stream: TokenStream) -> int | None:
         stream.advance()
         if stream.accept_word("plus"):
             return int(token.text)
+    stream.reset(mark)
+    word = stream.peek_word()
+    if word in NUMBER_WORDS and word not in ("a", "an"):
+        stream.advance()
+        if stream.accept_word("plus"):
+            return int(NUMBER_WORDS[word])
     stream.reset(mark)
     return None
 

@@ -42,9 +42,9 @@ from ._amounts import (
     _per_each_amount,
     _per_each_offset,
     _static_x_amount,
-    _x_definition_spec,
 )
-from ._counted_pumps import _TARGET_PUMP_DURATIONS, lower_counted_pump
+from ._counted_pumps import (_TARGET_PUMP_DURATIONS, lower_counted_pump,
+                             _x_definition_spec)
 from ._events import (binds_block_pair, _EVENT_SUBJECT_OBJECTS,
                       ROLE_NAMES_EVENT_SUBJECT)
 from ._common import (

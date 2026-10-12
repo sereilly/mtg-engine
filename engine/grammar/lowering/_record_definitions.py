@@ -33,7 +33,7 @@ a definition to it. The seam is not the size and was not drawn here:
   in ``amounts`` is a quantity the sentence states, "and what moved is a
   quantity the sentence *refers* to". This is the lowering of that quantity in
   the one printed position that wraps a whole sentence.
-* ``_amounts._x_definition_spec`` — a where-clause read off a ``Pump`` node
+* ``_counted_pumps._x_definition_spec`` — a where-clause read off a ``Pump`` node
   instead of round a sentence — already divides its definitions by a parameter.
   It reads a board on any call (a count, a maximum, the source's counters, the
   named object's characteristic) and a record only when its caller passes

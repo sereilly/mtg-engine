@@ -743,14 +743,11 @@ def _lower_discard(
     ):
         return (OracleInstruction("opponent_discards_random_card_on_damage", "", {}),)
     payload: dict[str, object] = {}
-    if amount == "x":
-        if not node.at_random:
-            raise LoweringError(
-                "the only variable-count discard handler discards at random; "
-                "a chosen discard of X cards has none",
-                node=node,
-            )
+    if amount == "x" and node.at_random:
         kind = "discard_x_target_cards"
+    # A *chosen* discard of X cards (Mind Burst, Cabal Shrine) is the last
+    # branch's: ``discard_target_cards`` sizes its prompt through
+    # ``resolve_amount``, so the X a where-clause defines is read there.
     elif node.at_random:
         # "**That player**" names the seat a firing event recorded, and only the
         # damage-trigger shape above knows one was. Under any other event this

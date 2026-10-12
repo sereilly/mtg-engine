@@ -38,7 +38,7 @@ from ...oracle_types import OracleInstruction, X_FROM_COUNT
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import (TARGET_OPPONENT_SCOPE, count_filter_on_frozen_seat,
-                       count_filter_on_targeted_seat, count_spec)
+                       count_filter_on_targeted_seat, counted_definition_spec)
 from ._amounts import _mentions_x, _stamp_x_from_count
 from ._record_definitions import lower_record_definition
 
@@ -134,72 +134,33 @@ def lower_where_x(
     counter_spec = _source_counter_spec(node.definition)
     if counter_spec is not None:
         return _lower_where_x_counters(node, inner, counter_spec)
-    # "…where X is **twice** the number of …" (Jovial Evil). The factor is
-    # unwrapped here and handed to `count_spec`, so only the definitions this
-    # branch can scale accept one: a `Times` over a death history or a mana
-    # value falls to the refusal below rather than silently losing the "twice",
-    # which would be half the damage the card prints.
-    factor = 1
-    definition = node.definition
-    # "…where X is **2 plus** the number of cards named ~ in all graveyards"
-    # (Kindle); "…twice the number of … **minus 2**" said of a counted set
-    # rather than of the source's counters. The constant is unwrapped *before*
-    # the multiplier so the two compose in the order the sentence prints them,
-    # and it becomes ``plus`` rather than ``offset`` for
-    # ``_source_counter_spec``'s reason exactly: ``_scaled`` applies ``offset``
-    # ahead of the multiplier, which for "twice the number … minus 2" would be
-    # 2N-4.
+    # An aggregate over a set — a count, a maximum, the colours among — and the
+    # printed arithmetic on it: "…**twice** the number of …" (Jovial Evil),
+    # "…**2 plus** the number of cards named ~ in all graveyards" (Kindle),
+    # "…the number of cards in your hand **minus the number of cards in that
+    # player's hand**" (Bulwark). Read by ``_amounts.counted_definition_spec``,
+    # the one reader the ``Pump`` form asks too: this arm used to unwrap the
+    # arithmetic itself and then demand a plain count, while that form read
+    # three aggregates and none of the arithmetic — so which definitions a card
+    # could print depended on which sentence it printed them in. A `Times` or a
+    # `Plus` over anything that reader does not aggregate (a death history, a
+    # mana value) comes back None and falls to the refusal below rather than
+    # silently losing the "twice".
     #
-    # A subtrahend on the **left** ("2 minus the number of …") is deliberately
-    # not taken: that is a constant minus a count, which no key on this spec
-    # expresses, so it falls to the refusal below rather than being read as its
-    # own negation.
-    plus = 0
-    # "…where X is the number of cards in your hand **minus the number of cards
-    # in that player's hand**." (Bulwark.) A count taken off a count, which no
-    # key above can say: ``plus`` is a printed constant and the two sides here
-    # are both quantities read at resolution. So the right-hand count becomes a
-    # nested spec the evaluator takes and subtracts, clamped at zero where every
-    # other quantity in this engine is (CR 107.1b: no card prints a negative
-    # amount, and a hand smaller than the opponent's deals no damage rather than
-    # healing them).
-    #
-    # Read before the constant arm below, which would otherwise see a `Minus`
-    # whose right side is not `Fixed`, leave it alone, and fall through to
-    # "only a count can define X in a where-clause".
-    subtracted: dict | None = None
-    if (
-        isinstance(definition, ast.Minus)
-        and isinstance(definition.left, ast.CountOf)
-        and isinstance(definition.right, ast.CountOf)
-    ):
-        subtracted = count_spec(
-            _count_filter_for(definition.right.filter, inner, node, event), node
-        )
-        definition = definition.left
-    if isinstance(definition, (ast.Plus, ast.Minus)):
-        sign = -1 if isinstance(definition, ast.Minus) else 1
-        left, right = definition.left, definition.right
-        if isinstance(right, ast.Fixed) and not isinstance(left, ast.Fixed):
-            plus, definition = sign * right.value, left
-        elif sign > 0 and isinstance(left, ast.Fixed) and not isinstance(right, ast.Fixed):
-            plus, definition = left.value, right
-    if isinstance(definition, ast.Times):
-        factor = definition.factor
-        definition = definition.of
-    if not isinstance(definition, ast.CountOf):
+    # What stays here is what only this caller knows — the sentence, so "that
+    # player" in the counted phrase is moved onto the seat it named
+    # (``_count_filter_for``) before the count is described.
+    spec = counted_definition_spec(
+        node.definition, node,
+        rewrite=lambda filt: _count_filter_for(filt, inner, node, event),
+    )
+    if spec is None:
         raise LoweringError("only a count can define X in a where-clause", node=node)
     if not _mentions_x(inner):
         # The clause defined an X the sentence never used, which means one of
         # them was misread. Refusing keeps that loud instead of executing the
         # sentence with the definition quietly discarded.
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
-    spec = count_spec(_count_filter_for(definition.filter, inner, node, event), node,
-                      multiplier=factor)
-    if plus:
-        spec["plus"] = plus
-    if subtracted is not None:
-        spec["minus_count"] = subtracted
     if node.as_cast:
         # And **whose** board, which is the half a cast-time count has to settle
         # that a resolution-time one does not. At the announcement nothing has

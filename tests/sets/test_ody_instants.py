@@ -39,6 +39,241 @@ log), not instruction kinds alone.
 # ==== W1G4 ==========================================================
 # W1G4's tests go between this line and the "end W1G4" line.
 
+import pytest as _w1g4_pytest
+
+from engine import Game as _w1g4_Game, PlayerState as _w1g4_PlayerState
+from engine.models import Permanent as _w1g4_Permanent
+from engine.oracle import compile_card_oracle as _w1g4_compile
+from tests.helpers import _mk_card as _w1g4_mk_card
+from tests.helpers import resolve_stack as _w1g4_resolve_stack
+
+
+def _w1g4_duel(set_pool, *, hand0=(), hand1=(), gy0=(), gy1=(), lib0=(),
+               lib1=(), bf0=(), bf1=()):
+    """A two-seat game with costs off, built from card names.
+
+    Odyssey and Alpha in one pool: the Bursts count their own name, and what
+    they are aimed at is furniture.
+    """
+    pool = {**set_pool("LEA"), **set_pool("ODY")}
+    seats = [
+        _w1g4_PlayerState(
+            name=f"P{seat}", life=20,
+            hand=[pool[n] for n in hand], graveyard=[pool[n] for n in gy],
+            library=[pool[n] for n in lib],
+        )
+        for seat, (hand, gy, lib) in enumerate(
+            ((hand0, gy0, lib0), (hand1, gy1, lib1))
+        )
+    ]
+    game = _w1g4_Game(players=seats)
+    game.enforce_mana_costs = False
+    for seat, names in enumerate((bf0, bf1)):
+        for name in names:
+            game._put_permanent_onto_battlefield(
+                seat, _w1g4_Permanent(card=pool[name]), None
+            )
+    return game
+
+
+def _w1g4_names(cards):
+    return [card.name for card in cards]
+
+
+def _w1g4_on_board(game, seat, name):
+    return next(p for p in game.controlled_by(seat) if p.card.name == name)
+
+
+# --- The Bursts: "N plus the number of cards named ~ in all graveyards" ------
+
+def test_flame_burst_counts_its_name_in_every_graveyard(set_pool):
+    """2 plus one in each graveyard: 4 damage, and the copy being cast is on
+    the stack while the count is taken, so it is not one of them."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Flame Burst"], gy0=["Flame Burst"],
+        gy1=["Flame Burst", "Grizzly Bears"],
+    )
+    assert game.cast_from_hand(0, "Flame Burst", target_player_index=1).supported
+    _w1g4_resolve_stack(game)
+    assert game.players[1].life == 16
+    assert _w1g4_names(game.players[0].graveyard) == ["Flame Burst", "Flame Burst"]
+
+
+def test_flame_burst_with_none_in_a_graveyard_deals_its_printed_two(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Flame Burst"], bf1=["Grizzly Bears"])
+    bears = _w1g4_on_board(game, 1, "Grizzly Bears")
+    assert game.cast_from_hand(
+        0, "Flame Burst", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g4_resolve_stack(game)
+    game.check_state_based_actions()
+    assert _w1g4_names(game.players[1].graveyard) == ["Grizzly Bears"]
+    assert game.players[1].life == 20
+
+
+def test_muscle_burst_is_three_plus_the_bursts_in_all_graveyards(set_pool):
+    """The same definition Flame Burst prints, in the +X/+X position — which
+    refused ("only a count or a maximum can define X here") while the damage
+    form read it: one where-clause, two readers that had drifted apart."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Muscle Burst"], gy0=["Muscle Burst"],
+        gy1=["Muscle Burst", "Flame Burst"], bf0=["Grizzly Bears"],
+    )
+    bears = _w1g4_on_board(game, 0, "Grizzly Bears")
+    assert game.cast_from_hand(
+        0, "Muscle Burst", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == (7, 7)
+
+
+def test_muscle_burst_needs_a_creature_to_aim_at(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Muscle Burst"], bf1=["Forest"])
+    forest = _w1g4_on_board(game, 1, "Forest")
+    refused = game.cast_from_hand(
+        0, "Muscle Burst", target_permanent_ids=[forest.permanent_id]
+    )
+    assert not refused.supported
+    assert _w1g4_names(game.players[0].hand) == ["Muscle Burst"]
+
+
+@_w1g4_pytest.mark.parametrize("line, expected", [
+    # The arithmetic the sentence form always read, now in the pump position.
+    ("Target creature gets +X/+X until end of turn, where X is twice the "
+     "number of cards named Vigor Burst in all graveyards minus 1.", (5, 5)),
+    ("Target creature gets +X/+0 until end of turn, where X is the number of "
+     "cards in your graveyard minus the number of cards in your hand.", (4, 2)),
+])
+def test_a_pump_reads_the_arithmetic_a_damage_where_clause_reads(
+    set_pool, line, expected
+):
+    """An invented card, not a name: the fork was in which *sentence* could
+    carry a sum, so the proof is a card nobody printed carrying one."""
+    burst = _w1g4_mk_card("Vigor Burst", "{G}", "Instant", line)
+    assert _w1g4_compile(burst).supported
+    game = _w1g4_duel(set_pool, bf0=["Grizzly Bears"])
+    game.players[0].hand.append(burst)
+    game.players[0].graveyard.extend([burst, burst])
+    bears = _w1g4_on_board(game, 0, "Grizzly Bears")
+    assert game.cast_from_hand(
+        0, "Vigor Burst", target_permanent_ids=[bears.permanent_id]
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert (bears.effective_power, bears.effective_toughness) == expected
+
+
+def test_a_damage_where_clause_reads_the_maximum_a_pump_reads(set_pool):
+    """The fork's other direction: "the greatest power among" defined a pump's
+    X (Carrion Grub) and refused a damage's."""
+    blast = _w1g4_mk_card(
+        "Grave Blast", "{R}", "Instant",
+        "Grave Blast deals X damage to any target, where X is the greatest "
+        "power among creature cards in your graveyard.",
+    )
+    assert _w1g4_compile(blast).supported
+    game = _w1g4_duel(set_pool, gy0=["Grizzly Bears", "Craw Wurm", "Forest"])
+    game.players[0].hand.append(blast)
+    assert game.cast_from_hand(0, "Grave Blast", target_player_index=1).supported
+    _w1g4_resolve_stack(game)
+    assert game.players[1].life == 14
+
+
+def test_a_continuous_x_refuses_a_count_taken_off_a_count():
+    """A durationless +X/+0 is rebuilt by the CR 613 recompute, which asks the
+    zone evaluator and never the resolution-time function that subtracts — so
+    the shape refuses instead of dropping its subtrahend."""
+    grower = _w1g4_mk_card(
+        "Odd Grower", "{G}", "Creature — Beast",
+        "This creature gets +X/+0, where X is the number of cards in your "
+        "hand minus the number of cards in your graveyard.",
+    )
+    assert not _w1g4_compile(grower).supported
+    steady = _w1g4_mk_card(
+        "Even Grower", "{G}", "Creature — Beast",
+        "This creature gets +X/+0, where X is 1 plus the number of cards in "
+        "your graveyard.",
+    )
+    assert _w1g4_compile(steady).supported
+
+
+# --- Aether Burst: an X counted as the spell is cast (CR 601.2b/601.2c) ------
+
+def test_aether_burst_announces_its_x_and_bounds_the_picker(set_pool):
+    game = _w1g4_duel(
+        set_pool, hand0=["Aether Burst"], gy1=["Aether Burst"],
+        bf0=["Grizzly Bears"], bf1=["Craw Wurm", "Scryb Sprites"],
+    )
+    card = set_pool("ODY")["Aether Burst"]
+    assert game.announced_cast_x(0, card) == 2
+    spec = game.cast_target_spec(0, card)
+    assert spec["defined_x"] == 2 and spec["max_targets"] == 2
+    assert len(spec["valid_targets"]) == 3
+    every = [p.permanent_id for p in game.all_permanents()]
+    refused = game.cast_from_hand(0, "Aether Burst", target_permanent_ids=every)
+    assert not refused.supported
+    assert refused.details == "Aether Burst has 2 targets, not 3"
+    assert _w1g4_names(game.players[0].hand) == ["Aether Burst"]
+
+
+def test_aether_burst_returns_what_was_named_to_its_owners_hand(set_pool):
+    game = _w1g4_duel(
+        set_pool, hand0=["Aether Burst"], gy1=["Aether Burst"],
+        bf0=["Grizzly Bears"], bf1=["Craw Wurm", "Scryb Sprites"],
+    )
+    theirs = [p.permanent_id for p in game.controlled_by(1)]
+    assert game.cast_from_hand(
+        0, "Aether Burst", target_permanent_ids=theirs
+    ).supported
+    _w1g4_resolve_stack(game)
+    assert sorted(_w1g4_names(game.players[1].hand)) == ["Craw Wurm", "Scryb Sprites"]
+    assert [p.card.name for p in game.all_permanents()] == ["Grizzly Bears"]
+
+
+def test_aether_burst_may_name_nobody_and_refuses_a_land(set_pool):
+    """"Up to X": naming none is a legal announcement (CR 601.2c), and what is
+    named has to be a creature."""
+    game = _w1g4_duel(set_pool, hand0=["Aether Burst"], bf1=["Craw Wurm"])
+    assert game.cast_from_hand(0, "Aether Burst", target_permanent_ids=[]).supported
+    _w1g4_resolve_stack(game)
+    assert [p.card.name for p in game.all_permanents()] == ["Craw Wurm"]
+
+    again = _w1g4_duel(set_pool, hand0=["Aether Burst"], bf1=["Forest"])
+    forest = _w1g4_on_board(again, 1, "Forest")
+    refused = again.cast_from_hand(
+        0, "Aether Burst", target_permanent_ids=[forest.permanent_id]
+    )
+    assert not refused.supported
+    assert _w1g4_names(again.players[0].hand) == ["Aether Burst"]
+
+
+def test_aether_burst_freezes_its_x_at_the_announcement(set_pool):
+    """CR 601.2c: the number of targets does not change once determined. The
+    graveyards are emptied in response and one target leaves: the two that are
+    left are still returned, where a count taken again would return one."""
+    game = _w1g4_duel(
+        set_pool, hand0=["Aether Burst"], gy1=["Aether Burst", "Aether Burst"],
+        bf1=["Craw Wurm", "Scryb Sprites", "Grizzly Bears"],
+    )
+    ids = [p.permanent_id for p in game.controlled_by(1)]
+    assert game.queue_from_hand(0, "Aether Burst", target_permanent_ids=ids).supported
+    assert game.stack[-1].x_value == 3
+    game.players[1].graveyard.clear()
+    game.remove_from_battlefield(game.permanent_by_id(ids[0]))
+    _w1g4_resolve_stack(game)
+    assert sorted(_w1g4_names(game.players[1].hand)) == ["Grizzly Bears", "Scryb Sprites"]
+
+
+def test_aether_burst_with_every_target_gone_does_nothing(set_pool):
+    game = _w1g4_duel(set_pool, hand0=["Aether Burst"], bf1=["Craw Wurm"])
+    wurm = _w1g4_on_board(game, 1, "Craw Wurm")
+    assert game.queue_from_hand(
+        0, "Aether Burst", target_permanent_ids=[wurm.permanent_id]
+    ).supported
+    game.remove_from_battlefield(wurm)
+    _w1g4_resolve_stack(game)
+    assert any("608.2b" in line for line in game.log)
+    assert game.players[1].hand == []
+
 # ==== end W1G4 ======================================================
 
 
