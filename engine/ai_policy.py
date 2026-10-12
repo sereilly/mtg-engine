@@ -558,10 +558,12 @@ def _nonland_mana_source(
     the tap seam's own predicate — which also excludes a printed "Activate
     only …" and an ability that asks another player something). A mana ability
     with a further cost is not free mana: "{1}, {T}: Add one mana of any
-    color" (Mana Cylix) spends one to make one, "{T}, Sacrifice this artifact"
-    (Black Lotus) and "Sacrifice this creature" (Morgue Toad) spend the
-    permanent, and a plan that counted those would sacrifice a creature to
-    cast a one-drop. They stay out until a policy prices them.
+    color" (Mana Cylix) spends one to make one — counted apart, as a last
+    resort and behind the tap that pays for it (`_priced_mana_source`) —
+    and "{T}, Sacrifice this artifact" (Black Lotus) and "Sacrifice this
+    creature" (Morgue Toad) spend the permanent: a plan that counted those
+    would sacrifice a creature to cast a one-drop. Those stay out until a
+    policy prices them.
 
     **And only one the activation path will accept**, the non-land twin of
     `land_mana_tap_refusal`: untapped; not a summoning-sick creature (CR 302.6
