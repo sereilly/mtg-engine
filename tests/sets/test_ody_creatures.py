@@ -361,6 +361,108 @@ def test_w1g5_spellbane_centaur_entering_in_response_fizzles_a_blue_spell(
     _w1g5_resolve_stack(game)
     assert not game.is_on_battlefield(theirs)
 
+
+# Obstinate Familiar -----------------------------------------------------------
+
+
+def test_w1g5_obstinate_familiar_asks_its_controller_about_each_draw(
+    catalog_by_name, set_pool,
+):
+    """"If you would draw a card, you may skip that draw instead." An optional
+    replacement of one draw by nothing (CR 614.10), asked through the one draw
+    seam. A two-card draw is two draws (CR 121.2), so two offers: the first is
+    skipped — no card moves — and the second is declined, and the draw it
+    leaves is made without the Familiar being asked again (CR 614.5)."""
+    game = _w1g5_table(catalog_by_name, set_pool, interactive={0})
+    _w1g5_put(game, 0, "Obstinate Familiar")
+    alice = game.players[0]
+
+    assert game._draw_with_replacements(alice, 2) == 0, "the draw is suspended"
+    assert [c.kind for c in game.pending_replacement_choices] == ["skip_draw"]
+    assert game.pending_skip_draws[0]["options"] == ["draw the card", "skip the draw"]
+    assert game.waiting_prompt() is not None, "the game waits on the answer"
+
+    assert game.confirm_skip_draw(0, skip=True)
+    assert alice.hand == [] and len(alice.library) == 20
+    assert len(game.pending_skip_draws) == 1, "the second draw is its own offer"
+
+    assert game.confirm_skip_draw(0, skip=False)
+    assert len(alice.hand) == 1 and len(alice.library) == 19
+    assert game.pending_replacement_choices == []
+
+
+def test_w1g5_obstinate_familiar_is_its_controllers_own_and_saves_an_empty_library(
+    catalog_by_name, set_pool,
+):
+    """"If **you** would draw" is the Familiar's controller (CR 109.5): an
+    opponent's draw is not offered. And a seat nobody asks takes the choice a
+    player would make — it draws while there is a card to draw, and skips a
+    draw from an empty library, so the Familiar's controller is never decked
+    (CR 704.5b) beside the permanent that prevents it."""
+    game = _w1g5_table(catalog_by_name, set_pool, interactive={1})
+    _w1g5_put(game, 0, "Obstinate Familiar")
+    alice, bob = game.players
+
+    assert game._draw_with_replacements(bob, 1) == 1
+    assert game.pending_replacement_choices == []
+
+    assert game._draw_with_replacements(alice, 2) == 2
+    alice.library = []
+    assert game._draw_with_replacements(alice, 1) == 0
+    game.check_state_based_actions()
+    assert not alice.lost
+    assert any("Alice skipped a draw (Obstinate Familiar)" in line for line in game.log)
+
+    # Without the Familiar the same draw is the game.
+    familiar = next(p for p in game.all_permanents() if p.card.name == "Obstinate Familiar")
+    game.remove_from_battlefield(familiar)
+    game._draw_with_replacements(alice, 1)
+    game.check_state_based_actions()
+    assert alice.lost
+
+
+def test_w1g5_obstinate_familiar_is_asked_in_the_draw_step(catalog_by_name, set_pool):
+    """The turn-based draw (CR 504.1) is a draw like any other: the Familiar's
+    controller is asked, and the game waits until they answer."""
+    game = _w1g5_table(catalog_by_name, set_pool, interactive={0})
+    _w1g5_put(game, 0, "Obstinate Familiar")
+    game.turn = 3
+    game.start_turn(0)
+
+    assert [c.kind for c in game.pending_replacement_choices] == ["skip_draw"]
+    assert game.players[0].hand == []
+    assert game.confirm_skip_draw(0, skip=False)
+    assert len(game.players[0].hand) == 1
+
+
+def test_w1g5_the_skip_draw_prompt_is_rendered_with_its_labels(
+    catalog_by_name, set_pool,
+):
+    """The server half of the wire. The prompt carries the option labels the
+    resolver accepts, the source's name, how many offers are queued and the
+    size of the library — which is the decision. **The browser has no
+    renderer for this key yet** (W1G5 stayed out of ``web/static/``):
+    ``tests/ui/test_prompt_client_coverage.py`` names ``skip_draw`` until one
+    is added."""
+    from web.prompts import PROMPT_RENDERERS
+
+    game = _w1g5_table(catalog_by_name, set_pool, interactive={0})
+    _w1g5_put(game, 0, "Obstinate Familiar")
+    game._draw_with_replacements(game.players[0], 2)
+
+    class _Ctx:  # the two attributes this renderer reads
+        pass
+
+    ctx = _Ctx()
+    ctx.game = game
+    assert PROMPT_RENDERERS["skip_draw"](ctx, list(game.pending_replacement_choices)) == {
+        "player_seat": 0,
+        "source_name": "Obstinate Familiar",
+        "options": ["draw the card", "skip the draw"],
+        "remaining": 1,
+        "library_size": 20,
+    }
+
 # ==== end W1G5 ======================================================
 
 

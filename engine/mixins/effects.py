@@ -1163,6 +1163,20 @@ class EffectsMixin:
         ]
 
     @property
+    def pending_skip_draws(self) -> list[dict]:
+        """Obstinate Familiar's outstanding CR 614.1 offers - one per draw a
+        permanent printing "you may skip that draw instead" would replace.
+        Shaped like the two views above."""
+        return [
+            {
+                "player_index": choice.player_index,
+                "options": list(choice.options),
+                "source_id": choice.data["source_id"],
+            }
+            for choice in pending_choices_for(self, "skip_draw")
+        ]
+
+    @property
     def pending_optional_damage_redirects(self) -> list[dict]:
         """CR 614.9's outstanding optional offers — one per damage event whose
         recipient a class-scoped redirect watches (Blood of the Martyr)."""

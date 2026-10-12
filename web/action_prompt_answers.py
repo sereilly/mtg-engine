@@ -589,6 +589,24 @@ def _action_reveal_until_kind_draw_confirm(session, req, seat_type):
     if not session.game.confirm_reveal_until_kind_draw(req.seat, option):
         raise HTTPException(status_code=400, detail="invalid reveal-until choice")
 
+@action_handler("skip_draw_confirm")
+def _action_skip_draw_confirm(session, req, seat_type):
+    # Obstinate Familiar: "If you would draw a card, you may skip that draw
+    # instead." Answered by index into the offered options, the Abundance
+    # offer's shape: 0 draws the card, 1 skips the draw.
+    pending = [
+        e for e in session.game.pending_skip_draws if e["player_index"] == req.seat
+    ]
+    if not pending:
+        raise HTTPException(status_code=400, detail="no skip-the-draw choice pending for you")
+    if req.option_index is None:
+        raise HTTPException(status_code=400, detail="option_index is required")
+    option = int(req.option_index)
+    if not 0 <= option < len(pending[0]["options"]):
+        raise HTTPException(status_code=400, detail="option_index is out of range")
+    if not session.game.confirm_skip_draw(req.seat, skip=option == 1):
+        raise HTTPException(status_code=400, detail="invalid skip-the-draw choice")
+
 @action_handler("resolve_optional_pay")
 def _action_resolve_optional_pay(session, req, seat_type):
     # Color rods (Wooden Sphere, …): "you may pay {1}. If you do, gain life."

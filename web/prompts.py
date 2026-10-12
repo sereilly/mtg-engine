@@ -1076,6 +1076,29 @@ def _reveal_until_kind_draw(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+@prompt_renderer("skip_draw")
+def _skip_draw(ctx: PromptContext, choices: list) -> dict:
+    """Obstinate Familiar: draw the card, or skip that draw.
+
+    The Abundance offer's shape one option shorter, and for its reasons: one
+    offer at a time (the replacement arms one per draw) with how many are
+    queued behind it, and the labels come off the choice so what the client
+    shows and what the resolver accepts are one list. ``library_size`` rides
+    along because it is the whole decision — skipping matters when the next
+    draw would be from an empty library — and a seat always knows the size of
+    its own library.
+    """
+    choice = choices[0]
+    source = ctx.game.permanent_by_id(int(choice.data["source_id"]))
+    return {
+        "player_seat": choice.player_index,
+        "source_name": source.card.name if source is not None else "",
+        "options": list(choice.options),
+        "remaining": sum(1 for c in choices if c.player_index == choice.player_index),
+        "library_size": len(ctx.game.players[choice.player_index].library),
+    }
+
+
 @prompt_renderer("balance")
 def _balance(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

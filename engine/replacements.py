@@ -285,6 +285,12 @@ DRAW_REVEALS_UNTIL_KIND = 21  # Abundance
 # order. Being optional, the number matters less than for its neighbours -
 # declining leaves the event for whatever is behind it.
 DRAW_BECOMES_COUNTER = 25  # Pursuit of Knowledge
+# Beside it and for its reason exactly: the second optional consuming
+# replacement, a decision its own controller makes about their own draw. After
+# Pursuit, because that one hands something back for the draw it takes and this
+# one hands back nothing — the order a player holding both would choose, which
+# CR 616.1e permits. Declining either leaves the event for whatever is behind.
+DRAW_MAY_BE_SKIPPED = 26  # Obstinate Familiar
 DRAW_DISCARD_INSTEAD = 30  # Chains of Mephistopheles
 # Beside it, and last for the same reason: this one takes the draw away too.
 # Between the two the order is arbitrary — no card in the pool prints both, and
@@ -3961,6 +3967,139 @@ def _resolve_draw_becomes_counter(
     return drawn
 
 
+#: "If you would draw a card, you may skip that draw instead." (Obstinate
+#: Familiar.) Pursuit of Knowledge's sentence with nothing where the counter
+#: was: an optional replacement of one draw by **no event at all** (CR 614.10:
+#: "'Skip [something]' is the same as 'Instead of doing [something], do
+#: nothing.'").
+#:
+#: The whole line, with no payload: the sentence names the draw, the seat and
+#: the option and nothing else. A printing that added a condition or a rider
+#: would be a different rule and stays unmatched.
+SKIP_DRAW_TEXT = "if you would draw a card, you may skip that draw instead"
+
+
+def skip_draw_line(line: str) -> bool:
+    """Whether *line* is, in full, the optional skip. One reader for the
+    interceptor and for the claim (``REPLACEMENT_LINES``)."""
+    return " ".join((line or "").split()).strip().lower().rstrip(".") == SKIP_DRAW_TEXT
+
+
+def _skip_draw_sources(game, payload: dict) -> list:
+    """Every permanent offering to skip *this* draw.
+
+    "If **you** would draw a card" is CR 109.5's seat, so only the drawing
+    player's own permanents offer it. CR 614.5's exclusion is honoured through
+    the ``exclude_sources`` key every draw replacement here reads — the draw a
+    declined offer leaves is remade through the seam, and a source already
+    asked must not ask again. Read off ``effective_card`` (CR 707.2, CR 612.1),
+    and pure, like every applicability predicate in this file.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    seat = game.players.index(payload["player"])
+    return [
+        perm
+        for perm in game.controlled_by(seat)
+        if perm.permanent_id not in exclude
+        and any(
+            skip_draw_line(line)
+            for line in (perm.effective_card.oracle_text or "").splitlines()
+        )
+    ]
+
+
+def _applies_skip_draw(game, payload: dict) -> bool:
+    return int(payload.get("count", 0)) > 0 and bool(
+        _skip_draw_sources(game, payload)
+    )
+
+
+@replacement_effect("draw", DRAW_MAY_BE_SKIPPED, applies=_applies_skip_draw)
+def _skip_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
+    """Obstinate Familiar: "If you would draw a card, you may skip that draw
+    instead."
+
+    One draw at a time (CR 121.2 makes a multi-card instruction that many
+    draws), and **optional**, so it is a :class:`ReplacementChoice` — the
+    shape Pursuit of Knowledge's offer above has, for its reasons: the answer
+    arrives from a human on a later request, and both answers finish through
+    one registered resolver.
+
+    The default a non-interactive seat takes is the choice a player would
+    make: draw the card — unless the library is **empty**, where the draw
+    would lose the game at the next state-based check (CR 704.5b) and skipping
+    it is the whole reason the card is played. A seat that always skipped
+    would never draw again; one that never did would deck itself beside the
+    permanent that prevents it.
+    """
+    player = payload["player"]
+    seat = game.players.index(player)
+    source = min(
+        _skip_draw_sources(game, payload), key=lambda perm: perm.permanent_id
+    )
+    excludes = tuple(payload.get("exclude_sources") or ()) + (source.permanent_id,)
+    suspended, drawn = offer_replacement_choice(
+        game,
+        ReplacementChoice(
+            kind="skip_draw",
+            player_index=seat,
+            options=("draw the card", "skip the draw"),
+            default_option=0 if player.library else 1,
+            data={
+                "source_id": source.permanent_id,
+                "remaining_draws": int(payload["count"]) - 1,
+                "exclude_sources": excludes,
+                "turn_based": bool(payload.get("turn_based")),
+            },
+        ),
+    )
+    if suspended:
+        game.log.append(
+            f"{player.name} may skip that draw ({source.card.name})"
+        )
+    payload["drawn"] = drawn
+    return ReplacementOutcome(replaced=True)
+
+
+@replacement_choice("skip_draw")
+def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> int:
+    """Carry out the answer to Obstinate Familiar's offer.
+
+    Option 0 declines: the draw is remade through ``_draw_with_replacements``
+    with the offering permanent excluded, so every *other* draw replacement
+    still gets its turn and this one is not asked twice (CR 614.5).
+
+    Option 1 skips: nothing happens and no card is drawn, so "whenever you
+    draw a card" sees one fewer draw and an empty library is never drawn from.
+
+    Nothing here reads the source again, so a Familiar that left the
+    battlefield while the offer was queued changes neither answer: the
+    replacement was applied when it was offered (CR 614.1), and the two
+    options are what it offered.
+    """
+    player = game.players[choice.player_index]
+    data = choice.data
+    remaining = int(data.get("remaining_draws", 0))
+    drawn = 0
+    if option_index == 0:
+        drawn += game._draw_with_replacements(
+            player, 1,
+            turn_based=bool(data.get("turn_based")),
+            exclude_sources=tuple(data.get("exclude_sources") or ()),
+        )
+    else:
+        source = game.permanent_by_id(int(data["source_id"]))
+        game.log.append(
+            f"{player.name} skipped a draw"
+            + (f" ({source.card.name})" if source is not None else "")
+        )
+    if remaining > 0:
+        # The draws queued behind this one are their own events (CR 121.2) and
+        # are offered on their own — including by this source again.
+        drawn += game._draw_with_replacements(player, remaining)
+    return drawn
+
+
 def _chains_affected_draws(payload: dict) -> int:
     """How many of this event's draws the exemption leaves.
 
@@ -4774,6 +4913,9 @@ REPLACEMENT_LINES: tuple[tuple[str, str], ...] = (
     # stopping at the first sentence would admit the card with the clause that
     # makes it a real card doing nothing.
     (RETURN_FROM_GRAVEYARD_INSTEAD_OF_DRAW_TEXT, ""),
+    # _skip_instead_of_drawing (Obstinate Familiar): the phrase is the whole
+    # line. The offer and both of its answers are the interceptor's.
+    (SKIP_DRAW_TEXT, ""),
 )
 
 
