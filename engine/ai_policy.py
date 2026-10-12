@@ -5323,9 +5323,10 @@ def toll_decline_is_smaller_loss(
     ):
         return False  # mana-priced: the floating-mana policy stands
     source = entry.get("_source_permanent")
+    context = entry.get("_context")
     paying = toll_branch_loss(
         game, player_index, tuple(entry.get("_on_accept") or ()),
-        self_recipients, source,
+        self_recipients, source, context,
     )
     if paying is None:
         return False
@@ -5333,10 +5334,17 @@ def toll_decline_is_smaller_loss(
     if life_cost:
         paying = paying.plus_life(life_cost)
     declining = toll_branch_loss(
-        game, player_index, penalty_steps, self_recipients, source
+        game, player_index, penalty_steps, self_recipients, source, context
     )
     if declining is None:
-        return False
+        # **A price that kills is never paid for a penalty nobody can price.**
+        # "Counter target instant or sorcery spell unless its controller has
+        # Molten Influence deal 4 damage to them": what a countered spell is
+        # worth is not derivable here, so the standing policy — pay tolls —
+        # applied, and a seat at 4 life paid with the game. Whatever the
+        # penalty is, it is not larger than the game; every survivable price
+        # still goes to the standing policy, exactly as before.
+        return _toll_loss_price(game, player_index, paying) >= _TOLL_LETHAL_PRICE
     if legacy_damage:
         declining = declining.plus_life(legacy_damage)
     return _toll_loss_price(game, player_index, declining) < _toll_loss_price(

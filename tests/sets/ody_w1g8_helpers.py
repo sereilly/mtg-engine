@@ -18,7 +18,7 @@ from tests.helpers import resolve_stack
 #: Where a card named by a W1G8 test is looked up, in order. Odyssey first, so
 #: a name the set prints is always the set's own card; the rest are the sets
 #: whose cards these tests stand beside the group's.
-_SETS = ("ODY", "LEA", "7ED", "TMP", "ICE")
+_SETS = ("ODY", "LEA", "7ED", "TMP", "ICE", "M21", "LEG", "DRK")
 
 
 def card(set_pool, name):

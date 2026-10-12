@@ -930,6 +930,77 @@ def test_w1g6_zombify_does_nothing_when_its_target_has_left(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Lava Blister -----------------------------------------------------------
+# "Destroy target nonbasic land unless its controller has Lava Blister deal 6
+# damage to them." Blazing Salvo's clause behind a destruction (the rules
+# reading is beside that card's tests, in `test_ody_instants.py`).
+
+def _w1g8_blister(set_pool, seat=1, interactive=(0, 1)):
+    game = _w1g8.table(set_pool, hand=["Lava Blister"], interactive=interactive)
+    game.start_turn(0)
+    land = _w1g8.put(game, set_pool, seat, "Bayou")
+    cast = game.queue_from_hand(
+        0, "Lava Blister", target_permanent_ids=[land.permanent_id]
+    )
+    assert cast.supported, cast.details
+    return game, land
+
+
+@_w1g8_pytest.mark.parametrize("seat", [1, 0])
+def test_w1g8_lava_blister_spares_the_land_of_a_controller_who_takes_six(
+    set_pool, seat
+):
+    game, land = _w1g8_blister(set_pool, seat=seat)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.owed(game) == [("optional_pay", seat)], "the land's controller"
+    assert game.confirm_optional_pay(seat, accept=True)
+    _w1g8.settle(game)
+
+    assert game.players[seat].life == 14 and game.players[1 - seat].life == 20
+    assert game.is_on_battlefield(land)
+
+
+def test_w1g8_lava_blister_declined_destroys_the_land(set_pool):
+    game, land = _w1g8_blister(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 20]
+    assert _w1g8.pile(game, 1) == ["Bayou"]
+
+
+def test_w1g8_lava_blister_cannot_be_aimed_at_a_basic_land(set_pool):
+    game = _w1g8.table(set_pool, hand=["Lava Blister"])
+    game.start_turn(0)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+
+    refused = game.cast_from_hand(
+        0, "Lava Blister", target_permanent_ids=[forest.permanent_id]
+    )
+
+    assert not refused.supported
+    assert _w1g8.pile(game, 0, "hand") == ["Lava Blister"]
+    assert game.is_on_battlefield(forest)
+
+
+def test_w1g8_a_seat_nobody_asks_gives_up_the_land_rather_than_six_life(set_pool):
+    """The non-interactive answer prices both losses: a land against six
+    life. "Pay tolls" took the six every time, and at six life took the game."""
+    for life in (20, 6):
+        game, land = _w1g8_blister(set_pool, interactive=())
+        game.players[1].life = life
+        _w1g8.settle(game)
+
+        assert game.players[1].life == life and not game.players[1].lost
+        assert _w1g8.pile(game, 1) == ["Bayou"]
 
 # ==== end W1G8 ======================================================
 

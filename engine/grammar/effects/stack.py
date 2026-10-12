@@ -195,6 +195,30 @@ def _parse_counter(stream: TokenStream) -> ast.Statement:
         )
     stream.reset(sacrifice_mark)
 
+    # "…**unless its controller has Molten Influence deal 4 damage to them**."
+    # A price that is not a payment: the countered spell's controller *chooses
+    # to be dealt damage*, which is one of the toll's action currencies
+    # (``tolls.accept_damage_price``) and not this flow's — that one collects
+    # mana from the spell's controller while the spell waits. So the clause is
+    # left on the stream for the toll reader around the sentence, exactly as
+    # the sacrifice tail above hands its own to ``May``; read on into
+    # `_parse_unless_pays` it raised "expected 'pays or pay'", which named a
+    # payment the card never offered.
+    #
+    # Peeked rather than consumed, and only for the two payers that clause
+    # admits: a third party "having" damage dealt keeps the refusal below.
+    punisher_mark = stream.mark()
+    if stream.accept_word("unless"):
+        payer = parse_player_ref(stream)
+        chooses_damage = (
+            payer is not None
+            and payer.kind in ("controller", "that_player")
+            and stream.at_word("has", "have")
+        )
+        stream.reset(punisher_mark)
+        if chooses_damage:
+            return ast.CounterSpell(subject)
+
     payment, payment_life = _parse_unless_pays(stream)
     if payment is not None:
         # "…pays {1} **for each card revealed this way**." (Brine Seer, Scent

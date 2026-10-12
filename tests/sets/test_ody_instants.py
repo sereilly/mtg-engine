@@ -806,6 +806,256 @@ def test_w1g6_ghastly_demise_cannot_be_aimed_at_a_black_creature_or_at_nothing(
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Blazing Salvo ----------------------------------------------------------
+# "Blazing Salvo deals 3 damage to target creature unless that creature's
+# controller has Blazing Salvo deal 5 damage to them." The punisher clause: the
+# toll's eighth currency is damage the payer *chooses to be dealt*.
+#
+# Scryfall carries no ruling for this card, Lava Blister or Molten Influence
+# (fetched 2026-10-12), so the Comprehensive Rules are the authority:
+# CR 118.12a makes "[do something] unless [a player does something else]" the
+# offer "[a player may do something else]. If [that player doesn't], [do
+# something]", and CR 118.12 says that "if" checks "whether the player chose
+# to pay … regardless of what events actually occurred". Vexing Devil's
+# 2012-05-01 ruling says the same of the "may have it deal" spelling.
+
+def _w1g8_salvo(set_pool, seat=1, interactive=(1,), victim="Hill Giant"):
+    """Blazing Salvo cast at *victim* on *seat*'s side, resolved up to the
+    point somebody is asked."""
+    game = _w1g8.table(set_pool, hand=["Blazing Salvo"], interactive=interactive)
+    game.start_turn(0)
+    creature = _w1g8.put(game, set_pool, seat, victim)
+    cast = game.queue_from_hand(
+        0, "Blazing Salvo", target_permanent_ids=[creature.permanent_id]
+    )
+    assert cast.supported, cast.details
+    return game, creature
+
+
+def test_w1g8_blazing_salvo_asks_the_creatures_controller_who_may_take_five(set_pool):
+    game, giant = _w1g8_salvo(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.owed(game) == [("optional_pay", 1)]
+    assert [item.card.name for item in game.stack] == ["Blazing Salvo"], (
+        "the spell waits on the stack for the answer (CR 608.2)"
+    )
+    assert game.confirm_optional_pay(1, accept=True)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 15]
+    assert game.is_on_battlefield(giant) and giant.damage_marked == 0
+    assert _w1g8.pile(game, 0) == ["Blazing Salvo"]
+
+
+def test_w1g8_blazing_salvo_declined_deals_its_three_to_the_creature(set_pool):
+    game, giant = _w1g8_salvo(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 20]
+    assert _w1g8.pile(game, 1) == ["Hill Giant"]
+
+
+def test_w1g8_blazing_salvo_at_the_casters_own_creature_asks_the_caster(set_pool):
+    """"That creature's controller" is a seat read off the target, not "the
+    opponent": aimed at its own creature the caster is the one who chooses."""
+    game, giant = _w1g8_salvo(set_pool, seat=0, interactive=(0, 1))
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.owed(game) == [("optional_pay", 0)]
+    assert game.confirm_optional_pay(0, accept=True)
+    _w1g8.settle(game)
+    assert [player.life for player in game.players] == [15, 20]
+    assert game.is_on_battlefield(giant)
+
+
+def test_w1g8_a_prevented_punisher_still_spares_the_creature(set_pool):
+    """CR 118.12: the creature is spared because its controller *chose* the
+    damage, whatever then happens to it. Behind a Circle of Protection: Red the
+    five is prevented and the three is still not dealt."""
+    game, giant = _w1g8_salvo(set_pool)
+    _w1g8.put(game, set_pool, 1, "Circle of Protection: Red")
+    game.players[1].mana_pool["C"] = 1
+    shield = game.activate_permanent_ability(1, "Circle of Protection: Red")
+    assert shield.supported, shield.details
+
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=True)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 20]
+    assert game.is_on_battlefield(giant) and giant.damage_marked == 0
+    assert any("prevented 5 damage" in line for line in game.log)
+
+
+def test_w1g8_the_punishers_damage_is_dealt_by_the_casters_spell(set_pool):
+    """The damage the opponent takes is Blazing Salvo's, controlled by its
+    caster (CR 109.5) — "a source you control" for Fiery Emancipation."""
+    game, giant = _w1g8_salvo(set_pool)
+    _w1g8.put(game, set_pool, 0, _w1g8.card(set_pool, "Fiery Emancipation"))
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=True)
+    _w1g8.settle(game)
+
+    assert game.players[1].life == 5, "5 damage tripled"
+
+
+def test_w1g8_blazing_salvo_whose_creature_left_asks_nobody(set_pool):
+    """CR 608.2b: its only target gone, the spell does not resolve — there is
+    no offer to make and no five to take."""
+    game, giant = _w1g8_salvo(set_pool)
+    _w1g8.leave(game, giant)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    _w1g8.settle(game)
+
+    assert _w1g8.owed(game) == []
+    assert [player.life for player in game.players] == [20, 20]
+    assert any("every target is illegal" in line for line in game.log)
+
+
+def test_w1g8_blazing_salvo_needs_a_creature_to_be_cast_at(set_pool):
+    game = _w1g8.table(set_pool, hand=["Blazing Salvo"])
+    game.start_turn(0)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+
+    at_a_land = game.cast_from_hand(
+        0, "Blazing Salvo", target_permanent_ids=[forest.permanent_id]
+    )
+    at_nothing = game.cast_from_hand(0, "Blazing Salvo")
+
+    assert not at_a_land.supported and not at_nothing.supported
+    assert _w1g8.pile(game, 0, "hand") == ["Blazing Salvo"]
+
+
+@_w1g8_pytest.mark.parametrize(
+    "life, victim, takes_five",
+    [
+        (20, "Hill Giant", True),      # five life for a creature: the toll is paid
+        (5, "Hill Giant", False),      # …but never with the game
+        (20, "Shivan Dragon", False),  # three does not kill it: nothing to buy off
+    ],
+)
+def test_w1g8_a_seat_nobody_asks_weighs_the_five_against_the_creature(
+    set_pool, life, victim, takes_five
+):
+    """The non-interactive answer (an AI seat, a headless game). "Pay tolls"
+    used to pay this one unconditionally: a seat at 5 life took the five and
+    lost the game to keep a Hill Giant."""
+    game, creature = _w1g8_salvo(set_pool, interactive=(), victim=victim)
+    game.players[1].life = life
+    _w1g8.settle(game)
+
+    assert game.players[1].life == (life - 5 if takes_five else life)
+    assert not game.players[1].lost
+
+
+# --- Molten Influence -------------------------------------------------------
+# "Counter target instant or sorcery spell unless its controller has Molten
+# Influence deal 4 damage to them." The same clause behind a counter, where
+# "its controller" is a *spell's* — a seat neither the control seam nor the
+# resolution's own target channel holds.
+
+def _w1g8_molten(set_pool, caster=1, interactive=(0, 1)):
+    """A Lightning Bolt cast by *caster* at the other seat, with seat 0's
+    Molten Influence aimed at it."""
+    game = _w1g8.table(
+        set_pool, hand=["Molten Influence", "Lightning Bolt"],
+        their_hand=["Lightning Bolt"], interactive=interactive,
+    )
+    game.start_turn(0)
+    bolt = game.queue_from_hand(caster, "Lightning Bolt", target_player_index=1 - caster)
+    assert bolt.supported, bolt.details
+    counter = game.queue_from_hand(0, "Molten Influence", target_stack_index=0)
+    assert counter.supported, counter.details
+    return game
+
+
+@_w1g8_pytest.mark.parametrize("caster", [1, 0])
+def test_w1g8_molten_influence_lets_the_spells_controller_take_four(set_pool, caster):
+    """The spell's controller is asked — the opponent, or the caster who aimed
+    it at their own spell — and taking the four lets the spell resolve."""
+    game = _w1g8_molten(set_pool, caster=caster)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.owed(game) == [("optional_pay", caster)]
+    assert game.confirm_optional_pay(caster, accept=True)
+    _w1g8.settle(game)
+
+    life = [20, 20]
+    life[caster] -= 4        # Molten Influence, by choice
+    life[1 - caster] -= 3    # the Bolt, which resolved
+    assert [player.life for player in game.players] == life
+
+
+def test_w1g8_molten_influence_declined_counters_the_spell(set_pool):
+    game = _w1g8_molten(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 20]
+    assert _w1g8.pile(game, 1) == ["Lightning Bolt"]
+    assert any("was countered by Molten Influence" in line for line in game.log)
+
+
+@_w1g8_pytest.mark.parametrize("life, countered", [(20, False), (4, True)])
+def test_w1g8_a_seat_nobody_asks_answers_molten_influence_before_the_spell_resolves(
+    set_pool, life, countered
+):
+    """Headless, the offer is answered where it stands: the spell it is about
+    is the next object to resolve, and an answer drained after the stack
+    emptied countered nothing. A seat the four would kill declines."""
+    game = _w1g8_molten(set_pool, interactive=())
+    game.players[1].life = life
+    _w1g8.settle(game)
+
+    if countered:
+        assert [player.life for player in game.players] == [20, life]
+        assert _w1g8.pile(game, 1) == ["Lightning Bolt"]
+    else:
+        assert [player.life for player in game.players] == [17, life - 4]
+
+
+def test_w1g8_molten_influence_cannot_be_aimed_at_a_creature_spell_or_nothing(set_pool):
+    game = _w1g8.table(
+        set_pool, hand=["Molten Influence"], their_hand=["Grizzly Bears"],
+    )
+    game.start_turn(0)
+    assert not game.cast_from_hand(0, "Molten Influence").supported, "an empty stack"
+
+    assert game.queue_from_hand(1, "Grizzly Bears").supported
+    refused = game.queue_from_hand(0, "Molten Influence", target_stack_index=0)
+    assert not refused.supported
+    assert _w1g8.pile(game, 0, "hand") == ["Molten Influence"]
+
+
+@_w1g8_pytest.mark.parametrize(
+    "price",
+    [
+        "has Probe Salvo deal 5 damage to you",              # not the payer
+        "has Probe Salvo deal 5 damage to them and to you",  # a second recipient
+        "has target creature deal 5 damage to them",         # not this spell
+    ],
+)
+def test_w1g8_a_damage_price_is_this_spells_damage_to_the_payer_alone(price):
+    """The refusing gate's refusal test: only the ability's own source, and
+    only to the seat that was asked."""
+    from tests.helpers import _mk_card
+
+    probe = _mk_card(
+        "Probe Salvo", "Instant",
+        "Probe Salvo deals 3 damage to target creature unless that creature's "
+        f"controller {price}.",
+    )
+    assert not _w1g8_compile(probe).supported
 
 # ==== end W1G8 ======================================================
 

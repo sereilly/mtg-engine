@@ -41,7 +41,8 @@ from ..oracle_types import (BIDDING_WINNER,
                             OracleInstruction)
 from ..oracle_types import SECRET_NUMBERS_BY_SEAT
 from ..oracle_types import (EVENT_SPELL_MANA_COST,
-                            OTHER_THAN_EVENT_SUBJECT_PLAYER)
+                            OTHER_THAN_EVENT_SUBJECT_PLAYER,
+                            STACK_TARGET_CONTROLLER)
 from ..turn_state import started_the_turn
 from ..repeated_offers import OFFER_TAKEN_RESULTS
 from ..resumption import run_resumable
@@ -3616,7 +3617,10 @@ def may(game: Game, instruction: OracleInstruction, context: OracleExecutionCont
     )
 
     def offer(player_index: int) -> None:
-        _offer_to_seat(game, instruction, context, player_index, rebind=rebind)
+        _offer_to_seat(
+            game, instruction, context, player_index, rebind=rebind,
+            aim=actor in _NAMED_SEAT_ACTORS,
+        )
 
     # Through ``run_resumable`` like every other loop in this file, and for the
     # reason ``engine/resumption.py`` states: the offer suspends on an
@@ -3710,6 +3714,20 @@ _EACH_ACTORS = frozenset({
 _EVENT_ACTORS = frozenset({"event_subject_player", "event_subject_controller"})
 
 
+#: The actors that name **one seat the resolution's target channel does not
+#: hold**, and whose offer therefore *aims* the branches at it: ``target``
+#: becomes the offered seat, so a player word inside the offer ("has Molten
+#: Influence deal 4 damage to **them**") means the seat that was asked.
+#:
+#: Narrower than the rebind the two sets above make, and on purpose. Those
+#: move ``caster`` too, because their offered seat *performs* the action
+#: (sacrifices, discards, draws). Here nobody but the effect's controller
+#: performs anything: the spell deals the damage, and the spell's controller
+#: is who "a source you control" must go on naming (CR 109.5) - moved, a
+#: punisher's damage would be a source the punished player controls.
+_NAMED_SEAT_ACTORS = frozenset({STACK_TARGET_CONTROLLER})
+
+
 def _offered_seats(
     game: Game, actor: str, context: OracleExecutionContext,
     start_seat: int | None = None,
@@ -3781,6 +3799,33 @@ def _offered_seats(
         host = attached_host(game, context.source_permanent)
         seat = game.controller_index_of(host) if host is not None else None
         return [] if seat is None else [seat]
+    if actor == STACK_TARGET_CONTROLLER:
+        # "Counter target instant or sorcery spell unless **its controller**
+        # has Molten Influence deal 4 damage to them." The controller of the
+        # spell this object targeted, read off the stack object itself
+        # (CR 112.2: a spell's controller is the player who cast it) rather
+        # than off ``context.target``, which for an announcement that named a
+        # spell and no player is whatever seat a targetless resolution
+        # defaults to - the caster's opponent, even when the spell being
+        # countered is the caster's own.
+        #
+        # The object is the one ``counter_top_stack_spell`` will counter if
+        # the offer is declined, found the way that handler finds it: the
+        # named spell while it is still on the stack (by identity), nothing
+        # once a named spell has left (CR 608.2b - nobody is asked about a
+        # counter that cannot happen), and the top of the stack for the
+        # headless caller that named none.
+        named = context.stack_target
+        if named is not None:
+            item = named if any(found is named for found in game.stack) else None
+        else:
+            item = game.stack[-1] if game.stack else None
+        if item is None or item.is_ability:
+            return []
+        seat = item.caster_index
+        if not (0 <= seat < len(game.players)) or game.players[seat].lost:
+            return []
+        return [seat]
     if actor == "target_opponent":
         # "**Target opponent** may ante the top card of their library."
         # (Amulet of Quoz.) The seat the ability chose, held in
@@ -3923,9 +3968,15 @@ def _derived_cost_is_unpayable(printed, context: OracleExecutionContext, game) -
     return permanent_mana_cost(permanent) is None
 
 
+#: The instruction kinds that act on **an object on the stack** - which, by
+#: the time a queued answer is drained on the headless path, has resolved and
+#: left. See the last step of :func:`_offer_to_seat`.
+_STACK_OBJECT_KINDS = frozenset({"counter_top_stack_spell", "counter_stack_ability"})
+
+
 def _offer_to_seat(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
-    player_index: int, rebind: bool = False,
+    player_index: int, rebind: bool = False, aim: bool = False,
 ) -> None:
     """Arm one seat's copy of the offer.
 
@@ -3957,6 +4008,10 @@ def _offer_to_seat(
     # scratchpad shared by reference — which is exactly CR 608.2h's split
     # between what an offer was about and what the resolution knows.
     context = dataclasses.replace(context)
+    if aim:
+        # See ``_NAMED_SEAT_ACTORS``: the player word inside the offer names
+        # the offered seat, and the performer does not move.
+        context = dataclasses.replace(context, target=player)
     if rebind:
         # **Both ends of the sentence move to the offered seat.** ``target`` is
         # what a back-reference to a player reads ("that player's life total
@@ -4149,7 +4204,31 @@ def _offer_to_seat(
         amount = on_accept[0].payload.get("amount")
         if isinstance(amount, int):
             entry["life"] = amount
-    game.arm_pending_choice("optional_pay", player_index, **entry)
+    choice = game.arm_pending_choice("optional_pay", player_index, **entry)
+    # **An offer about something on the stack cannot outlive the resolution
+    # that made it.** "Counter target instant or sorcery spell unless its
+    # controller has Molten Influence deal 4 damage to them": the spell the
+    # decline branch counters is the next object to resolve. An interactive
+    # game holds this resolution open until the seat answers
+    # (``resolving_stack_item``, CR 608.2). A headless one does not - the
+    # object pops and the queue is drained when the stack is empty
+    # (``StackMixin._settle``) - which for every other offer is a harmless
+    # reordering and for this one is the whole card: the answer arrived after
+    # the spell it was about had resolved, so a declined punisher countered
+    # nothing and a paid Imprison bought a counter of an ability that had
+    # already happened. So where nothing is holding the resolution, the seat
+    # nobody is asking answers where the offer stands. Three cards print the
+    # shape (Imprison, Mana Vortex, Molten Influence).
+    if (
+        choice is not None
+        and game.resolving_stack_item is None
+        and player_index not in game.interactive_seats
+        and any(
+            step.kind in _STACK_OBJECT_KINDS
+            for step in (*on_accept, *on_decline)
+        )
+    ):
+        game._default_optional_pay(choice)
 
 
 @effect_handler("unless_player_pays")

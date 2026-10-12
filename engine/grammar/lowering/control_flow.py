@@ -39,7 +39,8 @@ from __future__ import annotations
 
 from ...oracle_types import (EVENT_SPELL_MANA_COST, OracleInstruction,
                              OTHER_THAN_EVENT_SUBJECT_PLAYER,
-                             REVEALED_TOP_CARDS_BY_SEAT)
+                             REVEALED_TOP_CARDS_BY_SEAT,
+                             STACK_TARGET_CONTROLLER)
 from .. import ast
 from ..errors import LoweringError
 from ._amounts import count_spec
@@ -352,6 +353,24 @@ def _offered(step: OracleInstruction) -> OracleInstruction:
 #: already moves ``context.caster`` onto the offered seat for those, so a second
 #: answer would be a second chance to disagree.
 PERFORMER_CHOICE_KINDS = frozenset({"choose_one"})
+
+
+def _counters_a_chosen_spell(statement: "ast.Statement | None") -> bool:
+    """Whether *statement* is "counter **target** <spell>" and nothing else —
+    the decline branch of an offer whose "its controller" is a spell's.
+
+    Only the chosen form. "Counter **that spell**" under a cast trigger names
+    the spell the event was about, whose controller the event tables above
+    have already resolved; and a counter with a payment clause of its own is
+    the counter flow's offer, not this one.
+    """
+    return (
+        isinstance(statement, ast.CounterSpell)
+        and statement == ast.CounterSpell(statement.subject)
+        and isinstance(statement.subject, ast.TargetSpec)
+        and statement.subject.targeted
+        and statement.subject.quantifier == "target"
+    )
 
 
 def _performed_by(step: OracleInstruction, actor: str) -> OracleInstruction:
@@ -680,6 +699,18 @@ def _lower_may(
         # "its" is the trigger's own subject here, not a target this sentence
         # chose — see ``attached_controller`` in ``OFFERABLE_ACTORS``.
         actor = "attached_controller"
+    if actor in ("controller", "that_player") and _counters_a_chosen_spell(
+        node.otherwise
+    ):
+        # "Counter target instant or sorcery spell unless **its controller**
+        # has Molten Influence deal 4 damage to them." The possessive names
+        # the *spell* the sentence chose, and a spell is not a permanent:
+        # ``controller`` is read off the control seam through
+        # ``bound_permanent``, which finds nothing on the stack, so the offer
+        # went to nobody and the counter with it — a card that compiled and
+        # did nothing at all. Its own actor, read off the stack object the
+        # announcement named (``STACK_TARGET_CONTROLLER``).
+        actor = STACK_TARGET_CONTROLLER
     payload: dict[str, object] = {"actor": actor}
     if node.actor.kind == "target_opponent":
         # "**Target opponent** may ante the top card of their library."

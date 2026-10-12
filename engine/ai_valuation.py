@@ -1343,8 +1343,21 @@ class TollLoss:
         )
 
 
+def _offer_target_permanent(game, context):
+    """The one permanent the offer's resolution announced as its target, or
+    None where it named none, named several, or the permanent has left."""
+    named = getattr(context, "target_permanent_id", None)
+    # One id, or the one-slot list an announcement made by id arrives as.
+    if isinstance(named, (list, tuple)) and len(named) == 1:
+        named = named[0]
+    if not isinstance(named, int):
+        return None
+    return game.permanent_by_id(named)
+
+
 def toll_branch_loss(
-    game, player_index: int, steps, self_recipients=(), source_permanent=None
+    game, player_index: int, steps, self_recipients=(), source_permanent=None,
+    context=None,
 ) -> TollLoss | None:
     """The loss running *steps* costs seat *player_index*, or None when a step's
     loss is not derivable from the compiled program.
@@ -1364,6 +1377,15 @@ def toll_branch_loss(
     *self_recipients* is the same set ``offered_action_is_a_payment`` takes,
     resolved by the caller, for the steps whose payload names a printed player
     reference (``deal_damage``, a self-mill).
+
+    *context* is the resolution the offer sits inside, for the two penalties
+    aimed at the **permanent the spell targeted** rather than at a seat or at
+    the source: "deals 3 damage to target creature unless …" (Blazing Salvo)
+    and "destroy target nonbasic land unless …" (Lava Blister). The loss is
+    that permanent when the offered seat controls it and the step would take
+    it — a creature the damage does not kill is no loss at all, and neither is
+    somebody else's permanent. Without a context those steps stay unpriceable,
+    which is what they were.
     """
     from .handlers._common import attached_host
 
@@ -1384,9 +1406,30 @@ def toll_branch_loss(
             life += amount
         elif kind == "deal_damage":
             amount = payload.get("amount")
-            if not isinstance(amount, int) or payload.get("recipient") not in recipients:
+            if not isinstance(amount, int):
                 return None
-            life += amount
+            if payload.get("recipient") in recipients:
+                life += amount
+                continue
+            if payload.get("recipient") is not None or not payload.get("targets"):
+                return None
+            # Damage aimed at the announced permanent. Lethal to a creature
+            # the seat controls is that creature gone; anything less is
+            # nothing this valuation counts.
+            victim = _offer_target_permanent(game, context)
+            if victim is None or not victim.is_creature:
+                return None
+            if (
+                game.controller_index_of(victim) == player_index
+                and amount >= victim.effective_toughness - victim.damage_marked
+            ):
+                permanents.append(victim)
+        elif kind == "destroy_target_permanent":
+            victim = _offer_target_permanent(game, context)
+            if victim is None:
+                return None
+            if game.controller_index_of(victim) == player_index:
+                permanents.append(victim)
         elif kind in ("sacrifice_self", "destroy_self"):
             if source_permanent is None or not game.is_on_battlefield(source_permanent):
                 return None

@@ -34,9 +34,11 @@ from .references import parse_player_ref, parse_target_spec
 from .stream import TokenStream
 from .phrases import (_accept_life_alternative, _parse_mana_payment,
                       _parse_pay_life, _parse_per_each_objects)
+from .readers import accept_source_reference_spec
 from .sacrifices import _parse_counted_sacrifice
-from .effects import (_parse_discard, _parse_mill, _parse_put_counter,
-                      _parse_put_hand_cards_on_library, _parse_remove_counter)
+from .effects import (_parse_damage, _parse_discard, _parse_mill,
+                      _parse_put_counter, _parse_put_hand_cards_on_library,
+                      _parse_remove_counter)
 
 
 def _parse_unless_player_pays(stream: TokenStream, parse_body) -> "ast.UnlessPlayerPays | None":
@@ -364,6 +366,14 @@ def _accept_price_action(
         if removed is None:
             stream.reset(mark)
         return removed
+    # "…unless that creature's controller **has Blazing Salvo deal 5 damage to
+    # them**" (Blazing Salvo, Lava Blister, Molten Influence). The eighth
+    # currency, see :func:`accept_damage_price`.
+    if stream.at_word("has", "have"):
+        dealt = accept_damage_price(stream, payer)
+        if dealt is None:
+            stream.reset(mark)
+        return dealt
     # "…unless the player **puts a -1/-1 counter on a creature they control**"
     # (Thelon's Chant, Tourach's Chant). Another printed currency beside mana
     # and a discard, and the same decomposition for the same reason.
@@ -480,6 +490,66 @@ def accept_counter_removal_price(stream: TokenStream) -> "ast.RemoveCounter | No
         stream.reset(mark)
         return None
     return removal
+
+
+def accept_damage_price(
+    stream: TokenStream, payer: ast.PlayerRef
+) -> "ast.DealDamage | None":
+    """``has|have <this ability's source> deal <N> damage to them`` as a
+    **price** — or None with the cursor unmoved.
+
+    "Blazing Salvo deals 3 damage to target creature **unless that creature's
+    controller has Blazing Salvo deal 5 damage to them**." The "punisher"
+    clause, and the one currency here that is not given up out of a zone: the
+    payer *chooses to be dealt damage*. CR 118.12a makes "[do something]
+    unless [a player does something else]" the same sentence as "[a player may
+    do something else]. If [that player doesn't], [do something]", which is the
+    :class:`ast.May` every other price in this list already is — and
+    CR 118.12 is what settles the question the clause raises, because it says
+    the "if … doesn't" half "checks whether the player **chose** to pay …
+    regardless of what events actually occurred". A payer behind a Circle of
+    Protection who takes the offer has taken it: the damage is prevented and
+    the creature is spared all the same. So the action is an ordinary damage
+    event from the spell (prevention, protection and redirection all see it),
+    and nothing afterwards measures what it dealt.
+
+    The damage is read by the damage production itself — the causative "have
+    <source> deal …" Worms of the Earth prints is the same words — so the
+    price a player takes and the damage the engine deals cannot come to
+    describe different events. **Only the ability's own source may deal it,
+    and only to the payer**: "them" (or the payer restated) is rewritten to the
+    payer the toll already read, so the seat that is asked and the seat that is
+    burned are one reference. A second recipient, a rider, or damage aimed at
+    anybody else is not a price this player pays, and refuses.
+
+    No takeability arm answers it, and that is the rule rather than an
+    omission (the mill beside it says the same): a player can always choose to
+    be dealt damage, including damage that will be prevented (CR 608.2d bars
+    only an *impossible* choice), so a "can you?" check would withdraw an offer
+    the card makes.
+    """
+    mark = stream.mark()
+    if not stream.accept_word("has", "have"):
+        return None
+    source = accept_source_reference_spec(stream)
+    if source is None or not stream.at_word("deal"):
+        stream.reset(mark)
+        return None
+    try:
+        damage = _parse_damage(stream, source)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if (
+        not isinstance(damage, ast.DealDamage)
+        or damage.recipients not in ((ast.PlayerRef("that_player"),), (payer,))
+        or damage.riders != ast.DamageRiders()
+        or damage.chooser is not None
+        or damage.per_each is not None
+    ):
+        stream.reset(mark)
+        return None
+    return dataclasses.replace(damage, recipients=(payer,))
 
 
 def _accept_repeat_request(stream: TokenStream) -> "ast.RepeatProcessRequest | None":
