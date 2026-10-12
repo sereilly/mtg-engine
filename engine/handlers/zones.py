@@ -5127,6 +5127,49 @@ def put_exiled_this_way(game: Game, instruction: OracleInstruction, context: Ora
     return True, "resolved"
 
 
+def _exile_announced_graveyard_slots(
+    game: Game, instruction: OracleInstruction, context: OracleExecutionContext,
+    holder,
+) -> tuple[bool, str]:
+    """Exile the graveyard cards an announcement named, out of *holder*'s pile.
+
+    The two announced piles of ``exile_cards_from_graveyard`` — the caster's
+    own (Midnight Ritual) and the one a "single graveyard" announcement's seat
+    names — through ``_resolve_graveyard_slots``, the reader the graveyard
+    return uses for Shattered Crypt: a slot is not an identity, so each is
+    resolved to its card before anything leaves and the removals run highest
+    slot first. *holder* is None when the announcement named no pile at all,
+    which exiles nothing — as an empty list of slots does.
+
+    CR 400.3: an exiled card goes to its **owner's** exile, and a card's owner
+    is the player whose graveyard held it.
+    """
+    count = instruction.payload.get("count")
+    wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
+    taken = [] if holder is None else _resolve_graveyard_slots(
+        holder, context, wanted,
+        lambda card: graveyard_card_matches(instruction.payload, card),
+    )
+    if holder is not None:
+        holder.exile.extend(taken)
+    context.results[EXILED_THIS_WAY_OBJECTS] = list(taken)
+    context.results[EXILED_THIS_WAY] = len(taken)
+    # The pile is named only where a card came out of it, or where the sentence
+    # printed one: an "up to" announcement that named nothing named no
+    # graveyard either, and the seat this resolution happens to be carrying is
+    # not one the card chose.
+    printed_pile = instruction.payload.get("graveyard_owner") == "you"
+    game.log.append(
+        f"{context.card.name} exiled "
+        + (", ".join(card.name for card in taken) or "nothing")
+        + (
+            f" from {holder.name}'s graveyard"
+            if holder is not None and (taken or printed_pile) else ""
+        )
+    )
+    return True, "resolved"
+
+
 @effect_handler("exile_cards_from_graveyard")
 def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"…exile up to two target creature cards from defending player's
@@ -5151,11 +5194,26 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
     """
     owner = str(instruction.payload.get("graveyard_owner") or "")
     caster_index = game.players.index(context.caster)
-    # "…from **a single** graveyard" (Ebony Charm). The pile is not printed;
-    # the chooser names it as the spell resolves, and only where there is a
-    # choice to make. One pile with a legal card in it is not a decision, and
-    # none at all is not a prompt — offering either would be a question with one
-    # answer or with none, which the seat then has to dismiss.
+    announced = bool(instruction.payload.get("targets"))
+    # "Exile up to three **target** cards from a single graveyard." (Ebony
+    # Charm, Rapid Decay, Decompose; Carrion Beetles' and Famished Ghoul's
+    # activations.) On a spell or an activated ability the cards were named as
+    # the object was put on the stack (CR 601.2c, CR 602.2b) and the pile is
+    # the one the announcement's seat names — so this resolves the announced
+    # slots, exactly as the caster's own pile does below, and asks nobody
+    # anything. A card that left in response is not replaced (CR 608.2b's last
+    # sentence): its slot arrives here as None and is skipped. Naming none is
+    # the legal "up to" announcement and exiles nothing.
+    if owner == "chosen" and announced:
+        holder = next(
+            (player for player in game.players if player is context.target), None
+        )
+        return _exile_announced_graveyard_slots(game, instruction, context, holder)
+    # The same sentence under a **trigger**, which has no picker for a card in
+    # a graveyard: the chooser names the pile as the ability resolves, and only
+    # where there is a choice to make. One pile with a legal card in it is not
+    # a decision, and none at all is not a prompt — offering either would be a
+    # question with one answer or with none, which the seat then has to dismiss.
     if owner == "chosen":
         piles = game.graveyard_piles_with_a_legal_card(dict(instruction.payload))
         if not piles:
@@ -5215,21 +5273,9 @@ def exile_cards_from_graveyard(game: Game, instruction: OracleInstruction, conte
         )
         return True, "resolved"
     if owner == "you":
-        count = instruction.payload.get("count")
-        wanted = int(context.x_value or 0) if count == "x" else int(count or 1)
-        taken = _resolve_graveyard_slots(
-            context.caster, context, wanted,
-            lambda card: graveyard_card_matches(instruction.payload, card),
+        return _exile_announced_graveyard_slots(
+            game, instruction, context, context.caster
         )
-        context.caster.exile.extend(taken)
-        context.results[EXILED_THIS_WAY_OBJECTS] = list(taken)
-        context.results[EXILED_THIS_WAY] = len(taken)
-        game.log.append(
-            f"{context.card.name} exiled "
-            + (", ".join(card.name for card in taken) or "nothing")
-            + f" from {context.caster.name}'s graveyard"
-        )
-        return True, "resolved"
     # The two seats a firing event froze, each read off the key its fire site
     # stamps: CR 506.2's defender, and — "target card from **that player's**
     # graveyard" on a damage trigger (Zombie Cannibal) — the player the damage

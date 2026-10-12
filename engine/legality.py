@@ -62,6 +62,7 @@ from .target_requirements import (announcement_refusal, cast_is_bound,
 from .targeting import (
     CAST_FROM_GRAVEYARD,
     GRAVEYARD_TARGET_KIND,
+    SINGLE_GRAVEYARD,
     ROLES_TARGET_KIND,
     _nested_steps,
     activation_target_slot,
@@ -81,6 +82,25 @@ from .targeting import (
     spec_roles,
     usable_activated_abilities,
 )
+
+
+def _unnamed_single_pile_refusal(card, spec: dict, seat) -> str | None:
+    """Why graveyard slots named for "…target cards from **a single**
+    graveyard" may not be accepted without the seat whose graveyard they are
+    in, or None.
+
+    The relation across the targets (``targeting.SINGLE_GRAVEYARD``) is held by
+    the announcement's own shape: one seat, and slots counted into that seat's
+    pile — a split across two graveyards cannot be spelled. What *can* be
+    spelled is slots with no seat, and both gates read that as "legal in any
+    pile the enumeration offers", so slot 0 could be one player's card and slot
+    1 another's while ``Game.graveyard_target_seat`` resolved both out of the
+    caster's own. So the pile is part of the announcement here and has to be
+    said. Asked by the cast gate and the activation gate alike.
+    """
+    if spec.get(SINGLE_GRAVEYARD) and seat is None:
+        return f"{card.name}: name the graveyard its targets are in"
+    return None
 
 
 def _cast_from_graveyard_slot(spec: dict, graveyard, spell) -> int | None:
@@ -3027,10 +3047,22 @@ class LegalityMixin:
             spec.pop("x_targets", None)
             spec["max_targets"] = max(0, int(x_value))
         maximum = spec.get("max_targets")
+        # A card in a graveyard is named by **slot** and has no id (the
+        # graveyard branch below says why the stamped ids are not read), so
+        # for that kind the list counted is the slot list. It was the id list
+        # for every kind, which no graveyard announcement fills: "Exile up to
+        # **two** target cards from a single graveyard" (Famished Ghoul) named
+        # at three was accepted, paid for — the Ghoul sacrificed — and resolved
+        # the first two.
+        named_list = (
+            target_permanent_index
+            if spec.get("kind") == GRAVEYARD_TARGET_KIND
+            else target_permanent_ids
+        )
         if (
             isinstance(maximum, int)
-            and isinstance(target_permanent_ids, list)
-            and len(target_permanent_ids) > maximum
+            and isinstance(named_list, list)
+            and len(named_list) > maximum
         ):
             return f"too many targets for {card.name}"
         # …and CR 601.2c's **exact** count, the half ``cast_target_count_refusal``
@@ -3158,6 +3190,20 @@ class LegalityMixin:
             # targeted, and comparing its seat against a list of graveyard
             # slots answered about a different zone.
             if named_indices:
+                unnamed_pile = _unnamed_single_pile_refusal(
+                    card, spec, target_player_index
+                )
+                if unnamed_pile is not None:
+                    return unnamed_pile
+                # CR 115.3 for slots, as the cast gate asks it: the repeat
+                # check above this branch reads only the id list, which a card
+                # in a graveyard never fills, so one slot named twice was
+                # accepted and quietly resolved once.
+                repeated = self._repeated_target_refusal(
+                    card, spec, [], named_indices, target_player_index
+                )
+                if repeated is not None:
+                    return repeated
                 seats = (
                     [target_player_index] if target_player_index is not None
                     else list(range(len(self.players)))
@@ -3782,6 +3828,11 @@ class LegalityMixin:
             )
             if repeated is not None:
                 return repeated
+            unnamed_pile = _unnamed_single_pile_refusal(
+                card, spec, target_player_index
+            )
+            if unnamed_pile is not None:
+                return unnamed_pile
             valid = self._enumerate_targets(
                 caster_index, card, spec, for_cast=True, mode_index=mode_index,
             )

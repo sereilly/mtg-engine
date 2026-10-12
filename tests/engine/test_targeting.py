@@ -230,19 +230,15 @@ _NO_PICKER = {
     # "You own target card in the ante." Nothing enumerates the ante zone, so
     # the handler exchanges the card it finds there rather than one chosen.
     "Darkpact": "the ante zone has no picker",
-    # "Exile up to three target cards from a single graveyard." The **cast**
-    # face of ``exile_cards_from_graveyard``, whose activation face is the
-    # reviewed decline in ``_UNANNOUNCEABLE_TARGETS`` (Carrion Beetles) — one
-    # deviation, three cards. No picker in this engine names several cards in
-    # one pile at CR 601.2c, so the chooser names them as the spell resolves
-    # (``graveyard_pile_choice`` then ``graveyard_exile_pick``): the card is
-    # castable and playable, and what it does not do is *announce*. Closing the
-    # deviation is a class-wide round — a spec for the kind, an "all slots from
-    # one pile" announcement constraint (``legality``'s ``same_controller`` is
-    # permanents-only), a handler that consumes announced slots, and the AI's
-    # side of naming graveyard slots — and it moves Ebony Charm's second mode
-    # and Carrion Beetles with it.
-    "Rapid Decay": "a graveyard target is chosen at resolution, not announced",
+    # Rapid Decay stood here from Urza's Destiny to Odyssey — "Exile up to
+    # three target cards from a single graveyard", chosen as the spell resolved
+    # rather than announced, with the class-wide round that would close it
+    # written out: a spec for the kind, an "all slots from one pile"
+    # constraint, a handler that consumes announced slots, and the AI's side
+    # of naming graveyard slots. Odyssey's second wave was that round
+    # (``targeting.SINGLE_GRAVEYARD``), and it moved Ebony Charm's second mode,
+    # Decompose and the two activations with it. Under a *trigger* the same
+    # sentence is still chosen at resolution; no card prints one.
 }
 
 
