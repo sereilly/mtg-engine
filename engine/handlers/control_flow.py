@@ -2081,6 +2081,28 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
             (context.trigger_context or {}).get("attacked_or_blocked_this_combat")
         )
 
+    if kind == "came_under_your_control_this_turn":
+        # "…if this creature didn't attack **or come under your control this
+        # turn**" (Mad Dog). CR 302.6's own record, read through the predicate
+        # summoning sickness asks: a permanent not controlled continuously
+        # since its controller's turn began came under that control during it —
+        # by entering or by changing hands, which Erg Raiders' ruling says are
+        # both "coming under your control". The lowering admits the clause only
+        # under a trigger of the controller's own turn, which is when that
+        # reading holds.
+        #
+        # A source that has left answers False for the *positive* clause — the
+        # direction CR 603.4 takes for an intervening-if it cannot check — so
+        # the negated one is what answers True and lets a "sacrifice it" find
+        # nothing to sacrifice.
+        source = context.source_permanent
+        came = (
+            source is not None
+            and game.is_on_battlefield(source)
+            and not game._controlled_since_turn_start(source)
+        )
+        return (not came) if payload.get("negated") else came
+
     if kind == "came_under_your_control_since_your_last_upkeep":
         # CR 702.30a's intervening-if — echo's whole condition, and the reason
         # an echo creature pays once and never again. Read off the record the

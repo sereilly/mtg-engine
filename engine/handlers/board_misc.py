@@ -454,30 +454,6 @@ def add_corpse_counters_for_each_creature_died(game: Game, instruction: OracleIn
     return True, "resolved"
 
 
-@effect_handler("end_step_damage_if_not_attacked")
-def end_step_damage_if_not_attacked(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
-    """Erg Raiders: "At the beginning of your end step, if this creature
-    didn't attack this turn, it deals 2 damage to you unless it came under
-    your control this turn." Both guards are re-checked at resolution (CR
-    603.4), matching the Pestilence intervening-if precedent."""
-    source = context.source_permanent
-    caster = context.caster
-    if source is None or caster is None:
-        return True, "resolved"
-    if source.metadata.get("attacked_this_turn"):
-        return True, "resolved"
-    if source.metadata.get("summoning_sickness_turn") == game.turn:
-        return True, "resolved"
-    amount = resolve_amount(instruction.payload.get("amount", 0), context.x_value)
-    game._deal_damage_to_player(
-        caster, amount, source=source,
-        then=lambda dealt: game.log.append(
-            f"{source.card.name} dealt {dealt} damage to {caster.name}"
-        ),
-    )
-    return True, "resolved"
-
-
 @effect_handler("balance_resources")
 def balance_resources(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     def _count(player, kind):

@@ -2305,6 +2305,97 @@ def test_w1g8_a_counter_removal_price_is_one_counter_off_the_source(price):
     )
     assert not _w1g8_compile(probe).supported
 
+
+# --- Mad Dog ----------------------------------------------------------------
+# "At the beginning of your end step, if this creature didn't attack or come
+# under your control this turn, sacrifice it." One negation over two records
+# of the turn: an intervening-if (CR 603.4), so on a turn it attacked or
+# arrived the ability does not trigger at all.
+
+def _w1g8_end_step(game, seat):
+    """*seat*'s end step, settled; returns the lines it logged."""
+    before = len(game.log)
+    game.resolve_end_step(seat)
+    _w1g8.settle(game)
+    return game.log[before:]
+
+
+def _w1g8_next_turn(game, seat):
+    game.turn += 1
+    game.start_turn(seat)
+
+
+def test_w1g8_mad_dog_stays_the_turn_it_arrives_and_dies_the_turn_it_idles(set_pool):
+    game = _w1g8.table(set_pool, hand=["Mad Dog"])
+    _w1g8_next_turn(game, 0)
+    assert game.cast_from_hand(0, "Mad Dog").supported
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 0)), (
+        "it came under your control this turn, so nothing triggered"
+    )
+    _w1g8_next_turn(game, 1)
+    _w1g8_end_step(game, 1)
+    assert _w1g8.names(game, 0) == ["Mad Dog"], "an opponent's end step is not yours"
+
+    _w1g8_next_turn(game, 0)
+    assert "Mad Dog was sacrificed" in _w1g8_end_step(game, 0)
+    assert _w1g8.pile(game, 0) == ["Mad Dog"]
+
+
+def test_w1g8_mad_dog_that_attacked_is_kept(set_pool):
+    game = _w1g8.table(set_pool)
+    dog = _w1g8.put(game, set_pool, 0, "Mad Dog")
+    _w1g8_next_turn(game, 0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    declared, why = game.declare_attackers(0, [0])
+    assert declared, why
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 0))
+    assert game.is_on_battlefield(dog)
+
+
+def test_w1g8_mad_dog_changing_hands_is_coming_under_control(set_pool):
+    """Erg Raiders' 2018-03-16 ruling: a creature "comes under your control"
+    if it enters under your control *or* you gain control of it while it is
+    already on the battlefield. The thief keeps the Dog that turn and loses it
+    the next one it sits out."""
+    from engine.control import change_control
+
+    game = _w1g8.table(set_pool)
+    dog = _w1g8.put(game, set_pool, 0, "Mad Dog")
+    _w1g8_next_turn(game, 0)
+    _w1g8_next_turn(game, 1)
+    change_control(dog, 1, source="a test's theft")
+    game._sync_control()
+
+    assert not any("Mad Dog" in line for line in _w1g8_end_step(game, 1))
+    _w1g8_next_turn(game, 0)
+    _w1g8_end_step(game, 0)
+    assert _w1g8.names(game, 1) == ["Mad Dog"], "its old controller's end step is not 'yours'"
+
+    _w1g8_next_turn(game, 1)
+    assert "Mad Dog was sacrificed" in _w1g8_end_step(game, 1)
+    assert _w1g8.pile(game, 0) == ["Mad Dog"], "to its owner's graveyard"
+
+
+def test_w1g8_came_under_control_this_turn_is_only_read_on_your_own_turn():
+    """The refusing gate's refusal test. The record is CR 302.6's, carried
+    across other players' turns, so under "each end step" it could not tell
+    this turn from the last one — the clause refuses there instead."""
+    from tests.helpers import _mk_card
+
+    def dog(step):
+        return _mk_card(
+            "Probe Dog", "Creature — Dog",
+            f"At the beginning of {step}, if this creature didn't attack or "
+            "come under your control this turn, sacrifice it.",
+        )
+
+    assert _w1g8_compile(dog("your end step")).supported
+    assert not _w1g8_compile(dog("each end step")).supported
+
 # ==== end W1G8 ======================================================
 
 

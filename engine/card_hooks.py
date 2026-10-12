@@ -208,11 +208,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creature loses flying."':
             _line('deal_damage', 'spell_pattern', amount=2),
     },
-    'Erg Raiders': {
-        "at the beginning of your end step, if this creature didn't attack this "
-        "turn, it deals 2 damage to you unless it came under your control this turn":
-            _line("end_step_damage_if_not_attacked", "triggered_damage", amount=2),
-    },
     'Eye for an Eye': {
         "the next time a source of your choice would deal damage to you this turn, "
         "instead that source deals that much damage to you and eye for an eye "

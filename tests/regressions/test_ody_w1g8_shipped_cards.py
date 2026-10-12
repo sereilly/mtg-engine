@@ -131,6 +131,42 @@ def test_an_offer_about_a_stack_object_still_waits_for_an_interactive_seat(set_p
     assert game.players[0].life == 20
 
 
+# --- Erg Raiders, without its hook ---------------------------------------------
+
+def test_erg_raiders_compiles_from_the_grammar_and_spares_a_thief_for_a_turn(set_pool):
+    """Mad Dog's "or come under your control this turn" is the clause Erg
+    Raiders prints as "unless it came under your control this turn", so the
+    card's name-keyed line and its handler are retired: it is two conditions
+    the grammar reads. Driven across a control change, which the hook's own
+    tests never made."""
+    from engine.card_hooks import CARD_LINE_INSTRUCTIONS
+    from engine.control import change_control
+    from engine.oracle import compile_card_oracle
+
+    assert "Erg Raiders" not in CARD_LINE_INSTRUCTIONS
+    program = compile_card_oracle(set_pool("ARN")["Erg Raiders"])
+    assert program.supported
+    assert program.triggered_abilities[0].instruction.kind == "if_then"
+
+    game = w1g8.table(set_pool)
+    raiders = w1g8.put(game, set_pool, 0, set_pool("ARN")["Erg Raiders"])
+
+    def end_of_turn(seat):
+        game.turn += 1
+        game.start_turn(seat)
+        if seat == 1 and game.controller_index_of(raiders) == 0:
+            change_control(raiders, 1, source="a test's theft")
+            game._sync_control()
+        game.resolve_end_step(seat)
+        w1g8.settle(game)
+        return [player.life for player in game.players]
+
+    assert end_of_turn(0) == [18, 20], "it sat out its controller's turn"
+    assert end_of_turn(1) == [18, 20], "stolen this turn: no damage to the thief"
+    assert end_of_turn(0) == [18, 20], "not its old controller's any more"
+    assert end_of_turn(1) == [18, 18], "the thief's next idle turn"
+
+
 # --- a lethal toll -------------------------------------------------------------
 
 def test_toll_valuation_prices_the_spells_own_target(set_pool):

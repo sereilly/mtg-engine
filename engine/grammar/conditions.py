@@ -668,6 +668,22 @@ def _parse_single_condition(stream: TokenStream) -> ast.Condition:
         # prints about a creature it chose). The same axis the present-tense
         # clause above reads, asked of the turn's record rather than of the
         # board — `Permanent.attacked_this_turn`, which the cleanup step sweeps.
+        # "…**didn't attack or come under your control this turn**" (Mad
+        # Dog). One negation over two records, so it is the conjunction of two
+        # negated clauses — De Morgan's reading of the printed "or", which is
+        # also what Erg Raiders prints as two clauses ("didn't attack this
+        # turn … unless it came under your control this turn"). Read in front
+        # of the shorter spelling below, which is its prefix up to "or".
+        if stream.accept_phrase(
+            "didn't", "attack", "or", "come", "under", "your", "control",
+            "this", "turn",
+        ):
+            return ast.EveryOf((
+                ast.IsState(subject, "attacked_this_turn", negated=True),
+                ast.CameUnderControlThisTurn(subject, negated=True),
+            ))
+        if stream.accept_phrase("came", "under", "your", "control", "this", "turn"):
+            return ast.CameUnderControlThisTurn(subject)
         if stream.accept_phrase("didn't", "attack", "this", "turn"):
             return ast.IsState(subject, "attacked_this_turn", negated=True)
         if stream.accept_phrase("attacked", "this", "turn"):
