@@ -1765,10 +1765,17 @@ def test_ebony_charm_exiles_nothing_when_every_graveyard_is_empty(set_pool):
     assert game.players[0].exile == [] and game.players[1].exile == []
 
 
-def test_ebony_charms_pile_choice_takes_the_first_live_pile_for_an_ai_seat(set_pool):
+def test_ebony_charms_pile_choice_takes_an_opponents_pile_for_an_ai_seat(set_pool):
     """A non-interactive seat never queues either prompt: the resolution has to
-    finish, and the stated default is taken where the effect stands. Seat order
-    rather than a valuation, so a seed reproduces a run exactly."""
+    finish, and the stated default is taken where the effect stands — the first
+    live pile **that is not the chooser's own**, in seat order
+    (``ai_valuation.denied_graveyard_pile``).
+
+    This read "takes the first live pile" and asserted seat 0's own Dirtwater
+    Wraith exiled: the default was seat order alone, so the same Charm cast
+    from seat 1 took seat 0's pile — one card, two chairs, two piles. Exiling
+    is denial, and the pile it is aimed at is an opponent's from either chair.
+    Still seat order within that, so a seed reproduces a run exactly."""
     game = _w2g4_charm(
         set_pool, mine=["Dirtwater Wraith"], theirs=["Femeref Knight"]
     )
@@ -1777,8 +1784,22 @@ def test_ebony_charms_pile_choice_takes_the_first_live_pile_for_an_ai_seat(set_p
     game.resolve_stack()
 
     assert [c.kind for c in game.pending_choices] == [], game.log
+    assert [c.name for c in game.players[1].exile] == ["Femeref Knight"], game.log
+    assert game.players[0].exile == []
+    assert "Dirtwater Wraith" in [c.name for c in game.players[0].graveyard]
+
+
+def test_ebony_charms_pile_choice_takes_its_own_pile_when_it_is_the_only_one(set_pool):
+    """…and its own only when no other pile holds a card: one live pile is not
+    a decision (the handler arms the pick directly), and the sentence still
+    does what it says."""
+    game = _w2g4_charm(set_pool, mine=["Dirtwater Wraith"])
+    game.interactive_seats = set()
+    game.queue_from_hand(0, "Ebony Charm", mode_index=1)
+    game.resolve_stack()
+
+    assert [c.kind for c in game.pending_choices] == [], game.log
     assert [c.name for c in game.players[0].exile] == ["Dirtwater Wraith"], game.log
-    assert [c.name for c in game.players[1].graveyard] == ["Femeref Knight"]
 
 
 # --- W2G4: a cost read off the permanent the step in front of it made ---

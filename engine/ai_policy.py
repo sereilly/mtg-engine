@@ -37,7 +37,9 @@ from .ai_valuation import (
     counters_a_spell,
     destroyed_permanent_filter,
     divided_shape,
+    exiles_a_graveyard_target,
     foreign_activation_use,
+    graveyard_denial_order,
     hand_entry_steps,
     harms_its_own_source,
     instruction_target_side,
@@ -81,7 +83,8 @@ from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
-from .targeting import (announced_mode_instructions, bounce_subject_filter,
+from .targeting import (GRAVEYARD_TARGET_KIND, announced_mode_instructions,
+                        bounce_subject_filter,
                         cast_target_slot, derive_activation_spec,
                         derive_cast_spec, derive_instruction_spec,
                         instructions_as_announced, role_is_seat,
@@ -1444,6 +1447,14 @@ def _cast_candidate_announcing(
                     return None
                 if single is not None:
                     target, target_permanent_index, target_permanent_ids = single
+    # "Exile target card from a graveyard" (Coffin Purge): whose graveyard,
+    # named — see `_graveyard_denial_target`. Only where nothing above named
+    # an object, which for a spell whose one target is a graveyard card is
+    # always.
+    if target_permanent_index is None and divided_targets is None:
+        buried = _cast_graveyard_denial(game, player_index, card)
+        if buried is not None:
+            target, target_permanent_index = buried
     # "…that player must choose at least one Flagbearer on the battlefield if
     # able" (Standard Bearer): the announcement chosen above, held to what an
     # opponent's permanent demands of it — re-aimed where this seat can obey on
@@ -1617,6 +1628,74 @@ def _cast_candidate_announcing(
         optional_cost_payments=dict(offers) if announces_offer else None,
         mode_index=_announced_mode(card),
         target_stack_index=role_stack_index,
+    )
+
+
+def _graveyard_denial_target(
+    game: Game, player_index: int, legal
+) -> "tuple[int, int] | None":
+    """``(pile's seat, slot)`` — the card an "exile target card from a
+    graveyard" is aimed at — or None to name nothing.
+
+    *legal* is the picker's own list for the announcement (``valid_targets``).
+    A card in **another seat's** pile, the ones its owner could still cast
+    from there first (`ai_valuation.graveyard_denial_order`), then seat and
+    pile order. None when no other seat's pile holds a legal card: the
+    announcement is then what it always was — a seat and no slot, which the
+    handler answers.
+
+    **Why the policy names it at all.** A bare announcement falls to the
+    handler's scan, "the first graveyard with a card in it, in seat order" —
+    so the seat in chair 0 exiled a card of its own with Coffin Purge, Cremate,
+    Headstone, Crypt Creeper, Steamclaw, Grave Robbers and Scavenging Ooze,
+    and the seat in chair 1 exiled its opponent's, off one board. A graveyard
+    card is announced as a seat and a slot in that seat's pile, the spelling
+    the cast and activation gates check (`targeting.GRAVEYARD_TARGET_KIND`).
+    """
+    by_seat: dict[int, list[int]] = {}
+    for entry in legal or ():
+        if entry.get("kind") != "graveyard":
+            continue
+        seat = int(entry["seat"])
+        if seat != player_index:
+            by_seat.setdefault(seat, []).append(int(entry["index"]))
+    for seat in sorted(by_seat):
+        ordered = graveyard_denial_order(game, seat, by_seat[seat])
+        if ordered:
+            return seat, ordered[0]
+    return None
+
+
+def _cast_graveyard_denial(
+    game: Game, player_index: int, card: CardDefinition
+) -> "tuple[int, int] | None":
+    """`_graveyard_denial_target` for the cast candidate being built: the
+    spell's own spec and steps (its mode, its offers, the zone it leaves),
+    and the picker's list for that announcement."""
+    program = compile_card_oracle(card)
+    if not _one_graveyard_card_is_denied(
+        _cast_spec(card, program), _announced_steps(card, program)
+    ):
+        return None
+    legal = game.cast_target_spec(
+        player_index, card, optional_cost_payments=_OFFERS_ANNOUNCED.get(),
+        mode_index=_announced_mode(card), from_zone=_cast_zone(card),
+    ).get("valid_targets") or []
+    return _graveyard_denial_target(game, player_index, legal)
+
+
+def _one_graveyard_card_is_denied(spec, instructions) -> bool:
+    """Whether an announcement described by *spec* names exactly **one card in
+    a graveyard** and the steps behind it exile that card — the shape
+    `_graveyard_denial_target` answers."""
+    return (
+        isinstance(spec, dict)
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+        and not spec_roles(spec)
+        and not spec_is_a_cost(spec)
+        and not spec.get("max_targets")
+        and not spec.get("x_targets")
+        and exiles_a_graveyard_target(instructions)
     )
 
 
@@ -2103,6 +2182,25 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             chosen = max(perms, key=_power)
             target = chosen["seat"]
             target_permanent_index = chosen["index"]
+
+        # "{3}, {T}: Exile target card from a graveyard." (Steamclaw; Crypt
+        # Creeper, Grave Robbers, Scavenging Ooze.) Whose graveyard, named —
+        # the cast side's answer (`_graveyard_denial_target`) over this
+        # ability's own picker. Named nothing, the handler took the first pile
+        # in seat order: the activator's own, from chair 0.
+        if (
+            target_permanent_index is None
+            and not target_role_refs
+            and _one_graveyard_card_is_denied(spec, (ability.instruction,))
+        ):
+            buried = _graveyard_denial_target(
+                game, player_index,
+                game.activation_target_spec(
+                    player_index, permanent_index, ability_index=0,
+                ).get("valid_targets") or [],
+            )
+            if buried is not None:
+                target, target_permanent_index = buried
 
         # CR 601.2d asked of an ability: a divided announcement ("…divided as
         # you choose", Serra's Hymn) is one this chooser never makes, and the
@@ -3370,6 +3468,11 @@ def _combat_instant_candidate(
             return None
         if single is not None:
             target, target_permanent_index, target_permanent_ids = single
+    # ...and the same graveyard a denial is aimed at (`_cast_graveyard_denial`).
+    if target_permanent_index is None and divided is None:
+        buried = _cast_graveyard_denial(game, player_index, card)
+        if buried is not None:
+            target, target_permanent_index = buried
     # The same hold the main-phase chooser applies (`_cast_candidate`): what an
     # opponent's Flagbearer demands of this announcement.
     aimed = _aimed_under_target_requirements(

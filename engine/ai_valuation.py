@@ -2965,6 +2965,83 @@ def cast_offers(card: CardDefinition) -> tuple[CastOffer, ...]:
     return tuple(offers)
 
 
+#: Instruction kinds that take a **targeted card out of a graveyard and out of
+#: the game** — "Exile target card from a graveyard." (Coffin Purge, Cremate,
+#: Headstone; Crypt Creeper's, Steamclaw's and Scavenging Ooze's abilities.)
+#: Spelled out and held to registered handlers by
+#: ``tests/ai/test_ai_graveyard_denial.py``, for :data:`MANA_ABILITY_KINDS`'
+#: reason: a kind renamed out from under a set like this stops matching in
+#: silence.
+#:
+#: Denial, and so wanted from an **opponent's** pile: a card in a graveyard is
+#: a resource for the seat that owns it (a flashback cast, a reanimation
+#: target, a card toward threshold), and removing the caster's own is the
+#: effect spent on itself. A kind that *returns* the card it names — to a
+#: hand, to the battlefield — is not here: its printed phrase is almost always
+#: "from your graveyard", and where it is not, either pile is a gain.
+GRAVEYARD_DENIAL_KINDS = frozenset({"exile_target_graveyard_card"})
+
+
+def exiles_a_graveyard_target(instructions) -> bool:
+    """Whether a step of *instructions* (wrappers opened) is one of
+    :data:`GRAVEYARD_DENIAL_KINDS` — the question the cast and activation
+    choosers ask before naming whose graveyard a card is exiled from."""
+    def walk(steps) -> bool:
+        for step in steps or ():
+            if getattr(step, "kind", None) in GRAVEYARD_DENIAL_KINDS:
+                return True
+            payload = getattr(step, "payload", None) or {}
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    return walk(instructions)
+
+
+def denied_graveyard_pile(player_index: int, piles) -> "int | None":
+    """Which of *piles* (seats, in the order offered) a seat takes cards **out
+    of the game** from: the first that is not its own, and its own only when
+    there is no other. None for no pile at all.
+
+    "Exile up to three target cards from **a single graveyard**" (Decompose,
+    Rapid Decay, Ebony Charm; Carrion Beetles' and Famished Ghoul's abilities)
+    leaves the pile to the chooser, and the default took the first in seat
+    order — so the seat in chair 0 exiled its own graveyard and the seat in
+    chair 1 its opponent's, the same card played two ways by where a player
+    sat. See :data:`GRAVEYARD_DENIAL_KINDS` for why the opponent's.
+    """
+    piles = list(piles or ())
+    if not piles:
+        return None
+    return next((seat for seat in piles if seat != player_index), piles[0])
+
+
+def graveyard_denial_order(game, owner_seat: int, slots) -> list:
+    """*slots* — positions in *owner_seat*'s graveyard a seat may exile — with
+    the cards their owner could still **cast from there** first, each group
+    in pile order.
+
+    A card with flashback (CR 702.34a; printed, or granted by Recoup) is a
+    spell its owner still holds; any other card in a graveyard is, to a seat
+    removing "up to three", one card among equals. Asked of
+    ``flashback.has_flashback`` with the game and the pile's seat, which is
+    what sees a grant. A stable sort, so a pile holding none is exiled in the
+    order it always was — and a seed that met none replays as it did.
+    """
+    from .flashback import has_flashback
+
+    pile = game.players[owner_seat].graveyard
+    return sorted(
+        slots,
+        key=lambda slot: 0 if (
+            isinstance(slot, int) and 0 <= slot < len(pile)
+            and has_flashback(pile[slot], game=game, owner_seat=owner_seat)
+        ) else 1,
+    )
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -2985,6 +3062,7 @@ def _walk_program(program):
 
 
 __all__ = [
+    "GRAVEYARD_DENIAL_KINDS",
     "MANA_ABILITY_KINDS",
     "SELF_PAYMENT_KINDS",
     "SOURCE_HAMPER_KINDS",
@@ -3006,6 +3084,7 @@ __all__ = [
     "casting_under",
     "chosen_creature_type_side",
     "counters_a_spell",
+    "denied_graveyard_pile",
     "denies_its_target",
     "destroyed_permanent_filter",
     "divided_shape",
@@ -3013,7 +3092,9 @@ __all__ = [
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
     "exiled_search_pile_comes_back_one_at_a_time",
+    "exiles_a_graveyard_target",
     "foreign_activation_use",
+    "graveyard_denial_order",
     "hand_entry_steps",
     "hand_waiver",
     "harms_its_own_source",
