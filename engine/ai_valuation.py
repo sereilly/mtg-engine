@@ -1455,6 +1455,200 @@ def castable_commanders(game, player_index: int):
     )
 
 
+@dataclass(frozen=True)
+class PermittedCast:
+    """One cast a seat may make because an **effect** allows it (CR 601.3):
+    a card outside its hand it may cast or play, or a card in its hand it may
+    cast without paying its mana cost.
+
+    What the policy needs to build a candidate that the cast path will accept,
+    and none of it is derivable from the card alone:
+
+    * **where the card is** — ``zone``, ``owner_seat`` and ``index``. The pile
+      is the grantee's own on every grant but the cross-seat one (Grinning
+      Totem leaves the card in the *searched* player's exile, CR 400.3);
+    * **what it is cast as** — ``spell``, the half for a split card (CR 709.3)
+      and ``held`` itself otherwise;
+    * **what the cast is charged** — ``permission``: its required alternative
+      cost (CR 118.9b; flashback, CR 702.34a), its waiver, or neither;
+    * **the announcement that selects that permission** — ``alternative_cost``,
+      CR 601.2b's choice, in the cast path's own spelling. A card may be
+      covered twice (a flashback card under Yawgmoth's Will) and those are two
+      casts at two prices.
+    """
+
+    zone: str
+    owner_seat: int
+    index: int
+    held: CardDefinition
+    spell: CardDefinition
+    permission: object
+    alternative_cost: bool = False
+
+    @property
+    def cost(self):
+        """The alternative cost the permission requires, or None."""
+        return getattr(self.permission, "cost", None)
+
+    @property
+    def waives_mana_cost(self) -> bool:
+        """Whether the cast is made "without paying its mana cost".
+
+        A grant's ``free`` flag — and **every** permission over the hand,
+        which is the cast path's own reading (``cast_permissions.permission_for``
+        answers the hand zone for cost waivers alone, and ``_cast_onto_stack``
+        takes whatever it answers as one)."""
+        return self.cost is None and (
+            bool(getattr(self.permission, "free", False)) or self.zone == "hand"
+        )
+
+    @property
+    def expires(self) -> bool:
+        """Whether the permission has a stated duration (CR 611.2a) — "until
+        end of turn", "until your next turn" — as opposed to lasting for as
+        long as the card stays where it is (flashback, a static ability of a
+        permanent)."""
+        return getattr(self.permission, "duration", None) is not None
+
+
+def permitted_casts(game, player_index: int) -> "tuple[PermittedCast, ...]":
+    """Every cast *player_index* may make from **outside its hand** right now
+    (CR 601.3), one entry per spell and per price.
+
+    The list is the engine's: ``cast_permissions.playable_from_zones``, the
+    one the browser's zone badges are built from, so an AI seat is offered
+    exactly the cards a human seat is. The command zone is left to
+    :func:`castable_commanders` — CR 903.8 is a rule rather than a permission,
+    and it carries a tax where these carry a price.
+
+    **Which permission a cast will be made under is the cast path's answer,
+    mirrored rather than re-decided.** ``_cast_onto_stack`` finds a card *by
+    name*, in the caster's own pile first and then the others', and takes the
+    first permission that covers it — the first that *requires an alternative
+    cost* when the caster announced one (CR 601.2b, ``permission_for``'s
+    ``costed``). So for each spell name in each zone:
+
+    * the **bare** cast is the first covered copy in that scan order, under the
+      first permission that answers for it — and a later copy is not offered
+      again, because the cast could not reach it;
+    * where that permission asks no alternative cost and another one does (a
+      flashback card under Yawgmoth's Will, an opened graveyard), the cast
+      **announcing an alternative cost** is offered beside it.
+
+    Lands are included (``mode="play"``): the land-drop chooser reads them.
+    """
+    from .cast_permissions import permission_for, playable_from_zones
+    from .faces import castable_faces
+
+    found: list[PermittedCast] = []
+    bare_seen: set[tuple[str, str]] = set()
+    costed_seen: set[tuple[str, str]] = set()
+    for entry in playable_from_zones(game, player_index):
+        zone = entry["zone"]
+        if zone == "command":
+            continue
+        owner = entry["owner_seat"]
+        index = entry["index"]
+        pile = getattr(game.players[owner], zone)
+        if not 0 <= index < len(pile):
+            continue
+        held = pile[index]
+        as_land = held.primary_type == "land"
+        for spell in castable_faces(held):
+            key = (zone, spell.name)
+            first = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+            )
+            if first is None or first.zone_seat != owner:
+                continue
+            if key not in bare_seen:
+                bare_seen.add(key)
+                found.append(PermittedCast(
+                    zone=zone, owner_seat=owner, index=index, held=held,
+                    spell=spell, permission=first,
+                    alternative_cost=first.cost is not None,
+                ))
+                if first.cost is not None:
+                    costed_seen.add(key)
+            if key in costed_seen:
+                continue
+            costed = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+                costed=True,
+            )
+            if costed is None or costed.zone_seat != owner:
+                continue
+            costed_seen.add(key)
+            found.append(PermittedCast(
+                zone=zone, owner_seat=owner, index=index, held=held,
+                spell=spell, permission=costed, alternative_cost=True,
+            ))
+    return tuple(found)
+
+
+def hand_waiver(
+    game, player_index: int, held: CardDefinition, spell: CardDefinition,
+    hand_index: int,
+) -> "PermittedCast | None":
+    """The waiver a cast of *spell* out of *player_index*'s hand will be made
+    under ("Any player may cast creature spells with mana value 3 or less
+    without paying their mana costs", Aluren; "you may cast spells from your
+    hand without paying their mana costs", Chandra, Flame's Catalyst), or None.
+
+    The cast path's own default, mirrored: a cast that announces nothing takes
+    a hand waiver whenever one covers the card, **except for an {X} spell** —
+    a waived {X} is locked to 0 (CR 107.3b), so that one defaults to paying.
+    Never a land, which is played rather than cast.
+    """
+    from .cast_permissions import permission_for
+
+    if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
+        return None
+    permission = permission_for(game, player_index, held, "hand", spell=spell)
+    if permission is None:
+        return None
+    return PermittedCast(
+        zone="hand", owner_seat=player_index, index=hand_index, held=held,
+        spell=spell, permission=permission,
+    )
+
+
+#: The permission the cast being weighed would be made under (CR 601.3), as a
+#: :class:`PermittedCast` -- or None, which is every ordinary cast from hand.
+#:
+#: The zone's twin of :data:`_MODE_CONSIDERED`, a context variable for its
+#: reason: *where a spell is cast from* and *what that cast is charged* are
+#: asked by a dozen choosers underneath the candidate builder -- the spec (a
+#: spell leaving a graveyard is not a card in it, CR 601.2a), the prohibitions
+#: (a row may bind one zone), the price, the X -- and each took a card. Held
+#: with the spell, by identity, so a question about another card asked while
+#: this one is weighed is answered for a cast from hand.
+_CAST_WEIGHED: ContextVar["PermittedCast | None"] = ContextVar(
+    "ai_cast_weighed", default=None
+)
+
+
+@contextmanager
+def casting_under(permitted: "PermittedCast | None"):
+    """Weigh a cast as made under *permitted* for the length of the block.
+    None is an ordinary cast from hand, which reads what every reader read
+    before a seat could cast from anywhere else."""
+    token = _CAST_WEIGHED.set(permitted)
+    try:
+        yield
+    finally:
+        _CAST_WEIGHED.reset(token)
+
+
+def cast_weighed(card: CardDefinition) -> "PermittedCast | None":
+    """The permission *card* is being weighed under (:func:`casting_under`),
+    or None."""
+    held = _CAST_WEIGHED.get()
+    if held is None or held.spell is not card:
+        return None
+    return held
+
+
 def entry_sacrifice_is_unavoidable(game, seat: int, card: CardDefinition) -> bool:
     """Whether *card*, entering under *seat* now, would be sacrificed by its own
     entry trigger because the price to keep it cannot be met.
@@ -2801,12 +2995,15 @@ __all__ = [
     "DividedShape",
     "ManaYield",
     "OfferTrade",
+    "PermittedCast",
     "TollLoss",
     "ability_target_side",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
+    "cast_weighed",
     "caster_sacrifice_steps",
     "castable_commanders",
+    "casting_under",
     "chosen_creature_type_side",
     "counters_a_spell",
     "denies_its_target",
@@ -2818,11 +3015,13 @@ __all__ = [
     "exiled_search_pile_comes_back_one_at_a_time",
     "foreign_activation_use",
     "hand_entry_steps",
+    "hand_waiver",
     "harms_its_own_source",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offer_trade",
     "offered_action_is_a_payment",
+    "permitted_casts",
     "pick_is_tested_for_a_shared_color",
     "planned_mana_yield",
     "returns_creature_to_hand",

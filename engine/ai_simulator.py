@@ -10,7 +10,8 @@ from .ai_combat import run_ai_combat_phase
 from .ai_policy import (cast_announcement, choose_activation_action,
                         choose_cast_action, choose_foreign_activation_action,
                         choose_hand_activation_action, choose_land_drop,
-                        spell_being_cast, tap_planned_lands)
+                        spell_being_cast, tap_planned_lands,
+                        zone_being_cast_from)
 from .card_loader import load_cards
 from .faces import whole_card
 from .game import Game
@@ -135,6 +136,18 @@ class SimulationReport:
     #: card was cast, it resolved, nothing was refused. A report whose only
     #: key is 0 over a pool that prints modal spells is that coming back.
     modal_casts: Counter[int] = field(default_factory=Counter)
+    #: Spells cast — and lands played — from a zone **other than the hand**
+    #: (CR 601.3), by the zone: ``"graveyard"`` (flashback, CR 702.34a;
+    #: Yawgmoth's Will), ``"exile"`` (an Elkin Bottle's card), ``"library"``
+    #: (Temporal Aperture's top card), ``"command"`` (CR 903.8). **Empty in
+    #: every run before ODY's wave 2**, and not because no deck held such a
+    #: card: `ai_policy.choose_cast_action` walked the hand and nothing else,
+    #: so the second half of every flashback card — Odyssey's headline
+    #: mechanic, 28 cards — was text no simulated game reached, and the run
+    #: read exactly as clean as it does now. Each card was cast from hand, it
+    #: resolved, nothing was refused. A report with no ``"graveyard"`` key over
+    #: a pool that prints flashback is that coming back.
+    casts_from_zones: Counter[str] = field(default_factory=Counter)
     #: How many step changes that count was taken over. A zero above means
     #: something only beside a number here: an instrument that looked at
     #: nothing reports nothing owed.
@@ -769,18 +782,27 @@ def _play_land_drops(
         action = choose_land_drop(game, active)
         if action is None:
             return
-        land = game.players[active].hand[action.hand_index]
+        # The land the chooser named, out of the zone it named: the hand, or a
+        # zone an effect lets the seat **play** from (CR 305.1 with CR 601.3's
+        # permission: an Elkin Bottle's exiled land, a graveyard under
+        # Yawgmoth's Will). Through `cast_announcement` like every cast — the
+        # zone is part of what is announced, and for a land in hand the rest
+        # of that dict is the defaults this call always took.
+        land = zone_being_cast_from(game, active, action)[action.hand_index]
         result = game.cast_from_hand(
-            active, land.name, target_player_index=action.target_player_index,
+            active, land.name, **cast_announcement(action),
         )
         _resolve_pending_choices(game)
         report.log_lines.append(
             f"G{game_index} T{turn} {seat_name} play {land.name} -> {result.details}"
+            + _zone_named(action)
         )
         if not result.supported:
             report.refused_casts[f"{land.name}: {result.details}"] += 1
             return
         report.lands_played += 1
+        if action.from_zone != "hand":
+            report.casts_from_zones[action.from_zone] += 1
 
 
 def _play_one_cast(
@@ -796,15 +818,13 @@ def _play_one_cast(
     cast_action = choose_cast_action(game, active)
     if cast_action is None:
         return False
-    # `hand_index` indexes the zone `from_zone` names. The simulator's games
-    # are ordinary duels, so today this is always the hand — but the executor
-    # reads the field rather than assuming it, or a commander game run through
-    # here would cast the wrong card.
-    cast_zone = (
-        active_player.command_zone
-        if cast_action.from_zone == "command"
-        else active_player.hand
-    )
+    # `hand_index` indexes the zone `from_zone` names — the hand, the command
+    # zone, or a graveyard, an exile or a library an effect has opened
+    # (CR 601.3: a flashback card, a card an Elkin Bottle exiled) — through the
+    # one reader every executor shares. This read "the command zone for a
+    # commander cast, the hand otherwise", so a cast proposed from a graveyard
+    # would have been read off the hand at the graveyard's index.
+    cast_zone = zone_being_cast_from(game, active, cast_action)
     # The spell, not the zone's card: a split card is cast as the half the
     # policy scored (CR 709.3), and every line below — the cast, the log, the
     # support check, the effect audit — is about that half.
@@ -841,10 +861,12 @@ def _play_one_cast(
     )
     report.log_lines.append(
         f"G{game_index} T{turn} {active_player.name} cast {card_to_cast.name} "
-        f"-> {result.details}{named}"
+        f"-> {result.details}{named}{_zone_named(cast_action)}"
     )
     if result.supported:
         report.modal_casts.update(index for index, _label in modes_named)
+        if cast_action.from_zone != "hand":
+            report.casts_from_zones[cast_action.from_zone] += 1
     if not result.supported:
         # Two different things wore one message. `supported` on a cast result
         # means "the cast went through", so a spell declined for want of a
@@ -870,6 +892,15 @@ def _play_one_cast(
     if expectation_error:
         report.issues.append(InteractionIssue(game_index, turn, expectation_error))
     return True
+
+
+def _zone_named(cast_action) -> str:
+    """`` [from graveyard]`` for a cast or a land play out of a zone other
+    than the hand, and nothing for one out of it — after the outcome, like the
+    mode, so every line about a hand cast reads as it always did."""
+    if cast_action.from_zone == "hand":
+        return ""
+    return f" [from {cast_action.from_zone}]"
 
 
 def _modes_named(card: CardDefinition, cast_action) -> list[tuple[int, str]]:
