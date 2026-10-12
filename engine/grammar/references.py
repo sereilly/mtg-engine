@@ -495,6 +495,17 @@ def parse_recipient(stream: TokenStream) -> ast.Recipient | None:
     ):
         return ast.TargetSpec("permanent_or_player")
     stream.reset(mark_either)
+    # "…deals 4 damage to **each of those permanents and/or players**
+    # instead" (Shower of Coals). The plural of the marker above: whatever
+    # several "any target"s chose, each of which is either kind of thing. Its
+    # own marker for that one's reason and with that one's default — no
+    # lowering knows it, so it refuses unless
+    # ``conditional_instead._instead_subject`` has replaced it with the list
+    # the sentence it replaces announced. ("And/or" lexes as two words.)
+    stream.accept_phrase("each", "of")
+    if stream.accept_phrase("those", "permanents", "and", "or", "players"):
+        return ast.TargetSpec("permanents_or_players")
+    stream.reset(mark_either)
     mark_definite = stream.mark()
     if stream.accept_word("the"):
         # "…**the attacking creature** assigns no combat damage this turn"

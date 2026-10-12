@@ -443,7 +443,9 @@ _INSTEAD_SUBJECT_FIELDS = {
 
 #: The object back-references: a pronoun, a demonstrative, and the marker
 #: ``parse_recipient`` reads for "that permanent or player".
-_BACK_REFERENCES = ("it", "that", "permanent_or_player")
+_BACK_REFERENCES = (
+    "it", "that", "permanent_or_player", "permanents_or_players",
+)
 
 #: The quantifiers under which an unannounced subject is still **one object**
 #: the surrounding ability already has in hand -- its own source, or what its
@@ -502,6 +504,15 @@ def _instead_subject(named, original):
     announced = original.targeted and original.count == 1
     if named.quantifier == "permanent_or_player":
         return original if announced and original.quantifier == "any_target" else None
+    if named.quantifier == "permanents_or_players":
+        # "…to each of **those permanents and/or players** instead" (Shower of
+        # Coals): the plural, after a list of "any target"s and after nothing
+        # else. One target is the singular's; a list of creatures is "those
+        # creatures".
+        several = original.targeted and original.quantifier == "any_target" and (
+            original.count > 1 or original.count_from_x
+        )
+        return original if several else None
     if named.quantifier == "it":
         if announced:
             return original

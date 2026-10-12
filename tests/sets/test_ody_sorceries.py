@@ -194,15 +194,121 @@ def test_kirtars_wrath_marks_the_replacing_sweep_unregenerable_too(set_pool):
     assert then[1].payload["count"] == 2
 
 
-def test_both_threshold_sorceries_compile_every_printed_sentence(set_pool):
-    """Neither is supported on its first sentence alone: the whole card is
-    one conditional whose condition is the graveyard count."""
+def test_the_threshold_sorceries_compile_every_printed_sentence(set_pool):
+    """None is supported on its first sentence alone: the whole card is one
+    conditional whose condition is the graveyard count."""
     ody = set_pool("ODY")
-    for name in ("Epicenter", "Kirtar's Wrath"):
+    for name in ("Epicenter", "Kirtar's Wrath", "Shower of Coals"):
         program = _w1g2_compile(ody[name])
         assert program.supported, name
         assert [i.kind for i in program.instructions] == ["if_then"], name
         assert program.instructions[0].payload["condition"]["value"] == 7
+
+
+# ---------------------------------------------------------------------------
+# Shower of Coals
+# ---------------------------------------------------------------------------
+
+def _w1g2_shower_board(set_pool, graveyard):
+    """Shower of Coals in hand; the opponent has Bears (2/2), a Wurm (6/4)
+    and a Giant (3/3), the caster a Wurm of its own."""
+    lea = set_pool("LEA")
+    game = _w1g2_duel(set_pool, ["Shower of Coals"], graveyard=graveyard)
+    mine = _w1g2_put(game, 0, lea["Craw Wurm"])
+    bears = _w1g2_put(game, 1, lea["Grizzly Bears"])
+    wurm = _w1g2_put(game, 1, lea["Craw Wurm"])
+    giant = _w1g2_put(game, 1, lea["Hill Giant"])
+    return game, mine, bears, wurm, giant  # _w1g2_shower_board
+
+
+def _w1g2_slot(game, permanent):
+    return (game.controller_index_of(permanent), game.battlefield_index_of(permanent))  # _w1g2_slot
+
+
+@_w1g2_pytest.mark.parametrize("graveyard, each", [(6, 2), (7, 4)])
+def test_shower_of_coals_deals_two_or_four_to_each_of_up_to_three(
+    set_pool, graveyard, each,
+):
+    """"Shower of Coals deals 2 damage to each of up to three targets. /
+    Threshold — Shower of Coals deals 4 damage to **each of those permanents
+    and/or players** instead if there are seven or more cards in your
+    graveyard." One list — a face and two creatures here — announced once, and
+    every target on it takes the whole amount of whichever sentence runs:
+    2 kills the Bears and not the Wurm, 4 kills both. The Giant was never
+    named and is never touched."""
+    game, _mine, bears, wurm, giant = _w1g2_shower_board(set_pool, graveyard)
+
+    assert game.queue_from_hand(
+        0, "Shower of Coals",
+        divided_targets=[(1, None), _w1g2_slot(game, bears), _w1g2_slot(game, wurm)],
+    ).supported
+    _w1g2_resolve_stack(game)
+    game._settle()
+
+    assert game.players[1].life == 20 - each and game.players[0].life == 20
+    assert not game.is_on_battlefield(bears)
+    assert game.is_on_battlefield(wurm) is (each < 4)
+    assert game.is_on_battlefield(giant)
+    assert sum("Shower of Coals dealt" in line for line in game.log) == 3
+    assert all(
+        f"dealt {each} damage" in line
+        for line in game.log if "Shower of Coals dealt" in line
+    )
+
+
+def test_shower_of_coals_holds_its_list_to_three_different_targets(set_pool):
+    """CR 601.2c: "up to three" is a ceiling the caster may fall short of and
+    never exceed, one instance of the word names each target once, and the
+    card — not the caster — says what each gets. Every refusal leaves the
+    spell in hand."""
+    card = set_pool("ODY")["Shower of Coals"]
+    game, mine, bears, wurm, giant = _w1g2_shower_board(set_pool, 7)
+    spec = game.cast_target_spec(0, card)
+    assert (spec["kind"], spec["division"], spec["max_targets"]) == ("divided", "each", 3)
+    assert {entry["kind"] for entry in spec["valid_targets"]} == {"player", "permanent"}
+
+    four = game.queue_from_hand(0, "Shower of Coals", divided_targets=[
+        (1, None), _w1g2_slot(game, bears), _w1g2_slot(game, wurm), _w1g2_slot(game, giant),
+    ])
+    twice = game.queue_from_hand(
+        0, "Shower of Coals", divided_targets=[(1, None), (1, None)],
+    )
+    sized = game.queue_from_hand(
+        0, "Shower of Coals", divided_targets=[(*_w1g2_slot(game, bears), 9)],
+    )
+    assert "at most 3 targets" in four.details
+    assert "different" in twice.details
+    assert "printed, not announced" in sized.details
+    assert not (four.supported or twice.supported or sized.supported)
+    assert game.players[0].hand == [card] and game.stack == []
+
+    assert game.cast_from_hand(
+        0, "Shower of Coals", divided_targets=[_w1g2_slot(game, giant)],
+    ).supported
+    assert not game.is_on_battlefield(giant)
+    assert game.is_on_battlefield(bears) and game.is_on_battlefield(mine)
+    assert game.players[1].life == 20
+
+
+def test_shower_of_coals_reads_threshold_as_it_resolves_and_drops_a_gone_target(set_pool):
+    """Six cards as it is cast and a seventh arriving in response is 4 each
+    (CR 608.2h). A target that left in response is dealt nothing and nothing
+    takes its place (CR 608.2b); the rest of the list still burns."""
+    lea = set_pool("LEA")
+    game, _mine, bears, wurm, giant = _w1g2_shower_board(set_pool, 6)
+    assert game.queue_from_hand(
+        0, "Shower of Coals",
+        divided_targets=[_w1g2_slot(game, bears), _w1g2_slot(game, wurm), (1, None)],
+    ).supported
+
+    game.players[0].graveyard.append(lea["Forest"])
+    game.remove_from_battlefield(bears)
+    _w1g2_resolve_stack(game)
+    game._settle()
+
+    assert not game.is_on_battlefield(wurm), "4, not 2"
+    assert game.is_on_battlefield(giant), "never named"
+    assert game.players[1].life == 16
 
 # ==== end W1G2 ======================================================
 
