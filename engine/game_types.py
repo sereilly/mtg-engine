@@ -340,7 +340,10 @@ class StackItem:
     # stamp may be a slot nobody chose (the death sweep records the dying
     # permanent itself), so "has a target on it" says nothing about whether a
     # player picked it. Set by the two answers that record a chosen target
-    # (``_resolve_trigger_target`` / ``_resolve_trigger_targets``), by
+    # (``_resolve_trigger_target`` / ``_resolve_trigger_targets`` — unless the
+    # answer is a default taken while a permanent was on its way to a
+    # graveyard, ``Game.departing``, when the picker's list was the board
+    # before the event), by
     # ``_stack_push`` for an entry trigger whose permanent spell named the
     # target and whose own list accepted it (``cast_announcement_fault``), by
     # the upkeep step for a pick made at its target prompt and accepted the

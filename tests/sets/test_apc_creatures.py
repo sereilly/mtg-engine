@@ -1555,7 +1555,12 @@ def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
     """CR 608.2b at the other end: the trigger is on the stack naming the
     Shock, and the Shock leaves in response. The trigger's only target is gone,
     so it counters nothing — it used to fall back to the top of the stack and
-    counter the Lightning Bolt nobody had named, which here resolves."""
+    counter the Lightning Bolt nobody had named, which here resolves.
+
+    (W2G3: the Shock was named as the Snake was cast and the trigger's own
+    list accepted it, so it is a chosen target and the rule's gate removes the
+    trigger above its instructions — the line asserted is the gate's, where it
+    was the counter handler's own "…is no longer on the stack".)"""
     apc, lea, sth = set_pool("APC"), set_pool("LEA"), set_pool("STH")
     game, _mine, _theirs = _w1g5_duel(
         hand0=[apc["Mystic Snake"]], hand1=[lea["Lightning Bolt"], sth["Shock"]], active=1,
@@ -1568,7 +1573,10 @@ def test_the_snakes_trigger_counters_nothing_once_its_spell_has_left(set_pool):
     assert game.stack[-1].target_stack_item is shock
     game.counter_stack_object(shock)
     _w1g5_resolve_stack(game)
-    assert "Mystic Snake: the spell it would counter is no longer on the stack" in game.log
+    assert (
+        "Mystic Snake ability was removed from the stack: "
+        "every target is illegal (608.2b)"
+    ) in game.log
     assert not any("was countered by Mystic Snake" in line for line in game.log)
     assert game.players[0].life == 17   # the Bolt was never the Snake's target
 

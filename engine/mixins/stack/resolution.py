@@ -1384,6 +1384,23 @@ class StackResolutionMixin:
         else:
             self.log.append(f"{item.card.name} ability resolved")
 
+    def _intervening_if_is_no_longer_true(self, item: StackItem) -> bool:
+        """CR 608.2a / CR 603.4: whether *item* is a triggered ability whose
+        intervening-if condition is false as it resolves.
+
+        False for everything that has none — a spell, an activated ability, a
+        hook-keyed object (which resolves through its hook and never asked),
+        and a trigger whose line prints no "if". Scoped by the payload key,
+        as :meth:`trigger_condition_holds` is at the other end of the rule.
+        """
+        instruction = item.ability_instruction
+        if instruction is None or item.hook_key is not None:
+            return False
+        gate = (instruction.payload or {}).get("intervening_if")
+        if gate is None:
+            return False
+        return not evaluate_condition(self, self._ability_execution_context(item), gate)
+
     def _run_stack_item_resolution(self, item: StackItem) -> None:
         # **An index is not an identity** (ROADMAP idiom #11) and a graveyard is
         # the zone with no identity to fall back on, so what ``_stack_push``
@@ -1417,6 +1434,25 @@ class StackResolutionMixin:
             )
             if first is not None:
                 item.target_player_index = first.seat
+        # CR 608.2a, which the rule puts **before** 608.2b ("The steps
+        # described in rules 608.2a and 608.2b are followed first"): CR 603.4's
+        # **second** check. An intervening-if is asked again as the ability
+        # resolves, and the ability is removed from the stack and does nothing
+        # if it is false. 102 supported cards compile the key; the comment that
+        # stood beside this check said no card in the shipped pool did, which
+        # was the reason the rule's *first* check went unbuilt for as long as
+        # it did.
+        #
+        # It stood *below* the target gates, which did not matter while those
+        # gates answered for spells (no spell has an intervening-if) and
+        # matters now that a trigger's chosen target is asked too: Ana
+        # Sanctuary's only blue permanent leaving is "its condition is no
+        # longer true" whether or not that permanent was also what it targeted.
+        if self._intervening_if_is_no_longer_true(item):
+            self.log.append(
+                f"{item.card.name} ability did nothing: its condition is no longer true"
+            )
+            return
         # CR 608.2b, asked once for the whole object before any of it runs.
         # This module's docstring has claimed since it was written that a
         # resolution re-checks its targets, and until now nothing did: each
@@ -1475,19 +1511,10 @@ class StackResolutionMixin:
                 self._log_ability_outcome(item, True, "")
             return
         if item.ability_instruction is not None:
+            # CR 603.4's second check was made at the top of this method (CR
+            # 608.2a); the context is built here, after the illegal slots were
+            # blanked, so the instructions read the announcement as it stands.
             context = self._ability_execution_context(item)
-            # CR 603.4's **second** check: an intervening-if is asked again as
-            # the ability resolves, and the ability is removed from the stack
-            # and does nothing if it is false. 102 supported cards compile the
-            # key; the comment that stood here said no card in the shipped pool
-            # did, which was the reason the rule's *first* check went unbuilt
-            # for as long as it did.
-            gate = (item.ability_instruction.payload or {}).get("intervening_if")
-            if gate is not None and not evaluate_condition(self, context, gate):
-                self.log.append(
-                    f"{item.card.name} ability did nothing: its condition is no longer true"
-                )
-                return
             state_machine = OracleStateMachine(self, context)
             supported, details = state_machine.run(
                 self._chosen_trigger_instruction(item)

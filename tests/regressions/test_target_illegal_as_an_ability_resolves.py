@@ -349,17 +349,18 @@ def _effigy_dies(catalog_by_name, *, interactive=()):
     return game, item, bears, giant
 
 
-def test_blazing_effigys_dies_trigger_chooses_its_target_and_is_held_to_it(catalog_by_name):
+def test_blazing_effigys_dies_trigger_is_held_to_the_target_a_player_chose(catalog_by_name):
     """"When this creature dies, it deals X damage to **target creature**…"
 
     ROADMAP declined CR 608.2b for every triggered ability on this card's
-    account: the death sweep recorded the dying Effigy itself as the target,
-    and asking the rule of that id would have reported a mis-stamp as a
-    fizzle. That is no longer what happens — the trigger's own picker treats
-    a stamp of its own source as a reference and **chooses** (CR 603.3d), and
-    the choice is marked (``StackItem.targets_chosen``). So the rule is asked:
-    the chosen Hill Giant leaves in response, and the 3 damage does not go to
-    the Grizzly Bears that slid into its slot."""
+    account: the death sweep announces the trigger while the dying Effigy is
+    still listed, so the id on the stack object could be the Effigy itself.
+    For a **person** that is not what happens any more — the trigger's picker
+    asks (CR 603.3d), the answer is given after the sweep and has to name a
+    permanent that is still there, and it is marked as a choice
+    (``StackItem.targets_chosen``). So the rule is asked of it: the chosen Hill
+    Giant leaves in response, and the 3 damage does not go to the Grizzly Bears
+    that slid into its slot."""
     game, item, bears, giant = _effigy_dies(catalog_by_name, interactive={0})
     assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
     assert item.targets_chosen and item.target_permanent_id == giant.permanent_id
@@ -372,18 +373,22 @@ def test_blazing_effigys_dies_trigger_chooses_its_target_and_is_held_to_it(catal
     assert game.is_on_battlefield(bears) and bears.damage_marked == 0
 
 
-def test_blazing_effigys_dies_trigger_still_burns_a_legal_target(catalog_by_name):
-    """The other direction, with nobody to ask: the default picks a creature,
-    nothing happens in response, and it takes the 3 damage."""
+def test_a_default_taken_while_the_effigy_is_dying_is_not_a_recorded_choice(catalog_by_name):
+    """The bound, at the one moment it is drawn. With nobody to ask, the
+    picker's default is taken *inside* the death sweep, off a list that still
+    holds the dying Effigy (``Game.departing``) — a board CR 603.3d would
+    never have chosen from. So it is not marked as a choice, CR 608.2b is not
+    asked of it, and the ability reaches a creature by the path it always
+    took: here a creature takes the 3 damage and nothing is "removed from the
+    stack" for a target the engine mis-chose."""
     game, item, bears, giant = _effigy_dies(catalog_by_name)
-    assert item.targets_chosen
-    chosen = game.permanent_by_id(item.target_permanent_id)
-    assert chosen is bears or chosen is giant
+    assert not item.targets_chosen and not item.activated
+    assert game.illegal_targets_refusal(item) is None
 
     resolve_stack(game)
 
-    assert chosen.damage_marked == 3, game.log[-4:]
-    assert not any("608.2b" in line for line in game.log)
+    assert 3 in (bears.damage_marked, giant.damage_marked), game.log[-4:]
+    assert not any(_REMOVED in line for line in game.log)
 
 
 def test_a_target_a_fire_site_stamped_is_not_asked_the_rule(catalog_by_name):

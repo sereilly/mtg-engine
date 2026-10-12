@@ -1137,7 +1137,22 @@ class GameHelpersMixin:
         return bool(consumed)
 
     def _permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
-        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead."""
+        """Move a permanent to the graveyard. Tokens (704.5d) cease to exist instead.
+
+        Recorded on ``Game.departing`` for the duration: the dies-triggers this
+        announces go on the stack — and a non-interactive seat's picker takes
+        its default target — while *permanent* is still listed on its
+        battlefield, and ``StackItem.targets_chosen`` has to know that such a
+        default was not a choice off the board the trigger will resolve on.
+        """
+        self.departing.append(permanent)
+        try:
+            self._move_permanent_to_graveyard(player, permanent)
+        finally:
+            self.departing.pop()
+
+    def _move_permanent_to_graveyard(self, player: PlayerState, permanent: Permanent) -> None:
+        """:meth:`_permanent_to_graveyard`'s body."""
         if "Aura" in permanent.card.type_line:
             self._remove_aura_effects(permanent)
         # CR 614 would-die replacements (Disintegrate's "exile it instead"):

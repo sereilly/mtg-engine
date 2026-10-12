@@ -573,6 +573,14 @@ class Game(
     # waits on a prompt, which is the honest answer both times: nothing is
     # running.
     resolving_items: list = field(default_factory=list)
+    # Permanents on their way to a graveyard **right now**: pushed and popped
+    # around ``_permanent_to_graveyard``, which announces a dies-trigger while
+    # the dying permanent is still listed on its battlefield. A target that
+    # trigger's picker defaults to at that moment is chosen off a board the
+    # event has already made stale — it can be the dying permanent itself — so
+    # it is not recorded as a choice (``StackItem.targets_chosen``). Empty
+    # everywhere else.
+    departing: list = field(default_factory=list)
     # What every source dealt this turn, and every cast that could have dealt
     # something — one record, read by "the amount of damage dealt to this
     # creature this turn by other sources named …" (Blazing Effigy) and by "the
