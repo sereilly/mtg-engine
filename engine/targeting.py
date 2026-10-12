@@ -2982,6 +2982,43 @@ def entry_trigger_instructions(
     return _as_kicked(instructions, kickers)
 
 
+#: Set on a graveyard-target spec derived for a cast **out of a graveyard**:
+#: the card being cast is in that pile as the caster looks at it and is not a
+#: candidate. CR 601.2a moves the card to the stack as the *first* step of
+#: casting it and CR 601.2c chooses targets two steps later, so by the time
+#: there is anything to choose the spell is no longer a card in a graveyard.
+#:
+#: Flashback is what made it reachable (CR 702.34a): Coffin Purge's "exile
+#: target card from a graveyard" flashed back out of a graveyard holding only
+#: itself was offered itself, announced at itself, paid for and resolved
+#: having exiled nothing, and Recoup granted flashback to the Recoup doing the
+#: granting. A flag on the spec rather than a parameter to the enumerator,
+#: because the spec is the one thing the picker, the announcement gate and
+#: the no-legal-target gate are all handed — and it is set only where the
+#: caller says which zone the cast leaves, so the resolution-time re-check
+#: (which derives the spec with no zone) never sees it: the spell is on the
+#: stack by then, and a *second copy* in the pile is a legal target.
+CAST_FROM_GRAVEYARD = "cast_from_graveyard"
+
+
+def as_cast_from(spec: "dict | None", from_zone: str) -> "dict | None":
+    """*spec* as the announcement of a cast leaving *from_zone* reads it.
+
+    Unchanged for every zone but a graveyard and for every spec that does not
+    choose a graveyard card, so a caller may pass anything. Returns a copy:
+    the derived specs below are built per call but the tables behind them are
+    shared, and a flag written in place would follow the spec to a caller
+    that named no zone.
+    """
+    if (
+        spec is not None
+        and from_zone == "graveyard"
+        and spec.get("kind") == GRAVEYARD_TARGET_KIND
+    ):
+        return {**spec, CAST_FROM_GRAVEYARD: True}
+    return spec
+
+
 def derive_cast_spec(
     card, program, *, from_zone: str = "hand",
     optional_cost_payments: dict | None = None,
@@ -2989,6 +3026,27 @@ def derive_cast_spec(
 ) -> dict | None:
     """The cast-time spec of *card* cast from *from_zone*, or None when it
     chooses nothing.
+
+    A spec that chooses a graveyard card is marked :data:`CAST_FROM_GRAVEYARD`
+    when the cast itself leaves a graveyard (:func:`as_cast_from`).
+    """
+    return as_cast_from(
+        _derive_cast_spec(
+            card, program, from_zone=from_zone,
+            optional_cost_payments=optional_cost_payments,
+            mode_index=mode_index,
+        ),
+        from_zone,
+    )
+
+
+def _derive_cast_spec(
+    card, program, *, from_zone: str = "hand",
+    optional_cost_payments: dict | None = None,
+    mode_index: "int | None" = None,
+) -> dict | None:
+    """:func:`derive_cast_spec` before the zone the cast leaves is read onto
+    the target half.
 
     *mode_index* is the mode a "Choose one —" spell was announced with
     (CR 601.2b): the spec is then **that mode's**, through

@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import dataclasses
 
+from ...flashback import FLASHBACK
 from ...oracle_types import OracleInstruction
 from ...subject_filters import OBJECT_ONLY_FILTER_KEYS, card_only_filter
 from .. import ast
@@ -65,6 +66,7 @@ from ._common import (
                       testable_filter_payload)
 from ._events import EVENT_SUBJECT_NAMES
 from ._piles import _sweep_graveyard_actor
+from ._targets import _targets_only
 
 
 def describes_a_swept_set(node: ast.DealDamage) -> bool:
@@ -473,10 +475,34 @@ def lower_exile_sweep(
         # graveyards" refused while the identical return lowered, for no
         # reason either sentence prints.
         graveyard_owner = _sweep_graveyard_actor(node, subject)
+        # "**Target player** exiles all cards with flashback from **their**
+        # graveyard." (Tombfire; Mudhole prints "all land cards".) The third
+        # pairing of the same two halves: one chosen seat, emptying its own
+        # pile. Read here rather than added to the shared reconciler, because
+        # that function also answers for the two *return* sweeps, whose
+        # handlers know two seats ("you", "each_player") and would be handed a
+        # third they do nothing for. The possessive is the noun parser's
+        # "owner" — "their graveyard" behind a singular subject — and it is
+        # required, for the reconciler's reason: "target player exiles all
+        # cards from *your* graveyard" is one player and somebody else's pile,
+        # and there is no such card.
+        chosen_seat: dict[str, object] = {}
+        if graveyard_owner is None and (
+            node.actor is not None
+            and node.actor.kind in ("target_player", "target_opponent")
+            and filt.zone_owner is not None
+            and filt.zone_owner.kind == "owner"
+        ):
+            graveyard_owner = "target_player"
+            # The target description rides the payload so the announcement
+            # chooses the player (CR 601.2c) and "target opponent" keeps its
+            # narrowing; the handler reads the chosen seat off the context.
+            chosen_seat = _targets_only(node.actor)
         if graveyard_owner is None:
             raise LoweringError(
                 "the graveyard exile sweep reads your own pile, "
-                "\"each player … their graveyard\", or \"all graveyards\"",
+                "\"each player … their graveyard\", \"target player … "
+                "their graveyard\", or \"all graveyards\"",
                 node=node,
             )
         if node.counters:
@@ -484,9 +510,24 @@ def lower_exile_sweep(
                 "a graveyard exile sweep carries no counters", node=node
             )
         default = ast.ObjectFilter()
+        # "…all cards **with flashback**…" (Tombfire.) The one keyword a card
+        # in a graveyard is asked about, because it is the one that *functions*
+        # there (CR 702.34a) — and it can be granted there too (Recoup), which
+        # no reading of the printed card can see. So it is lifted off the
+        # filter and carried beside it, the split the sweep bounce makes for
+        # ``attached_to``: inside the filter it would reach the card matcher,
+        # which answers a printed type line and a name (CR 613.1) and would
+        # have to refuse it. Any other keyword stays on the filter and is
+        # refused there — "cards with flying" in a graveyard is a question no
+        # handler here answers.
+        with_keyword: dict[str, object] = {}
+        swept = filt
+        if filt.with_keywords == (FLASHBACK,):
+            with_keyword = {"with_keyword": FLASHBACK}
+            swept = dataclasses.replace(filt, with_keywords=())
         described = card_only_filter(
             dataclasses.replace(
-                filt, zone=default.zone, zone_owner=default.zone_owner,
+                swept, zone=default.zone, zone_owner=default.zone_owner,
             ).to_payload()
         )
         if described is None:
@@ -498,7 +539,10 @@ def lower_exile_sweep(
         return (
             OracleInstruction(
                 "exile_graveyard_cards", "",
-                {"graveyard_owner": graveyard_owner, "filter": described},
+                {
+                    "graveyard_owner": graveyard_owner, "filter": described,
+                    **with_keyword, **chosen_seat,
+                },
             ),
         )
     if filt.zone != "battlefield" or filt.is_card:

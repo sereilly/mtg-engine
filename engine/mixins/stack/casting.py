@@ -1529,6 +1529,10 @@ class SpellCastingMixin:
                 caster_index, card,
                 optional_cost_payments=optional_paid, x_value=x_value,
                 mode_index=announced_mode,
+                # A spell cast out of a graveyard is not a card in it by the
+                # time targets are chosen (CR 601.2a), so it cannot be the
+                # legal target that lets itself be cast.
+                from_zone=from_zone,
             )
             if unaimed is not None and mode_stack_item is None:
                 self.log.append(unaimed)
@@ -2352,6 +2356,8 @@ class SpellCastingMixin:
                         ),
                     },
             )
+            if from_zone == "graveyard":
+                self._rebase_graveyard_targets(spell_item, source_seat, hand_index)
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
             if kicked(card, spell_item.choices):
@@ -2416,6 +2422,44 @@ class SpellCastingMixin:
             owner_index=source_seat,
         )
         return SimulationResult(card.name, True, classification.effect_kind, "resolved")
+    def _rebase_graveyard_targets(
+        self, item: StackItem, pile_seat: int, left_slot: int
+    ) -> None:
+        """Re-count *item*'s graveyard target slots now that the spell itself
+        has left *pile_seat*'s graveyard from *left_slot*.
+
+        A graveyard target is announced as a slot, and the announcement is
+        made against the pile **the caster is looking at** — the spell still
+        in it, which is the list the picker enumerated and the list the
+        announcement gates above just checked the slot against. The card then
+        leaves that pile (CR 601.2a), every later slot slides down one, and
+        ``_stack_push`` names the target by the slot it is handed. Read
+        unshifted, Morgue Theft flashed back from under two creature cards
+        returned the *other* one, and a slot past the shortened end named
+        nothing and fell back to the first legal card.
+
+        Only where the slot counts into the pile the spell left: the same
+        ``graveyard_target_seat`` the stamp is about to ask, so the two cannot
+        disagree about whose pile an index is into. The spell's own slot never
+        arrives here — the picker does not offer it and
+        ``cast_target_refusal`` has refused it (``targeting.CAST_FROM_GRAVEYARD``).
+        """
+        spec = graveyard_target_spec(
+            item.card, compile_card_oracle(item.card),
+            mode_index=item.chosen_mode_index,
+        )
+        if spec is None or self.graveyard_target_seat(item, spec) != pile_seat:
+            return
+
+        def rebased(slot):
+            return slot - 1 if isinstance(slot, int) and slot > left_slot else slot
+
+        chosen = item.target_permanent_index
+        item.target_permanent_index = (
+            [rebased(slot) for slot in chosen] if isinstance(chosen, list)
+            else rebased(chosen)
+        )
+
     # ------------------------------------------------------------------
     # Printed additional costs (CR 601.2b)
     # ------------------------------------------------------------------

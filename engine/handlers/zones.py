@@ -4793,10 +4793,40 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         seats = list(range(len(game.players)))
     elif who == "you":
         seats = [game.players.index(context.caster)]
+    elif who == "target_player":
+        # "**Target player** exiles all cards with flashback from their
+        # graveyard." (Tombfire, Mudhole.) The one seat the announcement chose
+        # (CR 601.2c). No fallback to the caster: a sweep with nobody named is
+        # a different card, and the resolution gate above this handler has
+        # already removed a spell whose only target became illegal.
+        chosen = context.target
+        seat = next(
+            (i for i, player in enumerate(game.players) if player is chosen),
+            None,
+        )
+        if seat is None:
+            game.log.append(f"{context.card.name}: no player was chosen")
+            return True, "resolved"
+        seats = [seat]
     else:
         game.log.append(f"{context.card.name}: no graveyard named")
         return True, "resolved"
     described = dict(payload.get("filter") or {})
+    # "…all cards **with flashback**…" (Tombfire.) Carried beside the filter
+    # rather than in it: whether a card has flashback is a printed keyword *or
+    # a grant somebody made this turn* (Recoup), and the second half needs the
+    # game and the seat, which the card matcher's keys are not about.
+    with_keyword = payload.get("with_keyword")
+    if with_keyword not in (None, "flashback"):
+        # A keyword nothing here can test would be a narrowing dropped, and a
+        # dropped narrowing on a sweep is the whole graveyard. The lowering
+        # admits only the one; this is the second lock on the same door.
+        game.log.append(
+            f"{context.card.name}: no card in a graveyard is tested for "
+            f"{with_keyword!r}"
+        )
+        return True, "resolved"
+    from ..flashback import has_flashback
     # One entry per seat, **including the empty ones**, and seeded before
     # anything moves. The sentence behind this one is read once per player
     # ("puts all cards *they* exiled this way onto the battlefield"), so a seat
@@ -4822,6 +4852,10 @@ def exile_graveyard_cards(game: Game, instruction: OracleInstruction, context: O
         taken_slots = [
             index for index, card in enumerate(owner.graveyard)
             if _card_matches_filter(card, described, game=game, owner=owner)
+            and (
+                with_keyword is None
+                or has_flashback(card, game=game, owner_seat=seat)
+            )
         ]
         if not taken_slots:
             continue
@@ -8320,6 +8354,36 @@ def grant_cast_permission(game: Game, instruction: OracleInstruction, context: O
             chosen = next((card for card in caster.graveyard if _legal(card)), None)
         if chosen is None:
             game.log.append(f"{source_name}: no legal card in {caster.name}'s graveyard")
+            return True, "resolved"
+        spelling = payload.get("flashback")
+        if spelling:
+            # "Target sorcery card in your graveyard **gains flashback** until
+            # end of turn. The flashback cost is equal to its mana cost."
+            # (Recoup.) CR 702.34a's permission granted to one card: the same
+            # grant as the one below with the alternative cost it *requires*
+            # (CR 118.9b) and both exile riders — and scoped to "if the
+            # resulting spell is an instant or sorcery spell", which is part
+            # of the keyword rather than of this card's noun phrase.
+            from ..flashback import granted_cost
+
+            cost = granted_cost(chosen, str(spelling))
+            if cost is None:
+                # A price this cannot build is a grant at no stated price,
+                # which would be a free cast. Refused out loud instead.
+                game.log.append(
+                    f"{source_name}: no flashback cost is spelled {spelling!r}"
+                )
+                return True, "resolved"
+            grant_permission(
+                game, player_index=caster_index, zone="graveyard", mode="cast",
+                cards=[chosen], duration=duration, exile_instead=True,
+                card_types=("instant", "sorcery"), cost=cost,
+                source_name=source_name,
+            )
+            game.log.append(
+                f"{chosen.name} gains flashback "
+                f"{cost.mana or '(no mana cost)'} until end of turn"
+            )
             return True, "resolved"
         grant_permission(
             game, player_index=caster_index, zone="graveyard", mode="cast",
