@@ -427,10 +427,15 @@ def _card_castable_now(
             # through the same enumeration the offer prompt reads — a highlight
             # that said "no" here would call five shipped cards uncastable on
             # exactly the boards they are famous for being cast from.
+            #
+            # ``extra_generic``: CR 118.9d applies the cost increases to the
+            # alternative cost too, so the offer's ``payable`` prices the taxes
+            # in force and has to be told the one the zone adds.
             return any(
                 offer.get("kind") == "alternative" and offer.get("payable")
                 for offer in game.cast_cost_offers(
                     player_index, card, spell_hand_index=hand_index,
+                    extra_generic=extra_generic,
                 )
             )
 

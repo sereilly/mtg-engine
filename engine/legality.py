@@ -1441,6 +1441,13 @@ class LegalityMixin:
         offers = self.cast_cost_offers(
             caster_index, card, from_zone=from_zone,
             spell_hand_index=spell_hand_index, taken=optional_cost_payments,
+            # CR 903.8's tax is a cost increase like any other, and CR 118.9d
+            # applies it to an alternative cost: the offer's ``payable`` is
+            # told what this zone adds.
+            extra_generic=(
+                self.commander_tax(caster_index, card)
+                if from_zone == "command" else 0
+            ),
         )
         if offers:
             spec["cost_offers"] = offers
@@ -1672,9 +1679,14 @@ class LegalityMixin:
         from_zone: str = "hand",
         spell_hand_index: int | None = None,
         taken: dict[str, int] | None = None,
+        extra_generic: int = 0,
     ) -> list[dict]:
         """Every *optional* price CR 601.2b lets the caster announce for *card*,
         with what each one costs and how many times it is payable.
+
+        *extra_generic* is what the zone adds to this cast's cost (CR 903.8's
+        commander tax), for the one offer whose ``payable`` is a promise about
+        the whole cast: the alternative cost's (see below).
 
         The two optional cost kinds this engine has grown, described in one
         vocabulary because the browser asks one question about them ("what are
@@ -1719,6 +1731,30 @@ class LegalityMixin:
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
+            # CR 118.9d: "any additional costs, cost increases, and cost
+            # reductions that affect that spell are applied to that alternative
+            # cost." So a pitched card and a life are not the whole price under
+            # Sphere of Resistance — the {1} is owed beside them, and an offer
+            # that says "payable" over a board that cannot make it is a cast
+            # the payment refuses (and the reason the castable highlight, which
+            # falls back to this flag, glowed over it). Priced by the one
+            # reader the AI plans the same announcement with, and asked of the
+            # pool plus the untapped lands as every other ceiling here is.
+            # ``mana_owed`` tells the prompt what to float.
+            if self.enforce_mana_costs:
+                from .board_payment import board_can_pay
+                from .mana_payment import mana_cost_label
+                from .restricted_mana import CAST, PaymentPurpose
+
+                owed = self.alternative_cost_mana(
+                    caster_index, card, cost, extra_generic=extra_generic,
+                )
+                if any(owed.values()):
+                    entry["mana_owed"] = mana_cost_label(owed)
+                    entry["payable"] = entry["payable"] and board_can_pay(
+                        self, caster_index, owed,
+                        purpose=PaymentPurpose(CAST, card=card),
+                    )
             if (
                 cost.exile_from_hand is not None
                 or cost.discard_from_hand is not None

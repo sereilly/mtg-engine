@@ -2044,7 +2044,7 @@ class SpellCastingMixin:
                 # its mana cost" (Recoup) over an X spell, whose X is then the
                 # one the caster announced.
                 resolved_x_value = 0
-            if alternative_mana is not None and self.enforce_mana_costs:
+            if self.enforce_mana_costs:
                 # **An alternative cost paid in mana** (CR 702.34a: flashback's
                 # "by paying [cost] rather than paying its mana cost"). Charged
                 # where the mana cost would have been and by the same payment,
@@ -2053,7 +2053,21 @@ class SpellCastingMixin:
                 # gathered above for this cast apply to *this* total — "start
                 # with the mana cost or alternative cost you're paying, add any
                 # cost increases, then apply any cost reductions".
-                if not alternative_mana.strip():
+                #
+                # **And an alternative cost paid in something else** — a
+                # pitched card, life, a sacrifice (Force of Will, Fireblast,
+                # Dream Halls' grant). Its mana is nothing, and CR 118.9d says
+                # the same thing about it: the increases and the additional
+                # costs are "applied to that alternative cost", so the payment
+                # is this same one over an empty run of symbols. This branch
+                # charged mana only when the alternative cost itself printed
+                # some, which made a Sphere of Resistance, a per-target tax,
+                # the commander tax and the mana of a kicker or a buyback the
+                # caster had *announced* free for every such cast: 43 of 43
+                # pitch spells were cast under a Sphere with an empty pool,
+                # and Capsize came back to hand off a Dream Halls discard with
+                # its {3} unpaid.
+                if alternative_mana is not None and not alternative_mana.strip():
                     # A flashback cost "equal to its mana cost" over a card
                     # that has none (CR 118.6): unpayable, never free.
                     details = (
@@ -2079,7 +2093,7 @@ class SpellCastingMixin:
                     ),
                     extra_pips=extra_pip_tax,
                     offer_x_colorings=offer_x_colorings,
-                    mana_cost=alternative_mana,
+                    mana_cost=alternative_mana or "",
                 )
                 if paid is None:
                     details = (
@@ -2087,6 +2101,13 @@ class SpellCastingMixin:
                         f"{chosen_alternative.keyword or 'alternative'} cost "
                         f"({alternative_mana})"
                     )
+                    if alternative_mana is None:
+                        details = self._mana_still_owed_refusal(
+                            card,
+                            f"its alternative cost "
+                            f"({chosen_alternative.describe()})",
+                            extra_generic_tax, extra_pip_tax, cost_reduction,
+                        )
                     self.log.append(details)
                     return SimulationResult(
                         card.name, False, classification.effect_kind, details,
@@ -2105,6 +2126,32 @@ class SpellCastingMixin:
         elif free_grant is not None and card.primary_type != "land":
             if "{X}" in card.mana_cost.upper():
                 resolved_x_value = 0  # CR 107.3b: the only legal choice for X
+            if self.enforce_mana_costs:
+                # "Without paying its mana cost" is an alternative cost
+                # (CR 118.9), and CR 118.9d keeps every additional cost and
+                # cost increase in force on top of one: what is waived is the
+                # mana cost and nothing else. So the payment still runs, over
+                # an empty run of symbols — the taxes, the commander tax and
+                # the mana of every optional cost this caster announced. It
+                # did not run at all, which made a kicker and a buyback free
+                # under any waiver (61 of 73 such cards were cast, kicked, with
+                # an empty pool) and Aluren a way round Sphere of Resistance.
+                x_mana_spent = self._pay_cast_cost(
+                    caster, card, resolved_x_value, x_colors,
+                    extra_generic=extra_generic_tax, reduction=cost_reduction,
+                    extra_pips=extra_pip_tax,
+                    offer_x_colorings=offer_x_colorings,
+                    mana_cost="",
+                )
+                if x_mana_spent is None:
+                    details = self._mana_still_owed_refusal(
+                        card, "cast without paying its mana cost",
+                        extra_generic_tax, extra_pip_tax, cost_reduction,
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
             self.log.append(
                 f"{card.name} cast without paying its mana cost"
                 + (f" ({free_grant.source_name})" if free_grant.source_name else "")
@@ -3597,6 +3644,76 @@ class SpellCastingMixin:
                     f"(CR 601.2h)"
                 )
         return None
+
+    def alternative_cost_mana(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None" = None,
+        *,
+        extra_generic: int = 0,
+    ) -> dict[str, int]:
+        """CR 118.9d, for a reader that **prices** a cast before making it: the
+        mana a cast of *card* owes when it is paid for with *cost* rather than
+        with its mana cost.
+
+        The cost's own mana (a flashback cost) or none (a pitched card, a life
+        payment, a sacrifice), plus every cost increase in force and less every
+        reduction, in CR 601.2f's order — the total ``_cast_onto_stack`` hands
+        ``_pay_cast_cost`` for the same announcement, with every optional cost
+        declined and nothing aimed at. *cost* None is a waiver ("without paying
+        its mana cost"), which CR 118.9 calls an alternative cost too.
+        *extra_generic* is what the zone adds — CR 903.8's commander tax.
+
+        Three readers price a cast and all three used to read an alternative
+        cost as costing no mana, because the cast path charged none: the offer's
+        ``payable`` (``legality.cast_cost_offers``), the castable highlight's
+        fallback behind it, and the AI's ``_alternative_cost_is_payable``. One
+        reader so the day the cast path began charging the taxes was not the day
+        the other three began offering casts it refuses.
+        """
+        tax, _taxing = spell_cost_tax(self, caster_index, card)
+        pips, _pip_taxing = spell_symbol_tax(self, caster_index, card)
+        reduction, _reducing = cost_reduction_for_cast(self, caster_index, card)
+        more, less, _by = keyword_cost_modifiers(
+            self, caster_index, cost.keyword if cost is not None else None
+        )
+        return reduce_cost(
+            self._parse_mana_cost(
+                (cost.mana if cost is not None else None) or "",
+                x_value=0,
+                extra_generic=max(0, extra_generic) + tax + more,
+                extra_pips=pips,
+            ),
+            CostReduction(reduction.generic + less, reduction.colored),
+        )
+
+    def _mana_still_owed_refusal(
+        self, card: CardDefinition, how: str, extra_generic: int,
+        extra_pips: "dict[str, int] | None", reduction: "CostReduction | None",
+    ) -> str:
+        """The refusal for a cast whose mana cost is not being paid and whose
+        pool cannot pay what CR 118.9d leaves owing.
+
+        *how* is the cost that replaced the mana cost, as the log should name
+        it. The amount is this cast's own total — its taxes and the optional
+        costs it announced, after its reductions — so the line says what to
+        float, which "insufficient mana" alone would not: the card's mana cost
+        is exactly what the caster is not paying.
+        """
+        from ...mana_payment import mana_cost_label
+
+        owed = reduce_cost(
+            self._parse_mana_cost(
+                "", x_value=0, extra_generic=extra_generic, extra_pips=extra_pips,
+            ),
+            reduction or CostReduction(),
+        )
+        return (
+            f"insufficient mana for {card.name}: {how} still owes "
+            f"{mana_cost_label(owed)} in additional costs and cost increases "
+            f"(CR 118.9d)"
+        )
 
     def _life_gain_cost_payer(self, caster_index: int) -> "int | None":
         """The seat an "have an opponent gain N life" cost will hand its life to.
