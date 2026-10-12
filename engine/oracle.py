@@ -1169,6 +1169,20 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("land_tapped_for_mana",
      r"whenever an opponent(?P<tapped_by_opponent>) taps an? "
      r"(?P<tapped_land_subtype>[a-z]+) for mana"),
+    # "Whenever **you** tap a land for mana, remove a +1/+1 counter from this
+    # creature." (Savage Firecat.) The third seat the active voice prints, and
+    # the opposite narrowing from the row above: ``tapped_by_you`` is tested at
+    # the tap seam against the watching permanent's controller too, and
+    # dropped it is a Firecat that shrinks every time *anybody* taps a land —
+    # a trigger firing on a strictly larger set, the direction no census sees.
+    #
+    # The bare "a land" row first and the land-type row after it, for the
+    # reason the "a player" pair above is ordered that way.
+    ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap a land for mana"),
+    ("land_tapped_for_mana",
+     r"whenever you(?P<tapped_by_you>) tap an? "
+     r"(?P<tapped_land_subtype>[a-z]+) for mana"),
     # "Whenever **a land an opponent controls** is tapped for mana" (Mana Web).
     # The passive voice with a whole *noun phrase* where the three rows above
     # carry a single word — so it is a `_subject` group read by the noun parser,

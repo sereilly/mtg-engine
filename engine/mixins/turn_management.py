@@ -53,6 +53,20 @@ TAP_TRIGGER_KINDS = frozenset({
     # condition *is* dispatched and it is the effect that falls off the end.
     "may",
     "target_gains_life",
+    # "Whenever you tap a land for mana, **remove a +1/+1 counter from this
+    # creature**." (Savage Firecat.) "…if it's not that player's turn,
+    # **destroy that land**." (Price of Glory.) Two more effects that are not
+    # mana abilities, run through the ordinary dispatcher like the two above
+    # them, with the event's seat and the event's land stamped in the context.
+    "remove_counter_from_self",
+    "destroy_event_subject",
+})
+
+#: The kinds above that reach ``EFFECT_HANDLERS`` through the engine's own
+#: dispatcher rather than through an arm written out at the fire site.
+_TAP_TRIGGER_HANDLER_KINDS = frozenset({
+    "may", "target_gains_life", "remove_counter_from_self",
+    "destroy_event_subject",
 })
 
 
@@ -1003,6 +1017,13 @@ class TurnManagementMixin:
                 watcher = self.controller_index_of(perm)
                 if watcher is None or player_index == watcher:
                     continue
+            # "Whenever **you** tap a land for mana" (Savage Firecat). The
+            # same seat test the other way round: only the watching
+            # permanent's own controller's taps count.
+            if trig.condition.payload.get("tapped_by_you") is not None:
+                watcher = self.controller_index_of(perm)
+                if watcher is None or player_index != watcher:
+                    continue
             described = trig.condition.payload.get("tapped_land_filter")
             if described:
                 from ..subject_filters import subject_matches
@@ -1021,6 +1042,25 @@ class TurnManagementMixin:
             # by teaching each arm about sequences: what the arms answer is
             # "which effect is this", and how many sentences the ability was
             # printed in is not part of that question.
+            # "…**if it's not that player's turn**, destroy that land." (Price
+            # of Glory.) CR 603.4's intervening-if. This site triggers and
+            # resolves in one motion, so the rule's two checks are one check:
+            # false, the ability does not trigger and nothing below runs.
+            gate = (trig.instruction.payload or {}).get("intervening_if")
+            if gate is not None:
+                from ..handlers.control_flow import evaluate_condition
+
+                watcher = self.controller_index_of(perm)
+                if watcher is None or not evaluate_condition(
+                    self,
+                    OracleExecutionContext(
+                        caster=self.players[watcher], target=player,
+                        card=perm.card, source_permanent=perm,
+                        trigger_context={"event_subject_player": player_index},
+                    ),
+                    gate,
+                ):
+                    continue
             for step in _tap_trigger_steps(trig.instruction):
                 self._resolve_tapped_land_trigger_step(
                     step, player_index, player, land, mana_symbol, perm
@@ -1097,7 +1137,7 @@ class TurnManagementMixin:
         # every "that player" reader already asks for, because this site is the
         # fire site and holds it: an effect printed under this condition that
         # names the event's player has one place to read it, and it is here.
-        if kind in ("may", "target_gains_life"):
+        if kind in _TAP_TRIGGER_HANDLER_KINDS:
             watcher = self.controller_index_of(perm)
             if watcher is None:
                 self.log.append(
@@ -1114,6 +1154,9 @@ class TurnManagementMixin:
                     trigger_context={
                         "event_subject_player": player_index,
                         "event_subject_controller": player_index,
+                        # The land the event was about, by id (CR 400.7) —
+                        # what "destroy **that land**" reads (Price of Glory).
+                        "event_subject_permanent_id": land.permanent_id,
                     },
                 ),
             )

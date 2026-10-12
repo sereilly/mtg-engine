@@ -102,7 +102,6 @@ ActionKind = Literal[
     "draw_up_to_confirm",
     "pay_any_amount_confirm",
     "confirm_mana_payment",
-    "kudzu_reattach_confirm",
     "face_down_cast_confirm",
     "flip_again_confirm",
     "repeat_process_confirm",

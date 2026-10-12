@@ -89,9 +89,13 @@ def _accept_land_tapped_for_mana_by_a_player(
     # whose two halves watch different sets, which is the whole reason this
     # reader exists — so the words are consumed here even though nothing here
     # asks what they mean.
+    # "Whenever **you** tap a land for mana" (Savage Firecat) is the third
+    # seat, in the second person — the same event again, and the same split:
+    # the words are consumed here and ``tapped_by_you`` rides the other table.
     if not (
         stream.accept_phrase("a", "player", "taps")
         or stream.accept_phrase("an", "opponent", "taps")
+        or stream.accept_phrase("you", "tap")
     ):
         stream.reset(mark)
         return None

@@ -557,6 +557,19 @@ def _damage_dealt_this_turn(game, context, query: dict) -> int:
             if context.caster in game.players else None
         )
         return max(0, base + damage_dealt_to_seat(game, seat))
+    if query.get("recipient") == "target":
+        # "…equal to the damage already dealt **to it** this turn"
+        # (Whipkeeper). The permanent the sentence targeted, by the id the
+        # announcement stamped — never a fallback pick: a history read off a
+        # creature the player did not choose is a number about somebody else.
+        # A target that has left answers with the base, which is nothing.
+        aimed = resolve_target_permanent(
+            game, context, predicate=lambda p: True,
+            fallback_on_invalid_choice=False,
+        )
+        if aimed is None:
+            return base
+        return max(0, base + damage_dealt_to_permanent(game, aimed.permanent_id))
     if query.get("recipient") != "source" or source is None:
         return base
     permanent_id = getattr(source, "permanent_id", None)

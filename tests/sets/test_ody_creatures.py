@@ -933,6 +933,12 @@ def test_w1g5_resilient_wanderer_discards_and_is_asked_its_colour_as_it_resolves
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+#
+# They are in `test_ody_creatures_w1g8.py`, a file of the group's own: the
+# five creatures it implemented and the twenty-three it drove came to some
+# 900 lines, and this file had 415 lines of room with four sections still to
+# land. Split along a section boundary, the axis `tests/sets/README.md` names
+# once the printed type has run out, so each section stays whole.
 
 # ==== end W1G8 ======================================================
 

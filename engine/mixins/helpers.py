@@ -1488,7 +1488,7 @@ class GameHelpersMixin:
             subject=permanent, event_subject_controller=tapped_seat,
             # The tapped object itself, by id (CR 400.7 — an index is not an
             # identity). A trigger that acts *on* it rather than on its
-            # controller ("destroy it" — Kudzu) reads it here, frozen at the
+            # controller ("destroy it" — Mine Layer) reads it here, frozen at the
             # announcement, because by resolution the land may have moved and a
             # board search would find a look-alike.
             event_subject_permanent_id=permanent.permanent_id,

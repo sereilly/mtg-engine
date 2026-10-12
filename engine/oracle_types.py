@@ -1267,6 +1267,16 @@ EVENT_SPELL_MANA_COST = "event_spell_mana_cost"
 #: spell). Beside the cost word above for the same reason.
 OTHER_THAN_EVENT_SUBJECT_PLAYER = "other_than_event_subject_player"
 
+#: The ``actor`` word of an offer made to the controller of the **spell this
+#: object targeted** ("Counter target instant or sorcery spell unless *its
+#: controller* has Molten Influence deal 4 damage to them"). A stack object
+#: has a controller and no battlefield, so neither of the two seats an offer
+#: otherwise reads - the control seam for a permanent, the resolution's own
+#: target seat for a player - names it. Beside the two words above for their
+#: reason: the lowering writes it, the offer handler reads it, and an actor
+#: only one of them knew would be an offer made to nobody.
+STACK_TARGET_CONTROLLER = "stack_target_controller"
+
 #: What "**that color**" names (Persecute). One colour symbol, chosen by the
 #: controller of the resolving spell (CR 608.2d) in the sentence in front, and
 #: read back by the sentence that spends it through a ``color_filter_from`` key.

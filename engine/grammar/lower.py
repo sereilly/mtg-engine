@@ -451,6 +451,31 @@ def _rebind_blocking_pronoun(statement: ast.Statement) -> ast.Statement:
     return dataclasses.replace(statement, **updates) if changed else statement
 
 
+def _returning_from_exile(instruction: OracleInstruction) -> OracleInstruction:
+    """*instruction* with every self-return inside it reading the source out
+    of **exile** — see the activated branch of :func:`lower_ability`.
+
+    Walked by shape rather than by a table of wrapper kinds, because the
+    return this is written for sits inside a delayed trigger inside an offer:
+    a nested instruction is an ``OracleInstruction`` wherever a payload holds
+    one, alone or in a sequence. Rebuilt, never mutated — a compiled
+    instruction is shared by every copy of the card.
+    """
+    def walk(value):
+        if isinstance(value, OracleInstruction):
+            return _returning_from_exile(value)
+        if isinstance(value, tuple):
+            return tuple(walk(item) for item in value)
+        if isinstance(value, list):
+            return [walk(item) for item in value]
+        return value
+
+    payload = {key: walk(value) for key, value in instruction.payload.items()}
+    if instruction.kind == "return_self_from_graveyard":
+        payload["from"] = "exile"
+    return OracleInstruction(instruction.kind, instruction.value, payload)
+
+
 def lower_ability(
     node: ast.AbilityNode, *, event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
@@ -566,9 +591,20 @@ def lower_ability(
             for cost in node.costs
             if type(cost) in _COST_PRODUCES
         )
-        return _lower_line_statement(
+        lowered = _lower_line_statement(
             _rebind_blocking_pronoun(node.statement), produced=produced
         )
+        if any(isinstance(cost, ast.ExileSelf) for cost in node.costs):
+            # "{3}{U}, **Exile this creature**: … If you do, **return this
+            # card to the battlefield**." (Shifty Doppelganger.) The sentence
+            # names no zone to return the card from, and the lowering reads
+            # that as a graveyard — Nether Spirit's reading, right for every
+            # card that prints the words anywhere else. Here the ability's own
+            # cost has said where "this card" is: in exile. This is the one
+            # place the cost clause and the effect clause are both in view,
+            # so it is where the zone is stamped.
+            lowered = tuple(_returning_from_exile(step) for step in lowered)
+        return lowered
     if isinstance(node, ast.KeywordLine):
         return ()
     if isinstance(node, ast.RegistryLine):

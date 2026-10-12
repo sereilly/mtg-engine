@@ -627,6 +627,26 @@ class CameUnderControlSinceLastUpkeep:
     """
     subject: "TargetSpec"
 @dataclass(frozen=True)
+class CameUnderControlThisTurn:
+    """"if this creature didn't attack **or come under your control this
+    turn**" (Mad Dog); "…unless it **came under your control this turn**" (Erg
+    Raiders).
+
+    :class:`CameUnderControlSinceLastUpkeep`'s sibling over a narrower window,
+    and a record for that one's reason: nothing on the board says when a
+    permanent changed hands. **Control, not entry** — the word is load-bearing
+    here too, and Erg Raiders' 2018-03-16 ruling spells it out: a creature
+    "comes under your control" if it enters the battlefield under your control
+    *or* if you gain control of it while it is already there.
+
+    The record is the one CR 302.6 already keeps for summoning sickness, which
+    is this very question about the controller's own turn — and only about
+    that turn, which is why the lowering admits the clause under a trigger of
+    the controller's own turn and refuses it anywhere else.
+    """
+    subject: "TargetSpec"
+    negated: bool = False
+@dataclass(frozen=True)
 class AttackedOrBlockedThisCombat:
     """"if this creature **attacked or blocked this combat**" (Clockwork Beast,
     Avian, Steed and Swarm; Kjeldoran Home Guard).

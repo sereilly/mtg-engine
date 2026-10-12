@@ -494,6 +494,56 @@ def _lower_counted_damage(
     return (OracleInstruction("deal_damage", "", payload),)
 
 
+def lower_ledger_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
+    """"This creature deals damage to target creature equal to **the damage
+    already dealt to it this turn**." (Whipkeeper.)
+
+    The turn's damage ledger asked about the creature the sentence targets,
+    through the ``x_from_count`` channel every other computed amount travels
+    and the ``damage_ledger`` spec Blazing Effigy's where-clause already
+    writes — one reader (``handlers/_common._damage_dealt_this_turn``) for
+    both, so "damage dealt to a creature this turn" is one history.
+
+    **The recipient and the creature counted are one object**, and that is
+    checked rather than assumed: "it" in the clause is the sentence's own
+    target, so the spec names ``target`` and the damage is aimed by the same
+    announcement. A sweep, a player or a second recipient has no "it" for the
+    history to be about, and a narrowing by source ("…dealt to it by red
+    sources") is a reader nothing here writes — each refuses.
+    """
+    history = node.amount
+    assert isinstance(history, ast.DamageDealtThisTurn)
+    if (
+        history.recipient != "target"
+        or history.source_name is not None
+        or history.others_only
+    ):
+        raise LoweringError(
+            "this damage history is defined by a where-clause, not spent "
+            "as an amount",
+            node=node,
+        )
+    if node.riders != ast.DamageRiders():
+        raise LoweringError("a damage history carries no riders yet", node=node)
+    if len(node.recipients) != 1 or not _is_target(node.recipients[0]):
+        raise LoweringError(
+            "\"the damage already dealt to it\" names the one creature this "
+            "sentence targets",
+            node=node,
+        )
+    payload: dict[str, object] = {
+        "amount": "x",
+        X_FROM_COUNT: {
+            "damage_ledger": {
+                "recipient": "target", "source_name": None,
+                "others_only": False, "base": 0,
+            },
+        },
+    }
+    _describe_targets(payload, node.recipients[0])
+    return (OracleInstruction("deal_damage", "", payload),)
+
+
 def lower_revealed_this_way_damage(
     node: ast.DealDamage, produced: frozenset[str], *, multiplier: int = 1,
     event: str | None = None,

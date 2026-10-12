@@ -32,7 +32,6 @@ END_STEP_DEATH_COUNTER_KINDS = frozenset({
     "add_corpse_counters_for_each_creature_died",
     "add_plus1_counters_for_each_creature_died",
 })
-END_STEP_DID_NOT_ATTACK_KINDS = frozenset({"end_step_damage_if_not_attacked"})
 
 #: The two condition kinds this step dispatches, and the only difference between
 #: them: ``end_step_self`` is "at the beginning of **your** end step" and fires
@@ -79,10 +78,13 @@ def end_step_trigger_seat_matches(game, permanent, cond: str, player_index: int)
 #: Every instruction kind an ``end_step`` trigger can be dispatched on *by kind*.
 #: The fourth scan below is keyed on a payload **shape** instead and so has no
 #: entry here — see ``END_STEP_INTERVENING_IF``.
-END_STEP_DISPATCHED_KINDS = (
-    END_STEP_DEATH_COUNTER_KINDS
-    | END_STEP_DID_NOT_ATTACK_KINDS
-)
+#:
+#: One set today. A second, ``end_step_damage_if_not_attacked``, was Erg
+#: Raiders' name-keyed line and its own scan; the card's sentence is two
+#: conditions the grammar reads now ("if this creature didn't attack this
+#: turn, … unless it came under your control this turn"), so it arrives
+#: through the gated scan like every other intervening-if.
+END_STEP_DISPATCHED_KINDS = END_STEP_DEATH_COUNTER_KINDS
 
 #: The payload key that makes a trigger fire through the CR 603.4 intervening-if
 #: scan, whatever its instruction kind. It used to be a list of kinds holding
@@ -228,19 +230,6 @@ class EndStepMixin:
                 events.append(make_trigger_event(
                     controller_index, permanent, trig, trigger_context={"count": died}
                 ))
-
-        # Erg Raiders: "at the beginning of YOUR end step" — scoped to this
-        # end step's own player only, unlike the two blocks above (which don't
-        # yet distinguish "your" from "each"/"the"). The "didn't attack" /
-        # "came under your control this turn" guards are re-checked at
-        # resolution (matching the Pestilence intervening-if precedent).
-        for controller_index, permanent, trig in iter_triggered_abilities(
-            self,
-            condition_kinds={END_STEP_SELF_CONDITION},
-            instruction_kinds=END_STEP_DID_NOT_ATTACK_KINDS,
-            players=[self.players[player_index]],
-        ):
-            events.append(make_trigger_event(controller_index, permanent, trig))
 
         # A trigger whose whole gate is a CR 603.4 intervening-if (Barrin,
         # Tolarian Archmage; Liliana's Devotee). Scoped like Erg Raiders to this

@@ -153,21 +153,26 @@ def test_kudzu_tap_prompts_controller_to_reattach():
     resp = client.post(f"/api/sessions/{sid}/action", json={"seat": 0, "action": "pass_priority"})
     assert resp.status_code == 200
 
+    # The general "choose a permanent" prompt, which is what the card's line
+    # arms since it began compiling from the grammar — its own `kudzu_reattach`
+    # prompt, renderer and action went with its name-keyed hook.
     state = client.get(f"/api/sessions/{sid}/state", params={"seat": 0}).json()
-    info = state["kudzu_reattach"]
+    info = state["permanent_choice"]
     assert info is not None
-    names = {land["name"] for land in info["lands"]}
+    assert info["card_name"] == "Kudzu" and info["player_seat"] == 0
+    assert info["optional"] is True, "\"may attach\" may be declined"
+    names = {land["name"] for land in info["candidates"]}
     assert names == {"Island", "Plains"}
 
-    # Re-enchant the Plains (its current battlefield index after Forest is removed).
-    plains_index = next(land["index"] for land in info["lands"] if land["name"] == "Plains")
+    # Re-enchant the Plains, by its stable id.
+    plains_id = next(land["id"] for land in info["candidates"] if land["name"] == "Plains")
     resp = client.post(
         f"/api/sessions/{sid}/action",
-        json={"seat": 0, "action": "kudzu_reattach_confirm", "target_permanent_index": plains_index},
+        json={"seat": 0, "action": "permanent_choice_confirm", "target_permanent_id": plains_id},
     )
     assert resp.status_code == 200
     assert kudzu.metadata.get("attached_to") is plains
-    assert game.pending_kudzu_reattach is None
+    assert not game.pending_choices
 
 
 def _tapped(name):

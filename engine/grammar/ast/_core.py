@@ -708,7 +708,9 @@ class DamageDealtThisTurn:
     #: over the same window, joined on the ledger's recipient *seat* instead of
     #: its recipient permanent. One node for both, because which end of a damage
     #: event a clause names is payload here exactly as a printed noun phrase is
-    #: everywhere else in this grammar.
+    #: everywhere else in this grammar. ``"target"`` is Whipkeeper's "the
+    #: damage already dealt **to it** this turn", "it" being the creature the
+    #: same sentence aims at.
     recipient: str = "source"
     #: ``None`` is "from any source", which is what a clause printing no "by …"
     #: phrase means. Spelled out rather than left to the default, because the

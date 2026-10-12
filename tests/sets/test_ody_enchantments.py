@@ -331,6 +331,285 @@ def test_zombie_infestation_trades_two_cards_for_a_black_zombie(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Price of Glory ---------------------------------------------------------
+# "Whenever a player taps a land for mana, if it's not that player's turn,
+# destroy that land." An intervening-if (CR 603.4) about the seat the event
+# named, and a destroy of the land the event was about. Resolved at the tap
+# seam, like every non-mana trigger under this event (see Savage Firecat's
+# note in `test_ody_creatures.py`).
+
+def _w1g8_tap(game, seat, land):
+    return game.tap_land_for_mana(seat, land.card.name, permanent_id=land.permanent_id)
+
+
+@_w1g8_pytest.mark.parametrize("active", [0, 1])
+def test_w1g8_price_of_glory_destroys_a_land_tapped_off_turn(set_pool, active):
+    """Only the player whose turn it is taps safely — the enchantment's own
+    controller included when the turn is somebody else's."""
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    lands = [
+        _w1g8.put(game, set_pool, 0, "Mountain"),
+        _w1g8.put(game, set_pool, 1, "Forest"),
+    ]
+    game.start_turn(active)
+    idle = 1 - active
+
+    assert _w1g8_tap(game, active, lands[active])
+    assert game.is_on_battlefield(lands[active])
+
+    assert _w1g8_tap(game, idle, lands[idle])
+    assert not game.is_on_battlefield(lands[idle])
+    assert _w1g8.pile(game, idle) == [lands[idle].card.name]
+    symbol = "R" if idle == 0 else "G"
+    assert game.players[idle].mana_pool[symbol] == 1, (
+        "the mana was made before the land died (CR 605.3b)"
+    )
+
+
+def test_w1g8_two_prices_of_glory_destroy_one_land_once(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    _w1g8.put(game, set_pool, 1, "Price of Glory")
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    assert _w1g8_tap(game, 1, forest)
+
+    assert _w1g8.pile(game, 1) == ["Forest"], "one card in the graveyard, not two"
+    assert any("the permanent it named is gone" in line for line in game.log)
+
+
+def test_w1g8_price_of_glory_spares_a_regenerating_land_and_ignores_other_taps(set_pool):
+    """It says *destroy*: nothing here bypasses regeneration. And a land
+    tapped for something other than mana is not this event at all."""
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Price of Glory")
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    game.become_tapped(forest)
+    assert game.is_on_battlefield(forest)
+
+    program = _w1g8_compile(set_pool("ODY")["Price of Glory"])
+    assert "bypass_regeneration" not in program.triggered_abilities[0].instruction.payload
+
+
+def test_w1g8_that_players_turn_needs_an_event_that_names_a_player():
+    """The refusing gate's refusal test: "that player's turn" under an event
+    that froze no player would be asked about the ability's controller."""
+    from tests.helpers import _mk_card
+
+    under_a_tap = _mk_card(
+        "Probe Price", "Enchantment",
+        "Whenever a player taps a land for mana, if it's that player's turn, "
+        "destroy that land.",
+    )
+    under_an_attack = _mk_card(
+        "Probe Price", "Creature — Dwarf",
+        "Whenever this creature attacks, if it's not that player's turn, "
+        "you gain 1 life.",
+    )
+    assert _w1g8_compile(under_a_tap).supported
+    assert not _w1g8_compile(under_an_attack).supported
+
+
+# --- Steam Vines ------------------------------------------------------------
+# "When enchanted land becomes tapped, destroy it and this Aura deals 1 damage
+# to that land's controller. That player attaches this Aura to a land of their
+# choice." Kudzu's sentence with damage in it and no "may" — the second card of
+# a shape Kudzu held a name-keyed hook for, so it is a production now and the
+# hook is retired (`tests/regressions/test_ody_w1g8_shipped_cards.py`).
+#
+# The host is picked as the ability resolves, by the destroyed land's
+# controller, among every land the Aura could enchant. The card's rulings:
+# moving it "does not target the land" (2004-10-04); with no land to move to
+# it goes to the graveyard (2005-08-01); and if the Aura left before its
+# trigger resolved, the land is still destroyed and the damage dealt, but
+# nothing brings it back (2004-10-04).
+
+def _w1g8_vines(set_pool, interactive=(), lands=True):
+    """Seat 0's Steam Vines on seat 1's Forest, on seat 1's turn."""
+    from engine.auras import attach_aura
+
+    game = _w1g8.table(set_pool, interactive=interactive)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+    vines = _w1g8.put(game, set_pool, 0, "Steam Vines")
+    attach_aura(vines, forest)
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain") if lands else None
+    swamp = _w1g8.put(game, set_pool, 1, "Swamp") if lands else None
+    game.start_turn(1)
+    return game, vines, forest, mountain, swamp
+
+
+def _w1g8_host(aura):
+    host = aura.metadata.get("attached_to")
+    return None if host is None else host.card.name
+
+
+def test_w1g8_steam_vines_destroys_burns_and_moves_where_its_victim_says(set_pool):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool, interactive=(0, 1))
+
+    assert _w1g8_tap(game, 1, forest)
+    assert [item.card.name for item in game.stack] == ["Steam Vines"], (
+        "\"becomes tapped\" is not a mana ability: it uses the stack"
+    )
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.pile(game, 1) == ["Forest"] and game.players[1].life == 19
+    assert _w1g8.owed(game) == [("permanent_choice", 1)], "that land's controller chooses"
+    assert game.is_on_battlefield(vines), "the Aura waits for its new land"
+
+    assert not game.confirm_permanent_choice(1, None), "no \"may\": it must go somewhere"
+    assert game.confirm_permanent_choice(1, mountain.permanent_id), (
+        "any land, its own controller's included"
+    )
+    _w1g8.settle(game)
+    assert _w1g8_host(vines) == "Mountain"
+
+    # …and it is still Steam Vines on the land it moved to.
+    game.turn += 1
+    game.start_turn(0)
+    assert _w1g8_tap(game, 0, mountain)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.players[0].life == 19 and _w1g8.pile(game, 0) == ["Mountain"]
+    assert _w1g8.owed(game) == [("permanent_choice", 0)]
+
+
+def test_w1g8_steam_vines_moved_by_a_seat_nobody_asks_goes_to_somebody_elses_land(
+    set_pool,
+):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool)
+
+    game.become_tapped(forest)      # tapped by anything, not only for mana
+    _w1g8.settle(game)
+
+    assert _w1g8_host(vines) == "Mountain", "not the chooser's own Swamp"
+
+
+def test_w1g8_steam_vines_with_no_land_to_move_to_is_put_in_the_graveyard(set_pool):
+    game, vines, forest, _, _ = _w1g8_vines(set_pool, lands=False)
+
+    assert _w1g8_tap(game, 1, forest)
+    _w1g8.settle(game)
+
+    assert game.players[1].life == 19
+    assert _w1g8.pile(game, 0) == ["Steam Vines"]
+
+
+def test_w1g8_steam_vines_gone_in_response_still_destroys_and_burns(set_pool):
+    game, vines, forest, mountain, swamp = _w1g8_vines(set_pool)
+
+    assert _w1g8_tap(game, 1, forest)
+    _w1g8.leave(game, vines)
+    _w1g8.settle(game)
+
+    assert _w1g8.pile(game, 1) == ["Forest"] and game.players[1].life == 19
+    assert _w1g8.pile(game, 0) == ["Steam Vines"], "and it does not come back"
+    assert _w1g8.names(game, 0) == ["Mountain"]
+
+
+# --- driven: the four enchantments that compiled on the day of the ingest ---
+# Each given a game through its whole text; this is what the game showed.
+
+def _w1g8_dies(game, permanent):
+    _w1g8.leave(game, permanent)
+    _w1g8.settle(game)
+
+
+def test_w1g8_battle_strain_burns_the_controller_of_each_blocker(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Battle Strain")
+    giant = _w1g8.put(game, set_pool, 0, "Hill Giant")
+    blockers = [
+        _w1g8.put(game, set_pool, 1, name)
+        for name in ("Grizzly Bears", "Llanowar Elves")
+    ]
+    game.start_turn(0)
+    game._close_current_priority_step()
+    game.advance_combat_phase()
+    game.advance_combat_phase()
+    mine = list(game.controlled_by(0))
+    assert game.declare_attackers(0, [mine.index(giant)])[0]
+    game.advance_combat_phase()
+    theirs = list(game.controlled_by(1))
+
+    assert game.declare_blockers(
+        1, {theirs.index(blocker): mine.index(giant) for blocker in blockers}
+    )[0]
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 18], (
+        "one trigger a blocker, each on the blocker's controller"
+    )
+
+
+def test_w1g8_burning_sands_costs_a_land_for_every_creature_that_dies(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Burning Sands")
+    mine = _w1g8.put(game, set_pool, 0, "Llanowar Elves")
+    _w1g8.put(game, set_pool, 0, "Mountain")
+    theirs = _w1g8.put(game, set_pool, 1, "Grizzly Bears")
+    _w1g8.put(game, set_pool, 1, "Forest")
+    game.start_turn(0)
+
+    _w1g8_dies(game, theirs)
+    assert _w1g8.names(game, 1) == [], "that creature's controller, not the enchantment's"
+    assert "Mountain" in _w1g8.names(game, 0)
+
+    _w1g8_dies(game, mine)
+    assert _w1g8.names(game, 0) == ["Burning Sands"]
+
+
+def test_w1g8_magma_vein_spends_a_land_to_sweep_the_ground(set_pool):
+    game = _w1g8.table(set_pool, enforce=True)
+    _w1g8.put(game, set_pool, 0, "Magma Vein")
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain")
+    _w1g8.put(game, set_pool, 1, "Llanowar Elves")
+    _w1g8.put(game, set_pool, 1, "Birds of Paradise")
+    game.start_turn(0)
+    game.players[0].mana_pool["R"] = 2
+
+    used = game.activate_permanent_ability(
+        0, "Magma Vein", cost_permanent_ids=[mountain.permanent_id]
+    )
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert _w1g8.names(game, 0) == ["Magma Vein"]
+    assert _w1g8.names(game, 1) == ["Birds of Paradise"]
+
+    without = game.activate_permanent_ability(0, "Magma Vein")
+    assert not without.supported and game.players[0].mana_pool["R"] == 1
+
+
+def test_w1g8_need_for_speed_trades_a_land_for_haste(set_pool):
+    game = _w1g8.table(set_pool)
+    _w1g8.put(game, set_pool, 0, "Need for Speed")
+    mountain = _w1g8.put(game, set_pool, 0, "Mountain")
+    bears = _w1g8.put(game, set_pool, 0, "Grizzly Bears")
+    game.start_turn(0)
+    bears.metadata["summoning_sickness_turn"] = game.turn
+    assert game._is_summoning_sick(bears)
+
+    used = game.activate_permanent_ability(
+        0, "Need for Speed", target_permanent_ids=[bears.permanent_id],
+        cost_permanent_ids=[mountain.permanent_id],
+    )
+    _w1g8.settle(game)
+    assert used.supported, used.details
+    assert not game._is_summoning_sick(bears)
+    assert "Mountain" not in _w1g8.names(game, 0)
+
+    again = game.activate_permanent_ability(
+        0, "Need for Speed", target_permanent_ids=[bears.permanent_id]
+    )
+    assert not again.supported and "no land available" in again.details
 
 # ==== end W1G8 ======================================================
 

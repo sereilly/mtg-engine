@@ -16,7 +16,7 @@ no spec, or registered with a part missing.
 
 Covered here: paying for an optional effect, discarding, sacrificing, naming a
 land type, choosing a body as a permanent enters, Balance's removals, Word of
-Command's borrowed turn, Kudzu's reattachment, and reordering a library.
+Command's borrowed turn, and reordering a library.
 """
 
 from __future__ import annotations
@@ -24,7 +24,6 @@ from __future__ import annotations
 import random
 from dataclasses import replace
 
-from ...auras import attach_aura
 from ...faces import castable_faces, has_name, is_multi_face, spell_named
 from ...handlers._common import apply_temp_pt_boost, permanent_matches_filter
 from ...grammar.lowering._events import EVENT_SUBJECT_PLAYER
@@ -588,10 +587,6 @@ class PendingChoicesMixin:
     @property
     def pending_mana_payment(self) -> dict | None:
         return self._choice_view("mana_payment", "player_index")
-
-    @property
-    def pending_kudzu_reattach(self) -> dict | None:
-        return self._choice_view("kudzu_reattach", "player_index")
 
     @property
     def pending_face_down_cast(self) -> dict | None:
@@ -5416,6 +5411,16 @@ class PendingChoicesMixin:
         prefers = (choice.data.get("_payload") or {}).get("default_prefers")
         if prefers == "tapped":
             live = sorted(live, key=lambda perm: not perm.tapped)
+        elif prefers == "not_the_choosers":
+            # "That player attaches this Aura to a land of their choice."
+            # (Steam Vines, Kudzu.) The Aura destroys the land it is on, so a
+            # seat nobody asks puts it on somebody else's first. A preference,
+            # like the one above: with only its own lands to choose from, the
+            # seat still has to choose one.
+            live = sorted(
+                live,
+                key=lambda perm: self.controller_index_of(perm) == choice.player_index,
+            )
         # …and the one ordering a *later sentence* asks for: "Prevent all combat
         # damage target creature would deal this turn **if it shares a color
         # with that permanent**" (Guard Dogs). The pick decides whether the
@@ -7410,35 +7415,6 @@ class PendingChoicesMixin:
             if context is not None:
                 context.results[EXILED_THIS_WAY_OBJECTS] = []
                 context.results[EXILED_THIS_WAY] = 0
-            self.discard_pending_choice(choice)
-
-    # -- Kudzu's reattachment ------------------------------------------------
-
-    def confirm_kudzu_reattach(self, player_index: int, land_index: int) -> bool:
-        """Resolve a pending Kudzu reattach by moving the detached Aura onto the
-        controller's chosen land."""
-        return self.resolve_pending_choice("kudzu_reattach", player_index, land_index=land_index)
-
-    def _resolve_kudzu_reattach(self, choice: PendingChoice, land_index: int) -> bool:
-        player = self.players[choice.player_index]
-        if not (0 <= land_index < len(player.battlefield)):
-            return False
-        new_land = player.battlefield[land_index]
-        if new_land.card.primary_type != "land":
-            return False
-        attach_aura(choice.data["aura"], new_land)
-        self.log.append(f"Kudzu attached to {new_land.card.name}")
-        self.discard_pending_choice(choice)
-        return True
-
-    def _default_kudzu_reattach(self, choice: PendingChoice) -> None:
-        """Re-attach to the first land the controller has, deterministically."""
-        player = self.players[choice.player_index]
-        index = next(
-            (i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"),
-            None,
-        )
-        if index is None or not self._resolve_kudzu_reattach(choice, index):
             self.discard_pending_choice(choice)
 
     # -- Illusionary Mask's face-down cast -----------------------------------
@@ -11609,22 +11585,6 @@ register_choice(
     # Deliberately *not* spectator_visible, for ``put_from_hand_choice``'s
     # reason: the candidates are cards in a hand (CR 400.2, a hidden zone), so
     # rendering them to a seatless viewer would publish the hand.
-)
-
-register_choice(
-    "kudzu_reattach",
-    resolve=lambda game, choice, r: game._resolve_kudzu_reattach(choice, r["land_index"]),
-    default=lambda game, choice: game._default_kudzu_reattach(choice),
-    action="kudzu_reattach_confirm",
-    prompt_key="kudzu_reattach",
-    # Whether the controller is *asked* is the seat's interactivity, read here
-    # rather than passed in. It used to be a ``defer_choice`` flag threaded from
-    # ``tap_land_for_mana`` down through a name-keyed dispatcher, which is the
-    # same question ``interactive_seats`` already answers for every other
-    # prompt — and the web layer computed it a second way ("not ai" against this
-    # table's "is human"). One answer, so a new seat kind needs no new argument.
-    default_at_arm=True,
-    blocked_detail="choose where Kudzu moves before other actions",
 )
 
 register_choice(

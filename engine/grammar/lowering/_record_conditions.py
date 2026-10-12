@@ -59,7 +59,7 @@ from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
-from ._common import _filter_payload, _restrictions_beyond
+from ._common import _filter_payload, _is_source, _restrictions_beyond
 from ._events import COUNTED_NUMBER
 # The one name this file shares with the table that declares it: which key a
 # discard cost writes. Imported rather than spelled, because a producer gate and
@@ -102,6 +102,12 @@ _SHARED_TYPE_CHANNELS: dict[str, tuple[str, str]] = {
     "sacrificed": (SACRIFICED_FOR_COST, "sacrificed_for_cost"),
     "discarded": (DISCARDED_FOR_COST, "discarded_for_cost"),
 }
+
+
+#: The trigger events that fire only on their controller's **own turn**
+#: ("at the beginning of *your* upkeep / end step"), which is the only time
+#: :class:`ast.CameUnderControlThisTurn`'s record can be read.
+_OWN_TURN_EVENTS = frozenset({"upkeep_self", "end_step_self"})
 
 
 def lower_record_condition(
@@ -727,6 +733,37 @@ def lower_record_condition(
         # the combat and no other window, and the object is the ability's own
         # source. The evaluator reads the answer the fire site froze.
         return {"kind": "attacked_or_blocked_this_combat"}
+    if isinstance(condition, ast.CameUnderControlThisTurn):
+        # "…or come under your control this turn" (Mad Dog). Two refusals, each
+        # a way the clause could otherwise be answered about something else.
+        #
+        # The object is the ability's own source: the record is read off
+        # ``context.source_permanent``, and a clause about any other object
+        # would be answered about this one.
+        #
+        # The moment is the controller's **own turn**. The record is CR 302.6's
+        # — the stamp summoning sickness reads — and it is carried across other
+        # players' turns (``Game._advance_summoning_sickness``), so on somebody
+        # else's turn it cannot tell "this turn" from "since your last turn
+        # began". Both printings ask at "the beginning of **your** end step";
+        # a card asking under any other event refuses rather than being
+        # answered wrongly for half of every round.
+        if not _is_source(condition.subject):
+            raise LoweringError(
+                "'came under your control this turn' is asked of the "
+                "ability's own permanent",
+                node=condition,
+            )
+        if event not in _OWN_TURN_EVENTS:
+            raise LoweringError(
+                "'came under your control this turn' is answerable only "
+                "during its controller's own turn",
+                node=condition,
+            )
+        return {
+            "kind": "came_under_your_control_this_turn",
+            "negated": condition.negated,
+        }
     if isinstance(condition, ast.CameUnderControlSinceLastUpkeep):
         # CR 702.30a. No payload, for the sibling below's reason exactly: the
         # sentence names no seat other than "your" — the ability's controller,

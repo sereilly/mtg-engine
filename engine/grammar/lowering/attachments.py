@@ -111,11 +111,67 @@ def _lower_attach(
     recorded = _lower_attach_to_recorded(node, produced)
     if recorded is not None:
         return recorded
+    if node.chooser is not None:
+        return _lower_attach_to_their_choice(node, produced)
     if not isinstance(node.host, ast.TargetSpec) or not _is_target(node.host):
         raise LoweringError("attach needs one chosen permanent to attach to", node=node)
     payload = _filter_payload(node.host.filter)
     _describe_targets(payload, node.host)
     return (OracleInstruction("attach_source_to_target", "", payload),)
+
+
+def _lower_attach_to_their_choice(
+    node: ast.Attach, produced: frozenset[str]
+) -> tuple[OracleInstruction, ...]:
+    """"That player attaches this Aura to a land of their choice." (Steam
+    Vines.) "That land's controller may attach this Aura to a land of their
+    choice." (Kudzu.)
+
+    Two steps, for ``_lower_attach_chosen``'s reason exactly: the host is
+    picked as the ability resolves — nothing was targeted (CR 115.10), which
+    is why Steam Vines' ruling says moving it "does not target the land" and
+    Kudzu's says it may land on one that can't be targeted — so it is the
+    ``choose_permanent`` every other resolution-time pick is, and the attach
+    behind it reads the answer by the key named here. Kudzu was one name-keyed
+    line and a prompt of its own for want of exactly this composition.
+
+    **Whose land is not narrowed.** "A land of their choice" is any land the
+    Aura could enchant, whoever controls it (Kudzu, 2004-10-04: "You can move
+    it to any other player's land") — the card's whole menace. The only test
+    is CR 303.4j's, measured against the source: ``legal_host_for_source``.
+    The seat asked nobody defaults to a land it does not itself control
+    (``default_prefers``), since the Aura destroys what it is on.
+
+    "May" is the pick being declinable (``optional``). Declined, or with no
+    land to choose, nothing is recorded, the attach attaches nothing, and the
+    Aura — on nothing — is put into its owner's graveyard by CR 704.5m, which
+    is what Steam Vines' 2005-08-01 ruling says of that case.
+    """
+    host = node.host
+    assert isinstance(host, ast.TargetSpec) and node.chooser is not None
+    pick = _lower_choose_permanent(
+        ast.ChoosePermanent(
+            node.chooser,
+            dataclasses.replace(
+                host, filter=dataclasses.replace(host.filter, their_choice=False),
+            ),
+            optional=node.optional,
+            host_for_source=True,
+        ),
+        produced,
+    )
+    choose = OracleInstruction(
+        pick[0].kind, pick[0].value,
+        {
+            **pick[0].payload,
+            "prompt": "Choose a permanent to attach it to.",
+            "default_prefers": "not_the_choosers",
+        },
+    )
+    attach = OracleInstruction(
+        "attach_source_to_target", "", {"host_from": _ATTACH_HOST_KEY}
+    )
+    return (choose, attach)
 
 
 def _lower_attach_chosen(node: ast.Attach) -> tuple[OracleInstruction, ...]:

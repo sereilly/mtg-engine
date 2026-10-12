@@ -244,11 +244,22 @@ class Attach:
     that a lowering which does not test it refuses - the words consumed and
     dropped would be an Aura moved onto something its own enchant line
     forbids.
+
+    *chooser* and *optional* are for the host nobody targeted: "**That player
+    attaches** this Aura to a land **of their choice**." (Steam Vines.) "That
+    land's controller **may** attach this Aura to a land of their choice."
+    (Kudzu.) The seat the sentence names picks the host as the ability
+    resolves (CR 115.10 — nothing was targeted), and "may" with "of their
+    choice" is one decision by one seat, so it folds onto the node as the
+    pick being declinable rather than wrapping it in an offer: two nodes
+    would be two prompts to the same player.
     """
 
     subject: Recipient
     host: Recipient
     host_it_can_enchant: bool = False
+    chooser: "PlayerRef | None" = None
+    optional: bool = False
 
 
 @dataclass(frozen=True)

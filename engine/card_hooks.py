@@ -207,11 +207,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         'creature loses flying."':
             _line('deal_damage', 'spell_pattern', amount=2),
     },
-    'Erg Raiders': {
-        "at the beginning of your end step, if this creature didn't attack this "
-        "turn, it deals 2 damage to you unless it came under your control this turn":
-            _line("end_step_damage_if_not_attacked", "triggered_damage", amount=2),
-    },
     'Eye for an Eye': {
         "the next time a source of your choice would deal damage to you this turn, "
         "instead that source deals that much damage to you and eye for an eye "
@@ -300,20 +295,6 @@ CARD_LINE_INSTRUCTIONS: dict[str, dict[str, CardLine]] = {
         "{t}: ante this artifact. if you do, put all other cards you own from the "
         "ante into your graveyard, then draw a card":
             _line("ante_self_then_clear_ante_and_draw", "activated_ante"),
-    },
-    # The whole card, as one line. Bespoke by the entry bar's own test: give an
-    # invented card this text and it still needs a destroy whose subject is the
-    # trigger's, plus an attach whose chooser is that subject's controller and
-    # whose host is unchosen — three things the grammar reads separately and
-    # none of which it composes yet. It was a dispatcher inside
-    # ``tap_land_for_mana`` (``ENCHANTED_LAND_TAPPED_FOR_MANA``) until this
-    # entry: as an instruction the line is announced by the tap seam, so it
-    # fires however the land became tapped and goes on the stack like any other
-    # trigger.
-    'Kudzu': {
-        "when enchanted land becomes tapped, destroy it. that land's controller "
-        "may attach this aura to a land of their choice":
-            _line("destroy_tapped_land_and_reoffer_aura", "triggered_destruction"),
     },
     'Mijae Djinn': {
         "whenever this creature attacks, flip a coin. if you lose the flip, remove "

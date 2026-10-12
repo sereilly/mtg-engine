@@ -1468,18 +1468,6 @@ def _mana_payment(ctx: PromptContext, choices: list) -> dict:
     }
 
 
-@prompt_renderer("kudzu_reattach")
-def _kudzu_reattach(ctx: PromptContext, choices: list) -> dict:
-    owner = ctx.game.players[choices[0].player_index]
-    return {
-        "lands": [
-            {"index": i, "name": p.card.name}
-            for i, p in enumerate(owner.battlefield)
-            if p.card.primary_type == "land"
-        ],
-    }
-
-
 @prompt_renderer("face_down_cast")
 def _face_down_cast(ctx: PromptContext, choices: list) -> dict:
     choice = choices[0]

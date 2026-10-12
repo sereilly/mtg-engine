@@ -1484,6 +1484,204 @@ def test_w1g6_zombify_does_nothing_when_its_target_has_left(set_pool):
 
 # ==== W1G8 ==========================================================
 # W1G8's tests go between this line and the "end W1G8" line.
+import pytest as _w1g8_pytest
+
+from engine.oracle import compile_card_oracle as _w1g8_compile
+from tests.sets import ody_w1g8_helpers as _w1g8
+
+
+# --- Lava Blister -----------------------------------------------------------
+# "Destroy target nonbasic land unless its controller has Lava Blister deal 6
+# damage to them." Blazing Salvo's clause behind a destruction (the rules
+# reading is beside that card's tests, in `test_ody_instants.py`).
+
+def _w1g8_blister(set_pool, seat=1, interactive=(0, 1)):
+    game = _w1g8.table(set_pool, hand=["Lava Blister"], interactive=interactive)
+    game.start_turn(0)
+    land = _w1g8.put(game, set_pool, seat, "Bayou")
+    cast = game.queue_from_hand(
+        0, "Lava Blister", target_permanent_ids=[land.permanent_id]
+    )
+    assert cast.supported, cast.details
+    return game, land
+
+
+@_w1g8_pytest.mark.parametrize("seat", [1, 0])
+def test_w1g8_lava_blister_spares_the_land_of_a_controller_who_takes_six(
+    set_pool, seat
+):
+    game, land = _w1g8_blister(set_pool, seat=seat)
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert _w1g8.owed(game) == [("optional_pay", seat)], "the land's controller"
+    assert game.confirm_optional_pay(seat, accept=True)
+    _w1g8.settle(game)
+
+    assert game.players[seat].life == 14 and game.players[1 - seat].life == 20
+    assert game.is_on_battlefield(land)
+
+
+def test_w1g8_lava_blister_declined_destroys_the_land(set_pool):
+    game, land = _w1g8_blister(set_pool)
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(1, accept=False)
+    _w1g8.settle(game)
+
+    assert [player.life for player in game.players] == [20, 20]
+    assert _w1g8.pile(game, 1) == ["Bayou"]
+
+
+def test_w1g8_lava_blister_cannot_be_aimed_at_a_basic_land(set_pool):
+    game = _w1g8.table(set_pool, hand=["Lava Blister"])
+    game.start_turn(0)
+    forest = _w1g8.put(game, set_pool, 1, "Forest")
+
+    refused = game.cast_from_hand(
+        0, "Lava Blister", target_permanent_ids=[forest.permanent_id]
+    )
+
+    assert not refused.supported
+    assert _w1g8.pile(game, 0, "hand") == ["Lava Blister"]
+    assert game.is_on_battlefield(forest)
+
+
+def test_w1g8_a_seat_nobody_asks_gives_up_the_land_rather_than_six_life(set_pool):
+    """The non-interactive answer prices both losses: a land against six
+    life. "Pay tolls" took the six every time, and at six life took the game."""
+    for life in (20, 6):
+        game, land = _w1g8_blister(set_pool, interactive=())
+        game.players[1].life = life
+        _w1g8.settle(game)
+
+        assert game.players[1].life == life and not game.players[1].lost
+        assert _w1g8.pile(game, 1) == ["Bayou"]
+
+
+# --- driven: the five sorceries that compiled on the day of the ingest ------
+# Each given a game through its whole text; this is what the game showed.
+
+_W1G8_FOUR = ("Sol Ring", "Grizzly Bears", "Castle", "Forest")
+
+
+def _w1g8_decimate(set_pool, names=_W1G8_FOUR):
+    game = _w1g8.table(set_pool, hand=["Decimate"])
+    board = {name: _w1g8.put(game, set_pool, 1, name) for name in names}
+    game.start_turn(0)
+    return game, board
+
+
+def _w1g8_ids(board, *names):
+    return [board[name].permanent_id for name in names]
+
+
+def test_w1g8_decimate_destroys_one_of_each_of_its_four_kinds(set_pool):
+    game, board = _w1g8_decimate(set_pool)
+
+    cast = game.cast_from_hand(
+        0, "Decimate", target_permanent_ids=_w1g8_ids(board, *_W1G8_FOUR)
+    )
+    _w1g8.settle(game)
+
+    assert cast.supported, cast.details
+    assert _w1g8.names(game, 1) == []
+
+
+@_w1g8_pytest.mark.parametrize(
+    "named",
+    [
+        (),                                                  # nothing
+        ("Sol Ring", "Grizzly Bears"),                       # two of four
+        ("Grizzly Bears", "Sol Ring", "Forest", "Castle"),   # four, in the wrong slots
+    ],
+)
+def test_w1g8_decimate_is_refused_unless_all_four_slots_are_filled(set_pool, named):
+    game, board = _w1g8_decimate(set_pool)
+
+    refused = game.cast_from_hand(
+        0, "Decimate", target_permanent_ids=_w1g8_ids(board, *named) or None
+    )
+
+    assert not refused.supported
+    assert _w1g8.pile(game, 0, "hand") == ["Decimate"]
+    assert len(_w1g8.names(game, 1)) == 4
+
+
+def test_w1g8_decimate_cannot_be_cast_with_a_kind_missing_from_the_table(set_pool):
+    """Its reminder text: "You can't cast this spell unless you have legal
+    choices for all its targets" (CR 601.2c)."""
+    game, board = _w1g8_decimate(set_pool, ("Sol Ring", "Grizzly Bears", "Forest"))
+
+    assert not game.cast_from_hand(0, "Decimate").supported
+    assert len(_w1g8.names(game, 1)) == 3
+
+
+def test_w1g8_decimate_still_destroys_the_rest_when_one_target_leaves(set_pool):
+    game, board = _w1g8_decimate(set_pool)
+    assert game.queue_from_hand(
+        0, "Decimate", target_permanent_ids=_w1g8_ids(board, *_W1G8_FOUR)
+    ).supported
+
+    _w1g8.leave(game, board["Grizzly Bears"])
+    _w1g8.settle(game)
+
+    assert _w1g8.names(game, 1) == [], "CR 608.2b: the other three are still legal"
+
+
+def test_w1g8_demolish_takes_an_artifact_or_a_land_and_nothing_else(set_pool):
+    for name, legal in (("Sol Ring", True), ("Forest", True), ("Grizzly Bears", False)):
+        game = _w1g8.table(set_pool, hand=["Demolish"])
+        aimed = _w1g8.put(game, set_pool, 1, name)
+        game.start_turn(0)
+
+        cast = game.cast_from_hand(
+            0, "Demolish", target_permanent_ids=[aimed.permanent_id]
+        )
+        _w1g8.settle(game)
+
+        assert cast.supported is legal
+        assert game.is_on_battlefield(aimed) is not legal
+
+
+@_w1g8_pytest.mark.parametrize(
+    "spell, kind, mine, theirs",
+    [
+        ("Innocent Blood", "creature", ("Grizzly Bears", "Hill Giant"), ("Llanowar Elves",)),
+        ("Tremble", "land", ("Forest", "Mountain"), ("Island",)),
+        ("Simplify", "enchantment", ("Castle",), ("Crusade", "Bad Moon")),
+    ],
+)
+def test_w1g8_the_three_edicts_ask_each_player_in_turn_order(
+    set_pool, spell, kind, mine, theirs
+):
+    """"Each player sacrifices a … of their choice": one prompt a seat, the
+    active player's first (CR 101.4), each over that seat's own permanents of
+    the printed kind — and a seat with none simply gives up nothing."""
+    game = _w1g8.table(set_pool, hand=[spell], interactive=(0, 1))
+    for name in mine:
+        _w1g8.put(game, set_pool, 0, name)
+    for name in theirs:
+        _w1g8.put(game, set_pool, 1, name)
+    _w1g8.put(game, set_pool, 0, "Sol Ring")
+    game.start_turn(0)
+
+    assert game.queue_from_hand(0, spell).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+    assert _w1g8.owed(game) == [("sacrifice", 0), ("sacrifice", 1)]
+    assert all(
+        choice.data["filter"] == {"type_filter": kind} and choice.data["count"] == 1
+        for choice in game.pending_choices
+    )
+    _w1g8.settle(game)
+
+    assert len(_w1g8.names(game, 0)) == len(mine), "one of theirs, and the Sol Ring kept"
+    assert len(_w1g8.names(game, 1)) == len(theirs) - 1
+
+    game = _w1g8.table(set_pool, hand=[spell])
+    _w1g8.put(game, set_pool, 1, theirs[0])
+    game.start_turn(0)
+    assert game.cast_from_hand(0, spell).supported
+    _w1g8.settle(game)
+    assert _w1g8.names(game, 1) == [], "the caster had nothing to give; the other seat still paid"
 
 # ==== end W1G8 ======================================================
 
