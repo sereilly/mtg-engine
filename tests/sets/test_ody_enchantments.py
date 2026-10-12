@@ -421,6 +421,73 @@ def test_w1g5_this_effect_doesnt_remove_this_aura_exempts_only_its_own_grant(
     assert _w1g5_attached(game, host) == []
     assert aura in [card.name for card in game.players[0].graveyard]
 
+
+# Ground Seal ------------------------------------------------------------------
+
+
+def test_w1g5_ground_seal_draws_and_stops_every_way_of_targeting_a_graveyard_card(
+    catalog_by_name, set_pool,
+):
+    """"When this enchantment enters, draw a card. Cards in graveyards can't be
+    the targets of spells or abilities." It compiled supported on the first
+    sentence alone. The second is asked in the one enumeration of graveyard
+    targets, so both players' spells and abilities are refused with nothing
+    spent, and a trigger that must target a card there is removed from the
+    stack (CR 603.3d). The pool-wide census is
+    ``tests/regressions/test_ody_w1g5_ground_seal.py``."""
+    game = _w1g5_table(
+        catalog_by_name, set_pool,
+        hand0=["Ground Seal", "Raise Dead", "Animate Dead", "Karmic Guide"],
+        hand1=["Regrowth"],
+    )
+    bears = catalog_by_name["Grizzly Bears"]
+    game.players[0].graveyard = [bears, catalog_by_name["Hill Giant"]]
+    game.players[1].graveyard = [catalog_by_name["Lightning Bolt"]]
+    adun = _w1g5_put(game, 0, "Adun Oakenshield")
+
+    assert [t["name"] for t in game.cast_target_spec(
+        0, catalog_by_name["Raise Dead"])["valid_targets"]] == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert game.cast_from_hand(0, "Ground Seal").supported
+    _w1g5_resolve_stack(game)
+    assert [card.name for card in game.players[0].hand].count("Island") == 1, (
+        "the entry trigger drew a card"
+    )
+
+    assert game.cast_target_spec(0, catalog_by_name["Raise Dead"])["valid_targets"] == []
+    for seat, name in ((0, "Raise Dead"), (0, "Animate Dead"), (1, "Regrowth")):
+        refused = game.cast_from_hand(
+            seat, name, target_player_index=seat, target_permanent_index=0,
+        )
+        assert not refused.supported, (name, refused.details)
+        assert game._w1g5_card(name) in game.players[seat].hand
+    refused = game.activate_permanent_ability(
+        0, "Adun Oakenshield", target_player_index=0, target_permanent_index=0,
+    )
+    assert not refused.supported and not adun.tapped, refused.details
+
+    # A permanent spell targets nothing, so Karmic Guide is cast; its entry
+    # trigger ("return target creature card from your graveyard to the
+    # battlefield") has no legal target and never resolves.
+    assert game.cast_from_hand(0, "Karmic Guide").supported
+    _w1g5_resolve_stack(game)
+    assert [card.name for card in game.players[0].graveyard] == [
+        "Grizzly Bears", "Hill Giant",
+    ]
+    assert any("Karmic Guide's triggered ability was removed from the stack"
+               in line for line in game.log)
+
+    # And it ends with the permanent (the card's ruling: "only works when
+    # Ground Seal is on the battlefield").
+    seal = next(p for p in game.all_permanents() if p.card.name == "Ground Seal")
+    game.remove_from_battlefield(seal)
+    returned = game.cast_from_hand(
+        0, "Raise Dead", target_player_index=0, target_permanent_index=0,
+    )
+    _w1g5_resolve_stack(game)
+    assert returned.supported and bears in game.players[0].hand
+
 # ==== end W1G5 ======================================================
 
 

@@ -1872,7 +1872,34 @@ class GameHelpersMixin:
             ]
         if target is None:
             return index
+        # A stamp is a **target** somebody announced, so it is re-located only
+        # while it is still a legal one — gone from its pile, or under "Cards
+        # in graveyards can't be the targets of spells or abilities" (Ground
+        # Seal arriving in response), it answers None and CR 608.2b's last
+        # sentence leaves that slot's card unaffected.
+        if not self.graveyard_target_is_legal(target):
+            return None
         return self.graveyard_index_of(target)
+
+    def graveyard_target_is_legal(self, target) -> bool:
+        """Whether the graveyard card *target* names is still a legal target
+        (CR 608.2b).
+
+        Two ways it stops being one: no copy of the card is left in that
+        graveyard (``graveyard_index_of``'s "gone"), or the board now says no
+        card in a graveyard may be targeted at all
+        (``target_immunity.graveyard_cards_untargetable``, Ground Seal). The
+        second is CR 608.2b's "other changes to the game state", and it is why
+        this is a method rather than the bare ``graveyard_index_of(...) is not
+        None`` the three resolution gates used to spell: the card being
+        *there* and the card being *targetable* are different questions, and
+        only the first is about where it sits.
+        """
+        if self.graveyard_index_of(target) is None:
+            return False
+        from ..target_immunity import graveyard_cards_untargetable
+
+        return graveyard_cards_untargetable(self) is None
 
     def stamp_graveyard_targets(self, seat, index):
         """Every chosen graveyard slot, named. Mirrors the index's own shape."""

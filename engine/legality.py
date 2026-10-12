@@ -4616,7 +4616,9 @@ class LegalityMixin:
             # remains in that graveyard — the unambiguous "gone", per the
             # docstring above. While a copy survives, `graveyard_index_of`
             # answers a slot (clamping where it must) and the target is legal.
-            legality.append(self.graveyard_index_of(stamp) is not None)
+            # …and legal only while a card in a graveyard may be targeted at
+            # all (Ground Seal arriving in response): one reader for both.
+            legality.append(self.graveyard_target_is_legal(stamp))
             if addresses is not None:
                 addresses.append(None)
         stack_target = getattr(holder, "target_stack_item", None)
@@ -4874,11 +4876,92 @@ class LegalityMixin:
             return None
         if any(target.kind != "graveyard" for target in chosen):
             return None
-        if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
+        if any(self.graveyard_target_is_legal(target.stamp) for target in chosen):
             return None
+        if any(self.graveyard_index_of(target.stamp) is not None for target in chosen):
+            # Still in its pile and no longer targetable: "Cards in graveyards
+            # can't be the targets of spells or abilities" arrived in response
+            # (Ground Seal). Said in its own words, because "no longer in the
+            # graveyard" would be false of a card anyone can see there.
+            from .target_immunity import graveyard_cards_untargetable
+
+            return (
+                f"{item.card.name} ability was removed from the stack: its "
+                f"target can't be targeted "
+                f"({graveyard_cards_untargetable(self)}, 608.2b)"
+            )
         return (
             f"{item.card.name} ability was removed from the stack: its target "
             "is no longer in the graveyard (608.2b)"
+        )
+
+    def sealed_graveyard_target_refusal(self, item) -> str | None:
+        """Why the **ability** *item* cannot have its one target — a card in a
+        graveyard — while "Cards in graveyards can't be the targets of spells
+        or abilities" (Ground Seal) is on the battlefield, or None.
+
+        The half of that sentence the target enumeration cannot reach. A cast
+        and an activation name their target through
+        ``_enumerate_graveyard_creatures``, which offers nothing under the
+        Seal, so CR 601.2c / 602.2b refuse them before anything is paid. A
+        **triggered** ability has no picker for a card in a graveyard at all —
+        the kind is not one ``_trigger_target_candidates`` chooses — so its
+        handler scans the pile for itself as it resolves, and a scan asks
+        nobody whether the card may be targeted: Karmic Guide went on
+        returning a creature card and Monk Idealist an enchantment card with
+        the Seal in play. (A bare, headless activation takes the same scan.)
+
+        Asked at both ends of the rule by the two callers: as a trigger is put
+        on the stack (CR 603.3d — no legal target, so it is removed) and as
+        any ability resolves (CR 608.2b — the Seal arrived in response).
+
+        What makes the scan's pick a **target** is not in the compiled
+        program: "you may return target creature card from your graveyard"
+        (Gravedigger) and "…unless you return a basic land card from your
+        graveyard" (Harvest Wurm) lower to one instruction with one payload,
+        and the card's ruling protects exactly the second ("abilities that
+        don't target cards in graveyards … can still affect those cards"). So
+        the evidence is the one this engine already keeps for CR 115.3 —
+        ``stack_targets._printed_target_instances``, how many times the
+        ability's own printed line says "target" — and the bounds are:
+
+        * an **ability** (a spell's target is announced and stamped, and
+          ``illegal_targets_refusal`` judges it);
+        * its derived spec is the graveyard target kind and not a cost;
+        * its line prints the word **exactly once**, so its one target is
+          that card. Two instances are two targets, one of which this cannot
+          judge (Goblin Welder), and none is a choice that is not a target;
+        * it does not say "up to" — zero targets is then a legal announcement
+          (CR 601.2c) and the ability stays to do whatever else it prints.
+        """
+        from .target_immunity import graveyard_cards_untargetable
+
+        sealed = graveyard_cards_untargetable(self)
+        if sealed is None or not getattr(item, "is_ability", False):
+            return None
+        instruction = item.ability_instruction
+        if instruction is None or item.hook_key is not None:
+            return None
+        if modal_trigger_modes(instruction):
+            return None
+        if resolves_with_illegal_targets(item.card, item.ability_text):
+            return None
+        from .targeting import graveyard_target_spec
+
+        spec = graveyard_target_spec(
+            item.card, compile_card_oracle(item.card), instruction=instruction,
+        )
+        if spec is None or spec_is_a_cost(spec):
+            return None
+        from .stack_targets import _printed_target_instances
+
+        if _printed_target_instances(item) != 1:
+            return None
+        if "up to" in (item.ability_text or "").lower():
+            return None
+        return (
+            f"{item.card.name} ability was removed from the stack: its "
+            f"target can't be targeted ({sealed}, 608.2b)"
         )
 
     def ability_target_verdicts(self, item) -> "list[tuple] | None":
@@ -4974,7 +5057,7 @@ class LegalityMixin:
                 return None
             for target in targets:
                 if target.kind == "graveyard":
-                    legal = self.graveyard_index_of(target.stamp) is not None
+                    legal = self.graveyard_target_is_legal(target.stamp)
                 else:
                     legal = any(candidate.same_object(target) for candidate in candidates)
                 verdicts.append((target, legal))
@@ -5988,6 +6071,19 @@ class LegalityMixin:
         self, caster_index: int, spec: dict, *, source_card=None
     ) -> list[dict]:
         targets: list[dict] = []
+        # "Cards in graveyards can't be the targets of spells or abilities."
+        # (Ground Seal.) Asked **here**, in the one enumeration of graveyard
+        # targets, so every reader of the list inherits the answer: the picker
+        # offers nothing, CR 601.2c's cast gate and CR 602.2b's activation gate
+        # refuse with nothing paid, and a trigger that must target one has no
+        # legal choice (CR 603.3d). A *cost* paid out of a graveyard (Necropolis)
+        # is not a target and keeps its list — the card's ruling: "Abilities
+        # that don't target cards in graveyards … can still affect those cards."
+        if not spec_is_a_cost(spec):
+            from .target_immunity import graveyard_cards_untargetable
+
+            if graveyard_cards_untargetable(self) is not None:
+                return targets
         # Reconstruction returns an *artifact* card, Raise Dead a creature card,
         # Chandra a red instant or sorcery. One template with the type as data,
         # and one predicate shared with the cast-time re-check and the handler

@@ -527,9 +527,69 @@ def immunity_claims_line(line: str) -> bool:
             # enforcement reads, or the card is admitted with the protection
             # absent.
             or board_target_immunities(clause)
+            or graveyard_target_immunity(clause)
         )
         for clause in clauses
     )
+
+
+#: "Cards in graveyards can't be the targets of spells or abilities." (Ground
+#: Seal.) The fourth subject a shroud can be printed about, and the first that
+#: is not a permanent: every reader above is asked through
+#: ``Game._can_be_targeted``, which takes a permanent, and a card in a
+#: graveyard is not one (CR 115.2: an object in another zone is a target only
+#: where the spell or ability says it can be).
+#:
+#: Whole, with no payload: the sentence names every graveyard, every card in
+#: one, and both kinds of targeting object (CR 115.1a spells, CR 115.1c/d
+#: abilities — triggered as well as activated, which is where it differs from
+#: Peace Talks' "spells or **activated** abilities"). A printing that narrowed
+#: any of the three would be a different rule and stays unmatched.
+_GRAVEYARD_TARGET_IMMUNITY = re.compile(
+    r"^cards in graveyards can't be the targets of spells or abilities$"
+)
+
+
+def graveyard_target_immunity(line: str) -> bool:
+    """Whether *line* is, in full, the graveyard shroud.
+
+    One matcher for the claim (:func:`immunity_claims_line`) and for the
+    enforcement (:func:`graveyard_cards_untargetable`), so a wording admitted
+    here is one the target enumeration really honours.
+    """
+    return bool(_GRAVEYARD_TARGET_IMMUNITY.match(
+        " ".join((line or "").split()).strip().rstrip(".").lower()
+    ))
+
+
+def graveyard_cards_untargetable(game) -> str | None:
+    """The name of a permanent under which no card in a graveyard may be
+    targeted — or None when nothing on the battlefield says so.
+
+    Asked of the board when a target is chosen and again as the object
+    resolves, never latched: the card's ruling is that the ability "only works
+    when Ground Seal is on the battlefield" (CR 113.6), so it ends with the
+    permanent and reaches a spell cast before it arrived (CR 608.2b).
+
+    Read off ``effective_card``, so a copy answers with what it copied
+    (CR 707.2) and a text change is folded in (CR 612.1).
+
+    **Targets only.** The ruling's other half: "Abilities that don't target
+    cards in graveyards (like the one Tormod's Crypt has) can still affect
+    those cards." So this is asked by the one enumeration of graveyard
+    *targets* (``legality._enumerate_graveyard_creatures``) and by the
+    resolution re-check (``Game.graveyard_target_is_legal``), and by nothing
+    that merely moves a card — a cost paid out of a graveyard, a mass exile,
+    and a flashback cast (CR 702.34a casts the card; nothing targets it) are
+    all untouched.
+    """
+    if game is None:
+        return None
+    for permanent in game.all_permanents():
+        for line in (permanent.effective_card.oracle_text or "").splitlines():
+            if graveyard_target_immunity(line):
+                return permanent.card.name
+    return None
 
 
 def _lines_of(card) -> list[str]:
