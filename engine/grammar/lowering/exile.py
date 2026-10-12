@@ -23,6 +23,13 @@ step or by the firing event before the sentence ran. Everything below chooses
 its object out of the game and carries a filter payload to a handler; nothing
 below reads a record. (Thieves' Auction's claim out of the exiled pile did, and
 left for `linked_exile` at Nemesis's second wave for exactly that sentence.)
+
+The second paragraph has been wrong since Alliances' third wave, when
+`effects/exile.py` took this module's name, and the ordinary production it
+mentions is the tail of the `exile` arm in `imperative_verbs`. Since the Phase 0
+before Odyssey the twin is cut where this side is: `effects/exile.py` reads an
+object going *into* the zone and `effects/linked_exile.py` the pile already
+there.
 """
 
 from __future__ import annotations

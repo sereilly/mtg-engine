@@ -143,18 +143,24 @@ from .production_changes import (
 )
 from .exile import (
     _parse_exile_bound_card,
-    parse_claims_one_exiled_card,
     parse_exile_graveyard_arrivals_this_turn,
+    _parse_exile_cost_sacrifices,
+    _parse_exile_graveyard,
+    _parse_player_exiles_pile,
+    _parse_player_exiles_target_spell,
+)
+# The pile that is already in exile, split off `exile` at Odyssey's Phase 0
+# under `lowering/linked_exile.py`'s name. The ten names it took keep their
+# addresses: this package re-exports flat, so no caller learns where the split
+# fell.
+from .linked_exile import (
+    parse_claims_one_exiled_card,
     _parse_bin_unplayed_exiled_card,
     _parse_bin_unplayed_exiled_cards,
     _parse_put_exiled_card_into_hand,
     _parse_put_exiled_pile_top_into_hand,
-    _parse_exile_cost_sacrifices,
-    _parse_exile_graveyard,
     _parse_put_exiled_with_source,
     _parse_random_exiled_with_source,
-    _parse_player_exiles_pile,
-    _parse_player_exiles_target_spell,
     _parse_player_returns_exiled_with_source,
     _parse_put_exiled_this_way,
     parse_put_exiled_pile_on_library,

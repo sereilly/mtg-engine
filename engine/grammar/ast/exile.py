@@ -31,6 +31,13 @@ the other half wherever its reader happened to live. What every node below has
 in common is the zone it names, which is the one thing none of them disagrees
 about.
 
+The parse side came to agree with the lowering side at the Phase 0 before
+Odyssey — ``effects/linked_exile.py`` took the productions whose nodes
+``lowering/linked_exile.py`` lowers — so the readers are two modules on each
+side now and this is still one. That is the paragraph above holding rather than
+expiring: the nodes of both halves name the zone, and ``ExileTopOfLibrary``
+still parses in a third family.
+
 A family rather than a floor, and it reads nothing: like every other module in
 this package it imports ``_core`` and ``costs`` and no sibling, and
 ``__init__`` re-exports it flat — so no caller outside this package names the
