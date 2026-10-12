@@ -410,6 +410,44 @@ def test_zone_being_cast_from_reads_the_zone_the_action_names(pool):
     ) is opp.exile
 
 
+def test_no_executor_picks_the_zone_for_itself():
+    """Every `spell_being_cast(…)` in the simulator and in the web layer is
+    handed `zone_being_cast_from(…)`. Each of them used to spell "the command
+    zone, or else the hand" out — the shape `cast_announcement` was written to
+    end for the keywords, here for the pile — and two of the four read the
+    hand outright."""
+    root = Path(__file__).resolve().parents[2]
+    found = 0
+    for relative in ("engine/ai_simulator.py", "web/game_flow.py"):
+        tree = ast.parse((root / relative).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and getattr(node.func, "id", None) == "spell_being_cast"
+            ):
+                continue
+            found += 1
+            zone = node.args[0]
+            assert (
+                isinstance(zone, ast.Call)
+                and getattr(zone.func, "id", None) == "zone_being_cast_from"
+            ) or (
+                isinstance(zone, ast.Name) and zone.id == "cast_zone"
+            ), (relative, node.lineno)
+        # ...and where a site binds the pile to a name first, the name is that
+        # function's result.
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Assign)
+                and any(getattr(target, "id", None) == "cast_zone" for target in node.targets)
+            ):
+                assert (
+                    isinstance(node.value, ast.Call)
+                    and getattr(node.value.func, "id", None) == "zone_being_cast_from"
+                ), (relative, node.lineno)
+    assert found == 4, f"expected the four executor sites, found {found}"
+
+
 # --- the seam: no chooser can read the hand by leaving a keyword out -----------
 
 #: Engine questions about a cast that take the zone it leaves. A call to one
