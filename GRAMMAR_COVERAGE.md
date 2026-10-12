@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 69.0% | 65.1% | 47.9% | 211 |
+| ODY *(measured)* | 335 | 507 | 71.4% | 67.7% | 50.1% | 222 |
 | **All (shipped)** | **7406** | **10877** | **90.6%** | **90.0%** | **61.7%** | **5693** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,9 +61,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 646 | 340 | expected a subject |  |
+| 644 | 338 | expected a subject |  |
 | 168 | 87 | unrecognized effect verb |  |
-| 160 | 92 | unconsumed text |  |
+| 152 | 84 | unconsumed text |  |
 | 68 | 49 | granted ability in quotes | phase 3 (quoted abilities) |
 | 36 | 36 | unrecognized activation cost |  |
 | 30 | 8 | expected what this creature can't block, or a duration |  |
@@ -79,12 +79,12 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 4 | 1 | the sacrifice prompt cannot test this restriction |  |
 | 4 | 1 | expected 'that' |  |
 | 4 | 1 | attach needs one chosen permanent to attach to |  |
-| 4 | 3 | expected 'the number of' in a where-clause |  |
 | 4 | 1 | expected a destination zone after 'return' |  |
 | 4 | 4 | unrecognized "can't be" restriction |  |
 | 3 | 1 | expected 'of' |  |
 | 3 | 1 | expected 'top' |  |
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
+| 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
 
 ## Cards executing through the grammar
@@ -186,6 +186,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{1}{U}{U}: Exile the top card of your library. Until end of turn, you may play that card. (Reveal the card as you exile it.)`
 - **Aether Barrier**
   - `Whenever a player casts a creature spell, that player sacrifices a permanent of their choice unless they pay {1}.`
+- **Aether Burst**
+  - `Return up to X target creatures to their owners' hands, where X is one plus the number of cards named Aether Burst in all graveyards as you cast this spell.`
 - **Aether Flash**
   - `Whenever a creature enters, this enchantment deals 2 damage to it.`
   - `Whenever a creature enters, this enchantment deals 2 damage to it.`
@@ -636,6 +638,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{W}: This creature gets +0/+1 until end of turn.`
 - **Aven Gagglemaster**
   - `When this creature enters, you gain 2 life for each creature you control with flying.`
+- **Aven Shrine**
+  - `Whenever a player casts a spell, that player gains X life, where X is the number of cards in all graveyards with the same name as that spell.`
 - **Aven Windreader**
   - `{1}{U}: Target player reveals the top card of their library.`
 - **Avenger en-Dal**
@@ -1255,6 +1259,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{2}{B}, Exile a creature card from your graveyard: Target creature gets -2/-2 until end of turn.`
 - **Cabal Pit**
   - `{T}: Add {B}. This land deals 1 damage to you.`
+- **Cabal Shrine**
+  - `Whenever a player casts a spell, that player discards X cards, where X is the number of cards in all graveyards with the same name as that spell.`
 - **Cackling Fiend**
   - `When this creature enters, each opponent discards a card.`
 - **Cackling Witch**
@@ -1448,6 +1454,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{U}{U}: Tap target creature without flying.`
 - **Cephalid Scout**
   - `{2}{U}, Sacrifice a land: Draw a card.`
+- **Cephalid Shrine**
+  - `Whenever a player casts a spell, counter that spell unless that player pays {X}, where X is the number of cards in all graveyards with the same name as the spell.`
 - **Ceremonial Guard**
   - `When this creature attacks or blocks, destroy it at end of combat.`
 - **Cessation**
@@ -2747,6 +2755,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}, Sacrifice this land: Add {R}{R}.`
 - **Dwarven Sea Clan**
   - `{T}: Choose target attacking or blocking creature whose controller controls an Island. This creature deals 2 damage to that creature at end of combat. Activate only before the end of combat step.`
+- **Dwarven Shrine**
+  - `Whenever a player casts a spell, this enchantment deals X damage to that player, where X is twice the number of cards in all graveyards with the same name as that spell.`
 - **Dwarven Soldier**
   - `Whenever this creature blocks or becomes blocked by one or more Orcs, this creature gets +0/+2 until end of turn.`
   - `Whenever this creature blocks or becomes blocked by one or more Orcs, this creature gets +0/+2 until end of turn.`
@@ -4215,6 +4225,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `When this creature dies, exile it and each other player creates a 3/3 black Angel creature token with flying.`
 - **Haunted Crossroads**
   - `{B}: Put target creature card from your graveyard on top of your library.`
+- **Haunting Echoes**
+  - `Exile all cards from target player's graveyard other than basic land cards. For each card exiled this way, search that player's library for all cards with the same name as that card and exile them. Then that player shuffles.`
 - **Haunting Misery**
   - `Haunting Misery deals X damage to target player or planeswalker.`
 - **Haunting Wind**
@@ -4383,6 +4395,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Until end of turn, whenever a player taps an Island for mana, that player adds an additional {U}.`
 - **Highway Robber**
   - `When this creature enters, target opponent loses 2 life and you gain 2 life.`
+- **Hint of Insanity**
+  - `Target player reveals their hand. That player discards all nonland cards with the same name as another card in their hand.`
 - **Hired Giant**
   - `When this creature enters, each other player may search their library for a land card and put that card onto the battlefield. Then each player who searched their library this way shuffles.`
 - **Historian of Zhalfir**
@@ -5411,6 +5425,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Life // Death**
   - `All lands you control become 1/1 creatures until end of turn. They're still lands.`
   - `Return target creature card from your graveyard to the battlefield. You lose life equal to its mana value.`
+- **Life Burst**
+  - `Target player gains 4 life, then gains 4 life for each card named Life Burst in each graveyard.`
 - **Life Chisel**
   - `Sacrifice a creature: You gain life equal to the sacrificed creature's toughness. Activate only during your upkeep.`
 - **Life Goes On**
@@ -5988,6 +6004,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
   - `Each player may discard up to three cards. Mind Bomb deals damage to each player equal to 3 minus the number of cards they discarded this way.`
+- **Mind Burst**
+  - `Target player discards X cards, where X is one plus the number of cards named Mind Burst in all graveyards.`
 - **Mind Extraction**
   - `Target player reveals their hand and discards all cards of each of the sacrificed creature's colors.`
 - **Mind Games**
@@ -6273,6 +6291,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
   - `Whenever this creature attacks and isn't blocked, it gets +2/+0 until end of combat.`
+- **Muscle Burst**
+  - `Target creature gets +X/+X until end of turn, where X is 3 plus the number of cards named Muscle Burst in all graveyards.`
 - **Muscle Sliver**
   - `All Sliver creatures get +1/+1.`
 - **Musician**
@@ -6304,6 +6324,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{T}: Add {C}{G}.`
 - **Nantuko Mentor**
   - `{2}{G}, {T}: Target creature gets +X/+X until end of turn, where X is that creature's power.`
+- **Nantuko Shrine**
+  - `Whenever a player casts a spell, that player creates X 1/1 green Squirrel creature tokens, where X is the number of cards in all graveyards with the same name as that spell.`
 - **Natural Affinity**
   - `All lands become 2/2 creatures until end of turn. They're still lands.`
 - **Natural Balance**
