@@ -137,7 +137,7 @@ class DamageRedirect:
     #: which a noun phrase cannot be asked of, because a spell's damage source
     #: is its printed card (CR 109.5) and has no battlefield state to read.
     #: Answered by :func:`spell_source_matches`. ``None`` is every other record.
-    spell_sources: "tuple[tuple[str, ...], str] | None" = None
+    spell_sources: "tuple[tuple[str, ...], str | None] | None" = None
 
     @property
     def spent(self) -> bool:
@@ -583,6 +583,11 @@ def spell_source_matches(game, redirect: DamageRedirect, source) -> bool:
         return False
     if not any(source_has_type(game, source, word) for word in types):
         return False
+    if color is None:
+        # "…an instant or sorcery spell would deal damage to you…" (Aegis of
+        # Honor): the class is the types alone. Harsh Judgment's record names
+        # a colour beside them and is asked the question below.
+        return True
     return color in damage_source_colors(
         game, source, seat=damage_source_seat(game, source)
     )

@@ -267,12 +267,22 @@ class ChosenSourceNextDamage:
     would carry is a constant, and the lowering refuses unless a step in front of
     it really recorded one.
 
-    ``combat_only`` is deliberately absent for :class:`DoubleCombatDamage`'s
-    stated reason: the pool prints one card and it narrows nothing, so a field
-    with no second card behind it would be a claim nothing checks.
+    ``combat_only`` was deliberately absent while the pool printed one card
+    that narrowed nothing. Impulsive Maneuvers is the second: "the next time
+    **that creature** would deal **combat** damage this turn, it deals double
+    that damage instead" / "…, prevent that damage." Both words are read:
+
+    * ``combat_only`` — CR 510.2's narrowing, a property of the event. Dropped,
+      the rider would be spent by (or would double) a ping ability's damage.
+    * ``source`` — who "that …" is. ``"chosen"`` is Desperate Gambit's
+      back-reference to the step in front of it; ``"event_subject"`` is the
+      object the trigger's event was about, which is the only other thing the
+      words can name and has to be checked against the event that fired.
     """
     modification: str
     duration: Duration = field(default_factory=Duration)
+    combat_only: bool = False
+    source: str = "chosen"
 
 
 @dataclass(frozen=True)
@@ -348,6 +358,15 @@ class RedirectDamage:
     #: subject, and ``parse_recipient`` reads a bare "itself" as the ability's
     #: own permanent (Psionic Entity). ``new_recipient`` is None beside it.
     to_damage_source: bool = False
+    #: "The next time **an instant or sorcery spell** would deal damage to you
+    #: this turn, that spell deals that damage to its controller instead."
+    #: (Aegis of Honor.) The fourth way the sentence names whose damage moves:
+    #: not a target (``dealt_by``), not a source of the player's choice
+    #: (``from_chosen_source``) and not a noun phrase over permanents (the
+    #: class form), but a **class of spells** — the printed card types, any
+    #: spell of which answers when its damage would be dealt. Empty for every
+    #: other printing.
+    spell_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

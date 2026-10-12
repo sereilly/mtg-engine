@@ -1545,6 +1545,36 @@ def flip_coin(win_probability: float = 0.5) -> bool:
     return random.random() < win_probability
 
 
+def flip_coin_for(game: Game, flipper, win_probability: float = 0.5) -> bool:
+    """A coin flip *flipper* **wins or loses** (CR 705.2), announced.
+
+    The seam for every flip a player can win. CR 705.2 draws the line this
+    function is named for: an effect that "cares only about whether the coin
+    comes up heads or tails" (Mana Clash) has no winner — it goes on calling
+    :func:`flip_coin` — and for every other flip "only the player who flips the
+    coin wins or loses". So the announcement carries one seat, the flipper's,
+    and "Whenever **you** win a coin flip" (Chance Encounter) hears exactly the
+    flips its controller made and won, which is the card's own ruling ("Your
+    opponent losing a flip does not count as you winning one").
+
+    One draw from the same RNG, in the same place the bare call made it, so a
+    seeded game replays the flips it always did. The trigger goes on the stack
+    behind the object that is resolving, as every event announced part-way
+    through a resolution does.
+    """
+    won = flip_coin(win_probability)
+    if won and flipper is not None:
+        seat = next(
+            (index for index, player in enumerate(game.players) if player is flipper),
+            None,
+        )
+        if seat is not None:
+            from ..events import emit
+
+            emit(game, "you_win_coin_flip", seat=seat)
+    return won
+
+
 def resolve_own_combatant(
     game: Game,
     context: OracleExecutionContext,

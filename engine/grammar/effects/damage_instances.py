@@ -126,6 +126,68 @@ def _accept_unsourced_instance_redirect(
     )
 
 
+def _accept_spell_class_instance_redirect(
+    stream: TokenStream,
+) -> "ast.RedirectDamage | None":
+    """``an instant or sorcery spell would deal damage to <recipient>
+    <duration>, that spell deals that damage to its controller instead`` —
+    with "The next time" already read by the caller. (Aegis of Honor.)
+
+    CR 615.8's one instance with the source named as a **class of spells**:
+    Harsh Judgment's static sentence ("If an instant or sorcery spell of the
+    chosen color would deal damage to you, it deals that damage to its
+    controller instead") armed for a turn and spent on the first spell that
+    answers. Every other branch of the production this is called from names
+    one object or lets the player choose one; this names a kind, so nothing is
+    chosen and whichever such spell comes next is the one.
+
+    The types are a list — "instant **or** sorcery" — read as a loop, and each
+    must be a card type; the head noun "spell" is required, because without it
+    the phrase is "an instant source", a different sentence with a different
+    reader. The tail is this production's own: "that spell" is the class member
+    the event turned out to be about, so its controller is a seat nobody knows
+    until the damage would be dealt, and it travels as the bare "that player"
+    Reverberation's "that spell's controller" already lowers from.
+
+    Refuses with the cursor untouched.
+    """
+    mark = stream.mark()
+    if not (stream.accept_word("a") or stream.accept_word("an")):
+        return None
+    types: list[str] = []
+    while True:
+        word = stream.peek_word()
+        if word not in CARD_TYPES:
+            stream.reset(mark)
+            return None
+        types.append(str(word))
+        stream.advance()
+        if not stream.accept_word("or"):
+            break
+    if not stream.accept_phrase("spell", "would", "deal", "damage", "to"):
+        stream.reset(mark)
+        return None
+    recipient = parse_recipient(stream)
+    if recipient is None:
+        stream.reset(mark)
+        return None
+    duration = _parse_duration(stream)
+    stream.accept_punct(",")
+    if not stream.accept_phrase(
+        "that", "spell", "deals", "that", "damage", "to", "its", "controller",
+        "instead",
+    ):
+        stream.reset(mark)
+        return None
+    return ast.RedirectDamage(
+        to=recipient,
+        new_recipient=ast.PlayerRef("that_player"),
+        duration=duration,
+        one_shot=True,
+        spell_types=tuple(types),
+    )
+
+
 def _finish_named_source_effect(
     stream: TokenStream, source: "ast.TargetSpec", mark, combat_only: bool
 ) -> "ast.PreventDamage | ast.RedirectDamage | None":
@@ -250,6 +312,14 @@ def _parse_source_of_choice_effect(
     unsourced = _accept_unsourced_instance_redirect(stream)
     if unsourced is not None:
         return unsourced
+    # "The next time **an instant or sorcery spell** would deal damage to you
+    # this turn, that spell deals that damage to its controller instead."
+    # (Aegis of Honor.) Read before the article below, which would take "an
+    # instant" for a card-typed source of the player's choice and then fail the
+    # line on the missing "of your choice".
+    spell_class = _accept_spell_class_instance_redirect(stream)
+    if spell_class is not None:
+        return spell_class
     colours: list[str] = []
     card_type = None
     if not (stream.accept_word("a") or stream.accept_word("an")):
@@ -569,10 +639,24 @@ def _parse_chosen_source_next_damage(
     mark = stream.mark()
     if not stream.accept_phrase("the", "next", "time"):
         return None
-    if not (stream.accept_phrase("that", "source") or stream.accept_word("it")):
+    # "…the next time **that creature** would deal **combat** damage this
+    # turn, …" (Impulsive Maneuvers.) The same clause about a different
+    # antecedent — the creature the trigger's event was about rather than a
+    # source the step in front chose — and with CR 510.2's narrowing printed.
+    # Which antecedent the words have is carried, not decided here: the
+    # lowering checks it against what the sentence in front of it or the
+    # firing event really established.
+    source = "chosen"
+    if stream.accept_phrase("that", "creature"):
+        source = "event_subject"
+    elif not (stream.accept_phrase("that", "source") or stream.accept_word("it")):
         stream.reset(mark)
         return None
-    if not stream.accept_phrase("would", "deal", "damage"):
+    if not stream.accept_phrase("would", "deal"):
+        stream.reset(mark)
+        return None
+    combat_only = bool(stream.accept_word("combat"))
+    if not stream.accept_word("damage"):
         stream.reset(mark)
         return None
     duration = _parse_duration(stream)
@@ -582,6 +666,8 @@ def _parse_chosen_source_next_damage(
         (("prevent", "that", "damage"), "prevent"),
     ):
         if stream.accept_phrase(*printed):
-            return ast.ChosenSourceNextDamage(modification, duration)
+            return ast.ChosenSourceNextDamage(
+                modification, duration, combat_only=combat_only, source=source,
+            )
     stream.reset(mark)
     return None

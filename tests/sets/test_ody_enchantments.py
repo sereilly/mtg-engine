@@ -689,6 +689,245 @@ def test_w1g5_delaying_shield_asks_once_per_counter_at_upkeep(
     ) == untapped
     assert game.pending_choices == [] and game.stack == []
 
+
+# Aegis of Honor ---------------------------------------------------------------
+
+
+def test_w1g5_aegis_of_honor_turns_the_next_instant_or_sorcery_back_on_its_controller(
+    catalog_by_name, set_pool,
+):
+    """"{1}: The next time an instant or sorcery spell would deal damage to you
+    this turn, that spell deals that damage to its controller instead." A
+    one-shot CR 614.9 redirect keyed on a class of **spells**: a creature's
+    ability is not one, the first Lightning Bolt is — its caster takes the 3 —
+    and the second finds the record spent."""
+    game = _w1g5_table(catalog_by_name, set_pool, hand1=["Lightning Bolt"] * 2)
+    _w1g5_put(game, 0, "Aegis of Honor")
+    _w1g5_put(game, 1, "Prodigal Sorcerer")
+    alice, bob = game.players
+
+    assert game.activate_permanent_ability(0, "Aegis of Honor").supported
+    _w1g5_resolve_stack(game)
+    game.active_player_index = 1
+
+    assert game.activate_permanent_ability(
+        1, "Prodigal Sorcerer", target_player_index=0,
+    ).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (19, 20), "an ability is not a spell"
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (19, 17)
+    assert any("3 damage to Alice is dealt to Bob instead (Aegis of Honor)" in line
+               for line in game.log)
+
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (16, 17), "one instance, and it is spent"
+
+
+def test_w1g5_aegis_of_honor_covers_a_sorcery_ignores_its_controllers_own_spell_and_ends_with_the_turn(
+    catalog_by_name, set_pool,
+):
+    """The other printed type, the degenerate recipient and the duration. An
+    opponent's Earthquake deals its damage to "each player": the Aegis'
+    controller's share moves to the Earthquake's controller, who takes both.
+    The controller's own Bolt at their own face would be redirected to the
+    player it is already headed for, which moves nothing and spends nothing
+    (CR 614.9). And a record nobody used is gone at cleanup."""
+    game = _w1g5_table(
+        catalog_by_name, set_pool,
+        hand0=["Lightning Bolt"], hand1=["Earthquake", "Lightning Bolt"],
+    )
+    _w1g5_put(game, 0, "Aegis of Honor")
+    alice, bob = game.players
+
+    assert game.activate_permanent_ability(0, "Aegis of Honor").supported
+    _w1g5_resolve_stack(game)
+    assert game.cast_from_hand(0, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (17, 20)
+
+    game.active_player_index = 1
+    assert game.cast_from_hand(1, "Earthquake", x_value=2).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (17, 16), "the record was still there to spend"
+
+    assert game.activate_permanent_ability(0, "Aegis of Honor").supported
+    _w1g5_resolve_stack(game)
+    game.resolve_cleanup_step(1)
+    assert game.cast_from_hand(1, "Lightning Bolt", target_player_index=0).supported
+    _w1g5_resolve_stack(game)
+    assert (alice.life, bob.life) == (14, 16)
+
+
+# Impulsive Maneuvers and Chance Encounter -------------------------------------
+
+
+def _w1g5_rig_coin(monkeypatch, won: bool) -> None:
+    """Every coin lands as *won* says. The flip is one function
+    (``handlers._common.flip_coin``), and the seam that announces a win calls
+    it through its module, so one patch rigs every flip a player can win."""
+    from engine.handlers import _common
+
+    monkeypatch.setattr(_common, "flip_coin", lambda win_probability=0.5: won)
+
+
+def _w1g5_attack(game, attacker, blocker=None):
+    """Seat 0 attacks seat 1 with *attacker*, blocked or not, through to the
+    second main phase — draining the stack after the declaration, which is
+    where an attack trigger resolves."""
+    _w1g5_to_declare_attackers(game)
+    slot = _w1g5_slot(game, 0, attacker)
+    assert game.declare_attackers(0, [slot])[0]
+    _w1g5_resolve_stack(game)
+    game.advance_combat_phase()
+    blocks = {} if blocker is None else {_w1g5_slot(game, 1, blocker): slot}
+    assert game.declare_blockers(1, blocks)[0]
+    _w1g5_finish_combat(game)  # _w1g5_attack
+
+
+@_w1g5_pytest.mark.parametrize("won, life", [(True, 14), (False, 20)])
+def test_w1g5_impulsive_maneuvers_doubles_or_prevents_the_attackers_combat_damage(
+    catalog_by_name, set_pool, monkeypatch, won, life,
+):
+    """"Whenever a creature attacks, flip a coin. If you win the flip, the
+    next time that creature would deal combat damage this turn, it deals
+    double that damage instead. If you lose the flip, the next time that
+    creature would deal combat damage this turn, prevent that damage."
+    Desperate Gambit's two riders on the creature the attack trigger was
+    about, narrowed to combat damage. A Hill Giant deals 6 or nothing."""
+    _w1g5_rig_coin(monkeypatch, won)
+    game = _w1g5_table(catalog_by_name, set_pool)
+    _w1g5_put(game, 0, "Impulsive Maneuvers")
+    giant = _w1g5_put(game, 0, "Hill Giant")
+
+    _w1g5_attack(game, giant)
+
+    assert game.players[1].life == life
+    assert not any("next_" in key for key in giant.metadata), "the rider was spent"
+
+
+def test_w1g5_impulsive_maneuvers_rider_answers_to_combat_damage_only_and_dies_with_the_turn(
+    catalog_by_name, set_pool, monkeypatch,
+):
+    """"…would deal **combat** damage": the rider on an attacker is not spent
+    by — and does not double — that creature's noncombat damage. And it is
+    "this turn": an attacker whose combat damage never happened carries
+    nothing into the next one."""
+    from engine.next_damage import COMBAT_DAMAGE_DOUBLED_NEXT, armed
+
+    _w1g5_rig_coin(monkeypatch, True)
+    game = _w1g5_table(catalog_by_name, set_pool)
+    _w1g5_put(game, 0, "Impulsive Maneuvers")
+    sorcerer = _w1g5_put(game, 0, "Prodigal Sorcerer")
+    bob = game.players[1]
+
+    _w1g5_to_declare_attackers(game)
+    assert game.declare_attackers(0, [_w1g5_slot(game, 0, sorcerer)])[0]
+    _w1g5_resolve_stack(game)
+    assert armed(sorcerer, COMBAT_DAMAGE_DOUBLED_NEXT) == 1
+
+    # A ping from the same creature, outside combat damage: 1, not 2.
+    assert _w1g5_dealt(game, bob, 1, sorcerer) == 1
+    assert armed(sorcerer, COMBAT_DAMAGE_DOUBLED_NEXT) == 1
+
+    game.resolve_cleanup_step(0)
+    assert armed(sorcerer, COMBAT_DAMAGE_DOUBLED_NEXT) == 0
+
+
+def test_w1g5_impulsive_maneuvers_flips_once_per_attacker_and_its_controller_flips(
+    catalog_by_name, set_pool, monkeypatch,
+):
+    """The card's ruling: "You flip a coin for each creature that attacks, not
+    once per attack." And "you" is the enchantment's controller, whoever is
+    attacking — the defending player's Maneuvers flips for the attackers
+    coming at them, and a win doubles the damage they take."""
+    _w1g5_rig_coin(monkeypatch, True)
+    game = _w1g5_table(catalog_by_name, set_pool)
+    _w1g5_put(game, 1, "Impulsive Maneuvers")
+    giant = _w1g5_put(game, 0, "Hill Giant")
+    bears = _w1g5_put(game, 0, "Grizzly Bears")
+
+    _w1g5_to_declare_attackers(game)
+    assert game.declare_attackers(
+        0, [_w1g5_slot(game, 0, giant), _w1g5_slot(game, 0, bears)],
+    )[0]
+    _w1g5_resolve_stack(game)
+    assert sum("Impulsive Maneuvers: won the coin flip" in line for line in game.log) == 2
+    game.advance_combat_phase()
+    assert game.declare_blockers(1, {})[0]
+    _w1g5_finish_combat(game)
+
+    assert game.players[1].life == 20 - 6 - 4
+
+
+def test_w1g5_chance_encounter_counts_only_flips_its_controller_won(
+    catalog_by_name, set_pool, monkeypatch,
+):
+    """"Whenever you win a coin flip, put a luck counter on this enchantment."
+    Implemented by nothing at the ingest. CR 705.2: only the player who flips
+    the coin wins or loses it — the card's ruling says the same. So its
+    controller's won flip is a counter; a lost one, an opponent's win, and a
+    flip nobody can win (Mana Clash's heads-or-tails) are not."""
+    from engine.named_counters import counters_on
+
+    game = _w1g5_table(
+        catalog_by_name, set_pool,
+        hand0=["Mana Clash"],
+    )
+    encounter = _w1g5_put(game, 0, "Chance Encounter")
+    mine = _w1g5_put(game, 0, "Impulsive Maneuvers")
+    giant = _w1g5_put(game, 0, "Hill Giant")
+
+    _w1g5_rig_coin(monkeypatch, True)
+    _w1g5_attack(game, giant)
+    assert counters_on(encounter, "luck") == 1
+
+    _w1g5_rig_coin(monkeypatch, False)
+    game.turn += 2
+    _w1g5_attack(game, giant)
+    assert counters_on(encounter, "luck") == 1, "a lost flip"
+
+    # The opponent's Maneuvers: they flip, they win, nobody else did.
+    game.remove_from_battlefield(mine)
+    _w1g5_put(game, 1, "Impulsive Maneuvers")
+    _w1g5_rig_coin(monkeypatch, True)
+    game.turn += 2
+    _w1g5_attack(game, giant)
+    assert counters_on(encounter, "luck") == 1, "an opponent's win"
+
+    # Mana Clash: both coins heads on the first round. No player wins a flip
+    # that only cares which side came up.
+    game.current_turn_phase = "main1"
+    assert game.cast_from_hand(0, "Mana Clash", target_player_index=1).supported
+    _w1g5_resolve_stack(game)
+    assert counters_on(encounter, "luck") == 1, "heads is not a win"
+
+
+def test_w1g5_chance_encounter_wins_the_game_at_ten_luck_counters_in_upkeep(
+    catalog_by_name, set_pool,
+):
+    """"At the beginning of your upkeep, if this enchantment has ten or more
+    luck counters on it, you win the game." An intervening "if" (CR 603.4):
+    nine counters do not trigger it, ten do, and its controller's opponent has
+    then lost."""
+    from engine.named_counters import add_counters
+
+    game = _w1g5_table(catalog_by_name, set_pool)
+    encounter = _w1g5_put(game, 0, "Chance Encounter")
+    add_counters(encounter, "luck", 9)
+    game.turn = 3
+    game.resolve_upkeep(0)
+    _w1g5_resolve_stack(game)
+    assert not game.players[1].lost and game.get_winner() is None
+
+    add_counters(encounter, "luck", 1)
+    game.resolve_upkeep(0)
+    _w1g5_resolve_stack(game)
+    assert game.get_winner() is game.players[0]
+
 # ==== end W1G5 ======================================================
 
 

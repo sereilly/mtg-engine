@@ -67,7 +67,7 @@ from .damage_source_colors import damage_source_colors
 from .effect_ordering import Candidate, affected_seat
 from .models import PlayerState
 from .named_counters import add_counters, counters_on, remove_counters
-from .next_damage import DAMAGE_PREVENTED_NEXT, armed, spend as spend_next_damage
+from .next_damage import DAMAGE_PREVENTED_NEXT, armed_for_event, spend_for_event
 from .pt import remove_plus1_counters
 from .shields import (END_OF_TURN as SHIELD_END_OF_TURN, PREVENT_ALL_BUT,
                       PREVENT_AND_DAMAGE_SOURCE, PREVENT_AND_GAIN_LIFE,
@@ -2710,7 +2710,12 @@ def _applies_chosen_source_one_shot(game, event: dict) -> bool:
     """
     if event["amount"] <= 0:
         return False
-    return armed(event.get("source"), DAMAGE_PREVENTED_NEXT) > 0
+    # "…would deal **combat** damage…" (Impulsive Maneuvers) answers only to a
+    # combat event; the unnarrowed rider (Desperate Gambit) to every one.
+    return armed_for_event(
+        event.get("source"), DAMAGE_PREVENTED_NEXT,
+        combat=bool(event.get("combat")),
+    ) > 0
 
 
 @prevention_effect(CHOSEN_SOURCE_ONE_SHOT, applies=_applies_chosen_source_one_shot)
@@ -2726,7 +2731,9 @@ def _prevent_next_damage_from_chosen_source(game, event: dict) -> PreventionOutc
     """
     source = event.get("source")
     amount = event["amount"]
-    spend_next_damage(source, DAMAGE_PREVENTED_NEXT)
+    spend_for_event(
+        source, DAMAGE_PREVENTED_NEXT, combat=bool(event.get("combat"))
+    )
     card = getattr(source, "card", source)
     game.log.append(
         f"{amount} damage from {getattr(card, 'name', 'a chosen source')} is "

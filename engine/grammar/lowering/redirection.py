@@ -94,6 +94,12 @@ def _lower_redirect_damage(node: ast.RedirectDamage) -> tuple[OracleInstruction,
       pointing at nothing, and CR 614.9 makes that a redirect that silently does
       nothing at all.
     """
+    if node.spell_types:
+        # "The next time **an instant or sorcery spell** would deal damage to
+        # you this turn, that spell deals that damage to its controller
+        # instead." (Aegis of Honor.) Read first: the source is a class of
+        # spells, which none of the branches below has a reading for.
+        return _lower_spell_class_instance_redirect(node)
     if node.amount is not None:
         # "**The next N** damage …" — a point pool rather than the whole event.
         # Read ahead of every branch below rather than beside them, because
@@ -655,6 +661,73 @@ def _lower_source_class_redirect(
         OracleInstruction(
             "redirect_source_class_damage_until_eot", "",
             {"sources": described, "combat_only": bool(node.combat_only)},
+        ),
+    )
+
+
+def _lower_spell_class_instance_redirect(
+    node: ast.RedirectDamage,
+) -> tuple[OracleInstruction, ...]:
+    """Aegis of Honor: "{1}: The next time an instant or sorcery spell would
+    deal damage to you this turn, that spell deals that damage to its
+    controller instead."
+
+    The source-class redirect one function up with the class named as a kind
+    of **spell** rather than as a noun phrase over permanents — a spell's
+    damage source is its printed card (CR 109.5), which a noun phrase cannot
+    be asked of — so it is the same instruction with the class on a different
+    key, and the record behind it is the one Harsh Judgment's static sentence
+    derives (``DamageRedirect.spell_sources``).
+
+    Every refusal is a way the sentence could otherwise mean more than it
+    says:
+
+    * the protected recipient must be **you** — the record is armed on the
+      ability's controller;
+    * it must be one instance for this turn. A blanket printing is Harsh
+      Judgment's static, which is derived off the board rather than armed;
+    * the taker must be the spell's controller, the only new recipient a
+      class of spells can have without somebody choosing one;
+    * every printed type must be instant or sorcery — the two that are never
+      permanents, and the two this pool prints. A permanent type would parse
+      and name a class of spells nothing here exercises.
+    """
+    if not _is_you(node.to):
+        raise LoweringError(
+            "a spell-class redirect is armed on its controller", node=node
+        )
+    if not node.one_shot or node.duration.kind not in _REST_OF_TURN:
+        raise LoweringError(
+            "a spell-class redirect moves the next instance this turn",
+            node=node,
+        )
+    if (
+        not isinstance(node.new_recipient, ast.PlayerRef)
+        or node.new_recipient.kind != "that_player"
+    ):
+        raise LoweringError(
+            "a spell-class redirect moves the damage to that spell's controller",
+            node=node,
+        )
+    if node.combat_only or node.chooser is not None or node.optional:
+        raise LoweringError(
+            "a spell-class redirect has no combat narrowing, chooser or option",
+            node=node,
+        )
+    if any(word not in ("instant", "sorcery") for word in node.spell_types):
+        raise LoweringError(
+            "no redirect watches a spell of the type "
+            + ", ".join(node.spell_types),
+            node=node,
+        )
+    return (
+        OracleInstruction(
+            "redirect_source_class_damage_until_eot", "",
+            {
+                "spell_types": list(node.spell_types),
+                "uses": 1,
+                "new_recipient": "source_controller",
+            },
         ),
     )
 

@@ -1453,6 +1453,10 @@ _SEAT_SCOPED_EVENTS = frozenset({
     "you_lose_life",
     "draws_second_card",
     "you_sacrifice_permanent",
+    # "Whenever **you** win a coin flip" (Chance Encounter). The seat is the
+    # flipper's, which is the only seat that can win it (CR 705.2) — so an
+    # opponent winning their own flip, or losing one, leaves this silent.
+    "you_win_coin_flip",
     # "Whenever a spell **you've cast** is countered" (Multani's Presence).
     # The seat is the *caster* of the countered spell, which is the only seat
     # the announcement could carry — CR 108.4 gives the card in the graveyard

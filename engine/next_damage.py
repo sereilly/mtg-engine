@@ -72,11 +72,64 @@ DAMAGE_DOUBLED_NEXT = "next_damage_it_deals_is_doubled"
 #: the damage is prevented whoever it was headed for.
 DAMAGE_PREVENTED_NEXT = "next_damage_it_deals_is_prevented"
 
-#: Both keys, for the end-of-turn sweep that is these records' whole duration.
-#: Named as a pair so the sweep cannot pick up one of them and leave the other
+#: "…the next time that creature would deal **combat** damage this turn, it
+#: deals double that damage instead." / "…prevent that damage." (Impulsive
+#: Maneuvers.) The same two riders narrowed by CR 510.2's word, which is a
+#: property of the *event* rather than of either end of it — so it is a second
+#: pair of records on the same object rather than a flag beside the first: a
+#: source carrying a combat rider and an unnarrowed one is carrying two
+#: effects, and one count with a flag could not say which of them a ping
+#: ability's damage spends.
+COMBAT_DAMAGE_DOUBLED_NEXT = "next_combat_damage_it_deals_is_doubled"
+COMBAT_DAMAGE_PREVENTED_NEXT = "next_combat_damage_it_deals_is_prevented"
+
+#: The combat-narrowed twin of each unnarrowed rider.
+_COMBAT_ONLY = {
+    DAMAGE_DOUBLED_NEXT: COMBAT_DAMAGE_DOUBLED_NEXT,
+    DAMAGE_PREVENTED_NEXT: COMBAT_DAMAGE_PREVENTED_NEXT,
+}
+
+#: Every key, for the end-of-turn sweep that is these records' whole duration.
+#: Named together so the sweep cannot pick up one of them and leave another
 #: running for the rest of the game — the failure a second spelling produces
 #: here is a coin flip whose losing half never expires.
-NEXT_DAMAGE_KEYS = (DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT)
+NEXT_DAMAGE_KEYS = (
+    DAMAGE_DOUBLED_NEXT, DAMAGE_PREVENTED_NEXT,
+    COMBAT_DAMAGE_DOUBLED_NEXT, COMBAT_DAMAGE_PREVENTED_NEXT,
+)
+
+
+def rider_key(key: str, *, combat_only: bool = False) -> str:
+    """The record *key*'s rider is written under: itself, or its
+    combat-narrowed twin when the sentence printed "combat damage"."""
+    return _COMBAT_ONLY[key] if combat_only else key
+
+
+def armed_for_event(source: Any, key: str, *, combat: bool) -> int:
+    """How many riders of *key*'s kind answer to **this** damage event. Pure.
+
+    The unnarrowed rider answers to every event; the combat-narrowed one only
+    to combat damage. The interceptors' predicate half.
+    """
+    count = armed(source, key)
+    if combat:
+        count += armed(source, _COMBAT_ONLY[key])
+    return count
+
+
+def spend_for_event(source: Any, key: str, *, combat: bool) -> None:
+    """Charge one rider of *key*'s kind against this event. The mutating half.
+
+    The combat-narrowed rider first where both are armed and the event is
+    combat damage: it is the one that could not have applied to anything else,
+    so spending it leaves the wider rider for the source's next damage of any
+    kind — the order its controller would choose (CR 616.1e).
+    """
+    narrowed = _COMBAT_ONLY[key]
+    if combat and armed(source, narrowed) > 0:
+        spend(source, narrowed)
+    else:
+        spend(source, key)
 
 
 def arm(source: Any, key: str, times: int = 1) -> bool:

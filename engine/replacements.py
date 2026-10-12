@@ -87,8 +87,8 @@ from .damage_redirects import (
     live_recipient,
 )
 from .hand_locks import lock_card_in_hand
-from .next_damage import (DAMAGE_DOUBLED_NEXT, armed,
-                          spend as spend_next_damage)
+from .next_damage import (DAMAGE_DOUBLED_NEXT, armed_for_event,
+                          spend_for_event)
 from .search_filters import card_has_type
 from .models import Permanent, PlayerState
 from .replacement_choices import (
@@ -2340,7 +2340,12 @@ def _applies_next_damage_doubled(game, payload: dict) -> bool:
     """
     if payload["amount"] <= 0:
         return False
-    return armed(payload.get("source"), DAMAGE_DOUBLED_NEXT) > 0
+    # "…would deal **combat** damage…" (Impulsive Maneuvers) answers only to a
+    # combat event; the unnarrowed rider (Desperate Gambit) to every one.
+    return armed_for_event(
+        payload.get("source"), DAMAGE_DOUBLED_NEXT,
+        combat=bool(payload.get("combat")),
+    ) > 0
 
 
 @replacement_effect(
@@ -2372,7 +2377,9 @@ def _double_next_damage_from_chosen_source(
     """
     source = payload.get("source")
     amount = int(payload["amount"])
-    spend_next_damage(source, DAMAGE_DOUBLED_NEXT)
+    spend_for_event(
+        source, DAMAGE_DOUBLED_NEXT, combat=bool(payload.get("combat"))
+    )
     card = getattr(source, "card", source)
     game.log.append(
         f"{amount} damage from {getattr(card, 'name', 'a chosen source')} "
