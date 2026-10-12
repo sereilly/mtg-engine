@@ -3006,6 +3006,31 @@ class LegalityMixin:
             and len(target_permanent_ids) > maximum
         ):
             return f"too many targets for {card.name}"
+        # …and CR 601.2c's **exact** count, the half ``cast_target_count_refusal``
+        # has asked of a spell since Planeshift and nothing asked of an
+        # ability: "Threshold — {W}{W}, {T}: Tap **two** target creatures"
+        # (Nomad Decoy) named at one creature was accepted, paid for, and
+        # tapped one. A printed "two" is two — "up to two" and "any number of"
+        # make fewer legal, and :func:`exact_target_count` answers None for
+        # them, for a roles list and for a divided one.
+        #
+        # Only a list that **names something** is counted. A bare activation
+        # is this engine's standing headless convention (the handler picks;
+        # ROADMAP has its parts), and counting it here would settle that
+        # question by a side door.
+        if isinstance(target_permanent_ids, list):
+            counted = activation_target_slot(ability)
+            required = (
+                exact_target_count(counted[0], counted[1], x_value)
+                if counted is not None else None
+            )
+            named_count = sum(1 for pid in target_permanent_ids if isinstance(pid, int))
+            if required is not None and named_count and named_count != required:
+                return (
+                    f"{card.name} needs {required} target"
+                    + ("s" if required != 1 else "")
+                    + f", not {named_count}"
+                )
         # CR 115.3's twin on this side, beside the count gate for the same
         # reason the count gate is here: an activation announces its targets
         # (CR 602.2b routes through CR 601.2c), so a repeat is refused before

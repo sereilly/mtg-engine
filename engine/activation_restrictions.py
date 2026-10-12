@@ -1422,6 +1422,81 @@ def _source_card_is_in_your_graveyard(
     )
 
 
+@lru_cache(maxsize=None)
+def _counted_pile_condition(phrase: str) -> "dict | None":
+    """"there are seven or more cards in your graveyard" as the lowered
+    condition payload that answers it, or None when this cannot read it.
+
+    The phrase is read by **the grammar's own condition reader**
+    (``grammar.condition_payload_for``), for the reason
+    :func:`_controlled_board_phrase` reads its noun phrase through the noun
+    parser: the identical words stand behind an "if" on a spell ("If there are
+    seven or more cards in your graveyard, draw a card") and behind "as long
+    as" on a static ability, and a regex of its own here would be a third
+    answer to how many cards that is. What comes back is the ``cards_in_zones``
+    payload those sentences lower to, so the number, the pile's owner and any
+    narrowing on the cards ("seven or more **creature** cards") are all
+    payload — threshold's seven is not special-cased anywhere.
+
+    Held to that one kind. The reader admits every condition the grammar knows,
+    and most of them ask about something an activation does not have — a
+    target, an event's player, a record a resolution wrote. A count of cards in
+    piles is a fact about the game as it stands, which is what CR 602.5 needs a
+    restriction to be.
+    """
+    from .grammar import condition_payload_for
+
+    payload = condition_payload_for(phrase)
+    if payload is None or payload.get("kind") != "cards_in_zones":
+        return None
+    return payload
+
+
+def _readable_counted_pile(match: "re.Match[str]") -> bool:
+    """Whether the pile count in a "there are … in your graveyard" clause is
+    one the condition evaluator can answer."""
+    return _counted_pile_condition(match.group("pile")) is not None
+
+
+def _counted_pile_holds(
+    game: "Game", controller_index: int, source, match: "re.Match[str]"
+) -> bool:
+    """"Activate only if there are seven or more cards in your graveyard."
+    (Threshold — Barbarian Ring, Nomad Decoy, Cabal Inquisitor.)
+
+    Answered by ``handlers/control_flow.evaluate_condition``, the one evaluator
+    every printed "if" goes through, so this clause and a spell's "If there are
+    seven or more cards in your graveyard, …" cannot count differently. "Your"
+    is the *activating* seat (CR 602.1a's controller of the ability), which is
+    what ``controller_index`` is here.
+
+    **Asked before any cost is paid**, because that is when CR 602.5 asks it:
+    "a player can't *begin* to activate an ability that's prohibited from being
+    activated", and costs are paid at the end of the process (CR 601.2h by way
+    of CR 602.2b). So a land sacrificed to pay for its own threshold ability is
+    not in the graveyard yet and does not count toward the seven, and a cost
+    that exiles cards from that graveyard (Cabal Inquisitor) may leave fewer
+    than seven behind without undoing an activation that was legal when it
+    began. Nothing re-asks the clause as the ability resolves.
+    """
+    payload = _counted_pile_condition(match.group("pile"))
+    if payload is None or not 0 <= controller_index < len(game.players):
+        return False
+    from .game_types import OracleExecutionContext
+    from .handlers.control_flow import evaluate_condition
+
+    activator = game.players[controller_index]
+    # ``target`` is the activator only because the context needs one: the one
+    # kind :func:`_counted_pile_condition` admits never reads it.
+    return evaluate_condition(
+        game,
+        OracleExecutionContext(
+            caster=activator, target=activator, card=getattr(source, "card", None),
+        ),
+        payload,
+    )
+
+
 #: Matched whole, and no pattern is a prefix of another -- held by
 #: `tests/rules/test_activation_restrictions.py`.
 ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
@@ -1871,6 +1946,32 @@ ACTIVATION_RESTRICTIONS: tuple[ActivationRestriction, ...] = (
         _no_counters_of_that_kind,
         "it already has one of those counters",
         reads_payload=True,
+    ),
+    # "Activate only if there are seven or more cards in your graveyard."
+    # (Odyssey's threshold abilities: the Barbarian Ring cycle, Nomad Decoy,
+    # Cabal Inquisitor's "…only as a sorcery **and only if** there are seven
+    # or more cards in your graveyard", which `_conjuncts` hands here as its
+    # second half.) The whole count is payload — the number, whose pile, and
+    # any narrowing on the cards — read by the grammar's own condition reader
+    # and validated by `payload_readable`, so a clause that reader cannot turn
+    # into a pile count ("in target player's graveyard", "in each graveyard")
+    # leaves the sentence unmatched and its card unsupported.
+    #
+    # Anchored on the closing "graveyard", which is what keeps it off the two
+    # counter rows above ("there are two or more hatchling counters on this
+    # artifact") and off every other "there are" a later set prints: a pile
+    # count somewhere else is a row somebody adds with a card that prints it.
+    ActivationRestriction(
+        re.compile(
+            r"^activate only if (?P<pile>there (?:is|are) .+ graveyards?)$"
+        ),
+        _counted_pile_holds,
+        "that clause's graveyard count is not met",
+        reads_payload=True,
+        payload_readable=_readable_counted_pile,
+        # The printed sentence, because the number is what the player needs:
+        # "only if there are seven or more cards in your graveyard".
+        denial_from_payload=lambda match: f"only if {match.group('pile')}",
     ),
     # "Activate only if three or more creature cards are above this card."
     # (Ashen Ghoul.) The one clause in the pool that asks about a graveyard's
