@@ -93,6 +93,21 @@ def main() -> int:
             f"{later} other than the first bullet"
         )
 
+    # CR 601.3: spells cast and lands played from a zone other than the hand —
+    # a flashback card out of a graveyard (CR 702.34a), a card an Elkin Bottle
+    # lent out of exile, the top of a library. Until ODY's wave 2 no seat made
+    # one, because the policy walked the hand alone, and a run over a set of
+    # flashback cards read exactly as clean as it does now: each was cast
+    # once, from hand. Only a pool that opens such a zone can move it, so it
+    # is shown when it did — and its absence over Odyssey is that coming back.
+    if report.casts_from_zones:
+        total = sum(report.casts_from_zones.values())
+        by_zone = ", ".join(
+            f"{count} from a {zone}"
+            for zone, count in sorted(report.casts_from_zones.items())
+        )
+        print(f"Casts and land plays from outside the hand: {total} ({by_zone})")
+
     # CR 602.1b: abilities activated on a permanent another seat controls
     # ("Any player may activate this ability"). Only a pool printing one can
     # move it, so it is shown when it did.
