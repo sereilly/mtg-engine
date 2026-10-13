@@ -17,12 +17,16 @@ So an AI in chair 0 exiled its own graveyard — its own flashback cards, its
 own cards toward threshold — and the same AI in chair 1 exiled its
 opponent's, off the same board. W1G6 reported the first road; the census here
 found the second and counts both: **eleven cards** on the tree before the
-change, every one of them wrong from chair 0 and right from chair 1.
+change, every one of them wrong from chair 0 and right from chair 1. (The
+four on the first road have since been made an *announcement* by a sibling
+group — CR 601.2c, named when the spell is cast — which takes the prompt off
+their road; the default it leaves behind, for the same sentence under a
+trigger, is the one stated here.)
 
 The sweep plays every supported card in both manifest roles whose program
 exiles a graveyard card somebody chooses, as the AI in each chair, and asks
 which pile a card left. Validated backwards: with the two defaults restored it
-names those eleven.
+names them.
 """
 from __future__ import annotations
 
@@ -40,6 +44,7 @@ from engine.ai_valuation import (GRAVEYARD_DENIAL_KINDS, _walk_program,
                                  graveyard_denial_order)
 from engine.card_loader import load_cards, manifest_set_paths
 from engine.faces import castable_faces
+from engine.game_types import OracleExecutionContext
 from engine.handlers import EFFECT_HANDLERS
 from engine.models import Permanent
 from engine.oracle import compile_card_oracle
@@ -225,12 +230,20 @@ def test_the_chair_does_not_change_what_a_card_does(rows):
     assert differ == []
 
 
-#: The cards the two old defaults aimed at the AI's own graveyard from chair 0.
-_WRONG_BEFORE = [
-    "Carrion Beetles", "Coffin Purge", "Cremate", "Crypt Creeper", "Decompose",
-    "Famished Ghoul", "Grave Robbers", "Headstone", "Rapid Decay",
+#: The cards a bare announcement of **one** targeted graveyard card sent to the
+#: AI's own pile from chair 0 — the handler's seat-order scan.
+_ONE_TARGET_WRONG_BEFORE = {
+    "Coffin Purge", "Cremate", "Crypt Creeper", "Grave Robbers", "Headstone",
     "Scavenging Ooze", "Steamclaw",
-]
+}
+#: …and the four whose pile was the prompt's default ("from a single
+#: graveyard"). On a tree where those cards are *announced* rather than picked
+#: at resolution, the prompt is no longer on their road and they are not in
+#: the wrong set either way — so the backwards test below holds them to
+#: "nothing outside the eleven", not to being there.
+_SINGLE_PILE_WRONG_BEFORE = {
+    "Carrion Beetles", "Decompose", "Famished Ghoul", "Rapid Decay",
+}
 
 
 def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
@@ -248,7 +261,9 @@ def test_the_sweep_names_the_defect_with_the_old_defaults_restored(monkeypatch):
 
     old = census()
 
-    assert sorted({r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}) == _WRONG_BEFORE
+    wrong = {r["card"] for r in old if "AI" in r["from"] and r["seat"] == 0}
+    assert _ONE_TARGET_WRONG_BEFORE <= wrong, sorted(_ONE_TARGET_WRONG_BEFORE - wrong)
+    assert wrong <= _ONE_TARGET_WRONG_BEFORE | _SINGLE_PILE_WRONG_BEFORE, sorted(wrong)
     assert [r["card"] for r in old if "AI" in r["from"] and r["seat"] == 1] == []
 
 
@@ -269,22 +284,40 @@ def test_the_pile_a_seat_denies_is_not_its_own_unless_there_is_no_other():
 
 def test_the_cards_their_owner_could_still_cast_go_first(set_pool):
     """Firebolt in a graveyard is a spell its owner still holds (CR 702.34a).
-    "Up to three" of five takes it and the first two; a pile with no flashback
-    card is taken in pile order, as it always was."""
+    The pick a seat nobody asks makes out of **another** seat's pile takes it
+    before the cards in front of it; a pile with no flashback card, and the
+    seat's own pile, are taken in pile order as they always were.
+
+    The prompt is armed by hand, so this is about the default and not about
+    which card's road reaches it."""
     ody = set_pool("ODY")
-    with_flashback = {"AI": [], "Opp": [
+    pile = [
         BY_NAME["Grizzly Bears"], BY_NAME["Hill Giant"], BY_NAME["Craw Wurm"],
         BY_NAME["Scryb Sprites"], ody["Firebolt"],
-    ]}
-    game = play(ody["Decompose"], ody["Decompose"], 0, yards=with_flashback)
+    ]
 
-    assert game is not None
-    assert sorted(card.name for card in game.players[1].exile) == [
-        "Firebolt", "Grizzly Bears", "Hill Giant",
-    ]
-    assert [card.name for card in game.players[1].graveyard] == [
-        "Craw Wurm", "Scryb Sprites",
-    ]
+    # Decompose's own description of what it may exile ("up to three …
+    # cards"), so the pick is offered exactly the cards the card names.
+    payload = compile_card_oracle(ody["Decompose"]).instructions[0].payload
+    assert payload.get("count") == 3 and payload.get("up_to")
+
+    def pick(owner_seat: int) -> list[str]:
+        yards = {"AI": [], "Opp": []}
+        yards["AI" if owner_seat == 0 else "Opp"] = list(pile)
+        game = rig(None, 0, yards=yards)
+        context = OracleExecutionContext(
+            caster=game.players[0], target=game.players[owner_seat],
+            card=ody["Decompose"],
+        )
+        game.arm_graveyard_exile_pick(0, owner_seat, dict(payload), context)
+        game.auto_resolve_pending_choices()
+        assert game.pending_choices == []
+        return sorted(card.name for card in game.players[owner_seat].exile)
+
+    assert pick(1) == ["Firebolt", "Grizzly Bears", "Hill Giant"]
+    assert pick(0) == ["Craw Wurm", "Grizzly Bears", "Hill Giant"]
+    game = rig(None, 0, yards={"AI": [], "Opp": list(pile)})
+    assert graveyard_denial_order(game, 1, [0, 1, 2, 3, 4]) == [4, 0, 1, 2, 3]
     assert graveyard_denial_order(game, 1, [0, 1]) == [0, 1]
 
 
