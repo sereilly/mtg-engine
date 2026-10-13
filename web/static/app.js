@@ -1194,6 +1194,15 @@ function shouldShowAiControls(state) {
   return values.length > 0 && values.every((t) => t === "ai");
 }
 
+// The game is decided. Nothing automatic is owed any more, and every action
+// but a rematch is refused ("game already finished") — so each automatic
+// sender below asks this first, and the prompt panel stands down for the
+// Victory/Defeat overlay.
+function gameIsOver(state = currentState) {
+  if (!state) return false;
+  return state.status === "finished" || (state.winner !== null && state.winner !== undefined);
+}
+
 function getAiStepStateKey(state) {
   if (!state) return "";
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
@@ -1253,6 +1262,7 @@ function shouldAutoPassUntilTurnEnd(state = currentState) {
 }
 
 async function maybeAutoPassUntilTurnEnd(state = currentState) {
+  if (gameIsOver(state)) return;
   if (!shouldAutoPassUntilTurnEnd(state) || autoPassTurnEndInFlight) {
     return;
   }
@@ -1391,6 +1401,7 @@ function releaseStackClickHold(message) {
 }
 
 async function maybeAutoPassPriority(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
@@ -1439,6 +1450,7 @@ async function maybeAutoPassPriority(state = currentState) {
 }
 
 async function maybeAutoPassDisabledPhase(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
@@ -1511,6 +1523,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
 // combat never deadlocks. Only fires when there are zero legal choices — when a
 // real choice exists, the player declares it themselves via the combat UI.
 async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (!state || seat === null) return;
   if (autoCombatDeclareInFlight) return;
@@ -1624,6 +1637,14 @@ async function waitForBattlefieldAnimations() {
 
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
+  if (gameIsOver(state)) return false;
+  // `waiting_on_prompt` is the server's own answer to "would this viewer's
+  // next action be refused because a decision is owed" (web/state_view.py,
+  // read off the choice registry). An `ai_step` is such an action: sent into
+  // the human's open discard it came back 400 and was painted over the prompt
+  // as a red "Auto AI step paused" hint, on every AI turn that armed one.
+  // Answering the prompt renders a new state, which asks again.
+  if (state.waiting_on_prompt) return false;
   // Hold the AI while a human player is disconnected: the game is waiting for
   // them to rejoin, and every remaining client is behind the blocking dialog.
   if (blockingDisconnectSeats(state).length > 0) return false;
@@ -10707,6 +10728,13 @@ function renderActivationPrompt() {
   // the game ends, so no prompt applies — the spectator banner (renderBoard)
   // owns the messaging.
   if (isFfaState(currentState) && me?.lost && currentState?.winner == null) {
+    panel.classList.add("hidden");
+    return;
+  }
+  // The game is decided: the Victory/Defeat overlay owns the screen, and the
+  // step's ordinary prompt ("End of Combat … Next Phase") used to stay live
+  // underneath it, offering an action the server refuses.
+  if (gameIsOver(currentState)) {
     panel.classList.add("hidden");
     return;
   }
