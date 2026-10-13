@@ -1944,6 +1944,15 @@ class SpellCastingMixin:
         # announcements and 601.2c's targets, and nothing between the two
         # positions spends anything, so a refusal here costs the caster exactly
         # what a refusal above it did.
+        if resolved_x_value is None and any(
+            cost.choose_number is not None for cost in cast_costs
+        ):
+            # "…, choose a number between 0 and 5." (Liquid Fire.) An unmade
+            # announcement is 0, made explicit *here* so that the gate below
+            # judges the number the resolution will spend and the stack object
+            # shows it — the gate reads a missing number as "none yet", which
+            # is the question the castable highlight asks it.
+            resolved_x_value = 0
         unpayable = self._unpayable_additional_cost(
             caster_index, card, cast_costs, spell_hand_index=hand_index,
             from_zone=from_zone, x_value=resolved_x_value,

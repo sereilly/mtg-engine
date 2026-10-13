@@ -124,6 +124,9 @@ def test_liquid_fire_with_no_number_announced_has_chosen_zero(set_pool):
     wurm = _put(game, 1, lea["Craw Wurm"])
 
     assert _cast(game, "Liquid Fire", wurm).supported
+    # …and the table is shown the number that was (not) chosen.
+    assert game.stack[-1].x_value == 0
+    assert "Caster chose 0 for Liquid Fire" in game.log
     resolve_stack(game)
 
     assert wurm.damage_marked == 0
@@ -333,6 +336,35 @@ def test_an_invented_range_with_a_floor_refuses_zero_and_reports_the_floor(set_p
     }
     spec = _table(set_pool, [ember]).cast_target_spec(0, ember)
     assert (spec["announces_x"], spec["min_x"], spec["max_x"]) == (True, 1, 3)
+
+
+def test_a_reader_with_no_number_yet_is_not_told_the_cost_cannot_be_paid(set_pool):
+    """The castable highlight asks the cost gate before anything is announced
+    (``web/state_view``: "an announced X reads as 0 here"). For a range that
+    excludes 0 that reading would say "uncastable" of a card that is castable
+    at three numbers — so no number is no refusal, and only the cast, which
+    settles an unmade announcement to 0, refuses it."""
+    ember = _invented(
+        "W2G7 Ember",
+        "As an additional cost to cast this spell, choose a number between 1 "
+        "and 3.\nW2G7 Ember deals X damage to any target, where X is the "
+        "chosen number.",
+    )
+    game = _table(set_pool, [ember])
+    costs = additional_costs(ember)
+
+    assert game._unpayable_additional_cost(
+        0, ember, costs, spell_hand_index=0, from_zone="hand",
+    ) is None
+    for chosen, payable in ((0, False), (1, True), (3, True), (4, False)):
+        refusal = game._unpayable_additional_cost(
+            0, ember, costs, spell_hand_index=0, from_zone="hand", x_value=chosen,
+        )
+        assert (refusal is None) == payable, (chosen, refusal)
+
+    bare = game.queue_from_hand(0, ember.name, target_player_index=1)
+    assert not bare.supported
+    assert "0 is not a number between 1 and 3" in bare.details
 
 
 def test_a_printed_number_minus_x_is_floored_at_zero(set_pool):

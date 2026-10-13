@@ -336,6 +336,47 @@ def test_the_damage_is_the_creatures_own(set_pool):
     assert any("gained 4 life from lifelink" in line for line in game.log)
 
 
+def test_a_stolen_lifelinker_is_the_thiefs_source_when_it_deals_the_four(set_pool):
+    """One seat for every reader of the dealer's controller. The creature is
+    destroyed while the thief controls it, so the 4 is dealt to the thief —
+    and the lifelink is the thief's too, not the seat the creature entered
+    under, which is who gained before the departed source's seat was read off
+    the same stamp."""
+    linker = _invented(
+        "W2G7 Chorister", "Lifelink", keywords=("Lifelink",), colors=("W",),
+    )
+    game, _squad, chorister = _lit(set_pool, card=linker)
+    change_control(chorister, 0, source="w2g7-theft")
+    game._sync_control()
+
+    resolve_stack(game)
+
+    assert "W2G7 Chorister dealt 4 damage to Sapper" in game.log
+    assert any("Sapper gained 4 life from lifelink" in line for line in game.log)
+    assert [player.life for player in game.players] == [20, 20]
+
+
+def test_a_departed_sources_seat_is_the_seat_that_last_controlled_it(set_pool):
+    """``damage_source_seat`` — "a source **you** control" — for a permanent
+    that has left: the seat that controlled it as it left (CR 608.2h), which
+    differs from the seat it entered under exactly when it had been stolen."""
+    from engine.damage_events import damage_source_seat
+
+    lea = set_pool("LEA")
+    game = _table(set_pool)
+    stolen = _put(game, 1, lea["Grizzly Bears"])
+    assert damage_source_seat(game, stolen) == 1
+    change_control(stolen, 0, source="w2g7-theft")
+    game._sync_control()
+    assert damage_source_seat(game, stolen) == 0
+    _bury(game, stolen)
+    assert damage_source_seat(game, stolen) == 0
+
+    kept = _put(game, 1, lea["Grizzly Bears"])
+    _bury(game, kept)
+    assert damage_source_seat(game, kept) == 1
+
+
 def test_a_countered_trigger_triggers_again_while_the_state_holds(set_pool):
     """CR 603.8: "doesn't trigger again until the ability has resolved, has
     been countered, or has otherwise left the stack. Then, if … the game state

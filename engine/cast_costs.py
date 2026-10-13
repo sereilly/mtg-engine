@@ -479,15 +479,20 @@ class AdditionalCost:
 
         One reader for the gate and the picker's bounds, because they are one
         question: the range is the card's, and a picker offering what the gate
-        refuses is a cast announced and then declined. An announcement nobody
-        made reads as 0, which is what an unmade CR 107.3a announcement is
-        everywhere in this engine — legal when the range admits 0 and refused
-        when it does not, exactly as "X can't be 0" refuses it one table over.
+        refuses is a cast announced and then declined.
+
+        ``None`` is **no number yet**, and refuses nothing: the castable
+        highlight and the offer pricer ask the cost gate before anything is
+        announced, and "is there a number this card would take?" is always
+        yes. The cast itself never asks with None — it settles an unmade
+        announcement to 0 first, which is what one reads as everywhere in this
+        engine, so a range that excludes 0 refuses a cast that named nothing
+        exactly as "X can't be 0" does one table over.
         """
-        if self.choose_number is None:
+        if self.choose_number is None or x_value is None:
             return None
         low, high = self.choose_number
-        chosen = int(x_value or 0)
+        chosen = int(x_value)
         if low <= chosen <= high:
             return None
         return f"{chosen} is not a number between {low} and {high}"

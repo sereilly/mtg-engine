@@ -2463,6 +2463,54 @@ def harms_its_own_source(instruction: OracleInstruction | None) -> bool:
     )
 
 
+def named_counter_marks_for_harm(
+    card: CardDefinition, instruction: OracleInstruction | None
+) -> bool:
+    """Whether *instruction* puts a named counter on its target that **this
+    same card's** state trigger then punishes.
+
+    "{T}: Put a fuse counter on target creature." reads as a gift by its
+    category — ``counters`` is an own-side category, because a +1/+1 counter is
+    one — and the card's third line says what a fuse counter is for: "Whenever
+    a creature has four or more fuse counters on it, … destroy it. That
+    creature deals 4 damage to its controller." (Bomb Squad.) A named counter
+    means nothing by itself (CR 122.1); what it means is whatever the card's
+    other lines say about it, so this reads them: a state trigger watching
+    other permanents for the same kind of counter, whose effect has a step the
+    engine already files as hostile.
+
+    Without it an AI seat holding Bomb Squad lit its own creature, blew it up,
+    took the 4, and then started on Bomb Squad itself — every simulated game
+    that dealt the card.
+    """
+    if instruction is None:
+        return False
+    placed = {
+        str((step.payload or {}).get("counter"))
+        for step in _effect_steps(instruction)
+        if step.kind == "add_named_counter_to_target"
+        and isinstance((step.payload or {}).get("targets"), dict)
+    }
+    if not placed:
+        return False
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+    from .state_triggers import WATCHED_COUNTER_THRESHOLD
+
+    for trig in compile_card_oracle(card).triggered_abilities:
+        if (
+            trig.condition.kind != WATCHED_COUNTER_THRESHOLD
+            or trig.instruction is None
+            or str(trig.condition.payload.get("counter_kind")) not in placed
+        ):
+            continue
+        if any(
+            INSTRUCTION_CATEGORIES.get(step.kind) in _OPPONENT_CATEGORIES
+            for step in _effect_steps(trig.instruction)
+        ):
+            return True
+    return False
+
+
 def source_toughness_change(instruction: OracleInstruction | None) -> int | None:
     """The toughness change an effect makes to its own source, when that is the
     whole of the effect — every step a ``pump_self`` with printed numbers — or
@@ -2862,6 +2910,7 @@ __all__ = [
     "foreign_activation_use",
     "hand_entry_steps",
     "harms_its_own_source",
+    "named_counter_marks_for_harm",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offer_trade",
