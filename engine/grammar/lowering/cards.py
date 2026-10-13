@@ -8,7 +8,8 @@ discard family with its two fused draw/discard shapes, and a hand put back onto
 a library — in `hand.py`.
 """
 
-from ...oracle_types import (DISCARDED_BY_SEAT, MILLED_THIS_WAY,
+from ...oracle_types import (COUNTERED_SPELL_CONTROLLER, DISCARDED_BY_SEAT,
+                             LAST_TARGET_CONTROLLER, MILLED_THIS_WAY,
                              OTHER_THAN_EVENT_SUBJECT_PLAYER,
                              PER_OBJECT_SEAT_RECORDS,
                              X_FROM_COUNT, X_FROM_COUNT_PER_RECIPIENT,
@@ -33,8 +34,11 @@ from ._common import (
 from ._events import (
     _DAMAGED_PLAYER_EVENTS,
     _DEFENDING_PLAYER_EVENTS,
+    _EVENT_SUBJECT_CONTROLLERS,
     _EVENT_SUBJECT_PLAYERS,
+    EVENT_SUBJECT_CONTROLLER,
     EVENT_SUBJECT_PLAYER,
+    LOOP_BOUND_OBJECT,
     _back_reference_payload,
 )
 
@@ -162,10 +166,37 @@ def _lower_draw(
             "no draw handler offers a ceiling the drawer chooses under",
             node=node,
         )
-    drawer_seat = (
-        PER_OBJECT_SEAT_RECORDS["controller"]
-        if node.player.kind == "controller" else None
-    )
+    # "**Its controller** draws a card." Which object "its" names is decided by
+    # what stands in front of the sentence, and the seat is read from the
+    # record *that* froze — never from one nothing wrote. This used to answer
+    # the per-object loop record whatever came before, which is right inside
+    # "for each creature exiled this way, its controller draws a card"
+    # (Martyr's Cry) and nowhere else: "Whenever a creature with power 4 or
+    # greater enters, its controller draws a card" (Kavu Lair) compiled
+    # supported, read a map only a sweep fills, logged "nothing recorded whose
+    # permanent that was" and drew nobody a card — a shipped enchantment that
+    # had never done anything. Asked in the order the life sentences ask the
+    # same word (``life._lower_gain_life``): the loop the sentence is inside,
+    # then the spell or the permanent an earlier step of this effect chose,
+    # then the object the firing event was about (CR 603.10); with none of
+    # them the possessive names nothing and the line refuses.
+    drawer_seat = None
+    controller_record = None
+    if node.player.kind == "controller":
+        if LOOP_BOUND_OBJECT in produced:
+            drawer_seat = PER_OBJECT_SEAT_RECORDS["controller"]
+        elif COUNTERED_SPELL_CONTROLLER in produced:
+            controller_record = COUNTERED_SPELL_CONTROLLER
+        elif LAST_TARGET_CONTROLLER in produced:
+            controller_record = LAST_TARGET_CONTROLLER
+        elif event in _EVENT_SUBJECT_CONTROLLERS:
+            controller_record = EVENT_SUBJECT_CONTROLLER
+        else:
+            raise LoweringError(
+                '"its controller" names the object an earlier step or the '
+                "firing event chose, and nothing here recorded one",
+                node=node,
+            )
     kind = (
         "draw_controller_cards" if node.player.kind == "you" else "draw_target_cards"
     )
@@ -353,6 +384,8 @@ def _lower_draw(
         payload = {"amount": _amount_payload(node.count)}
     if drawer_seat is not None:
         payload["drawer_seat"] = drawer_seat
+    if controller_record is not None:
+        payload["drawer_seat_record"] = controller_record
     if looped_seats is not None:
         payload["recipient"] = looped_seats
         # "**Each player** draws a card **for each creature card in their

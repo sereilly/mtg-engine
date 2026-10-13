@@ -523,7 +523,12 @@ def take_permanent_special_action(
             victim = game.default_sacrifice_pick(candidates)
     plan = _payment_plan(game, seat, offer.mana) if offer.mana else None
     if plan:
-        game._spend_payment_plan(game.players[seat], plan)
+        # The planned lands are tapped for mana through the one payer
+        # (``Game._pay_planned_cost``, CR 605.3a).
+        if not game._pay_planned_cost(
+            game.players[seat], lambda: _payment_plan(game, seat, offer.mana)
+        ):
+            return "that cost can't be paid"
     if victim is not None:
         game.sacrifice_permanent(victim)
         game.log.append(

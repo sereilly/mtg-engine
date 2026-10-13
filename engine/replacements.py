@@ -4422,10 +4422,23 @@ def _mill_cards(game, player, count: int) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _applies_land_mana_substitution(game, payload: dict) -> bool:
-    from .land_mana_swaps import swapped_symbol
+def _land_mana_tapper(game, payload: dict) -> "int | None":
+    """The seat that tapped the event's land for mana — who the production
+    belongs to when the land itself has left (``swapped_production``)."""
+    player = payload.get("player")
+    return next(
+        (index for index, found in enumerate(game.players) if found is player),
+        None,
+    )
 
-    return swapped_symbol(game, payload["land"]) is not None
+
+def _applies_land_mana_substitution(game, payload: dict) -> bool:
+    from .land_mana_swaps import swapped_production
+
+    found = swapped_production(
+        game, payload["land"], tapper=_land_mana_tapper(game, payload),
+    )
+    return found is not None and found.produced is not None
 
 
 @replacement_effect(
@@ -4464,7 +4477,8 @@ def _substitute_land_mana(game, payload: dict) -> ReplacementOutcome | None:
     # tapper for this one event, so the colour the seam was asked for travels
     # with the event and answers it. Every fixed swap ignores it.
     substitution = swapped_production(
-        game, payload["land"], requested=payload.get("requested")
+        game, payload["land"], requested=payload.get("requested"),
+        tapper=_land_mana_tapper(game, payload),
     )
     if substitution is None:
         return None

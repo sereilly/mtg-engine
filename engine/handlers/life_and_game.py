@@ -4,7 +4,8 @@ import dataclasses
 from typing import TYPE_CHECKING
 
 from ._common import (bound_permanent, count_from_payload,
-                      per_recipient_amount, resolve_amount)
+                      per_recipient_amount, resolve_amount,
+                      stack_target_controller_seat)
 from ..exiled_records import source_object
 from ..life_prohibitions import life_gain_banned
 from ..named_counters import counters_on
@@ -268,6 +269,19 @@ def target_loses_life(game: Game, instruction: OracleInstruction, context: Oracl
         seat = (context.trigger_context or {}).get("trigger_defending_player_index")
         if not isinstance(seat, int) or not (0 <= seat < len(game.players)):
             game.log.append(f"{card.name}: no recorded defending player, no life lost")
+            return True, "resolved"
+        victims = [game.players[seat]]
+    elif recipient == COUNTERED_SPELL_CONTROLLER:
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # The seat the counter step recorded when it *chose* its spell — not
+        # when it succeeded, so a spell that can't be countered still costs
+        # its controller the life (CR 608.2: as much as possible; the sentence
+        # is not an "if you do"). No record means no spell was chosen, and
+        # nobody loses life: an effect aimed at a player nothing named is one
+        # that should not happen rather than one that lands on a default.
+        seat = stack_target_controller_seat(game, context, recorded_only=True)
+        if seat is None:
+            game.log.append(f"{card.name}: no countered spell, no life lost")
             return True, "resolved"
         victims = [game.players[seat]]
     elif recipient == "last_target_controller":

@@ -553,11 +553,16 @@ class StackResolutionMixin:
         which is exactly the shape of bug the rule's own wording invites: it is
         the *same* condition, asked at two moments.
         """
-        target_idx = (
-            item.target_player_index
-            if item.target_player_index is not None
-            else self._default_opposing_seat(item.caster_index)
-        )
+        # An ability whose every target is a spell on the stack is about that
+        # spell's controller, whatever seat rode beside it — see
+        # ``Game.stack_target_seat``.
+        target_idx = self.stack_target_seat(item)
+        if target_idx is None:
+            target_idx = (
+                item.target_player_index
+                if item.target_player_index is not None
+                else self._default_opposing_seat(item.caster_index)
+            )
         return OracleExecutionContext(
             caster=self.players[item.caster_index],
             target=self.players[target_idx],
@@ -1718,7 +1723,9 @@ class StackResolutionMixin:
         # cast, so it skips the cast/graveyard bookkeeping in _resolve_card.
         if item.is_copy and item.card.primary_type in ("instant", "sorcery"):
             caster = self.players[item.caster_index]
-            target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
+            target_idx = self.stack_target_seat(item)
+            if target_idx is None:
+                target_idx = item.target_player_index if item.target_player_index is not None else (1 - item.caster_index)
             target = self.players[target_idx] if 0 <= target_idx < len(self.players) else caster
             self._apply_spell_text(
                 caster,
@@ -1737,11 +1744,22 @@ class StackResolutionMixin:
             return
 
         classification = classify_card(item.card)
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # An instant or sorcery whose every target is a spell on the stack is
+        # about that spell's controller — the seat the announcement already
+        # names (``Game.stack_target_seat``), read here rather than written
+        # onto the item so a target changed in response (CR 115.7) is followed.
+        # A permanent spell is left alone: its seat field is an Aura's board or
+        # an entry trigger's, and that trigger asks for itself
+        # (``_ability_execution_context``) — so the seat rides beside the
+        # item's own and only the instant-and-sorcery arm of ``_resolve_card``
+        # reads it.
         self._resolve_card(
             caster_index=item.caster_index,
             card=item.card,
             classification=classification,
             target_player_index=item.target_player_index,
+            stack_target_seat=self.stack_target_seat(item),
             target_permanent_index=item.target_permanent_index,
             target_permanent_id=item.target_permanent_id,
             x_value=item.x_value,
@@ -1800,6 +1818,11 @@ class StackResolutionMixin:
         # them apart: a paid buyback contends with the graveyard rider
         # (CR 616.1) and loses to this (``_bin_spell_card``).
         leaves_to_exile: bool = False,
+        # The controller of the spell(s) this one targeted, where it targeted
+        # nothing else (``Game.stack_target_seat``): the player an instant or
+        # sorcery is about, ahead of whatever seat rode in
+        # ``target_player_index``. None for every other spell.
+        stack_target_seat: int | None = None,
     ) -> None:
         caster = self.players[caster_index]
         owner_seat = caster_index if owner_index is None else owner_index
@@ -2087,7 +2110,8 @@ class StackResolutionMixin:
 
         # Sorceries and instants resolve immediately in this basic engine.
         target_idx = (
-            target_player_index if target_player_index is not None
+            stack_target_seat if stack_target_seat is not None
+            else target_player_index if target_player_index is not None
             else self._spell_default_seat(caster_index)
         )
         target = self.players[target_idx]

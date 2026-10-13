@@ -3089,6 +3089,53 @@ class GameHelpersMixin:
         }
         return seats.pop() if len(seats) == 1 else None
 
+    def stack_target_seat(self, item) -> int | None:
+        """The seat an announcement that chose **only objects on the stack**
+        already names: their controller (CR 112.2, CR 113.8), or None where
+        the object chose anything else, nothing, or two objects two players
+        control.
+
+        :meth:`announced_target_seat`'s twin for the one kind of target that
+        has no battlefield. A permanent's id names whose board it is on; a
+        spell names the player who cast it, and that is the only player
+        "Counter target spell. **Its controller** loses 3 life" can be about.
+        Nothing said so. A stack target was recorded by identity
+        (``StackItem.target_stack_item``) and the *seat* field beside it kept
+        whatever it was sent — nothing from a headless caller, the opposing
+        seat from the web route, which rides a default on every cast — so
+        every resolution read "the player this is about" as the caster's
+        opponent. Right whenever the spell being countered was an opponent's,
+        which is nearly always, and that is how it survived: countering your
+        own spell aimed its rider at the other player, and at three seats the
+        rider landed on ``1 - caster`` whoever had cast the spell.
+
+        Read off :func:`engine.stack_targets.chosen_targets`, never off
+        ``target_player_index is None``: that field cannot tell a player the
+        caster chose from a default that rode along, and the spec is what says
+        which channel was a target. A spell that names a spell *and* a
+        permanent or a player (Suffocating Blast's roles) answers None and
+        keeps the seat its other target settled.
+
+        The controller, not the owner (CR 108.3 is the owner; CR 112.2 makes
+        the player who cast a spell its controller): a spell cast out of
+        another player's pile is controlled by the seat that cast it.
+        """
+        from ..stack_targets import chosen_targets
+
+        chosen = chosen_targets(self, item)
+        if not chosen:
+            return None
+        seats: set[int] = set()
+        for target in chosen:
+            named = target.stack_item if target.kind == "stack" else None
+            if named is None:
+                return None
+            seats.add(named.caster_index)
+        if len(seats) != 1:
+            return None
+        seat = seats.pop()
+        return seat if 0 <= seat < len(self.players) else None
+
     def _settle_announced_target_seat(self, item) -> None:
         """Write :meth:`announced_target_seat`'s answer onto *item*.
 

@@ -2121,10 +2121,15 @@ class PendingChoicesMixin:
             plan = self._optional_pay_plan(payer, {"cost": total})
             if plan is None:
                 return False
+            # Paid from the board the plan was made over — before anything is
+            # untapped, so a permanent this answer untaps is never what pays
+            # for its own untapping.
+            if not self._pay_planned_cost(
+                payer, lambda: self._optional_pay_plan(payer, {"cost": total})
+            ):
+                return False
         for perm in chosen:
             self.become_untapped(perm)
-        if plan is not None:
-            self._spend_payment_plan(payer, plan)
         names = ", ".join(perm.card.name for perm in chosen) if chosen else "nothing"
         self.log.append(
             f"{self.players[choice.player_index].name} untapped {names} "
@@ -3770,7 +3775,7 @@ class PendingChoicesMixin:
         silently repaired answer would let a client ask for eight Squirrels off
         four lands and be told it worked.
 
-        The payment goes through ``_spend_payment_plan``, the one writer, so the
+        The payment goes through ``_pay_planned_cost``, the one writer, so the
         pool and the lands are charged together.
         """
         try:
@@ -3792,8 +3797,16 @@ class PendingChoicesMixin:
         )
         if value and plan is None:
             return False
-        if plan is not None:
-            self._spend_payment_plan(player, plan)
+        if plan is not None and not self._pay_planned_cost(
+            player,
+            lambda: plan_payment(
+                player.mana_pool,
+                untapped_mana_lands(self.controlled_by(seat)),
+                generic_cost(value),
+                produces=self._land_payment_colors, payer=player,
+            ),
+        ):
+            return False
         self.log.append(
             f"{player.name} paid {value} mana" if value
             else f"{player.name} paid no mana"
@@ -5196,10 +5209,19 @@ class PendingChoicesMixin:
         chosen = self._counter_payment_plan_any(controller, data) if pay else None
         cost, plan = chosen if chosen is not None else (cost, None)
         if plan is not None:
-            for symbol, spent in plan.from_pool.items():
-                controller.mana_pool[symbol] = controller.mana_pool.get(symbol, 0) - spent
-            for land in plan.tapped:
-                self.become_tapped(land)
+            # The planned lands are tapped **for mana** (CR 605.3a), through
+            # the one payer every effect-collected cost shares: this is the
+            # payment Price of Glory is printed for, and it used to tap the
+            # lands without anything hearing that they had made mana. A price
+            # that cannot be met after all is a price not paid, and the spell
+            # is countered below as if it had been declined.
+            paid_cost = cost
+            if not self._pay_planned_cost(
+                controller,
+                lambda: self._counter_payment_plan(controller, paid_cost),
+            ):
+                plan = None
+        if plan is not None:
             # "…and 1 life" (Mundungu). Charged after the mana and before the
             # object is left alone, because the two are one payment: the plan
             # above is only returned when both halves can be met, so nothing
@@ -8136,19 +8158,105 @@ class PendingChoicesMixin:
                 return plan
         return None
 
-    def _spend_payment_plan(self, player, plan) -> None:
-        """Carry out a :func:`plan_payment` answer: spend the floating mana it
-        names and tap the lands it names.
+    def _pay_planned_cost(self, player, planner, *, spend=None) -> bool:
+        """Pay a cost an effect collects, and say whether it was paid.
 
-        One writer, because a plan is *how* a cost is paid and a second
-        spelling of it is a second answer — the untap toll (Mudslide) collects
-        the same plan the optional-pay prompt does, and a payment that tapped
-        the lands but forgot the pool would be a cost half charged.
+        *planner* answers ``mana_payment.plan_payment`` for the cost **against
+        the board as it stands** each time it is called (None: cannot be
+        paid). One writer for every such cost — an optional "you may pay", a
+        counterspell's "unless its controller pays", an upkeep price, an
+        attack or block toll, a special action — because a plan is *how* a
+        cost is paid and a second spelling of it is a second answer.
+
+        **A planned land is tapped for mana, not merely tapped.** CR 605.3a:
+        a player may activate a mana ability "whenever a rule or effect asks
+        for a mana payment, even if it's in the middle of … resolving a
+        spell", and that is the only thing this payment can be — the payer
+        has no priority window, so the engine activates the mana abilities on
+        their behalf. It used to stop short of doing so: the planned lands
+        were tapped with ``become_tapped`` and the cost was deemed paid. No
+        mana ability ran, so nothing that follows from one happened either —
+        a painland dealt no damage, an Ancient Tomb neither hurt nor made its
+        second mana, a depletion land took no counter, and no "whenever a
+        player taps a land for mana" heard a thing: an opponent paying a
+        Force Spike on your turn kept the land Price of Glory should have
+        destroyed, and Manabarbs, Mana Flare, Storm Cauldron and Wild Growth
+        were silent for every cost an effect charged.
+
+        So each planned land goes through ``tap_land_for_mana`` — the tap
+        seam, whose event is the one every other road announces — **one at a
+        time, and the plan is asked again after each**. Asking again is what
+        makes the mana the tap really made count: under Mana Flare one land
+        makes two and the second planned land stays untapped; an Ancient
+        Tomb's second mana pays the next generic; and a tap a watcher answered
+        by changing the board (Mana Web tapping the rest) is planned around
+        rather than assumed. When the pool alone covers the cost it is spent,
+        through *spend* where a caller draws on more than the open pool (the
+        upkeep's restricted bucket).
+
+        False when the cost could not be met — up front, or part-way, in
+        which case the lands already tapped stay tapped and what they made
+        stays in the pool, exactly as for a player who tapped and then could
+        not pay. Callers treat it as the cost not having been paid.
         """
-        for symbol, amount in plan.from_pool.items():
-            player.mana_pool[symbol] = int(player.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        seat = next(
+            (index for index, found in enumerate(self.players) if found is player),
+            None,
+        )
+        if seat is None:
+            return False
+        # Each pass taps one land or finishes, so the bound is the board.
+        for _ in range(2 + sum(1 for _perm in self.controlled_by(seat))):
+            plan = planner()
+            if plan is None:
+                return False
+            if not plan.tapped:
+                if spend is not None:
+                    spend(plan)
+                else:
+                    for symbol, amount in plan.from_pool.items():
+                        player.mana_pool[symbol] = (
+                            int(player.mana_pool.get(symbol, 0)) - amount
+                        )
+                return True
+            land = plan.tapped[0]
+            wanted = plan.tapped_for[0] if plan.tapped_for else None
+            color = self._planned_tap_color(land, wanted)
+            if not self.tap_land_for_mana(
+                seat, land.card.name, color,
+                permanent_id=land.permanent_id,
+                # Which of the land's mana abilities makes that colour
+                # (CR 605): a painland's first is "{T}: Add {C}".
+                ability_index=self.land_mana_ability_for(land, color),
+            ):
+                # The seam refused a land the planner counted (a summoning-
+                # sick land creature, a land under Interdict). Refused is not
+                # paid: tapping it anyway is the free mana this used to make.
+                return False
+        return False
+
+    def _planned_tap_color(self, land, wanted: "str | None") -> str:
+        """The symbol a payment plan asks *land* for.
+
+        The pip the plan matched it to, when the land makes that symbol; else
+        the first symbol it makes — a land the generic part took, or one whose
+        mana pays the pip only *as* another colour (CR 106.6: white as any
+        colour under Celestial Dawn, where no land "produces" the pip).
+        """
+        from ...ai_valuation import mana_ability_symbols
+
+        offered = [str(symbol).upper() for symbol in self._land_payment_colors(land)]
+        if wanted is not None and str(wanted).upper() in offered:
+            return str(wanted).upper()
+        # Nothing in particular is wanted of it, so it is asked for what its
+        # **default** ability makes: a painland pays a generic pip with the
+        # {C} that costs it nothing, never with the colour that hurts.
+        free, _priced = self._land_mana_abilities(land)
+        default = mana_ability_symbols(free) if free is not None else frozenset()
+        for symbol in offered:
+            if symbol in default:
+                return symbol
+        return offered[0] if offered else "C"
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
         """CR 601.2h, for an optional cost: whether it *could* be paid.
@@ -8288,8 +8396,12 @@ class PendingChoicesMixin:
                     f"{player.name} paid {alternative} life "
                     f"({entry.get('card_name', '')})"
                 )
-            else:
-                self._spend_payment_plan(player, plan)
+            elif not self._pay_planned_cost(
+                player,
+                lambda: self._optional_pay_plan(player, entry, option=option),
+            ):
+                # Could not be met after all (CR 601.2h): it buys nothing.
+                return
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.

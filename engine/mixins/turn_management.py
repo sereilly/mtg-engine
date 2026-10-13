@@ -99,6 +99,29 @@ def _is_free_beyond_tapping(cost) -> bool:
     )
 
 
+def _mana_made_since(player, before: dict) -> dict[str, int]:
+    """What *player*'s pool gained since *before* (a
+    ``land_mana_swaps.production_snapshot``), per symbol and summed across
+    every bucket — the open pool and each CR 106.6 "spend this mana only…"
+    bucket beside it, because restricted mana is still mana a land produced.
+
+    The answer to two questions the tap-for-mana event asks of a production it
+    did not perform itself: *did this make mana at all* (CR 106.12a) and
+    *which type* (Mana Flare's "any type that land produced"). Insertion order
+    is the pool's own symbol order, so "the first type it made" is stable.
+    """
+    made: dict[str, int] = {}
+    buckets = [(None, player.mana_pool)]
+    buckets.extend((getattr(player, "restricted_mana", None) or {}).items())
+    for key, bucket in buckets:
+        prior = before.get(key, {})
+        for symbol, amount in bucket.items():
+            gained = int(amount or 0) - int(prior.get(symbol, 0) or 0)
+            if gained > 0:
+                made[symbol] = made.get(symbol, 0) + gained
+    return made
+
+
 def is_tap_alone_mana_ability(ability) -> bool:
     """Whether *ability* is one the tap-for-mana seam may run: a supported mana
     ability (CR 605.1a; an ``if_then`` "…add {C}{C} instead" too) whose whole
@@ -552,6 +575,56 @@ class TurnManagementMixin:
         chosen = usable[ability_index]
         return chosen.instruction if is_tap_alone_mana_ability(chosen) else None
 
+    def land_mana_ability_for(self, land, color: str) -> int | None:
+        """Which of *land*'s mana abilities makes *color* — an index for
+        ``tap_land_for_mana(ability_index=…)`` — or None for the seam's default.
+
+        CR 605: each mana ability is its own ability, and the tap seam runs the
+        land's **first** tap-alone one unless told which. For a painland that
+        is "{T}: Add {C}", so a payer that counted a Karplusan Forest or an
+        Underground River as a coloured mana and tapped it by colour alone got
+        {C}. None whenever the default already makes the colour (a basic, a
+        dual, City of Brass, a land under a swap the seam applies to any
+        ability), so every land that taps correctly by default taps exactly
+        as it did.
+
+        On the game rather than in the AI's policy, where it was written
+        (``ai_policy.planned_tap_ability`` asks here now): the engine's own
+        payer — a cost an effect collects, ``_pay_planned_cost`` — taps lands
+        for a colour a plan counted on exactly as an AI seat does, and two
+        readers choosing an ability two ways is a land that pays for one
+        player and not for the other.
+        """
+        from ..ai_valuation import mana_ability_symbols
+        from ..land_mana_swaps import swapped_production
+
+        free, _priced = self._land_mana_abilities(land)
+        if free is None or color in mana_ability_symbols(free):
+            return None
+        # **A land under a swap makes the swapped symbol by any of its
+        # abilities** ("If a land is tapped for mana, it produces {B}
+        # instead", Infernal Darkness), so the default one answers — and it is
+        # the one that costs nothing more. Asked for the {B} the swap makes,
+        # an Underground River was sent to its second ability because that is
+        # the one whose *printed* symbols include {B}: the plan took a point
+        # of damage to pay a generic pip its free {C} would have paid. The
+        # one exception is a colours-only swap ("…instead of any other
+        # **color**", Hall of Gemstone) over a default that makes only {C},
+        # which the swap leaves alone.
+        swap = swapped_production(self, land)
+        if swap is not None and swap.produced is not None and not (
+            swap.colors_only and mana_ability_symbols(free) <= {"C"}
+        ):
+            return None
+        for index, ability in enumerate(self.usable_abilities_of(land)):
+            if not is_tap_alone_mana_ability(ability):
+                continue
+            if color in mana_ability_symbols(ability.instruction) and (
+                self.land_mana_tap_refusal(land, index) is None
+            ):
+                return index
+        return None
+
     def land_mana_tap_refusal(self, land, ability_index: int | None = None) -> str | None:
         """Why tapping *land* for mana through :meth:`tap_land_for_mana` would
         be refused right now — a short reason key — or None when it would make
@@ -737,6 +810,144 @@ class TurnManagementMixin:
         # Both are ordinary `permanent_becomes_tapped` triggers now, so they go
         # on the stack (CR 603.3) from wherever the tap happens.
         self.become_tapped(land)
+
+        def produce() -> str:
+            # **The land's own compiled mana ability, when it has one.** This used
+            # to add exactly one symbol chosen from `produced_mana`, which is right
+            # for every land in the 1993-94 base sets and for the dual cycles — all
+            # of them produce one mana — and silently wrong for the first land that
+            # does not. Antiquities brought four: Mishra's Workshop prints
+            # {C}{C}{C} and paid one, and the Urza's cycle's assembly could not be
+            # read at all because the amount is behind a condition.
+            #
+            # `produced_mana` is Scryfall's summary of *which symbols* a land can
+            # make; it says nothing about how many or under what condition. The
+            # compiled ability says both, so it is what runs, and the summary is
+            # the fallback for a basic whose whole ability line is CR 305.6
+            # reminder text and compiles to nothing.
+            # "One mana of any type **that land produced**" (Mana Flare) reads this
+            # at the bottom of the method, and the compiled-ability branch below
+            # writes into the pool without ever naming a symbol — so it was left
+            # unbound there, and a Mana Flare over any land whose mana ability
+            # compiles (every dual, every filter land) raised `UnboundLocalError`
+            # instead of adding mana. Seeded with the colour the seat asked for,
+            # which is the answer for a land that offers a choice and the closest
+            # honest one for a land that does not.
+            mana_symbol = chosen_color
+            if mana_ability is not None:
+                instruction = mana_ability
+                # The colour arrives the way the activation path delivers it,
+                # so "tap Badlands for {R}" keeps meaning what it did; the
+                # handler ignores it unless the printed clause offers a choice.
+                #
+                # **A colour, or nothing.** The request is a mana *symbol*, and
+                # {C} is one a land may be asked for — it is what
+                # ``_land_payment_colors`` answers for every land under Ritual
+                # of Subdual, so it is what the AI's plan and the client's
+                # colour fan send. Injected as the answer to "{R} or {G}" it
+                # reached the handler's colour normaliser, which raises: a dual
+                # land under a colourless swap ended the game with a
+                # ValueError. Colourless is not a colour (CR 105.1), so a land
+                # asked for it has been told nothing about its choice and makes
+                # its first printed alternative — which the swap then replaces.
+                asked_color = self._chosen_mana_color(chosen_color)
+                if asked_color:
+                    instruction = dataclasses.replace(
+                        instruction,
+                        payload={**instruction.payload, "color": asked_color},
+                    )
+                # …and to the "Choose a color" step of a two-sentence spelling
+                # ("Choose a color. Add one mana of that color."), which the
+                # outer injection cannot reach — CR 605.3b, one helper for both
+                # inline sites (``mana_payment.answer_color_choices``).
+                instruction = answer_color_choices(
+                    instruction, self._chosen_mana_color(chosen_color)
+                )
+                self._execute_oracle_instruction(
+                    instruction,
+                    OracleExecutionContext(
+                        caster=player,
+                        target=player,
+                        card=land.card,
+                        source_permanent=land,
+                        # The colour again, on the key the activation path carries
+                        # it on (``new_color``), because the payload injection above
+                        # rewrites only the *outer* instruction: a painland's "Add
+                        # {R} or {G}. This land deals 1 damage to you." lowers to a
+                        # ``sequence`` whose nested add step never sees it, and asked
+                        # for {G} would make the first printed alternative.
+                        choices={"new_color": self._chosen_mana_color(chosen_color)},
+                    ),
+                )
+            else:
+                produced = land.effective_produced_mana
+                if gained_symbol is not None:
+                    mana_symbol = gained_symbol
+                elif produced:
+                    # A colour swapped away is still a legitimate request: the seat
+                    # names the symbol the land prints and the swap decides what
+                    # comes out, so the request is mapped through the swaps rather
+                    # than dropped. `produced[0]` is the answer only when nothing
+                    # maps — a land asked for a colour it never made.
+                    mana_symbol = land.produced_symbol_for(chosen_color) or produced[0]
+                else:
+                    symbols = land.basic_land_mana
+                    if symbols:
+                        mana_symbol = symbols[0]
+                player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
+            return mana_symbol
+
+        # CR 106.12: what follows is the event — the record, the replacement
+        # over the production, the production itself and everything that
+        # watches a land tapped for mana. One method, because this is one of
+        # three roads to it (:meth:`_land_tapped_for_mana`).
+        self._land_tapped_for_mana(
+            player_index, land, chosen_color, produce, land_name=land_name,
+        )
+        return True
+
+    def _land_tapped_for_mana(
+        self, player_index: int, land, chosen_color: str | None, produce,
+        *, land_name: str | None = None,
+    ) -> bool:
+        """**A land was tapped for mana** (CR 106.12) — the one event.
+
+        "To 'tap [a permanent] for mana' is to activate a mana ability of that
+        permanent that includes the {T} symbol in its activation cost." Three
+        roads do that, and until Odyssey's wave 2 only the first told anybody:
+
+        * the player's own tap (:meth:`tap_land_for_mana`);
+        * **a cost an effect collects** — "counter target spell unless its
+          controller pays {1}", an upkeep price, an attack toll. The payer
+          gets no priority window, so the engine plans the payment and taps
+          the lands itself, which is the player activating mana abilities
+          while an effect asks for mana (CR 605.3a). It tapped them with
+          ``become_tapped``: no mana was produced, no ability ran, and
+          nothing here was announced. Each planned land is tapped through
+          :meth:`tap_land_for_mana` now (``Game._pay_planned_cost``), so this
+          road *is* the first one;
+        * **a land whose mana ability costs more than the tap** — "{1}, {T}:
+          Add {U}{B}" (Darkwater Catacombs), a sacrifice land, a depletion
+          land — which the seam above refuses by design (CR 602.2b) and the
+          activation path resolves inline (CR 605.3b). That branch calls this
+          method around the ability it runs.
+
+        *produce* runs the land's own production and returns the symbol the
+        seat asked it for; what it actually made is read off the pool, so
+        "one mana of any type **that land produced**" (Mana Flare) is the
+        type that came out. The land is already tapped: {T} is a cost, and
+        every road pays it before it gets here.
+
+        Returns whether mana was produced. CR 106.12a: an ability that
+        triggers whenever a permanent is tapped for mana "triggers whenever
+        such a mana ability resolves **and produces mana**" — a land whose
+        ability made none this time (a Tolarian Academy beside no artifact)
+        was tapped, and nothing watching for mana saw any.
+        """
+        player = self.players[player_index]
+        if land_name is None:
+            land_name = land.card.name
+
         # "…each player who **tapped a land for mana this turn**" (Desolation).
         # The seat's own per-turn record, written at the one tap-for-mana seam
         # — the same site that announces `land_tapped_for_mana` below, so what
@@ -789,78 +1000,8 @@ class TurnManagementMixin:
         # clause narrowed is written into its own bucket (CR 106.6), and a
         # snapshot of the pool alone let it escape every swap — Mishra's
         # Workshop under Contamination made {C}{C}{C}, not one {B}.
-        pool_before = production_snapshot(player) if swapped_to else {}
-        # **The land's own compiled mana ability, when it has one.** This used
-        # to add exactly one symbol chosen from `produced_mana`, which is right
-        # for every land in the 1993-94 base sets and for the dual cycles — all
-        # of them produce one mana — and silently wrong for the first land that
-        # does not. Antiquities brought four: Mishra's Workshop prints
-        # {C}{C}{C} and paid one, and the Urza's cycle's assembly could not be
-        # read at all because the amount is behind a condition.
-        #
-        # `produced_mana` is Scryfall's summary of *which symbols* a land can
-        # make; it says nothing about how many or under what condition. The
-        # compiled ability says both, so it is what runs, and the summary is
-        # the fallback for a basic whose whole ability line is CR 305.6
-        # reminder text and compiles to nothing.
-        # "One mana of any type **that land produced**" (Mana Flare) reads this
-        # at the bottom of the method, and the compiled-ability branch below
-        # writes into the pool without ever naming a symbol — so it was left
-        # unbound there, and a Mana Flare over any land whose mana ability
-        # compiles (every dual, every filter land) raised `UnboundLocalError`
-        # instead of adding mana. Seeded with the colour the seat asked for,
-        # which is the answer for a land that offers a choice and the closest
-        # honest one for a land that does not.
-        mana_symbol = chosen_color
-        if mana_ability is not None:
-            instruction = mana_ability
-            if chosen_color:
-                # The colour arrives the way the activation path delivers it,
-                # so "tap Badlands for {R}" keeps meaning what it did; the
-                # handler ignores it unless the printed clause offers a choice.
-                instruction = dataclasses.replace(
-                    instruction,
-                    payload={**instruction.payload, "color": chosen_color},
-                )
-            # …and to the "Choose a color" step of a two-sentence spelling
-            # ("Choose a color. Add one mana of that color."), which the
-            # outer injection cannot reach — CR 605.3b, one helper for both
-            # inline sites (``mana_payment.answer_color_choices``).
-            instruction = answer_color_choices(
-                instruction, self._chosen_mana_color(chosen_color)
-            )
-            self._execute_oracle_instruction(
-                instruction,
-                OracleExecutionContext(
-                    caster=player,
-                    target=player,
-                    card=land.card,
-                    source_permanent=land,
-                    # The colour again, on the key the activation path carries
-                    # it on (``new_color``), because the payload injection above
-                    # rewrites only the *outer* instruction: a painland's "Add
-                    # {R} or {G}. This land deals 1 damage to you." lowers to a
-                    # ``sequence`` whose nested add step never sees it, and asked
-                    # for {G} would make the first printed alternative.
-                    choices={"new_color": self._chosen_mana_color(chosen_color)},
-                ),
-            )
-        else:
-            produced = land.effective_produced_mana
-            if gained_symbol is not None:
-                mana_symbol = gained_symbol
-            elif produced:
-                # A colour swapped away is still a legitimate request: the seat
-                # names the symbol the land prints and the swap decides what
-                # comes out, so the request is mapped through the swaps rather
-                # than dropped. `produced[0]` is the answer only when nothing
-                # maps — a land asked for a colour it never made.
-                mana_symbol = land.produced_symbol_for(chosen_color) or produced[0]
-            else:
-                symbols = land.basic_land_mana
-                if symbols:
-                    mana_symbol = symbols[0]
-            player.mana_pool[mana_symbol] = player.mana_pool.get(mana_symbol, 0) + 1
+        pool_before = production_snapshot(player)
+        mana_symbol = produce()
 
         if swapped_to:
             # Whatever the land already put in under the swapped symbol itself
@@ -887,6 +1028,20 @@ class TurnManagementMixin:
                 mana_symbol = swapped_to
 
         self.log.append(f"{player.name} tapped {land_name} for mana")
+
+        # What the land really made, across every bucket (CR 106.6: restricted
+        # mana is still mana). Nothing made, nothing to announce — CR 106.12a.
+        made = _mana_made_since(player, pool_before)
+        if not made:
+            return False
+        # "One mana of any type **that land produced**" (Mana Flare) is a type
+        # that came out. The seat's request stands when the land made it — a
+        # dual asked for {R} — and otherwise the answer is read off the pool:
+        # an Ancient Tomb asked for the route's default {G} made {C}{C}, and
+        # the adder used to hand back the {G} it was asked for.
+        if mana_symbol not in made:
+            asked = (chosen_color or "").strip().upper()
+            mana_symbol = asked if asked in made else next(iter(made))
 
         # Kudzu's "when enchanted land becomes tapped" used to be dispatched
         # here, from inside the *mana* path — so it was the one attached trigger
@@ -1028,9 +1183,29 @@ class TurnManagementMixin:
             if described:
                 from ..subject_filters import subject_matches
 
+                watcher = self.controller_index_of(perm)
+                if not self.is_on_battlefield(land):
+                    # **A land its own cost sacrificed** ("{T}, Sacrifice this
+                    # land: Add {B}{B}", Ebon Stronghold). It was tapped for
+                    # mana and the ability has now resolved (CR 106.12a), but
+                    # the land is a card in a graveyard, which CR 109.4 gives
+                    # no controller — so "a land **an opponent controls**"
+                    # asked of the control seam answers no, and Mana Web
+                    # slept through every sacrifice land. Whose it was is the
+                    # seat that tapped it; the rest of the phrase is asked of
+                    # the object as it last was.
+                    described = dict(described)
+                    whose = described.pop("controller", None)
+                    if whose == "opponent" and (
+                        watcher is None or watcher == player_index
+                    ):
+                        continue
+                    if whose == "you" and watcher != player_index:
+                        continue
+                    if whose not in (None, "opponent", "you"):
+                        continue
                 if not subject_matches(
-                    self, land, described,
-                    observer=self.controller_index_of(perm), source=perm,
+                    self, land, described, observer=watcher, source=perm,
                 ):
                     continue
             # "…that player adds one mana of any type that land produced.

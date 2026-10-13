@@ -308,20 +308,10 @@ def planned_tap_ability(game: Game, land: Permanent, color: str) -> int | None:
     dual, City of Brass, a land under a swap the seam applies to any ability),
     so every land that tapped correctly taps exactly as it did.
     """
-    from .mixins.turn_management import is_tap_alone_mana_ability
-
-    free, _priced = game._land_mana_abilities(land)
-    if free is None or color in mana_ability_symbols(free):
-        return None
-    usable = usable_activated_abilities(compile_card_oracle(game.playable_card_of(land)))
-    for index, ability in enumerate(usable):
-        if not is_tap_alone_mana_ability(ability):
-            continue
-        if color in mana_ability_symbols(ability.instruction) and (
-            game.land_mana_tap_refusal(land, index) is None
-        ):
-            return index
-    return None
+    # The game's own answer (``Game.land_mana_ability_for``): the engine's
+    # payer for a cost an effect collects asks the same question, and it is
+    # not a policy.
+    return game.land_mana_ability_for(land, color)
 
 
 def tap_planned_lands(game: Game, seat: int, action) -> None:

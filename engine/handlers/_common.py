@@ -3005,6 +3005,64 @@ def triggering_spell(game: Game, context: OracleExecutionContext):
     return next((item for item in game.stack if item is cast_item), None)
 
 
+def stack_target_controller_seat(
+    game: Game, context: OracleExecutionContext, *, spells_only: bool = False,
+    recorded_only: bool = False,
+) -> int | None:
+    """The seat that controls the **spell this object is about**, or ``None``.
+
+    "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+    "Counter target instant or sorcery spell unless **its controller** has
+    Molten Influence deal 4 damage to them." One referent, two moments, and
+    until now two readers that each knew half of it:
+
+    * once a counter step has **chosen** its spell, the seat is the record
+      that step wrote (``COUNTERED_SPELL_CONTROLLER``) — written when the
+      spell is chosen, not when the counter succeeds, because by the next
+      sentence the spell is a card in a graveyard, and CR 109.4 gives a card
+      there no controller at all. So a rider reads last-known information
+      (CR 608.2h) whether or not the spell could be countered;
+    * before that — an offer made *instead of* the counter — nothing has been
+      recorded yet, and the seat is read off the stack object itself (CR 112.2:
+      a spell's controller is the player who put it on the stack): the spell
+      the announcement named while it is still there (by identity), nobody
+      once a named spell has left (CR 608.2b), and the top of the stack for a
+      headless caller that named none.
+
+    The offer actor (``control_flow._offered_seats``) and every recipient key
+    that names this seat ask here, so "its controller" cannot be one player
+    when it is asked and another when it is charged.
+
+    The **controller**, never the owner (CR 108.3): a spell cast out of
+    another player's pile answers with the seat that cast it.
+
+    *spells_only* is the offer's own narrowing — "counter target … **spell**"
+    has nobody to ask about an ability — and applies to the stack read alone;
+    a record is written by a step that already chose a spell.
+
+    *recorded_only* is a **rider's** reading: a sentence behind the counter
+    names the spell that step chose and no other, so with no record nothing
+    was chosen and nobody is named — never whatever happens to be on top of
+    the stack by then, which may be the very object that is resolving.
+    """
+    from ..oracle_types import COUNTERED_SPELL_CONTROLLER
+
+    recorded = (context.results or {}).get(COUNTERED_SPELL_CONTROLLER)
+    if isinstance(recorded, int):
+        return recorded if 0 <= recorded < len(game.players) else None
+    if recorded_only:
+        return None
+    named = context.stack_target
+    if named is not None:
+        item = named if any(found is named for found in game.stack) else None
+    else:
+        item = game.stack[-1] if game.stack else None
+    if item is None or (spells_only and item.is_ability):
+        return None
+    seat = item.caster_index
+    return seat if 0 <= seat < len(game.players) else None
+
+
 def resolve_role_permanent(
     game: Game,
     context: OracleExecutionContext,
