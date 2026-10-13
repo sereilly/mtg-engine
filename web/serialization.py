@@ -289,6 +289,85 @@ def _offered_mana(game: Game, perm: Permanent) -> tuple[str, ...]:
     return own
 
 
+#: Payload keys of an add-mana step that change *how much* it makes or what the
+#: mana may pay for, never *which symbols* it can be asked for.
+_MANA_AMOUNT_KEYS = frozenset({
+    "per_each", "per_each_counter_removed", "per_each_counter_on_source",
+    "pips_amount", "spend_only", "x_from_count", "any_color_count", "oracle_text",
+})
+
+
+def _effect_steps(instruction) -> list:
+    """*instruction*'s own steps, a ``sequence`` opened up."""
+    if instruction is None:
+        return []
+    if instruction.kind == "sequence":
+        return [
+            leaf
+            for step in (instruction.payload or {}).get("steps") or ()
+            if hasattr(step, "kind")
+            for leaf in _effect_steps(step)
+        ]
+    return [instruction]
+
+
+def _ability_mana(instruction) -> dict | None:
+    """What one activation of a mana ability adds, as its own payload states
+    it: ``{"symbols": […], "choice": bool}``, or None where the payload alone
+    does not say.
+
+    ``choice`` is the question the client has to ask. "{1}, {T}: Add {R}{G}."
+    (Mossfire Valley) and "{T}: Add {C}{C}." make a **fixed** output — every
+    symbol, whichever is named — and "{T}: Add {R} or {G}." makes **one of**
+    its symbols. The permanent's ``produced_mana`` cannot tell those apart: it
+    is a summary of everything the permanent can make, so a filter land and a
+    dual land read the same there, and the client opened a colour fan for an
+    ability with nothing to choose and then sent an answer the engine ignored.
+
+    Riders that change the amount or restrict the spend are read through; a
+    shape whose symbols the board, a record or the seat's own split decides
+    (``any_color_from``, ``from_noted``, ``combination`` …) is None, and the
+    client falls back to the summary — which the server narrows for exactly
+    those (:func:`_offered_mana`).
+    """
+    adders = [step for step in _effect_steps(instruction) if step.kind == "add_mana_from_text"]
+    if not adders:
+        return None
+    symbols: list[str] = []
+    choice = False
+    for step in adders:
+        payload = step.payload or {}
+        shape = set(payload) - _MANA_AMOUNT_KEYS
+        if shape == {"pips"}:
+            found = [str(symbol) for symbol, _count in payload["pips"]]
+        elif shape == {"pips_choice"} and len(adders) == 1:
+            found = [str(symbol) for symbol, _count in payload["pips_choice"]]
+            choice = len(set(found)) >= 2
+        elif shape == {"any_color"} and payload.get("any_color") and len(adders) == 1:
+            found = ["W", "U", "B", "R", "G"]
+            choice = True
+        else:
+            return None
+        symbols.extend(symbol for symbol in found if symbol not in symbols)
+    return {"symbols": symbols, "choice": choice} if symbols else None
+
+
+def _ability_mana_payload(game: Game, perm: Permanent, usable) -> list | None:
+    """``ability_mana`` for one of the viewer's permanents: one entry per
+    usable ability, indexed like the ``ability_index`` the activate action
+    takes (so a one-ability permanent's is entry 0). None — the field is left
+    off — when no ability says anything, and when the board has changed what a
+    land offers (:func:`_offered_mana`'s swap or narrowing): there the summary
+    is the answer and an ability's printed symbols are not.
+    """
+    if not usable:
+        return None
+    if perm.has_type("land") and set(_offered_mana(game, perm)) != set(perm.effective_produced_mana):
+        return None
+    entries = [_ability_mana(getattr(ability, "instruction", None)) for ability in usable]
+    return entries if any(entry is not None for entry in entries) else None
+
+
 def _shield_source_payload(source_name: str | None) -> dict | None:
     """A card-preview payload for the effect that granted a damage-prevention
     shield, so the UI can show its art when the shield badge is hovered. Returns
@@ -1222,6 +1301,12 @@ def _serialize_player(
             ]
             if any(denials):
                 perm_dict["ability_denials"] = denials
+            # What each ability adds and whether activating it asks for a
+            # colour (:func:`_ability_mana`) - the per-ability fact behind the
+            # permanent-wide ``produced_mana`` summary.
+            ability_mana = _ability_mana_payload(game, perm, usable)
+            if ability_mana is not None:
+                perm_dict["ability_mana"] = ability_mana
 
     def _crowned(entries: list, cards) -> list:
         # CR 903.3: mark the designated commander card, wherever its zone

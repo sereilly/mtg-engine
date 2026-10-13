@@ -2504,6 +2504,24 @@ function landWordOptionsForTarget(perm) {
   return MANA_COLOR_OPTIONS.filter((o) => haystack.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
 }
 
+// What the ability chosen from the menu — or the permanent's only one — adds,
+// as the server states it: `{symbols, choice}` from the payload's
+// `ability_mana`, indexed like `ability_index`. `choice` false is a fixed
+// output ("{1}, {T}: Add {R}{G}.", "{T}: Add {C}{C}."): every symbol is made
+// whichever is asked for, so there is nothing to ask. null where the server
+// said nothing (no such field, or an ability whose colours the board decides).
+//
+// `produced_mana` cannot answer this: it is the permanent's whole colour
+// summary, and a filter land's reads exactly like a dual land's — which is how
+// Mossfire Valley came to open a Red/Green fan whose answer the engine ignored.
+function chosenAbilityMana(card) {
+  if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
+  const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
+  const entry = card.ability_mana[index];
+  if (!entry || !Array.isArray(entry.symbols) || !entry.symbols.length) return null;
+  return { symbols: entry.symbols.map((symbol) => String(symbol).toUpperCase()), choice: entry.choice === true };
+}
+
 function getDualLandColors(card) {
   if (!card || typeof card === "string") return null;
   const produced = Array.isArray(card.produced_mana) ? card.produced_mana.map((s) => s.toUpperCase()) : [];
@@ -2517,6 +2535,12 @@ function getDualLandColors(card) {
 // the line prints its symbols, only those are offered; a line that prints none
 // ("any color") keeps the permanent's list.
 function abilityManaColors(card) {
+  // The payload's own answer for this ability, where the server gave one
+  // (`ability_mana`): its symbols if activating it asks for a colour, and no
+  // colours at all — no fan — if its output is fixed. Below is what is left
+  // for a permanent the server said nothing about.
+  const stated = chosenAbilityMana(card);
+  if (stated) return stated.choice && stated.symbols.length >= 2 ? stated.symbols : null;
   const produced = getDualLandColors(card);
   if (!produced || !Number.isInteger(card?.__abilityIndex)) return produced;
   const line = String(card.oracle_text || "");
@@ -13227,7 +13251,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // index made the server tap the land's *first* one — a Karplusan Forest
   // asked for {R} off its coloured ability produced {C} and no damage, and a
   // mana ability Overlaid Terrain granted could never be reached.
-  if (cardRequiresManaColorChoice(card)) {
+  // …and neither is asked of an ability whose output is fixed. Where the
+  // server says what this ability adds (`chosenAbilityMana`), that decides
+  // whether there is a colour to choose and whether it is one of all five (the
+  // modal) or one of the ability's own symbols (the fan); the card's text is
+  // read only for a permanent the server said nothing about.
+  const ownMana = chosenAbilityMana(card);
+  const asksAnyColor = ownMana
+    ? ownMana.choice && ownMana.symbols.length >= 5
+    : cardRequiresManaColorChoice(card);
+  if (asksAnyColor) {
     pendingManaColor = {
       cardName,
       permanentIndex,
@@ -13288,7 +13321,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  if (!shouldPromptForActivationCost(activationCost)) {
+  // A mana ability with a fixed output and a mana cost the pool already covers
+  // (a filter land, "{1}, {T}: Add {R}{G}.", with the {1} floating) is sent as
+  // it is clicked: there is nothing to choose and nothing left to tap for, and
+  // the "press OK to start paying" step below would be a second click that
+  // decides nothing. With the cost not yet in the pool that step is what lets
+  // the player tap for it.
+  const fixedManaPaidFromPool =
+    !!ownMana && !ownMana.choice
+    && manaPoolCanPayCost(getCurrentPlayerState()?.mana_pool || {}, parseManaCostSymbols(activationCost));
+  if (!shouldPromptForActivationCost(activationCost) || fixedManaPaidFromPool) {
     const directBody = withPermanentId(
       {
         seat,
