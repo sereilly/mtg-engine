@@ -200,6 +200,15 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
         "whenever there are four or more tide counters on this creature",
         "when there are four or more page counters on this artifact",
     ),
+    # Bomb Squad. The same state asked of *another* permanent, so the noun
+    # phrase is a subject group and the kind is its own. In the whenever table
+    # for the row above's reason; the "when" spelling and a printed digit are
+    # here because a card may print either and neither may be read as the
+    # source's own threshold or as a keyword the creature "has".
+    "permanent_counters_reach_threshold": (
+        "whenever a creature has four or more fuse counters on it",
+        "when an artifact you control has 2 or more charge counters on it",
+    ),
     # Phyrexian Devourer. CR 603.8 read off a characteristic, and the row is in
     # the *whenever* table under the "when" the card prints — so the "whenever"
     # spelling is the one that table is asked about and the printed one is here

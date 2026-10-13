@@ -389,21 +389,14 @@ def _parse_divided_recipients(stream: TokenStream) -> ast.Recipient:
 
 
 def _parse_printed_amount(stream: TokenStream) -> ast.Amount:
-    """The quantity in front of the word "damage", with the arithmetic a
-    card may print on it.
+    """The quantity in front of "damage", with the arithmetic printed on it:
+    "…deals **X plus 3** damage to you" (Hellfire), "…and **5 minus X** damage
+    to that creature's controller" (Liquid Fire). A node rather than a folded
+    number, because one half is usually not a number yet.
 
-    "…deals **X plus 3** damage to you" (Hellfire) is a printed sum and
-    "…and **5 minus X** damage to that creature's controller" (Liquid Fire)
-    a printed difference. Read into ``ast.Plus`` / ``ast.Minus`` rather than
-    folded to a number, because one half is usually not a number yet — the
-    reason `effects/characteristics.py` reads "1 plus the number of …" into
-    a node instead of adding it up.
-
-    **One reader for every clause of a sentence.** The sum used to be read
-    for the first clause alone and the clauses after an "and" took a bare
-    ``parse_amount`` — so which arithmetic a card could print depended on
-    whether the amount came first, which is not a rule the sentence has.
-    Liquid Fire prints its difference in the second clause.
+    One reader for every clause of a sentence: the sum used to be read for the
+    first clause alone, so which arithmetic a card could print depended on
+    whether the amount came first — and Liquid Fire prints its in the second.
     """
     amount = parse_amount(stream)
     if stream.accept_word("plus"):

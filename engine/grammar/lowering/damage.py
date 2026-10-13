@@ -36,6 +36,7 @@ from ._counted_damage import (
     lower_ledger_damage,
     lower_difference_damage,
     lower_revealed_this_way_damage,
+    lower_subtracted_damage,
 )
 
 from ._bites import lower_bite
@@ -117,48 +118,6 @@ def _lower_halved_damage(
         raise LoweringError("no handler halves this damage amount", node=node)
     payload["amount_half"] = node.amount.rounding
     return (dataclasses.replace(whole[0], payload=payload),)
-
-
-def _lower_subtracted_damage(
-    node: ast.DealDamage,
-    subtracted: dict,
-    event: str | None,
-    produced: frozenset[str],
-    event_subject: object | None,
-) -> tuple[OracleInstruction, ...]:
-    """"…and **5 minus X** damage to that creature's controller." (Liquid
-    Fire.)
-
-    Lowered the way the half above is: as the sentence the bare X would have
-    made, with the arithmetic put on afterwards — the recipient, the riders
-    and the picker are whatever "X damage to …" already lowers to, and
-    re-deciding them beside the subtraction is where two copies disagree.
-
-    The amount becomes ``{"minus_x": n}``, read by ``resolve_amount`` — the
-    one evaluator — and floored there at zero (CR 107.1b). One plain
-    ``deal_damage`` spending the letter is required rather than assumed: a
-    sweep, a counted amount or a bite reads its number some other way, and an
-    arithmetic those handlers never apply would deal the whole X on a card
-    reporting itself supported.
-    """
-    whole = _lower_damage(
-        dataclasses.replace(node, amount=ast.Var("x")),
-        event, produced, event_subject,
-    )
-    if (
-        len(whole) != 1
-        or whole[0].kind != "deal_damage"
-        or whole[0].payload.get("amount") != "x"
-        or X_FROM_COUNT in whole[0].payload
-    ):
-        raise LoweringError(
-            "no handler subtracts X from a printed damage amount here", node=node
-        )
-    return (
-        dataclasses.replace(
-            whole[0], payload={**whole[0].payload, "amount": subtracted}
-        ),
-    )
 
 
 #: Instruction kinds that *read* the two CR 701.19c / CR 614 riders a damage
@@ -511,8 +470,9 @@ def _lower_damage_shape(
         # below keeps refusing everything else with its own sentence.
         subtracted = x_offset_amount(node.amount)
         if subtracted is not None:
-            return _lower_subtracted_damage(
-                node, subtracted, event, produced, event_subject
+            return lower_subtracted_damage(
+                node, subtracted,
+                lambda bare: _lower_damage(bare, event, produced, event_subject),
             )
         return lower_difference_damage(node)
     # "…equal to **the damage already dealt to it this turn**" (Whipkeeper). A
