@@ -4932,7 +4932,17 @@ def _choose_several_targets(
         # one-target chooser as it always has.
         return () if sized_by_x else None
 
-    if sized_by_x:
+    if sized_by_x or announced is not None:
+        # **…and "up to X target creatures, where X is one plus the number of
+        # cards named Aether Burst in all graveyards"** (`announced`): the same
+        # one printed instance of the word, with its X counted off the board
+        # instead of paid for. It fell through to the several-slot default at
+        # the bottom of this function — "the caster's own board, because every
+        # card carrying the template gives a benefit per target" — which for
+        # this one is a bounce: the seat returned its own creatures to its own
+        # hand. (Reap, the other card on this branch, names cards in its
+        # caster's graveyard and has no second board to land on.)
+        #
         # "X target …" is one printed instance of the word, so every slot wants
         # the same board — and which board is the reading the **one-target**
         # chooser has always made for these cards (`spell_target_side`, then

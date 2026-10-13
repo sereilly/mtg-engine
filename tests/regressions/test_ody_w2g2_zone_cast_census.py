@@ -52,7 +52,20 @@ rotation.
 The twin sweep runs over **every Nth card** in the suite (``STRIDE``) — a
 proposal on a populated board is the engine's whole target enumeration, and
 the pool is five thousand cards — and over the whole pool when run as a
-module, which is how the numbers in the round's report were taken.
+module. The whole pool, at the round's end: 9,990 rows over 5,023 spells, and
+three rows that differ, each for a reason the card prints —
+
+* *Demonic Embrace* is not proposed from an opened graveyard: its "by paying
+  3 life and discarding a card" is a price for a cast **from the graveyard**,
+  whichever permission opens it, and the rig's hand is empty;
+* *Forgotten Lore* leaves one mana more or less, because how often its own
+  "you may pay {G}" repeats depends on what is in the graveyard it was just
+  cast out of;
+* *Aether Burst* names one target more: its X counts the cards named Aether
+  Burst "in all graveyards as you cast this spell", and the engine counts the
+  one being cast (`legality.announced_cast_x` is not told the zone — CR 601.2a
+  has already moved it to the stack). Reachable only with a graveyard opened
+  by another effect; left as measured.
 
 Validated backwards: on the tree before the change every flashback row and
 every twin row reads "never proposed" — the whole population.
