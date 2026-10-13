@@ -2440,6 +2440,13 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
     checked against are one rule rather than two copies. ``up_to`` is sent
     because the client cannot derive it: unlike the tap prompt beside it, the
     ceiling is smaller than the candidate list and is what the card printed.
+
+    ``at_least`` is sent for the same reason, one bound over: a printed count
+    is a floor as well ("return **two** Forests", Bull Elephant; "choose **the
+    same number**", Cultural Exchange), the engine refuses an answer under it,
+    and until this the client was told only the ceiling — so a person could
+    confirm too few, be refused, and not know by how many. Zero for every
+    prompt that prints no floor.
     """
     choice = choices[0]
     live = {id(perm) for perm in ctx.game.live_permanent_set_choices(choice)}
@@ -2448,6 +2455,7 @@ def _permanent_set_choice(ctx: PromptContext, choices: list) -> dict:
         "card_name": choice.data.get("card_name", ""),
         "prompt": choice.data.get("prompt", ""),
         "up_to": int(choice.data.get("up_to", 1)),
+        "at_least": int(choice.data.get("at_least", 0) or 0),
         "candidates": [
             {
                 "seat": seat,

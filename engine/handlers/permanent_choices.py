@@ -532,6 +532,7 @@ def _choose_permanents_for_one_seat(
             # prompt with no answer, it is a step that asked for nothing.
             game.log.append(f"{card_name}: nothing to choose")
             return True, "resolved"
+    counted_prompt = ""
     same_number = payload.get("same_number_as")
     if same_number is not None:
         # "Choose **the same number** of creatures another target player
@@ -549,6 +550,9 @@ def _choose_permanents_for_one_seat(
             game.log.append(f"{card_name}: nothing to choose")
             return True, "resolved"
         up_to = at_least = wanted
+        # The number, in the words the seat is shown: it is an answer given a
+        # moment ago, and nothing printed on the card says what it was.
+        counted_prompt = f" (exactly {wanted})"
     matched = payload.get("matched_by")
     if isinstance(matched, dict):
         # "Choose any number of creatures target player controls. Choose **the
@@ -566,13 +570,14 @@ def _choose_permanents_for_one_seat(
         if up_to <= 0:
             game.log.append(f"{card_name}: nothing to choose")
             return True, "resolved"
+        counted_prompt = f" (up to {up_to})"
     if len(candidates) < max(at_least, 1):
         game.log.append(f"{card_name}: there is no permanent it could choose")
         return True, "resolved"
     game.arm_permanent_set_choice(
         seat,
         card_name=card_name,
-        prompt=payload.get("prompt") or "Choose permanents.",
+        prompt=(payload.get("prompt") or "Choose permanents.") + counted_prompt,
         result_key=result_key,
         payload=payload,
         context=context,

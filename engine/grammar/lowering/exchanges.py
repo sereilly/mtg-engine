@@ -325,7 +325,7 @@ def _lower_exchange_chosen_sets(
             {
                 "filter": filters[0],
                 "result_key": EXCHANGE_FIRST_SET,
-                "prompt": "Choose any number to exchange.",
+                "prompt": "Choose any number to exchange",
                 "unbounded": True,
                 "controlled_by": "target",
                 "matched_by": matching,
@@ -338,7 +338,7 @@ def _lower_exchange_chosen_sets(
             {
                 **matching,
                 "result_key": EXCHANGE_SECOND_SET,
-                "prompt": "Choose the same number to exchange for them.",
+                "prompt": "Choose the same number to exchange for them",
                 "same_number_as": EXCHANGE_FIRST_SET,
             },
         ),
