@@ -80,9 +80,25 @@ def test_declining_is_a_legal_answer_and_finishes_the_resolution():
     it, so the gate must let it through — ``search_library_decline`` shipped
     registered but unreachable, every attempt refused with the search prompt's
     own blocked_detail, which stranded the seat whenever nothing in the library
-    matched the restriction."""
+    matched the restriction.
+
+    Over an **empty** library, because this search is Demonic Tutor's — "a
+    card", which names no quality and so must find one while the library has
+    one (CR 701.23d). With none there, "as many as possible" is none and the
+    decline is the answer; with three there it is a 400 from the engine, not
+    from the gate (``tests/ui/test_unqualified_search_ui_api.py``)."""
     sid, session, game = _session()
 
+    refused = client.post(
+        f"/api/sessions/{sid}/action",
+        json={"seat": 0, "action": "search_library_decline"},
+    )
+    assert refused.status_code == 400
+    assert "must find a card" in refused.json()["detail"], (
+        "refused by the search, not by the gate's blocked_detail"
+    )
+
+    game.players[0].library = []
     resp = client.post(
         f"/api/sessions/{sid}/action",
         json={"seat": 0, "action": "search_library_decline"},

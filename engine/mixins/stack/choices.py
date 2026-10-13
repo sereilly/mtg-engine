@@ -59,7 +59,8 @@ from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
 # Which cards a chosen discard took (Gerrard's Verdict); its own line for the
 # reason the one above has one.
 from ...oracle_types import DISCARDED_THIS_WAY
-from ...search_filters import (landing_seat, search_matches, search_slots,
+from ...search_filters import (landing_seat, search_matches,
+                               search_names_a_quality, search_slots,
                                searched_seat, slot_assignment)
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -1106,18 +1107,28 @@ class PendingChoicesMixin:
 
         Three conditions, each a different sentence. A printed "up to" or "any
         number of" is a ceiling and no floor at all. A search naming **one** card
-        is left alone deliberately: the single-find flow's decline is the
-        engine's one escape from a prompt nothing can answer, and closing it
-        would strand a seat wherever the picker and the resolver read a
-        restriction even slightly differently. And what is left is bounded by
-        what is actually there — CR 701.23d's "or as many as possible", which is
-        what keeps an empty library from being a refusal.
+        *with a stated quality* is left alone deliberately: the single-find
+        flow's decline is the engine's one escape from a prompt nothing can
+        answer, and closing it would strand a seat wherever the picker and the
+        resolver read a restriction even slightly differently — and CR 701.23b
+        lets that search fail anyway. And what is left is bounded by what is
+        actually there — CR 701.23d's "or as many as possible", which is what
+        keeps an empty library from being a refusal.
+
+        **A search for "a card" names no quality and has a floor of one.** It
+        was caught by the single-find exemption, so Demonic Tutor and Entomb
+        offered "fail to find" and took it — the search CR 701.23d names by
+        its own example. No restriction means nothing for the picker and the
+        resolver to read differently, so the reason for the exemption does
+        not reach it (``search_filters.search_names_a_quality``).
         """
         if choice.data.get("up_to"):
             return 0
         slots = len(self._search_destination_slots(choice.data))
         if slots < 2:
-            return 0
+            if search_names_a_quality(choice.data):
+                return 0
+            return min(1, self._search_findable_count(choice))
         return min(slots, self._search_findable_count(choice))
 
     def _search_findable_count(self, choice: PendingChoice) -> int:
@@ -1463,6 +1474,14 @@ class PendingChoicesMixin:
             return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
+            # A search that must find (CR 701.23d: "a card", with no quality
+            # stated) is not one a policy may decline, so before the decline
+            # the fallback is the resolver's own first findable card — the
+            # arrangement the counted branch above already has.
+            if self._search_floor(choice) > 0:
+                for zone, index, _card in self._search_findable_entries(choice):
+                    if self._resolve_search_library(choice, index, zone):
+                        return
             self._resolve_search_library(choice, -1, "none", enforce_floor=False)
 
     # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------

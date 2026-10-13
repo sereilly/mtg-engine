@@ -260,6 +260,13 @@ def _search_library(ctx: PromptContext, choices: list) -> dict:
         "count": choice.data["count"],
         "card_type": choice.data["card_type"],
         "card_name": choice.data.get("card_name", ""),
+        # CR 701.23d: how many cards this answer **must** name — the engine's
+        # own floor. 0 for a search with a stated quality (CR 701.23b: it may
+        # fail to find) and for "up to"; 1 for "search your library for a
+        # card" while the zone holds one (Demonic Tutor, Entomb), where "fail
+        # to find" is not an answer and ``search_library_decline`` is a 400.
+        # Sent for every search; the counted branch below sends the same key.
+        "min_picks": ctx.game._search_floor(choice),
         "zones": list(zones),
         # Where the find actually goes. The dialog wrote "into your hand" into
         # its own copy, so Sanctum of All — "…and put it onto the battlefield" —

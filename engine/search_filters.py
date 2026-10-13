@@ -275,6 +275,36 @@ def search_matches(card, data: dict, *, game=None, owner=None) -> bool:
     return True
 
 
+#: Every key :func:`search_matches` narrows on outside ``restrictions`` — the
+#: flat ones a noun phrase carries beside its card type.
+_FLAT_NARROWINGS = ("exclude_types", "exclude_basic_lands", "exclude_supertypes")
+
+
+def search_names_a_quality(data: dict) -> bool:
+    """Whether a search armed with *data* is for cards **with a stated
+    quality** — a card type, a colour, a name — rather than simply for a
+    quantity of cards.
+
+    CR 701.23b and CR 701.23d are that one difference: a search with a stated
+    quality "isn't required to find some or all of those cards even if they're
+    present" (the zone is hidden, and nobody can check), while a search
+    "simply for a quantity of cards, such as 'a card' or 'three cards'" must
+    find that many. Demonic Tutor and Entomb print the second.
+
+    Answered off the keys :func:`search_matches` reads, so "names no quality"
+    and "admits every card" are one fact — held to each other over the pool by
+    ``tests/rules/test_unqualified_search_must_find.py``, which fails the day
+    a narrowing is added to the predicate and not counted here.
+    """
+    card_type = data.get("card_type", "any")
+    wanted = card_type if isinstance(card_type, (list, tuple)) else (card_type,)
+    if any(name not in (None, "", "any") for name in wanted):
+        return True
+    if any(data.get(key) for key in _FLAT_NARROWINGS):
+        return True
+    return any(bool(value) for value in (data.get("restrictions") or {}).values())
+
+
 #: The restriction key of a search that finds **one card per printed
 #: description**: a list of slot dicts, each in this predicate's own vocabulary
 #: (``card_type`` / ``exclude_types`` / ``restrictions``), each filled by at
