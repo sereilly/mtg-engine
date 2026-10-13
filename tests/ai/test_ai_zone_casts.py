@@ -375,6 +375,32 @@ def test_a_land_is_played_out_of_an_opened_graveyard(pool):
     assert agenda.players[ME].graveyard == []
 
 
+def test_the_top_of_a_library_is_cast_and_played_where_a_permanent_opens_it(pool):
+    """"You may cast Goblin spells from the top of your library." (Conspicuous
+    Snoop.) "…you may play lands from the top of your library." (Radha, Heart
+    of Keld.) The third zone the engine's list names: a Goblin on top is cast,
+    a land on top is the land drop, and a card neither permanent covers is not
+    offered at all."""
+    def top(source, card):
+        game = _duel(pool, mine=[source, "Mountain", "Mountain"])
+        game.players[ME].library.insert(0, pool[card])
+        return game
+
+    goblin = top("Conspicuous Snoop", "Goblin Arsonist")
+    action = choose_cast_action(goblin, ME)
+    assert (action.card_name, action.from_zone) == ("Goblin Arsonist", "library")
+    assert zone_being_cast_from(goblin, ME, action) is goblin.players[ME].library
+    assert _cast(goblin, action).supported
+    assert goblin.players[ME].library[0].name == "Forest"
+    assert "Goblin Arsonist" in [perm.card.name for perm in goblin.controlled_by(ME)]
+
+    land = top("Radha, Heart of Keld", "Forest")
+    drop = choose_land_drop(land, ME)
+    assert (drop.card_name, drop.from_zone) == ("Forest", "library")
+
+    assert permitted_casts(top("Conspicuous Snoop", "Grizzly Bears"), ME) == ()
+
+
 def test_an_instant_with_flashback_is_offered_in_the_response_window(pool):
     """The web AI's priority chooser walks the same list: Moment's Peace in
     the graveyard is castable in the declare-blockers step as the hand's
