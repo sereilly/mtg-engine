@@ -3066,7 +3066,13 @@ class AbilityActivationMixin:
                 or instruction.payload.get("combination")
             )
         ):
-            selected_color = self._normalize_mana_color(mana_color)
+            # Through ``_chosen_mana_color``, not the raising normaliser: the
+            # wire's ``mana_color`` is a *symbol* and may be {C} — what every
+            # land pays under Ritual of Subdual, and so what the AI's plan and
+            # the client's colour fan send. "{C}" is no answer to "{B} or {R}"
+            # (CR 105.1), so it names nothing and the handler's own default
+            # stands; it used to raise ``ValueError`` out of the activation.
+            selected_color = self._chosen_mana_color(mana_color)
             if selected_color is not None:
                 instruction = OracleInstruction(
                     instruction.kind,
@@ -3180,7 +3186,32 @@ class AbilityActivationMixin:
                     },
                 ),
             )
-            supported, details = state_machine.run(instruction)
+            # **CR 106.12: a land's mana ability with {T} in its cost is the
+            # land being tapped for mana**, whatever else the cost asks for.
+            # "{1}, {T}: Add {U}{B}" (Darkwater Catacombs), "{T}, Sacrifice
+            # this land: Add {B}{B}" (Ebon Stronghold), "{T}, Remove a
+            # depletion counter" (Peat Bog) are refused by the tap seam, which
+            # runs only an ability whose whole cost is the tap — so they came
+            # down here, and here nothing was announced: no Manabarbs damage,
+            # no Mana Flare mana, no Wild Growth, no Contamination, and
+            # Desolation never learned the seat had tapped a land for mana.
+            # The same event the seam announces, around the same production
+            # (``Game._land_tapped_for_mana``). A creature's mana ability is
+            # not a land's, and a land's mana ability without {T} (a
+            # sacrifice-only one) is not a tap.
+            if ability.cost.requires_tap and permanent.has_type("land"):
+                outcome: list = []
+
+                def produce():
+                    outcome.append(state_machine.run(instruction))
+                    return self._chosen_mana_color(mana_color)
+
+                self._land_tapped_for_mana(
+                    controller_index, permanent, mana_color, produce,
+                )
+                supported, details = outcome[0]
+            else:
+                supported, details = state_machine.run(instruction)
             return SimulationResult(permanent.card.name, supported, ability.effect_kind, details)
 
         # A mixed-zone roles announcement becomes the three positional lists a

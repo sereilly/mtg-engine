@@ -1804,10 +1804,21 @@ class DeclareBlockersStepMixin:
         if plan is None:
             return
         defender = self.players[controller_index]
-        for symbol, amount in plan.from_pool.items():
-            defender.mana_pool[symbol] = int(defender.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        # The lands the plan named, tapped **for mana** (CR 605.3a) through the
+        # one payer every effect-collected cost shares, re-planned over those
+        # same lands as the attack side does.
+        planned = list(plan.tapped)
+        self._pay_planned_cost(
+            defender,
+            lambda: plan_payment(
+                defender.mana_pool,
+                [
+                    land for land in untapped_mana_lands(self.controlled_by(controller_index))
+                    if any(land is named for named in planned)
+                ],
+                total, payer=defender,
+            ),
+        )
         self.log.append(
             f"{defender.name} paid {mana_cost_label(total)} to declare blockers"
         )

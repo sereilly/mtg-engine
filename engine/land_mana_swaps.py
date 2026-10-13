@@ -463,8 +463,20 @@ def _color_of_choice(requested, land) -> str:
     return COLORS[0]
 
 
-def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
+def swapped_production(
+    game, land, requested=None, *, tapper: "int | None" = None,
+) -> "ManaSubstitution | None":
     """What *land* produces instead of whatever it would have, or None.
+
+    *tapper* is the seat that tapped it for mana, supplied by the production
+    event and by nobody else. It answers the one land the control seam cannot:
+    "{T}, Sacrifice this land: Add {B}{B}" (Ebon Stronghold) has left the
+    battlefield by the time its ability resolves, and CR 109.4 gives a card in
+    a graveyard no controller — but CR 106.12b applies the replacement to the
+    **production event**, which that land's ability is still performing. So
+    whose land it was is the seat that tapped it. With no tapper (the payment
+    planner asking what a land *could* make) a land nobody controls answers
+    None, as it always did.
 
     *requested* is the colour the tapper asked for, supplied by the tap seam
     alone. It answers a record whose symbol is "a color of your choice"
@@ -488,6 +500,8 @@ def swapped_production(game, land, requested=None) -> "ManaSubstitution | None":
     from .subject_filters import subject_matches
 
     seat = game.controller_index_of(land)
+    if seat is None:
+        seat = tapper
     if seat is None:
         return None
     found = static_substitution_for(game, land)

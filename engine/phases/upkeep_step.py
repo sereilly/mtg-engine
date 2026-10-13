@@ -252,7 +252,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
 
         Both halves, because a plan is *how* a cost is paid and paying from one
         without the other would let the same land answer two costs — the
-        sibling ``_spend_payment_plan`` says the same. A plan that cannot be
+        sibling ``_pay_planned_cost`` says the same. A plan that cannot be
         formed here is a caller that skipped the affordability test, and that
         is raised rather than spent in part: a cost half charged is a free
         ability, the class Vodalian War Machine's tap costs were.
@@ -265,16 +265,26 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
                 f"{player.name} cannot pay {mana} at upkeep; the caller must ask "
                 "can_pay_upkeep_mana first"
             )
-        restricted = spendable_restricted_mana(player, purpose)
-        for symbol, amount in plan.from_pool.items():
-            from_restricted = min(amount, restricted.get(symbol, 0))
-            if from_restricted:
-                debit_restricted_mana(player, purpose, symbol, from_restricted)
-            player.mana_pool[symbol] = (
-                int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
-            )
-        for land in plan.tapped:
-            self.become_tapped(land)
+
+        def spend(final) -> None:
+            restricted = spendable_restricted_mana(player, purpose)
+            for symbol, amount in final.from_pool.items():
+                from_restricted = min(amount, restricted.get(symbol, 0))
+                if from_restricted:
+                    debit_restricted_mana(player, purpose, symbol, from_restricted)
+                player.mana_pool[symbol] = (
+                    int(player.mana_pool.get(symbol, 0)) - (amount - from_restricted)
+                )
+
+        # The planned lands are tapped **for mana** (CR 605.3a) through the one
+        # payer every effect-collected cost shares (``_pay_planned_cost``), and
+        # the plan is asked again after each tap — so a Snowfall's extra mana,
+        # which lands in the very bucket this purpose admits, pays the upkeep
+        # it was made for instead of floating beside it.
+        self._pay_planned_cost(
+            player, lambda: self._upkeep_payment_plan(player, mana, purpose),
+            spend=spend,
+        )
 
     def can_pay_upkeep_cost(self, player, cost, *, purpose=None) -> bool:
         """Whether *player* can pay a whole upkeep cost — CR 702.24a's [cost],

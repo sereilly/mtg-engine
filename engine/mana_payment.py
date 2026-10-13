@@ -50,10 +50,18 @@ class ManaPayment:
     needed by the caller and neither can be derived from the other, which is why
     the plan is a value rather than the payment itself — a caller can ask
     "could this be paid?" without paying it, which is what CR 601.2h needs.
+
+    ``tapped_for`` is positional beside ``tapped``: the pip each land was
+    matched to, or None for a land the generic part takes. It is what the
+    payer **asks the land for** — a plan's tap is the player activating that
+    land's mana ability (CR 605.3a), and a land that offers a choice has to be
+    told which colour the plan counted on it for
+    (``Game._pay_planned_cost``).
     """
 
     from_pool: dict[str, int] = field(default_factory=dict)
     tapped: tuple["Permanent", ...] = ()
+    tapped_for: tuple["str | None", ...] = ()
 
 
 def fungible_colors_headroom(
@@ -345,11 +353,17 @@ def _plan_under_permissions(
     ]
     if generic > len(spare):
         return None
-    tapped = sorted(
-        [index - floating for index in assignment if index >= floating]
-        + spare[:max(0, generic)]
+    matched = {
+        index - floating: pip
+        for index, pip in assignment.items() if index >= floating
+    }
+    tapped = sorted([*matched, *spare[:max(0, generic)]])
+    return ManaPayment(
+        from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
+        # The pip is what the land's mana pays *as*; whether the land can be
+        # asked for that symbol is the payer's to decide from what it makes.
+        tapped_for=tuple(matched.get(i) for i in tapped),
     )
-    return ManaPayment(from_pool=from_pool, tapped=tuple(lands[i] for i in tapped))
 
 
 def plan_payment(
@@ -434,7 +448,10 @@ def plan_payment(
     if generic > len(spare):
         return None
     tapped = sorted([*assignment, *spare[:generic]])
-    return ManaPayment(from_pool=from_pool, tapped=tuple(lands[i] for i in tapped))
+    return ManaPayment(
+        from_pool=from_pool, tapped=tuple(lands[i] for i in tapped),
+        tapped_for=tuple(assignment.get(i) for i in tapped),
+    )
 
 
 #: Instruction kinds that put mana into a pool. CR 605.1a's "could add mana to

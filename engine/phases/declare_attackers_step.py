@@ -773,10 +773,23 @@ class DeclareAttackersStepMixin:
         if plan is None:
             return
         controller = self.players[controller_index]
-        for symbol, amount in plan.from_pool.items():
-            controller.mana_pool[symbol] = int(controller.mana_pool.get(symbol, 0)) - amount
-        for land in plan.tapped:
-            self.become_tapped(land)
+        # The lands the plan named, tapped **for mana** (CR 605.3a) through the
+        # one payer every effect-collected cost shares. Re-planned over those
+        # same lands and no others: the plan was made before the attackers
+        # tapped (CR 508.1f), and a land it left out is one it must still
+        # leave out.
+        planned = list(plan.tapped)
+        self._pay_planned_cost(
+            controller,
+            lambda: plan_payment(
+                controller.mana_pool,
+                [
+                    land for land in untapped_mana_lands(self.controlled_by(controller))
+                    if any(land is named for named in planned)
+                ],
+                total, payer=controller,
+            ),
+        )
         self.log.append(
             f"{controller.name} paid {mana_cost_label(total)} to declare attackers"
         )
