@@ -537,7 +537,7 @@ _NOT_DESTRUCTIONS_BY_CALLER: dict[str, str] = {
         "CR 701.21a — the one sacrifice transition",
     "check_state_based_actions":
         "CR 704.5j legend rule, 704.5k world rule, 704.5m / 702.16c an Aura "
-        "that may no longer be where it is, 704.5y the Role rule: each is "
+        "that may no longer be where it is, 704.5z the Role rule: each is "
         "'put into its owner's graveyard'",
     "_remove_aura_effects":
         "Animate Dead: 'that creature's controller sacrifices it' (CR 701.21a), "

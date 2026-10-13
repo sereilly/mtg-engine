@@ -6,7 +6,7 @@ rule 506 that the LEA engine implements: the five combat steps and their
 skips/repeats (506.1), the attacking/defending player roles (506.2), the
 "only a creature can attack or block" restriction (506.3, 506.3a, 506.3b),
 removal from combat (506.4, 506.4b), "attacking/blocking alone" (506.5), and
-"had to attack" (506.6), plus the combat damage step's priority window
+"had to attack" (506.7), plus the combat damage step's priority window
 (510.3) and "the defending player" an attacking creature's ability names
 (508.5). Tests here are 2-player except the CR 508.5 pair at the end,
 which needs a third seat before "the defending player" is a question with
@@ -885,12 +885,12 @@ def test_active_player_gets_priority_after_declaring_blockers():
 
 
 # ---------------------------------------------------------------------------
-# 506.6 — "had to attack"
+# 506.7 — "had to attack"
 # ---------------------------------------------------------------------------
 
-@pytest.mark.cr("506.6", "508.1d")
+@pytest.mark.cr("506.7", "508.1d")
 def test_creature_that_had_to_attack_must_be_declared():
-    # 506.6 / 508: a creature required to attack "had to attack." Such a creature
+    # 506.7 / 508: a creature required to attack "had to attack." Such a creature
     # must be included when attackers are declared.
     forced = Permanent(card=_mk_creature("Juggernaut", 5, 3, "This creature attacks each combat if able"))
     p1 = PlayerState(name="P1", battlefield=[forced])
@@ -936,9 +936,9 @@ def test_ai_choose_attackers_includes_forced_creatures():
     assert ok
 
 
-@pytest.mark.cr("506.6")
+@pytest.mark.cr("506.7")
 def test_creature_did_not_have_to_attack_even_if_only_legal_attacker():
-    # 506.6: a creature did not "have to attack" if no effect required it, even if
+    # 506.7: a creature did not "have to attack" if no effect required it, even if
     # there were no other legal attacks. An ordinary creature may hold back.
     ordinary = Permanent(card=_mk_creature("Ordinary", 2, 2))
     p1 = PlayerState(name="P1", battlefield=[ordinary])

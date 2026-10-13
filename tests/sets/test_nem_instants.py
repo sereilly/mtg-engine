@@ -277,7 +277,7 @@ def _w1g2i_alternative_offers(game, card):
 
 
 def test_w1g2_angelic_favor_is_cast_only_during_combat(set_pool):
-    """"Cast this spell only during combat." (CR 506.7c's window, any step.)
+    """"Cast this spell only during combat." (CR 506.8c's window, any step.)
 
     Refused in the main phase with nothing paid — the creature the alternative
     cost would tap is still untapped — and admitted in the declare attackers

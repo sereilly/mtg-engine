@@ -90,7 +90,7 @@ def _before_blockers_are_declared(game: "Game", caster_index: int) -> bool:
 def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
     """Aleatory: "only during combat **after** blockers are declared".
 
-    CR 506.7's window one point later than every other row here, and written as
+    CR 506.8's window one point later than every other row here, and written as
     the *complement* of the row above rather than as its own list of steps:
     "before blockers are declared" and "after blockers are declared" partition
     the turn between them, and no moment may fall into both or into neither.
@@ -117,7 +117,7 @@ def _combat_after_blockers(game: "Game", caster_index: int) -> bool:
 
 def _during_combat(game: "Game", caster_index: int) -> bool:
     """Angelic Favor: "only during combat" — the whole combat phase, any of its
-    five steps, on anybody's turn (CR 506.7c).
+    five steps, on anybody's turn (CR 506.8c).
 
     The widest of the combat windows and the one the three "during combat
     <before/after> blockers are declared" rows each narrow, so it names no step

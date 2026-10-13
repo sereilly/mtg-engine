@@ -233,7 +233,7 @@ def test_w3g4_delirium_deals_no_damage_when_its_creature_has_left(set_pool):
     assert game.players[1].life == 20, game.log
 
 
-# --- W4G1: Aleatory's combat window (CR 506.7) ---
+# --- W4G1: Aleatory's combat window (CR 506.8) ---
 
 from engine import Game as _w4g1i_Game, PlayerState as _w4g1i_PlayerState  # noqa: E402
 from engine.models import Permanent as _w4g1i_Permanent  # noqa: E402

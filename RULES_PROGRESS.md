@@ -1,11 +1,11 @@
 # Comprehensive Rules Test Coverage
 
-Coverage of `tests/rules/` against the Comprehensive Rules (April 17, 2026).
+Coverage of `tests/rules/` against the Comprehensive Rules (September 25, 2026).
 Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 622 tracked rules covered (67%)** — 2951 tests, 0 unannotated.
+**419 / 625 tracked rules covered (67%)** — 2951 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [503. Upkeep Step](#503-upkeep-step) | 1/2 | 50% |
 | [504. Draw Step](#504-draw-step) | 2/2 | 100% |
 | [505. Main Phase](#505-main-phase) | 3/6 | 50% |
-| [506. Combat Phase](#506-combat-phase) | 7/7 | 100% |
+| [506. Combat Phase](#506-combat-phase) | 7/8 | 87% |
 | [507. Beginning of Combat Step](#507-beginning-of-combat-step) | 1/2 | 50% |
 | [508. Declare Attackers Step](#508-declare-attackers-step) | 4/8 | 50% |
 | [509. Declare Blockers Step](#509-declare-blockers-step) | 4/4 | 100% |
@@ -71,7 +71,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [512. Ending Phase](#512-ending-phase) | 1/1 | 100% |
 | [513. End Step](#513-end-step) | 1/2 | 50% |
 | [514. Cleanup Step](#514-cleanup-step) | 3/3 | 100% |
-| [601. Casting Spells](#601-casting-spells) | 4/7 | 57% |
+| [601. Casting Spells](#601-casting-spells) | 4/8 | 50% |
 | [602. Activating Activated Abilities](#602-activating-activated-abilities) | 4/5 | 80% |
 | [603. Handling Triggered Abilities](#603-handling-triggered-abilities) | 11/12 | 91% |
 | [604. Handling Static Abilities](#604-handling-static-abilities) | 3/7 | 42% |
@@ -87,7 +87,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [614. Replacement Effects](#614-replacement-effects) | 15/17 | 88% |
 | [615. Prevention Effects](#615-prevention-effects) | 8/13 | 61% |
 | [616. Interaction of Replacement and/or Prevention Effects](#616-interaction-of-replacement-andor-prevention-effects) | 2/2 | 100% |
-| [700. General](#700-general) | 2/15 | 13% |
+| [700. General](#700-general) | 2/16 | 12% |
 | [701. Keyword Actions](#701-keyword-actions) | 19/19 | 100% |
 | [702. Keyword Abilities](#702-keyword-abilities) | 32/32 | 100% |
 | [703. Turn-Based Actions](#703-turn-based-actions) | 4/4 | 100% |
@@ -608,10 +608,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **506.1** The combat phase has five steps, which proceed in order: beginning of combat, declare attackers, ... *(6 tests)*
 - [x] **506.2** During the combat phase, the active player is the attacking player; creatures that player control... *(8 tests)*
 - [x] **506.3** Only a creature can attack or block. Only a player, a planeswalker, or a battle can be attacked. *(13 tests, subrules ab)*
-- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller changes, if it... *(11 tests, subrules bc)*
+- [x] **506.4** A permanent is removed from combat if it leaves the battlefield, if its controller or protector c... *(11 tests, subrules bc)*
 - [x] **506.5** A creature attacks alone if it’s the only creature declared as an attacker during the declare att... *(8 tests)*
-- [x] **506.6** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
-- [x] **506.7** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(10 tests, subrules c)*
+- [ ] **506.6** A creature attacks a player alone if it’s declared as an attacker attacking a player during the d...
+- [x] **506.7** Some abilities check to see whether or not a creature “had to attack” during a particular combat ... *(2 tests)*
+- [x] **506.8** Some spells state that they may be cast “only [before/after] [a particular point in the combat ph... *(10 tests, subrules c)*
 
 ### 507. Beginning of Combat Step
 
@@ -670,9 +671,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(315 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
-- [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
-- [ ] **601.6** Some spells specify that one of their controller’s opponents does something the controller would ...
-- [x] **601.7** Casting a spell that alters costs won’t affect spells and abilities that are already on the stack. *(1 tests)*
+- [ ] **601.5** While announcing the choices of any targets and/or the division or distribution of any effects as...
+- [x] **601.6** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
+- [ ] **601.7** Some spells specify that one of their controller’s opponents does something the controller would ...
+- [x] **601.8** Casting a spell that alters costs won’t affect spells and abilities that are already on the stack. *(1 tests)*
 
 ### 602. Activating Activated Abilities
 
@@ -847,6 +849,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **700.13** Some cards refer to committing a crime. A player commits a crime as that player casts a spell, ac...
 - [ ] **700.14** Some abilities trigger “Whenever you expend N.” A player expends N if they pay a cost to cast a s...
 - [ ] **700.15** The term enter[s] is short for “enter[s] the battlefield.”
+- [ ] **700.16** Some cards refer to worthy creatures. A creature is worthy if it’s legendary, isn’t a Villain, an...
 
 ### 701. Keyword Actions
 
@@ -918,7 +921,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **704.2** State-based actions are checked throughout the game and are not controlled by any player. *(1 tests)*
 - [x] **704.3** Whenever a player would get priority (see rule 117, “Timing and Priority”), the game checks for a... *(7 tests)*
 - [x] **704.4** Unlike triggered abilities, state-based actions pay no attention to what happens during the resol... *(1 tests)*
-- [x] **704.5** The state-based actions are as follows: *(97 tests, subrules abcdefghijkmnpqrsy)*
+- [x] **704.5** The state-based actions are as follows: *(97 tests, subrules abcdefghijkmnpqrsz)*
 - [x] **704.6** Some variant games include additional state-based actions that aren’t normally applicable: *(3 tests, subrules cd)*
 - [x] **704.7** If multiple state-based actions would have the same result at the same time, a single replacement... *(1 tests)*
 - [x] **704.8** If a state-based action results in a permanent leaving the battlefield at the same time other sta... *(1 tests)*

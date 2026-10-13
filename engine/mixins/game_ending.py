@@ -1113,7 +1113,7 @@ class GameEndingMixin:
                 ):
                     changed = True
 
-            # 704.5y: Role rule — per creature per controller, keep only the most recent Role
+            # 704.5z: Role rule — per creature per controller, keep only the most recent Role
             for perm in self.all_permanents():
                 if perm.card.primary_type != "creature":
                     continue
@@ -1136,7 +1136,7 @@ class GameEndingMixin:
                         if self.controls(ctrl_player, role_perm):
                             self.remove_from_battlefield(role_perm)
                             self._permanent_to_graveyard(ctrl_player, role_perm)
-                            self.log.append(f"{role_perm.card.name} put into graveyard (704.5y: role rule)")
+                            self.log.append(f"{role_perm.card.name} put into graveyard (704.5z: role rule)")
                     changed = True
 
             if changed:
