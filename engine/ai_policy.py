@@ -1532,6 +1532,17 @@ def _cast_candidate_announcing(
         ) is not None
     ):
         return None
+    # **A cost paid in life is not paid with the seat's last point.** CR 119.4
+    # lets a player pay life equal to their total, the gates above accept it,
+    # and the cast then ends its caster's game (CR 704.5a): "You may cast this
+    # card from your graveyard by paying 3 life and discarding a card"
+    # (Demonic Embrace) at three life, the moment a seat could cast from a
+    # graveyard at all — and "As an additional cost to cast this spell, pay 3
+    # life" (Fumarole, Withering Boon) from hand before that. Not a reserve:
+    # a mandatory price is the spell's own, and a seat at four may still judge
+    # it worth one. Just never the last.
+    if _cast_life_price(card, from_zone, x_value, offers, under) >= player.life > 0:
+        return None
     target = _choose_target_for_spell(card, player_index, game, x_value)
     target_permanent_index: int | list[int] | None = None
     target_permanent_ids: list[int] | None = None
@@ -1834,6 +1845,29 @@ def _cast_graveyard_denial(
         mode_index=_announced_mode(card), from_zone=_cast_zone(card),
     ).get("valid_targets") or []
     return _graveyard_denial_target(game, player_index, legal)
+
+
+def _cast_life_price(
+    card: CardDefinition, from_zone: str, x_value: "int | None",
+    offers: "dict[str, int] | None", under: "PermittedCast | None",
+) -> int:
+    """The life the announcement being built pays **as a cost** (CR 601.2h):
+    every printed additional cost that applies to a cast from *from_zone* and
+    is mandatory or taken (`optional_cost_taken`, the cast path's own reader),
+    at the announced X, plus what a required alternative cost asks
+    (`PermittedCast.cost`: a flashback cost printed with "Pay 3 life")."""
+    from .mixins.stack.casting import optional_cost_taken
+
+    total = 0
+    for cost in additional_costs(card):
+        if cost.from_zone not in (None, from_zone):
+            continue
+        if not optional_cost_taken(cost, offers):
+            continue
+        total += int(cost.life_charged(x_value) or 0)
+    if under is not None and under.cost is not None:
+        total += int(getattr(under.cost, "pay_life", 0) or 0)
+    return total
 
 
 def _one_graveyard_card_is_denied(spec, instructions) -> bool:

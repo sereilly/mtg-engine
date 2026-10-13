@@ -314,6 +314,37 @@ def test_a_hand_cast_under_a_waiver_needs_no_mana(pool):
     assert choose_cast_action(under, ME) is None, "the Wurm's mana value is six"
 
 
+def test_a_life_cost_is_not_paid_with_the_seats_last_point(pool):
+    """"You may cast this card from your graveyard by paying 3 life and
+    discarding a card in addition to paying its other costs." (Demonic
+    Embrace.) CR 119.4 lets a player pay life equal to their total and the
+    cast gates accept it — so the day a seat could cast from its graveyard it
+    could also pay its last three life to do it. At four it still may; at
+    three it does not. The same line holds a hand cast: Fumarole's "As an
+    additional cost to cast this spell, pay 3 life"."""
+    def embrace(life: int):
+        game = _duel(
+            pool, graveyard=["Demonic Embrace"], hand=["Scaled Wurm"],
+            mine=["Swamp"] * 3 + ["Grizzly Bears"],
+        )
+        game.players[ME].life = life
+        return choose_cast_action(game, ME)
+
+    def fumarole(life: int):
+        game = _duel(
+            pool, hand=["Fumarole"], mine=["Swamp"] * 3 + ["Mountain"] * 2,
+            theirs=["Grizzly Bears", "Forest"],
+        )
+        game.players[ME].life = life
+        return choose_cast_action(game, ME)
+
+    at_four = embrace(4)
+    assert (at_four.card_name, at_four.from_zone) == ("Demonic Embrace", "graveyard")
+    assert embrace(3) is None
+    assert fumarole(4).card_name == "Fumarole"
+    assert fumarole(3) is None
+
+
 def test_a_land_is_played_out_of_an_opened_graveyard(pool):
     """"You may play lands and cast spells from your graveyard." (Yawgmoth's
     Agenda.) The land-drop chooser reads the zone; a land in hand wins the
