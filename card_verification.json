@@ -511,9 +511,9 @@
       "updated_at": 1782190991.2357428
     },
     "Darkwater Catacombs": {
-      "reason": "Clicking it opens a \"Choose a mana color\" fan (U or B) although the card adds both {U}{B}; the answer is ignored. A {3} toll (Mana Leak) with Island + Catacombs + Cabal Pit untapped: Pay answered 200 and the spell was countered, nothing tapped.",
-      "status": "fail",
-      "updated_at": 1791884641.9502833
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791890839.5114172
     },
     "Death Ward": {
       "reason": "",
@@ -1441,9 +1441,9 @@
       "updated_at": 1783303091.3089557
     },
     "Mossfire Valley": {
-      "reason": "Clicking it opens a \"Choose a mana color\" fan (R or G) although the card adds both {R}{G}; the answer is ignored. Castable highlight and Auto-Tap also say no when the payment needs its net mana.",
-      "status": "fail",
-      "updated_at": 1791884639.4550457
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791890836.7556596
     },
     "Mountain": {
       "reason": "",
@@ -1915,6 +1915,11 @@
       "status": "pass",
       "updated_at": 1788673315.976005
     },
+    "Shadowblood Ridge": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791890842.2688622
+    },
     "Shahrazad": {
       "reason": "",
       "status": "pass",
@@ -1984,6 +1989,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782364012.382203
+    },
+    "Skycloud Expanse": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791890845.0371144
     },
     "Skyshroud War Beast": {
       "reason": "",
@@ -2089,6 +2099,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782597950.5790997
+    },
+    "Sungrass Prairie": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791890847.7612422
     },
     "Swamp": {
       "reason": "",
