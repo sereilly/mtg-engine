@@ -157,6 +157,29 @@ def test_naming_no_cards_is_a_legal_cast_that_exiles_nothing():
     assert game.players[1].exile == []
 
 
+def test_the_body_the_shipped_client_sends_for_an_activation_is_accepted():
+    """`confirmSeveralGraveyardTargets` builds one body for casts and
+    activations: ``card_name``, ``target_seat`` and the slots, with no
+    ``permanent_name`` / ``permanent_index`` / ``ability_index``. No ability
+    reached that confirm before this one, so this replays exactly what the
+    browser sends — a person must be able to finish what the picker starts.
+    The route's own comment says why reading the name there is a stopgap."""
+    sid, _session, game = _make_session(beetles=True)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "activate", "card_name": "Carrion Beetles",
+            "target_seat": 1, "target_permanent_indices": [1, 3],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    game.resolve_stack()
+
+    assert _names(game.players[1].exile) == ["Hill Giant", "Island"]
+    assert game.pending_choices == []
+
+
 def test_an_activation_names_its_cards_the_same_way():
     sid, _session, game = _make_session(beetles=True)
 
