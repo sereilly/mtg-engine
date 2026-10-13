@@ -575,6 +575,40 @@ class TurnManagementMixin:
         chosen = usable[ability_index]
         return chosen.instruction if is_tap_alone_mana_ability(chosen) else None
 
+    def land_mana_ability_for(self, land, color: str) -> int | None:
+        """Which of *land*'s mana abilities makes *color* — an index for
+        ``tap_land_for_mana(ability_index=…)`` — or None for the seam's default.
+
+        CR 605: each mana ability is its own ability, and the tap seam runs the
+        land's **first** tap-alone one unless told which. For a painland that
+        is "{T}: Add {C}", so a payer that counted a Karplusan Forest or an
+        Underground River as a coloured mana and tapped it by colour alone got
+        {C}. None whenever the default already makes the colour (a basic, a
+        dual, City of Brass, a land under a swap the seam applies to any
+        ability), so every land that taps correctly by default taps exactly
+        as it did.
+
+        On the game rather than in the AI's policy, where it was written
+        (``ai_policy.planned_tap_ability`` asks here now): the engine's own
+        payer — a cost an effect collects, ``_pay_planned_cost`` — taps lands
+        for a colour a plan counted on exactly as an AI seat does, and two
+        readers choosing an ability two ways is a land that pays for one
+        player and not for the other.
+        """
+        from ..ai_valuation import mana_ability_symbols
+
+        free, _priced = self._land_mana_abilities(land)
+        if free is None or color in mana_ability_symbols(free):
+            return None
+        for index, ability in enumerate(self.usable_abilities_of(land)):
+            if not is_tap_alone_mana_ability(ability):
+                continue
+            if color in mana_ability_symbols(ability.instruction) and (
+                self.land_mana_tap_refusal(land, index) is None
+            ):
+                return index
+        return None
+
     def land_mana_tap_refusal(self, land, ability_index: int | None = None) -> str | None:
         """Why tapping *land* for mana through :meth:`tap_land_for_mana` would
         be refused right now — a short reason key — or None when it would make

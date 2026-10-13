@@ -8196,9 +8196,13 @@ class PendingChoicesMixin:
                 return True
             land = plan.tapped[0]
             wanted = plan.tapped_for[0] if plan.tapped_for else None
+            color = self._planned_tap_color(land, wanted)
             if not self.tap_land_for_mana(
-                seat, land.card.name, self._planned_tap_color(land, wanted),
+                seat, land.card.name, color,
                 permanent_id=land.permanent_id,
+                # Which of the land's mana abilities makes that colour
+                # (CR 605): a painland's first is "{T}: Add {C}".
+                ability_index=self.land_mana_ability_for(land, color),
             ):
                 # The seam refused a land the planner counted (a summoning-
                 # sick land creature, a land under Interdict). Refused is not
@@ -8214,9 +8218,19 @@ class PendingChoicesMixin:
         mana pays the pip only *as* another colour (CR 106.6: white as any
         colour under Celestial Dawn, where no land "produces" the pip).
         """
+        from ...ai_valuation import mana_ability_symbols
+
         offered = [str(symbol).upper() for symbol in self._land_payment_colors(land)]
         if wanted is not None and str(wanted).upper() in offered:
             return str(wanted).upper()
+        # Nothing in particular is wanted of it, so it is asked for what its
+        # **default** ability makes: a painland pays a generic pip with the
+        # {C} that costs it nothing, never with the colour that hurts.
+        free, _priced = self._land_mana_abilities(land)
+        default = mana_ability_symbols(free) if free is not None else frozenset()
+        for symbol in offered:
+            if symbol in default:
+                return symbol
         return offered[0] if offered else "C"
 
     def _player_can_pay_optional(self, player, entry: dict) -> bool:
