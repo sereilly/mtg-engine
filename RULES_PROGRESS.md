@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2870 tests, 0 unannotated.
+**418 / 622 tracked rules covered (67%)** — 2882 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -174,7 +174,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **107.1** The only numbers the Magic game uses are integers. *(3 tests, subrules ab)*
 - [x] **107.2** If anything needs to use a number that can’t be determined, either as a result or in a calculatio... *(1 tests)*
-- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(17 tests, subrules ab)*
+- [x] **107.3** Many objects use the letter X as a placeholder for a number that needs to be determined. Some obj... *(18 tests, subrules ab)*
 - [x] **107.4** The mana symbols are {W}, {U}, {B}, {R}, {G}, and {C}; the numerical symbols {0}, {1}, {2}, {3}, ... *(4 tests)*
 - [x] **107.5** The tap symbol is {T}. The tap symbol in an activation cost means “Tap this permanent.” A permane... *(2 tests)*
 - [ ] **107.6** The untap symbol is {Q}. The untap symbol in an activation cost means “Untap this permanent.” A p...
@@ -300,7 +300,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
 - [x] **118.7** What a player actually needs to do to pay a cost may be changed or reduced by effects. If the man... *(7 tests, subrules abc)*
 - [x] **118.8** Some spells and abilities have additional costs. An additional cost is a cost listed in a spell’s... *(5 tests)*
-- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(21 tests, subrules abcd)*
+- [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(27 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
 - [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
@@ -667,7 +667,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 601. Casting Spells
 
 - [ ] **601.1** Previously, the action of casting a spell, or casting a card as a spell, was referred to on cards...
-- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(314 tests, subrules abcdefghi)*
+- [x] **601.2** To cast a spell is to take it from where it is (usually the hand), put it on the stack, and pay i... *(315 tests, subrules abcdefghi)*
 - [x] **601.3** A player can begin to cast a spell only if a rule or effect allows that player to cast it and no ... *(30 tests, subrules a)*
 - [ ] **601.4** While announcing the choices of any modes, alternative costs, and/or additional costs as describe...
 - [x] **601.5** If a player is no longer allowed to cast a spell after completing its proposal (see rules 601.2a–... *(4 tests)*
@@ -687,7 +687,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(91 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(22 tests)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(23 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
@@ -827,7 +827,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(49 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(51 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -896,7 +896,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **702.24** Cumulative Upkeep *(32 tests, subrules ab)*
 - [x] **702.25** Flanking *(6 tests, subrules ab)*
 - [x] **702.26** Phasing *(19 tests, subrules adfgim)*
-- [x] **702.27** Buyback *(8 tests, subrules a)*
+- [x] **702.27** Buyback *(15 tests, subrules a)*
 - [x] **702.28** Shadow *(6 tests, subrules abc)*
 - [x] **702.29** Cycling *(15 tests, subrules abef)*
 - [x] **702.30** Echo *(16 tests, subrules ab)*
@@ -955,7 +955,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 724. Ending Turns and Phases
 
-- [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(8 tests, subrules bcde)*
+- [x] **724.1** Some cards end the turn. When an effect ends the turn, follow these steps in order, as they diffe... *(9 tests, subrules bcde)*
 - [ ] **724.2** One card (Mandate of Peace) ends the combat phase. When an effect ends the combat phase, follow t...
 
 ### 733. Handling Illegal Actions
@@ -1014,6 +1014,6 @@ Listed rather than dropped — see `EXCLUDED` in `scripts/rules_progress.py`. A 
 
 ## Cited outside tracked scope (consider widening SCOPE)
 
-- **702.33** Keyword Abilities (12 tests)
-- **702.34** Keyword Abilities (21 tests)
+- **702.33** Keyword Abilities (13 tests)
+- **702.34** Keyword Abilities (22 tests)
 - **723.5** Controlling Another Player (3 tests)

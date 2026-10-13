@@ -48,7 +48,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 88.8% | 88.8% | 68.6% | 291 |
+| ODY *(measured)* | 335 | 507 | 89.3% | 89.3% | 69.2% | 294 |
 | **All (shipped)** | **7406** | **10877** | **90.7%** | **90.1%** | **61.8%** | **5706** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
@@ -61,9 +61,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 600 | 294 | expected a subject |  |
+| 599 | 293 | expected a subject |  |
 | 163 | 82 | unrecognized effect verb |  |
-| 128 | 67 | unconsumed text |  |
+| 127 | 66 | unconsumed text |  |
 | 63 | 44 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -83,9 +83,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | 2 | 1 | remove-from-combat acts on the object the sentence already chose |  |
 | 2 | 1 | expected 'the number of' in a where-clause |  |
 | 2 | 2 | a counter-removal cost reads the ability's own source or a permanent the payer can be asked for |  |
-| 2 | 2 | expected 'a' |  |
 | 2 | 2 | an Aura's continuous grant is derived by engine/auras.py |  |
 | 1 | 1 | expected what to gain control of |  |
+| 1 | 1 | the source-class shield is armed on its controller, not on a chosen recipient |  |
 
 ## Cards executing through the grammar
 
@@ -2085,6 +2085,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `Add {B}{B}{B}{B}.`
 - **Cultivate**
   - `Search your library for up to two basic land cards, reveal those cards, put one onto the battlefield tapped and the other into your hand, then shuffle.`
+- **Cultural Exchange**
+  - `Choose any number of creatures target player controls. Choose the same number of creatures another target player controls. Those players exchange control of those creatures. (This effect lasts indefinitely.)`
 - **Cunning**
   - `When enchanted creature attacks or blocks, sacrifice this Aura at the beginning of the next cleanup step.`
 - **Cuombajj Witches**
@@ -5096,6 +5098,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `At the beginning of each player's upkeep, this enchantment deals damage to that player equal to the number of Swamps they control.`
 - **Karmic Guide**
   - `When this creature enters, return target creature card from your graveyard to the battlefield.`
+- **Karmic Justice**
+  - `Whenever a spell or ability an opponent controls destroys a noncreature permanent you control, you may destroy target permanent that opponent controls.`
 - **Karn's Touch**
   - `Target noncreature artifact becomes an artifact creature with power and toughness each equal to its mana value until end of turn. (It retains its abilities.)`
 - **Karn, Silver Golem**
@@ -9806,6 +9810,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Tainted Aether**
   - `Whenever a creature enters, its controller sacrifices a creature or land of their choice.`
   - `Whenever a creature enters, its controller sacrifices a creature or land of their choice.`
+- **Tainted Pact**
+  - `Exile the top card of your library. You may put that card into your hand unless it has the same name as another card exiled this way. Repeat this process until you put a card into your hand or you exile two cards with the same name, whichever comes first.`
 - **Tainted Specter**
   - `{1}{B}{B}, {T}: Target player discards a card unless they put a card from their hand on top of their library. If that player discards a card this way, this creature deals 1 damage to each creature and each player. Activate only as a sorcery.`
 - **Tainted Well**

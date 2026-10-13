@@ -52,7 +52,7 @@ Held at this rate, supporting the 26,113-card release line would need about **28
 | 7ED | 335 | 335 (100.0%) | 0 (0.0%) | 385 | 0 (0.0%) | 0 | 0.0 |
 | APC | 143 | 143 (100.0%) | 0 (0.0%) | 240 | 0 (0.0%) | 0 | 0.0 |
 | M21 | 285 | 285 (100.0%) | 0 (0.0%) | 503 | 0 (0.0%) | 0 | 0.0 |
-| ODY *(measured)* | 335 | 330 (98.5%) | 0 (0.0%) | 495 | 0 (0.0%) | 0 | 0.0 |
+| ODY *(measured)* | 335 | 333 (99.4%) | 0 (0.0%) | 498 | 0 (0.0%) | 0 | 0.0 |
 | **Whole pool (shipped, deduped)** | **4924** | **4924 (100.0%)** | **49 (1.0%)** | **7655** | **45 (0.6%)** | **54** | **1.1** |
 
 *(measured)* — ODY are ingested for measurement and **not shipped**: `cards/manifest.json` lists them under `measured`, the engine's catalog does not load them, and no player can put one in a deck. They are reported here and excluded from the ALL row and from the ceilings, because a ratchet over a set nobody has implemented would fire on its composition rather than on anything anyone did. A measured set moves up to `sets` when it is fully supported.
