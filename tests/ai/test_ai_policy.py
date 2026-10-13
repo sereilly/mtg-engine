@@ -462,7 +462,7 @@ def test_an_each_of_up_to_n_list_is_filled_rather_than_concentrated(set_pool):
     ceiling, and the announcement is the one the cast gate takes.
     """
     from engine.ai_policy import choose_divided_targets
-    from tests.helpers import _mk_card
+    from tests.helpers import _mk_card, resolve_stack
 
     pool = set_pool("LEA")
     hail = _mk_card(
@@ -489,6 +489,5 @@ def test_an_each_of_up_to_n_list_is_filled_rather_than_concentrated(set_pool):
     # caster's own, and no share beside either: there is nothing to share out.
     assert announced == [(1, None), (1, 0)], announced
     assert game.cast_from_hand(0, hail.name, divided_targets=list(announced)).supported
-    while game.stack:
-        game.resolve_top_of_stack()
+    resolve_stack(game)
     assert game.players[1].life == 19 and game.players[0].life == 20
