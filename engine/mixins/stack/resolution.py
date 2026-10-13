@@ -18,6 +18,7 @@ from ...cast_costs import (CAST_COST_DISCARD_MANA_VALUE, KICKED,
 from ...cast_timing import CAST_AT_INSTANT_SPEED
 from ...classifier import CardClassification, classify_card
 from ...color_changes import carry_spell_color_change
+from ...destruction_events import destruction_finished
 from ...enter_effects import copy_on_enter_type
 from ...events import emit
 from ...extra_triggers import additional_triggers
@@ -1496,7 +1497,14 @@ class StackResolutionMixin:
         if self.choices_for_stack_item(item):
             item.resolution_held = True
             self.stack.append(item)
+            # …and what it has destroyed so far keeps waiting with it: the
+            # abilities that triggered go on the stack when the last answer
+            # arrives (`_answer_pending_choice`), not under an object that is
+            # still resolving.
             return True
+        # The resolution is over, so the abilities its destructions triggered
+        # stop waiting for it (CR 603.3b). See engine/destruction_events.py.
+        destruction_finished(self)
         # Word of Command pauses mid-resolution for the caster's card choice
         # (CR 608.2: the spell is still resolving). Keep it on the stack until
         # confirm_word_of_command finishes the resolution and removes it. The

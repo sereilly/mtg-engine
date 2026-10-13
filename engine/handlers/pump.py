@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..combat_assignment import MAY_ASSIGN_AS_UNBLOCKED
+from ..destruction_events import mark_delayed_destruction
 from ..models import Permanent
 from ..pt import add_pt_modifier, set_base_pt
 from ._common import (divided_target_permanent, recorded_permanent_ids, 
@@ -42,7 +43,7 @@ def berserk_pump(game: Game, instruction: OracleInstruction, context: OracleExec
         grant_keyword(target_perm, "trample", duration="end_of_turn")
         # "At the beginning of the next end step, destroy that creature if it
         # attacked this turn." Mark it; the end step checks attacked_this_turn.
-        target_perm.metadata["destroy_if_attacked_eot"] = True
+        mark_delayed_destruction(game, target_perm, "destroy_if_attacked_eot")
         game.log.append(f"{card.name} pumped {target_perm.card.name} by +{boost}/+0 and granted trample")
     else:
         game.log.append(f"{card.name}: no valid creature target")
@@ -2850,7 +2851,7 @@ def grant_flying_and_delayed_destruction(game: Game, instruction: OracleInstruct
     )
     if target_creature is not None:
         grant_keyword(target_creature, "flying", duration="end_of_turn")
-        target_creature.metadata["destroy_at_next_end_step"] = True
+        mark_delayed_destruction(game, target_creature, "destroy_at_next_end_step")
         game.log.append(f"{target_creature.card.name} gains temporary flying and delayed destruction")
     else:
         game.log.append("No valid target for Stone Giant effect")

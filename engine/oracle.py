@@ -287,6 +287,41 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("permanent_dies",
      r"whenever (?P<dying_subject>an? [^,]+) is put into (?:a|a player's) "
      r"graveyard from the battlefield"),
+    # "Whenever **a spell or ability an opponent controls destroys** a
+    # noncreature permanent you control, you may destroy target permanent that
+    # opponent controls." (Karmic Justice.) CR 701.8's keyword action as an
+    # event, and **not** a spelling of the death rows above it: a sacrifice
+    # puts the same card in the same graveyard and is not this (CR 701.21a), a
+    # creature with toughness 0 is "put into its owner's graveyard" and is not
+    # this (CR 704.5f), and a destroyed permanent a replacement exiled instead
+    # never died and **is** this. So it has its own kind and its own seam
+    # (`engine/destruction_events.py`), which the two destroy paths announce
+    # from and nothing else does.
+    #
+    # Two narrowings, both payload. **What** was destroyed is a `_subject`
+    # group read by the noun parser, so "a creature you control", "an artifact"
+    # and "a nonland permanent an opponent controls" are this row with no
+    # code — asked of the permanent as it last existed on the battlefield
+    # (CR 603.10a). **Who** destroyed it is `destroyed_cause`, the seat CR
+    # 109.5 gives the spell or ability that did it; the event carries that
+    # seat or says there is none (CR 704.5g's lethal damage is a destruction
+    # no spell or ability performs, whoever dealt the damage). One printed
+    # value, for this table's rule that a narrowing is listed once the pool
+    # prints it.
+    #
+    # "**Another**" stands where the article does, as it does on the entry and
+    # departure rows: the noun parser folds it into the filter's own exclusion,
+    # and the watcher is then not one of the permanents it watches. The grammar
+    # reads that spelling whether or not this table does, and a condition only
+    # one front end names compiles to a bare instruction on a permanent — so it
+    # is listed although no card prints it.
+    #
+    # Neither a prefix of the two "…an opponent controls **causes**…" rows nor
+    # prefixed by them — the verb is the fork — so the position is
+    # documentation: beside the deaths it must not be confused with.
+    ("permanent_destroyed",
+     r"whenever a spell or ability (?P<destroyed_cause>an opponent) controls "
+     r"destroys (?P<destroyed_subject>(?:an?|another) [^,]+)"),
     # "Whenever **another card** is put into **a** graveyard **from anywhere**."
     # (Planar Void.) Not a death and not the row above it: the object is a
     # *card*, the source zone is unnamed, and the pile is anybody's — so nothing

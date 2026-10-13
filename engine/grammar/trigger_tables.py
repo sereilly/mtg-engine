@@ -384,6 +384,19 @@ _FILTERED_EVENTS: tuple[tuple[tuple[str, ...], str], ...] = (
     # the two front ends turn one printed phrase into one filter.
     (("you", "activate", "a", "loyalty", "ability", "of"),
      "you_activate_loyalty_ability"),
+    # "Whenever a spell or ability an opponent controls **destroys** a
+    # noncreature permanent you control" (Karmic Justice). CR 701.8's keyword
+    # action as an event: the fixed words name who did it and what was done,
+    # and the noun phrase behind them is the permanent it was done to — this
+    # table's shape exactly, so it is a row and not a production. Whose spell
+    # or ability it was is payload on `engine/oracle.py`'s row
+    # (`destroyed_cause`), as every seat narrowing in this file is.
+    #
+    # No collision with the two "…an opponent controls **causes**…" readings
+    # (`_WHENEVER_EVENTS`' discard row, `trigger_matched`'s Sacred Ground
+    # clause): a phrase is accepted whole or not at all, and the verb differs.
+    (("a", "spell", "or", "ability", "an", "opponent", "controls", "destroys"),
+     "permanent_destroyed"),
 )
 
 # The same, for events whose subject comes *first* — "a creature you control

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 # Re-exported for backwards compatibility with external importers.
 from .damage_ledger import DamageLedger
+from .destruction_events import DestructionLedger
 from .game_types import SimulationResult, StackItem
 from .models import CardDefinition, PlayerState
 from .mixins import (
@@ -589,6 +590,12 @@ class Game(
     # which is why it is a record and not a scan. Written from `deal_damage`,
     # cleared with the turn. See engine/damage_ledger.py.
     damage_ledger: DamageLedger = field(default_factory=DamageLedger)
+    # What the destroy seam is holding between an event and the stack: the
+    # triggers a destruction has triggered, waiting for the resolution that
+    # destroyed to finish (CR 603.3b), and the watchers taken earlier in the
+    # same simultaneous event (CR 603.10a). Empty outside a destruction. See
+    # engine/destruction_events.py.
+    destruction: DestructionLedger = field(default_factory=DestructionLedger)
 
     def __post_init__(self) -> None:
         # Preserve legacy external phase naming while internally tracking phase/step.

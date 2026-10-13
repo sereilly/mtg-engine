@@ -6,6 +6,9 @@ from ..dexterity import flip_lands_on
 from ..static_bonuses import singular_land_type
 from ..models import Permanent, PlayerState
 from ..object_colors import share_a_color
+from ..destruction_events import (begin_destruction_hold,
+                                  end_destruction_hold,
+                                  mark_delayed_destruction)
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                             EVENT_SUBJECT_LAST_KNOWN, LAST_TARGET_CONTROLLER,
                             LAST_TARGET_NAME,
@@ -1060,18 +1063,30 @@ def chaos_orb_flip(game: Game, instruction: OracleInstruction, context: OracleEx
     # ``engine.dexterity`` is the one place that substitution is made and
     # explained. Only the count is this card's ("up to two permanents").
     chosen = flip_lands_on(candidates, maximum=2)
+    # "…**destroy** all nontoken permanents it touches. Then **destroy** this
+    # artifact." Two destructions, through the destroy seam every sibling here
+    # uses. They were a bare removal and a move to the graveyard — one of the
+    # two destructions in the engine that went round the seam — so the Orb
+    # destroyed an indestructible permanent, destroyed a creature through its
+    # regeneration shield (CR 702.12b, CR 701.8c), and nothing watching a
+    # destruction heard of either.
     for victim_player, victim_perm in chosen:
-        game.remove_from_battlefield(victim_perm)
-        game._permanent_to_graveyard(victim_player, victim_perm)
-        game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
-    # Always destroy Chaos Orb itself
+        if game._destroy_swept_permanents(
+            victim_player, lambda perm, victim=victim_perm: perm is victim
+        ):
+            game.log.append(f"Chaos Orb flip destroyed {victim_perm.card.name}")
+        else:
+            game.log.append(
+                f"Chaos Orb flip touched {victim_perm.card.name}, which was "
+                "not destroyed"
+            )
+    # "Then destroy this artifact."
     if source_permanent is not None:
         holder = game.controller_index_of(source_permanent)
-        if holder is not None:
-            player = game.players[holder]
-            game.remove_from_battlefield(source_permanent)
-            game._permanent_to_graveyard(player, source_permanent)
-    game.log.append("Chaos Orb was destroyed after flip")
+        if holder is not None and game._destroy_swept_permanents(
+            game.players[holder], lambda perm: perm is source_permanent
+        ):
+            game.log.append("Chaos Orb was destroyed after flip")
     return True, "resolved"
 
 
@@ -1180,7 +1195,12 @@ def arm_self_action_at_next_end_step(game: Game, instruction: OracleInstruction,
         "bounce": "bounce_at_next_end_step",
         "sacrifice": "sacrifice_at_next_end_step",
     }.get(action, "destroy_at_next_end_step")
-    source.metadata[key] = True
+    if key == "destroy_at_next_end_step":
+        # A destruction, so the mark carries who set it up (CR 603.7d–e) —
+        # the end step that carries it out has no spell or ability resolving.
+        mark_delayed_destruction(game, source, key)
+    else:
+        source.metadata[key] = True
     return True, "resolved"
 
 
@@ -1732,9 +1752,25 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
         for permanent_id in targets
         for seat in [*offered, None]
     ]
+    # Whose spell or ability this is (CR 109.5), read now and handed to every
+    # destruction below. A verdict reached after a human seat's answer runs
+    # when nothing is resolving any more — the loop is resumed from the prompt
+    # — so "whatever is resolving" would be nobody, and a land an opponent's
+    # Cleansing destroyed would have been destroyed by no one.
+    destroyer = game.players.index(context.caster)
+    # …and the whole loop is one effect, however many answers it stops for:
+    # what its destructions trigger waits for the last verdict (CR 603.3b), so
+    # the final step — the only place a resumable loop may put work it owes —
+    # is what lets them go.
+    _FINISHED = object()
+    steps.append((_FINISHED, None))
+    begin_destruction_hold(game)
 
     def _step(item) -> None:
         permanent_id, seat = item
+        if permanent_id is _FINISHED:
+            end_destruction_hold(game)
+            return
         permanent = game.permanent_by_id(permanent_id)
         if permanent is None or permanent_id in saved:
             return
@@ -1746,6 +1782,7 @@ def destroy_each_unless_life_paid(game: Game, instruction: OracleInstruction, co
                 game.players[controller],
                 lambda candidate, target=permanent: candidate is target,
                 allow_regeneration=allow_regeneration,
+                cause=destroyer,
             )
             game.log.append(
                 f"{context.card.name} destroyed {permanent.card.name} "

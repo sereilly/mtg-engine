@@ -14,6 +14,8 @@ from ..control import (
     has_control_change,
     set_base_controller,
 )
+from ..destruction_events import (RESOLVING, announce_destroyed,
+                                  destruction_finished)
 from ..delayed_triggers import (end_source_tapped_delayed_triggers,
                                 fire_delayed_triggers)
 from ..enter_effects import CAST_THIS_TURN_STAMP, ENTERED_BATTLEFIELD_TURN
@@ -3313,8 +3315,25 @@ class GameHelpersMixin:
         respect_indestructible: bool = True,
         on_regenerate=None,
         on_destroy=None,
+        cause=RESOLVING,
     ) -> list[Permanent]:
         """Destroy every permanent on *player*'s battlefield that ``matches``.
+
+        **The caller says whether this is a destruction, and whose** (*cause*).
+        This sweep is the road to the graveyard for more than CR 701.8's
+        action: a creature with toughness 0 (CR 704.5f), a planeswalker with no
+        loyalty (704.5i), an Aura attached to nothing (704.5m) and two
+        sacrifices all leave through it, and CR 701.8b is exact that none of
+        those "has been destroyed". So a caller making one of those moves
+        passes ``NOT_A_DESTRUCTION`` and nothing is announced; the lethal-damage
+        sweep passes ``NO_SPELL_OR_ABILITY`` (destroyed, and by no spell or
+        ability — said rather than read off whatever is resolving, because
+        state-based actions are checked inside resolutions too); a delayed
+        destruction passes the seat that set it up (CR 603.7d–e). The default
+        is CR 109.5's controller of whatever is resolving, which is every
+        effect handler's answer. *cause* may also be a callable taking the
+        permanent, for the delayed sweeps, whose victims were marked by
+        different players' effects. See ``engine/destruction_events.py``.
 
         Indestructible permanents survive (when respected); a creature's
         regeneration shield is consumed instead of destruction (when allowed).
@@ -3353,11 +3372,18 @@ class GameHelpersMixin:
                 if on_regenerate is not None:
                     on_regenerate(permanent)
                 continue
+            # Destroyed (CR 701.8a) — announced while it is still listed, as
+            # the single-permanent seam announces it and for its reasons
+            # (CR 603.10a; a replaced move is still a destruction).
+            announce_destroyed(
+                self, permanent, cause(permanent) if callable(cause) else cause
+            )
             self._permanent_to_graveyard(player, permanent)
             if on_destroy is not None:
                 on_destroy(permanent)
             destroyed.append(permanent)
         self.remove_all_from_battlefield(destroyed)
+        destruction_finished(self)
         return destroyed
 
     def _fire_permanent_dies_triggers(

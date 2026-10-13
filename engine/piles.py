@@ -40,6 +40,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from .destruction_events import holding_destruction_triggers
 from .resumption import run_resumable
 from .search_filters import card_has_type
 
@@ -612,15 +613,24 @@ def _battlefield_fates(game, session: PileSession, chosen_fate: str, other_fate)
     ):
         if fate == "destroy":
             destroyed: list = []
-            for permanent in members:
-                seat = game.controller_index_of(permanent)
-                if seat is None:
-                    continue
-                destroyed.extend(game._destroy_swept_permanents(
-                    game.players[seat],
-                    lambda candidate, target=permanent: candidate is target,
-                    allow_regeneration=not payload.get("no_regeneration"),
-                ))
+            # One pile is one simultaneous destruction, carried out when the
+            # last answer arrives — so what it triggers waits for the whole
+            # pile rather than going on the stack a permanent at a time.
+            with holding_destruction_triggers(game):
+                for permanent in members:
+                    seat = game.controller_index_of(permanent)
+                    if seat is None:
+                        continue
+                    destroyed.extend(game._destroy_swept_permanents(
+                        game.players[seat],
+                        lambda candidate, target=permanent: candidate is target,
+                        allow_regeneration=not payload.get("no_regeneration"),
+                        # The spell or ability that separated the piles
+                        # destroys (CR 109.5) — named here, because the piles
+                        # are dealt with when the last answer arrives and
+                        # nothing is resolving by then.
+                        cause=session.caster,
+                    ))
             game.log.append(
                 f"{session.card_name} destroyed "
                 + (", ".join(p.card.name for p in destroyed) or "nothing")

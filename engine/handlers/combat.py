@@ -18,6 +18,7 @@ from ._common import (recorded_permanent_ids,
 )
 from .registry import effect_handler
 from ..keywords import grant_keyword
+from ..destruction_events import mark_delayed_destruction
 from ..mana_payment import mana_cost_label
 from ..combat_assignment import (ASSIGNS_NO_COMBAT_DAMAGE,
                                 MUST_ASSIGN_AS_UNBLOCKED,
@@ -136,7 +137,7 @@ def delayed_destroy_blocked_or_blocker(game: Game, instruction: OracleInstructio
         game.log.append(f"{context.card.name} block trigger had no valid target")
         return True, "no target"
     for victim in victims:
-        victim.metadata["destroy_at_end_of_combat"] = True
+        mark_delayed_destruction(game, victim, "destroy_at_end_of_combat")
         game.log.append(
             f"{context.card.name} will destroy {victim.card.name} at end of combat"
         )
@@ -790,7 +791,7 @@ def mark_non_wall_target_to_attack(game: Game, instruction: OracleInstruction, c
         game.log.append(f"{context.card.name}: no legal creature to force into combat")
         return True, "resolved"
     chosen.metadata["must_attack_until_eot"] = True
-    chosen.metadata["destroy_if_did_not_attack_eot"] = True
+    mark_delayed_destruction(game, chosen, "destroy_if_did_not_attack_eot")
     game.log.append(f"{chosen.card.name} marked to attack this turn")
     return True, "resolved"
 
@@ -1148,13 +1149,16 @@ def force_subject_to_attack_until_eot(game: Game, instruction: OracleInstruction
         if stamp is not None:
             perm.metadata[MUST_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
             if destroy:
-                perm.metadata[
-                    DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
-                ] = dict(stamp)
+                mark_delayed_destruction(
+                    game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                    dict(stamp),
+                )
         else:
             perm.metadata["must_attack_until_eot"] = True
             if destroy:
-                perm.metadata["destroy_if_did_not_attack_eot"] = True
+                mark_delayed_destruction(
+                    game, perm, "destroy_if_did_not_attack_eot"
+                )
         marked.append(perm.card.name)
     if marked:
         when = (
@@ -1257,9 +1261,12 @@ def destroy_subject_at_end_step_if_it_didnt_attack(game: Game, instruction: Orac
     marked: list[str] = []
     for perm in subjects:
         if stamp is not None:
-            perm.metadata[DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY] = dict(stamp)
+            mark_delayed_destruction(
+                game, perm, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
+                dict(stamp),
+            )
         else:
-            perm.metadata["destroy_if_did_not_attack_eot"] = True
+            mark_delayed_destruction(game, perm, "destroy_if_did_not_attack_eot")
         marked.append(perm.card.name)
     if marked:
         game.log.append(

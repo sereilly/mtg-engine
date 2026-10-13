@@ -14,6 +14,7 @@ no seat.
 """
 
 from ..delayed_triggers import fire_delayed_triggers
+from ..destruction_events import NOT_A_DESTRUCTION, delayed_destruction_cause
 from ..models import Permanent
 from ..turn_state import (DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY,
                           marked_for_this_turn)
@@ -160,6 +161,30 @@ class EndStepMixin:
         def _delayed_eot_sacrifice(permanent: Permanent) -> bool:
             return bool(permanent.metadata.get("sacrifice_at_next_end_step"))
 
+        def _delayed_eot_cause(permanent: Permanent):
+            # Whose delayed ability this destruction is (CR 603.7d–e): the
+            # seat recorded with whichever mark is firing, in the order
+            # `_delayed_eot_destruction` reads them. A creature can carry two
+            # — a Berserk and a Nettling Imp's — set by two players, and the
+            # one that destroys it is the one whose condition holds.
+            marks = []
+            if permanent.metadata.get("destroy_at_next_end_step"):
+                marks.append("destroy_at_next_end_step")
+            if not permanent.metadata.get("attacked_this_turn"):
+                if permanent.metadata.get("destroy_if_did_not_attack_eot"):
+                    marks.append("destroy_if_did_not_attack_eot")
+                if marked_for_this_turn(
+                    self, permanent, DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY
+                ):
+                    marks.append(DESTROY_IF_DID_NOT_ATTACK_ON_SEAT_TURN_KEY)
+            elif permanent.metadata.get("destroy_if_attacked_eot"):
+                marks.append("destroy_if_attacked_eot")
+            for mark in marks:
+                cause = delayed_destruction_cause(permanent, mark)
+                if isinstance(cause, int):
+                    return cause
+            return delayed_destruction_cause(permanent, marks[0] if marks else "")
+
         # **Two sweeps, because a sacrifice is not a destruction.** This was one
         # sweep with regeneration and indestructibility both switched off, and
         # its own comment named the reason and the fix: the flags conflated
@@ -177,12 +202,15 @@ class EndStepMixin:
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
                 controller, _delayed_eot_destruction,
+                cause=_delayed_eot_cause,
             ):
                 destroyed_names.append(permanent.card.name)
         for controller in self.players:
             for permanent in self._destroy_swept_permanents(
                 controller, _delayed_eot_sacrifice,
                 allow_regeneration=False, respect_indestructible=False,
+                # CR 701.21a: "Sacrificing a permanent doesn't destroy it."
+                cause=NOT_A_DESTRUCTION,
             ):
                 destroyed_names.append(permanent.card.name)
 
