@@ -5599,6 +5599,11 @@ function manaCostText(cost) {
   return out;
 }
 
+// What a Pay button says while the server reports the price cannot be met
+// (`payable: false`): the refusal's own advice, before the click instead of
+// after it.
+const PAY_NOT_YET_HINT = "Tap for the mana first — your pool and untapped lands don't cover this yet — or decline.";
+
 function applyOptionalPayPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -5691,13 +5696,17 @@ function applyOptionalPayPrompt(info) {
   // all: CR 118.8's alternatives are two ways to buy one consequence and the
   // engine states which currency it spends.
   const gradedOptions = Array.isArray(current?.graded_options) ? current.graded_options : [];
+  // The same field on the same question as the toll prompt above: whether
+  // "pay" would be accepted now. Only a priced offer carries a false one.
+  const cannotPayYet = current?.payable === false;
+  const payLock = cannotPayYet ? ` disabled title="${PAY_NOT_YET_HINT}"` : "";
   const payButtons = gradedOptions.length
     ? gradedOptions.map(
       (label, index) =>
         `<button type="button" class="prompt-choice-btn" data-optional-pay="yes" ` +
-        `data-pay-option="${index}">Pay ${renderSymbolsInline(label)}</button>`,
+        `data-pay-option="${index}"${payLock}>Pay ${renderSymbolsInline(label)}</button>`,
     )
-    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>`];
+    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes"${payLock}>${acceptLabel}</button>`];
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
@@ -5705,6 +5714,7 @@ function applyOptionalPayPrompt(info) {
       payButtons.join("") +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">${declineLabel}</button>` +
       `</div>`,
+    cannotPayYet ? `<div class="prompt-subnote prompt-pay-note">${PAY_NOT_YET_HINT}</div>` : "",
   ].join("");
 
   steps.querySelectorAll("[data-optional-pay]").forEach((btn) => {
@@ -7756,12 +7766,22 @@ function applyManaPaymentPrompt(info) {
     `${cardName} counters ${spellName} unless you pay ${costText}. ` +
       `Tap lands to generate mana, then pay or decline.`,
   );
-  const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn">Pay ${costSymbols}</button>`;
+  // `payable` is the server's answer to "would Pay be accepted as the board
+  // stands" — the pool plus what the untapped lands would add. "Pay" used to be
+  // offered whatever the board held and a payment the planner could not make
+  // was read as a decline: the spell was countered behind a 200. It is refused
+  // now, so the button follows the field and says what is missing; each land
+  // or mana rock tapped renders a new state, which asks again. (Absent on an
+  // older server, where the button stays as it was.)
+  const cannotPayYet = info.payable === false;
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn"`
+    + `${cannotPayYet ? ` disabled title="${PAY_NOT_YET_HINT}"` : ""}>Pay ${costSymbols}</button>`;
   const declineBtn = `<button type="button" class="prompt-choice-btn" id="manaDeclineBtn">Don't pay (${escapeHtml(spellName)} is countered)</button>`;
   steps.innerHTML = [
     `<div>Spell: ${escapeHtml(spellName)}</div>`,
     `<div>Cost to keep it: ${costSymbols}</div>`,
     `<div class="prompt-choice-row">${payBtn}${declineBtn}</div>`,
+    cannotPayYet ? `<div class="prompt-subnote prompt-pay-note">${PAY_NOT_YET_HINT}</div>` : "",
   ].join("");
 
   const payEl = document.getElementById("manaPayBtn");
