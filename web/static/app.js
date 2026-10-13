@@ -1310,13 +1310,45 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
 
     await sendAction({ seat, action: "pass_priority" });
   } catch (error) {
-    autoPassTurnEndEnabled = false;
-    autoPassMode = null;
     const message = error instanceof Error ? error.message : "Auto-pass failed";
-    updateActionHint(`Auto-pass paused: ${message}`, true);
+    // "Player does not have priority" / "no active priority window" is this
+    // pass arriving at a state the server had already left — another request
+    // crossed it. The newer state is fetched below; stopping End Turn for it
+    // left the turn standing at Declare Attackers.
+    if (!/does not have priority|no active priority window/i.test(message)) {
+      autoPassTurnEndEnabled = false;
+      autoPassMode = null;
+      updateActionHint(`Auto-pass paused: ${message}`, true);
+    }
   } finally {
     autoPassTurnEndInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
+}
+
+// Every automatic sender below is guarded by an in-flight flag, and a state
+// rendered while that flag is up is *skipped* — the response to the sender's
+// own request is rendered inside its `await sendAction`, before its `finally`
+// runs, so that skip happens on every send. The game only moved on because the
+// server's SSE push fetched and rendered the state again a moment later; where
+// a slower await was pending (`waitForBattlefieldAnimations`, up to 8 s) the
+// push arrived first too, the skipped state was the last one the server sent,
+// and the game sat in a step nobody had priority in — End Turn stalled in
+// Declare Blockers with no prompt on screen. So each sender asks again as its
+// flag clears.
+//
+// It asks the **server**, not `currentState`. The state a sender holds then is
+// its own request's response, and at a step or turn boundary that response can
+// be mid-transition — "turn 14, end step, priority: you" carrying a log that
+// already has the opponent's untap and draw in it. Skipping its own response
+// is what kept a sender from acting on one; re-running the senders on it sent
+// passes the server refused ("player does not have priority") and one it did
+// not. A fetched state is the one the SSE path has always rendered. The
+// per-sender state key makes a state already acted on a no-op, which is what
+// ends the chain.
+function retryAutoAdvanceAfterFlight() {
+  if (!sessionId) return;
+  getState().catch(() => {});
 }
 
 function isStackHoverHolding() {
@@ -1383,6 +1415,12 @@ async function maybeAutoPassPriority(state = currentState) {
     const latest = currentState;
     if (
       isPriorityHeld() ||
+      // End Turn was pressed while this waited for the cast's animation: that
+      // sender has the passing now (and has already passed for this spell). A
+      // second pass from here landed on the empty stack behind it, and End
+      // Turn's own next pass was then refused — "player does not have
+      // priority" — which switched End Turn off.
+      autoPassTurnEndEnabled ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest) ||
@@ -1396,6 +1434,7 @@ async function maybeAutoPassPriority(state = currentState) {
     // Silently absorb; next state update will retry if needed.
   } finally {
     autoPassPriorityInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
 }
 
@@ -1426,6 +1465,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     const latest = currentState;
     if (
       isPriorityHeld() ||
+      autoPassTurnEndEnabled ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest)
@@ -1459,6 +1499,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     // Silently absorb
   } finally {
     autoPassDisabledPhaseInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
 }
 
@@ -1484,7 +1525,13 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     isCombatStep(state, "declare_attackers") &&
     seat === state.current_turn &&
     !combat.attackers_locked &&
-    getValidAttackerIndices(state).length === 0
+    getValidAttackerIndices(state).length === 0 &&
+    // One submitter. While End Turn is passing this turn for its own seat,
+    // `maybeAutoPassUntilTurnEnd` owes the empty declaration (`owesOwnAttack`)
+    // and sends it at once; this one waits for animations first, so the two
+    // both sent it ("declared 0 attacker(s)" twice in the log) and this one's
+    // wait could outlast the two states that followed.
+    !shouldAutoPassUntilTurnEnd(state)
   ) {
     const defendingSeat = Number.isInteger(combat.defending_player_index)
       ? combat.defending_player_index
@@ -1550,6 +1597,10 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     // Silently absorb; the next state update will retry if still stuck.
   } finally {
     autoCombatDeclareInFlight = false;
+    // "The next state update" may already have come and been skipped above
+    // (`if (autoCombatDeclareInFlight) return;`), and nothing else nudges a
+    // step nobody has priority in.
+    retryAutoAdvanceAfterFlight();
   }
 }
 
