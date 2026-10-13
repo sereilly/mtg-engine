@@ -336,6 +336,11 @@ class PendingChoicesMixin:
                 if self.priority_player_index is not None:
                     self.priority_player_index = self.active_player_index
                     self.priority_pass_count = 0
+                # …and CR 603.3b's: the abilities this object's destructions
+                # triggered were waiting for it to finish, and it has. After
+                # the state-based check, which is the order the rule gives.
+                # See engine/destruction_events.py.
+                destruction_finished(self)
                 return
 
     def _answer_pending_choice(self, choice: PendingChoice, apply):
@@ -358,10 +363,12 @@ class PendingChoicesMixin:
         if item is not None:
             self._release_stack_item(item)
         if item is None or not item.resolution_held:
-            # The resolution this answer belonged to is over — or there was
-            # none to hold — so what its destructions triggered goes on the
-            # stack now (CR 603.3b). While the object is still held on a later
-            # prompt they keep waiting. See engine/destruction_events.py.
+            # The resolution this answer belonged to is over — or no object
+            # was held for it (a headless table arms its prompts against an
+            # empty stack) — so what its destructions triggered goes on the
+            # stack (CR 603.3b). While the object is still held on a later
+            # prompt they keep waiting with it. See
+            # engine/destruction_events.py.
             destruction_finished(self)
         return answered
 

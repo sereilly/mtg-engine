@@ -723,6 +723,15 @@ _UNANNOUNCED_TRIGGER_TARGETS = frozenset({
     # controls**" — Caustic Wasps' shape. Driven through a real combat damage
     # step it targets a creature of the damaged player's and kills it.
     "Spark Mage#0",
+    # Odyssey, W2G4. "…you may destroy target permanent **that opponent
+    # controls**" — the seat is whoever's spell or ability did the destroying,
+    # and only the destroy seam's event names it
+    # (``destruction_events.announce_destroyed``). Driven through a real
+    # destruction the controller is asked as the ability goes on the stack,
+    # out of exactly that opponent's permanents, and the answer is a target
+    # like any other (tests/sets/test_ody_enchantments_w2g4.py); it is this
+    # context-free drive that has no seat to give it.
+    "Karmic Justice#0",
     # no picker derived
     "The Abyss#0", "Rysorian Badger#0", "Goblin Grenadiers#0",
     "Carpet of Flowers#0", "Erithizon#0", "Ley Line#0", "Tolarian Kraken#0",

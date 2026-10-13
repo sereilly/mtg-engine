@@ -337,6 +337,26 @@ def test_a_regenerated_permanent_was_not_destroyed(set_pool):
     assert _justice_triggers(game) == []
 
 
+def test_a_land_whose_destruction_was_replaced_was_not_destroyed(set_pool):
+    """Pyramids: "The next time target land would be destroyed this turn,
+    remove all damage marked on it instead." The third thing that replaces a
+    destruction, and the same answer as the other two: the Stone Rain
+    resolves, the Island stays, and nothing was destroyed. (The shield is set
+    as the Pyramids' ability sets it; that ability has its own tests.)"""
+    game = _table(set_pool)
+    _put(game, set_pool, 0, "Karmic Justice")
+    island = _put(game, set_pool, 0, "Island")
+    island.metadata["land_destruction_shield_this_turn"] = True
+    _put(game, set_pool, 1, "Mox Pearl")
+
+    _cast(game, set_pool, 1, "Stone Rain", target_permanent_ids=[island.permanent_id])
+    game.resolve_top_of_stack()
+
+    assert game.is_on_battlefield(island)
+    assert "land_destruction_shield_this_turn" not in island.metadata
+    assert _justice_triggers(game) == []
+
+
 def test_a_destroyed_permanent_that_was_exiled_instead_was_still_destroyed(set_pool):
     """Yawgmoth's Agenda: "If a card would be put into your graveyard from
     anywhere, exile it instead." The Sol Ring never reaches a graveyard and

@@ -1870,8 +1870,8 @@ def destroyed_trigger_applies(
       carries the seat (``cause_seat``) or None, and None is an answer: lethal
       damage destroys a creature and no spell or ability did (CR 704.5g),
       whoever dealt the damage. "An opponent" is every seat but the watcher's
-      own (CR 102.2). A cause word this does not know refuses, which is the
-      direction a trigger must fail in.
+      own (CR 102.2, CR 102.3). A cause word this does not know refuses, which
+      is the direction a trigger must fail in.
     * ``destroyed_filter`` — **what** was destroyed, through the one matcher
       every printed noun phrase is read by. Asked while the permanent is still
       on its battlefield (CR 603.10a): its types are layer 4's, so a land an
