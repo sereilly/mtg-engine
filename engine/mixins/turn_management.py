@@ -596,9 +596,25 @@ class TurnManagementMixin:
         player and not for the other.
         """
         from ..ai_valuation import mana_ability_symbols
+        from ..land_mana_swaps import swapped_production
 
         free, _priced = self._land_mana_abilities(land)
         if free is None or color in mana_ability_symbols(free):
+            return None
+        # **A land under a swap makes the swapped symbol by any of its
+        # abilities** ("If a land is tapped for mana, it produces {B}
+        # instead", Infernal Darkness), so the default one answers — and it is
+        # the one that costs nothing more. Asked for the {B} the swap makes,
+        # an Underground River was sent to its second ability because that is
+        # the one whose *printed* symbols include {B}: the plan took a point
+        # of damage to pay a generic pip its free {C} would have paid. The
+        # one exception is a colours-only swap ("…instead of any other
+        # **color**", Hall of Gemstone) over a default that makes only {C},
+        # which the swap leaves alone.
+        swap = swapped_production(self, land)
+        if swap is not None and swap.produced is not None and not (
+            swap.colors_only and mana_ability_symbols(free) <= {"C"}
+        ):
             return None
         for index, ability in enumerate(self.usable_abilities_of(land)):
             if not is_tap_alone_mana_ability(ability):

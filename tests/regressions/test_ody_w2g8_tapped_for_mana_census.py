@@ -246,9 +246,14 @@ def drive(pool, road, land_card, tapper, active, watcher=None, how=None,
         ):
             return None
     elif road == "plan":
-        if game._optional_pay_plan(player, {"cost": {"generic": 1}}) is None:
+        # Through the payer every effect-collected cost shares, with the
+        # planner the optional-pay prompt gives it. A price that could not be
+        # met is a road that refused.
+        if not game._pay_planned_cost(
+            player,
+            lambda: game._optional_pay_plan(player, {"cost": {"generic": 1}}),
+        ):
             return None
-        game._pay_optional(tapper, {"cost": {"generic": 1}, "card_name": "a price"})
         # the payment's own unit, put back so the roads compare on what was made
         player.mana_pool["C"] = player.mana_pool.get("C", 0) + 1
     else:

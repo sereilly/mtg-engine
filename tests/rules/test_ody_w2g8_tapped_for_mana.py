@@ -198,6 +198,25 @@ def test_a_painland_pays_a_coloured_pip_with_the_ability_that_makes_it(set_pool)
         assert _floating(player) == 0
 
 
+@pytest.mark.cr("106.12b", "605.3a")
+def test_a_painland_under_a_swap_pays_with_the_ability_that_does_not_hurt(set_pool):
+    """Infernal Darkness makes every land's mana {B}, whichever ability made
+    it — so Adarkar Wastes' free "{T}: Add {C}" is a {B}, and a plan that asks
+    it for {B} must not go looking for the ability that *prints* one."""
+    game = _table(set_pool, active=0)
+    _put(game, set_pool, 1, "Infernal Darkness")
+    wastes = _put(game, set_pool, 0, "Adarkar Wastes")
+    player = game.players[0]
+
+    assert game._pay_planned_cost(
+        player, lambda: game._optional_pay_plan(player, {"cost": {"B": 1}}),
+    )
+
+    assert wastes.tapped
+    assert player.life == 20
+    assert _floating(player) == 0
+
+
 @pytest.mark.cr("106.12a", "118.3")
 def test_a_land_that_makes_no_mana_pays_for_nothing(set_pool):
     """Tolarian Academy beside no artifact makes none. It used to be tapped
