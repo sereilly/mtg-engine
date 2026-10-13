@@ -6,9 +6,9 @@
       "updated_at": 1786234428.1613116
     },
     "Abundance": {
-      "reason": "With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 \"choose which effect applies\" / \"choose whether to take the counter\"). Each card alone answered its prompt correctly.",
-      "status": "fail",
-      "updated_at": 1791886359.2900853
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900804.458534
     },
     "Afflict": {
       "reason": "",
@@ -558,7 +558,7 @@
     "Demonic Tutor": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782797204.1439722
+      "updated_at": 1791900821.6936688
     },
     "Desert": {
       "reason": "",
@@ -708,7 +708,7 @@
     "Entomb": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1791884609.0928023
+      "updated_at": 1791900824.53482
     },
     "Erg Raiders": {
       "reason": "",
@@ -851,9 +851,9 @@
       "updated_at": 1781503124.4112332
     },
     "Fork": {
-      "reason": "Forking a spell whose picker is \"any target\" or \"target player\" (Lightning Bolt) never offers new targets for the copy; only creature/permanent/artifact/land spells get the second step. The copy does keep the original target (a Bolt at a creature is copied at that creature).",
+      "reason": "One-slot copies now work: the server asks for the copy's target (a creature, a player by the life pill, or the original) and each answer resolved correctly. But Forking a Shower of Coals aimed at two creatures: the copy dealt its 2 to the opponent's face (\"AI took 2 damage\") instead of to the original's two targets (CR 707.10).",
       "status": "fail",
-      "updated_at": 1791885065.052563
+      "updated_at": 1791901160.201225
     },
     "Frozen Shade": {
       "reason": "",
@@ -1074,6 +1074,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787844.5205953
+    },
+    "Inspiration": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900827.4836483
     },
     "Instill Energy": {
       "reason": "",
@@ -1321,9 +1326,9 @@
       "updated_at": 1782544325.311722
     },
     "Lodestone Bauble": {
-      "reason": "\"That player draws a card at the beginning of the next turn's upkeep\": three basic lands from MY graveyard went on top of my library, and at the AI's upkeep the AI drew the card.",
-      "status": "fail",
-      "updated_at": 1791885747.5969656
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900810.2259123
     },
     "Lord of Atlantis": {
       "reason": "",
@@ -1359,6 +1364,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884629.232374
+    },
+    "Mana Leak": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900818.8307428
     },
     "Mana Short": {
       "reason": "",
@@ -1686,9 +1696,9 @@
       "updated_at": 1782970446.445287
     },
     "Pursuit of Knowledge": {
-      "reason": "With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 \"choose which effect applies\" / \"choose whether to take the counter\"). Each card alone answered its prompt correctly.",
-      "status": "fail",
-      "updated_at": 1791886361.9396043
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900807.3152852
     },
     "Pyramids": {
       "reason": "",
@@ -1715,6 +1725,11 @@
       "status": "pass",
       "updated_at": 1791787819.601704
     },
+    "Rampant Growth": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900830.336597
+    },
     "Red Elemental Blast": {
       "reason": "",
       "status": "pass",
@@ -1738,7 +1753,7 @@
     "Reinforcements": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1791885895.3077137
+      "updated_at": 1791900813.0675707
     },
     "Repentant Blacksmith": {
       "reason": "",
@@ -2134,6 +2149,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791884576.274099
+    },
+    "Teferi's Ageless Insight": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791900815.918794
     },
     "Temporal Spring": {
       "reason": "",

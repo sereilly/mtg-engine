@@ -2029,8 +2029,12 @@ def test_cast_targeted_spell_succeeds_after_mana_tapped():
 
 
 def test_fork_serializes_copies_spell_flag_in_hand():
-    """A Fork in hand carries copies_spell=True so the UI runs the copy-retarget
-    flow; a plain counterspell does not."""
+    """A Fork in hand carries copies_spell=True; a plain counterspell does not.
+
+    The flag is the wire's, and no longer what starts anything in the browser:
+    the client's cast-time retarget step read it and is gone, the copy's new
+    target being asked by the server's ``copy_spell_target`` prompt as Fork
+    resolves (``test_ody_p5_closer_b_client_ui_api.py``)."""
     from engine.card_loader import load_cards as _load
 
     cards = {c.name: c for c in _load(LEA_PATH)}
@@ -2049,9 +2053,8 @@ def test_fork_serializes_copies_spell_flag_in_hand():
     assert fork["target_spec"]["kind"] == "stack"
     assert fork["target_spec"]["copies_spell"] is True
     # Absent rather than False: the spec is derived from Counterspell's compiled
-    # program, which sets only the flags that apply. Every reader tests it for
-    # truthiness (`!!targetSpecOf(card).copies_spell`), so a missing key and an
-    # explicit False are the same answer.
+    # program, which sets only the flags that apply. A reader tests it for
+    # truthiness, so a missing key and an explicit False are the same answer.
     assert not counter["target_spec"].get("copies_spell")
 
 

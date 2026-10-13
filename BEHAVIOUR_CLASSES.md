@@ -7,7 +7,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 - Cards in the catalog: **5246**
 - Distinct behaviours: **4752**
 - Cards sharing a behaviour with another: **716** in **222** classes
-- Unverified cards covered by a verified peer: **193**
+- Unverified cards covered by a verified peer: **194**
 
 | Size | Cards |
 | --- | --- |
@@ -151,7 +151,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 2 | Fledgling Djinn, **Serendib Efreet** |
 | 2 | Flooded Woodlands, Reclamation |
 | 2 | Forbidden Lore, Verdant Field |
-| 2 | Force Spike, Mana Leak |
+| 2 | Force Spike, **Mana Leak** |
 | 2 | **Forest**, Snow-Covered Forest |
 | 2 | Frenetic Ogre, Pardic Swordsmith |
 | 2 | Fylamarid, Metathran Transport |

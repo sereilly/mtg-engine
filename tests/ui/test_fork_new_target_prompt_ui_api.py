@@ -1,9 +1,10 @@
 """Fork on a Lightning Bolt aimed at a face, over the wire.
 
 "Copy target instant or sorcery spell, except that the copy is red. You may
-choose new targets for the copy." The client offers new targets through a
-second step of its own, which exists for permanent pickers and cannot name a
-player; so this cast — the body it sends for a face-aimed Bolt —
+choose new targets for the copy." The client offered new targets through a
+second step of its own, which existed for permanent pickers and could not name
+a player; so this cast — the body it sent for a face-aimed Bolt, and since the
+client closer the body it sends for every Fork —
 
     {"action":"cast","card_name":"Fork","target_stack_index":0}
 
@@ -16,8 +17,10 @@ one Double Vision's copy and Chain Lightning's use:
     {"action":"copy_spell_target_confirm","target_seat":N}          (a player)
     {"action":"copy_spell_target_confirm","target_permanent_id":ID}  (a permanent)
 
-A new permanent named on the cast (the existing second step) is still the
-answer by itself and arms nothing. The rule is
+A new permanent named on the cast is still the answer by itself and arms
+nothing — the wire accepts it, though the browser no longer sends it: the
+client's second step stood down in favour of this prompt, one way of asking
+rather than two (``test_ody_p5_closer_b_client_ui_api.py``). The rule is
 ``tests/rules/test_forked_copy_new_targets.py``.
 """
 from __future__ import annotations
@@ -115,7 +118,9 @@ def test_forking_a_bolt_aimed_at_a_face_asks_for_the_copys_target():
 
 
 def test_a_new_permanent_named_on_the_cast_is_not_asked_again():
-    """The client's existing second step, unchanged: one answer, one ask."""
+    """A cast that names the copy's new permanent is one answer and one ask.
+    (What the client's own second step used to send; a scripted caller and a
+    headless test still may.)"""
     sid, game, _me, you, _mine, theirs = _session()
 
     assert _act(

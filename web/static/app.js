@@ -5599,6 +5599,11 @@ function manaCostText(cost) {
   return out;
 }
 
+// What a Pay button says while the server reports the price cannot be met
+// (`payable: false`): the refusal's own advice, before the click instead of
+// after it.
+const PAY_NOT_YET_HINT = "Tap for the mana first — your pool and untapped lands don't cover this yet — or decline.";
+
 function applyOptionalPayPrompt(info) {
   const panel = q("activationPanel");
   const title = q("promptTitle");
@@ -5691,13 +5696,17 @@ function applyOptionalPayPrompt(info) {
   // all: CR 118.8's alternatives are two ways to buy one consequence and the
   // engine states which currency it spends.
   const gradedOptions = Array.isArray(current?.graded_options) ? current.graded_options : [];
+  // The same field on the same question as the toll prompt above: whether
+  // "pay" would be accepted now. Only a priced offer carries a false one.
+  const cannotPayYet = current?.payable === false;
+  const payLock = cannotPayYet ? ` disabled title="${PAY_NOT_YET_HINT}"` : "";
   const payButtons = gradedOptions.length
     ? gradedOptions.map(
       (label, index) =>
         `<button type="button" class="prompt-choice-btn" data-optional-pay="yes" ` +
-        `data-pay-option="${index}">Pay ${renderSymbolsInline(label)}</button>`,
+        `data-pay-option="${index}"${payLock}>Pay ${renderSymbolsInline(label)}</button>`,
     )
-    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes">${acceptLabel}</button>`];
+    : [`<button type="button" class="prompt-choice-btn" data-optional-pay="yes"${payLock}>${acceptLabel}</button>`];
   steps.innerHTML = [
     `<div>Card: ${escapeHtml(cardName)}</div>`,
     `<div>Remaining decisions: ${pending.length}</div>`,
@@ -5705,6 +5714,7 @@ function applyOptionalPayPrompt(info) {
       payButtons.join("") +
       `<button type="button" class="prompt-choice-btn" data-optional-pay="no">${declineLabel}</button>` +
       `</div>`,
+    cannotPayYet ? `<div class="prompt-subnote prompt-pay-note">${PAY_NOT_YET_HINT}</div>` : "",
   ].join("");
 
   steps.querySelectorAll("[data-optional-pay]").forEach((btn) => {
@@ -7756,12 +7766,22 @@ function applyManaPaymentPrompt(info) {
     `${cardName} counters ${spellName} unless you pay ${costText}. ` +
       `Tap lands to generate mana, then pay or decline.`,
   );
-  const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn">Pay ${costSymbols}</button>`;
+  // `payable` is the server's answer to "would Pay be accepted as the board
+  // stands" — the pool plus what the untapped lands would add. "Pay" used to be
+  // offered whatever the board held and a payment the planner could not make
+  // was read as a decline: the spell was countered behind a 200. It is refused
+  // now, so the button follows the field and says what is missing; each land
+  // or mana rock tapped renders a new state, which asks again. (Absent on an
+  // older server, where the button stays as it was.)
+  const cannotPayYet = info.payable === false;
+  const payBtn = `<button type="button" class="prompt-choice-btn" id="manaPayBtn"`
+    + `${cannotPayYet ? ` disabled title="${PAY_NOT_YET_HINT}"` : ""}>Pay ${costSymbols}</button>`;
   const declineBtn = `<button type="button" class="prompt-choice-btn" id="manaDeclineBtn">Don't pay (${escapeHtml(spellName)} is countered)</button>`;
   steps.innerHTML = [
     `<div>Spell: ${escapeHtml(spellName)}</div>`,
     `<div>Cost to keep it: ${costSymbols}</div>`,
     `<div class="prompt-choice-row">${payBtn}${declineBtn}</div>`,
+    cannotPayYet ? `<div class="prompt-subnote prompt-pay-note">${PAY_NOT_YET_HINT}</div>` : "",
   ].join("");
 
   const payEl = document.getElementById("manaPayBtn");
@@ -9225,9 +9245,13 @@ function renderSearchLibraryModal(info) {
   // descriptions, each with its label and the cards that answer it. Empty for
   // every other search, and everything below that reads it is then inert.
   const slots = multi && Array.isArray(info.one_of_each) ? info.one_of_each : [];
-  // CR 701.23d: how many the answer must name (0 for "up to" and for a search
+  // CR 701.23d: how many the answer must name (0 for "up to", for a search
+  // with a stated quality — which may fail to find, CR 701.23b — and for one
   // nothing can answer). The engine refuses fewer whole, so the confirm waits.
-  const minPicks = multi && Number.isInteger(info.min_picks) ? info.min_picks : 0;
+  // Sent for every search now, not only a counted one: "search your library
+  // for a card" (Demonic Tutor, Entomb) names no quality, so it must find one,
+  // and its floor of 1 is what takes "Fail to Find" off that modal below.
+  const minPicks = Number.isInteger(info.min_picks) ? info.min_picks : 0;
 
   const title = document.getElementById("searchLibraryTitle");
   if (title) {
@@ -10369,12 +10393,18 @@ function renderReorderLibraryModal(info) {
   // on the wire is the same either way: the leftmost card is the uppermost of
   // the pile, the first of them a draw reaches.
   const atBottom = info.position === "bottom";
+  // …and `position: "top"` is cards being *put* on top in an order their
+  // owner chooses ("…on top of their library in any order", Lodestone Bauble;
+  // Reinforcements), which is not a look at cards already there: nothing was
+  // on top to "reorder", and the words say where the pile is going.
+  const ontoTop = info.position === "top";
   const whose = info.target_seat === seat ? "your" : `${info.target_name || "that player"}'s`;
   const titleEl = document.getElementById("reorderLibraryTitle");
   if (titleEl) {
     titleEl.textContent = !canReorder
       ? "Top of Library"
-      : atBottom ? "Order the Bottom of Library" : "Reorder Top of Library";
+      : atBottom ? "Order the Bottom of Library"
+        : ontoTop ? "Order the Top of Library" : "Reorder Top of Library";
   }
   const subtitleEl = document.getElementById("reorderLibrarySubtitle");
   if (subtitleEl) {
@@ -10383,7 +10413,10 @@ function renderReorderLibraryModal(info) {
       : atBottom
         ? `These ${cards.length} cards go on the bottom of ${whose} library. Drag cards to rearrange. `
           + "The leftmost card will be drawn first of them; the rightmost will be the very bottom card."
-        : "Drag cards to rearrange. The leftmost card will be on top of the library.";
+        : ontoTop
+          ? `These ${cards.length} cards go on top of ${whose} library. Drag cards to rearrange. `
+            + "The leftmost card will be the top card — the next one drawn."
+          : "Drag cards to rearrange. The leftmost card will be on top of the library.";
   }
 
   const container = document.getElementById("reorderLibraryCards");
@@ -15950,73 +15983,18 @@ function startCastStackSpellPrompt(card, castAction = "cast", validTargets = nul
   }
   pendingCastTarget = {
     card, cardName, targetKind: "stack", castAction,
-    // Fork copies the chosen spell and lets the caster pick new targets for the
-    // copy, so selecting the spell starts a second target prompt rather than
-    // casting immediately.
-    copiesSpell: !!targetSpecOf(card).copies_spell,
+    // Fork's "you may choose new targets for the copy" is not asked here. It
+    // was, as a second prompt before the cast went out — but only for a copied
+    // spell whose picker was a creature / permanent / artifact / land, so a
+    // Forked Lightning Bolt was never offered anything, and a player could not
+    // be named at all. The server asks now, as the copy is made (CR 707.10c),
+    // through the `copy_spell_target` prompt Chain Lightning's copy uses, with
+    // every candidate the original's own picker would offer and the original's
+    // target among them. One way of asking, not two.
     ...fields,
   };
   renderActivationPrompt();
   renderStack(currentState ? currentState.stack : _currentStack);
-}
-
-// Fork second step: after the spell to copy is chosen, offer the caster a new
-// target for the copy (when the copied spell targets a permanent), then send the
-// cast carrying both the copied-spell index and the chosen target. A copied spell
-// that targets a player or nothing simply keeps its original targets.
-const _FORK_RETARGET_KINDS = new Set(["creature", "permanent", "artifact", "land"]);
-
-async function startForkCopyRetarget(forkPending, stackArrayIndex, copiedItem) {
-  const copiedName = copiedItem?.card?.name || "the spell";
-  const copiedCard = await attachCardTargetSpec(await fetchCardByName(copiedName), seat);
-  const spec = copiedCard ? targetSpecOf(copiedCard) : EMPTY_TARGET_SPEC;
-  const fields = indexValidTargets(spec.valid_targets || []);
-  if (!_FORK_RETARGET_KINDS.has(spec.kind) || fields.validKeys.size === 0) {
-    // Nothing to retarget — copy keeps the original spell's targets.
-    sendForkCopyCast(forkPending, stackArrayIndex, null, null, copiedName);
-    return;
-  }
-  pendingCastTarget = {
-    card: forkPending.card,
-    cardName: forkPending.cardName,
-    targetKind: spec.kind === "creature" ? "creature" : "permanent",
-    castAction: forkPending.castAction,
-    forkStackIndex: stackArrayIndex,
-    copyTargetName: copiedName,
-    ...fields,
-  };
-  renderActivationPrompt();
-  renderBoard(currentState);
-  updateActionHint(`Choose a new target for the copy of ${copiedName} (click the original to keep it).`);
-}
-
-function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentIndex, copiedName) {
-  const body = {
-    seat,
-    action: forkPending.castAction || "cast",
-    card_name: forkPending.cardName,
-    target_stack_index: stackArrayIndex,
-  };
-  if (Number.isInteger(targetSeat)) body.target_seat = targetSeat;
-  if (Number.isInteger(permanentIndex)) {
-    body.permanent_index = permanentIndex;
-    withPermanentId(body, "target_permanent_id", targetSeat, permanentIndex);
-  }
-  updateActionHint(`Casting ${forkPending.cardName} (copying ${copiedName})...`);
-  sendAction(body)
-    .then(() => {
-      updateActionHint(`Cast ${forkPending.cardName}.`);
-      clearPendingHandCast();
-    })
-    .catch((e) => {
-      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
-        pendingAutoTap = { card: forkPending.card, cardName: forkPending.cardName, actionBody: body };
-        renderActivationPrompt();
-        return;
-      }
-      clearPendingHandCast();
-      updateActionHint(e.message, true);
-    });
 }
 
 // The X prompt for an **activated ability**, priced against the activation cost
@@ -16241,13 +16219,6 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     const costPermanentId = permanentIdAt(selectedTarget, selectedPermanentIndex);
     if (Number.isInteger(costPermanentId)) pendingCastCost.cost_permanent_id = costPermanentId;
     continueCastAfterCost(pending.card, pending.castAction || "cast");
-    return;
-  }
-
-  // Fork copy retarget: the chosen permanent becomes the copy's new target. Send
-  // the Fork cast carrying both the copied-spell index and the new target.
-  if (Number.isInteger(pending.forkStackIndex)) {
-    sendForkCopyCast(pending, pending.forkStackIndex, selectedTarget, selectedPermanentIndex, pending.copyTargetName);
     return;
   }
 
@@ -18597,13 +18568,6 @@ function selectStackSpellTarget(arrayIndex) {
 
   pendingCastTarget = null;
   renderActivationPrompt();
-
-  // Fork: after choosing the spell to copy, run a second prompt to let the caster
-  // choose new targets for the copy before the cast is sent.
-  if (pending.copiesSpell && pending.castAction !== "activate") {
-    startForkCopyRetarget(pending, arrayIndex, item);
-    return;
-  }
 
   // A *cast*'s source stage answered with a spell on the stack (CR 609.7a lets
   // a source be one). arrayIndex is the top-first index the server converts.
