@@ -550,7 +550,6 @@ def test_603_4_the_condition_is_a_production_and_not_an_echo_only_trick():
 @pytest.mark.parametrize("window", [
     "since the beginning of your last turn",
     "since your last upkeep",
-    "this turn",
 ])
 def test_603_4_a_different_window_refuses_rather_than_borrowing_this_one(window):
     """The stamp answers one window. A sentence naming another has to fail the
@@ -561,6 +560,21 @@ def test_603_4_a_different_window_refuses_rather_than_borrowing_this_one(window)
             "At the beginning of your upkeep, if this permanent came under "
             f"your control {window}, sacrifice it unless you pay {{1}}{{G}}."
         )
+
+
+@pytest.mark.cr("603.4")
+def test_603_4_this_turn_is_a_window_of_its_own_and_not_this_one():
+    """"…came under your control **this turn**" stood in the refusing list above
+    until Odyssey's Mad Dog printed it ("…if this creature didn't attack or
+    come under your control this turn"). It reads now, as its own node with
+    its own stamp — which is the same invariant from the other side: a window
+    the engine can answer is answered as itself, and never as echo's."""
+    node = parse_line(
+        "At the beginning of your upkeep, if this permanent came under your "
+        "control this turn, sacrifice it unless you pay {1}{G}."
+    )
+
+    assert node.intervening_if.__class__.__name__ == "CameUnderControlThisTurn"
 
 
 @pytest.mark.cr("603.4")

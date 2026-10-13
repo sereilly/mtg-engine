@@ -357,10 +357,16 @@ def test_no_ability_printing_a_target_is_activated_with_nothing_to_name(
 
 #: Cards the census named on the tree before this file, one per way the old
 #: walk missed a target: a kind whose row carries no ``targets`` description
-#: (a bounce, a land-type change, a control gift), "any target", an offer
-#: (``may``) around the targeting step, and a toll (``unless_player_pays``).
+#: (a bounce, a control gift), "any target", an offer (``may``) around the
+#: targeting step, and a toll (``unless_player_pays``).
+#:
+#: Gaea's Liege was the sample of a third such kind, a land-type change, while
+#: its ability was a name-keyed hook's. Odyssey retired the hook: the line
+#: compiles through the grammar now and its row carries a ``targets``
+#: description, so even the gate as it was holds it - there is no longer a
+#: defect on that card for this validation to find.
 _KNOWN = frozenset({
-    "Seal of Removal", "Gaea's Liege", "Jinxed Idol", "Prodigal Sorcerer",
+    "Seal of Removal", "Jinxed Idol", "Prodigal Sorcerer",
     "Puppet Strings", "Scarwood Bandits",
 })
 
@@ -412,8 +418,7 @@ def test_the_empty_sweep_finds_the_defect_on_the_gate_as_it_was(
     _examined, accepted = _empty_sweep(_catalog, _by_name, only=_KNOWN)
 
     assert {label for label, _kind, _details in accepted} >= {
-        "Seal of Removal[0]", "Gaea's Liege[0]", "Puppet Strings[0]",
-        "Scarwood Bandits[0]",
+        "Seal of Removal[0]", "Puppet Strings[0]", "Scarwood Bandits[0]",
     }
 
 

@@ -174,6 +174,10 @@ EXAMPLE_TEXTS: dict[str, str | tuple[str, ...]] = {
     "player_chooses_targets": "whenever a player chooses one or more targets",
     "opponent_casts_spell": "whenever an opponent casts a spell",
     "you_cast_spell": "whenever you cast a spell",
+    # Chance Encounter. CR 705.2: only the player who flipped wins a flip, so
+    # the event is the flipper's and is announced by the one seam that flips
+    # for a seat (`handlers/_common.flip_coin_for`).
+    "you_win_coin_flip": "whenever you win a coin flip",
     # Multani's Presence. CR 701.6a's cancel rather than a cast, and the one
     # condition in the pool whose event happens after its spell has left the
     # stack (CR 603.10e: such an ability looks back in time).
