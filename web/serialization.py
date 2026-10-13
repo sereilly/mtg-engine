@@ -481,6 +481,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),
+        # …and a colour the *layers* give with no such record behind it:
+        # Repentant Vampire's threshold ("is white"), Darkest Hour, Shifting
+        # Sky, Alloy Golem. ``colors`` above already says what the permanent
+        # is; this says that it is not what its card (as copied, CR 707.2)
+        # prints, which is the one thing a player looking at the art cannot
+        # see. ``color_override`` is None for all of these - it is one
+        # effect's own slot - so a client reading it alone signalled nothing.
+        "color_changed": effective_colors != sorted(perm.effective_card.colors),
         # Corpse counters (Scavenging Ghoul) so the canvas can render them. Folded
         # into a generic ``counters`` map so future counter types render for free.
         "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),

@@ -96,6 +96,13 @@ let pendingCastFromZone = null;
 // way that requires an alternative cost (CR 118.9b) — the flag the engine
 // reads to look for that kind of permission first.
 let pendingCastZoneWay = null;
+// What a cast still owes in MANA once it has announced its printed alternative
+// cost (CR 118.9d: cost increases apply to an alternative cost too) — the
+// offer's `mana_owed`, "" when it owes none, null when no alternative cost
+// was announced. The insufficient-mana prompt taps for this, not for the mana
+// cost the alternative replaced: under Sphere of Resistance it asked for
+// Force of Will's {3}{U}{U} with a card and a life already offered.
+let pendingCastAlternativeOwed = null;
 // A printed additional cost the caster has already chosen how to pay
 // (CR 601.2b), as the action fields carrying it: `cost_hand_index` for a
 // discard, `cost_permanent_index`/`cost_permanent_id` for a sacrifice or an
@@ -1799,6 +1806,14 @@ function abilityCostRequiresTap(card) {
 function pendingAutoTapCost(pending) {
   if (!pending) return "";
   if (typeof pending.cost === "string" && pending.cost) return pending.cost;
+  // A cast that announced its printed alternative cost owes only what the
+  // cost increases leave (`pendingCastAlternativeOwed`).
+  if (
+    pendingCastAlternativeOwed !== null && pendingCastCost?.alternative_cost === true
+    && _CAST_ACTIONS.has(pending.actionBody?.action)
+  ) {
+    return pendingCastAlternativeOwed;
+  }
   return (pending.card && pending.card.mana_cost) || "";
 }
 
@@ -2001,9 +2016,24 @@ function cardRequiresDividedDamage(card) { return specKind(card) === "divided"; 
 // card names, derived by the backend from the compiled program — its absence is
 // the ordinary one-target case, so this reads false for every other card without
 // anything having to list them.
+//
+// One family writes the same ceiling under `count`: "Put up to three target
+// cards from an opponent's graveyard on top of their library" (Misinformation;
+// Gaea's Blessing, Reinforcements, Lodestone Bauble). `count` is also how a
+// *cost* spec says how many it takes, so it is read only for a graveyard
+// target spec that is not a cost — those four were handed the one-card picker.
 function severalTargetMaximum(card) {
-  const max = targetSpecOf(card).max_targets;
-  return Number.isInteger(max) && max > 1 ? max : null;
+  const spec = targetSpecOf(card);
+  const max = spec.max_targets;
+  if (Number.isInteger(max) && max > 1) return max;
+  const counted = spec.count;
+  if (
+    spec.kind === "graveyard_creature" && !specIsACost(spec)
+    && Number.isInteger(counted) && counted > 1
+  ) {
+    return counted;
+  }
+  return null;
 }
 
 // "**X** target creatures" (Part Water, Winter Blast). Deliberately *not*
@@ -2065,8 +2095,37 @@ function startCastGraveyardCreatureTargetPrompt(card, castAction = "cast", extra
   // be zero (CR 601.2c). The prompt opens with nothing clickable and a reachable
   // confirm, which is what announcing no targets looks like.
   if (!max && (spec.valid_targets || []).length === 0) {
-    clearPendingHandCast();
-    updateActionHint(`No ${noun}s in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
+    // Nothing to click. For an ability that is the answer. For a **cast** it
+    // is the engine's to give: the spec says "a card in a graveyard" for
+    // every spell that picks one, a *choice* included ("…then you may return
+    // an instant or sorcery card from your graveyard to your hand",
+    // Experimental Overload), and refusing here was a second opinion the
+    // engine did not share — under Ground Seal, or with nothing to return,
+    // the card glowed as castable, the click said "No instant or sorcery
+    // cards in your graveyard", and a 2/2 Weird the rules allow was never
+    // made. So the cast is sent naming nothing: a spell that really needs a
+    // target is refused by the engine with its own reason (CR 601.2c).
+    if (castAction === "activate") {
+      clearPendingHandCast();
+      updateActionHint(`No ${noun}s in ${ownGraveyardOnly ? "your" : "any"} graveyard for ${cardName}.`, true);
+      return;
+    }
+    const body = { seat, action: castAction || "cast", card_name: cardName };
+    updateActionHint(`Casting ${cardName}...`);
+    sendAction(body)
+      .then(() => {
+        updateActionHint(`Cast ${cardName}.`);
+        clearPendingHandCast();
+      })
+      .catch((e) => {
+        if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+          pendingAutoTap = { card, cardName, actionBody: body };
+          renderActivationPrompt();
+          return;
+        }
+        clearPendingHandCast();
+        updateActionHint(e.message, true);
+      });
     return;
   }
   pendingCastTarget = {
@@ -2099,6 +2158,8 @@ function severalGraveyardHint() {
   const spec = targetSpecOf(p.card);
   const where = spec.own_graveyard_only
     ? "in your graveyard"
+    : spec.opponent_graveyard_only
+    ? "in an opponent's graveyard"
     : spec.single_graveyard
     ? "in any one graveyard"
     : "in a graveyard";
@@ -4115,6 +4176,7 @@ function beginPendingHandCast(card, handIndex = null) {
   // A fresh cast is from the hand; a zone cast sets the zone right after.
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
+  pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
   pendingCastCreatureType = null;
@@ -4136,6 +4198,7 @@ function clearPendingHandCast() {
   pendingCastModeIndex = null;
   pendingCastFromZone = null;
   pendingCastZoneWay = null;
+  pendingCastAlternativeOwed = null;
   pendingCastCost = null;
   pendingCastOffers = null;
   pendingCastCreatureType = null;
@@ -9521,6 +9584,12 @@ function renderLookTopPickModal(info) {
     const whose = pileSeat === seat
       ? "your"
       : `${currentState?.players?.[pileSeat]?.name || "that player"}'s`;
+    // The heading named "Your Library" for an opponent's pile (Bamboozle,
+    // Sealed Fate).
+    const heading = document.getElementById("lookTopPickTitle");
+    if (heading) {
+      heading.textContent = `Look at the Top of ${whose.charAt(0).toUpperCase()}${whose.slice(1)} Library`;
+    }
     const pickWords = {
       hand: pileSeat === seat ? "put it into your hand" : "put it into its owner's hand",
       graveyard: `put it into ${whose} graveyard`,
@@ -9653,6 +9722,20 @@ function renderGraveyardExileModal(info) {
   }
   const grid = document.getElementById("graveyardExileGrid");
   const confirmBtn = document.getElementById("graveyardExileConfirmBtn");
+  // "Exile **two** cards from your graveyard" (Bloodcurdler) is an exact
+  // count: the engine refuses fewer, so the confirm is held until the number
+  // is reached (or the pile runs out). "Up to N" may stop anywhere, none
+  // included. A short answer used to be sent, refused, and leave this modal
+  // closed over a prompt the game was still waiting on.
+  const need = info.up_to ? 0 : Math.min(cap, legal.size);
+  const syncConfirm = () => {
+    if (!confirmBtn) return;
+    const chosen = graveyardExileSelected.size;
+    confirmBtn.disabled = chosen < need;
+    confirmBtn.textContent = info.up_to
+      ? (chosen === 0 ? "Exile nothing" : `Exile ${chosen} card${chosen === 1 ? "" : "s"}`)
+      : `Exile ${chosen} of ${need}`;
+  };
   if (grid) {
     grid.innerHTML = (info.cards || [])
       .map((card, idx) => {
@@ -9677,18 +9760,30 @@ function renderGraveyardExileModal(info) {
         else if (graveyardExileSelected.size < cap) graveyardExileSelected.add(idx);
         else return;
         el.classList.toggle("selected");
+        syncConfirm();
       });
     });
   }
-  if (confirmBtn && !confirmBtn.dataset.bound) {
-    confirmBtn.dataset.bound = "1";
-    confirmBtn.addEventListener("click", async () => {
+  syncConfirm();
+  if (confirmBtn) {
+    // Rebound on every render (`onclick`, so there is exactly one): the
+    // handler reads this render's `info` for the floor and for the retry.
+    confirmBtn.onclick = async () => {
       const picks = [...graveyardExileSelected];
+      if (picks.length < need) return;
+      // Cleared before the send: the answer may arm the next prompt of this
+      // kind, which renders inside the send and must start with nothing chosen.
       graveyardExileSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
-      await sendAction({ seat, action: "graveyard_exile_confirm", graveyard_indices: picks });
-    });
+      try {
+        await sendAction({ seat, action: "graveyard_exile_confirm", graveyard_indices: picks });
+      } catch (e) {
+        // Refused: the prompt is still owed, so put it back with the picks.
+        graveyardExileSelected = new Set(picks);
+        updateActionHint(e.message, true);
+        renderGraveyardExileModal(info);
+      }
+    };
   }
 }
 
@@ -10344,9 +10439,10 @@ function renderScryModal(info) {
   const count = info.amount || cards.length;
   const title = document.getElementById("scryTitle");
   if (title) {
-    title.textContent = toGraveyard
-      ? `Look at the top ${count === 1 ? "card" : `${count} cards`}`
-      : `Scry ${count}`;
+    // CR 701.25a: "To 'surveil N' means to look at the top N cards of your
+    // library, then put any number of them into your graveyard and the rest
+    // on top of your library in any order."
+    title.textContent = toGraveyard ? `Surveil ${count}` : `Scry ${count}`;
   }
   const subtitle = document.getElementById("scrySubtitle");
   if (subtitle) {
@@ -11359,11 +11455,22 @@ function renderActivationPrompt() {
       ? "Recomputing what is still payable…"
       : "These prices are optional. Choose what you are paying, then confirm.";
     const rows = [];
+    // A permanent-paid alternative cost named in part ("sacrifice two
+    // Mountains" with one chosen). The engine refuses a short list (CR 118.3:
+    // a cost is paid in full or not at all), so the confirm is held on it —
+    // this used to say the rest was left to the engine's default pick.
+    let shortAlternative = null;
     for (const offer of pending.offers) {
       if (offer.kind === "alternative") {
         // CR 118.9: paid *rather than* the mana cost, so the two are the two
         // arms of one choice rather than a box to tick beside the cost.
         const declined = pending.alternative === null;
+        // CR 118.9d: a cost increase applies to an alternative cost too, so
+        // under Sphere of Resistance a pitched card and a life still owe {1}.
+        // The server's label (`mana_owed`), absent on an untaxed board.
+        const owedNote = offer.mana_owed
+          ? ` — plus ${renderSymbolsInline(offer.mana_owed)} in mana that is still owed (cost increases apply to it, CR 118.9d)`
+          : "";
         const buttons = [
           `<button type="button" class="prompt-choice-btn${declined ? " selected" : ""}"`
           + ` data-alt-choice="decline">Pay ${escapeHtml(pending.card.mana_cost || "its mana cost")}</button>`,
@@ -11397,7 +11504,7 @@ function renderActivationPrompt() {
                   + ` data-alt-other="${choice.index}" data-alt-other-count="${others}">`
                   + `${verb} ${escapeHtml(choice.name)}</button>`;
               });
-            rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}</div>`);
+            rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}${owedNote}</div>`);
             rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
             rows.push(`<div>…and ${others === 1 ? "another card" : `${others} other cards`}:</div>`);
             rows.push(`<div class="prompt-choice-row">${otherButtons.join("")}</div>`);
@@ -11407,11 +11514,15 @@ function renderActivationPrompt() {
           // CR 601.2b: a price paid with a permanent ("sacrifice a creature",
           // "tap an untapped creature you control") is the caster's choice of
           // *which* one. Each button toggles one candidate into the payment, up
-          // to the printed count; naming fewer leaves the rest to the engine's
-          // default pick, exactly as the counted additional cost does.
+          // to the printed count — and the whole count, or none of it: the
+          // engine refuses a list shorter than the cost (CR 118.3).
           const chosenIds = altPermanentIds(pending.alternative);
           const verb = offer.permanent_verb === "return" ? "Return"
             : offer.permanent_verb === "tap" ? "Tap" : "Sacrifice";
+          const wanted = Math.max(1, Number(offer.permanent_count || 1));
+          if (chosenIds.length > 0 && chosenIds.length < wanted) {
+            shortAlternative = { chosen: chosenIds.length, wanted, verb: verb.toLowerCase() };
+          }
           for (const choice of offer.permanent_choices) {
             const on = chosenIds.includes(choice.id);
             buttons.push(
@@ -11427,7 +11538,7 @@ function renderActivationPrompt() {
             + ` data-alt-choice="take">${escapeHtml(offer.label)}</button>`,
           );
         }
-        rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}</div>`);
+        rows.push(`<div>Instead of its mana cost: ${escapeHtml(offer.label)}${owedNote}</div>`);
         rows.push(`<div class="prompt-choice-row">${buttons.join("")}</div>`);
         continue;
       }
@@ -11490,9 +11601,16 @@ function renderActivationPrompt() {
     if (Number.isInteger(willTarget) && willTarget > 1) {
       rows.push(`<div>This will name ${willTarget} targets.</div>`);
     }
+    if (shortAlternative) {
+      const more = shortAlternative.wanted - shortAlternative.chosen;
+      rows.push(
+        `<div>Choose ${more} more to ${shortAlternative.verb} (${shortAlternative.chosen} of `
+        + `${shortAlternative.wanted}), or pay the mana cost instead.</div>`,
+      );
+    }
     rows.push(
       '<div class="prompt-choice-row">'
-      + `<button type="button" class="prompt-choice-btn" id="castOffersConfirmBtn"${pending.refreshing ? " disabled" : ""}>Confirm</button>`
+      + `<button type="button" class="prompt-choice-btn" id="castOffersConfirmBtn"${pending.refreshing || shortAlternative ? " disabled" : ""}>Confirm</button>`
       + "</div>",
     );
     steps.innerHTML = rows.join("");
@@ -11665,9 +11783,16 @@ function renderActivationPrompt() {
       // which click filled which. Every other divided spell splits one
       // quantity among interchangeable targets and keeps the old words.
       const dividedSlotRows = dividedSlotRowsHtml();
+      // "…to each of up to N targets" (Shower of Coals) divides nothing:
+      // every target takes the whole amount, and none is a legal answer.
+      const eachUpTo = dividedEachUpTo(pendingCastTarget.card);
+      const eachAmount = targetSpecOf(pendingCastTarget.card)?.division_total;
       body.textContent = dividedSlotRows.length
         ? "This spell's targets are not interchangeable: each click fills the next slot below. "
           + "Click a creature on the battlefield or a player's life pill; click a chosen one again to release it. Then confirm."
+        : eachUpTo
+        ? `Each target takes the whole amount${Number.isInteger(eachAmount) ? ` (${eachAmount})` : ""}. Click creatures or a player's life pill to choose them — `
+          + "up to the number the card names, and choosing none is legal. Then confirm."
         : "Click creatures to split the damage among them, or click a player's life pill to hit their face. "
           + (hasXCost(pendingCastTarget.card) ? "Then confirm to choose X." : "Then confirm.");
       const n = dividedTargetCount();
@@ -11680,7 +11805,7 @@ function renderActivationPrompt() {
         ...dividedSlotRows,
         `<div>${escapeHtml(dividedTargetsHint())}</div>`,
         ...targetRequirementRowsHtml(pendingCastTarget.card, pendingCastTarget.dividedTargets),
-        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="dividedConfirmBtn"${n === 0 || dividedOwesRequired ? " disabled" : ""}>Confirm targets</button></div>`,
+        `<div class="prompt-choice-row"><button type="button" class="prompt-choice-btn" id="dividedConfirmBtn"${(n === 0 && !eachUpTo) || dividedOwesRequired ? " disabled" : ""}>${n === 0 && eachUpTo ? "Cast with no targets" : "Confirm targets"}</button></div>`,
       ].join("");
       const confirmBtn = document.getElementById("dividedConfirmBtn");
       if (confirmBtn) confirmBtn.addEventListener("click", confirmDividedTargets);
@@ -11744,6 +11869,8 @@ function renderActivationPrompt() {
       // player's pile, and all of the cards out of that one.
       const where = spec?.own_graveyard_only
         ? "your graveyard"
+        : spec?.opponent_graveyard_only
+        ? "an opponent's graveyard"
         : spec?.single_graveyard
         ? "any one graveyard"
         : "a graveyard";
@@ -14328,6 +14455,11 @@ function confirmCastOffers() {
     if (permanentIds.length) {
       announced.alternative_cost_permanent_ids = permanentIds.slice();
     }
+    // What the cast still owes in mana, for the auto-tap (CR 118.9d).
+    const taken = pending.offers.find((offer) => offer.kind === "alternative");
+    pendingCastAlternativeOwed = taken?.mana_owed || "";
+  } else {
+    pendingCastAlternativeOwed = null;
   }
   pendingCastOffers = null;
   pendingCastCost = { ...(pendingCastCost || {}), ...announced };
@@ -15340,7 +15472,13 @@ function confirmDividedTargets() {
   const p = pendingCastTarget;
   if (!p || p.targetKind !== "divided") return;
   const n = dividedTargetCount();
-  if (n === 0) {
+  // "…2 damage to **each of up to** three targets" (Shower of Coals): every
+  // target takes the whole amount, so nothing is divided (CR 601.2d has no
+  // floor to apply) and the ceiling may be left empty (CR 115.6 — the spell
+  // is then targeted by nothing). The server's spec says both: the division
+  // is "each" and the count is a ceiling.
+  const eachUpTo = dividedEachUpTo(p.card);
+  if (n === 0 && !eachUpTo) {
     updateActionHint("Choose at least one target first.", true);
     return;
   }
@@ -15405,10 +15543,7 @@ function confirmDividedTargets() {
       x_value: dividedPayload.length,
     };
     updateActionHint(`Casting ${cardName} (X = ${dividedPayload.length})...`);
-    sendAction(body)
-      .then(() => updateActionHint(`Cast ${cardName}.`))
-      .catch((e) => updateActionHint(e.message, true))
-      .finally(() => clearPendingHandCast());
+    sendDividedCast(card, cardName, body);
     return;
   }
   // A card whose shares are printed and whose count is printed announces
@@ -15416,7 +15551,11 @@ function confirmDividedTargets() {
   // only where the sentence says "as you choose"). Cone of Flame is the whole
   // of it, and without this branch the caster was shown an X prompt for a spell
   // that has no X.
-  if (Number.isInteger(printedTargets) && !hasXCost(card)) {
+  //
+  // …and so does "each of up to N targets": the amount each takes is the
+  // instruction's and the count is whatever was clicked, none included. It
+  // fell through to the X prompt below, for a spell that has no X.
+  if ((Number.isInteger(printedTargets) || eachUpTo) && !hasXCost(card)) {
     const body = {
       seat,
       action: castAction || "cast",
@@ -15424,10 +15563,7 @@ function confirmDividedTargets() {
       divided_targets: dividedPayload,
     };
     updateActionHint(`Casting ${cardName}...`);
-    sendAction(body)
-      .then(() => updateActionHint(`Cast ${cardName}.`))
-      .catch((e) => updateActionHint(e.message, true))
-      .finally(() => clearPendingHandCast());
+    sendDividedCast(card, cardName, body);
     return;
   }
   if (Number.isInteger(fixedTotal)) {
@@ -15444,7 +15580,39 @@ function confirmDividedTargets() {
   );
 }
 
+// Send a divided cast that asks nothing more (its count and its shares are
+// both settled). The pool not covering it opens the auto-tap every other cast
+// offers, with the body — and so the targets — kept for the retry; these two
+// branches reported the refusal as a hint, dropped the picks, and left the
+// target prompt on the panel behind a cast that was no longer pending.
+function sendDividedCast(card, cardName, body) {
+  renderActivationPrompt();
+  sendAction(body)
+    .then(() => {
+      updateActionHint(`Cast ${cardName}.`);
+      clearPendingHandCast();
+    })
+    .catch((e) => {
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = { card, cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      clearPendingHandCast();
+      renderActivationPrompt();
+      updateActionHint(e.message, true);
+    });
+}
+
 // --- CR 601.2d: announcing the division --------------------------------------
+
+/** "…to each of up to N targets" (Shower of Coals): a list whose every entry
+ * takes the whole amount, with a ceiling and no floor. Read off the spec. */
+function dividedEachUpTo(card) {
+  const spec = targetSpecOf(card) || {};
+  return spec.kind === "divided" && spec.division === "each"
+    && Number.isInteger(spec.max_targets) && !Number.isInteger(spec.divided_target_count);
+}
 
 /** How much a "divided as you choose" spell has to divide, once X is known. */
 function dividedDivisionTotal(card, xValue) {
