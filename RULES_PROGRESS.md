@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**418 / 622 tracked rules covered (67%)** — 2882 tests, 0 unannotated.
+**419 / 622 tracked rules covered (67%)** — 2914 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 | [109. Objects](#109-objects) | 4/5 | 80% |
 | [110. Permanents](#110-permanents) | 5/5 | 100% |
 | [111. Tokens](#111-tokens) | 6/13 | 46% |
-| [112. Spells](#112-spells) | 1/4 | 25% |
+| [112. Spells](#112-spells) | 2/4 | 50% |
 | [113. Abilities](#113-abilities) | 3/12 | 25% |
 | [114. Emblems](#114-emblems) | 5/5 | 100% |
 | [115. Targets](#115-targets) | 10/10 | 100% |
@@ -118,7 +118,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **101.1** Whenever a card’s text directly contradicts these rules, the card takes precedence. The card over... *(1 tests)*
 - [x] **101.2** When a rule or effect allows or directs something to happen, and another effect states that it ca... *(2 tests)*
-- [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(1 tests)*
+- [x] **101.3** Any part of an instruction that’s impossible to perform is ignored. (In many cases the card will ... *(2 tests)*
 - [x] **101.4** If multiple players would make choices and/or take actions at the same time, the active player (t... *(3 tests)*
 
 ### 102. Players
@@ -148,7 +148,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 105. Colors
 
-- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(5 tests)*
+- [x] **105.1** There are five colors in the Magic game: white, blue, black, red, and green. *(6 tests)*
 - [x] **105.2** An object can be one or more of the five colors, or it can be no color at all. An object is the c... *(10 tests, subrules abc)*
 - [x] **105.3** Effects may change an object’s color or give a color to a colorless object. If an effect gives an... *(4 tests)*
 - [ ] **105.4** If a player is asked to choose a color, they must choose one of the five colors. “Multicolored” i...
@@ -167,7 +167,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **106.9** If an effect would add mana represented by a Phyrexian mana symbol to a player’s mana pool, one m...
 - [ ] **106.10** If an effect would add mana represented by a generic mana symbol to a player’s mana pool, that mu...
 - [ ] **106.11** If an effect would add mana represented by one or more snow mana symbols to a player’s mana pool,...
-- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(19 tests, subrules ab)*
+- [x] **106.12** To “tap [a permanent] for mana” is to activate a mana ability of that permanent that includes the... *(37 tests, subrules ab)*
 - [x] **106.13** One card (Drain Power) causes one player to lose unspent mana and another to add “the mana lost t... *(1 tests)*
 
 ### 107. Numbers and Symbols
@@ -195,7 +195,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [ ] **108.1** Use the Oracle card reference when determining a card’s wording. A card’s Oracle text can be foun...
 - [ ] **108.2** When a rule or text on a card refers to a “card,” it means only a Magic card or an object represe...
-- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(16 tests)*
+- [x] **108.3** The owner of a card in the game is the player who started the game with it in their deck. If a ca... *(17 tests)*
 - [x] **108.4** A card doesn’t have a controller unless that card represents a permanent or spell; in those cases... *(1 tests, subrules a)*
 - [ ] **108.5** Nontraditional Magic cards can’t start the game in any zone other than the command zone (see rule...
 - [ ] **108.6** For more information about cards, see section 2, “Parts of a Card.”
@@ -205,8 +205,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **109.1** An object is an ability on the stack, a card, a copy of a card, a token, a spell, a permanent, or... *(1 tests)*
 - [x] **109.2** If a spell or ability uses a description of an object that includes a card type or subtype, but d... *(4 tests, subrules a)*
 - [ ] **109.3** An object’s characteristics are name, mana cost, color, color indicator, card type, subtype, supe...
-- [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(3 tests, subrules b)*
-- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(25 tests)*
+- [x] **109.4** Only objects on the stack or on the battlefield have a controller. Objects that are neither on th... *(4 tests, subrules b)*
+- [x] **109.5** The words “you” and “your” on an object refer to the object’s controller, its would-be controller... *(26 tests)*
 
 ### 110. Permanents
 
@@ -235,7 +235,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 112. Spells
 
 - [x] **112.1** A spell is a card on the stack. As the first step of being cast (see rule 601, “Casting Spells”),... *(3 tests, subrules a)*
-- [ ] **112.2** A spell’s owner is the same as the owner of the card that represents it, unless it’s a copy. In t...
+- [x] **112.2** A spell’s owner is the same as the owner of the card that represents it, unless it’s a copy. In t... *(8 tests)*
 - [ ] **112.3** A noncopy spell’s characteristics are the same as those printed on its card, as modified by any c...
 - [ ] **112.4** If an effect of a resolving spell or ability changes any characteristics of a permanent spell, th...
 
@@ -264,7 +264,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 115. Targets
 
-- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(31 tests, subrules abcd)*
+- [x] **115.1** Some spells and abilities require their controller to choose one or more targets for them. The ta... *(32 tests, subrules abcd)*
 - [x] **115.2** Only permanents are legal targets for spells and abilities, unless a spell or ability (a) specifi... *(3 tests)*
 - [x] **115.3** The same target can’t be chosen multiple times for any one instance of the word “target” on a spe... *(13 tests)*
 - [x] **115.4** Some spells and abilities that refer to damage require “any target,” “another target,” “two targe... *(6 tests)*
@@ -294,7 +294,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(3 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(21 tests, subrules abc)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(22 tests, subrules abc)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -303,7 +303,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(27 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
-- [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(1 tests, subrules a)*
+- [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(2 tests, subrules a)*
 - [ ] **118.13** Some costs contain mana symbols that can be paid in multiple ways. These include hybrid mana symb...
 - [ ] **118.14** Some effects say that “mana of any type can be spent” to pay a cost. This means that players may ...
 
@@ -533,7 +533,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **405.3** If an effect puts two or more objects on the stack at the same time, those controlled by the acti... *(3 tests)*
 - [x] **405.4** Each spell has all the characteristics of the card associated with it. Each activated or triggere... *(2 tests)*
 - [x] **405.5** When all players pass in succession, the top (last-added) spell or ability on the stack resolves.... *(2 tests)*
-- [x] **405.6** Some things that happen during the game don’t use the stack. *(3 tests, subrules ce)*
+- [x] **405.6** Some things that happen during the game don’t use the stack. *(4 tests, subrules ce)*
 
 ### 406. Exile
 
@@ -687,11 +687,11 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.1** Triggered abilities have a trigger condition and an effect. They are written as “[When/Whenever/A... *(3 tests, subrules b)*
 - [x] **603.2** Whenever a game event or game state matches a triggered ability’s trigger event, that ability aut... *(31 tests, subrules bd)*
 - [x] **603.3** Once an ability has triggered, its controller puts it on the stack as an object that’s not a card... *(91 tests, subrules bcd)*
-- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(23 tests)*
+- [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
 - [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
-- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(8 tests)*
+- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(12 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(16 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
@@ -709,10 +709,10 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 605. Mana Abilities
 
-- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(19 tests, subrules ab)*
+- [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(21 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(20 tests, subrules abc)*
-- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(6 tests, subrules a)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(28 tests, subrules abc)*
+- [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(7 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(4 tests, subrules ab)*
 
 ### 606. Loyalty Abilities
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(142 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(143 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -853,7 +853,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.2** Activate *(4 tests, subrules a)*
 - [x] **701.3** Attach *(13 tests, subrules abcd)*
 - [x] **701.5** Cast *(4 tests, subrules a)*
-- [x] **701.6** Counter *(13 tests, subrules ab)*
+- [x] **701.6** Counter *(15 tests, subrules ab)*
 - [x] **701.7** Create *(3 tests, subrules a)*
 - [x] **701.8** Destroy *(7 tests, subrules abc)*
 - [x] **701.9** Discard *(5 tests, subrules ac)*

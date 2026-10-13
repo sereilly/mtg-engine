@@ -47,13 +47,11 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 | PLS | 143 | 255 | 91.0% | 90.6% | 67.8% | 126 |
 | 7ED | 335 | 384 | 95.1% | 95.1% | 66.1% | 244 |
 | APC | 143 | 240 | 91.2% | 90.0% | 69.6% | 126 |
+| ODY | 335 | 507 | 89.7% | 89.7% | 69.6% | 295 |
 | M21 | 285 | 503 | 87.7% | 87.3% | 61.0% | 237 |
-| ODY *(measured)* | 335 | 507 | 89.3% | 89.3% | 69.2% | 294 |
-| **All (shipped)** | **7406** | **10877** | **90.7%** | **90.1%** | **61.8%** | **5706** |
+| **All (shipped)** | **7741** | **11384** | **90.7%** | **90.1%** | **62.2%** | **6001** |
 
 **The All row is printing-weighted, not deduped** — it sums the rows above, so a card printed in five sets is counted five times and the aggregate is a weighted average of the rows rather than a measure of the unique pool. `HOOK_RELIANCE.md`'s ALL row is the other choice (deduped, one entry per card); both are defensible and they answer different questions, so do not read one against the other. What makes the difference visible is a reprint set: promoting 4ED — 368 cards, every one of them already in the pool — moved this row from 2047 cards and 85.2% parsed to 2415 and 85.7% while hook reliance's ALL row did not move at all. **That 0.5pp was composition, not a production.** The floors are re-accepted at every promotion, so this is not a hole in the ratchet; it is a reason to read a promotion's diff as a change of membership before reading it as progress.
-
-*(measured)* — ODY are ingested for measurement and **not shipped** (`measured` in `cards/manifest.json`): the engine's catalog does not load them and no player can put one in a deck. They are reported here and left out of the **All** row and the floors, because these floors ask *is the parser losing ground* — and an aggregate that moves when an unimplemented set is ingested answers a different question with the same number. Ingesting M21 would have dropped All from 77.2% to 70.7% parsed without a single production changing, and a floor that fails on pool composition is a floor that gets lowered without being read.
 
 ## Backlog — failure reasons
 
@@ -61,9 +59,9 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 | Lines | Distinct | Reason | Scheduled |
 | ---: | ---: | --- | --- |
-| 599 | 293 | expected a subject |  |
+| 598 | 292 | expected a subject |  |
 | 163 | 82 | unrecognized effect verb |  |
-| 127 | 66 | unconsumed text |  |
+| 126 | 65 | unconsumed text |  |
 | 63 | 44 | granted ability in quotes | phase 3 (quoted abilities) |
 | 33 | 33 | unrecognized activation cost |  |
 | 29 | 7 | expected what this creature can't block, or a duration |  |
@@ -89,7 +87,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 
 ## Cards executing through the grammar
 
-5706 cards, 6726 lines.
+6001 cards, 7079 lines.
 
 - **Abandon Hope**
   - `Look at target opponent's hand and choose X cards from it. That player discards those cards.`
@@ -1088,6 +1086,7 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
 - **Bomb Squad**
   - `{T}: Put a fuse counter on target creature.`
   - `At the beginning of your upkeep, put a fuse counter on each creature with a fuse counter on it.`
+  - `Whenever a creature has four or more fuse counters on it, remove all fuse counters from it and destroy it. That creature deals 4 damage to its controller.`
 - **Bone Dancer**
   - `Whenever this creature attacks and isn't blocked, you may put the top creature card of defending player's graveyard onto the battlefield under your control. If you do, this creature assigns no combat damage this turn.`
 - **Bone Flute**
@@ -5614,6 +5613,8 @@ Categories currently switched on: `ante, attachments, characteristics, chosen_co
   - `{3}: Put target Rebel card from your graveyard on the bottom of your library.`
 - **Lion's Eye Diamond**
   - `Discard your hand, Sacrifice this artifact: Add three mana of any one color. Activate only as an instant.`
+- **Liquid Fire**
+  - `Liquid Fire deals X damage to target creature and 5 minus X damage to that creature's controller, where X is the chosen number.`
 - **Lithatog**
   - `Sacrifice an artifact: This creature gets +1/+1 until end of turn.`
   - `Sacrifice a land: This creature gets +1/+1 until end of turn.`

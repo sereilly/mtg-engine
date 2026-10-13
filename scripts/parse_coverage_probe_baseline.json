@@ -1,5 +1,12 @@
 [
  {
+  "card": "Aboshan, Cephalid Emperor",
+  "clause": "tap all creatures without flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Abu Ja'far",
   "clause": "destroy all creatures blocking or blocked by it. they can't be regenerated",
   "ignored": [
@@ -191,6 +198,20 @@
   ]
  },
  {
+  "card": "Ashen Firebeast",
+  "clause": "this creature deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
+  "card": "Aura Graft",
+  "clause": "gain control of target aura that's attached to a permanent. attach it to another permanent it can enchant",
+  "ignored": [
+   "that's"
+  ]
+ },
+ {
   "card": "Aura Thief",
   "clause": "you gain control of all enchantments",
   "ignored": [
@@ -361,6 +382,13 @@
   ]
  },
  {
+  "card": "Bomb Squad",
+  "clause": "put a fuse counter on each creature with a fuse counter on it",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Bone Flute",
   "clause": "all creatures get -1/-0 until end of turn",
   "ignored": [
@@ -387,6 +415,13 @@
   "ignored": [
    "or",
    "target"
+  ]
+ },
+ {
+  "card": "Braids, Cabal Minion",
+  "clause": "that player sacrifices an artifact, creature, or land of their choice",
+  "ignored": [
+   "or"
   ]
  },
  {
@@ -507,6 +542,13 @@
   "clause": "if you control a red or green permanent, draw a card, then discard a card. if you control a red permanent and a green permanent, instead draw two cards, then discard a card",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Chance Encounter",
+  "clause": "if this enchantment has ten or more luck counters on it, you win the game",
+  "ignored": [
+   "enchantment"
   ]
  },
  {
@@ -680,6 +722,13 @@
   ]
  },
  {
+  "card": "Decompose",
+  "clause": "exile up to three target cards from a single graveyard",
+  "ignored": [
+   "target"
+  ]
+ },
+ {
   "card": "Defiant Falcon",
   "clause": "search your library for a rebel permanent card with mana value 3 or less, put it onto the battlefield, then shuffle",
   "ignored": [
@@ -705,6 +754,20 @@
   "clause": "if you control a black or red permanent, you gain 2 life. if you control a black permanent and a red permanent, you gain 4 life instead",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Deluge",
+  "clause": "tap all creatures without flying",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Demoralize",
+  "clause": "all creatures gain menace until end of turn",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -971,6 +1034,13 @@
   ]
  },
  {
+  "card": "Epicenter",
+  "clause": "target player sacrifices a land of their choice. each player sacrifices all lands they control instead if there are seven or more cards in your graveyard",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Erg Raiders",
   "clause": "if this creature didn't attack this turn, it deals 2 damage to you unless it came under your control this turn",
   "ignored": [
@@ -1082,6 +1152,13 @@
   "clause": "exile all creatures",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Famished Ghoul",
+  "clause": "exile up to two target cards from a single graveyard",
+  "ignored": [
+   "target"
   ]
  },
  {
@@ -1348,6 +1425,13 @@
   ]
  },
  {
+  "card": "Graceful Antelope",
+  "clause": "you may have target land become a plains until this creature leaves the battlefield",
+  "ignored": [
+   "have"
+  ]
+ },
+ {
   "card": "Grafted Skullcap",
   "clause": "draw an additional card",
   "ignored": [
@@ -1423,6 +1507,13 @@
   "clause": "target blue or red creature gets +1/+0 until end of turn",
   "ignored": [
    "or"
+  ]
+ },
+ {
+  "card": "Haunting Echoes",
+  "clause": "exile all cards from target player's graveyard other than basic land cards. for each card exiled this way, search that player's library for all cards with the same name as that card and exile them. then that player shuffles",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -1850,6 +1941,14 @@
   ]
  },
  {
+  "card": "Kirtar's Wrath",
+  "clause": "destroy all creatures. they can't be regenerated. if there are seven or more cards in your graveyard, instead destroy all creatures, then create two 1/1 white spirit creature tokens with flying. creatures destroyed this way can't be regenerated",
+  "ignored": [
+   "all",
+   "all"
+  ]
+ },
+ {
   "card": "Kjeldoran Frostbeast",
   "clause": "destroy all creatures blocking or blocked by this creature",
   "ignored": [
@@ -2050,6 +2149,13 @@
   ]
  },
  {
+  "card": "Mad Dog",
+  "clause": "if this creature didn't attack or come under your control this turn, sacrifice it",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Mageta the Lion",
   "clause": "destroy all creatures except for mageta the lion. those creatures can't be regenerated",
   "ignored": [
@@ -2061,6 +2167,13 @@
   "clause": "magma burst deals 3 damage to any target. if this spell was kicked, it deals 3 damage to another target",
   "ignored": [
    "spell"
+  ]
+ },
+ {
+  "card": "Magma Vein",
+  "clause": "this enchantment deals 1 damage to each creature without flying",
+  "ignored": [
+   "each"
   ]
  },
  {
@@ -2220,6 +2333,13 @@
   ]
  },
  {
+  "card": "Mine Layer",
+  "clause": "remove all mine counters from all lands",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Minion of Leshrac",
   "clause": "this creature deals 5 damage to you unless you sacrifice a creature other than this creature. if this creature deals damage to you this way, tap it",
   "ignored": [
@@ -2273,6 +2393,13 @@
  {
   "card": "Monsoon",
   "clause": "tap all untapped islands that player controls and this enchantment deals x damage to the player, where x is the number of islands tapped this way",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
+  "card": "Mudhole",
+  "clause": "target player exiles all land cards from their graveyard",
   "ignored": [
    "all"
   ]
@@ -3483,6 +3610,14 @@
   ]
  },
  {
+  "card": "Spark Mage",
+  "clause": "you may have this creature deal 1 damage to target creature that player controls",
+  "ignored": [
+   "have",
+   "creature"
+  ]
+ },
+ {
   "card": "Sparkcaster",
   "clause": "return a red or green creature you control to its owner's hand",
   "ignored": [
@@ -3821,6 +3956,13 @@
   ]
  },
  {
+  "card": "Tombfire",
+  "clause": "target player exiles all cards with flashback from their graveyard",
+  "ignored": [
+   "all"
+  ]
+ },
+ {
   "card": "Tombstone Stairwell",
   "clause": "destroy all tokens created with this enchantment. they can't be regenerated",
   "ignored": [
@@ -3896,6 +4038,13 @@
   "clause": "destroy all enchantments",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Traumatize",
+  "clause": "target player mills half their library, rounded down",
+  "ignored": [
+   "down"
   ]
  },
  {
@@ -3978,6 +4127,13 @@
   ]
  },
  {
+  "card": "Twigwalker",
+  "clause": "two target creatures each get +2/+2 until end of turn",
+  "ignored": [
+   "each"
+  ]
+ },
+ {
   "card": "Twilight's Call",
   "clause": "each player returns all creature cards from their graveyard to the battlefield",
   "ignored": [
@@ -4010,6 +4166,13 @@
   "clause": "add one mana of any color. during your next untap step, as you untap your permanents, return this land to its owner's hand",
   "ignored": [
    "land"
+  ]
+ },
+ {
+  "card": "Upheaval",
+  "clause": "return all permanents to their owners' hands",
+  "ignored": [
+   "all"
   ]
  },
  {
@@ -4372,6 +4535,13 @@
   "clause": "exile all creature cards from your graveyard",
   "ignored": [
    "all"
+  ]
+ },
+ {
+  "card": "Zoologist",
+  "clause": "reveal the top card of your library. if it's a creature card, put it onto the battlefield. otherwise, put it into your graveyard",
+  "ignored": [
+   "card,"
   ]
  }
 ]

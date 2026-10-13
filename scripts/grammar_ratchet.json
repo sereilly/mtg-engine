@@ -1,24 +1,24 @@
 {
   "floors": {
     "2ED": {
-      "executed_pct": 49.9,
-      "lowered_pct": 86.9,
-      "parsed_pct": 88.7
+      "executed_pct": 50.4,
+      "lowered_pct": 87.4,
+      "parsed_pct": 88.9
     },
     "3ED": {
-      "executed_pct": 51.4,
-      "lowered_pct": 87.7,
-      "parsed_pct": 90.0
+      "executed_pct": 52.2,
+      "lowered_pct": 88.4,
+      "parsed_pct": 90.5
     },
     "4ED": {
-      "executed_pct": 55.4,
-      "lowered_pct": 92.1,
-      "parsed_pct": 93.1
+      "executed_pct": 55.8,
+      "lowered_pct": 92.5,
+      "parsed_pct": 93.5
     },
     "5ED": {
-      "executed_pct": 61.0,
-      "lowered_pct": 94.1,
-      "parsed_pct": 94.8
+      "executed_pct": 61.2,
+      "lowered_pct": 94.3,
+      "parsed_pct": 94.9
     },
     "6ED": {
       "executed_pct": 65.8,
@@ -31,9 +31,9 @@
       "parsed_pct": 95.1
     },
     "<pool>": {
-      "executed_pct": 61.7,
-      "lowered_pct": 90.0,
-      "parsed_pct": 90.6
+      "executed_pct": 62.2,
+      "lowered_pct": 90.1,
+      "parsed_pct": 90.7
     },
     "ALL": {
       "executed_pct": 70.5,
@@ -46,9 +46,9 @@
       "parsed_pct": 91.2
     },
     "ARN": {
-      "executed_pct": 55.6,
-      "lowered_pct": 77.8,
-      "parsed_pct": 81.5
+      "executed_pct": 56.5,
+      "lowered_pct": 78.7,
+      "parsed_pct": 82.4
     },
     "ATQ": {
       "executed_pct": 63.3,
@@ -86,14 +86,14 @@
       "parsed_pct": 87.9
     },
     "LEA": {
-      "executed_pct": 49.7,
-      "lowered_pct": 86.9,
-      "parsed_pct": 88.7
+      "executed_pct": 50.3,
+      "lowered_pct": 87.4,
+      "parsed_pct": 88.9
     },
     "LEB": {
-      "executed_pct": 49.9,
-      "lowered_pct": 86.9,
-      "parsed_pct": 88.7
+      "executed_pct": 50.4,
+      "lowered_pct": 87.4,
+      "parsed_pct": 88.9
     },
     "LEG": {
       "executed_pct": 58.7,
@@ -119,6 +119,11 @@
       "executed_pct": 64.4,
       "lowered_pct": 80.4,
       "parsed_pct": 80.4
+    },
+    "ODY": {
+      "executed_pct": 69.6,
+      "lowered_pct": 89.7,
+      "parsed_pct": 89.7
     },
     "PCY": {
       "executed_pct": 59.4,

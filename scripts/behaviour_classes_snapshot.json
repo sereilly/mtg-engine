@@ -69,10 +69,12 @@
     "Walking Corpse",
     "Water Elemental",
     "Wild Jhovall",
-    "Wishcoin Crab"
+    "Wishcoin Crab",
+    "Woodland Druid"
   ],
   [
     "Abbey Gargoyles",
+    "Aven Smokeweaver",
     "Cerulean Wyvern",
     "Duskrider Falcon",
     "Freewind Falcon",
@@ -81,6 +83,7 @@
     "Nightwind Glider",
     "Sea Sprite",
     "Thermal Glider",
+    "Treetop Sentinel",
     "Voice of Duty",
     "Voice of Grace",
     "Voice of Law",
@@ -95,6 +98,7 @@
     "Azure Drake",
     "Bird Maiden",
     "Concordia Pegasus",
+    "Dusk Imp",
     "Feral Shadow",
     "Fighting Drake",
     "Flying Men",
@@ -135,6 +139,18 @@
     "Warthog"
   ],
   [
+    "Elvish Archers",
+    "Halberdier",
+    "Hornet Cobra",
+    "Land Leeches",
+    "Lightning Hounds",
+    "Ramirez DePietro",
+    "Sabretooth Tiger",
+    "Serra Zealot",
+    "Stone-Throwing Devils",
+    "Youthful Knight"
+  ],
+  [
     "Argothian Swine",
     "Crash of Rhinos",
     "Goliath Beetle",
@@ -144,17 +160,6 @@
     "Pygmy Razorback",
     "War Mammoth",
     "Wild Elephant"
-  ],
-  [
-    "Elvish Archers",
-    "Hornet Cobra",
-    "Land Leeches",
-    "Lightning Hounds",
-    "Ramirez DePietro",
-    "Sabretooth Tiger",
-    "Serra Zealot",
-    "Stone-Throwing Devils",
-    "Youthful Knight"
   ],
   [
     "Benalish Hero",
@@ -205,6 +210,14 @@
     "Solidarity",
     "Vitalizing Wind",
     "Warrior's Honor"
+  ],
+  [
+    "Cat Warriors",
+    "Heartwood Treefolk",
+    "Leaf Dancer",
+    "Rushwood Dryad",
+    "Shanodin Dryads",
+    "Slinking Serpent"
   ],
   [
     "Clergy en-Vec",
@@ -281,11 +294,11 @@
     "Rib Cage Spider"
   ],
   [
-    "Cat Warriors",
-    "Heartwood Treefolk",
-    "Rushwood Dryad",
-    "Shanodin Dryads",
-    "Slinking Serpent"
+    "Canyon Wildcat",
+    "Dwarven Grunt",
+    "Goblin Spelunkers",
+    "Mountain Goat",
+    "Rock Badger"
   ],
   [
     "Circle of Protection: Black",
@@ -344,16 +357,23 @@
     "Rune of Protection: White"
   ],
   [
+    "Sphere of Duty",
+    "Sphere of Grace",
+    "Sphere of Law",
+    "Sphere of Reason",
+    "Sphere of Truth"
+  ],
+  [
     "Bloated Toad",
     "Darkwatch Elves",
     "Disciple of Grace",
     "Disciple of Law"
   ],
   [
-    "Canyon Wildcat",
-    "Goblin Spelunkers",
-    "Mountain Goat",
-    "Rock Badger"
+    "Breath of Life",
+    "Resurrection",
+    "Rise Again",
+    "Zombify"
   ],
   [
     "Colossal Dreadmaw",
@@ -431,11 +451,6 @@
     "Storm Crow"
   ],
   [
-    "Breath of Life",
-    "Resurrection",
-    "Rise Again"
-  ],
-  [
     "Breezekeeper",
     "Teferi's Drake",
     "Tolarian Drake"
@@ -476,6 +491,11 @@
     "Zebra Unicorn"
   ],
   [
+    "Elvish Berserker",
+    "Gang of Elk",
+    "Rabid Elephant"
+  ],
+  [
     "Flowstone Crusher",
     "Flowstone Giant",
     "Flowstone Shambler"
@@ -494,6 +514,11 @@
     "Killer Whale",
     "Manta Riders",
     "Whiptongue Frog"
+  ],
+  [
+    "Krosan Beast",
+    "Metamorphic Wurm",
+    "Springing Tiger"
   ],
   [
     "Lone Wolf",
@@ -547,6 +572,10 @@
     "Goblin Berserker"
   ],
   [
+    "Amugaba",
+    "Balshan Griffin"
+  ],
+  [
     "Anaba Bodyguard",
     "Tundra Wolves"
   ],
@@ -561,6 +590,10 @@
   [
     "Angelic Page",
     "Serra Advocate"
+  ],
+  [
+    "Angelic Wall",
+    "Wall of Swords"
   ],
   [
     "Arenson's Aura",
@@ -583,12 +616,20 @@
     "Crusade"
   ],
   [
+    "Balduvian Horde",
+    "Minotaur Explorer"
+  ],
+  [
     "Basalt Monolith",
     "Grim Monolith"
   ],
   [
     "Basri's Solidarity",
     "Titania's Boon"
+  ],
+  [
+    "Battle Strain",
+    "Heat of Battle"
   ],
   [
     "Benalish Trapper",
@@ -715,12 +756,24 @@
     "Ramosian Sky Marshal"
   ],
   [
+    "Demonic Tutor",
+    "Diabolic Tutor"
+  ],
+  [
     "Desert Twister",
     "Vindicate"
   ],
   [
+    "Dirtwater Wraith",
+    "Whispering Shade"
+  ],
+  [
     "Dromosaur",
     "Raging Gorilla"
+  ],
+  [
+    "Druid Lyrist",
+    "Elvish Lyrist"
   ],
   [
     "Dwarven Miner",
@@ -743,12 +796,16 @@
     "Taunting Elf"
   ],
   [
-    "Elvish Berserker",
-    "Gang of Elk"
+    "Ember Beast",
+    "Mogg Flunkies"
   ],
   [
     "Essence Flare",
     "Unstable Mutation"
+  ],
+  [
+    "Execute",
+    "Slay"
   ],
   [
     "Feral Instinct",
@@ -781,6 +838,10 @@
   [
     "Forest",
     "Snow-Covered Forest"
+  ],
+  [
+    "Frenetic Ogre",
+    "Pardic Swordsmith"
   ],
   [
     "Fylamarid",
@@ -837,6 +898,10 @@
   [
     "Henge of Ramos",
     "School of the Unseen"
+  ],
+  [
+    "Hermetic Study",
+    "Psionic Gift"
   ],
   [
     "Heroes' Reunion",
@@ -997,6 +1062,10 @@
   [
     "Piety",
     "Rally"
+  ],
+  [
+    "Pilgrim of Justice",
+    "Pilgrim of Virtue"
   ],
   [
     "Plains",
