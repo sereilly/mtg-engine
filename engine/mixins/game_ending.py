@@ -1152,6 +1152,8 @@ class GameEndingMixin:
 
         from ..events import emit
         from ..named_counters import EMPTIED_KINDS_MARK, counters_on
+        from ..state_triggers import (STATE_TRIGGER_LATCH,
+                                      announce_watched_counter_thresholds)
 
         # The two draw announcements — "your second card each turn" and CR
         # 121.2's per-card event — are one method, because the draw step asks
@@ -1268,7 +1270,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1303,7 +1307,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1431,8 +1437,17 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # See the two counter sweeps above: CR 603.8's latch key.
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
+
+        # "Whenever **a creature** has four or more fuse counters on it, …"
+        # (Bomb Squad.) CR 603.8 asked of every *other* permanent the noun
+        # phrase describes, so the state is true per watched permanent and the
+        # sweep is its own function (`engine/state_triggers.py`) rather than a
+        # sixth block here.
+        if announce_watched_counter_thresholds(self):
+            any_changed = True
 
         return any_changed

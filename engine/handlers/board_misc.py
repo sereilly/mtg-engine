@@ -2757,6 +2757,47 @@ def remove_counters_from_bound(game: Game, instruction: OracleInstruction, conte
     return True, "resolved"
 
 
+@effect_handler("remove_all_counters_from_event_subject")
+def remove_all_counters_from_event_subject(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Whenever a creature has four or more fuse counters on it, **remove all
+    fuse counters from it** and destroy it." (Bomb Squad.)
+
+    :func:`remove_all_counters_from_bound`'s twin one record over: the object
+    is the one the *trigger's own event* was about, carried by id in the
+    trigger's context, where that handler reads the object a delayed ability's
+    creator bound. Its own kind for the reason that one is — the self-reading
+    removal would empty the ability's source, which here is Bomb Squad rather
+    than the creature it lit.
+
+    Through the one removal seam (``named_counters.remove_counters``), so a P/T
+    counter's layer-7d bonus comes off with it and the emptied-kind record the
+    state sweep reads is written.
+
+    A creature already gone has no counters to take off (CR 122.2: they ceased
+    to exist with the zone change), which is CR 608.2c doing as much as it can
+    — the second of two Bomb Squads' triggers resolves into exactly this.
+    """
+    victim = game.permanent_by_id(
+        (context.trigger_context or {}).get("event_subject_permanent_id")
+    )
+    if victim is None or not game.is_on_battlefield(victim):
+        game.log.append(f"{context.card.name}: the permanent it named is gone")
+        return True, "resolved"
+    counter = str(instruction.payload.get("counter", ""))
+    held = counters_on(victim, counter)
+    if held <= 0:
+        game.log.append(
+            f"{victim.card.name} has no {counter} counters to remove"
+        )
+        return True, "resolved"
+    remove_counters(victim, counter, held)
+    game.log.append(
+        f"Removed all {held} {counter} counters from {victim.card.name} "
+        f"({context.card.name})"
+    )
+    return True, "resolved"
+
+
 @effect_handler("remove_all_counters_from_self")
 def remove_all_counters_from_self(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
     """"Remove all tide counters from it." (Homarid, Tidal Influence.)

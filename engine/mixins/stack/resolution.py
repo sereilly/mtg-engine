@@ -28,6 +28,7 @@ from ...models import CardDefinition, Permanent
 from ...oracle import OracleInstruction, compile_card_oracle
 from ...modal_triggers import ENTRY_TRIGGER_CONDITIONS, modal_trigger_modes
 from ...resumption import run_resumable
+from ...state_triggers import release_latch
 # Both owned by ``engine/targeting.py``: two callers ask whether a compiled
 # program announced a target — this picker (CR 603.3d) and the ``may``
 # handler deciding whether an offer may rebind the target its own trigger
@@ -176,6 +177,11 @@ class StackResolutionMixin:
             if obj is item:
                 del self.stack[index]
                 break
+        # CR 603.8: a state-triggered ability "doesn't trigger again until the
+        # ability has resolved, **has been countered**, or has otherwise left
+        # the stack" — and then does, if its state still holds. The latch key
+        # rides the object for exactly this.
+        release_latch(item)
         if item.is_ability or item.is_copy:
             return
         emit(
@@ -1519,6 +1525,9 @@ class StackResolutionMixin:
             illegal = self.sealed_graveyard_target_refusal(item)
         if illegal is not None:
             self.log.append(illegal)
+            # CR 603.8's "or has otherwise left the stack": an ability removed
+            # here did not resolve, so a state trigger may trigger again.
+            release_latch(item)
             if item.ability_instruction is None and not item.is_copy:
                 # CR 608.2b: removed from the stack and, if it is a spell, put
                 # into its owner's graveyard — the ordinary destination, so it

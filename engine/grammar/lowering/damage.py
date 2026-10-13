@@ -52,7 +52,7 @@ from ._common import (
     _filter_payload, _is_enchanted,
 )
 from ._events import (_chosen_cast_amount, SWEPT_CONTROLLER_SEATS,
-                      _back_reference_payload)
+                      _back_reference_payload, dealer_is_event_subject)
 from ._recipients import lower_damage_recipient
 from ._conjuncts import lower_damage_conjunction, lower_split_recipients
 
@@ -242,7 +242,7 @@ def _lower_damage(
             "no damage handler carries the printed seat narrowing here", node=node
         )
     lowered = _with_attached_dealer(node, lowered)
-    lowered = _with_foreign_dealer(node, lowered, produced)
+    lowered = _with_foreign_dealer(node, lowered, produced, event)
     return lowered
 
 
@@ -263,7 +263,7 @@ _CLASS_DEALER_QUANTIFIERS = frozenset({"all", "each", "target"})
 
 def _with_foreign_dealer(
     node: ast.DealDamage, lowered: tuple[OracleInstruction, ...],
-    produced: frozenset[str],
+    produced: frozenset[str], event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """"Destroy target artifact. **That artifact** deals damage equal to its
     mana value to this creature." (Goblin Tinkerer.)
@@ -285,6 +285,15 @@ def _with_foreign_dealer(
       (``"attached"``, ``"event_subject"``); its value here is the record the
       handler reads it from. With no such record the line refuses — a
       back-reference to nothing is a dealer nobody can find.
+
+      …unless the firing **event** recorded it: "Whenever a creature has four
+      or more fuse counters on it, … destroy it. **That creature** deals 4
+      damage to its controller." (Bomb Squad.) The dealer is the object the
+      trigger was about, frozen whole by the fire site so that it still deals
+      the damage after the sentence in front has destroyed it — and after
+      *another* Bomb Squad's trigger has, which is the card's ruling
+      (``_events.dealer_is_event_subject``). A step's record is the nearer
+      antecedent and is read first.
     * **a class or a target** ("creatures deal …", "target creature deals …")
       has no handler that makes each of them the source, so it refuses. No card
       in the pool prints it; it was found by the deletion probe on cards whose
@@ -310,6 +319,8 @@ def _with_foreign_dealer(
         return lowered
     if source.quantifier == "that":
         record = next((key for key in _DEALER_RECORDS if key in produced), None)
+        if record is None and dealer_is_event_subject(source, event):
+            record = "event_subject"
         if record is None:
             raise LoweringError(
                 "no earlier step records the object this damage's printed "

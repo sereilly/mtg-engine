@@ -163,6 +163,33 @@ def _parse_state_trigger_event(
             return ast.TriggerEvent("source_has_keyword", word)
     stream.reset(keyword_mark)
 
+    # "Whenever **a creature has four or more fuse counters on it**, …" (Bomb
+    # Squad.) The threshold state of the last branch below, asked of *another*
+    # permanent rather than of the source — so the noun is **carried**, for the
+    # reason the "no lands on the battlefield" branch carries its own: it is a
+    # subject, ``engine/oracle.py``'s row reads the same words as a
+    # ``countered_subject`` group, and the sweep tests every permanent against
+    # the filter that comes of it. It is also what makes the effect's "it" and
+    # "that creature" name the watched permanent
+    # (``rebinding.rebind_pronoun_to_event_subject``) instead of the source.
+    #
+    # The number and the counter kind are consumed and dropped as they are for
+    # the source's own threshold: the table supplies the payload the sweep
+    # dispatches on. Both spellings of the number, and one token of any kind
+    # for the counter's name, which is how that branch reads them.
+    watched_mark = stream.mark()
+    watched = parse_subject_filter_at(stream)
+    if watched is not None and stream.accept_word("has"):
+        if stream.at_kind(NUMBER) or stream.peek_word() in NUMBER_WORDS:
+            stream.advance()
+            if stream.accept_phrase("or", "more") and stream.peek() is not None:
+                stream.advance()
+                if stream.accept_word("counters") and stream.accept_phrase("on", "it"):
+                    return ast.TriggerEvent(
+                        "permanent_counters_reach_threshold", word, subject=watched,
+                    )
+    stream.reset(watched_mark)
+
     state_mark = stream.mark()
     if stream.accept_phrase("there", "are"):
         # "When there are **no lands on the battlefield**, sacrifice this

@@ -24,6 +24,7 @@ from ._common import (divided_target_permanent, recorded_permanent_ids,
 )
 from ..oracle_types import single_chosen_id
 from ..oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
+                           EVENT_SUBJECT_LAST_KNOWN,
                            LAST_DAMAGER_CONTROLLER,
                            X_FROM_COUNT_PER_RECIPIENT)
 from .prevention import chosen_shield_source
@@ -123,6 +124,33 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         # nothing else once ``source_permanent`` is known non-None, which the
         # early return above guarantees.
         card = host.card
+    elif instruction.payload.get("biter") == "event_subject":
+        # ``biter: "event_subject"`` — "Whenever a creature has four or more
+        # fuse counters on it, … destroy it. **That creature** deals 4 damage
+        # to its controller." (Bomb Squad.) The dealer is the object the
+        # trigger's own event was about. CR 608.2h: "If an ability states that
+        # an object does something, it's the object as it exists—or as it most
+        # recently existed—that does it, not the ability" — so the permanent
+        # itself while the id still resolves, and otherwise the object the fire
+        # site froze beside the id, which is that creature as it last existed.
+        # That second read is the card's ruling: with two Bomb Squads the
+        # second trigger still deals 4 after the first has destroyed the
+        # creature.
+        #
+        # The damage is the creature's own (CR 120.7): its colours for a
+        # protection or a Circle, its lifelink for its controller, and never
+        # Bomb Squad's. With neither read there is nothing to deal it, for the
+        # reason an Aura with no host deals none.
+        tctx = context.trigger_context or {}
+        dealer = game.permanent_by_id(tctx.get("event_subject_permanent_id"))
+        if dealer is None:
+            last_known = tctx.get(EVENT_SUBJECT_LAST_KNOWN)
+            dealer = last_known if isinstance(last_known, Permanent) else None
+        if dealer is None:
+            game.log.append(f"{card.name}: nothing to deal the damage")
+            return True, "resolved"
+        source_permanent = dealer
+        card = dealer.effective_card
     elif (dealer_record := instruction.payload.get("biter")) is not None:
         # ``biter: "destroyed_target"`` — "Destroy target artifact. **That
         # artifact** deals damage equal to its mana value to this creature."
@@ -530,6 +558,41 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
         game._deal_damage_to_player(
             victim, damage, source=source_permanent or card,
             then=_report_subject, asks=True,
+        )
+        return True, "resolved"
+    if instruction.payload.get("recipient") == "biter_controller":
+        # "That creature deals 4 damage to **its controller**." (Bomb Squad.)
+        # The controller of the object dealing the damage — the dealer the
+        # ``biter`` key moved this handler onto, above — read as the damage is
+        # dealt: whoever controls it now, or whoever controlled it as it last
+        # existed on the battlefield (CR 608.2h). Not a seat frozen when the
+        # ability triggered: a creature stolen in response burns the thief,
+        # and one destroyed a sentence earlier burns whoever lost it.
+        #
+        # ``bound_bites_player`` has read the same key off a recorded biter
+        # since Delirium; this is that reading for a dealer an *event* named.
+        # No dealer was named, or no seat can be found for it, and nobody is
+        # damaged — never the ability's own controller by default. (The dealer
+        # may *be* the ability's source: Bomb Squad is a creature and can
+        # light its own fuse.)
+        seat = (
+            game.controller_or_last_known(source_permanent)
+            if source_permanent is not None
+            and instruction.payload.get("biter") is not None else None
+        )
+        if seat is None:
+            game.log.append(f"{card.name}: no controller to deal the damage to")
+            return True, "resolved"
+        burned = game.players[seat]
+
+        def _report_burned(dealt: int) -> None:
+            context.results["damage_dealt"] = dealt
+            if dealt:
+                game.log.append(f"{card.name} dealt {dealt} damage to {burned.name}")
+
+        game._deal_damage_to_player(
+            burned, damage, source=source_permanent,
+            then=_report_burned, asks=True,
         )
         return True, "resolved"
     if instruction.payload.get("recipient") == "chosen_player":

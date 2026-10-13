@@ -1628,6 +1628,27 @@ WHENEVER_TRIGGER_PATTERNS: tuple[tuple[str, str], ...] = (
     ("counters_reach_threshold",
      r"whenever there are (?P<counter_count>[a-z]+) or more (?P<counter_kind>[a-z]+) counters on this "
      r"(?:artifact|creature|enchantment|permanent|land)"),
+    # "**Whenever a creature has four or more fuse counters on it**, remove all
+    # fuse counters from it and destroy it. That creature deals 4 damage to its
+    # controller." (Bomb Squad.) The same CR 603.8 state, asked of **another
+    # permanent** — any one the noun phrase describes, on any battlefield — so
+    # it is its own kind and not a subject on the row above: that row's state
+    # is one fact about its source, and this one is a fact per watched
+    # permanent, which is what its sweep latches on (two creatures crossing the
+    # line are two triggers, and one of them leaving re-arms neither).
+    #
+    # The noun phrase is delimited as a ``_subject`` group and read by the noun
+    # parser, so "an artifact" or "a creature you control" is payload; the
+    # number and the counter kind are payload as they are one row up, with the
+    # wider character class ``source_has_no_counters`` uses because a P/T
+    # counter is spelled with symbols (CR 122.1a).
+    #
+    # No row above can claim the sentence: "there are" and "this creature's
+    # power" do not open with an article, and the two "this <noun> has" rows
+    # below name the source.
+    ("permanent_counters_reach_threshold",
+     r"whenever (?P<countered_subject>an? [^,]+?) has (?P<counter_count>[a-z0-9]+) or more "
+     r"(?P<counter_kind>[-+/0-9a-z]+) counters on it"),
     # "**When** this creature's power is 7 or greater, sacrifice it."
     # (Phyrexian Devourer.) CR 603.8 again, and the first state trigger that
     # reads a *characteristic* rather than a census or a counter store — so

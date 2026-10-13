@@ -230,6 +230,10 @@ INSTRUCTION_CATEGORIES: dict[str, str] = {
     # than the ability's own source.
     "remove_all_counters_from_bound": "counters",
     "remove_counters_from_bound": "counters",
+    # Bomb Squad's defusing. The event-subject twin of the two rows above —
+    # same effect, and the object is the one the trigger's own event was about
+    # rather than one a delayed ability's creator bound.
+    "remove_all_counters_from_event_subject": "counters",
     # A counter on a **player** (CR 122.1f poison) coming off, the mirror of
     # ``player_gets_poison_counters`` above it. Same category: the store differs
     # and the question does not.

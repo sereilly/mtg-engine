@@ -173,6 +173,18 @@ _EVENT_SUBJECT_CONTROLLERS: frozenset[str] = frozenset({
     # path. Absent from this table the phrase fell through to `target_player`,
     # a choice neither card offers — which is Psychic Venom's bug one row up.
     "matching_permanent_enters",
+    # "Whenever a creature has four or more fuse counters on it, …" (Bomb
+    # Squad's condition). The watched creature's, stamped by the state sweep
+    # (`engine/state_triggers.announce_watched_counter_thresholds`) with the id
+    # beside it. Here so that "that creature's controller loses 2 life" under
+    # this event reads a seat somebody recorded rather than falling through to
+    # `target_player`, which for a trigger that targets nothing is whatever the
+    # resolution was carrying — Psychic Venom's bug, which every row here is
+    # the fix for. Bomb Squad's own sentence does not read it: "that creature
+    # deals 4 damage to **its controller**" asks the dealer as the damage is
+    # dealt (`_recipients`, the `biter_controller` branch), because that
+    # creature is still on the battlefield while the trigger waits.
+    "permanent_counters_reach_threshold",
     # Funeral March — the departing host's. CR 603.6c's event about the
     # permanent an Aura or Equipment is attached to, announced from the one
     # transition off the battlefield (`remove_all_from_battlefield`), which
