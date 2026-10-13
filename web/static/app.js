@@ -4282,6 +4282,15 @@ function beginPendingHandCast(card, handIndex = null) {
   };
 }
 
+// What the hint says once a card with nothing left to choose has gone out. A
+// land is played (CR 305.1) and a spell is cast; neither "targets seat N" —
+// that seat is only the default the request carries, and the hint used to read
+// it out ("Cast Mountain targeting seat 1.").
+function playedCardHint(card, cardName) {
+  const typeLine = String((card && card.type) || "").toLowerCase();
+  return /\bland\b/.test(typeLine) ? `Played ${cardName}.` : `Cast ${cardName}.`;
+}
+
 function clearPendingHandCast() {
   // While a multi-mode cast is collecting targets, each per-mode prompt ends by
   // calling sendAction — which captures instead of sending and opens the *next*
@@ -15491,8 +15500,24 @@ function confirmSeveralTargets() {
   updateActionHint(`${activating ? "Activating" : "Casting"} ${cardName}...`);
   sendAction(body)
     .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .catch((e) => {
+      // The refusal every other send answers with the Auto-Tap prompt, and this
+      // one answered with a hint: Nomad Decoy's "{W}{W}, {T}: Tap two target
+      // creatures" came back "insufficient mana to activate" beside three
+      // untapped Plains, with nothing to press. The body is kept whole, so the
+      // retry names the same targets; an activation's price is the ability's.
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = activating
+          ? { card, cardName, cost: getActivatedAbilityCost(card, p.abilityIndex), actionBody: body }
+          : { card, cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+    })
+    .finally(() => {
+      if (!pendingAutoTap) clearPendingHandCast();
+    });
 }
 
 /** Drop the in-progress target prompt and every highlight it painted. */
@@ -17776,7 +17801,7 @@ function createCardElement(card, options = {}) {
         const actionBody = { seat, action: "cast", card_name: cardName, target_seat: targetSeat };
         try {
           await sendAction(actionBody);
-          updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
+          updateActionHint(playedCardHint(card, cardName));
           clearPendingHandCast();
         } catch (e) {
           if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
@@ -19989,9 +20014,25 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
   }
 }
 
+// The ability menu ("Choose an ability for Cabal Pit") is about one permanent
+// of the viewer's. Once that permanent has left the battlefield the menu is
+// about nothing — it used to stay on the panel, offering the abilities of a
+// land Price of Glory had already destroyed. By id, never by slot: another
+// permanent sliding into the index is not the one the menu named (CR 400.7).
+function dropAbilityChoiceIfStale(state = currentState) {
+  if (!pendingAbilityChoice || seat === null) return;
+  const id = pendingAbilityChoice.card?.id;
+  if (!Number.isInteger(id)) return;
+  const battlefield = state?.players?.[seat]?.battlefield || [];
+  if (!battlefield.some((permanent) => permanent && permanent.id === id)) {
+    pendingAbilityChoice = null;
+  }
+}
+
 function renderBoard(state) {
   renderGameOverOverlay(state);
   closePermanentMenuIfStale(state);
+  dropAbilityChoiceIfStale(state);
   // Eliminated in a still-running FFA: pin the spectator strip while the
   // remaining players finish the game (the game-over overlay replaces it).
   const spectatorBanner = q("spectatorBanner");
@@ -21078,7 +21119,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const actionBody = { seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat };
       try {
         await sendAction(actionBody);
-        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        updateActionHint(playedCardHint(card, payload.name));
         clearPendingHandCast();
       } catch (e) {
         if (card && e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
