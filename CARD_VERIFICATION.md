@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5246**
-- Passed: **746** (489 checked in-game, 257 auto-passed)
-- Failed: **4**
-- Equivalent to a passing card: **58**
-- Untested: **4438**
+- Passed: **753** (496 checked in-game, 257 auto-passed)
+- Failed: **1**
+- Equivalent to a passing card: **59**
+- Untested: **4433**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -31,7 +31,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Absolute Law | ⬜ untested |  |
 | Absorb | ⬜ untested |  |
 | Abu Ja'far | ✅ pass |  |
-| Abundance | ❌ fail | With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 "choose which effect applies" / "choose whether to take the counter"). Each card alone answered its prompt correctly. |
+| Abundance | ✅ pass |  |
 | Abyssal Gatekeeper | ⬜ untested |  |
 | Abyssal Horror | ⬜ untested |  |
 | Abyssal Hunter | ⬜ untested |  |
@@ -1638,7 +1638,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Forbidden Lore | ⬜ untested |  |
 | Forbidden Ritual | ⬜ untested |  |
 | Forbidding Watchtower | ⬜ untested |  |
-| Force Spike | ⬜ untested |  |
+| Force Spike | ≡ equivalent | same behaviour as Mana Leak |
 | Force Void | ⬜ untested |  |
 | Force of Nature | ✅ pass |  |
 | Force of Will | ✅ pass |  |
@@ -1653,7 +1653,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Forgotten Lore | ⬜ untested |  |
 | Forgotten Sentinel | ⬜ untested |  |
 | Foriysian Brigade | ⬜ untested |  |
-| Fork | ❌ fail | Forking a spell whose picker is "any target" or "target player" (Lightning Bolt) never offers new targets for the copy; only creature/permanent/artifact/land spells get the second step. The copy does keep the original target (a Bolt at a creature is copied at that creature). |
+| Fork | ❌ fail | One-slot copies now work: the server asks for the copy's target (a creature, a player by the life pill, or the original) and each answer resolved correctly. But Forking a Shower of Coals aimed at two creatures: the copy dealt its 2 to the opponent's face ("AI took 2 damage") instead of to the original's two targets (CR 707.10). |
 | Formation | ⬜ untested |  |
 | Forsaken City | ⬜ untested |  |
 | Forsaken Wastes | ⬜ untested |  |
@@ -2191,7 +2191,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Insidious Bookworms | ⬜ untested |  |
 | Insight | ⬜ untested |  |
 | Insolence | ⬜ untested |  |
-| Inspiration | ⬜ untested |  |
+| Inspiration | ✅ pass |  |
 | Instigator | ⬜ untested |  |
 | Instill Energy | ✅ pass |  |
 | Insubordination | ⬜ untested |  |
@@ -2573,7 +2573,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Loafing Giant | ⬜ untested |  |
 | Lobotomy | ⬜ untested |  |
 | Locust Swarm | ⬜ untested |  |
-| Lodestone Bauble | ❌ fail | "That player draws a card at the beginning of the next turn's upkeep": three basic lands from MY graveyard went on top of my library, and at the AI's upkeep the AI drew the card. |
+| Lodestone Bauble | ✅ pass |  |
 | Lofty Denial | ⬜ untested |  |
 | Lone Wolf | ⬜ untested |  |
 | Longbow Archer | ✅ pass | auto-pass: keywords only (reach, first strike) |
@@ -2640,7 +2640,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Mana Cylix | ≡ equivalent | same behaviour as Celestial Prism |
 | Mana Drain | ⬜ untested |  |
 | Mana Flare | ✅ pass |  |
-| Mana Leak | ⬜ untested |  |
+| Mana Leak | ✅ pass |  |
 | Mana Leech | ⬜ untested |  |
 | Mana Matrix | ⬜ untested |  |
 | Mana Maze | ⬜ untested |  |
@@ -3377,7 +3377,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Purify | ⬜ untested |  |
 | Purraj of Urborg | ⬜ untested |  |
 | Pursued Whale | ⬜ untested |  |
-| Pursuit of Knowledge | ❌ fail | With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 "choose which effect applies" / "choose whether to take the counter"). Each card alone answered its prompt correctly. |
+| Pursuit of Knowledge | ✅ pass |  |
 | Putrefaction | ⬜ untested |  |
 | Putrid Warrior | ⬜ untested |  |
 | Pygmy Allosaurus | ✅ pass | auto-pass: keywords only (swampwalk) |
@@ -3460,7 +3460,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Ramosian Sergeant | ⬜ untested |  |
 | Ramosian Sky Marshal | ⬜ untested |  |
 | Rampant Elephant | ⬜ untested |  |
-| Rampant Growth | ⬜ untested |  |
+| Rampant Growth | ✅ pass |  |
 | Rampart Crawler | ⬜ untested |  |
 | Ramses Overdark | ⬜ untested |  |
 | Rancor | ⬜ untested |  |
@@ -4497,7 +4497,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Tectonic Break | ⬜ untested |  |
 | Tectonic Instability | ⬜ untested |  |
 | Teeka's Dragon | ⬜ untested |  |
-| Teferi's Ageless Insight | ⬜ untested |  |
+| Teferi's Ageless Insight | ✅ pass |  |
 | Teferi's Care | ⬜ untested |  |
 | Teferi's Curse | ⬜ untested |  |
 | Teferi's Drake | ✅ pass | auto-pass: keywords only (flying, phasing) |
