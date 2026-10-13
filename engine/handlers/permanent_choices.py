@@ -361,6 +361,30 @@ def _chooser_seat(game, payload: dict, context) -> int | None:
     )
 
 
+def _matched_candidates(game, matched: dict, context) -> list:
+    """What the pick *matched* describes could choose from, right now.
+
+    *matched* is a ``choose_permanents`` payload — the next sentence's — and it
+    is asked the way that step will be: through
+    ``control_flow._role_scoped``, so "creatures **another target player**
+    controls" is counted on that player's board, and through
+    :func:`permanent_choice_candidates`, so the count and the later prompt's
+    list are one rule's answer. A role that no longer resolves (CR 608.2b: its
+    player left the game, or was judged an illegal target and blanked) offers
+    nothing — "if part of the effect requires information about an illegal
+    target, it fails to determine any such information".
+    """
+    from ..oracle_types import OracleInstruction
+    from .control_flow import _role_scoped
+
+    scoped = _role_scoped(
+        game, OracleInstruction("choose_permanents", "", dict(matched)), context
+    )
+    if scoped is None:
+        return []
+    return permanent_choice_candidates(game, matched, scoped)
+
+
 @effect_handler("choose_permanents")
 def choose_permanents(
     game: Game, instruction: OracleInstruction, context: OracleExecutionContext
@@ -508,13 +532,52 @@ def _choose_permanents_for_one_seat(
             # prompt with no answer, it is a step that asked for nothing.
             game.log.append(f"{card_name}: nothing to choose")
             return True, "resolved"
+    counted_prompt = ""
+    same_number = payload.get("same_number_as")
+    if same_number is not None:
+        # "Choose **the same number** of creatures another target player
+        # controls." (Cultural Exchange.) Exactly as many as an earlier pick of
+        # this resolution recorded — a floor and a ceiling at once, read off
+        # the record rather than through a count spec because the number is
+        # not anything on a board: it is how a player answered one sentence
+        # ago. No record, or an empty one, is a pick of none; and where this
+        # board cannot supply the number the sentence asks for, nothing is
+        # chosen at all (the floor check below) rather than fewer — "the same
+        # number" has no smaller reading, and the exchange behind it then
+        # cannot be completed (CR 701.12a).
+        wanted = len(context.results.get(str(same_number)) or ())
+        if wanted <= 0:
+            game.log.append(f"{card_name}: nothing to choose")
+            return True, "resolved"
+        up_to = at_least = wanted
+        # The number, in the words the seat is shown: it is an answer given a
+        # moment ago, and nothing printed on the card says what it was.
+        counted_prompt = f" (exactly {wanted})"
+    matched = payload.get("matched_by")
+    if isinstance(matched, dict):
+        # "Choose any number of creatures target player controls. Choose **the
+        # same number** of creatures another target player controls." The pick
+        # the next sentence makes, described here so that this one cannot
+        # outrun it: no more may be chosen than that pick could match.
+        #
+        # A ceiling the words do not print and the rules do: an exchange that
+        # cannot be completed does nothing at all (CR 701.12a), so every
+        # larger answer is the answer "none" reached by a longer road, and CR
+        # 608.2d does not let a player choose what cannot be done. Bounded
+        # here rather than discovered at the exchange, where a person would
+        # learn it only after their choice had been thrown away.
+        up_to = min(up_to, len(_matched_candidates(game, matched, context)))
+        if up_to <= 0:
+            game.log.append(f"{card_name}: nothing to choose")
+            return True, "resolved"
+        counted_prompt = f" (up to {up_to})"
     if len(candidates) < max(at_least, 1):
         game.log.append(f"{card_name}: there is no permanent it could choose")
         return True, "resolved"
     game.arm_permanent_set_choice(
         seat,
         card_name=card_name,
-        prompt=payload.get("prompt") or "Choose permanents.",
+        prompt=(payload.get("prompt") or "Choose permanents.") + counted_prompt,
         result_key=result_key,
         payload=payload,
         context=context,

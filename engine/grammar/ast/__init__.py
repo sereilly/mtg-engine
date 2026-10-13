@@ -309,6 +309,7 @@ from .control_changes import (
     BidLifeForControl,
     ExchangeControl,
     ExchangeGreatestManaValue,
+    ExchangeChosenSets,
     MutualControlOfSets,
 )
 from .mana import (
@@ -727,6 +728,7 @@ __all__ = [
     "ExchangeControl",
     "ExchangeLifeTotals",
     "ExchangeGreatestManaValue",
+    "ExchangeChosenSets",
     "MutualControlOfSets",
     "PayOrSacrificeGreatestManaValue",
     "Destroy",

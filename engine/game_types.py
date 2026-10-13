@@ -162,6 +162,15 @@ CHOICE_KEYS = (
     # announcement to the matcher is what keeps a cast-time choice and an
     # entry-time choice (An-Zerrin Ruins) answerable by one reader.
     "chosen_creature_type",
+    # Every seat a **several-role** announcement named, one entry per role in
+    # role order with ``None`` where the role is not a player ("…creatures
+    # **target player** controls … creatures **another target player**
+    # controls", Cultural Exchange). A target rather than a choice beyond one,
+    # and on this channel for ``divided_targets``' reason: it is the other
+    # announcement that names several players, and ``target_player_index`` is
+    # one seat. Written only where there are two or more seat roles —
+    # ``targeting.ROLE_SEATS`` names the key and says who reads it.
+    "role_seats",
 )
 
 

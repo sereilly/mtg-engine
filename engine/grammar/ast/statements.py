@@ -145,6 +145,7 @@ from .control_changes import (
     BidLifeForControl,
     ExchangeControl,
     ExchangeGreatestManaValue,
+    ExchangeChosenSets,
     MutualControlOfSets,
 )
 from .mana import (
@@ -326,6 +327,7 @@ Effect = Union[
     DoesntUntapWhileCounter, UntapChosenByPaying,
     DelayedSelfAction, RebalanceLands, KeepChosenSacrificeRest, Attach, ExchangeControl,
     ExchangeGreatestManaValue,
+    ExchangeChosenSets,
     MutualControlOfSets,
     PayOrSacrificeGreatestManaValue,
     PayAnyAmountOfMana,

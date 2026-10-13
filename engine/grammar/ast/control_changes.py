@@ -203,3 +203,35 @@ class MutualControlOfSets:
     other: PlayerRef
     filter: ObjectFilter
     duration: str
+
+
+@dataclass(frozen=True)
+class ExchangeChosenSets:
+    """``Choose any number of <noun> target player controls. Choose the same
+    number of <noun> another target player controls. Those players exchange
+    control of those <noun>.`` (Cultural Exchange.)
+
+    A whole paragraph as one node, for :class:`ExchangeGreatestManaValue`'s
+    reason: "the same number" is a count only the first sentence's answer
+    gives, and "those players" and "those creatures" name seats and permanents
+    no sentence of their own has picked out. Read apart, the second sentence
+    has nothing to match and the third exchanges nothing between nobody.
+
+    **Two targets, both players, and nothing else is one** (CR 115.1a: a
+    spell targets where it says "target"). The permanents are *chosen* as the
+    spell resolves (CR 608.2d), so shroud and protection on a creature stop
+    nothing; only the two players are announced, and the printed "another" is
+    what makes them two different players (CR 115.3 would otherwise let one
+    be named for each instance of the word).
+
+    ``first`` and ``second`` are the two printed noun phrases with the seat
+    lifted off them, so a card exchanging artifacts — or artifacts for lands —
+    is this node with different words. ``first_opponent`` / ``second_opponent``
+    record a printed "target **opponent**" on either side, which narrows who
+    may be named and nothing else.
+    """
+
+    first: ObjectFilter
+    second: ObjectFilter
+    first_opponent: bool = False
+    second_opponent: bool = False

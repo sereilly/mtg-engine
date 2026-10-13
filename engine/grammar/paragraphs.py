@@ -49,6 +49,8 @@ its own words to the end, which is what lets this module sit below
 
 from __future__ import annotations
 
+import dataclasses
+
 from . import ast
 from .amounts import parse_amount
 from .errors import GrammarError
@@ -460,6 +462,89 @@ def _parse_exchange_greatest_mana_value(stream: TokenStream) -> ast.Statement | 
         return None
     return ast.ExchangeGreatestManaValue(tuple(types))
 
+
+
+#: The seat words a chosen set's noun phrase may be scoped by, each a player
+#: the sentence **targets** — and whether the word narrows that target to an
+#: opponent. A phrase scoped by anything else ("you control", "that player
+#: controls") names a seat the announcement did not choose, and is not this
+#: paragraph.
+_CHOSEN_SET_SEATS = {"target_player": False, "target_opponent": True}
+
+
+def _parse_exchange_chosen_sets(stream: TokenStream) -> ast.Statement | None:
+    """Cultural Exchange's whole three-sentence effect, as one statement.
+
+    ``Choose any number of <noun> target player controls. Choose the same
+    number of <noun> another target player controls. Those players exchange
+    control of those <noun>.``
+
+    Every sentence is required and none can be read alone — see
+    :class:`ast.ExchangeChosenSets`. The nouns are read rather than fixed, so
+    "creatures" is payload: both sets through the shared noun parser, and the
+    closing "those <noun>" held to the phrase the two sets were printed with
+    (or to "permanents", which names any set). A closing noun that names
+    neither is a sentence about objects this paragraph did not choose, and
+    refuses.
+
+    The second seat is read **here** rather than by the noun parser, which
+    stops at "another": the word is CR 115.3's exception, a relation between
+    two targets, and a filter key has nothing to compare against.
+
+    Refuses without consuming, like every production here.
+    """
+    mark = stream.mark()
+    if not stream.accept_phrase("choose", "any", "number", "of"):
+        stream.reset(mark)
+        return None
+    try:
+        first = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if first.controller not in _CHOSEN_SET_SEATS or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase("choose", "the", "same", "number", "of"):
+        stream.reset(mark)
+        return None
+    try:
+        second = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    if second.controller is not None or not stream.accept_phrase("another", "target"):
+        stream.reset(mark)
+        return None
+    second_seat = stream.peek()
+    if second_seat is None or second_seat.text not in ("player", "opponent"):
+        stream.reset(mark)
+        return None
+    stream.advance()
+    if not stream.accept_word("controls") or not stream.accept_punct("."):
+        stream.reset(mark)
+        return None
+    if not stream.accept_phrase(
+        "those", "players", "exchange", "control", "of", "those"
+    ):
+        stream.reset(mark)
+        return None
+    try:
+        exchanged = parse_object_filter(stream)
+    except GrammarError:
+        stream.reset(mark)
+        return None
+    first_noun = dataclasses.replace(first, controller=None)
+    if exchanged != ast.ObjectFilter() and not (
+        exchanged == first_noun and exchanged == second
+    ):
+        stream.reset(mark)
+        return None
+    return ast.ExchangeChosenSets(
+        first_noun, second,
+        first_opponent=_CHOSEN_SET_SEATS[first.controller],
+        second_opponent=second_seat.text == "opponent",
+    )
 
 
 def _parse_reassign_blockers_between_attackers(

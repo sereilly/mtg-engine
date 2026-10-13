@@ -411,7 +411,7 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
     """
     from .targeting import (
         GRAVEYARD_TARGET_KIND, ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
-        role_is_seat, role_is_stack, spec_roles,
+        recorded_role_seats, role_is_seat, role_is_stack, spec_roles,
     )
 
     spec, holder, mode = announcement.spec, announcement.holder, announcement.mode
@@ -421,11 +421,28 @@ def _read(game: "Game", item: "StackItem", announcement: _Announcement) -> list[
         # One object per role, positional in role order across the id list and
         # the graveyard-stamp list; a **player** role answers with the scalar
         # seat instead (``activation._role_announcement_stamps``).
+        #
+        # …unless the announcement named **more than one** player, when each
+        # seat is its own slot of the fourth positional list
+        # (``targeting.ROLE_SEATS``: "…target player controls … another target
+        # player controls", Cultural Exchange). Read off the scalar, both
+        # roles were one player: "becomes the target" fired twice for the
+        # first and never for the second. A slot that list leaves ``None``
+        # names nobody (CR 608.2b blanked it) and is not read off the scalar.
         found: list[ChosenTarget] = []
         ids, stamps = _ids(holder), _stamps(holder)
+        role_seats = recorded_role_seats(holder)
         for position, role in enumerate(spec_roles(spec)):
             if role_is_seat(role):
-                seat = _seat(game, holder)
+                if role_seats is not None:
+                    seat = role_seats[position] if position < len(role_seats) else None
+                    if not (
+                        isinstance(seat, int) and not isinstance(seat, bool)
+                        and 0 <= seat < len(game.players)
+                    ):
+                        seat = None
+                else:
+                    seat = _seat(game, holder)
                 if seat is not None:
                     found.append(ChosenTarget("player", seat=seat, channel="role", position=position, mode=mode))
                 continue
@@ -842,6 +859,13 @@ def names_several_targets(item: "StackItem") -> bool:
         return True
     if len((getattr(item, "choices", None) or {}).get(DIVIDED_TARGETS) or ()) > 1:
         return True
+    # …or several **players**, each on a slot of its own ("target player …
+    # another target player", Cultural Exchange): the list is only ever
+    # recorded for two or more of them.
+    from .targeting import recorded_role_seats
+
+    if recorded_role_seats(item) is not None:
+        return True
     return any(
         sum(1 for permanent_id in _ids(holder) if isinstance(permanent_id, int)) > 1
         for holder in (item, *modes)
@@ -888,16 +912,40 @@ def blank_illegal_targets(item: "StackItem", targets) -> int:
     are still legal as Fireball resolves") and what the handlers already did
     for a target that had left.
 
-    Only a ``permanent`` slot and a ``divided`` entry are rewritten. A
-    graveyard stamp with no surviving copy already answers None
-    (``Game.chosen_graveyard_index``), a stack object that has left is found
-    gone by identity, and a lone player is the whole-object rule's.
+    Only a ``permanent`` slot, a ``divided`` entry and a **player slot of a
+    several-seat roles announcement** are rewritten. A graveyard stamp with no
+    surviving copy already answers None (``Game.chosen_graveyard_index``), a
+    stack object that has left is found gone by identity, and a lone player is
+    the whole-object rule's.
+
+    The player slot is the newest: "…creatures target player controls …
+    creatures **another target player** controls" (Cultural Exchange) names
+    two players, and one of them given shroud in response is one illegal
+    target of a spell that still resolves. Its slot of the per-role seat list
+    (``targeting.ROLE_SEATS``) becomes ``None``, which every reader of that
+    list takes as "names nobody" — so the step spending that role is skipped
+    (``handlers/control_flow._role_scoped``) rather than run against the
+    scalar seat beside it. The list is replaced, never mutated: a copy of the
+    spell (CR 707.10) shares the original's list object.
     """
+    from .targeting import ROLE_SEATS, recorded_role_seats
+
     blanked = 0
     dropped: list[int] = []
     for target in targets:
         if target.channel == "divided":
             dropped.append(target.position)
+            continue
+        if target.kind == "player" and target.channel == "role":
+            seats = recorded_role_seats(item) if target.mode is None else None
+            if (
+                seats is not None
+                and 0 <= target.position < len(seats)
+                and seats[target.position] is not None
+            ):
+                seats[target.position] = None
+                item.choices[ROLE_SEATS] = seats
+                blanked += 1
             continue
         if target.kind != "permanent" or target.channel not in ("item", "role"):
             continue

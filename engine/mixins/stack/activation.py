@@ -37,7 +37,7 @@ from ...oracle_types import x_spend_colors_from_text
 from ...activation_restrictions import x_zero_restriction_line
 from ...cast_restrictions import combat_play_ban, global_play_timing
 from ...activation_zones import GRAVEYARD, HAND, ability_functions_from
-from ...targeting import (derive_activation_spec, spec_is_a_cost,
+from ...targeting import (ROLE_SEATS, derive_activation_spec, spec_is_a_cost,
                           usable_activated_abilities)
 from ...mana_payment import (answer_color_choices, is_mana_ability,
                              mana_cost_from_symbols)
@@ -3191,10 +3191,14 @@ class AbilityActivationMixin:
         # line may have put a card into the very pile the second slot counts
         # into.
         graveyard_stamps = None
+        # Every seat the announcement named, where it named more than one
+        # (``targeting.ROLE_SEATS``); None for every roles ability the pool
+        # holds today, each of which names at most one.
+        role_seats = None
         if target_role_refs:
             (
                 target_permanent_ids, target_permanent_index, graveyard_stamps,
-                role_seat,
+                role_seat, role_seats,
             ) = self._role_announcement_stamps(target_role_refs)
             # A roles announcement's ids are settled *here* (the cost above may
             # have moved the graveyard slot the second role counts into), so its
@@ -3321,6 +3325,10 @@ class AbilityActivationMixin:
                     # The word a text change replaces, beside the one it
                     # replaces it with. See the parameter's note above.
                     "old_color": self._normalize_mana_color(old_color),
+                    # A seat per player role, where the announcement named two
+                    # or more — beside the scalar above, which then holds the
+                    # first. See ``targeting.ROLE_SEATS``.
+                    ROLE_SEATS: role_seats,
                 },
             )
         )
@@ -3875,7 +3883,8 @@ class AbilityActivationMixin:
         return SimulationResult(card.name, True, ability.effect_kind, "queued")
 
     def _role_announcement_stamps(self, target_role_refs):
-        """One mixed-zone roles announcement as ``(ids, indices, stamps, seat)``.
+        """One mixed-zone roles announcement as ``(ids, indices, stamps, seat,
+        seats)``.
 
         Three lists, all positional in role order, because that is what a
         ``StackItem`` already carries: an id per battlefield slot
@@ -3894,14 +3903,26 @@ class AbilityActivationMixin:
         announcement names under ``target_player_index`` since the first
         announcement to name one, and the resolution reads it back as
         ``context.target``. Returned as a fourth value rather than squeezed into
-        a list, because it is not positional — an announcement with two player
-        roles would read one seat twice, which ``resolve_role_player`` refuses
-        on the other side of the same fact.
+        a list, because it is the field every reader of "the player this
+        targets" already reads.
+
+        **Two player slots answer with a fifth value as well**: every seat
+        named, positional in role order with ``None`` in the other slots
+        (``targeting.ROLE_SEATS``) — the list the item's ``choices`` carries so
+        that slot 1's player is not read off slot 0's scalar. None where the
+        announcement names at most one seat, which is every roles ability and
+        spell the pool held before "target player … another target player"
+        (Cultural Exchange) and leaves each of them exactly as it was. The
+        scalar is then the **first** seat named. Both announcement paths call
+        this — an activation always has, and a cast handed ``target_role_refs``
+        does (``casting._cast_onto_stack``) — so a seat per role has one
+        spelling going in and one coming out.
         """
         ids: list = []
         indices: list = []
         stamps: list = []
         seat: int | None = None
+        seats: list = []
         for ref in target_role_refs:
             ref = ref if isinstance(ref, dict) else {}
             permanent_id = ref.get("permanent_id")
@@ -3912,14 +3933,18 @@ class AbilityActivationMixin:
                     self.battlefield_index_of(found[1]) if found else None
                 )
                 stamps.append(None)
+                seats.append(None)
                 continue
             named_seat = ref.get("seat")
-            if isinstance(named_seat, int):
-                seat = named_seat
+            if isinstance(named_seat, int) and not isinstance(named_seat, bool):
+                if seat is None:
+                    seat = named_seat
                 ids.append(None)
                 indices.append(None)
                 stamps.append(None)
+                seats.append(named_seat)
                 continue
+            seats.append(None)
             if ref.get("stack"):
                 # A **stack** slot answers with none of the three either: the
                 # spell it names rides ``target_stack_item``, the scalar an
@@ -3935,7 +3960,8 @@ class AbilityActivationMixin:
             stamps.append(
                 self.graveyard_target_at(ref.get("graveyard_seat"), index)
             )
-        return ids, indices, stamps, seat
+        several = len([named for named in seats if named is not None]) > 1
+        return ids, indices, stamps, seat, (seats if several else None)
 
     def activate_from_graveyard(
         self,

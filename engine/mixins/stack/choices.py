@@ -5597,6 +5597,17 @@ class PendingChoicesMixin:
         floor = int(choice.data.get("at_least", 0) or 0)
         live = self.live_permanent_set_choices(choice)
         own = [perm for perm in live if self.controls(choice.player_index, perm)]
+        if (choice.data.get("_payload") or {}).get("default_none"):
+            # "Choose any number of creatures target player controls … Those
+            # players exchange control of those creatures." (Cultural
+            # Exchange.) The own-first rule above is written for a pick that
+            # *keeps* what it names; this one gives it away, so taking the
+            # ceiling in board order would hand a seat's creatures across for
+            # whatever stood first on the other side. The neutral answer to
+            # "any number" is none, and the lowering says which picks are
+            # this kind — a flag on the payload, never a card. A floor still
+            # binds: under one the list below is filled exactly as it was.
+            own = []
         # **The one place board order is not the answer: the permanent that is
         # asking is itself on the list.** "When this creature enters, return a
         # red or green creature you control to its owner's hand" (Planeshift's

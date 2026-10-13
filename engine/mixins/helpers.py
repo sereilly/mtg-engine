@@ -3205,12 +3205,42 @@ class GameHelpersMixin:
         card.
         """
         from ..events import emit
-        from ..targeting import _PLAYER_TARGET_SPEC_KINDS, stack_object_target_spec
+        from ..targeting import (ROLES_TARGET_KIND, _PLAYER_TARGET_SPEC_KINDS,
+                                 stack_object_target_spec)
 
+        spec = stack_object_target_spec(item)
+        if spec is not None and spec.get("kind") == ROLES_TARGET_KIND:
+            # **A player named for one role of several is targeted too.**
+            # "Target player gains control of target permanent you control"
+            # (Donate), "…2 damage to target player or planeswalker" (Lunge),
+            # "…creatures target player controls … creatures another target
+            # player controls" (Cultural Exchange). The kind test below reads a
+            # roles spec as "not a player kind" and returned, so no seat a
+            # roles announcement named ever became the target of anything —
+            # Rayne's controller, Donated a permanent, drew no card.
+            #
+            # Which seats are targets is ``stack_targets``' answer, the one
+            # reader of what a stack object announced: one event per player
+            # role, each its own seat where the announcement recorded several
+            # (``targeting.ROLE_SEATS``).
+            from ..stack_targets import chosen_targets
+
+            for target in chosen_targets(self, item) or ():
+                if target.kind != "player" or target.channel != "role":
+                    continue
+                emit(
+                    self, "self_becomes_target",
+                    subject=None,
+                    targeted_seat=target.seat,
+                    source_seat=item.caster_index,
+                    targeted_by="an ability" if item.is_ability else "a spell",
+                    targeted_by_card=item.card,
+                    event_subject_player=item.caster_index,
+                )
+            return
         seat = getattr(item, "target_player_index", None)
         if not isinstance(seat, int) or not (0 <= seat < len(self.players)):
             return
-        spec = stack_object_target_spec(item)
         if spec is None or spec.get("kind") not in _PLAYER_TARGET_SPEC_KINDS:
             return
         if spec.get("land_filter"):
