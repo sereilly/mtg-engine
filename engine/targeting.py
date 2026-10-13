@@ -1849,20 +1849,29 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     """"Exile X target creature cards from **your** graveyard." (Midnight
     Ritual.)
 
-    The counted graveyard exile is one instruction over three piles, and only
-    one of them is announced. Rysorian Badger's is "defending player's", frozen
-    into a *trigger's* context by the declare-attackers fire site, and Ebony
-    Charm's is "a single graveyard", named by the chooser as the spell resolves
-    — neither seat exists when the object goes on the stack, so neither has a
-    picker to derive and both keep the resolution prompt they were written with.
-    The caster's own pile does exist then, which is the whole of what separates
-    this row from those two.
+    The counted graveyard exile is one instruction over three piles, and the
+    payload's ``targets`` description says which of them are announced — the
+    lowering writes it for exactly the piles this derives a picker for:
 
-    So the answer is **None** for both of them rather than a spec that would
-    describe cards nobody is being asked to name: a picker the client fills for
-    an effect whose handler then prompts anyway is two questions for one
-    decision, and CLAUDE.md's rule for this module is to return None when the
-    program lacks the evidence rather than to guess.
+    * the caster's own (Midnight Ritual), scoped by ``own_graveyard_only``;
+    * "**a single** graveyard" on a spell or an activated ability (Ebony Charm,
+      Rapid Decay, Decompose, Carrion Beetles, Famished Ghoul). Every pile is
+      offered, and ``single_graveyard`` says what the announcement gates then
+      hold the answer to: a graveyard announcement is one seat and a list of
+      slots in *that seat's* pile (``Game.graveyard_target_seat``), so the
+      cards are in one graveyard by construction once the seat is named — and
+      the gate requires that it is (``legality._unnamed_single_pile_refusal``).
+      This row answered None for these until Odyssey's second wave, on the
+      ground that the pile "is named by the chooser as the spell resolves"; the
+      cards are targets (CR 115.1), chosen as the object is put on the stack
+      (CR 601.2c), and choosing them at resolution let a caster pick after the
+      opponent had passed.
+
+    Rysorian Badger's is "defending player's", frozen into a *trigger's*
+    context by the declare-attackers fire site. A trigger has no picker for a
+    card in a graveyard, so it carries no description, answers **None** here
+    and keeps its resolution prompt: a picker the client fills for an effect
+    whose handler then prompts anyway is two questions for one decision.
 
     Everything else is handed straight over in the key names
     ``graveyard_card_matches`` reads — the arrangement every graveyard spec in
@@ -1870,11 +1879,16 @@ def _graveyard_exile_pile_spec(payload: dict) -> dict | None:
     that same predicate and a spec described in this module's own spelling
     would be a second answer to which cards may be named.
     """
-    if payload.get("graveyard_owner") != "you" or not payload.get("targets"):
+    owner = payload.get("graveyard_owner")
+    if owner not in ("you", "chosen") or not payload.get("targets"):
         # No ``targets``: "exile a land card from your graveyard" (Forgotten
         # Harvest) names nothing at announcement and is picked at resolution.
         return None
-    spec: dict = {"kind": GRAVEYARD_TARGET_KIND, "own_graveyard_only": True}
+    spec: dict = {"kind": GRAVEYARD_TARGET_KIND}
+    if owner == "you":
+        spec["own_graveyard_only"] = True
+    else:
+        spec[SINGLE_GRAVEYARD] = True
     card_type = payload.get("card_type")
     if payload.get("any_card") or card_type is None:
         spec["any_card"] = True
@@ -3365,9 +3379,13 @@ def _first_described_slot(instructions) -> "tuple[dict, object] | None":
         # reading for the same reason as the two repeats beside it: both
         # targets are announced once as the ability is activated (CR 602.2b),
         # and every round spends the ones the announcement chose.
+        # "Repeat this process until …" (Tainted Pact's wrapper) is the fifth,
+        # listed for the reason the others are and before any card needs it: a
+        # targeted round inside it announces once (CR 601.2c), and a wrapper
+        # this did not open would derive no spec — the Roots class again.
         if instruction.kind in (
             "sequence", "repeat_optional_process", "repeat_process_while",
-            "repeat_process_on_request",
+            "repeat_process_on_request", "repeat_process_until",
         ):
             nested = _first_described_slot(instruction.payload.get("steps") or ())
             if chosen(nested) is not None:
@@ -4504,6 +4522,14 @@ def cast_time_count_spec(program, *, mode_index: int | None = None) -> dict | No
 # index?" is asked in five places and a sixth that forgets is a spell reading a
 # battlefield it never targeted.
 GRAVEYARD_TARGET_KIND = "graveyard_creature"
+
+#: "…target cards from **a single** graveyard" (Ebony Charm). A relation across
+#: the targets rather than a narrowing of any one of them — "two target
+#: creatures controlled by the same player" one zone over (``same_controller``)
+#: — so it rides the spec as a flag: every pile is offered, and an announcement
+#: is all in one of them. The client reads it to keep a selection inside the
+#: pile its first card came from.
+SINGLE_GRAVEYARD = "single_graveyard"
 
 
 def graveyard_target_spec(

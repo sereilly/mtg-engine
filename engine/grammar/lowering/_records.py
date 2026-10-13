@@ -71,7 +71,8 @@ from ...oracle_types import (ATTACHED_PERMANENT_CONTROLLER,
                              MANA_LOST_COUNT, MANA_LOST_THIS_WAY,
                              MANA_PAID_BY_SEAT, MILLED_THIS_WAY,
                              DISCARDED_INTO_GRAVEYARD, DISCARDED_THIS_WAY,
-                             PER_OBJECT_SEAT_RECORDS, REVEALED_HAND_CARDS,
+                             PER_OBJECT_SEAT_RECORDS, PUT_INTO_HAND_THIS_WAY,
+                             REVEALED_HAND_CARDS,
                              REVEALED_THIS_WAY, REVEALED_TOP_CARDS_BY_SEAT,
                              SACRIFICED_CARDS_BY_SEAT, SACRIFICED_COUNT,
                              SEARCHED_PERMANENTS, SECRET_NUMBERS_BY_SEAT,
@@ -882,6 +883,9 @@ _PRODUCES_FOR_PAYLOAD: dict[str, tuple[str, object, str]] = {
     "choose_permanents": ("chooser", "target", CHOSEN_PLAYER),
     # Psychic Theft: the "and exile that card" ending only.
     "reveal_hand_and_choose": ("fate", "exile", "exiled_cards"),
+    # "…until **you put a card into your hand**" (Tainted Pact): the hand
+    # destination only — see ``oracle_types.PUT_INTO_HAND_THIS_WAY``.
+    "put_exiled_cards_into_zone": ("zone", "hand", PUT_INTO_HAND_THIS_WAY),
 }
 
 

@@ -63,10 +63,6 @@ _QUOTED = re.compile(r'"[^"]*"')
 #: list; a new entry belongs there first.
 ACKNOWLEDGED = {
     "Darkpact": "the ante zone has no picker (tests/engine/test_targeting.py)",
-    "Rapid Decay": (
-        "a graveyard target is chosen at resolution, not announced "
-        "(tests/engine/test_targeting.py)"
-    ),
 }
 
 #: The same for an **activated ability**, keyed ``(card name, ability index)``
@@ -81,19 +77,17 @@ ACKNOWLEDGED = {
 #: only the tests carry would leave the script reporting a decline that has
 #: already been made.
 #:
-#: Carrion Beetles is the entry that showed the gap. It is the sole shipped
-#: card in this list, has been reported by this script since Urza's Saga was
-#: ingested, and had been reviewed and ratcheted in the test file the whole
-#: time — the script simply had nowhere to say so, and no branch that would
-#: have read it if it had: ``ACKNOWLEDGED`` was consulted for the cast finding
+#: Carrion Beetles was the entry that showed the gap: reported by this script
+#: since Urza's Saga was ingested, reviewed and ratcheted in the test file the
+#: whole time, and the script had nowhere to say so and no branch that would
+#: have read it if it had — ``ACKNOWLEDGED`` was consulted for the cast finding
 #: only. A standing advisory finding that is *known* to be a decline trains
 #: the reader to skim the report, which is how the next real one is missed.
-ACKNOWLEDGED_ABILITIES = {
-    ("Carrion Beetles", 0): (
-        "a graveyard target is chosen at resolution, not announced "
-        "(tests/engine/test_activation_targeting.py)"
-    ),
-}
+#:
+#: **Empty since Odyssey's second wave**, which announced "target cards from a
+#: single graveyard" (CR 602.2b) and so drained it, with Rapid Decay's cast
+#: entry above. The dict stays because the branch that reads it does.
+ACKNOWLEDGED_ABILITIES: dict[tuple[str, int], str] = {}
 
 
 def sweep(cards):

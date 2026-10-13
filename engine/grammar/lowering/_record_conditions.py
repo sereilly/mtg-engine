@@ -55,7 +55,8 @@ from __future__ import annotations
 from ...damage_deaths import DAMAGED_BY_SOURCE_DIED
 from ...oracle_types import (CHOSEN_COLOR_THIS_WAY, CHOSEN_NUMBER_THIS_WAY,
                              DISCARDED_THIS_WAY,
-                             MILLED_THIS_WAY, REVEALED_HAND_CARDS)
+                             MILLED_THIS_WAY, PUT_INTO_HAND_THIS_WAY,
+                             REVEALED_HAND_CARDS)
 from ...subject_filters import card_only_filter, untestable_filter_keys
 from .. import ast
 from ..errors import LoweringError
@@ -420,6 +421,33 @@ def lower_record_condition(
         return {
             "kind": "shared_color_milled_this_way", "count": condition.count,
         }
+    if isinstance(condition, ast.ExiledThisWayShareAName):
+        # "…it has the same name as another card exiled this way" / "you exile
+        # two cards with the same name" (Tainted Pact). A back-reference names
+        # its producer or refuses: with no exile in front of it the relation is
+        # asked of an empty pile and answers False for ever — on this card, a
+        # loop that never sees its second stopping clause.
+        if "exiled_cards" not in produced:
+            raise LoweringError(
+                "'cards exiled this way' with no exile before it in this "
+                "effect",
+                node=condition,
+            )
+        shares: dict[str, object] = {"kind": "exiled_this_way_share_a_name"}
+        if condition.of_latest:
+            shares["of_latest"] = True
+        return shares
+    if isinstance(condition, ast.PutIntoHandThisWay):
+        # "…until you put a card into your hand" (the same card). The record
+        # ``put_exiled_cards_into_zone`` writes when its destination is a hand,
+        # demanded for the reason above: unwritten, it reads as "never".
+        if PUT_INTO_HAND_THIS_WAY not in produced:
+            raise LoweringError(
+                "'you put a card into your hand' with no step in this effect "
+                "that puts one there",
+                node=condition,
+            )
+        return {"kind": "it_happened", "key": PUT_INTO_HAND_THIS_WAY}
     if isinstance(condition, ast.RevealedCardHasChosenName):
         # Both producers demanded, for the mill's reason below: without the
         # name the comparison is against nothing and answers False for ever,

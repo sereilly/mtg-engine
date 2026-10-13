@@ -2045,6 +2045,16 @@ def several_target_slot_sides(program, instructions=None) -> tuple[str | None, .
         # several-target *graveyard* return names cards, and whose pile they
         # come from is the printed phrase's business.
         shared = _effect_side(instruction)
+    elif (
+        instruction.kind == "exile_cards_from_graveyard"
+        and instruction.payload.get("graveyard_owner") == "chosen"
+    ):
+        # …with one exception, the one printing that leaves the pile to the
+        # chooser: "Exile up to three target cards from **a single**
+        # graveyard" (Ebony Charm, Rapid Decay, Decompose). Taking cards out
+        # of a graveyard is a denial, and the fallback's own-pile-first would
+        # empty the caster's.
+        shared = "opponent"
     else:
         shared = None
     sides: list[str | None] = []

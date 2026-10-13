@@ -75,7 +75,8 @@ from .oracle_types import cost_target_count, x_spend_colors_from_text
 from .search_filters import search_matches, searched_seat
 from .subject_filters import subject_matches
 from .activation_zones import HAND
-from .targeting import (announced_mode_instructions, bounce_subject_filter,
+from .targeting import (SINGLE_GRAVEYARD,
+                        announced_mode_instructions, bounce_subject_filter,
                         cast_target_slot, derive_activation_spec,
                         derive_cast_spec, derive_instruction_spec,
                         instructions_as_announced, role_is_seat,
@@ -1782,7 +1783,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # Skipped entirely when nothing is worth equipping, so the AI does not
         # pay {1} every main phase to move a sword onto the creature it is
         # already on.
-        target_permanent_index: int | None = None
+        target_permanent_index: int | list[int] | None = None
         if ability.instruction.kind == "attach_source_to_target":
             target_permanent_index = _choose_equip_target(game, player_index, permanent)
             if target_permanent_index is None:
@@ -1917,6 +1918,31 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
             chosen = max(perms, key=_power)
             target = chosen["seat"]
             target_permanent_index = chosen["index"]
+
+        # "{2}{B}, {T}: Exile up to three target cards from a single
+        # graveyard." (Carrion Beetles, Famished Ghoul.) The cards are announced
+        # (CR 602.2b), so an activation that names none is the legal "up to"
+        # announcement and exiles nothing — a cost paid for no effect, which is
+        # what this seat did with every one of them once the handler stopped
+        # picking for it. Named here the way the cast side names them
+        # (`_choose_several_targets`): the maximum, out of one opponent's pile,
+        # and skipped when no opponent has a card to take.
+        if (
+            spec is not None
+            and spec.get(SINGLE_GRAVEYARD)
+            and target_permanent_index is None
+            and not target_role_refs
+        ):
+            piles: dict[int, list[int]] = {}
+            for entry in game.activation_target_spec(
+                player_index, permanent_index, ability_index=0,
+            ).get("valid_targets") or []:
+                if entry.get("kind") == "graveyard" and entry.get("seat") != player_index:
+                    piles.setdefault(int(entry["seat"]), []).append(int(entry["index"]))
+            if not piles:
+                continue
+            target = min(piles)
+            target_permanent_index = piles[target][: int(spec.get("max_targets") or 1)]
 
         # CR 601.2d asked of an ability: a divided announcement ("…divided as
         # you choose", Serra's Hymn) is one this chooser never makes, and the

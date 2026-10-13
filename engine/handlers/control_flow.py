@@ -37,7 +37,7 @@ from ..oracle_types import (BIDDING_WINNER,
                             SWEPT_OWNER_SEATS,
                             REVEALED_HAND_CARDS, REVEALED_TOP_CARDS_BY_SEAT,
                             MILLED_THIS_WAY, DISCARDED_THIS_WAY,
-                            PER_OBJECT_SEAT_RECORDS,
+                            PER_OBJECT_SEAT_RECORDS, PROCESS_ROUNDS_SO_FAR,
                             OracleInstruction)
 from ..oracle_types import SECRET_NUMBERS_BY_SEAT
 from ..oracle_types import (EVENT_SPELL_MANA_COST,
@@ -1146,6 +1146,26 @@ def evaluate_condition(game: Game, context: OracleExecutionContext, payload: dic
         given = list(context.results.get(payload.get("key")) or ())
         described = payload.get("filter") or {}
         return any(_card_matches_filter(card, described) for card in given)
+
+    if kind == "exiled_this_way_share_a_name":
+        # "…unless **it has the same name as another card exiled this way**" /
+        # "…until **you exile two cards with the same name**" (Tainted Pact).
+        # CR 201.2a over the cards this effect has exiled so far: the step in
+        # front of the clause wrote this round's, and a repeated process files
+        # the rounds before it under ``PROCESS_ROUNDS_SO_FAR``. By *position*
+        # (``cards_sharing_a_name``), because "another" cannot be asked by
+        # identity — two copies of a card in a library are one object.
+        from ..counted_names import cards_sharing_a_name
+
+        earlier = list(
+            (context.results.get(PROCESS_ROUNDS_SO_FAR) or {}).get("exiled_cards")
+            or ()
+        )
+        latest = list(context.results.get("exiled_cards") or ())
+        sharing = cards_sharing_a_name(earlier + latest)
+        if payload.get("of_latest"):
+            return any(index >= len(earlier) for index in sharing)
+        return bool(sharing)
 
     if kind == "it_happened":
         happened = bool(context.results.get(payload.get("key")))
@@ -3133,6 +3153,23 @@ def if_then(game: Game, instruction: OracleInstruction, context: OracleExecution
     return _run(game, _steps(instruction, "else"), context)
 
 
+def _exiled_cards_still_in_exile(game: Game, context) -> list:
+    """The cards "that card" names behind an exile step of this same effect,
+    less any that have left exile since — ``put_exiled_cards_into_zone``'s own
+    two readers (the scratchpad, and the copy a delayed ability froze), so an
+    offer of that step and the step itself cannot disagree about what is there.
+    """
+    recorded = (
+        (context.trigger_context or {}).get("exiled_cards")
+        or context.results.get("exiled_cards")
+        or ()
+    )
+    return [
+        card for card in recorded
+        if any(held is card for player in game.players for held in player.exile)
+    ]
+
+
 def _action_is_takeable(
     game: Game, player, instruction: OracleInstruction, source, context=None,
 ) -> bool:
@@ -3225,6 +3262,14 @@ def _action_is_takeable(
     # the reason the singular states: a choice drawn from anywhere else is not a
     # price this player pays, and a wrongly-False answer withdraws an offer the
     # card makes.
+    # "Exile the top card of your library. **You may put that card into your
+    # hand** …" (Tainted Pact, on an empty library.) The card is the one an
+    # earlier step of this effect exiled, so with none recorded — or with the
+    # recorded one gone from exile since — there is nothing to take and nothing
+    # to offer. The same two places ``put_exiled_cards_into_zone`` reads, so
+    # what is offered and what would move are one answer.
+    if instruction.kind == "put_exiled_cards_into_zone" and context is not None:
+        return bool(_exiled_cards_still_in_exile(game, context))
     if instruction.kind == "choose_permanents":
         if instruction.payload.get("controlled_by") != "chooser":
             return True
@@ -4259,6 +4304,21 @@ def _offer_to_seat(
         )
     elif life_cost:
         entry["prompt"] = f"{preamble}Pay {life_cost} life?"
+    elif (
+        on_accept
+        and on_accept[0].kind == "put_exiled_cards_into_zone"
+        and on_accept[0].payload.get("zone", "hand") == "hand"
+    ):
+        # "You may put **that card** into your hand" (Tainted Pact). A free
+        # offer says nothing about itself, and this one is a decision about a
+        # particular card — so the prompt names it. Public: the card is face up
+        # in exile and the exile's own log line has already said what it is.
+        offered = _exiled_cards_still_in_exile(game, context)
+        if offered:
+            entry["prompt"] = (
+                f"{preamble}Put {', '.join(card.name for card in offered)} "
+                "into your hand?"
+            )
     # Mirror a plain "gain N life" consequence into the legacy `life` field so
     # the prompt UI keeps describing what accepting does. Display only —
     # _pay_optional runs the instruction branch and returns before reading it.
@@ -4795,6 +4855,113 @@ def repeat_process_while(game: Game, instruction: OracleInstruction, context: Or
         if not evaluate_condition(game, context, condition):
             return True, "resolved"
         game.log.append(f"{getattr(context.card, 'name', 'Effect')}: repeating")
+
+
+#: The loop a round is running under, for :func:`end_process_round` — the step
+#: that is the end of that round and may run long after the loop has returned.
+#: ``REPEAT_PROCESS``'s arrangement and for its reason.
+PROCESS_UNTIL = "repeat_process_until_this_way"
+
+#: Whether :func:`repeat_process_until` is on the Python stack *right now*, and
+#: what the round that just ended inside it asked for. A round that ends
+#: inline is repeated by the loop that ran it; one that ends on a seat's answer
+#: finds no loop there and starts the next round itself.
+_PROCESS_LOOP_LIVE = "repeat_process_until_live"
+_PROCESS_ROUND_AGAIN = "repeat_process_until_again"
+
+
+@effect_handler("repeat_process_until")
+def repeat_process_until(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """"Exile the top card of your library. You may put that card into your
+    hand unless it has the same name as another card exiled this way. **Repeat
+    this process until you put a card into your hand or you exile two cards
+    with the same name, whichever comes first.**" (Tainted Pact.)
+
+    One more repeat in this file and one more mechanism: a loop that ends on
+    conditions asked **when the round is over** — and whose round may end in
+    an offer, so "over" can be an answer away. ``repeat_process_while`` asks
+    its condition on the line after the round and says why it cannot be
+    resumable; this one's question is a *step* of the round instead
+    (:func:`end_process_round`, which the lowering puts on every way out of
+    the round's last sentence), so it is asked wherever the round really ends:
+    here, inline, or in the resolver of the prompt the round stopped on.
+
+    That is why there are two ways to start the next round. A round that ended
+    inline says so in the scratchpad and this loop runs it — a ``while``, so a
+    process of sixty prompt-free rounds is sixty turns of a loop and not sixty
+    nested resolutions. A round that ended on an answer finds this function
+    long returned, and :func:`end_process_round` dispatches the instruction
+    again, which is ``request_process_repeat``'s shape.
+
+    ``resets`` are the records the round's own steps write. Before each round
+    their lists are filed under ``PROCESS_ROUNDS_SO_FAR`` and the keys cleared:
+    "that card" is this round's card, and "another card exiled this way" is
+    every round's.
+
+    The round is the last thing each turn of the loop does, which is
+    ``engine/resumption.py``'s rule — after it there is only the read of what
+    the round's own end step recorded.
+    """
+    steps = _steps(instruction, "steps")
+    if not steps:
+        return True, "resolved"
+    results = context.results
+    results[PROCESS_UNTIL] = instruction
+    while True:
+        earlier = results.setdefault(PROCESS_ROUNDS_SO_FAR, {})
+        for key in instruction.payload.get("resets") or ():
+            written = results.pop(key, None)
+            if isinstance(written, (list, tuple)) and written:
+                earlier.setdefault(key, []).extend(written)
+        results[_PROCESS_ROUND_AGAIN] = False
+        results[_PROCESS_LOOP_LIVE] = True
+        try:
+            _run(game, steps, context)
+        finally:
+            results[_PROCESS_LOOP_LIVE] = False
+        if not results.pop(_PROCESS_ROUND_AGAIN, False):
+            return True, "resolved"
+
+
+@effect_handler("end_process_round")
+def end_process_round(game: Game, instruction: OracleInstruction, context: OracleExecutionContext) -> tuple[bool, str]:
+    """The end of one round of :func:`repeat_process_until`, and the only
+    place its stopping clauses are asked.
+
+    Three answers. **A stopping clause holds**: the process is over. **The
+    round did nothing** — not one record its steps write was written: a
+    process that can no longer be performed is not repeated (CR 101.3: any
+    part of an instruction that is impossible to perform is ignored). That is
+    Tainted Pact on an empty library, where exiling the top card exiles
+    nothing; nobody loses, because nothing was drawn. It is also what keeps a
+    loop whose clauses can no longer come true from being a hang. **Otherwise**
+    the process happens again.
+
+    The stopping clauses come first, so a round that both ended the process
+    and emptied the library reports the reason the card printed.
+    """
+    loop = context.results.get(PROCESS_UNTIL)
+    name = getattr(context.card, "name", "Effect")
+    if loop is None:
+        # Only reachable if the step outlived the wrapper its lowering puts
+        # round it, which no compiled program does — said rather than assumed.
+        game.log.append(f"{name}: no process to repeat")
+        return True, "resolved"
+    if any(
+        evaluate_condition(game, context, dict(condition))
+        for condition in loop.payload.get("until") or ()
+    ):
+        game.log.append(f"{name}: the process ends")
+        return True, "resolved"
+    if not any(context.results.get(key) for key in loop.payload.get("resets") or ()):
+        game.log.append(f"{name}: the process cannot continue")
+        return True, "resolved"
+    game.log.append(f"{name}: repeating the process")
+    if context.results.get(_PROCESS_LOOP_LIVE):
+        context.results[_PROCESS_ROUND_AGAIN] = True
+        return True, "resolved"
+    game._execute_oracle_instruction(loop, context)
+    return True, "resolved"
 
 
 @effect_handler("choose_one")

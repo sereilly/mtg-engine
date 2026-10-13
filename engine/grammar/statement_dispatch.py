@@ -114,6 +114,7 @@ from .lowering import (
     _lower_repeat_for_types,
     _lower_repeat_optional_process,
     _lower_repeat_process,
+    _lower_repeat_process_until,
     _lower_repeat_process_while,
     _lower_repeat_until_pile_chosen,
     _lower_for_each_destroyed,
@@ -667,6 +668,12 @@ def lower_statement(
     # takes the statement one: both live below this dispatcher.
     if isinstance(statement, ast.RepeatProcessWhile):
         return _lower_repeat_process_while(
+            statement, lower_statement, _lower_condition, produced, event,
+        )
+    # The seventh: the same two lowerings handed back, for a clause that says
+    # when to stop instead of when to go on (Tainted Pact).
+    if isinstance(statement, ast.RepeatProcessUntil):
+        return _lower_repeat_process_until(
             statement, lower_statement, _lower_condition, produced, event,
         )
     # The fifth, and the only one whose bound is a *pile*. It takes the

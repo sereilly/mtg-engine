@@ -299,6 +299,156 @@ def _lower_repeat_process_while(
     )
 
 
+def _instructions_within(instruction: OracleInstruction):
+    """*instruction* and every instruction it carries, at any depth.
+
+    A walk over the payload's values rather than over a table of wrapper
+    kinds: that table is the dispatcher's (``grammar/lower.WRAPPER_KINDS``),
+    which this family sits below, and what is asked here needs no key names —
+    only "is there one of these anywhere inside". A wrapper added later is
+    covered by construction.
+    """
+    yield instruction
+    pending = [instruction.payload]
+    while pending:
+        value = pending.pop()
+        if isinstance(value, OracleInstruction):
+            yield from _instructions_within(value)
+        elif isinstance(value, dict):
+            pending.extend(value.values())
+        elif isinstance(value, (list, tuple)):
+            pending.extend(value)
+
+
+#: The kinds that ask a seat something **without stopping the steps behind
+#: them** (an ``optional_pay`` does not suspend; see
+#: ``handlers/control_flow._offer_to_seat``). A round may end in one — its
+#: branches are where the round ends — but may not hold one anywhere else.
+_UNSUSPENDED_OFFERS = frozenset({"may", "unless_player_pays"})
+
+#: The step that is the end of one round: see ``_with_round_end``.
+_END_OF_ROUND = OracleInstruction("end_process_round", "", {})
+
+
+def _with_round_end(step: OracleInstruction) -> tuple[OracleInstruction, ...]:
+    """*step*, the last of a round, with the round's end put on **every way
+    out of it**.
+
+    "Repeat this process until …" is asked when the round is over, and a round
+    whose last sentence is an offer is over when the offer is *answered* — by
+    which time the handler that ran the round has long returned. So the
+    question cannot be a line after the round; it has to ride whichever branch
+    the answer runs. A conditional ends on both its arms, a sequence on its
+    last step, an offer on its accept branch and on its decline branch, and
+    anything else simply has the end behind it.
+
+    Rebuilt rather than mutated, for ``stamp_payload_key``'s reason: an
+    instruction is shared by every copy of its card.
+    """
+    payload = step.payload
+    if step.kind == "sequence" and payload.get("steps"):
+        steps = tuple(payload["steps"])
+        return (OracleInstruction(step.kind, step.value, {
+            **payload, "steps": steps[:-1] + _with_round_end(steps[-1]),
+        }),)
+    if step.kind == "if_then":
+        arms = {
+            arm: (
+                tuple(payload.get(arm) or ())[:-1]
+                + _with_round_end(tuple(payload[arm])[-1])
+                if payload.get(arm) else (_END_OF_ROUND,)
+            )
+            for arm in ("then", "else")
+        }
+        return (OracleInstruction(step.kind, step.value, {**payload, **arms}),)
+    if step.kind == "may":
+        # On the accept side the end goes behind everything accepting does —
+        # ``then`` runs after ``action`` — and the decline side gains a branch
+        # it did not print, which is the point: declining ends the round too.
+        return (OracleInstruction(step.kind, step.value, {
+            **payload,
+            "then": tuple(payload.get("then") or ()) + (_END_OF_ROUND,),
+            "otherwise": tuple(payload.get("otherwise") or ()) + (_END_OF_ROUND,),
+        }),)
+    if any(
+        inner.kind in _UNSUSPENDED_OFFERS for inner in _instructions_within(step)
+    ):
+        raise LoweringError(
+            f"a round ending in {step.kind!r} asks a seat something this "
+            "cannot find the end of"
+        )
+    return (step, _END_OF_ROUND)
+
+
+def _lower_repeat_process_until(
+    node: "ast.RepeatProcessUntil", lower, lower_condition, produced, event,
+) -> tuple[OracleInstruction, ...]:
+    """"Exile the top card of your library. You may put that card into your
+    hand unless it has the same name as another card exiled this way. **Repeat
+    this process until you put a card into your hand or you exile two cards
+    with the same name, whichever comes first.**" (Tainted Pact.)
+
+    :func:`_lower_repeat_process_while` read the other way round, and held to
+    the same two checks for the same reason — they are the difference between
+    a loop and a hang. Every stopping clause must read a record **the round
+    writes**: one asked of a record nothing writes answers False for ever. And
+    the records the round writes are named as ``resets``, which the handler
+    both clears before each round and reads after it: a round that wrote none
+    of them did nothing, and a process that can no longer be performed is not
+    repeated (CR 101.3) — which is what ends this card on an empty library.
+
+    Two more are this loop's own. The stopping clauses are asked at the *end*
+    of the round, so the end is lowered onto every way out of the round's last
+    step (:func:`_with_round_end`); and a step that asks without suspending
+    anywhere **but** last is refused, because the clauses would be asked
+    before that answer existed.
+    """
+    steps = lower(node.round, produced, event=event, whole_effect=False)
+    if not steps:
+        raise LoweringError("a repeated process with no effect in it", node=node)
+    written = frozenset(
+        key
+        for step in steps
+        for inner in _instructions_within(step)
+        for key in produced_keys(inner)
+    )
+    if not written:
+        raise LoweringError(
+            "a repeated process that records nothing can never be seen to "
+            "have stopped", node=node,
+        )
+    for step in steps[:-1]:
+        if any(
+            inner.kind in _UNSUSPENDED_OFFERS
+            for inner in _instructions_within(step)
+        ):
+            raise LoweringError(
+                "an offer that is not the round's last step would be answered "
+                "after the round was asked whether it had ended", node=node,
+            )
+    parts = (
+        node.condition.conditions
+        if isinstance(node.condition, ast.SomeOf) else (node.condition,)
+    )
+    until = tuple(
+        lower_condition(part, produced | written, event) for part in parts
+    )
+    try:
+        body = tuple(steps[:-1]) + _with_round_end(steps[-1])
+    except LoweringError as refusal:
+        raise LoweringError(str(refusal), node=node) from None
+    return (
+        OracleInstruction(
+            "repeat_process_until", "",
+            {
+                "steps": body,
+                "until": until,
+                "resets": tuple(sorted(written)),
+            },
+        ),
+    )
+
+
 def _lower_repeat_until_pile_chosen(
     node: "ast.RepeatUntilPileChosen", lower, produced,
 ) -> tuple[OracleInstruction, ...]:

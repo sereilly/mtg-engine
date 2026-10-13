@@ -657,18 +657,24 @@ def test_w1g6_famished_ghoul_exiles_up_to_two_cards_from_one_graveyard(set_pool)
     game.interactive_seats = {0, 1}
     game.start_turn(0)
 
-    queued = game.queue_permanent_ability(0, "Famished Ghoul")
+    # W2G3: the cards are announced as the ability is activated (CR 602.2b),
+    # where W1G6 drove them as two prompts at resolution. Three is too many,
+    # and the refusal comes before the Ghoul is sacrificed for it.
+    spec = game.activation_target_spec(0, 0, ability_index=0)
+    assert (spec["max_targets"], spec["single_graveyard"]) == (2, True)
+    refused = game.queue_permanent_ability(
+        0, "Famished Ghoul", target_player_index=1, target_permanent_index=[0, 1, 2],
+    )
+    assert not refused.supported
+    assert _w1g6_pile(game.players[0]) == ["Forest"], "nothing was paid"
+    queued = game.queue_permanent_ability(
+        0, "Famished Ghoul", target_player_index=1, target_permanent_index=[0, 2],
+    )
     assert queued.details == "queued"
     assert _w1g6_pile(game.players[0]) == ["Forest", "Famished Ghoul"]
-    game.resolve_top_of_stack()
-    assert game.confirm_graveyard_pile_choice(0, 1)
-    pick = game.pending_choices[0]
-    assert (pick.data["owner_index"], pick.data["count"], pick.data["up_to"]) == (
-        1, 2, True,
-    )
-    assert not game.confirm_graveyard_exile_pick(0, [0, 1, 2])   # three is too many
-    assert game.confirm_graveyard_exile_pick(0, [0, 2])
     _w1g6_resolve_stack(game)
+
+    assert not game.pending_choices
 
     assert _w1g6_pile(game.players[1]) == ["Lightning Bolt"]
     assert sorted(_w1g6_pile(game.players[1], "exile")) == ["Craw Wurm", "Hill Giant"]

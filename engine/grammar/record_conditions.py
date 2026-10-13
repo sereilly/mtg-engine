@@ -497,6 +497,34 @@ def _accept_record_condition(stream: TokenStream) -> "ast.Condition | None":
         return ast.RevealedCardHasChosenName()
     stream.reset(named_mark)
 
+    # "…unless **it has the same name as another card exiled this way**" /
+    # "…until you put a card into your hand or **you exile two cards with the
+    # same name**" (Tainted Pact). CR 201.2a's relation over the cards this
+    # effect has exiled so far, asked of the latest one and of any two — one
+    # node, because it is one record's question twice. Every word is required:
+    # "two" is the only size the relation is asked at, and a printed "three"
+    # must fail here rather than be answered as two.
+    if (
+        stream.accept_word("it") or stream.accept_phrase("that", "card")
+    ) and stream.accept_phrase(
+        "has", "the", "same", "name", "as", "another", "card", "exiled",
+        "this", "way",
+    ):
+        return ast.ExiledThisWayShareAName(of_latest=True)
+    stream.reset(named_mark)
+    if stream.accept_phrase(
+        "you", "exile", "two", "cards", "with", "the", "same", "name",
+    ):
+        return ast.ExiledThisWayShareAName()
+    stream.reset(named_mark)
+    # "…until **you put a card into your hand**" (the same card's other
+    # stopping clause). Whether a step of this effect put one there; the
+    # lowering refuses it with no such step in front of it.
+    if stream.accept_phrase("you", "put", "a", "card", "into", "your", "hand"):
+        stream.accept_phrase("this", "way")
+        return ast.PutIntoHandThisWay()
+    stream.reset(named_mark)
+
     milled_mark = stream.mark()
     # "if **one or more <noun> cards were put into that graveyard this way**"
     # (Helm of Obedience) and "if **a <noun> card was milled this way**"

@@ -65,12 +65,21 @@ _EXILED_CREATURE = ast.ObjectFilter(card_types=("creature",))
 _GRAVEYARD_PILE_SEATS = frozenset({"defending_player", "you"})
 
 #: The pile "from **a single** graveyard" names (Ebony Charm): not a seat the
-#: sentence prints but one the chooser picks as the spell resolves. It is a
-#: *value* of the same payload key rather than a second key, because everything
-#: downstream — the candidate rule, the count ceiling, the answer's re-check —
-#: is identical once the seat is known; only how the seat is arrived at differs.
-#: It is not in the set above for exactly that reason: nothing the parse can
-#: read names it, so it cannot arrive by the same route.
+#: sentence prints but one the chooser picks. It is a *value* of the same
+#: payload key rather than a second key, because everything downstream — the
+#: candidate rule, the count ceiling, the answer's re-check — is identical once
+#: the seat is known; only how the seat is arrived at differs. It is not in the
+#: set above for exactly that reason: nothing the parse can read names it, so
+#: it cannot arrive by the same route.
+#:
+#: **When** the chooser picks is the event's answer. On a spell or an activated
+#: ability the cards are *targets* (CR 115.1) and every graveyard exists as the
+#: object is announced, so they are named then (CR 601.2c, CR 602.2b) and the
+#: pile is simply the one they are all in — the payload carries a ``targets``
+#: description, as the caster's own pile does. This said "as the spell
+#: resolves" until Odyssey's second wave, which let the caster choose after
+#: the opponent had passed. Under a trigger it is still chosen at resolution,
+#: for the reason the branch below gives about every trigger's targets.
 _CHOSEN_GRAVEYARD_PILE = "chosen"
 
 
@@ -536,12 +545,16 @@ def _lower_exile(
             # spells reported "no graveyard holds a card it can exile" and
             # exiled nothing at all.
             pile["any_card"] = True
-        if pile_owner == "you":
-            # The target description, for the one pile whose seat is known at
-            # announcement. ``targeting._graveyard_exile_pile_spec`` derives the
-            # picker from it and the handler resolves the announced slots. The
-            # other two piles carry no description and keep their resolution
-            # prompt, so every payload written before this is byte-identical.
+        if pile_owner == "you" or (
+            pile_owner == _CHOSEN_GRAVEYARD_PILE and event is None
+        ):
+            # The target description, for a pile that exists when the object
+            # is announced: the caster's own, and — on a spell or an activated
+            # ability — "a single graveyard", which is whichever pile the named
+            # cards are in. ``targeting._graveyard_exile_pile_spec`` derives the
+            # picker from it and the handler resolves the announced slots. A
+            # pile a firing *event* froze a seat for, and the chosen pile under
+            # a trigger, carry no description and keep their resolution prompt.
             pile["targets"] = {
                 "quantifier": subject.quantifier,
                 "kind": "card",

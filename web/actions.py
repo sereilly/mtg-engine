@@ -340,10 +340,29 @@ def _action_tap(session, req, seat_type):
 
 @action_handler("activate", human_only=HUMAN_ONLY)
 def _action_activate(session, req, seat_type):
-    if req.permanent_name is None and req.permanent_index is None:
+    permanent_name = req.permanent_name
+    if permanent_name is None and req.permanent_index is None and req.card_name:
+        # **A stopgap for one client function, to be deleted with its cause.**
+        # The browser's several-graveyard confirm
+        # (`confirmSeveralGraveyardTargets` in `web/static/app.js`) was written
+        # for casts and builds one body for both actions — ``card_name``, the
+        # seat and the slots — so an *activation* that names several cards in a
+        # graveyard arrives with the permanent's name under the cast's key and
+        # neither ``permanent_index`` nor ``ability_index``. No ability reached
+        # that confirm until "exile up to three target cards from a single
+        # graveyard" was announced (Carrion Beetles, Famished Ghoul); refused
+        # here, a person could open the picker and never send the answer.
+        #
+        # Read as the name it is. Without the index two permanents of one name
+        # are told apart by nothing — the engine takes the first — and that is
+        # the reason this is a stopgap: the confirm should send
+        # ``permanent_name`` / ``permanent_index`` / ``ability_index`` the way
+        # every other activate body does (`resolvePendingCastTarget`).
+        permanent_name = req.card_name
+    if permanent_name is None and req.permanent_index is None:
         raise HTTPException(status_code=400, detail="permanent_name or permanent_index is required")
     controller = session.game.players[req.seat]
-    resolved = _find_controlled_permanent(controller, req.permanent_name, req.permanent_index)
+    resolved = _find_controlled_permanent(controller, permanent_name, req.permanent_index)
     # "Any player may activate this ability." (Ifh-Bíff Efreet), "Only your
     # opponents may activate this ability." (Clergy of the Holy Nimbus) — the
     # permanent may sit on another player's battlefield; the activator still
@@ -355,7 +374,7 @@ def _action_activate(session, req, seat_type):
         for other_seat, other in enumerate(session.game.players):
             if other_seat == req.seat:
                 continue
-            candidate = _find_controlled_permanent(other, req.permanent_name, req.permanent_index)
+            candidate = _find_controlled_permanent(other, permanent_name, req.permanent_index)
             if candidate is not None and card_widens_activation(
                 candidate[1].effective_card
             ):

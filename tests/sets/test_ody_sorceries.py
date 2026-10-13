@@ -1380,9 +1380,10 @@ def test_w1g6_pipers_melody_does_not_replace_a_target_that_left(set_pool):
 
 
 # --- Decompose --------------------------------------------------------------
-# "Exile up to three target cards from a single graveyard." Driven. The pile
-# and the cards are picked as it resolves (Ebony Charm's shipped route, a
-# stated deviation from CR 601.2c): one graveyard, and up to three out of it.
+# "Exile up to three target cards from a single graveyard." Driven. W1G6 wrote
+# these against the pile and the cards being picked as it resolved; W2G3 moved
+# the choice to the announcement (CR 601.2c) and rewrote both in place: one
+# graveyard, named with up to three of its cards as the spell is cast.
 
 def test_w1g6_decompose_exiles_up_to_three_cards_out_of_one_graveyard(set_pool):
     lea, ody = set_pool("LEA"), set_pool("ODY")
@@ -1394,21 +1395,24 @@ def test_w1g6_decompose_exiles_up_to_three_cards_out_of_one_graveyard(set_pool):
     )
     game.interactive_seats = {0, 1}
 
-    assert game.queue_from_hand(0, "Decompose").supported
-    game.resolve_top_of_stack()
-    pile = game.pending_choices[0]
-    assert (pile.kind, pile.player_index, pile.data["seats"]) == (
-        "graveyard_pile_choice", 0, [0, 1],
+    spec = game.cast_target_spec(0, ody["Decompose"])
+    assert (spec["kind"], spec["max_targets"], spec["single_graveyard"]) == (
+        "graveyard_creature", 3, True,
     )
-    assert game.confirm_graveyard_pile_choice(0, 1)
-    pick = game.pending_choices[0]
-    assert (pick.kind, pick.data["owner_index"], pick.data["count"], pick.data["up_to"]) == (
-        "graveyard_exile_pick", 1, 3, True,
-    )
+    assert sorted({target["seat"] for target in spec["valid_targets"]}) == [0, 1]
     # Four is more than three, and a card of the other pile is not in this one.
-    assert not game.confirm_graveyard_exile_pick(0, [0, 1, 2, 3])
-    assert game.confirm_graveyard_exile_pick(0, [0, 2, 3])
+    assert not game.queue_from_hand(
+        0, "Decompose", target_player_index=1, target_permanent_index=[0, 1, 2, 3],
+    ).supported
+    assert not game.queue_from_hand(
+        0, "Decompose", target_player_index=0, target_permanent_index=[0, 2, 3],
+    ).supported
+    assert game.queue_from_hand(
+        0, "Decompose", target_player_index=1, target_permanent_index=[0, 2, 3],
+    ).supported
     _w1g6_resolve_stack(game)
+
+    assert not game.pending_choices
 
     assert _w1g6_pile(game.players[1]) == ["Lightning Bolt"]
     assert sorted(_w1g6_pile(game.players[1], "exile")) == [
@@ -1421,6 +1425,7 @@ def test_w1g6_decompose_with_no_card_anywhere_resolves_and_exiles_nothing(set_po
     game = _w1g6_game(hand=[set_pool("ODY")["Decompose"]])
     game.interactive_seats = {0, 1}
 
+    assert game.cast_target_spec(0, set_pool("ODY")["Decompose"])["valid_targets"] == []
     assert game.queue_from_hand(0, "Decompose").supported
     _w1g6_resolve_stack(game)
 

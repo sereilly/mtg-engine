@@ -613,6 +613,23 @@ class RepeatProcessWhile:
 
 
 @dataclass(frozen=True)
+class RepeatProcessUntil:
+    """"**Repeat this process until you put a card into your hand or you exile
+    two cards with the same name, whichever comes first.**" (Tainted Pact.)
+
+    :class:`RepeatProcessWhile` with the two things that make it a seventh
+    mechanism: the clause states when to **stop** rather than when to go on,
+    and it is asked when the round is *over* — which, for a round ending in an
+    offer, is after the offer is answered and not when the last step returns.
+    *round* is every sentence in front of the clause (Forbidden Ritual's
+    reading: the words name the process, not its last sentence), and
+    *condition* is the printed one, a ``SomeOf`` when the card names several.
+    """
+    round: "Statement"
+    condition: "Condition"
+
+
+@dataclass(frozen=True)
 class RepeatUntilPileChosen:
     """"**Repeat this process until all cards exiled this way have been
     chosen.**" (Thieves' Auction.)
@@ -878,4 +895,4 @@ class NextDrawReplacement:
     effect: "Statement"
 
 
-Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]
+Statement = Union[Sequence, Conjunction, Conditional, May, UnlessPlayerPays, ForEach, RepeatProcess, RepeatProcessWhile, RepeatProcessUntil, RepeatUntilPileChosen, RepeatOptionalProcess, RepeatForEachType, RepeatProcessRequest, WhereX, CreateDelayedTrigger, NextDrawReplacement, Effect]

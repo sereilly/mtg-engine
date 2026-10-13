@@ -55,7 +55,8 @@ from .records import (AdditionalCostWasPaid, AttackedOrBlockedThisCombat,
                       ReturnedToHandThisTurn, RevealedCardIs,
                       ManaAddedWithThisAbility,
                       SacrificedThisWay, SourceAbilityActivations,
-                      StartedTheTurnState, TappedThisWay, WasKicked)
+                      StartedTheTurnState, TappedThisWay, WasKicked,
+                      ExiledThisWayShareAName, PutIntoHandThisWay)
 
 @dataclass(frozen=True)
 class Controls:
@@ -801,6 +802,8 @@ Condition = Union[
     EachShortOfThisWay,
     EnteredFrom,
     ExiledThisWay,
+    ExiledThisWayShareAName,
+    PutIntoHandThisWay,
     HadNamedCounter,
     HadPlus1Counter,
     InABlockSinceLastUpkeep,

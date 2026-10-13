@@ -198,6 +198,27 @@ class SharedColorMilledThisWay:
 
 
 @dataclass(frozen=True)
+class ExiledThisWayShareAName:
+    """``it has the same name as another card exiled this way`` / ``you exile
+    two cards with the same name`` (Tainted Pact).
+
+    One relation (CR 201.2a) over the cards this effect has exiled so far,
+    asked two ways: ``of_latest`` asks it of the card the step in front of the
+    clause just exiled, the bare form of any two. A relation between cards and
+    so not a filter, for :class:`SharedColorMilledThisWay`'s reason.
+    """
+
+    of_latest: bool = False
+
+
+@dataclass(frozen=True)
+class PutIntoHandThisWay:
+    """``you put a card into your hand`` (Tainted Pact's stopping clause):
+    whether a step of this same effect put a card there. A record, because a
+    hand does not say which of its cards an effect added."""
+
+
+@dataclass(frozen=True)
 class MilledThisWay:
     """"If one or more creature cards **were put into that graveyard this
     way**" (Helm of Obedience).

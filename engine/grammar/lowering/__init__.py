@@ -401,6 +401,7 @@ from .repeats import (_lower_repeat_for_types,
                       _lower_repeat_optional_process, _lower_repeat_process,
                       _lower_repeat_process_request,
                       _lower_repeat_until_pile_chosen,
+                      _lower_repeat_process_until,
                       _lower_repeat_process_while)
 from .game import (
     _lower_count_objects,
@@ -724,6 +725,7 @@ __all__ = [
     "_lower_repeat_until_pile_chosen",
     "_lower_repeat_process",
     "_lower_repeat_process_request",
+    "_lower_repeat_process_until",
     "_lower_repeat_process_while",
     "_lower_exchange_life_totals",
     "_lower_set_life_total",
