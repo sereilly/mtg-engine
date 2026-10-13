@@ -11,6 +11,8 @@ from ..control import (
     change_control,
     control_changes,
     end_control_change,
+    last_controller,
+    set_last_controller,
     has_control_change,
     set_base_controller,
 )
@@ -375,6 +377,31 @@ class GameHelpersMixin:
             return seat
         base = base_controller(permanent)
         return computed_controller(permanent, seat if base is None else base)
+
+    def controller_or_last_known(self, permanent: Permanent) -> int | None:
+        """Who controls *permanent*, or who last did if it has left (CR 608.2h).
+
+        "If the effect requires information from a specific object … the effect
+        uses the current information of that object if it's in the public zone
+        it was expected to be in; if it's no longer in that zone … the effect
+        uses the object's last known information." For a controller that is two
+        reads: the control seam while the permanent is on a battlefield, and
+        the seat the one removal transition stamped as it left. "That creature
+        deals 4 damage to **its controller**" (Bomb Squad) asks it of a
+        creature the same resolution has just destroyed — or that another
+        Bomb Squad's trigger destroyed first.
+
+        The seat it entered under is the last resort, for a permanent that left
+        by a road older than the stamp; None only for an object that was never
+        on a battlefield at all.
+        """
+        seat = self.controller_index_of(permanent)
+        if seat is not None:
+            return seat
+        seat = last_controller(permanent)
+        if seat is None:
+            seat = base_controller(permanent)
+        return seat if seat is not None and 0 <= seat < len(self.players) else None
 
     def owner_index_of(self, permanent: Permanent) -> int | None:
         """Index of the player who owns *permanent*'s card (CR 108.3), for
@@ -2074,6 +2101,12 @@ class GameHelpersMixin:
             seat = self.controller_index_of(perm)
             if seat is None:
                 continue
+            # CR 608.2h's last known information, for the one fact about a
+            # permanent that is not on the object: who controlled it. Stamped
+            # here, at the one transition off the battlefield and while the
+            # seam can still answer, so anything that reads this permanent
+            # after it is gone can ask (`controller_or_last_known`).
+            set_last_controller(perm, seat)
             # Both kinds from one scan, because a permanent leaving the
             # battlefield **is** its controller losing control of it: the
             # object ceases to exist and nobody controls the new one (CR

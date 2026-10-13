@@ -1479,6 +1479,22 @@ class LegalityMixin:
                     bound if spec.get("max_x") is None
                     else min(int(spec["max_x"]), bound)
                 )
+            # …and the **floor**, for the one cost that prints one: "choose a
+            # number between 1 and 3" may not announce 0. ``max_x`` above is
+            # that range's other end (`_additional_cost_x_ceiling`), so the two
+            # keys are the card's own range and ``number_refusal`` is what
+            # refuses anything outside it. Absent when the floor is 0, which is
+            # where every X box already starts.
+            floor = max(
+                (
+                    cost.choose_number[0]
+                    for cost in costs_charged_from(card, from_zone)
+                    if cost.choose_number is not None
+                ),
+                default=0,
+            )
+            if floor > 0:
+                spec["min_x"] = floor
         # "This spell costs {1} more to cast for each target beyond the first."
         # (Fireball; Phyrexian Purge charges life.) CR 601.2f prices the spell
         # by the targets CR 601.2c chose, and the picker sizes its X box from
@@ -2079,6 +2095,12 @@ class LegalityMixin:
                 bounds.append(len(self._discard_cost_payers(
                     caster_index, cost, spell_hand_index=spell_hand_index,
                 )))
+            # "…, **choose a number between 0 and 5**." (Liquid Fire.) Not a
+            # resource at all: the ceiling is the top of the range the card
+            # prints, the same number ``AdditionalCost.number_refusal`` refuses
+            # anything above.
+            if cost.choose_number is not None:
+                bounds.append(cost.choose_number[1])
             # "Kicker **{X}**" (Verdeloth the Ancient). The fifth resource, and
             # the one that *is* mana -- but not the mana cost's, so the
             # browser's own pool arithmetic (which prices an {X} it can see in

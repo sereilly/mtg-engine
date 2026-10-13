@@ -388,6 +388,24 @@ def _parse_divided_recipients(stream: TokenStream) -> ast.Recipient:
     return recipient
 
 
+def _parse_printed_amount(stream: TokenStream) -> ast.Amount:
+    """The quantity in front of "damage", with the arithmetic printed on it:
+    "…deals **X plus 3** damage to you" (Hellfire), "…and **5 minus X** damage
+    to that creature's controller" (Liquid Fire). A node rather than a folded
+    number, because one half is usually not a number yet.
+
+    One reader for every clause of a sentence: the sum used to be read for the
+    first clause alone, so which arithmetic a card could print depended on
+    whether the amount came first — and Liquid Fire prints its in the second.
+    """
+    amount = parse_amount(stream)
+    if stream.accept_word("plus"):
+        return ast.Plus(amount, parse_amount(stream))
+    if stream.accept_word("minus"):
+        return ast.Minus(amount, parse_amount(stream))
+    return amount
+
+
 def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Statement:
     """``<source> deals <amount> damage to <recipients> [riders]``.
 
@@ -404,13 +422,7 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
         deferred_amount = True
         amount: ast.Amount = ast.Fixed(0)
     else:
-        amount = parse_amount(stream)
-        # "…deals **X plus 3** damage to you" (Hellfire). A printed sum, read
-        # here rather than folded to a number because the left half is usually
-        # not one yet — the same reason `effects/characteristics.py` reads
-        # "1 plus the number of …" into an `ast.Plus` instead of adding it up.
-        if stream.accept_word("plus"):
-            amount = ast.Plus(amount, parse_amount(stream))
+        amount = _parse_printed_amount(stream)
     stream.expect_word("damage")
 
     if stream.accept_word("divided"):
@@ -550,7 +562,7 @@ def _parse_damage(stream: TokenStream, source: ast.TargetSpec | None) -> ast.Sta
             # additional damage" is not a printing, and accepting it would let
             # the reader claim a sentence no card has.
             fronted = bool(stream.accept_phrase("an", "additional"))
-            second_amount = parse_amount(stream)
+            second_amount = _parse_printed_amount(stream)
             if not fronted:
                 stream.accept_word("additional")
             stream.expect_word("damage")

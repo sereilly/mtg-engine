@@ -296,6 +296,44 @@ def _lower_cost_sacrifice_damage(
 #: a family. The name keeps its address for the readers below.
 
 
+def lower_subtracted_damage(
+    node: ast.DealDamage, subtracted: dict, lower_as_x,
+) -> tuple[OracleInstruction, ...]:
+    """"…and **5 minus X** damage to that creature's controller." (Liquid
+    Fire.) The other reading of a printed "minus", beside the difference of
+    two counted sets below: a printed number less the sentence's own X.
+
+    Lowered as the sentence the bare X would have made, with the arithmetic
+    put on afterwards — the recipient, the riders and the picker are whatever
+    "X damage to …" already lowers to. *lower_as_x* is the damage lowering
+    itself, handed down because a floor may not import its family
+    (``_conjuncts`` takes it the same way); the halving that re-enters it the
+    same way stayed in ``damage.py``, and this one came here for the cap.
+
+    The amount becomes ``{"minus_x": n}``, read by ``resolve_amount`` — the
+    one evaluator — and floored there at zero (CR 107.1b). One plain
+    ``deal_damage`` spending the letter is required rather than assumed: a
+    sweep, a counted amount or a bite reads its number some other way, and an
+    arithmetic those handlers never apply would deal the whole X on a card
+    reporting itself supported.
+    """
+    whole = lower_as_x(dataclasses.replace(node, amount=ast.Var("x")))
+    if (
+        len(whole) != 1
+        or whole[0].kind != "deal_damage"
+        or whole[0].payload.get("amount") != "x"
+        or X_FROM_COUNT in whole[0].payload
+    ):
+        raise LoweringError(
+            "no handler subtracts X from a printed damage amount here", node=node
+        )
+    return (
+        dataclasses.replace(
+            whole[0], payload={**whole[0].payload, "amount": subtracted}
+        ),
+    )
+
+
 def lower_difference_damage(node: ast.DealDamage) -> tuple[OracleInstruction, ...]:
     """"…deals damage to target creature equal to the number of creatures you
     control **in excess of** the number of creatures target opponent controls."

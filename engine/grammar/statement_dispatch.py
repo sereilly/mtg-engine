@@ -304,7 +304,13 @@ def lower_statement(
             statement, dispatch_event, produced, event_subject, event
         )
     if isinstance(statement, ast.RemoveCounter):
-        return _lower_remove_counter(statement, dispatch_event)
+        # Both events, as the placement one branch up takes them and for its
+        # reason: which *object* a pronoun names is a fact about the trigger
+        # and true of every clause under it ("…remove all fuse counters from
+        # it **and** destroy it", Bomb Squad — a conjunction, so the filtered
+        # event is already None), while the branches that pick a dispatch path
+        # by trigger kind keep reading the filtered one.
+        return _lower_remove_counter(statement, dispatch_event, event)
     if isinstance(statement, ast.GainLife):
         return _lower_gain_life(statement, produced, event)
     if isinstance(statement, ast.LoseLife):

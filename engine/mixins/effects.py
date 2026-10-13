@@ -6,7 +6,6 @@ import re
 from ..ante import is_ante_card
 from ..color_changes import change_color
 from ..card_hooks import UNTAPPED_ARTIFACT_PROTECTORS
-from ..control import base_controller
 from ..auras import aura_restriction_active
 from ..auras import attached_subject_triggers
 from ..damage_events import (EVENT_LOCK, EVENT_PREVENTION_LOCK,
@@ -658,9 +657,16 @@ class EffectsMixin:
         gained = lifelink_life_gained(source, dealt)
         if gained <= 0:
             return
-        seat = self.controller_index_of(source)
-        if seat is None and isinstance(source, Permanent):
-            seat = base_controller(source)
+        # …and, since Bomb Squad, the seat that controlled it **as it left**
+        # where that is on record (`controller_or_last_known`): "that creature
+        # deals 4 damage to its controller" is dealt by a creature the same
+        # resolution has just destroyed, and a *stolen* one's lifelink is the
+        # thief's — the seat it entered under gained instead.
+        seat = (
+            self.controller_or_last_known(source)
+            if isinstance(source, Permanent)
+            else self.controller_index_of(source)
+        )
         if seat is None or not (0 <= seat < len(self.players)):
             return
         self._gain_life(self.players[seat], gained, source_name="lifelink")

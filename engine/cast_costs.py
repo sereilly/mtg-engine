@@ -329,6 +329,31 @@ class AdditionalCost:
     #: clause this table cannot read leaves the sentence unread, and the card
     #: then reports supported with its choice never made (``unread_cost_sentence``).
     choose_creature_type: bool = False
+    #: "As an additional cost to cast this spell, **choose a number between 0
+    #: and 5**." (Liquid Fire.) The second cost here that consumes nothing, and
+    #: a cost for ``choose_creature_type``'s reason: CR 601.2b is where the
+    #: choice is made, so an opponent sees the number before responding. The
+    #: value is the printed range ``(low, high)``, both ends legal.
+    #:
+    #: **The number rides the cast's X.** The card's other line reads it back
+    #: as "where X is the chosen number", and CR 601.2b says a variable
+    #: "defined in the text of the spell by a choice that player would make
+    #: later in the announcement" is chosen as the spell is announced — so the
+    #: number *is* the announced X (CR 107.3a), and it travels the channel an
+    #: announced X already has: the wire's ``x_value``, the stack object every
+    #: viewer is shown, the value a copy inherits. A second channel would be a
+    #: second number for one printed letter.
+    #:
+    #: It charges nothing and multiplies nothing. ``_read_cost_clauses``
+    #: refuses a sentence pairing the choice with a clause that prices an X, so
+    #: the announced number is never also a count of cards, permanents or
+    #: life; and a card whose **mana cost** prints {X} is refused at the cast
+    #: (:meth:`number_refusal`'s caller), because one announcement cannot be
+    #: both a price in mana and a number chosen from a range. Unlike the
+    #: creature type it *can* make a cast illegal — a number outside the range
+    #: is not a choice the card offers — which is :meth:`number_refusal`, asked
+    #: with the other CR 601.2h gates before anything is spent.
+    choose_number: tuple[int, int] | None = None
     #: "…by paying **3 life** and discarding a card" (Demonic Embrace).
     #: CR 119.4 caps a life payment at the payer's life total and CR 601.2h then
     #: makes an unpayable cost an uncastable spell, checked with
@@ -448,6 +473,30 @@ class AdditionalCost:
             return max(0, int(x_value or 0))
         return self.exile_graveyard_count
 
+    def number_refusal(self, x_value: int | None) -> str | None:
+        """Why *x_value* is not a number this cost lets its caster choose, or
+        None — including for a cost that chooses no number at all.
+
+        One reader for the gate and the picker's bounds, because they are one
+        question: the range is the card's, and a picker offering what the gate
+        refuses is a cast announced and then declined.
+
+        ``None`` is **no number yet**, and refuses nothing: the castable
+        highlight and the offer pricer ask the cost gate before anything is
+        announced, and "is there a number this card would take?" is always
+        yes. The cast itself never asks with None — it settles an unmade
+        announcement to 0 first, which is what one reads as everywhere in this
+        engine, so a range that excludes 0 refuses a cast that named nothing
+        exactly as "X can't be 0" does one table over.
+        """
+        if self.choose_number is None or x_value is None:
+            return None
+        low, high = self.choose_number
+        chosen = int(x_value)
+        if low <= chosen <= high:
+            return None
+        return f"{chosen} is not a number between {low} and {high}"
+
     def discarded_count(self, x_value: int | None) -> int:
         """How many cards this cost discards, given the announced X.
 
@@ -508,6 +557,11 @@ class AdditionalCost:
             )
         if self.choose_creature_type:
             parts.append("choose a creature type")
+        if self.choose_number is not None:
+            parts.append(
+                "choose a number between "
+                f"{self.choose_number[0]} and {self.choose_number[1]}"
+            )
         if self.pay_life_x:
             parts.append("pay X life")
         elif self.pay_life:
@@ -593,6 +647,17 @@ _COST_CLAUSES: tuple[tuple[re.Pattern[str], str], ...] = (
     # Above the life rows only in source order; no row in this table shares a
     # first word with it.
     (re.compile(r"^choose a creature type$"), "choose_creature_type"),
+    # "…, **choose a number between 0 and 5**." (Liquid Fire.) The other
+    # choice-shaped cost, beside the first. Both ends are printed digits in the
+    # one printing there is; a spelled-out number matches nothing and leaves
+    # the sentence unread, which is the loud direction.
+    #
+    # The clause contains the word this table's reader splits a sentence on,
+    # so ``_split_cost_clauses`` keeps a "between N and M" whole.
+    (
+        re.compile(r"^choose a number between (?P<low>\d+) and (?P<high>\d+)$"),
+        "choose_number",
+    ),
     # "Kicker—**{2}{B}**, Discard a creature card." (Dralnu's Pet.) A run of
     # mana symbols as *one clause among several* of an optional price — the
     # reader admits it only under an ``optional_key`` (see
@@ -966,6 +1031,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
         "optional_mana": (),
         "optional_key": None,
         "choose_creature_type": False,
+        "choose_number": None,
         "mana_symbols": "",
     }
     # CR 601.2b's optional non-mana price. Tested **after** the mana-offer row,
@@ -984,7 +1050,7 @@ def _read_cost_clauses(costs: str) -> dict | None:
             # line a second time.
             fields["optional_key"] = offered.group("rest").strip()
             costs = fields["optional_key"]
-    for clause in re.split(r",\s*|\s+and\s+", costs):
+    for clause in _split_cost_clauses(costs):
         clause = clause.strip()
         if not clause:
             continue
@@ -1005,6 +1071,13 @@ def _read_cost_clauses(costs: str) -> dict | None:
                 fields["optional_mana"] = fields["optional_mana"] + offers
             elif field == "choose_creature_type":
                 fields["choose_creature_type"] = True
+            elif field == "choose_number":
+                low, high = int(found.group("low")), int(found.group("high"))
+                if fields["choose_number"] is not None or low > high:
+                    # Two choices would be two numbers on one X, and an empty
+                    # range is a cost nobody can pay. Refused whole.
+                    return None
+                fields["choose_number"] = (low, high)
             elif field == "mana":
                 from .mana_payment import (mana_cost_from_symbols,
                                            mana_cost_label)
@@ -1116,7 +1189,42 @@ def _read_cost_clauses(costs: str) -> dict | None:
             break
         else:
             return None
+    if fields["choose_number"] is not None and (
+        fields["pay_life_x"] or fields["return_count_x"]
+        or fields["exile_graveyard_count_x"] or fields["discard_count_x"]
+        or fields["optional_mana"] or fields["optional_key"] is not None
+    ):
+        # The chosen number is the cast's X (see ``choose_number``). Beside a
+        # clause that *prices* an X it would be charged as that many cards,
+        # permanents or life — a number the card says to choose, spent as a
+        # count it never printed. Inside an offer it would be a choice made
+        # only by a caster who took the offer, which the range gate cannot
+        # ask. No card prints either; refused whole.
+        return None
     return fields
+
+
+def _split_cost_clauses(costs: str) -> list[str]:
+    """The clauses of one cost sentence: split on commas and on "and".
+
+    Except the "and" **inside** a printed range — "choose a number between 0
+    and 5" is one clause, and cut at that word it is two that no row reads,
+    which refuses the whole sentence. The separator is kept only when the
+    piece in front of it ends "between <number>" and the piece behind it opens
+    with a number; every other sentence splits exactly as it did.
+    """
+    pieces = _COST_CLAUSE_SPLIT.split(costs)
+    clauses = [pieces[0]]
+    for separator, piece in zip(pieces[1::2], pieces[2::2]):
+        if (
+            separator.strip() == "and"
+            and re.search(r"\bbetween \d+$", clauses[-1])
+            and re.match(r"\d+\b", piece)
+        ):
+            clauses[-1] = f"{clauses[-1]} and {piece}"
+        else:
+            clauses.append(piece)
+    return clauses
 
 
 #: One printed {X}, either case (the cost sentences are read lowercased).
@@ -2049,6 +2157,53 @@ def unenforced_x_spend_restriction(
     return printed.strip()
 
 
+#: "…, where X is **the chosen number**" — the trailer
+#: ``grammar/where_x.parse_where_x_definition_body`` reads into
+#: ``ast.ChosenNumberAsCast``. Matched here on the words, as
+#: :func:`unlinked_kicker_question` matches its own: the question is which
+#: *lines of one card* go together, and a compiled line no longer knows its
+#: neighbours.
+_CHOSEN_NUMBER_DEFINITION = re.compile(r"\bwhere x is the chosen number\b")
+
+
+def unchosen_number_definition(
+    oracle_text: str, card_name: str | None = None, legendary: bool = False,
+    *, spell: bool = True,
+) -> str | None:
+    """The "where X is the chosen number" line of *oracle_text* when **no cast
+    of this card chooses one**, else None.
+
+    The words lower to the cast's own X (``ast.ChosenNumberAsCast``), which is
+    the right number exactly when the card also prints "As an additional cost
+    to cast this spell, choose a number between …" — CR 601.2b makes that
+    choice the announcement of X. Printed without the cost, the sentence would
+    compile and spend an X nobody announced: zero on every cast, on a card
+    reporting itself supported. And on a permanent the X of an ability is not
+    the X its spell was cast with (CR 107.3i's exceptions aside), so *spell*
+    False refuses the line outright.
+
+    The uncharged cost's mirror: that gate refuses a price nothing collects,
+    and this one a number nothing chooses. Asked by the support gate in
+    ``engine/oracle.py`` beside it.
+    """
+    printed = next(
+        (
+            line for line in (oracle_text or "").splitlines()
+            if _CHOSEN_NUMBER_DEFINITION.search(" ".join(line.lower().split()))
+        ),
+        None,
+    )
+    if printed is None:
+        return None
+    costs = _additional_costs_of_text(oracle_text or "", card_name or "", legendary)
+    if spell and any(
+        cost.choose_number is not None and cost.from_zone is None
+        for cost in costs
+    ):
+        return None
+    return printed.strip()
+
+
 def additional_costs(card: CardDefinition) -> tuple[AdditionalCost, ...]:
     """Every additional cost *card* prints, in printed order.
 
@@ -2121,6 +2276,10 @@ def cast_announces_x(
     if any(
         cost.pay_life_x or cost.return_count_x or cost.exile_graveyard_count_x
         or cost.discard_count_x
+        # "…, choose a number between 0 and 5" (Liquid Fire): CR 601.2b's
+        # variable "defined in the text of the spell by a choice" — the chosen
+        # number is the X the card's other line spends.
+        or cost.choose_number is not None
         for cost in charged
     ):
         return True
@@ -2233,6 +2392,7 @@ __all__ = [
     "x_one_of_each_color_line",
     "x_one_of_each_color_sentence",
     "unenforced_x_spend_restriction",
+    "unchosen_number_definition",
     "read_return_clause",
     "read_sacrifice_all_clause",
     "read_sacrifice_clause",

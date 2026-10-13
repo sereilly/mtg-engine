@@ -29,6 +29,7 @@ from ._common import (
     _amount_payload, _describe_targets, _is_source, testable_filter_payload
 )
 from ._delays import _BOUND_OBJECT_DELAYED_EVENTS
+from ._events import _EVENT_SUBJECT_OBJECTS
 
 #: The player counters this engine has a store for. CR 122.1 lets a counter have
 #: any name, and a player carries exactly one kind here
@@ -81,7 +82,9 @@ def _lower_player_counter_removal(
 
 
 def _lower_remove_counter(
-    node: ast.RemoveCounter, event: str | None = None
+    node: ast.RemoveCounter,
+    event: str | None = None,
+    trigger_event: str | None = None,
 ) -> tuple[OracleInstruction, ...]:
     """``Remove a <kind> counter from this <permanent>`` (Armageddon Clock).
 
@@ -91,6 +94,11 @@ def _lower_remove_counter(
     ``remove_counter_from_self`` reads the ability's own source and decrements by
     one, so anything else refuses rather than compiling onto a handler that
     would quietly do that instead.
+
+    *event* is the trigger kind filtered by ``whole_effect`` and *trigger_event*
+    the unfiltered one, the pair ``_named_counters.lower_named_placement`` takes:
+    the first picks a dispatch path, the second says which object the firing
+    was about.
     """
     # "**Target player** loses all poison counters." (Leeches.) A counter on a
     # seat rather than on an object, so it reaches neither the sweep below nor
@@ -221,6 +229,42 @@ def _lower_remove_counter(
             OracleInstruction(
                 "remove_all_counters_from_matching", "",
                 {"counter": node.counter, "filter": described},
+            ),
+        )
+    # "Whenever a creature has four or more fuse counters on it, **remove all
+    # fuse counters from it** and destroy it." (Bomb Squad.) The pronoun was
+    # rebound to the trigger's own subject by
+    # ``rebinding.rebind_pronoun_to_event_subject``, so it is neither the source
+    # nor a target: it is the object the event was about, which the fire site
+    # froze by id. Its own kind beside the self and bound removals above, for
+    # their reason — each reads one permanent off a different record, and the
+    # self-reading one would empty Bomb Squad instead of the creature it lit.
+    #
+    # Gated on the **unfiltered** event, because the sentence is a conjunction
+    # and which object a pronoun names is true of every clause under the
+    # trigger; and admitted only under an event whose fire site records one,
+    # as ``destroy_event_subject`` is one family over. "That creature" is the
+    # same referent spelled out, so both quantifiers are read.
+    #
+    # Only the emptying spelling: a printed count over the event's object is a
+    # sentence no card prints, and lowered onto this handler it would empty a
+    # permanent the card says to decrement.
+    if (
+        isinstance(node.subject, ast.TargetSpec)
+        and node.subject.quantifier in ("it", "that")
+        and not node.subject.targeted
+        and not node.subject.filter.is_source
+        and trigger_event in _EVENT_SUBJECT_OBJECTS
+    ):
+        if not isinstance(node.count, ast.AllOf):
+            raise LoweringError(
+                "the only removal from the event's object takes every counter",
+                node=node,
+            )
+        return (
+            OracleInstruction(
+                "remove_all_counters_from_event_subject", "",
+                {"counter": node.counter},
             ),
         )
     if not _is_source(node.subject):

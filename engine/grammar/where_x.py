@@ -485,6 +485,15 @@ def parse_where_x_definition_body(stream: TokenStream) -> "ast.Amount":
         if accept_source_reference(stream) and stream.accept_word("entered"):
             return ast.LifePaidAsEntered()
     stream.reset(life_mark)
+    # "…, where X is **the chosen number**." (Liquid Fire.) Beside the life
+    # paid as the source entered and for its reason: not an aggregate over
+    # anything, but a number a player settled once — here as CR 601.2b's
+    # announcement, "as an additional cost to cast this spell, choose a number
+    # between 0 and 5". The lowering refuses it wherever no cast could have
+    # announced one, and the support gate refuses a card that prints these
+    # words without that cost (``cast_costs.unchosen_number_definition``).
+    if stream.accept_phrase("chosen", "number"):
+        return ast.ChosenNumberAsCast()
     if not stream.accept_phrase("number", "of"):
         raise stream.error("expected 'the number of' in a where-clause")
     # "…the number of **+1/+1 counters on it**" (Primordial Ooze). In front of

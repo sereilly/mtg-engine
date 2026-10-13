@@ -1165,6 +1165,8 @@ class GameEndingMixin:
 
         from ..events import emit
         from ..named_counters import EMPTIED_KINDS_MARK, counters_on
+        from ..state_triggers import (STATE_TRIGGER_LATCH,
+                                      announce_watched_counter_thresholds)
 
         # The two draw announcements — "your second card each turn" and CR
         # 121.2's per-card event — are one method, because the draw step asks
@@ -1243,8 +1245,11 @@ class GameEndingMixin:
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the
         # game state matches rather than on an event, so this sweep is where it
         # belongs — there is no call site to hang it on, and CR 603.8 says it
-        # fires only once until the state stops matching, which is why the
-        # permanent remembers that it announced.
+        # does not trigger again until it has left the stack, which is why the
+        # permanent remembers that it announced. The blocks below forget when
+        # the state stops matching; an ability that is *countered* gives its
+        # latch back through the key its stack object carries
+        # (`engine/state_triggers.py`, which has the rule and its one bound).
         # "When this enchantment has no +1/+1 counters on it, sacrifice it."
         # (Afiya Grove.) The mirror state of the threshold sweep below, and it
         # shares that sweep's CR 603.8 bookkeeping: it fires once and does not
@@ -1281,7 +1286,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1316,7 +1323,9 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # The latch key rides the object, so one that is countered
+                    # gives it back (CR 603.8; `engine/state_triggers.py`).
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
 
@@ -1337,7 +1346,8 @@ class GameEndingMixin:
         #
         # The latch is the neighbours' ``_state_trigger_announced`` set, and the
         # rule is theirs: fire once, and not again until the state has stopped
-        # matching. CR 603.4 finishes the job at resolution — both cards print
+        # matching or the ability was countered (the key rides the object, as
+        # theirs does). CR 603.4 finishes the job at resolution — both cards print
         # "if this permanent is an enchantment", which is false once the
         # animation has replaced its types (CR 205.1a), so the ability an
         # unchanged board announces again does nothing.
@@ -1444,8 +1454,17 @@ class GameEndingMixin:
                     "instruction": trig.instruction,
                     "effect_kind": trig.effect_kind,
                     "ability_text": trig.source_line,
-                    "trigger_context": {},
+                    # See the two counter sweeps above: CR 603.8's latch key.
+                    "trigger_context": {STATE_TRIGGER_LATCH: key},
                 }])
                 any_changed = True
+
+        # "Whenever **a creature** has four or more fuse counters on it, …"
+        # (Bomb Squad.) CR 603.8 asked of every *other* permanent the noun
+        # phrase describes, so the state is true per watched permanent and the
+        # sweep is its own function (`engine/state_triggers.py`) rather than a
+        # sixth block here.
+        if announce_watched_counter_thresholds(self):
+            any_changed = True
 
         return any_changed

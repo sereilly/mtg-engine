@@ -163,7 +163,62 @@ _EVENT_SUBJECT_OBJECTS: frozenset[str] = frozenset({
     # "**this** creature becomes the target" the frozen id is the source's own,
     # which is what "that creature" would mean there too.
     "self_becomes_target",
+    # "Whenever a creature has four or more fuse counters on it, remove all fuse
+    # counters from **it** and destroy **it**." (Bomb Squad.) CR 603.8's state
+    # trigger about *another* permanent: the sweep that announces it
+    # (``engine/state_triggers.announce_watched_counter_thresholds``) stamps
+    # the id of the permanent whose counters crossed the line, once per
+    # permanent, so the pronoun has exactly one referent per firing.
+    "permanent_counters_reach_threshold",
 })
+
+
+#: The events above whose fire site freezes the **object itself** beside its id
+#: (``oracle_types.EVENT_SUBJECT_LAST_KNOWN``), so a sentence may make that
+#: object *do* something after it has left: "**That creature** deals 4 damage
+#: to its controller" (Bomb Squad), printed behind "destroy it". CR 608.2h: "If
+#: an ability states that an object does something, it's the object as it
+#: exists—or as it most recently existed—that does it", and an id resolves to
+#: nothing once the permanent is gone (CR 400.7).
+#:
+#: A narrower claim than :data:`_EVENT_SUBJECT_OBJECTS`, exactly as
+#: :data:`EVENT_SUBJECT_NAMES` below is: every kind there freezes an id and
+#: only these freeze the object, so a dealer admitted under the wider set would
+#: compile clean and then deal nothing the moment its creature died.
+EVENT_SUBJECT_LAST_KNOWN_EVENTS: frozenset[str] = frozenset({
+    "matching_permanent_enters",          # the entry seam, since Dual Nature
+    "permanent_counters_reach_threshold",
+})
+
+
+def dealer_is_event_subject(source, event: str | None) -> bool:
+    """Whether a damage sentence's printed dealer is the object the firing
+    event was about — "**that creature** deals …" under a trigger whose fire
+    site froze that creature.
+
+    One predicate because two lowerings ask it and must not disagree: the one
+    that moves the *dealer* off the ability's source (CR 120.7), and the one
+    that reads "its controller" behind such a dealer as that object's
+    controller rather than as a seat nothing chose.
+
+    **Only the demonstrative.** A bare "it" in the dealer's position is the
+    ability's own source wherever the pool prints one — "When another creature
+    enters, sacrifice this creature and **it** deals 3 damage to target
+    player" (Mogg Bombers), where the nearest antecedent is the creature the
+    clause in front just named — even though
+    ``rebinding.rebind_pronoun_to_event_subject`` has by then given the word
+    the trigger subject's filter. Reading that pronoun here moved Mogg
+    Bombers' damage onto the creature that entered; the program differential
+    caught it.
+    """
+    return (
+        isinstance(source, ast.TargetSpec)
+        and source.quantifier == "that"
+        and not source.targeted
+        and not source.filter.is_source
+        and not source.filter.is_enchanted
+        and event in EVENT_SUBJECT_LAST_KNOWN_EVENTS
+    )
 
 
 #: Trigger conditions whose fire site freezes the **name** of the object the

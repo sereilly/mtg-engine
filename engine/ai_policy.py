@@ -42,6 +42,7 @@ from .ai_valuation import (
     graveyard_denial_order,
     hand_entry_steps,
     harms_its_own_source,
+    named_counter_marks_for_harm,
     instruction_target_side,
     is_mana_ability,
     mana_ability_amount,
@@ -2559,6 +2560,12 @@ def _activation_target_side(permanent: Permanent, instruction) -> str | None:
     """
     if source_becomes_an_aura(instruction):
         return "opponent" if _aura_harms_its_host(permanent.effective_card) else "you"
+    # "{T}: Put a fuse counter on target creature." (Bomb Squad.) A named
+    # counter reads as a gift by category, and the card's own state trigger
+    # says this one is a death sentence — the Licids' case again: which board
+    # the target belongs on is what the card's *other* text does with it.
+    if named_counter_marks_for_harm(permanent.effective_card, instruction):
+        return "opponent"
     return ability_target_side(instruction) or instruction_target_side(instruction)
 
 

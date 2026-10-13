@@ -127,7 +127,7 @@ def lower_where_x(
     # down here, where the first of those readings always was; every branch on
     # either side answers a node class no other does, so the order between the
     # two halves decides nothing.
-    recorded = lower_record_definition(node, inner, produced)
+    recorded = lower_record_definition(node, inner, produced, event)
     if recorded is not None:
         return recorded
     if isinstance(node.definition, ast.CharacteristicOfSubject):

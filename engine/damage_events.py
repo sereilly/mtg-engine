@@ -39,7 +39,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from .control import base_controller
+from .control import base_controller, last_controller
 from .damage_ledger import record_damage
 from .effect_ordering import Candidate, affected_seat, apply_in_order
 from .models import Permanent, PlayerState
@@ -142,8 +142,12 @@ def damage_source_seat(game, source) -> int | None:
     - a permanent on the battlefield: the control seam, so a stolen creature's
       damage is the thief's (CR 613 layer 2);
     - a permanent that has left (a source sacrificed to pay for its own
-      ability): the seat it entered under, which ``base_controller_index`` keeps
-      precisely because it is never rewritten;
+      ability): the seat that controlled it **as it left** — CR 608.2h's last
+      known information, stamped by the one removal transition
+      (``control.LAST_CONTROLLER``) — and, for one that left by a road older
+      than the stamp, the seat it entered under. The two differ exactly when
+      the source had been stolen: a creature taken with Control Magic and then
+      destroyed deals its parting damage as the thief's;
     - anything else: whoever is resolving. That is the same rule, not a
       fallback — CR 109.5 makes a spell's source its controller — and it is
       recorded at the one dispatch point that knows it.
@@ -158,6 +162,9 @@ def damage_source_seat(game, source) -> int | None:
     if seat is not None:
         return seat
     if isinstance(source, Permanent):
+        last = last_controller(source)
+        if last is not None:
+            return last
         base = base_controller(source)
         if base is not None:
             return base
