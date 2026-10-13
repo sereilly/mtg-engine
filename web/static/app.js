@@ -1194,6 +1194,15 @@ function shouldShowAiControls(state) {
   return values.length > 0 && values.every((t) => t === "ai");
 }
 
+// The game is decided. Nothing automatic is owed any more, and every action
+// but a rematch is refused ("game already finished") — so each automatic
+// sender below asks this first, and the prompt panel stands down for the
+// Victory/Defeat overlay.
+function gameIsOver(state = currentState) {
+  if (!state) return false;
+  return state.status === "finished" || (state.winner !== null && state.winner !== undefined);
+}
+
 function getAiStepStateKey(state) {
   if (!state) return "";
   const stackSize = Array.isArray(state.stack) ? state.stack.length : 0;
@@ -1253,6 +1262,7 @@ function shouldAutoPassUntilTurnEnd(state = currentState) {
 }
 
 async function maybeAutoPassUntilTurnEnd(state = currentState) {
+  if (gameIsOver(state)) return;
   if (!shouldAutoPassUntilTurnEnd(state) || autoPassTurnEndInFlight) {
     return;
   }
@@ -1310,13 +1320,45 @@ async function maybeAutoPassUntilTurnEnd(state = currentState) {
 
     await sendAction({ seat, action: "pass_priority" });
   } catch (error) {
-    autoPassTurnEndEnabled = false;
-    autoPassMode = null;
     const message = error instanceof Error ? error.message : "Auto-pass failed";
-    updateActionHint(`Auto-pass paused: ${message}`, true);
+    // "Player does not have priority" / "no active priority window" is this
+    // pass arriving at a state the server had already left — another request
+    // crossed it. The newer state is fetched below; stopping End Turn for it
+    // left the turn standing at Declare Attackers.
+    if (!/does not have priority|no active priority window/i.test(message)) {
+      autoPassTurnEndEnabled = false;
+      autoPassMode = null;
+      updateActionHint(`Auto-pass paused: ${message}`, true);
+    }
   } finally {
     autoPassTurnEndInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
+}
+
+// Every automatic sender below is guarded by an in-flight flag, and a state
+// rendered while that flag is up is *skipped* — the response to the sender's
+// own request is rendered inside its `await sendAction`, before its `finally`
+// runs, so that skip happens on every send. The game only moved on because the
+// server's SSE push fetched and rendered the state again a moment later; where
+// a slower await was pending (`waitForBattlefieldAnimations`, up to 8 s) the
+// push arrived first too, the skipped state was the last one the server sent,
+// and the game sat in a step nobody had priority in — End Turn stalled in
+// Declare Blockers with no prompt on screen. So each sender asks again as its
+// flag clears.
+//
+// It asks the **server**, not `currentState`. The state a sender holds then is
+// its own request's response, and at a step or turn boundary that response can
+// be mid-transition — "turn 14, end step, priority: you" carrying a log that
+// already has the opponent's untap and draw in it. Skipping its own response
+// is what kept a sender from acting on one; re-running the senders on it sent
+// passes the server refused ("player does not have priority") and one it did
+// not. A fetched state is the one the SSE path has always rendered. The
+// per-sender state key makes a state already acted on a no-op, which is what
+// ends the chain.
+function retryAutoAdvanceAfterFlight() {
+  if (!sessionId) return;
+  getState().catch(() => {});
 }
 
 function isStackHoverHolding() {
@@ -1359,6 +1401,7 @@ function releaseStackClickHold(message) {
 }
 
 async function maybeAutoPassPriority(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
@@ -1383,6 +1426,12 @@ async function maybeAutoPassPriority(state = currentState) {
     const latest = currentState;
     if (
       isPriorityHeld() ||
+      // End Turn was pressed while this waited for the cast's animation: that
+      // sender has the passing now (and has already passed for this spell). A
+      // second pass from here landed on the empty stack behind it, and End
+      // Turn's own next pass was then refused — "player does not have
+      // priority" — which switched End Turn off.
+      autoPassTurnEndEnabled ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest) ||
@@ -1396,10 +1445,12 @@ async function maybeAutoPassPriority(state = currentState) {
     // Silently absorb; next state update will retry if needed.
   } finally {
     autoPassPriorityInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
 }
 
 async function maybeAutoPassDisabledPhase(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (autoPassTurnEndEnabled) return;
   if (!state || seat === null) return;
@@ -1426,6 +1477,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     const latest = currentState;
     if (
       isPriorityHeld() ||
+      autoPassTurnEndEnabled ||
       !latest ||
       latest.priority_player !== seat ||
       hasBlockingPromptForAutoPass(latest)
@@ -1459,6 +1511,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
     // Silently absorb
   } finally {
     autoPassDisabledPhaseInFlight = false;
+    retryAutoAdvanceAfterFlight();
   }
 }
 
@@ -1470,6 +1523,7 @@ async function maybeAutoPassDisabledPhase(state = currentState) {
 // combat never deadlocks. Only fires when there are zero legal choices — when a
 // real choice exists, the player declares it themselves via the combat UI.
 async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
+  if (gameIsOver(state)) return;
   if (isPriorityHeld()) return;
   if (!state || seat === null) return;
   if (autoCombatDeclareInFlight) return;
@@ -1484,7 +1538,13 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     isCombatStep(state, "declare_attackers") &&
     seat === state.current_turn &&
     !combat.attackers_locked &&
-    getValidAttackerIndices(state).length === 0
+    getValidAttackerIndices(state).length === 0 &&
+    // One submitter. While End Turn is passing this turn for its own seat,
+    // `maybeAutoPassUntilTurnEnd` owes the empty declaration (`owesOwnAttack`)
+    // and sends it at once; this one waits for animations first, so the two
+    // both sent it ("declared 0 attacker(s)" twice in the log) and this one's
+    // wait could outlast the two states that followed.
+    !shouldAutoPassUntilTurnEnd(state)
   ) {
     const defendingSeat = Number.isInteger(combat.defending_player_index)
       ? combat.defending_player_index
@@ -1550,6 +1610,10 @@ async function maybeAutoAdvanceCombatDeclaration(state = currentState) {
     // Silently absorb; the next state update will retry if still stuck.
   } finally {
     autoCombatDeclareInFlight = false;
+    // "The next state update" may already have come and been skipped above
+    // (`if (autoCombatDeclareInFlight) return;`), and nothing else nudges a
+    // step nobody has priority in.
+    retryAutoAdvanceAfterFlight();
   }
 }
 
@@ -1573,6 +1637,14 @@ async function waitForBattlefieldAnimations() {
 
 function shouldAutoStepAi(state = currentState) {
   if (!state || !sessionId) return false;
+  if (gameIsOver(state)) return false;
+  // `waiting_on_prompt` is the server's own answer to "would this viewer's
+  // next action be refused because a decision is owed" (web/state_view.py,
+  // read off the choice registry). An `ai_step` is such an action: sent into
+  // the human's open discard it came back 400 and was painted over the prompt
+  // as a red "Auto AI step paused" hint, on every AI turn that armed one.
+  // Answering the prompt renders a new state, which asks again.
+  if (state.waiting_on_prompt) return false;
   // Hold the AI while a human player is disconnected: the game is waiting for
   // them to rejoin, and every remaining client is behind the blocking dialog.
   if (blockingDisconnectSeats(state).length > 0) return false;
@@ -2432,6 +2504,24 @@ function landWordOptionsForTarget(perm) {
   return MANA_COLOR_OPTIONS.filter((o) => haystack.includes(LAND_TYPE_BY_SYMBOL[o.symbol]));
 }
 
+// What the ability chosen from the menu — or the permanent's only one — adds,
+// as the server states it: `{symbols, choice}` from the payload's
+// `ability_mana`, indexed like `ability_index`. `choice` false is a fixed
+// output ("{1}, {T}: Add {R}{G}.", "{T}: Add {C}{C}."): every symbol is made
+// whichever is asked for, so there is nothing to ask. null where the server
+// said nothing (no such field, or an ability whose colours the board decides).
+//
+// `produced_mana` cannot answer this: it is the permanent's whole colour
+// summary, and a filter land's reads exactly like a dual land's — which is how
+// Mossfire Valley came to open a Red/Green fan whose answer the engine ignored.
+function chosenAbilityMana(card) {
+  if (!card || typeof card === "string" || !Array.isArray(card.ability_mana)) return null;
+  const index = Number.isInteger(card.__abilityIndex) ? card.__abilityIndex : 0;
+  const entry = card.ability_mana[index];
+  if (!entry || !Array.isArray(entry.symbols) || !entry.symbols.length) return null;
+  return { symbols: entry.symbols.map((symbol) => String(symbol).toUpperCase()), choice: entry.choice === true };
+}
+
 function getDualLandColors(card) {
   if (!card || typeof card === "string") return null;
   const produced = Array.isArray(card.produced_mana) ? card.produced_mana.map((s) => s.toUpperCase()) : [];
@@ -2445,6 +2535,12 @@ function getDualLandColors(card) {
 // the line prints its symbols, only those are offered; a line that prints none
 // ("any color") keeps the permanent's list.
 function abilityManaColors(card) {
+  // The payload's own answer for this ability, where the server gave one
+  // (`ability_mana`): its symbols if activating it asks for a colour, and no
+  // colours at all — no fan — if its output is fixed. Below is what is left
+  // for a permanent the server said nothing about.
+  const stated = chosenAbilityMana(card);
+  if (stated) return stated.choice && stated.symbols.length >= 2 ? stated.symbols : null;
   const produced = getDualLandColors(card);
   if (!produced || !Number.isInteger(card?.__abilityIndex)) return produced;
   const line = String(card.oracle_text || "");
@@ -4184,6 +4280,15 @@ function beginPendingHandCast(card, handIndex = null) {
     cardName,
     handIndex: Number.isInteger(handIndex) && handIndex >= 0 ? handIndex : null,
   };
+}
+
+// What the hint says once a card with nothing left to choose has gone out. A
+// land is played (CR 305.1) and a spell is cast; neither "targets seat N" —
+// that seat is only the default the request carries, and the hint used to read
+// it out ("Cast Mountain targeting seat 1.").
+function playedCardHint(card, cardName) {
+  const typeLine = String((card && card.type) || "").toLowerCase();
+  return /\bland\b/.test(typeLine) ? `Played ${cardName}.` : `Cast ${cardName}.`;
 }
 
 function clearPendingHandCast() {
@@ -9790,6 +9895,16 @@ function renderGraveyardExileModal(info) {
 // Rewind's "Untap up to four lands": a resolution-time multi-select over
 // matching permanents, capped at the printed amount. Confirming with nothing
 // selected is legal ("up to" includes zero).
+// A modal's Confirm is bound ONCE, by the `dataset.bound` marker, and the
+// marker is never cleared. Each of these handlers used to `delete` it as it
+// ran, which removed the marker and not the listener: the next prompt bound a
+// second listener beside the first, the one after a third, and every Confirm
+// then sent one request per prompt ever shown — the real answer, then empty
+// ones. Cultural Exchange's second prompt answered `[126]` and then `[]`
+// (400 "no permanent choice pending"); a prompt that accepts an empty answer
+// would have been answered by the echo before its player saw it. The handlers
+// close over the button, the modal and module state only, so one binding
+// serves every prompt.
 let untapUpToSelected = new Set();
 
 function getUntapUpToInfo(state = currentState) {
@@ -9839,7 +9954,6 @@ function renderUntapUpToModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...untapUpToSelected];
       untapUpToSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "untap_up_to_confirm", target_permanent_ids: ids });
     });
@@ -9899,7 +10013,6 @@ function renderPermanentSetChoiceModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...permanentSetChoiceSelected];
       permanentSetChoiceSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "permanent_set_choice_confirm", target_permanent_ids: ids });
     });
@@ -10020,7 +10133,6 @@ function renderKeepPermanentsModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...keepPermanentsSelected];
       keepPermanentsSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "keep_permanents_confirm", target_permanent_ids: ids });
     });
@@ -10083,7 +10195,6 @@ function renderModalModeTargetsModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...modalModeTargetsSelected];
       modalModeTargetsSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "modal_mode_targets_confirm", target_permanent_ids: ids });
     });
@@ -10168,7 +10279,6 @@ function renderSearchExileModal(info) {
         return { zone, index: Number(idx) };
       });
       searchExileSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "search_exile_confirm", search_picks: picks });
     });
@@ -10364,14 +10474,12 @@ function renderReorderLibraryModal(info) {
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
-      // Each answered prompt clears `bound` below, so the next prompt binds a
-      // second listener beside this one. The first to run takes the order and
-      // nulls it; the rest have nothing to send (they used to throw on it).
+      // Bound once for the life of the page (see the note above
+      // `untapUpToSelected`); the null check is what is left of
+      // the days this button collected a listener per prompt.
       if (!reorderLibraryCurrentOrder) return;
       const order = [...reorderLibraryCurrentOrder];
       reorderLibraryCurrentOrder = null;
-      delete confirmBtn.dataset.bound;
-      if (shuffleBtn) delete shuffleBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "reorder_library_confirm", card_order: order });
     });
@@ -10389,8 +10497,6 @@ function renderReorderLibraryModal(info) {
           if (!reorderLibraryCurrentOrder) return;
           const order = [...reorderLibraryCurrentOrder];
           reorderLibraryCurrentOrder = null;
-          delete shuffleBtn.dataset.bound;
-          if (confirmBtn) delete confirmBtn.dataset.bound;
           modal.classList.add("hidden");
           await sendAction({ seat, action: "reorder_library_confirm", card_order: order, shuffle: true });
         });
@@ -10656,6 +10762,13 @@ function renderActivationPrompt() {
   // the game ends, so no prompt applies — the spectator banner (renderBoard)
   // owns the messaging.
   if (isFfaState(currentState) && me?.lost && currentState?.winner == null) {
+    panel.classList.add("hidden");
+    return;
+  }
+  // The game is decided: the Victory/Defeat overlay owns the screen, and the
+  // step's ordinary prompt ("End of Combat … Next Phase") used to stay live
+  // underneath it, offering an action the server refuses.
+  if (gameIsOver(currentState)) {
     panel.classList.add("hidden");
     return;
   }
@@ -13148,7 +13261,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   // index made the server tap the land's *first* one — a Karplusan Forest
   // asked for {R} off its coloured ability produced {C} and no damage, and a
   // mana ability Overlaid Terrain granted could never be reached.
-  if (cardRequiresManaColorChoice(card)) {
+  // …and neither is asked of an ability whose output is fixed. Where the
+  // server says what this ability adds (`chosenAbilityMana`), that decides
+  // whether there is a colour to choose and whether it is one of all five (the
+  // modal) or one of the ability's own symbols (the fan); the card's text is
+  // read only for a permanent the server said nothing about.
+  const ownMana = chosenAbilityMana(card);
+  const asksAnyColor = ownMana
+    ? ownMana.choice && ownMana.symbols.length >= 5
+    : cardRequiresManaColorChoice(card);
+  if (asksAnyColor) {
     pendingManaColor = {
       cardName,
       permanentIndex,
@@ -13209,7 +13331,16 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
     return;
   }
 
-  if (!shouldPromptForActivationCost(activationCost)) {
+  // A mana ability with a fixed output and a mana cost the pool already covers
+  // (a filter land, "{1}, {T}: Add {R}{G}.", with the {1} floating) is sent as
+  // it is clicked: there is nothing to choose and nothing left to tap for, and
+  // the "press OK to start paying" step below would be a second click that
+  // decides nothing. With the cost not yet in the pool that step is what lets
+  // the player tap for it.
+  const fixedManaPaidFromPool =
+    !!ownMana && !ownMana.choice
+    && manaPoolCanPayCost(getCurrentPlayerState()?.mana_pool || {}, parseManaCostSymbols(activationCost));
+  if (!shouldPromptForActivationCost(activationCost) || fixedManaPaidFromPool) {
     const directBody = withPermanentId(
       {
         seat,
@@ -15369,8 +15500,24 @@ function confirmSeveralTargets() {
   updateActionHint(`${activating ? "Activating" : "Casting"} ${cardName}...`);
   sendAction(body)
     .then(() => updateActionHint(`${activating ? "Activated" : "Cast"} ${cardName}.`))
-    .catch((e) => updateActionHint(e.message, true))
-    .finally(() => clearPendingHandCast());
+    .catch((e) => {
+      // The refusal every other send answers with the Auto-Tap prompt, and this
+      // one answered with a hint: Nomad Decoy's "{W}{W}, {T}: Tap two target
+      // creatures" came back "insufficient mana to activate" beside three
+      // untapped Plains, with nothing to press. The body is kept whole, so the
+      // retry names the same targets; an activation's price is the ability's.
+      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
+        pendingAutoTap = activating
+          ? { card, cardName, cost: getActivatedAbilityCost(card, p.abilityIndex), actionBody: body }
+          : { card, cardName, actionBody: body };
+        renderActivationPrompt();
+        return;
+      }
+      updateActionHint(e.message, true);
+    })
+    .finally(() => {
+      if (!pendingAutoTap) clearPendingHandCast();
+    });
 }
 
 /** Drop the in-progress target prompt and every highlight it painted. */
@@ -17654,7 +17801,7 @@ function createCardElement(card, options = {}) {
         const actionBody = { seat, action: "cast", card_name: cardName, target_seat: targetSeat };
         try {
           await sendAction(actionBody);
-          updateActionHint(`Cast ${cardName} targeting seat ${targetSeat}.`);
+          updateActionHint(playedCardHint(card, cardName));
           clearPendingHandCast();
         } catch (e) {
           if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
@@ -19867,9 +20014,25 @@ function renderFfaOpponentPanels(state, viewerSeat, oppSeat) {
   }
 }
 
+// The ability menu ("Choose an ability for Cabal Pit") is about one permanent
+// of the viewer's. Once that permanent has left the battlefield the menu is
+// about nothing — it used to stay on the panel, offering the abilities of a
+// land Price of Glory had already destroyed. By id, never by slot: another
+// permanent sliding into the index is not the one the menu named (CR 400.7).
+function dropAbilityChoiceIfStale(state = currentState) {
+  if (!pendingAbilityChoice || seat === null) return;
+  const id = pendingAbilityChoice.card?.id;
+  if (!Number.isInteger(id)) return;
+  const battlefield = state?.players?.[seat]?.battlefield || [];
+  if (!battlefield.some((permanent) => permanent && permanent.id === id)) {
+    pendingAbilityChoice = null;
+  }
+}
+
 function renderBoard(state) {
   renderGameOverOverlay(state);
   closePermanentMenuIfStale(state);
+  dropAbilityChoiceIfStale(state);
   // Eliminated in a still-running FFA: pin the spectator strip while the
   // remaining players finish the game (the game-over overlay replaces it).
   const spectatorBanner = q("spectatorBanner");
@@ -20956,7 +21119,7 @@ async function handleHandCardDropOnBattlefield({ event, targetSeat, targetItem }
       const actionBody = { seat, action: "cast", card_name: payload.name, target_seat: castTargetSeat };
       try {
         await sendAction(actionBody);
-        updateActionHint(`Cast ${payload.name} targeting seat ${castTargetSeat}.`);
+        updateActionHint(playedCardHint(card, payload.name));
         clearPendingHandCast();
       } catch (e) {
         if (card && e.message && e.message.toLowerCase().startsWith("insufficient mana")) {

@@ -3,10 +3,10 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5246**
-- Passed: **741** (484 checked in-game, 257 auto-passed)
-- Failed: **6**
+- Passed: **746** (489 checked in-game, 257 auto-passed)
+- Failed: **4**
 - Equivalent to a passing card: **58**
-- Untested: **4441**
+- Untested: **4438**
 
 An *auto-pass* is derived, never recorded: the card has no abilities, or nothing but keywords the engine implements, so its behaviour is the generic combat and keyword code plus its printed numbers, and there is no card-specific path for a manual check to exercise. The note names which. A result recorded in-game always takes precedence over it.
 
@@ -999,7 +999,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Darkness | ≡ equivalent | same behaviour as Fog |
 | Darkpact | ✅ pass |  |
 | Darkwatch Elves | ⬜ untested |  |
-| Darkwater Catacombs | ❌ fail | Clicking it opens a "Choose a mana color" fan (U or B) although the card adds both {U}{B}; the answer is ignored. A {3} toll (Mana Leak) with Island + Catacombs + Cabal Pit untapped: Pay answered 200 and the spell was countered, nothing tapped. |
+| Darkwater Catacombs | ✅ pass |  |
 | Darkwater Egg | ⬜ untested |  |
 | Darting Merfolk | ⬜ untested |  |
 | Daughter of Autumn | ⬜ untested |  |
@@ -2875,7 +2875,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Moss Monster | ✅ pass | auto-pass: no abilities |
 | Mossdog | ⬜ untested |  |
 | Mossfire Egg | ⬜ untested |  |
-| Mossfire Valley | ❌ fail | Clicking it opens a "Choose a mana color" fan (R or G) although the card adds both {R}{G}; the answer is ignored. Castable highlight and Auto-Tap also say no when the payment needs its net mana. |
+| Mossfire Valley | ✅ pass |  |
 | Mother of Runes | ⬜ untested |  |
 | Mountain | ✅ pass |  |
 | Mountain Goat | ✅ pass | auto-pass: keywords only (mountainwalk) |
@@ -3957,7 +3957,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Shadow Rift | ⬜ untested |  |
 | Shadowbane | ⬜ untested |  |
 | Shadowblood Egg | ⬜ untested |  |
-| Shadowblood Ridge | ⬜ untested |  |
+| Shadowblood Ridge | ✅ pass |  |
 | Shadowmage Infiltrator | ⬜ untested |  |
 | Shadowstorm | ⬜ untested |  |
 | Shahrazad | ✅ pass |  |
@@ -4082,7 +4082,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sky Spirit | ✅ pass | auto-pass: keywords only (flying, first strike) |
 | Sky Weaver | ⬜ untested |  |
 | Skycloud Egg | ⬜ untested |  |
-| Skycloud Expanse | ⬜ untested |  |
+| Skycloud Expanse | ✅ pass |  |
 | Skyscanner | ⬜ untested |  |
 | Skyshaper | ⬜ untested |  |
 | Skyship Weatherlight | ⬜ untested |  |
@@ -4419,7 +4419,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Sunder | ⬜ untested |  |
 | Sunglasses of Urza | ✅ pass |  |
 | Sungrass Egg | ⬜ untested |  |
-| Sungrass Prairie | ⬜ untested |  |
+| Sungrass Prairie | ✅ pass |  |
 | Sunken City | ⬜ untested |  |
 | Sunken Field | ⬜ untested |  |
 | Sunken Hope | ⬜ untested |  |

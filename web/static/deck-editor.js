@@ -593,8 +593,26 @@
     if (minus) minus.disabled = !entry;
   }
 
+  // Every entry the editor holds carries a `status`, and this is the one place
+  // a deck enters it. A shared deck and an import arrive with the server's
+  // (web/deck_store.py); a **personal** deck is stored in the browser as
+  // `{name, count}` and arrives with none — and the stats line counts
+  // `status !== "ok"`, so a saved or re-loaded personal deck read "60
+  // unsupported" with every row red, beside "✓ Legal". The status is a fact
+  // about the catalog, not about the deck, so it is derived here from the same
+  // catalog the server derives it from (`cardStatus`: ok / unsupported /
+  // unknown) rather than written into storage, where it would go stale.
+  function withEntryStatus(entries) {
+    return (entries || []).map((entry) => (
+      entry && !entry.status ? { ...entry, status: cardStatus(entry.name) } : entry
+    ));
+  }
+
   function resetDeck(name = "Untitled Deck", entries = [], id = null, scope = "personal", description = "", format = "casual", sideboard = [], commander = []) {
     const fmt = window.Legality ? window.Legality.normalizeFormat(format) : format || "casual";
+    entries = withEntryStatus(entries);
+    sideboard = withEntryStatus(sideboard);
+    commander = withEntryStatus(commander);
     state.current = { id, name, description, entries, sideboard, commander, scope, format: fmt };
     state.activeBoard = "main";
     state.dirty = false;
