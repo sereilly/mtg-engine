@@ -236,6 +236,62 @@ def test_the_trigger_with_nothing_to_target_is_removed_from_the_stack(set_pool):
     ), game.log
 
 
+# --- in response to it -----------------------------------------------------------
+#
+# The ability is a stack object with a target, chosen through its own picker —
+# so everything that can happen to a target before it resolves can happen to
+# this one, and CR 608.2b is asked of it as the ability resolves.
+
+
+def _trigger_aimed_at_the_mox(set_pool):
+    game = _table(set_pool, interactive=(0, 1))
+    justice = _put(game, set_pool, 0, "Karmic Justice")
+    ring = _put(game, set_pool, 0, "Sol Ring")
+    mox = _put(game, set_pool, 1, "Mox Pearl")
+    island = _put(game, set_pool, 1, "Island")
+    _cast(game, set_pool, 1, "Disenchant", target_permanent_ids=[ring.permanent_id])
+    assert game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_trigger_target(0, permanent_id=mox.permanent_id)
+    (trigger,) = _justice_triggers(game)
+    assert trigger.targets_chosen
+    return game, justice, mox, island
+
+
+@pytest.mark.parametrize("response", ["the target leaves", "the target changes hands"])
+def test_a_target_that_is_illegal_by_resolution_is_not_replaced_with_a_bystander(
+    set_pool, response,
+):
+    """CR 608.2b. The Mox is gone, or is no longer one "that opponent
+    controls" — the description is re-asked with the seat the event froze —
+    so the ability is removed from the stack. The Island beside it was never
+    the target and is not destroyed in its place."""
+    game, _justice, mox, island = _trigger_aimed_at_the_mox(set_pool)
+    if response == "the target leaves":
+        game.remove_from_battlefield(mox)
+    else:
+        game.take_control(mox, 0, source=mox)
+
+    assert game.resolve_top_of_stack(pause_for_choices=True)
+
+    assert game.stack == [] and game.pending_choices == []
+    assert game.is_on_battlefield(island)
+    assert response == "the target leaves" or game.is_on_battlefield(mox)
+    assert any("608.2b" in line for line in game.log), game.log
+
+
+def test_destroying_karmic_justice_in_response_does_not_stop_its_ability(set_pool):
+    """CR 113.7a: "Once activated or triggered, an ability exists on the stack
+    independently of its source." """
+    game, justice, mox, _island = _trigger_aimed_at_the_mox(set_pool)
+    game.remove_from_battlefield(justice)
+    game._permanent_to_graveyard(game.players[0], justice)
+
+    assert game.resolve_top_of_stack(pause_for_choices=True)
+    assert game.confirm_optional_pay(0, accept=True)
+
+    assert not game.is_on_battlefield(mox)
+
+
 # --- what is and is not a destruction of a noncreature permanent -------------------
 
 
