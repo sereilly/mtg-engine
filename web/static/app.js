@@ -10393,12 +10393,18 @@ function renderReorderLibraryModal(info) {
   // on the wire is the same either way: the leftmost card is the uppermost of
   // the pile, the first of them a draw reaches.
   const atBottom = info.position === "bottom";
+  // …and `position: "top"` is cards being *put* on top in an order their
+  // owner chooses ("…on top of their library in any order", Lodestone Bauble;
+  // Reinforcements), which is not a look at cards already there: nothing was
+  // on top to "reorder", and the words say where the pile is going.
+  const ontoTop = info.position === "top";
   const whose = info.target_seat === seat ? "your" : `${info.target_name || "that player"}'s`;
   const titleEl = document.getElementById("reorderLibraryTitle");
   if (titleEl) {
     titleEl.textContent = !canReorder
       ? "Top of Library"
-      : atBottom ? "Order the Bottom of Library" : "Reorder Top of Library";
+      : atBottom ? "Order the Bottom of Library"
+        : ontoTop ? "Order the Top of Library" : "Reorder Top of Library";
   }
   const subtitleEl = document.getElementById("reorderLibrarySubtitle");
   if (subtitleEl) {
@@ -10407,7 +10413,10 @@ function renderReorderLibraryModal(info) {
       : atBottom
         ? `These ${cards.length} cards go on the bottom of ${whose} library. Drag cards to rearrange. `
           + "The leftmost card will be drawn first of them; the rightmost will be the very bottom card."
-        : "Drag cards to rearrange. The leftmost card will be on top of the library.";
+        : ontoTop
+          ? `These ${cards.length} cards go on top of ${whose} library. Drag cards to rearrange. `
+            + "The leftmost card will be the top card — the next one drawn."
+          : "Drag cards to rearrange. The leftmost card will be on top of the library.";
   }
 
   const container = document.getElementById("reorderLibraryCards");
