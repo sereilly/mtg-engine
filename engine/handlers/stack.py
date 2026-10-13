@@ -61,29 +61,7 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
         game.log.append(f"{context.card.name}: that spell is no longer on the stack")
         return True, "resolved"
     caster_index = game.players.index(caster)
-    copy = StackItem(
-        card=copied.card,
-        caster_index=caster_index,
-        target_player_index=copied.target_player_index,
-        target_permanent_index=copied.target_permanent_index,
-        # **The identity travels with the copy** (CR 707.10: "all decisions
-        # made for it, including … targets") - Fork's lesson one handler down,
-        # which this one had not been given. An original announced by
-        # ``permanent_id`` alone, which is how the web layer announces every
-        # target, has no slot: the copy arrived holding a seat and no object,
-        # and a copied Lightning Bolt aimed at a creature dealt its 3 to that
-        # creature's controller. The graveyard card and the several modes of a
-        # "choose one or more" are the same decisions in their own channels.
-        target_permanent_id=copied.target_permanent_id,
-        target_graveyard_card=copied.target_graveyard_card,
-        x_value=copied.x_value,
-        # CR 707.10: the copy has the original's choices.
-        choices=dict(copied.choices),
-        chosen_mode_index=copied.chosen_mode_index,
-        chosen_modes=copied.chosen_modes,
-        target_stack_item=copied.target_stack_item,
-        is_copy=True,
-    )
+    copy = _copy_of_spell(copied, caster_index)
     # CR 707.10: a copy has the original's targets (or the ones the copying
     # effect changed them to). It does not choose again.
     game._stack_push(targets_already_chosen=True, item=copy)
@@ -99,6 +77,43 @@ def copy_triggering_spell(game: Game, instruction: OracleInstruction, context: O
     if _copy_reaim_is_one_slot(game, copy):
         game.arm_copy_spell_target(caster_index, copy)
     return True, "resolved"
+
+
+def _copy_of_spell(copied: StackItem, controller_index: int) -> StackItem:
+    """A copy of the spell *copied*, controlled by *controller_index*, with
+    every decision made for the original (CR 707.10: "…it copies all
+    decisions made when casting it, including modes, targets, the value of X,
+    and additional or alternative costs").
+
+    One builder for every effect that copies a spell on the stack. There were
+    two, written a set apart, and each had been taught a different half of the
+    rule: the trigger's copy (Double Vision, Mirari) carried the graveyard
+    card and the several modes of a "choose one or more", and Fork's carried
+    neither — so a Forked spell aimed at a card in a graveyard, or one cast
+    with two modes, was a copy that had forgotten what it was for.
+
+    **The identity travels with the copy.** An original announced by
+    ``permanent_id`` alone, which is how the web layer announces every target,
+    has no slot: a copy holding a seat and no object resolved as a spell aimed
+    at that player's face, and a copied Lightning Bolt pointed at a creature
+    dealt its 3 to the creature's controller.
+    """
+    return StackItem(
+        card=copied.card,
+        caster_index=controller_index,
+        target_player_index=copied.target_player_index,
+        target_permanent_index=copied.target_permanent_index,
+        target_permanent_id=copied.target_permanent_id,
+        target_graveyard_card=copied.target_graveyard_card,
+        x_value=copied.x_value,
+        # The copy has the original's choices, so this is one assignment
+        # rather than one per choice the original made.
+        choices=dict(copied.choices),
+        chosen_mode_index=copied.chosen_mode_index,
+        chosen_modes=copied.chosen_modes,
+        target_stack_item=copied.target_stack_item,
+        is_copy=True,
+    )
 
 
 def _copy_reaim_is_one_slot(game: Game, copy: StackItem) -> bool:
@@ -144,44 +159,50 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         return True, "resolved"
 
     caster_index = game.players.index(caster)
-    # "You may choose new targets for the copy." When the Fork caster supplied a
-    # new target (a creature/permanent index, optionally on a specific player),
-    # the copy uses it; otherwise the copy keeps the original spell's targets.
-    if context.target_permanent_index is not None:
-        new_target_player_index = game.players.index(context.target) if context.target is not None else copied.target_player_index
-        new_target_permanent_index = context.target_permanent_index
-        new_target_permanent_id = None
-    else:
-        new_target_player_index = copied.target_player_index
-        new_target_permanent_index = copied.target_permanent_index
-        # **The identity travels with the copy** (CR 707.10: "all decisions
-        # made for it, including … targets"). It was left behind: the copy took
-        # the seat and the *slot*, and an original announced by ``permanent_id``
-        # alone — which is how the web layer announces every target — has no
-        # slot. So the copy arrived holding a seat and no object, and resolved
-        # as a spell aimed at that player's face: a Forked Lightning Bolt
-        # pointed at a creature dealt its 3 to the creature's controller.
-        # ``copy_this_spell`` below has always carried it.
-        new_target_permanent_id = copied.target_permanent_id
+    # Every decision made for the original (CR 707.10), through the one
+    # builder — this handler had its own, which left the graveyard card and
+    # the several modes of a "choose one or more" behind.
+    copy = _copy_of_spell(copied, caster_index)
+    # "You may choose new targets for the copy." Two ways a caster says so.
+    # **On the cast**: a new permanent target named beside the Fork (a
+    # creature/permanent index, optionally on a specific player) is where the
+    # copy goes, and is the whole of the answer. **Or, having named none, at
+    # the prompt below.**
+    named_on_the_cast = context.target_permanent_index is not None
+    if named_on_the_cast:
+        # **By the id the cast stamped, not by a seat read off the context.**
+        # ``context.target`` is no longer the seat the caster named: an
+        # instant whose every target is a spell on the stack resolves about
+        # that spell's *controller* (``Game.stack_target_seat``, "counter
+        # target spell. Its controller loses 3 life"), and Fork's one target
+        # is a spell. So the named slot was counted into the forked spell's
+        # controller's battlefield — a Fork of one's own Bolt re-aimed at an
+        # opponent's creature hit one's own creature in that slot instead,
+        # two of the four seatings wrong. The id names the object and its
+        # battlefield both (CR 400.7), and travels onto the copy.
+        named_id = context.target_permanent_id
+        named = (
+            game.permanent_by_id(named_id) if isinstance(named_id, int) else None
+        )
+        if named is not None:
+            copy.target_player_index = game.controller_index_of(named)
+            copy.target_permanent_index = game.battlefield_index_of(named)
+            copy.target_permanent_id = named.permanent_id
+        else:
+            # A caller that announced a slot and stamped no id: the slot is
+            # all there is, on the seat the resolution was given.
+            copy.target_player_index = (
+                game.players.index(context.target)
+                if context.target is not None else copied.target_player_index
+            )
+            copy.target_permanent_index = context.target_permanent_index
+            copy.target_permanent_id = None
 
     game._stack_push(
         # CR 707.10: a copy has the original's targets (or the ones the
         # copying effect changed them to). It does not choose again.
         targets_already_chosen=True,
-        item=StackItem(
-            card=copied.card,
-            caster_index=caster_index,
-            target_player_index=new_target_player_index,
-            target_permanent_index=new_target_permanent_index,
-            target_permanent_id=new_target_permanent_id,
-            x_value=copied.x_value,
-            # CR 707.10: the copy has the same choices as the original, so this
-            # is one assignment rather than one per choice the original made.
-            choices=dict(copied.choices),
-            chosen_mode_index=copied.chosen_mode_index,
-            target_stack_item=copied.target_stack_item,
-            is_copy=True,
-        )
+        item=copy,
     )
     # "…**except that the copy is red.**" CR 707.9b: a characteristic the copy
     # effect sets is the copy's own. It was the one rider of Fork's line nothing
@@ -192,7 +213,7 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
     forget_spell_color_change(game.stack[-1])
     recolor_spell(game.stack[-1], "R")
     game.log.append(f"{card.name} copied {copied.card.name} (copy put on the stack)")
-    if context.target_permanent_index is not None:
+    if named_on_the_cast:
         # CR 707.10c: "You may choose new targets for the copy" — and this
         # caster did. A copy that kept the original's targets chose nothing,
         # which is why ``_stack_push`` announces no copy on its own.
@@ -200,6 +221,25 @@ def copy_top_stack_spell(game: Game, instruction: OracleInstruction, context: Or
         # No ``newly_targeted``: this copy was *pushed* with its new target,
         # so ``_stack_push_object`` has already announced it.
         game.announce_targets_chosen(game.stack[-1], chooser=caster_index)
+    elif caster_index in game.interactive_seats and _copy_reaim_is_one_slot(
+        game, game.stack[-1]
+    ):
+        # …and a caster who named none **is asked**. The sentence was offered
+        # only through the cast's own second step, which a client runs for a
+        # permanent picker and cannot run for a player at all — so a Forked
+        # Lightning Bolt aimed at a face could not be re-aimed, by any click
+        # or any request: no prompt was armed. The prompt the trigger's copy
+        # one handler up already uses (and Chain Lightning's), under its
+        # condition: one permanent-or-player target, no mode. Its candidates
+        # are the copied card's own picker's, the original's target among
+        # them — keeping it is the "may" declined.
+        #
+        # Never beside a target named on the cast: that caster has answered,
+        # and a second question would be the same one asked twice. And only
+        # of a seat somebody is asking — the prompt's default for any other
+        # is "keep the original's", which is what the copy already holds, so
+        # an AI's or a headless Fork is left exactly as it was.
+        game.arm_copy_spell_target(caster_index, game.stack[-1])
     return True, "resolved"
 
 
