@@ -329,6 +329,19 @@ def _action_tap(session, req, seat_type):
             permanent_index=permanent_index,
         )
     else:
+        # A payment prompt admits ``tap`` so that a land may be tapped for
+        # mana (``ChoiceSpec.also_answers``, CR 605.3a). A bare tap of
+        # anything else makes no mana and is not part of paying — and a mana
+        # rock tapped this way would be tapped for nothing — so while the
+        # seat owes one, it is refused and the mana ability is what to send.
+        if _owes_a_mana_payment(session.game, req.seat):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "only a land can be tapped for mana here — activate "
+                    "the permanent's mana ability instead"
+                ),
+            )
         tapped = session.game.tap_permanent(
             req.seat,
             permanent.card.name,

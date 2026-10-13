@@ -103,6 +103,12 @@ def test_pay_with_a_sol_ring_untapped_is_refused_then_paid_by_hand():
     assert "only a mana ability" in ping.json()["detail"]
     assert len(game.stack) == 1
 
+    # …and a bare tap of the Ring would tap it for nothing: refused too.
+    bare = _act(sid, action="tap", permanent_name="Sol Ring")
+    assert bare.status_code == 400
+    assert "activate the permanent's mana ability" in bare.json()["detail"]
+    assert not any(permanent.tapped for permanent in me.battlefield)
+
     # The Ring is the payer's own to tap (CR 605.3a), mid-resolution.
     ring = _act(sid, action="activate", permanent_name="Sol Ring")
     assert ring.status_code == 200, ring.text
