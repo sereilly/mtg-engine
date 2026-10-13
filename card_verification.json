@@ -851,9 +851,9 @@
       "updated_at": 1781503124.4112332
     },
     "Fork": {
-      "reason": "One-slot copies now work: the server asks for the copy's target (a creature, a player by the life pill, or the original) and each answer resolved correctly. But Forking a Shower of Coals aimed at two creatures: the copy dealt its 2 to the opponent's face (\"AI took 2 damage\") instead of to the original's two targets (CR 707.10).",
-      "status": "fail",
-      "updated_at": 1791901160.201225
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791904318.7402525
     },
     "Frozen Shade": {
       "reason": "",

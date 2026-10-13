@@ -3,8 +3,8 @@
 Master record of which cards have been manually validated in-game. Generated automatically — edit results via the in-game Debug Menu.
 
 - Total cards: **5246**
-- Passed: **753** (496 checked in-game, 257 auto-passed)
-- Failed: **1**
+- Passed: **754** (497 checked in-game, 257 auto-passed)
+- Failed: **0**
 - Equivalent to a passing card: **59**
 - Untested: **4433**
 
@@ -1653,7 +1653,7 @@ An *auto-pass* is derived, never recorded: the card has no abilities, or nothing
 | Forgotten Lore | ⬜ untested |  |
 | Forgotten Sentinel | ⬜ untested |  |
 | Foriysian Brigade | ⬜ untested |  |
-| Fork | ❌ fail | One-slot copies now work: the server asks for the copy's target (a creature, a player by the life pill, or the original) and each answer resolved correctly. But Forking a Shower of Coals aimed at two creatures: the copy dealt its 2 to the opponent's face ("AI took 2 damage") instead of to the original's two targets (CR 707.10). |
+| Fork | ✅ pass |  |
 | Formation | ⬜ untested |  |
 | Forsaken City | ⬜ untested |  |
 | Forsaken Wastes | ⬜ untested |  |
