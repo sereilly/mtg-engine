@@ -732,7 +732,17 @@ adding entries, not editing dispatch**:
   five handlers did until round 61 — so it is banned outside the seam by
   `tests/engine/test_draw_seam.py`, whose allow-list holds only the pregame
   draws (CR 103.4: no battlefield, so no replacement can exist) and names them
-  with that reason.
+  with that reason. **And draws are made one at a time.** A prompt armed
+  while a seat's draw is being made is stamped with that seat
+  (`replacement_choices.DRAW_OF`), and a later draw for it is parked
+  (`Game.parked_draws`) until the answer — CR 616.1f finishes one event
+  before the next begins. Without it a declined replacement remade its
+  draw, a second replacement asked about that one, and the draw *behind*
+  armed its own offer beside it: 69 of 198 pairs of draw replacements left a
+  multi-card draw with two prompts each refusing the other (Abundance with
+  Pursuit of Knowledge, found by a person playing them). A doubler has one
+  opportunity per event too (CR 614.5), passed down every tail as
+  `exclude_sources`.
 - **Discarding is one seam, and the event says who caused it.**
   `Game._discard_card` raises the CR 614 `discard` event and announces the
   discard; the event carries `cause_seat` (`discard_cause_seat`: the seat
@@ -755,7 +765,9 @@ adding entries, not editing dispatch**:
   `plan_payment` answers the second, exactly (an
   augmenting-path matching of coloured pips to lands, because a greedy pick
   under-reports a board that could pay and CR 601.2h asks what a player is
-  *able* to do). A cost is a symbol dict everywhere — `generic_cost(n)` is the
+  *able* to do), over the lands whose tap would in fact pay
+  (`Game.payment_lands` — five lands answered "can pay" and then failed).
+  A cost is a symbol dict everywhere — `generic_cost(n)` is the
   one line that turns a legacy number into one. **The planner is told who is
   paying** (`plan_payment(..., payer=)`): a seat holding a CR 106.6 spending
   permission (Celestial Dawn, Sunglasses of Urza, False Dawn's turn-long
@@ -800,7 +812,9 @@ adding entries, not editing dispatch**:
   order to choose (CR 401.4): `Game.offer_library_bottom_order` arms the
   `reorder_library` prompt with `position: "bottom"` for an interactive
   seat, for the look-and-pick family and the Apocalypse recruiters alike.
-  Abundance's is the one still not asked; ROADMAP has why.
+  Abundance's is asked too, since a draw now waits for the one in front of
+  it, and what is put on **top** "in any order" is the library owner's as
+  well (`Game.offer_library_top_order` — Lodestone Bauble, Reinforcements).
 - `engine/commander.py` — CR 903, the Commander variant and its Brawl option
   (CR 903.12). Opt-in like `engine/ante.py`: every seam is inert unless
   `Game.commander_variant` is `"commander"` or `"brawl"`, so an ordinary duel is
@@ -1525,7 +1539,14 @@ adding entries, not editing dispatch**:
 - `engine/mixins/` — cross-cutting game flow *not* tied to a single phase:
   turn-structure navigation and priority (`phase_steps`), per-turn/pregame
   management (`turn_management`), state-based actions, effects, helpers.
-  Consumes compiled programs; must never parse oracle text.
+  Consumes compiled programs; must never parse oracle text. **A step does
+  not end on an empty stack alone**: `_resolve_priority_window`, which every
+  step uses, makes the state check the players' passes would make before it
+  closes and goes round again if that put something on the stack (CR 500.2,
+  117.5). It used to drain and return, so whatever the last resolution set
+  off was announced a step late — all ten state triggers that reach the
+  stack, on the headless, the web's and the simulator's paths (Bomb Squad's
+  fourth counter detonated after the draw).
 - `engine/mixins/stack/` — the stack (CR 405), one mixin per stage of an
   object's life on it: `casting` (CR 601), `activation` (CR 602), `resolution`
   (CR 603/608), and `choices` — the `pending_choices` queue every
@@ -1652,17 +1673,36 @@ And **an AI step never advances a human's turn**: `_advance_ai_turn` returns
 unless the active seat is an AI — a human's precombat main phase was being
 walked into combat whenever the AI had acted in its second main phase.
 
+**What a card can do right now is sent, not re-derived by the client**
+(Odyssey). A card in a zone a permission opens carries `ways` — each way it
+may be cast, its price, and whether that is payable now — so a flashback cost
+is on screen before the click, and the client asks "cast how?" when two
+permissions cover one card. A permanent carries `ability_denials`, the
+activation gate's own refusal per ability (a threshold land at six cards),
+and `ability_mana`, each mana ability's symbols and whether a colour is
+chosen: the client asked a filter land which colour it adds until it read
+that instead of the land's colour summary. A payment prompt carries
+`payable`, and **a person's "pay" that cannot be collected is refused with the
+prompt kept, never read as a decline** — a land's tap and a mana ability are
+admitted while a payment is owed (CR 605.3a) and nothing else is. A search
+carries `min_picks` for every search, so "fail to find" is withheld from one
+that must find (CR 701.23d). And **every automatic sender in the client
+re-asks by fetching the state when its in-flight flag clears**: a POST's
+response can be mid-transition at a turn boundary, and a render skipped for a
+flag was never retried, which is how End Turn stalled its own turn in declare
+blockers.
+
 The board UI is **canvas-rendered** (`web/static/battlefield-canvas.js`).
 
 ## Card verification tracker
 
 `CARD_VERIFICATION.md` / `card_verification.json` track which cards have been
-manually validated in-game (680 of the 4,924 catalog cards passing — 433
-checked in-game and 247 auto-passed — with 56 more reported `equivalent`; the
+manually validated in-game (754 of the 5,246 catalog cards passing — 497
+checked in-game and 257 auto-passed — with 59 more reported `equivalent`; the
 rest — almost all of M21, Antiquities, Legends, The Dark, Ice Age, Fallen
 Empires, Homelands, Alliances, Mirage, Visions, Weatherlight, Tempest,
-Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift and
-Apocalypse included, all promoted before their in-game pass —
+Stronghold, Exodus, Urza's Saga and every set since, Invasion, Planeshift,
+Apocalypse and Odyssey included, all promoted before their in-game pass —
 have no
 recorded result yet, which SET_PLAYBOOK.md Phase 5 owns and deliberately does
 not gate promotion on; the summary at the top of the markdown is the current
@@ -1718,6 +1758,22 @@ being skipped whenever the AI acted in its second main phase. A closing round
 fixed all three, and each failing row was re-recorded only after the card was
 watched working — which is the rule in the next paragraph, kept on the first
 occasion it could have been skipped.
+**Odyssey moved it 433 to 497 — more than twice Apocalypse's move — and its
+Phase 5 is the first to need two closers.** One agent played a whole game
+and four lists and recorded 71 cards, six of them **failing**: Abundance and
+Pursuit of Knowledge (two draw replacements locking a multi-card draw),
+Lodestone Bauble (the wrong player drew), Fork (no new target for a copied
+"any target" spell), and two filter lands asked which colour they add. By
+playing rather than by card it found End Turn stalling its own turn in
+declare blockers and "Pay" on a toll being read as a decline. The defects
+were split by where they live: the agent with the browser took the client,
+a second took the engine with a census per item, and the first then drove
+the second's fixes in the app. Fork was recorded failing a **second** time
+on the way — its one-target copies worked and a copy of a several-target
+spell lost its targets, through an arm of the resolution neither closer
+had read — and passing only after a third fix was watched. Every row was
+re-recorded by the agent that had watched it fail, which is the rule in the
+next paragraph kept six times in a day.
 A card can also be recorded **failing**: that
 is an in-game bug report with a card name on it, and it stays in the tracker
 until the card is fixed **and re-checked in the app** — fixing the code does not

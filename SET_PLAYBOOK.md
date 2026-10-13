@@ -410,6 +410,81 @@ where reading costs an afternoon and names a suspect. And **a memo keyed by
 `tests/regressions/test_derived_card_memo_identity.py` holds a guard over
 every module-level dict under `engine/`.
 
+**Odyssey ran seventeen groups in two waves under the same two limits, and
+what it changed is what stands in for the suite between gates.** Each of these
+is a procedure.
+
+*The meeting-point list is not the suite, and two gates in a row said so.*
+Every merge got its meeting-point run and every one was green. The full gates
+behind them then found five reds, and a rehearsal a sixth, each in a file the
+list did not hold: an
+echo test that listed "this turn" among the windows that must refuse (a group
+had made it readable), a trigger-table example for a new condition, two
+validation sweeps naming a card whose hook a group had retired, a census floor
+that fell when a mode moved to a bucket the census had no arm for, and a
+ratchet on a test idiom. None was a defect in the engine. Each was a test
+stating a fact about the pool that a merged branch had legitimately changed -
+and **five of the six were first reported by a later group, from its base, as
+"a red I did not cause"**. Two rules. The list is the changed files, the set's
+own files, the structural guards *and every file a gate has surprised you
+with* - add it the day it does. And ask every group for the reds on its base
+beyond the ones the brief named: that list is the earliest gate there is, and
+it costs nothing. Fix them on the link when the first group reports them, not
+when the gate does.
+
+*Every merge gets the script, never a hand-picked list.* Once, to save ten
+minutes, six files were run by hand instead: a per-set test file went over
+its cap and a census tripped the face-blind guard, and both sat red on the
+link for one merge. Have the script refuse a path that does not exist -
+xdist reports a mistyped one as "no tests ran", exit 5, which reads as green
+in a tail.
+
+*A test that failed once in somebody's batch and passes alone gets read the
+day it is reported.* A wave-2 group saw one pool-wide census fail in a
+fifteen-thousand-test batch and named a suspect: a memoised list of
+instruction objects compared by identity, in a suite where another file
+clears the compile cache. It had not failed in six full runs. Ten lines
+reproduced it - fill the memo, clear the cache, call the test - and the fix
+was in the test. The Apocalypse plugin is for when nobody can name the
+mechanism; when a group can, try the order before the probe.
+
+*Gate on free memory, not on a clock and not on a worker count.* A brief that
+said "stay at `-n 2` until 08:10" was the wrong shape: what its agents were
+waiting for was another run's workers exiting. Twice the integrator's own
+extra run took the machine under a gigabyte free with a gate in its census
+tail, and a process in that state does not fail, it stops making progress - a
+three-minute simulation ran for twenty with a 53 MB working set. Read free
+memory before starting anything beside a gate, and stop your own run when it
+falls under a gigabyte. And **a stopped background task is not a stopped
+process**: the stop kills the tool's shell, and a `bash run.sh` under it
+lives on with its Python child. The integrator stopped a simulation runner,
+edited its script in place and started a second - two runners in one
+worktree racing on one log file, and an hour of output thrown away. Write a
+long loop inline in the command, look for survivors after a stop, and never
+edit a script something may still be reading.
+
+*Verify a report's "what the brief got wrong" before relaying it.* One group
+reported that the catalog sweep "parametrizes over the shipped catalog"; the
+integrator forwarded the correction to three running groups and then read the
+code - the sweep reads both roles and is parametrized by card *name*, so only
+the brief's `-k <CODE>` was wrong. Three corrections of a correction. A
+report is model output about code, and the code is one grep away.
+
+*Resolve a conflict with a script that asserts what it read.* Five merges
+conflicted, in one or two files each, and each was resolved by a replayable
+script - bytes in and out, line endings kept, every conflict region asserted
+to be the one that was read. A re-staged merge re-runs it, and the resolution
+is reviewed as intent ("both import names; both blocks, the link's first")
+rather than as text. The same shape moved test sections and answered the
+rehearsal's inventories.
+
+*A late merge needs no full gate of its own if the promotion's gate is next.*
+The last wave-2 branch arrived while the wave's gate was already running on
+the tree beneath it. It was merged with its meeting-point run, the promotion
+was made on top, and one full suite on the promoted tree covered both - two
+gates in sequence instead of three, with the rehearsals having already shown
+which guards the promotion itself could move.
+
 Fallen Empires added two more, both about *how the conflict is resolved* rather
 than about what conflicted. **A whole-file `--theirs` (or `--ours`) discards the
 hunks that were never in dispute.** Resolving one conflicted file that way would
@@ -2105,20 +2180,29 @@ file. The remaining 64 reads are recorded in `PRIMARY_TYPE_BASELINE` as
 entries deliberately carry no reason, because nobody has yet asked of those
 sites whether they mean the card or the permanent.
 
-**Added at APC's Phase 6: three grammar modules ended the set inside the
-pre-split band, and the suite's CI baseline is nine sets old.** `check_all.py
---caps` read *zero* modules within 30 lines of the cap at Apocalypse's Phase 0,
-so nothing was pre-split, and thirteen groups then crossed the cap exactly
-once, in round (`lowering/types.py`, split by its group into
-`lowering/colors.py`). What they left behind is `lowering/control_flow.py` at
-992, `effects/game.py` at 990 and `effects/library.py` at 979 - each reached
-by three or more of this set's groups, so each is "shared and tight" for the
-next one. **Phase 0 of the next set** pre-splits all three before any brief is
-written (hand the splitter the measurements to make, not a seam). And ROADMAP's
-invariant 2 still carries a CI baseline read at 21,127 tests; the suite is
-past 27,600 and `main` is unpushed. **Phase 0 of the next set** needs the
-branch pushed (its owner's decision, not an agent's) so that `suite wall time`
-can be read off a run, and decides BUDGET on that number.
+**Added at ODY's Phase 6: seven grammar modules end the set inside the
+pre-split band, and the CI budget has a number and no decision.** Apocalypse
+left three modules for this set's Phase 0 and all three were pre-split; the
+splitters then reported, from inside the code, that Odyssey's graveyard work
+would land in three *others*, and a second round split those. Six pre-splits,
+each moving 0 of 5,266 compiled programs, and seventeen groups crossed the
+grammar cap zero times at integration. What they leave: `ast/records.py` at
+989, `lowering/sequences.py` at 981 (owned by no group all set), `pronouns.py`,
+`effects/stack.py` and `effects/search.py` at 962, `effects/damage.py` at 958
+and `condition_counts.py` at 957 - and four per-set test files within 80
+lines of their 2,600 (`test_legends_enchantments.py` at 2,597,
+`test_mir_creatures.py`, `test_legends_instants.py`, `test_mir_instants.py`),
+which a shipped card's fix that wants a test beside its card will cross.
+**Phase 0 of the next set** pre-splits the ones two of its groups will
+reach, and asks the splitters which those are. The CI baseline
+was read at this set's Phase 0, with the branch pushed: the suite step took
+**4,253 s against a BUDGET of 940 s** and the run failed on it. Sixty of
+about 28,600 tests are some 41% of worker time - the pool-wide censuses and
+the AI's whole-game simulations (`test_player_target_census.py` alone is
+about 1,960 worker-seconds). Raising BUDGET, or splitting the job into a
+budgeted fast half and an unbudgeted census half, is the owner's decision and
+was not made during the set; `main` is unpushed again. **Phase 0 of the next
+set** needs that decision before a CI number means anything.
 
 ## Phase 0 — Pre-flight
 
@@ -2136,7 +2220,9 @@ instruments current.
    not fail loudly later — it refuses to parse in a way that looks exactly
    like a grammar gap, and gets debugged as one.
 3. **Read the size-guard headroom before briefing anyone**:
-   `python scripts/check_all.py --caps`. It fails nothing and is not a gate —
+   `python scripts/check_all.py --caps` (it runs every check and takes
+   minutes; `find engine/grammar -name "*.py" | xargs wc -l | sort -rn | head`
+   is the cheap reading between merges). It fails nothing and is not a gate —
    the point is that the *gate* only fires once a module is already over, and
    by then the work that crossed the line is usually two groups' additions
    summed at integration, where the seam has to be found with none of the work
@@ -2145,6 +2231,17 @@ instruments current.
    will breach on arrival: either split it now, while nothing is in flight and
    the family boundary is the only question, or brief the group that owns that
    area to expect the split as part of its round.
+
+   **Count a module's reach in non-merge commits, and ask the splitter where
+   the next set lands.** Apocalypse's Known-gaps entry called three modules
+   "reached by three or more of this set's groups"; `git log --no-merges`
+   showed one or two each - a merge commit touches every file its branch did.
+   The three were pre-split anyway, and each splitter was asked one more
+   question than its brief: which modules will *this* set's families reach?
+   They named three others (the exile, cards and where-X modules, for a set
+   about graveyards), a second round split those, and no grammar cap was
+   crossed at integration all set. The person inside a module knows its
+   neighbours better than a line count does.
 
    **Visions pre-split the tightest *unowned* module and still crossed five
    caps, so read the headroom per module the wave will touch rather than for
@@ -2414,6 +2511,15 @@ is green, the trackers carry its row, and the census is in hand.
    pairs became the group split and each cost one production for two cards.
    Left to Phase 4 they would have been promotion-gate findings instead, after
    the work they could have halved was already done.
+
+   **Run them before believing the supported percentage at all.** Odyssey
+   arrived at 65.4% with its headline keyword dropped on 27 of the cards that
+   number counted: a flashback line beside a line that compiled left the card
+   supported, castable from a hand and never from a graveyard. Nothing
+   refused, so no refusal census named it; `parse_coverage --set` listed all
+   27 on the day of the ingest. A keyword the engine has never heard of is
+   the case where the card census is most wrong, because the keyword line is
+   usually not the card's only line.
 
    **The third is the picker sweep, moved up from Phase 4 for the same reason.**
    `python scripts/picker_sweep.py --set <CODE>` asks of every *supported* card
@@ -3192,6 +3298,35 @@ read. **After the first, rehearse with the guards and not the suite**, as
 often as the tree changes shape - an inventory that asks for a review is
 asking early enough to be answered by somebody still in the code.
 
+**Odyssey rehearsed twice with the guards and promoted by replay.** With two
+cards still unsupported, `tests/engine` whole and four files beside it turned
+eleven red: three naming the two cards, four ratchets, four inventories. The
+inventories were answered that hour, on the link, by a script - and three
+things are worth carrying. *Run the card an inventory names, do not read
+it*: the AI's divided-card inventory wanted three cards reviewed, two added
+nothing, and the third (Shower of Coals, "each of up to three targets") was
+being aimed at one target of its three. *A guard with two asserts shows one
+inventory per run*: the effect-labels guard named five activated abilities,
+and five triggered ones only after those were answered. *A census that
+derives its subjects needs a shape for each place a subject can be printed*:
+the CR 305.7 census had no arm for a setter on a triggered ability, which its
+own docstring named as the case it would miss. At 335 of 335 the second
+rehearsal turned red the four ratchets and nothing of the set's. Then
+**preview the four `--accept`s in a second throwaway tree and read the diffs
+there** (the deletion probe's 24 rows, three of them probed with invented
+variants; fourteen new behaviour classes, each checked to be one printed
+behaviour): the promotion commit was the same commands again, and its
+`parse_coverage --check` output hashed equal to the preview's. **And
+rehearse every directory, not only `tests/engine`.** The full gate on the
+promoted tree still found two reds: pool-wide inventories written as
+equalities in `tests/ai` and `tests/ui`, each meeting an Odyssey card for
+the first time (Predict among the cards that choose a name; Shower of
+Coals among the divided spells that print a bound - where the comment
+beside the list said "the picker needs nothing for" a newcomer, and this
+one had needed an arm). A guard that reads the shipped catalog can live
+anywhere; the rehearsal is `-m "not slow"` over the whole tree, which is
+an hour and not a gate.
+
 **A new layout makes guards blind, not red.** A split card's whole-card
 program is supported and has no instructions, so every guard and instrument
 whose population is "each card, compiled" walks past both halves and reports
@@ -3327,6 +3462,33 @@ review directly shrinks this phase.
    blocking kinds. A hand-kept client list of a server registry is a second
    copy of one fact, and the fix was to send the fact
    (`waiting_on_prompt`) rather than the thirty-seven missing names.
+
+   **Odyssey's Phase 5 ended with two closers, split by where the defects
+   live, and that is the shape to copy when the report is long.** The same
+   brief of four lists came back with 71 cards recorded, six of them
+   failing, and half a dozen defects no card names, found by playing the
+   smoke game to turn 29 and by clicking the lists - two of which lock a
+   human seat (two draw replacements on a multi-card draw; End Turn
+   stalling its own turn in declare blockers). The agent with the browser
+   went back in for the client. A second agent took the engine, with a
+   census per item and no browser, and reported the wire bodies for each
+   fix. The first then pulled the second's branch, made the small client
+   changes those fixes needed, drove every one as a human seat, and
+   re-recorded each failing row only after watching it work. Three things
+   the run taught. *Put the last merge on the list*: the wave's final
+   branch had never been clicked, and its item is where "Pay" on a toll
+   turned out to be read as a decline. *An engine closer's census finds the
+   class the card belonged to*: the Abundance lock was 69 of 198 pairs of
+   draw replacements, the Bauble's wrong drawer was three of four such
+   delayed triggers, and Bomb Squad's late trigger was every state trigger
+   that reaches the stack. *And a fix is not watched until the reporter
+   watches it*: the engine closer's Fork fix passed its own tests and the
+   client closer still recorded Fork failing - a copy of a several-target
+   spell lost its targets, through an arm of the resolution neither had
+   read. A two-line fix and a third drive cleared it. Budget the closers as
+   a second and a third gate: about five agent-hours and two full suites
+   after the promotion, and they are where this set's most serious defects
+   were found.
 
    **For a reprint set this step is the only one that shows what promotion
    bought**, and
@@ -4551,3 +4713,36 @@ a second gate. *Known gaps:* three grammar modules inside the pre-split band
 and a CI baseline nine sets old, both for the next Phase 0. Nothing drained;
 what the set measured and left is one ROADMAP entry with its parts named, and
 CR 608.2b's entry there is rewritten to what is now true.
+
+### ODY — 2026-10-13
+
+*Two waves and seventeen groups under a cap of five agents on a 16 GB
+machine: 65.4% on arrival, the first machinery set since Invasion, 322 of 335
+new.* Flashback was three things the engine already had and had never joined;
+threshold was one condition asked in three places. Wave 1's nine groups
+landed 330 with no hook and retired three; wave 2 took the five declined
+cards in four groups and spent four on the pile (CR 118.9d on alternative
+costs, an AI that never cast from a graveyard, "tapped for mana" as one
+event, the client). `oracle_diff` moved no card a group had not named, on
+any of seventeen merges. Two full gates and a rehearsal found six reds, none
+in the engine, each in a file the meeting-point list did not hold.
+
+*Edits in place:* Integration gains the Odyssey block - the meeting-point
+list grows with every gate's surprises and every group reports the reds on
+its base; the script and never a hand list; a test that failed once is read
+the day it is reported; gate on free memory; verify a correction before
+relaying it; resolve conflicts by asserting scripts; a late merge rides the
+promotion's gate. *Phase 0:* count a module's reach in non-merge commits and
+ask the splitters where the next set lands. *Phase 1:* run the sentence
+instruments before believing the percentage (27 cards "supported" with their
+keyword dropped). *Phase 4:* two rehearsals with the guards, the inventories
+answered ahead by running the cards they name, and the four accepts
+previewed and read in a throwaway tree.
+*Phase 5:* two closers split by where the defects live - the browser's
+agent for the client, a second with a census per item for the engine - and
+the first re-drives the second's fixes before any row is re-recorded.
+*Known gaps:* Apocalypse's entry is drained (six modules pre-split in two
+rounds; the CI baseline read: 4,253 s against a budget of 940) and
+rewritten - seven modules inside the band for the next Phase 0, and the
+budget decision still the owner's. What the set measured and left is one
+ROADMAP entry with its parts named.
