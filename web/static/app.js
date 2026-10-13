@@ -9245,9 +9245,13 @@ function renderSearchLibraryModal(info) {
   // descriptions, each with its label and the cards that answer it. Empty for
   // every other search, and everything below that reads it is then inert.
   const slots = multi && Array.isArray(info.one_of_each) ? info.one_of_each : [];
-  // CR 701.23d: how many the answer must name (0 for "up to" and for a search
+  // CR 701.23d: how many the answer must name (0 for "up to", for a search
+  // with a stated quality — which may fail to find, CR 701.23b — and for one
   // nothing can answer). The engine refuses fewer whole, so the confirm waits.
-  const minPicks = multi && Number.isInteger(info.min_picks) ? info.min_picks : 0;
+  // Sent for every search now, not only a counted one: "search your library
+  // for a card" (Demonic Tutor, Entomb) names no quality, so it must find one,
+  // and its floor of 1 is what takes "Fail to Find" off that modal below.
+  const minPicks = Number.isInteger(info.min_picks) ? info.min_picks : 0;
 
   const title = document.getElementById("searchLibraryTitle");
   if (title) {
