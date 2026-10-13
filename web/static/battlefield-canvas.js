@@ -1655,9 +1655,24 @@ class BattlefieldCanvas {
       // reads the same wherever the card is sitting. The server answers per
       // index and this pile is one face, so any castable commander lights it —
       // clicking opens the reveal panel, where the individual cards glow.
+      //
+      // A graveyard or an exile takes the same light for the same reason: a
+      // flashback card the board can pay for right now is a card the viewer
+      // can cast, and the pile shows only its top card. `castable_now` is the
+      // server's per-entry answer (web/state_view `_zone_cast_options`); the
+      // permission alone — a card the viewer may cast from here but cannot
+      // pay for yet — lights nothing, exactly as an unaffordable card in hand
+      // does not.
       const castableFromPile =
-        pile.kind === "command" &&
-        (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0;
+        (pile.kind === "command" &&
+          (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0) ||
+        ((pile.kind === "graveyard" || pile.kind === "exile") &&
+          (this.currentState?.castable_from_zones || []).some(
+            (entry) =>
+              entry.zone === pile.kind &&
+              (entry.owner_seat ?? this.viewerSeat) === pile.seat &&
+              entry.castable_now === true,
+          ));
       if (castableFromPile) {
         ctx.strokeStyle = "rgba(0, 220, 220, 0.85)";
         ctx.lineWidth = 2 / this.zoom;
@@ -3328,7 +3343,17 @@ class BattlefieldCanvas {
 
     // ---- Color-change label (e.g. Lifelace: "Target ... becomes green.") ----
     const colorCard = creatureCard || card;
-    const colorOverride = colorCard && colorCard.color_override;
+    // One effect's recorded colour (`color_override`), or — where the layers
+    // give the colour and nothing recorded it (Repentant Vampire's threshold
+    // white, Darkest Hour, Shifting Sky) — the server's `color_changed` with
+    // the effective `colors` beside it. A colourless result is drawn as {C}.
+    const changedColors = colorCard && colorCard.color_changed === true
+      ? (Array.isArray(colorCard.colors) && colorCard.colors.length ? colorCard.colors : ["C"])
+      : null;
+    const shownColors = colorCard && colorCard.color_override
+      ? [colorCard.color_override]
+      : changedColors;
+    const colorOverride = shownColors ? shownColors[0] : null;
     if (colorOverride) {
       const COLOR_SWATCH = { W: "#f8f6d8", U: "#3b7fd4", B: "#5a4a5a", R: "#d4452f", G: "#2f9e44", C: "#b8b8b8" };
       // Render "Color:" followed by the actual mana symbol art (not literal "{U}").
@@ -3337,7 +3362,7 @@ class BattlefieldCanvas {
       const symSize = bh - 3;
       ctx.font = `bold ${Math.max(7, bh * 0.62)}px sans-serif`;
       const textW = Math.ceil(ctx.measureText(text + " ").width);
-      const bw = Math.min(w - 4, textW + symSize + 10);
+      const bw = Math.min(w - 4, textW + shownColors.length * (symSize + 1) + 9);
       const bx = x + (w - bw) / 2;
       // Sit below whichever regeneration badges are present, else at the top.
       const by = y + 2 + (hasRegenShield ? 15 : 0) + (cantRegenerate ? 15 : 0);
@@ -3352,18 +3377,20 @@ class BattlefieldCanvas {
       ctx.textAlign = "left";
       ctx.textBaseline = "middle";
       ctx.fillText(text, bx + 5, by + bh / 2);
-      const symX = bx + 5 + textW;
       const symY = by + (bh - symSize) / 2;
-      const symImg = this._loadImage(this._symbolSrc(`{${colorOverride}}`));
-      if (symImg && symImg.complete && symImg.naturalWidth) {
-        ctx.drawImage(symImg, symX, symY, symSize, symSize);
-      } else {
-        // Fallback to a colored dot until the symbol art has loaded.
-        ctx.fillStyle = COLOR_SWATCH[colorOverride] || "#ffffff";
-        ctx.beginPath();
-        ctx.arc(symX + symSize / 2, by + bh / 2, symSize / 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      shownColors.forEach((symbol, position) => {
+        const symX = bx + 5 + textW + position * (symSize + 1);
+        const symImg = this._loadImage(this._symbolSrc(`{${symbol}}`));
+        if (symImg && symImg.complete && symImg.naturalWidth) {
+          ctx.drawImage(symImg, symX, symY, symSize, symSize);
+        } else {
+          // Fallback to a colored dot until the symbol art has loaded.
+          ctx.fillStyle = COLOR_SWATCH[symbol] || "#ffffff";
+          ctx.beginPath();
+          ctx.arc(symX + symSize / 2, by + bh / 2, symSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
     }
 
     // ---- Land-type override label ----

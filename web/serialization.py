@@ -15,6 +15,7 @@ import re
 
 from engine import Game
 from engine.activation_permissions import card_widens_activation
+from engine.activation_restrictions import activation_denial
 from engine.color_changes import spell_color_change
 from engine.divided_damage import DIVIDED_TARGETS, divided_entry
 from engine.enter_effects import chosen_as_entered
@@ -481,6 +482,14 @@ def _serialize_permanent(perm: Permanent, game: Game) -> dict:
         # A color-changing effect (e.g. Lifelace: "Target ... becomes green.")
         # records the new color so the UI can label the recolored permanent.
         "color_override": perm.metadata.get("color_override"),
+        # …and a colour the *layers* give with no such record behind it:
+        # Repentant Vampire's threshold ("is white"), Darkest Hour, Shifting
+        # Sky, Alloy Golem. ``colors`` above already says what the permanent
+        # is; this says that it is not what its card (as copied, CR 707.2)
+        # prints, which is the one thing a player looking at the art cannot
+        # see. ``color_override`` is None for all of these - it is one
+        # effect's own slot - so a client reading it alone signalled nothing.
+        "color_changed": effective_colors != sorted(perm.effective_card.colors),
         # Corpse counters (Scavenging Ghoul) so the canvas can render them. Folded
         # into a generic ``counters`` map so future counter types render for free.
         "corpse_counters": int(perm.metadata.get("corpse_counters", 0)),
@@ -1197,6 +1206,22 @@ def _serialize_player(
                     game.activation_target_spec(seat, idx, ability_index=k)
                     for k in range(len(usable))
                 ]
+            # CR 602.5: why each ability may not be activated right now, by the
+            # index the activate action takes - the engine's own answer
+            # (``activation_denial``, the table the activation path refuses
+            # from), one entry per usable ability and None for one that may.
+            # Nothing said so until a click was refused: Barbarian Ring's
+            # payload was identical at six and at seven cards in the graveyard,
+            # its picker opened either way, and "only if there are seven or
+            # more cards in your graveyard" arrived as the action's error after
+            # a target had been chosen. Present only when some ability is
+            # denied, so every other permanent's payload is what it was.
+            denials = [
+                activation_denial(game, seat, perm, ability.source_line or "")
+                for ability in usable
+            ]
+            if any(denials):
+                perm_dict["ability_denials"] = denials
 
     def _crowned(entries: list, cards) -> list:
         # CR 903.3: mark the designated commander card, wherever its zone

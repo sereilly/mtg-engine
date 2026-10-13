@@ -23,6 +23,7 @@ shows them as one panel.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -1159,11 +1160,84 @@ def _sacrifice(ctx: PromptContext, choices: list) -> dict:
     }
 
 
+_REMINDER_TEXT = re.compile(r"\([^)]*\)")
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+_OFFER_WORD = re.compile(r"\b(?:unless|may)\b", re.IGNORECASE)
+#: "At the beginning of your upkeep, " / "When this creature dies, ": the
+#: trigger a sentence opens with, which is not part of either answer.
+_TRIGGER_OPENING = re.compile(r"^(?:at|when|whenever)\b[^,]*,\s*", re.IGNORECASE)
+
+
+def _offer_source_card(data: dict):
+    """The card an offer or a number was asked by, as its text reads now: the
+    source permanent through ``effective_card`` (CR 612 - a text change is the
+    text), else the resolving spell."""
+    permanent = data.get("_source_permanent") or data.get("permanent")
+    card = getattr(permanent, "effective_card", None)
+    if card is None:
+        card = getattr(data.get("_context"), "card", None)
+    return card
+
+
+def offer_wording(data: dict) -> dict:
+    """What a prompt with no words of its own can say: the printed sentence
+    it was armed by, and for "X unless Y" which half each answer is.
+
+    An offer priced in mana or life says so (``prompt``: "Pay {2}?"). One
+    priced in an *action* said nothing - Blazing Salvo's payload is a card
+    name and four zeroes, and the browser showed "you may apply this optional
+    effect. Do it?" over a choice between 3 damage to a creature and 5 to its
+    controller's face. The engine knows the instructions and not their
+    English; the card does, so the sentence is read off it:
+
+    * ``card_text`` - the one sentence of the source that makes an offer
+      ("…unless…" / "…may…"), or the whole text when that is not exactly one
+      sentence, so nothing is guessed between two offers on one card;
+    * ``accept_text`` / ``decline_text`` - the halves of "X unless Y", which
+      is the form where "yes" is the *second* clause and so the one a bare
+      Yes / No gets backwards. Absent for "you may …", where yes is the
+      sentence.
+
+    A reading of printed text for a label, never a rule: nothing dispatches on
+    it, and the answer is the same index whatever the words say.
+    """
+    card = _offer_source_card(data)
+    text = getattr(card, "oracle_text", "") or ""
+    if not text:
+        return {}
+    sentences = [
+        sentence.strip()
+        for line in text.split("\n")
+        for sentence in _SENTENCE_END.split(_REMINDER_TEXT.sub("", line).strip())
+        if sentence.strip()
+    ]
+    offers = [sentence for sentence in sentences if _OFFER_WORD.search(sentence)]
+    if len(offers) != 1:
+        return {"card_text": text}
+    sentence = offers[0]
+    wording = {"card_text": sentence}
+    head, found, tail = sentence.rstrip(".").partition(" unless ")
+    if found and head and tail:
+        wording["decline_text"] = _TRIGGER_OPENING.sub("", head, count=1)
+        wording["accept_text"] = tail
+    return wording
+
+
 @prompt_renderer("optional_pay")
 def _optional_pay(ctx: PromptContext, choices: list) -> dict:
-    """The colour rods and friends: a seat can owe several at once."""
+    """The colour rods and friends: a seat can owe several at once.
+
+    An offer the engine gave a ``prompt`` (a mana or life price, Tainted
+    Pact's named card) is sent as it is; one it gave none carries the printed
+    sentence instead (:func:`offer_wording`).
+    """
     return {"pending": [
-        {**public_data(choice), "player_index": choice.player_index} for choice in choices
+        {
+            **public_data(choice),
+            "player_index": choice.player_index,
+            **({} if choice.data.get("prompt") else offer_wording(choice.data)),
+        }
+        for choice in choices
     ]}
 
 
@@ -1428,6 +1502,12 @@ def _number_choice(ctx: PromptContext, choices: list) -> dict:
         "maximum": None if printed_high is None else offered_high,
         "options": list(range(low, offered_high + 1)),
         "default": int(data.get("default_number", low)),
+        # What the number is *for*. The payload is a range and a card name,
+        # and "Rites of Initiation: choose a number between 0 and 4" does not
+        # say that the number is how many cards leave the hand at random. The
+        # card says it, so its text rides along (``offer_wording``'s reader of
+        # the source) for the prompt to quote.
+        "card_text": getattr(_offer_source_card(data), "oracle_text", "") or "",
     }
 
 

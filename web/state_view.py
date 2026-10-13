@@ -43,18 +43,19 @@ from dataclasses import dataclass
 
 from engine import Game
 from engine.hand_locks import locked_hand_indices
-from engine.cast_permissions import playable_from_zones
+from engine.cast_permissions import permission_for, playable_from_zones
 from engine.special_actions import (available_permanent_special_actions,
                                     available_special_actions)
 from engine.board_payment import board_can_pay
 from engine.cast_prohibitions import cast_prohibition
 from engine.cast_timing import casts_at_instant_speed
 from engine.classifier import classify_card
-from engine.faces import face_cards
+from engine.faces import castable_faces, face_cards
 from engine.activation_zones import HAND
 from engine.cycling import expand_cycling_line
 from engine.mixins.stack.activation import hand_activation_cost
 from engine.oracle import compile_card_oracle
+from engine.mana_payment import mana_cost_label
 from engine.restricted_mana import ACTIVATE, CAST, PaymentPurpose
 from engine.cost_modifiers import (cost_reduction_for_cast, reduce_cost,
                                    spell_cost_tax, spell_symbol_tax)
@@ -224,6 +225,9 @@ def _card_castable_now(
     *,
     extra_generic: int = 0,
     hand_index: int | None = None,
+    from_zone: str = "hand",
+    zone_index: int | None = None,
+    permission=None,
 ) -> bool:
     """Whether *card* could be cast or played right now — timing, targets and
     mana (the pool plus what untapped lands could add).
@@ -237,6 +241,15 @@ def _card_castable_now(
     ``hand_index`` is which copy, and it matters to one gate: CR 118.9's
     alternative cost may be paid *rather than* the mana cost, and CR 601.2a
     withholds the spell itself from the hand that pays it.
+
+    ``from_zone`` / ``zone_index`` / ``permission`` are a cast out of a
+    graveyard or an exile (:func:`_zone_cast_options`): the zone the targets
+    and the zone-named additional costs are judged from, which slot is leaving
+    it, and the :class:`~engine.cast_permissions.CastPermission` the cast
+    would be made under. The permission is what prices it - CR 118.9b lets it
+    *require* an alternative cost (flashback), and a waiver is one too - so a
+    flashback card is castable now when the board can pay its flashback cost,
+    not when it can pay the cost in its corner.
     """
     game = session.game
 
@@ -249,6 +262,7 @@ def _card_castable_now(
             _card_castable_now(
                 session, player_index, face, window,
                 extra_generic=extra_generic, hand_index=hand_index,
+                from_zone=from_zone, zone_index=zone_index, permission=permission,
             )
             for face in faces
         )
@@ -363,6 +377,7 @@ def _card_castable_now(
         # them, so it glowed on an empty board and the click was then refused.
         if game.no_legal_cast_target_refusal(
             player_index, card, optional_cost_payments=_NO_OFFERS,
+            from_zone=from_zone,
         ) is not None:
             return False
 
@@ -375,11 +390,13 @@ def _card_castable_now(
     # not told), and only the mandatory ones: an offer nobody takes is not a
     # price. An announced X reads as 0 here, as it does for the mana below.
     printed_costs = tuple(
-        cost for cost in additional_costs(card) if cost.from_zone is None
+        cost for cost in additional_costs(card)
+        if cost.from_zone is None or (from_zone != "hand" and cost.from_zone == from_zone)
     )
     if printed_costs and game._unpayable_additional_cost(
         player_index, card, printed_costs,
-        spell_hand_index=hand_index, from_zone="hand", taken=_NO_OFFERS,
+        spell_hand_index=hand_index, from_zone=from_zone, taken=_NO_OFFERS,
+        spell_graveyard_slot=zone_index if from_zone == "graveyard" else None,
     ) is not None:
         return False
 
@@ -387,6 +404,27 @@ def _card_castable_now(
     # allowances on this seat's battlefield add (engine/land_play_allowance.py).
     if card.primary_type == "land" and not window.may_play_land:
         return False
+
+    # CR 118.9b: a permission that prices the cast - flashback's "by paying
+    # [cost] rather than paying its mana cost", or a waiver - replaces the
+    # mana cost below with its own. The part of that cost which is not mana
+    # (Torment's "Flashback-{1}{G}, Pay 3 life") through the gate the cast
+    # path refuses with, and the mana through the one reader that prices an
+    # alternative cost with the taxes and reductions in force (CR 118.9d).
+    priced = permission is not None and (permission.cost is not None or permission.free)
+    if priced and card.primary_type != "land":
+        if permission.cost is not None and game._unpayable_alternative_cost(
+            player_index, card, permission.cost, spell_hand_index=None,
+        ) is not None:
+            return False
+        if not game.enforce_mana_costs:
+            return True
+        owed = game.alternative_cost_mana(
+            player_index, card, permission.cost, extra_generic=extra_generic,
+        )
+        return not any(owed.values()) or board_can_pay(
+            game, player_index, owed, purpose=PaymentPurpose(CAST, card=card),
+        )
 
     # Mana affordability for non-land cards
     if card.primary_type != "land" and game.enforce_mana_costs:
@@ -612,6 +650,116 @@ def _compute_playable_command_indices(session: Session, player_index: int) -> li
             extra_generic=game.commander_tax(player_index, card),
         )
     ]
+
+
+def _zone_cast_price(game, player_index: int, spell, permission) -> str:
+    """The mana a cast of *spell* under *permission* is charged, as symbols.
+
+    What the cast path will ask for, so the number a player reads on the card
+    is the number the payment takes: an alternative cost or a waiver through
+    ``Game.alternative_cost_mana`` (CR 118.9d - the flashback cost with
+    Catalyst Stone's reduction and every tax in force), and the mana cost of
+    an unpriced permission through the three CR 601.2f readers the castable
+    highlight asks. An ``{X}`` is printed as it stands; it is announced later.
+    """
+    if permission.cost is not None or permission.free:
+        printed = (permission.cost.mana if permission.cost is not None else None) or ""
+        if "{X}" in printed:
+            return printed
+        owed = game.alternative_cost_mana(player_index, spell, permission.cost)
+        return mana_cost_label(owed) if any(owed.values()) else ""
+    if "{X}" in (spell.mana_cost or ""):
+        return spell.mana_cost
+    tax, _taxing = spell_cost_tax(game, player_index, spell)
+    pips, _pip_taxing = spell_symbol_tax(game, player_index, spell)
+    reduction, _reducing = cost_reduction_for_cast(game, player_index, spell)
+    owed = reduce_cost(
+        game._parse_mana_cost(
+            spell.mana_cost, x_value=0, extra_generic=tax, extra_pips=pips,
+        ),
+        reduction,
+    )
+    return mana_cost_label(owed) if any(owed.values()) else ""
+
+
+def _zone_cast_options(session: Session, player_index: int) -> list[dict]:
+    """``castable_from_zones`` as a person needs it: for each card a permission
+    opens, **every way** it may be cast, what each is charged, and whether each
+    could be made right now.
+
+    The engine's list (``cast_permissions.playable_from_zones``) answers "is
+    this pile open to you" with the *first* permission that covers the card,
+    which is the whole answer for a card with one. Two things a player has to
+    be shown were not in it:
+
+    * **The second permission.** A flashback card under Yawgmoth's Agenda may
+      be cast for its mana cost under the Agenda or for its flashback cost
+      under its own keyword (CR 601.2b: the caster announces which), and the
+      entry named only the Agenda - so a browser could not flash back Roar of
+      the Wurm for {3}{G} at all. ``ways`` lists both, each with the
+      ``alternative_cost`` flag the cast action takes to choose it
+      (``permission_for``'s ``costed``, asked both ways).
+    * **Whether the cast can be made now.** A permission is not a payment: the
+      emerald glow was on for a Morgue Theft over five Mountains. ``castable_now``
+      is the hand highlight's own question (:func:`_card_castable_now` - timing,
+      targets, mana on the board) asked of this cast at this cast's price, so
+      it is the graveyard's ``playable_hand_indices``.
+
+    ``price`` is read off the engine's pricing for that announcement, never
+    recomputed by the client. The command zone's entries are left as they are:
+    ``playable_command_indices`` already answers for them.
+    """
+    game = session.game
+    entries = playable_from_zones(game, player_index)
+    window = _casting_window(session, player_index)
+    for entry in entries:
+        zone = entry["zone"]
+        if zone == "command":
+            continue
+        pile = getattr(game.players[entry["owner_seat"]], zone)
+        if not 0 <= entry["index"] < len(pile):
+            continue
+        card = pile[entry["index"]]
+        as_land = card.primary_type == "land"
+        ways: list[dict] = []
+        for costed in (False, True):
+            found = next(
+                (
+                    (spell, permission)
+                    for spell in castable_faces(card)
+                    if (permission := permission_for(
+                        game, player_index, card, zone,
+                        as_land=as_land, spell=spell, costed=costed,
+                    )) is not None
+                    and permission.zone_seat == entry["owner_seat"]
+                ),
+                None,
+            )
+            if found is None:
+                continue
+            spell, permission = found
+            cost = permission.cost
+            ways.append({
+                # What the cast action carries to pick this permission when
+                # both kinds cover the card (``alternative_cost: true``).
+                "alternative_cost": cost is not None,
+                "source": permission.source_name,
+                "keyword": cost.keyword if cost is not None else None,
+                "free": bool(permission.free),
+                "land": as_land,
+                "price": "" if as_land else _zone_cast_price(game, player_index, spell, permission),
+                # The cost as a sentence, for one that is not only mana.
+                "cost": cost.describe() if cost is not None else None,
+                "castable_now": window is not None and _card_castable_now(
+                    session, player_index, card, window,
+                    from_zone=zone,
+                    zone_index=entry["index"] if entry["owner_seat"] == player_index else None,
+                    permission=permission,
+                ),
+            })
+        entry["ways"] = ways
+        entry["castable_now"] = any(way["castable_now"] for way in ways)
+    return entries
 
 
 def parse_optional_cost_payments(raw: str | None) -> dict[str, int] | None:
@@ -931,8 +1079,11 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
         # CR 601.3 permissions: what the viewer may currently cast or play from
         # their graveyard or exile (engine/cast_permissions.py). Empty for a
         # spectator — a permission belongs to a seat.
+        # Each entry also says every way the card may be cast, what each way
+        # is charged and whether it could be made right now
+        # (:func:`_zone_cast_options`).
         "castable_from_zones": (
-            playable_from_zones(session.game, viewer_seat)
+            _zone_cast_options(session, viewer_seat)
             if viewer_seat is not None
             else []
         ),
