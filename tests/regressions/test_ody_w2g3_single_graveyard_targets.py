@@ -414,6 +414,39 @@ def test_with_the_announcement_gate_off_only_offered_cards_are_exiled(pool, monk
 
 
 # ---------------------------------------------------------------------------
+# The AI names its slots
+# ---------------------------------------------------------------------------
+
+def test_an_ai_seat_names_an_opponents_cards_for_the_activation(pool):
+    """An activation that names none is the legal "up to" announcement and
+    exiles nothing, so a seat that names nothing pays {2}{B} and a tap for no
+    effect. The chooser names the maximum out of one opponent's pile, and
+    proposes nothing when no opponent has a card to take."""
+    from engine.ai_policy import choose_activation_action
+
+    game = _duel(pool, battlefield=["Carrion Beetles"])
+    game.interactive_seats = set()
+
+    action = choose_activation_action(game, 0)
+
+    assert action is not None and action.permanent_name == "Carrion Beetles"
+    assert (action.target_player_index, action.target_permanent_index) == (1, [0, 1, 2])
+    assert game.activate_permanent_ability(
+        0, action.permanent_name,
+        target_player_index=action.target_player_index,
+        target_permanent_index=action.target_permanent_index,
+    ).supported
+    resolve_stack(game)
+    assert _names(game.players[1].exile) == ["Swamp", "Hill Giant", "Terror"]
+    assert game.players[0].exile == []
+
+    # Only its own pile holds a card: nothing worth the mana.
+    alone = _duel(pool, battlefield=["Carrion Beetles"], theirs=())
+    alone.interactive_seats = set()
+    assert choose_activation_action(alone, 0) is None
+
+
+# ---------------------------------------------------------------------------
 # What is left: the same words under a trigger
 # ---------------------------------------------------------------------------
 
