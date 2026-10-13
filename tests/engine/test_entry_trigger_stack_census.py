@@ -95,24 +95,47 @@ def _pool() -> dict:
     return cards
 
 
+def _entry_triggers_of(card) -> tuple:
+    """*card*'s supported entry triggers, off its program as compiled **now**."""
+    if card.primary_type in ("instant", "sorcery"):
+        return ()
+    program = compile_card_oracle(card)
+    if not program.supported:
+        return ()
+    return tuple(
+        trig for trig in program.triggered_abilities
+        if trig.condition.kind in _ENTRY_CONDITIONS
+        and trig.supported and trig.instruction is not None
+    )
+
+
 @lru_cache(maxsize=1)
+def _entry_trigger_card_list() -> tuple:
+    """Every supported permanent printing an entry trigger - the **cards**,
+    which is all that may be kept across tests."""
+    return tuple(sorted(
+        (card for card in _pool().values() if _entry_triggers_of(card)),
+        key=lambda card: card.name,
+    ))
+
+
 def _entry_trigger_cards() -> tuple:
-    """``(card, entry triggers)`` for every supported permanent printing one."""
-    rows = []
-    for card in _pool().values():
-        if card.primary_type in ("instant", "sorcery"):
-            continue
-        program = compile_card_oracle(card)
-        if not program.supported:
-            continue
-        triggers = tuple(
-            trig for trig in program.triggered_abilities
-            if trig.condition.kind in _ENTRY_CONDITIONS
-            and trig.supported and trig.instruction is not None
-        )
-        if triggers:
-            rows.append((card, triggers))
-    return tuple(sorted(rows, key=lambda row: row[0].name))
+    """``(card, entry triggers)`` for every supported permanent printing one.
+
+    The triggers are read off the compile cache as it is at the call, and
+    never remembered: the census below tells "this instruction ran" and "this
+    instruction is on the stack" by **identity**, and
+    ``test_no_hollow_support.py`` clears ``_compile_card_oracle``'s cache. A
+    list memoised before that clear holds instruction objects no later entry
+    will ever hand the engine, so in a worker that ran the two files in that
+    order every trigger read as neither inline nor stacked - a test that
+    failed once in a fifteen-thousand-test batch and passed alone (Odyssey,
+    wave 2). Which cards qualify does not change with the cache, and is what
+    stays memoised.
+    """
+    return tuple(
+        (card, _entry_triggers_of(card)) for card in _entry_trigger_card_list()
+    )
 
 
 def _table(card) -> tuple[Game, list]:
