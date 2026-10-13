@@ -457,10 +457,13 @@ def test_a_blast_names_the_spell_it_would_counter(catalog_by_name):
 # --- The executors -----------------------------------------------------------------
 
 #: `CastAction` fields that are not part of the announcement: which card and
-#: where it is (the executor's `spell_being_cast` reads them), the score, and
-#: the payment plan (`tap_planned_lands`).
+#: where it is (the executor's `spell_being_cast` reads them, off the pile
+#: `zone_being_cast_from` finds — whose pile is `zone_seat`, which the cast
+#: path works out for itself from the permission), the score, and the payment
+#: plan (`tap_planned_lands`).
 _NOT_ANNOUNCED = {
     "card_name", "hand_index", "score", "land_tap_indices", "land_tap_colors",
+    "zone_seat",
 }
 
 
@@ -486,9 +489,16 @@ def test_every_announcement_a_cast_action_carries_reaches_the_cast():
 
 
 def test_the_executors_all_make_the_whole_announcement():
-    """The simulator and the web layer's four cast sites call the engine with
-    ``**cast_announcement(...)`` and spell out no target of their own — a
-    keyword written at one site is a keyword missing from another."""
+    """The simulator's two sites (its cast and its land drop) and the web
+    layer's four call the engine with ``**cast_announcement(...)`` and spell
+    out no target of their own — a keyword written at one site is a keyword
+    missing from another.
+
+    The land drop was the one exception ("a special action, no announcement")
+    until a land could be played from somewhere other than the hand: the zone
+    is part of what a land play says (CR 305.1 under a CR 601.3 permission),
+    and spelled at that one site it would have been the keyword this test
+    exists to stop."""
     root = Path(__file__).resolve().parents[2]
     found = 0
     for relative in ("engine/ai_simulator.py", "web/game_flow.py"):
@@ -504,8 +514,6 @@ def test_the_executors_all_make_the_whole_announcement():
             splatted = [
                 keyword.value for keyword in node.keywords if keyword.arg is None
             ]
-            if spelled == {"target_player_index"} and not splatted:
-                continue  # a land drop: a special action, no announcement
             found += 1
             assert not spelled, (relative, node.lineno, sorted(spelled))
             assert len(splatted) == 1 and isinstance(splatted[0], ast.Call), (
@@ -514,7 +522,7 @@ def test_the_executors_all_make_the_whole_announcement():
             assert getattr(splatted[0].func, "id", None) == "cast_announcement", (
                 relative, node.lineno,
             )
-    assert found == 5, f"expected the five AI cast sites, found {found}"
+    assert found == 6, f"expected the six AI cast sites, found {found}"
 
 
 def test_the_simulator_casts_the_chosen_mode_and_counts_it(catalog_by_name):

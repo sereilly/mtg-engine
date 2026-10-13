@@ -1498,6 +1498,200 @@ def castable_commanders(game, player_index: int):
     )
 
 
+@dataclass(frozen=True)
+class PermittedCast:
+    """One cast a seat may make because an **effect** allows it (CR 601.3):
+    a card outside its hand it may cast or play, or a card in its hand it may
+    cast without paying its mana cost.
+
+    What the policy needs to build a candidate that the cast path will accept,
+    and none of it is derivable from the card alone:
+
+    * **where the card is** — ``zone``, ``owner_seat`` and ``index``. The pile
+      is the grantee's own on every grant but the cross-seat one (Grinning
+      Totem leaves the card in the *searched* player's exile pile);
+    * **what it is cast as** — ``spell``, the half for a split card (CR 709.3)
+      and ``held`` itself otherwise;
+    * **what the cast is charged** — ``permission``: its required alternative
+      cost (CR 118.9b; flashback, CR 702.34a), its waiver, or neither;
+    * **the announcement that selects that permission** — ``alternative_cost``,
+      CR 601.2b's choice, in the cast path's own spelling. A card may be
+      covered twice (a flashback card under Yawgmoth's Will) and those are two
+      casts at two prices.
+    """
+
+    zone: str
+    owner_seat: int
+    index: int
+    held: CardDefinition
+    spell: CardDefinition
+    permission: object
+    alternative_cost: bool = False
+
+    @property
+    def cost(self):
+        """The alternative cost the permission requires, or None."""
+        return getattr(self.permission, "cost", None)
+
+    @property
+    def waives_mana_cost(self) -> bool:
+        """Whether the cast is made "without paying its mana cost".
+
+        A grant's ``free`` flag — and **every** permission over the hand,
+        which is the cast path's own reading (``cast_permissions.permission_for``
+        answers the hand zone for cost waivers alone, and ``_cast_onto_stack``
+        takes whatever it answers as one)."""
+        return self.cost is None and (
+            bool(getattr(self.permission, "free", False)) or self.zone == "hand"
+        )
+
+    @property
+    def expires(self) -> bool:
+        """Whether the permission has a stated duration (CR 611.2a) — "until
+        end of turn", "until your next turn" — as opposed to lasting for as
+        long as the card stays where it is (flashback, a static ability of a
+        permanent)."""
+        return getattr(self.permission, "duration", None) is not None
+
+
+def permitted_casts(game, player_index: int) -> "tuple[PermittedCast, ...]":
+    """Every cast *player_index* may make from **outside its hand** right now
+    (CR 601.3), one entry per spell and per price.
+
+    The list is the engine's: ``cast_permissions.playable_from_zones``, the
+    one the browser's zone badges are built from, so an AI seat is offered
+    exactly the cards a human seat is. The command zone is left to
+    :func:`castable_commanders` — CR 903.8 is a rule rather than a permission,
+    and it carries a tax where these carry a price.
+
+    **Which permission a cast will be made under is the cast path's answer,
+    mirrored rather than re-decided.** ``_cast_onto_stack`` finds a card *by
+    name*, in the caster's own pile first and then the others', and takes the
+    first permission that covers it — the first that *requires an alternative
+    cost* when the caster announced one (CR 601.2b, ``permission_for``'s
+    ``costed``). So for each spell name in each zone:
+
+    * the **bare** cast is the first covered copy in that scan order, under the
+      first permission that answers for it — and a later copy is not offered
+      again, because the cast could not reach it;
+    * where that permission asks no alternative cost and another one does (a
+      flashback card under Yawgmoth's Will, an opened graveyard), the cast
+      **announcing an alternative cost** is offered beside it.
+
+    Lands are included (``mode="play"``): the land-drop chooser reads them.
+    """
+    from .cast_permissions import permission_for, playable_from_zones
+    from .faces import castable_faces
+
+    found: list[PermittedCast] = []
+    bare_seen: set[tuple[str, str]] = set()
+    costed_seen: set[tuple[str, str]] = set()
+    for entry in playable_from_zones(game, player_index):
+        zone = entry["zone"]
+        if zone == "command":
+            continue
+        owner = entry["owner_seat"]
+        index = entry["index"]
+        pile = getattr(game.players[owner], zone)
+        if not 0 <= index < len(pile):
+            continue
+        held = pile[index]
+        as_land = held.primary_type == "land"
+        for spell in castable_faces(held):
+            key = (zone, spell.name)
+            first = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+            )
+            if first is None or first.zone_seat != owner:
+                continue
+            if key not in bare_seen:
+                bare_seen.add(key)
+                found.append(PermittedCast(
+                    zone=zone, owner_seat=owner, index=index, held=held,
+                    spell=spell, permission=first,
+                    alternative_cost=first.cost is not None,
+                ))
+                if first.cost is not None:
+                    costed_seen.add(key)
+            if key in costed_seen:
+                continue
+            costed = permission_for(
+                game, player_index, held, zone, as_land=as_land, spell=spell,
+                costed=True,
+            )
+            if costed is None or costed.zone_seat != owner:
+                continue
+            costed_seen.add(key)
+            found.append(PermittedCast(
+                zone=zone, owner_seat=owner, index=index, held=held,
+                spell=spell, permission=costed, alternative_cost=True,
+            ))
+    return tuple(found)
+
+
+def hand_waiver(
+    game, player_index: int, held: CardDefinition, spell: CardDefinition,
+    hand_index: int,
+) -> "PermittedCast | None":
+    """The waiver a cast of *spell* out of *player_index*'s hand will be made
+    under ("Any player may cast creature spells with mana value 3 or less
+    without paying their mana costs", Aluren; "you may cast spells from your
+    hand without paying their mana costs", Chandra, Flame's Catalyst), or None.
+
+    The cast path's own default, mirrored: a cast that announces nothing takes
+    a hand waiver whenever one covers the card, **except for an {X} spell** —
+    a waived {X} is locked to 0 (CR 107.3b), so that one defaults to paying.
+    Never a land, which is played rather than cast.
+    """
+    from .cast_permissions import permission_for
+
+    if spell.primary_type == "land" or "{X}" in (spell.mana_cost or "").upper():
+        return None
+    permission = permission_for(game, player_index, held, "hand", spell=spell)
+    if permission is None:
+        return None
+    return PermittedCast(
+        zone="hand", owner_seat=player_index, index=hand_index, held=held,
+        spell=spell, permission=permission,
+    )
+
+
+#: The permission the cast being weighed would be made under (CR 601.3), as a
+#: :class:`PermittedCast` -- or None, which is every ordinary cast from hand.
+#:
+#: The zone's twin of :data:`_MODE_CONSIDERED`, a context variable for its
+#: reason: *where a spell is cast from* and *what that cast is charged* are
+#: asked by a dozen choosers underneath the candidate builder -- the spec (a
+#: spell leaving a graveyard is not a card in it, CR 601.2a), the prohibitions
+#: (a row may bind one zone), the price, the X -- and each took a card. Held
+#: with the spell, by identity, so a question about another card asked while
+#: this one is weighed is answered for a cast from hand.
+_CAST_WEIGHED: ContextVar["PermittedCast | None"] = ContextVar(
+    "ai_cast_weighed", default=None
+)
+
+
+@contextmanager
+def casting_under(permitted: "PermittedCast | None"):
+    """Weigh a cast as made under *permitted* for the length of the block.
+    None is an ordinary cast from hand, which reads what every reader read
+    before a seat could cast from anywhere else."""
+    token = _CAST_WEIGHED.set(permitted)
+    try:
+        yield
+    finally:
+        _CAST_WEIGHED.reset(token)
+
+
+def cast_weighed(card: CardDefinition) -> "PermittedCast | None":
+    """The permission *card* is being weighed under (:func:`casting_under`),
+    or None."""
+    held = _CAST_WEIGHED.get()
+    if held is None or held.spell is not card:
+        return None
+    return held
+
+
 def entry_sacrifice_is_unavoidable(game, seat: int, card: CardDefinition) -> bool:
     """Whether *card*, entering under *seat* now, would be sacrificed by its own
     entry trigger because the price to keep it cannot be met.
@@ -2722,6 +2916,57 @@ def chosen_name_own_zone(card: CardDefinition, instruction) -> str | None:
     return None
 
 
+#: The steps that read a chosen name against a card off the top of **the
+#: targeted player's** library: "Choose a card name, then target player mills
+#: a card. If a card with the chosen name was milled this way…" (Predict;
+#: Foreshadow says "target opponent"). Whose library that is, is settled by
+#: the announcement, so this is half an answer and the game supplies the rest.
+_TARGET_LIBRARY_NAME_READERS = frozenset({"mill_target_player"})
+
+
+def chosen_name_is_read_off_the_targets_library(card: CardDefinition, instruction) -> bool:
+    """Whether *instruction*'s "choose a card name" is looked for among cards
+    milled from **the target player's** library — so that, when that player is
+    the chooser, the name worth choosing is one of the chooser's own cards.
+
+    :func:`chosen_name_own_zone`'s question one seat over, and read the same
+    way: the steps behind the choice in the sequence that holds it, found by
+    identity. A player built their own deck, so what their own library still
+    holds is theirs to work out (CR 401.2 hides only *which card is where*) —
+    and an **opponent's** library is a hidden zone outright (CR 400.2), which
+    is why the answer for a milled opponent stays what it was: that seat's
+    graveyard, the public evidence of what its deck holds.
+    """
+    program = compile_card_oracle(card)
+
+    def search(step) -> bool:
+        if step is None:
+            return False
+        payload = getattr(step, "payload", None) or {}
+        for key in ("steps", "then", "else", "action", "otherwise"):
+            nested = payload.get(key)
+            if not isinstance(nested, (list, tuple)):
+                continue
+            for position, inner in enumerate(nested):
+                if inner is instruction:
+                    return any(
+                        later.kind in _TARGET_LIBRARY_NAME_READERS
+                        for later in nested[position + 1:]
+                    )
+                if search(inner):
+                    return True
+        return False
+
+    return any(
+        search(root)
+        for root in (
+            *program.instructions,
+            *(ability.instruction for ability in program.activated_abilities),
+            *(ability.instruction for ability in program.triggered_abilities),
+        )
+    )
+
+
 # --- CR 601.2b: the optional additional costs a cast may take ---------------
 #
 # What an offer *buys*, as the four things an optional cost in this pool can
@@ -2824,6 +3069,83 @@ def cast_offers(card: CardDefinition) -> tuple[CastOffer, ...]:
     return tuple(offers)
 
 
+#: Instruction kinds that take a **targeted card out of a graveyard and out of
+#: the game** — "Exile target card from a graveyard." (Coffin Purge, Cremate,
+#: Headstone; Crypt Creeper's, Steamclaw's and Scavenging Ooze's abilities.)
+#: Spelled out and held to registered handlers by
+#: ``tests/ai/test_ai_graveyard_denial.py``, for :data:`MANA_ABILITY_KINDS`'
+#: reason: a kind renamed out from under a set like this stops matching in
+#: silence.
+#:
+#: Denial, and so wanted from an **opponent's** pile: a card in a graveyard is
+#: a resource for the seat that owns it (a flashback cast, a reanimation
+#: target, a card toward threshold), and removing the caster's own is the
+#: effect spent on itself. A kind that *returns* the card it names — to a
+#: hand, to the battlefield — is not here: its printed phrase is almost always
+#: "from your graveyard", and where it is not, either pile is a gain.
+GRAVEYARD_DENIAL_KINDS = frozenset({"exile_target_graveyard_card"})
+
+
+def exiles_a_graveyard_target(instructions) -> bool:
+    """Whether a step of *instructions* (wrappers opened) is one of
+    :data:`GRAVEYARD_DENIAL_KINDS` — the question the cast and activation
+    choosers ask before naming whose graveyard a card is exiled from."""
+    def walk(steps) -> bool:
+        for step in steps or ():
+            if getattr(step, "kind", None) in GRAVEYARD_DENIAL_KINDS:
+                return True
+            payload = getattr(step, "payload", None) or {}
+            for key in ("steps", "then", "else", "action", "otherwise", "effect"):
+                nested = payload.get(key)
+                if isinstance(nested, (list, tuple)) and walk(nested):
+                    return True
+        return False
+
+    return walk(instructions)
+
+
+def denied_graveyard_pile(player_index: int, piles) -> "int | None":
+    """Which of *piles* (seats, in the order offered) a seat takes cards **out
+    of the game** from: the first that is not its own, and its own only when
+    there is no other. None for no pile at all.
+
+    "Exile up to three target cards from **a single graveyard**" (Decompose,
+    Rapid Decay, Ebony Charm; Carrion Beetles' and Famished Ghoul's abilities)
+    leaves the pile to the chooser, and the default took the first in seat
+    order — so the seat in chair 0 exiled its own graveyard and the seat in
+    chair 1 its opponent's, the same card played two ways by where a player
+    sat. See :data:`GRAVEYARD_DENIAL_KINDS` for why the opponent's.
+    """
+    piles = list(piles or ())
+    if not piles:
+        return None
+    return next((seat for seat in piles if seat != player_index), piles[0])
+
+
+def graveyard_denial_order(game, owner_seat: int, slots) -> list:
+    """*slots* — positions in *owner_seat*'s graveyard a seat may exile — with
+    the cards their owner could still **cast from there** first, each group
+    in pile order.
+
+    A card with flashback (CR 702.34a; printed, or granted by Recoup) is a
+    spell its owner still holds; any other card in a graveyard is, to a seat
+    removing "up to three", one card among equals. Asked of
+    ``flashback.has_flashback`` with the game and the pile's seat, which is
+    what sees a grant. A stable sort, so a pile holding none is exiled in the
+    order it always was — and a seed that met none replays as it did.
+    """
+    from .flashback import has_flashback
+
+    pile = game.players[owner_seat].graveyard
+    return sorted(
+        slots,
+        key=lambda slot: 0 if (
+            isinstance(slot, int) and 0 <= slot < len(pile)
+            and has_flashback(pile[slot], game=game, owner_seat=owner_seat)
+        ) else 1,
+    )
+
+
 def _walk_program(program):
     """Every instruction on a program, wrappers opened."""
     def walk(instructions):
@@ -2844,6 +3166,7 @@ def _walk_program(program):
 
 
 __all__ = [
+    "GRAVEYARD_DENIAL_KINDS",
     "MANA_ABILITY_KINDS",
     "SELF_PAYMENT_KINDS",
     "SOURCE_HAMPER_KINDS",
@@ -2854,14 +3177,19 @@ __all__ = [
     "DividedShape",
     "ManaYield",
     "OfferTrade",
+    "PermittedCast",
     "TollLoss",
     "ability_target_side",
     "cards_drawn_by_controller",
     "cards_drawn_by_target",
+    "cast_weighed",
     "caster_sacrifice_steps",
     "castable_commanders",
+    "casting_under",
     "chosen_creature_type_side",
+    "chosen_name_is_read_off_the_targets_library",
     "counters_a_spell",
+    "denied_graveyard_pile",
     "denies_its_target",
     "destroyed_permanent_filter",
     "divided_shape",
@@ -2869,13 +3197,17 @@ __all__ = [
     "mana_ability_amount",
     "exiled_search_pile_comes_back",
     "exiled_search_pile_comes_back_one_at_a_time",
+    "exiles_a_graveyard_target",
     "foreign_activation_use",
+    "graveyard_denial_order",
     "hand_entry_steps",
+    "hand_waiver",
     "harms_its_own_source",
     "hand_pick_entry_consumer",
     "instruction_target_side",
     "offer_trade",
     "offered_action_is_a_payment",
+    "permitted_casts",
     "pick_is_tested_for_a_shared_color",
     "planned_mana_yield",
     "returns_creature_to_hand",

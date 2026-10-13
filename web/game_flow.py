@@ -24,6 +24,7 @@ from engine.ai_policy import (
     choose_combat_instant_cast_action,
     spell_being_cast,
     tap_planned_lands,
+    zone_being_cast_from,
 )
 
 from .prompts import auto_resolve_ai_prompts
@@ -134,13 +135,11 @@ def _ai_step(session: Session) -> bool:
     )
     cast_action = choose_cast_action(game, seat) if sorcery_speed_ok else None
     if cast_action is not None:
-        # `hand_index` indexes the zone `from_zone` names — the command zone
-        # for a commander cast (CR 903.8), the hand for everything else.
-        cast_zone = (
-            game.players[seat].command_zone
-            if cast_action.from_zone == "command"
-            else game.players[seat].hand
-        )
+        # `hand_index` indexes the zone `from_zone` names — the hand, the
+        # command zone for a commander cast (CR 903.8), or a graveyard, an
+        # exile or a library an effect has opened (CR 601.3: a flashback card)
+        # — through the one reader the simulator's executor shares.
+        cast_zone = zone_being_cast_from(game, seat, cast_action)
         # The spell the policy chose, which for a split card is one half of
         # the zone's card (CR 709.3) — see `ai_policy.spell_being_cast`.
         card_to_cast = spell_being_cast(cast_zone, cast_action)
@@ -236,7 +235,11 @@ def _ai_respond_to_priority(session: Session, seat: int) -> str | None:
 
     instant_action = choose_combat_instant_cast_action(game, seat)
     if instant_action is not None:
-        card_to_cast = spell_being_cast(game.players[seat].hand, instant_action)
+        # Out of the zone the action names (`zone_being_cast_from`): the hand,
+        # or a graveyard holding a flashback instant.
+        card_to_cast = spell_being_cast(
+            zone_being_cast_from(game, seat, instant_action), instant_action,
+        )
         tap_planned_lands(game, seat, instant_action)
         # The whole announcement (`cast_announcement`, as in `_ai_step`): the
         # chosen permanent — a spell whose handler has no board scan (Sivvi's
@@ -497,7 +500,10 @@ def _advance_phase(session: Session) -> None:
                     )
                     if instant_action is not None:
                         card_to_cast = spell_being_cast(
-                            game.players[defender_index].hand, instant_action
+                            zone_being_cast_from(
+                                game, defender_index, instant_action
+                            ),
+                            instant_action,
                         )
                         tap_planned_lands(game, defender_index, instant_action)
                         game.cast_from_hand(

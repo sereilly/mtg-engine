@@ -6956,8 +6956,19 @@ class PendingChoicesMixin:
         order is seed-deterministic, which is what AI and headless play need. A
         seat that should pick cleverly needs a weight in
         ``engine/ai_valuation.py``, not a branch here.
+
+        One such weight, for another seat's pile: the cards their owner could
+        still cast from there go first (``ai_valuation.graveyard_denial_order``
+        — a flashback card is a spell that seat still holds). A pile with none
+        is taken in pile order exactly as before, and the seat's own pile is
+        never reordered.
         """
         live = self.live_graveyard_exile_candidates(choice)
+        owner_index = int(choice.data["owner_index"])
+        if owner_index != choice.player_index:
+            from ...ai_valuation import graveyard_denial_order
+
+            live = graveyard_denial_order(self, owner_index, live)
         wanted = self._how_many_graveyard_cards(choice)
         if not self._resolve_graveyard_exile_pick(choice, live[:wanted]):
             self._record_graveyard_exile(choice, [])
@@ -7402,15 +7413,24 @@ class PendingChoicesMixin:
         return True
 
     def _default_graveyard_pile_choice(self, choice: PendingChoice) -> None:
-        """The stated policy: the **first** live pile, in seat order.
+        """The stated policy: the first live pile **that is not the chooser's
+        own**, in seat order — and its own only when no other is live.
 
-        Not a valuation — seat order is seed-deterministic, which is what AI and
-        headless play need, and ``_default_player_choice`` states the same rule
-        for the same reason. A seat that should choose cleverly needs a weight
-        in ``engine/ai_valuation.py``, not a branch here.
+        This prompt is armed by one sentence, "exile … from a single
+        graveyard", and exiling is denial. The policy was "the first live pile
+        in seat order", stated as "not a valuation" — and it was one all the
+        same, a different one per chair: the seat at index 0 exiled its own
+        graveyard and the seat at index 1 its opponent's, over the same board
+        (Decompose, Rapid Decay, Ebony Charm, Carrion Beetles, Famished
+        Ghoul). Which pile a seat denies is
+        ``ai_valuation.denied_graveyard_pile``; still seat order within it,
+        so it is as seed-deterministic as it was.
         """
+        from ...ai_valuation import denied_graveyard_pile
+
         live = self.live_graveyard_pile_choices(choice)
-        if not live or not self._resolve_graveyard_pile_choice(choice, live[0]):
+        seat = denied_graveyard_pile(choice.player_index, live)
+        if seat is None or not self._resolve_graveyard_pile_choice(choice, seat):
             context = choice.data.get("_context")
             if context is not None:
                 context.results[EXILED_THIS_WAY_OBJECTS] = []
