@@ -1346,16 +1346,18 @@ def test_w1g6_traveling_plague_grows_at_every_upkeep_and_shrinks_its_host(set_po
 
 def _w1g6_plague_kills_its_host(set_pool, **board):
     game, plague, giant = _w1g6_plague(set_pool, **board)
-    for seat in (0, 1, 0):
+    for seat in (0, 1):
         game.start_turn(seat)
         _w1g6_resolve_stack(game)
-    game.check_state_based_actions()
-    # The Giant is dead at three counters, the Aura followed it (CR 704.5m),
-    # and the return is on the stack.
+    # The third counter is lethal, and everything it sets off belongs to the
+    # upkeep that placed it (CR 500.2, CR 117.5): the Giant dies at the check
+    # the players' passes make, the Aura follows it (CR 704.5m), and the
+    # return resolves in that same step — held on the stack where it has a
+    # seat to ask. It used to wait for a state check made by hand after the
+    # turn had moved on to its draw.
+    game.start_turn(0)
     assert "Hill Giant" in _w1g6_pile(game.players[1])
     assert _w1g6_pile(game.players[0]) == ["Traveling Plague"]
-    assert [item.card.name for item in game.stack] == ["Traveling Plague"]
-    game.resolve_top_of_stack()
     return game  # _w1g6_plague_kills_its_host
 
 

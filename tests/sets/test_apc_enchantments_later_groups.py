@@ -250,7 +250,8 @@ def test_ice_cave_lets_another_player_pay_the_spells_mana_cost_to_counter_it(
 
 
 def test_ice_caves_price_includes_color(set_pool, catalog_by_name):
-    """Two Islands cannot pay {R}: saying yes buys nothing, taps nothing, and
+    """Two Islands cannot pay {R}: saying yes is refused (CR 118.3, CR
+    608.2d) — it buys nothing and taps nothing — and with the offer declined
     the Bolt resolves."""
     game, (p0, p1) = _w1g7_enchantment_game(interactive=(0, 1))
     _w1g7_enchantment_put(game, 0, set_pool("APC")["Ice Cave"])
@@ -259,7 +260,9 @@ def test_ice_caves_price_includes_color(set_pool, catalog_by_name):
     _w1g7_cast_for_free(game, 1, "Lightning Bolt", target_player_index=0)
     game.resolve_top_of_stack(pause_for_choices=True)
 
-    assert game.confirm_optional_pay(0, accept=True) is True
+    assert game.confirm_optional_pay(0, accept=True) is False
+    assert [land.tapped for land in islands] == [False, False]
+    assert game.confirm_optional_pay(0, accept=False) is True
     game.enforce_mana_costs = False
     _w1g7_resolve_stack(game)
 

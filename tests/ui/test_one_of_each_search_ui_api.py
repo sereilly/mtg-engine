@@ -196,7 +196,10 @@ def test_a_search_of_ones_own_library_names_no_other_owner():
     prompt = _state(sid, 0)["search_library"]
 
     assert prompt["zone_seat"] == 0 and prompt["zone_owner_name"] == "Host"
-    assert "one_of_each" not in prompt and "min_picks" not in prompt
+    assert "one_of_each" not in prompt
+    # The floor rides every search now (CR 701.23d): this one is for "a card",
+    # names no quality, and must find one while the library holds any.
+    assert prompt["min_picks"] == (1 if game.players[0].library else 0)
 
 
 def test_the_label_is_assembled_from_the_keys_the_predicate_honours():

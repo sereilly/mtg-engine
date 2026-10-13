@@ -1002,8 +1002,13 @@ def test_evasive_action_prices_the_toll_at_one_per_basic_land_type(
     owed = game.pending_mana_payment
     assert owed is not None and owed["player_index"] == 1 and owed["amount"] == 3
     assert "Evasive Action: B must pay {3} or Lightning Bolt is countered" in game.log
-    # Two Mountains cannot make three mana: saying yes is still a counter.
-    assert game.confirm_mana_payment(1, True) is True
+    # Two Mountains cannot make three mana, so "pay" is not an answer this
+    # seat can give (CR 118.3, CR 608.2d): it is refused and the question
+    # stands. It used to be carried out as the other answer — which a person
+    # holding a mana rock the engine does not tap for them had not given.
+    assert game.confirm_mana_payment(1, True) is False
+    assert game.pending_mana_payment is not None
+    assert game.confirm_mana_payment(1, False) is True
     _w1g7_resolve_stack(game)
 
     assert p0.life == 20

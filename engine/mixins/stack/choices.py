@@ -46,7 +46,7 @@ from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
                                 spec_for)
-from ...replacement_choices import pending_choices_for
+from ...replacement_choices import pending_choices_for, stamp_draw_of
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
@@ -59,7 +59,8 @@ from ...oracle_types import KEEP_FATES, RETURN_CHOSEN_TO_HAND
 # Which cards a chosen discard took (Gerrard's Verdict); its own line for the
 # reason the one above has one.
 from ...oracle_types import DISCARDED_THIS_WAY
-from ...search_filters import (landing_seat, search_matches, search_slots,
+from ...search_filters import (landing_seat, search_matches,
+                               search_names_a_quality, search_slots,
                                searched_seat, slot_assignment)
 from ...handlers.zones import FORGOTTEN_PICKS
 from ...oracle_types import OracleInstruction
@@ -194,6 +195,11 @@ class PendingChoicesMixin:
         # queue, so appending here is what stops the loop and nothing sets a
         # flag. Nothing is waiting on a default taken inline above — that already
         # happened.
+        #
+        # A prompt a *draw* armed says so (CR 121.2): the draws behind that one
+        # wait for it, whichever queue it sits on — see
+        # ``EffectsMixin._draw_prompt_open``.
+        stamp_draw_of(self, choice)
         self.pending_choices.append(choice)
         return choice
 
@@ -356,7 +362,12 @@ class PendingChoicesMixin:
         if item is not None:
             self.resolving_stack_item = item
         try:
-            answered = apply()
+            # A prompt a draw armed is answered inside that draw (CR 121.2):
+            # the draws parked behind it are released here, with the object
+            # they belong to still resolving, so a prompt one of *them* arms
+            # holds the same object. Inert for every other prompt.
+            with self.answering_draw_prompt(choice):
+                answered = apply()
         finally:
             self.resolving_stack_item = previous
         if item is not None:
@@ -1096,18 +1107,28 @@ class PendingChoicesMixin:
 
         Three conditions, each a different sentence. A printed "up to" or "any
         number of" is a ceiling and no floor at all. A search naming **one** card
-        is left alone deliberately: the single-find flow's decline is the
-        engine's one escape from a prompt nothing can answer, and closing it
-        would strand a seat wherever the picker and the resolver read a
-        restriction even slightly differently. And what is left is bounded by
-        what is actually there — CR 701.23d's "or as many as possible", which is
-        what keeps an empty library from being a refusal.
+        *with a stated quality* is left alone deliberately: the single-find
+        flow's decline is the engine's one escape from a prompt nothing can
+        answer, and closing it would strand a seat wherever the picker and the
+        resolver read a restriction even slightly differently — and CR 701.23b
+        lets that search fail anyway. And what is left is bounded by what is
+        actually there — CR 701.23d's "or as many as possible", which is what
+        keeps an empty library from being a refusal.
+
+        **A search for "a card" names no quality and has a floor of one.** It
+        was caught by the single-find exemption, so Demonic Tutor and Entomb
+        offered "fail to find" and took it — the search CR 701.23d names by
+        its own example. No restriction means nothing for the picker and the
+        resolver to read differently, so the reason for the exemption does
+        not reach it (``search_filters.search_names_a_quality``).
         """
         if choice.data.get("up_to"):
             return 0
         slots = len(self._search_destination_slots(choice.data))
         if slots < 2:
-            return 0
+            if search_names_a_quality(choice.data):
+                return 0
+            return min(1, self._search_findable_count(choice))
         return min(slots, self._search_findable_count(choice))
 
     def _search_findable_count(self, choice: PendingChoice) -> int:
@@ -1453,6 +1474,14 @@ class PendingChoicesMixin:
             return
         found = choose_search_card(self, choice.player_index, choice.data)
         if found is None or not self._resolve_search_library(choice, found[1], found[0]):
+            # A search that must find (CR 701.23d: "a card", with no quality
+            # stated) is not one a policy may decline, so before the decline
+            # the fallback is the resolver's own first findable card — the
+            # arrangement the counted branch above already has.
+            if self._search_floor(choice) > 0:
+                for zone, index, _card in self._search_findable_entries(choice):
+                    if self._resolve_search_library(choice, index, zone):
+                        return
             self._resolve_search_library(choice, -1, "none", enforce_floor=False)
 
     # -- Look at the top N, keep one, bottom the rest (See the Truth) ---------
@@ -2397,6 +2426,40 @@ class PendingChoicesMixin:
         )
         return True
 
+    def offer_library_top_order(
+        self, owner, count: int, *, chooser_index: int | None = None
+    ) -> bool:
+        """Ask for the order of the *count* cards an effect has just put on
+        **top** of *owner*'s library. True when a seat was asked.
+
+        :meth:`offer_library_bottom_order`'s twin for the library's other end,
+        and CR 401.4 is the same sentence for both: "If an effect puts two or
+        more cards in a specific position in a library at the same time, the
+        **owner** of those cards may arrange them in any order." The caller
+        lays the cards down first; the order is then the ordinary
+        ``reorder_library`` prompt over the top *count* — the look-and-put-back
+        prompt, with no shuffle on offer.
+
+        The owner, not the spell's controller, which is the half the order
+        "the targets were named in" could not carry: Lodestone Bauble puts
+        cards from *a player's* graveyard on top of *their* library, and the
+        player who named them is not the player whose draws they decide.
+
+        Only an interactive seat is asked, for the bottom twin's reason: "as
+        they lay" needs no prompt, so a headless or AI seat queues nothing and
+        a seeded run reads as it did.
+        """
+        seat = self.seat_index(owner)
+        count = min(int(count), len(self.players[seat].library))
+        chooser = seat if chooser_index is None else chooser_index
+        if count < 2 or chooser not in self.interactive_seats:
+            return False
+        self.arm_pending_choice(
+            "reorder_library", chooser,
+            target_index=seat, top_count=count, may_shuffle=False,
+        )
+        return True
+
     def _resolve_reorder_library(self, choice: PendingChoice, new_order: list, shuffle: bool) -> bool:
         target = self.players[choice.data["target_index"]]
         top_count = choice.data["top_count"]
@@ -2649,9 +2712,19 @@ class PendingChoicesMixin:
         # CR 121.2 makes "draw three cards" three individual draws; a
         # replacement takes one of them and the rest have to wait for the
         # answer, because they are later steps of the same instruction.
+        # They are draws of the same event as the one the prompt replaced, so
+        # what that event had already been through stays excluded (CR 614.5:
+        # the doubler that made them does not double them again) — and the
+        # seam parks them while the draw above is waiting on another
+        # replacement's offer.
         queued = int(choice.data.get("queued_draws", 0) or 0)
         if queued > 0:
-            self._draw_with_replacements(player, queued)
+            self._draw_with_replacements(
+                player, queued,
+                exclude_sources=tuple(
+                    choice.data.get("queued_exclude_sources") or ()
+                ),
+            )
 
     # -- An opponent picks out of a revealed pile (Thran Tome) ---------------
 
@@ -3789,7 +3862,7 @@ class PendingChoicesMixin:
         plan = (
             plan_payment(
                 player.mana_pool,
-                untapped_mana_lands(self.controlled_by(seat)),
+                self.payment_lands(seat),
                 generic_cost(value),
                 produces=self._land_payment_colors, payer=player,
             )
@@ -3801,7 +3874,7 @@ class PendingChoicesMixin:
             player,
             lambda: plan_payment(
                 player.mana_pool,
-                untapped_mana_lands(self.controlled_by(seat)),
+                self.payment_lands(seat),
                 generic_cost(value),
                 produces=self._land_payment_colors, payer=player,
             ),
@@ -5105,7 +5178,7 @@ class PendingChoicesMixin:
         could afford and lost the spell.
         """
         return plan_payment(
-            player.mana_pool, untapped_mana_lands(self.controlled_by(player)), cost,
+            player.mana_pool, self.payment_lands(player), cost,
             produces=self._land_payment_colors, payer=player,
         )
 
@@ -5194,7 +5267,47 @@ class PendingChoicesMixin:
                 return cost, plan
         return None
 
-    def _resolve_mana_payment(self, choice: PendingChoice, pay: bool) -> bool:
+    def seat_answers_for_itself(self, player_index: int) -> bool:
+        """Whether *player_index* is a seat somebody is asking (a person at the
+        table), as against one the engine answers for.
+
+        The line "pay" is read across. A seat the engine answers for that
+        cannot pay has declined — there is nobody to tell and nothing else it
+        would have done. A person who says "pay" and cannot be paid for has
+        **not** said "don't": CR 608.2d lets a player choose only an option
+        that is possible, and CR 118.3 makes a cost they cannot pay fully one
+        they cannot pay, so the answer is not one and the question stands —
+        for them to tap what they like (CR 605.3a; activating a mana ability
+        is theirs to decide, CR 118.3c) and answer again, or to decline.
+        """
+        return player_index in self.interactive_seats
+
+    def mana_payment_is_payable(self, choice: PendingChoice) -> bool:
+        """Whether "pay" would be accepted for this counter-unless price right
+        now: the pool, plus the lands the payer the engine plans for would tap.
+
+        One reader for the prompt's ``payable`` and for the refusal below, so
+        what a client is shown before the click and what the click is told
+        cannot be two answers.
+        """
+        return self._counter_payment_plan_any(
+            self.players[choice.player_index], choice.data
+        ) is not None
+
+    def _resolve_mana_payment(
+        self, choice: PendingChoice, pay: bool, *, asked: bool = False,
+    ) -> bool:
+        """Pay the price or have the object countered.
+
+        *asked* is whether this is a seat's own answer (the registered
+        ``resolve``) rather than the default taken for it. With it, a person's
+        "pay" that cannot be collected is **refused** and the prompt stays
+        owed — it used to be read as a decline: Mana Leak on a human's
+        Lightning Bolt with an Island, a filter land and a Sol Ring untapped,
+        "Pay", and the Bolt was countered with nothing tapped and no word
+        said, because the planner taps free land abilities only. See
+        :meth:`seat_answers_for_itself`.
+        """
         controller = self.players[choice.player_index]
         data = choice.data
         cost = self._mana_payment_cost(data)
@@ -5207,6 +5320,9 @@ class PendingChoicesMixin:
         # plan names both halves, and paying from one without the other would
         # let the same land answer two costs.
         chosen = self._counter_payment_plan_any(controller, data) if pay else None
+        held = bool(pay) and asked and self.seat_answers_for_itself(choice.player_index)
+        if held and chosen is None:
+            return False
         cost, plan = chosen if chosen is not None else (cost, None)
         if plan is not None:
             # The planned lands are tapped **for mana** (CR 605.3a), through
@@ -5220,6 +5336,12 @@ class PendingChoicesMixin:
                 controller,
                 lambda: self._counter_payment_plan(controller, paid_cost),
             ):
+                if held:
+                    # Part-way: a land the plan counted made nothing it could
+                    # spend. What was tapped stays tapped and its mana stays
+                    # in the pool, as for any player who tapped and came up
+                    # short — and the question is still theirs to answer.
+                    return False
                 plan = None
         if plan is not None:
             # "…and 1 life" (Mundungu). Charged after the mana and before the
@@ -8122,6 +8244,38 @@ class PendingChoicesMixin:
 
     # -- Optional "you may pay {N}" ------------------------------------------
 
+    def payment_lands(self, seat) -> list:
+        """The lands a cost an effect collects may be planned over: *seat*'s
+        untapped mana lands **whose tap would pay**.
+
+        ``mana_payment.untapped_mana_lands`` is the pure half — a land, not
+        tapped, with a free mana ability. Whether tapping it puts mana in the
+        pool that this payment can spend is the game's to answer, and two
+        readers already answer it for the AI's cast plan: the tap seam's own
+        gate (``land_mana_tap_refusal`` — a summoning-sick land creature, a
+        land under Interdict) and ``ai_policy._land_mana_is_unplannable``
+        (mana that may be spent only on something else, CR 106.6; an amount or
+        a colour the board decides and decides at nothing). A plan that
+        counted such a land said "can pay", tapped it, and failed part-way —
+        twelve cases in the tap census — which every payer then had to
+        survive: the counterspell countered, the upkeep logged "paid".
+
+        One reader for every payment with no priority window behind it — the
+        optional offer, counter-unless, pay-any-amount, the upkeep prices,
+        the attack and block tolls, the special actions — so "can pay" and
+        "pay it" are asked of one list. A land left out is not lost to a
+        person: it is mana beyond the plan (:meth:`mana_beyond_the_plan`),
+        theirs to tap before they answer.
+        """
+        from ...ai_policy import _land_mana_is_unplannable
+
+        return [
+            land
+            for land in untapped_mana_lands(self.controlled_by(seat))
+            if self.land_mana_tap_refusal(land) is None
+            and not _land_mana_is_unplannable(self, land)
+        ]
+
     def _optional_pay_plan(self, player, entry: dict, option: int | None = None):
         """How *player* would pay this entry's cost, or None if they cannot.
 
@@ -8141,7 +8295,7 @@ class PendingChoicesMixin:
         # where each way of covering the offer buys something different
         # (Winter's Chill), the payer is *choosing* rather than finding the
         # first they can afford, so only the option they chose may be planned.
-        lands = untapped_mana_lands(self.controlled_by(player))
+        lands = self.payment_lands(player)
         options = optional_pay_options(entry)
         if option is not None:
             options = options[option:option + 1]
@@ -8289,6 +8443,60 @@ class PendingChoicesMixin:
         alternative = int(entry.get("life_alternative", 0) or 0)
         return bool(alternative) and player.life >= alternative
 
+    def mana_beyond_the_plan(self, seat) -> bool:
+        """Whether *seat* controls an untapped source of mana the payment
+        planner does not tap for it.
+
+        The planner taps a land's free mana ability and nothing else
+        (``mana_payment.untapped_mana_lands``): a Sol Ring, a Mox, a Llanowar
+        Elves, a filter land's "{1}, {T}: Add {U}{B}" and a storage land are
+        all the player's own to activate (CR 605.3a), and all are mana a plan
+        over this board says is not there. So "the plan cannot pay" is "this
+        seat cannot pay" only where this answers no.
+
+        Read off what the permanent makes (CR 106.1, through the layers) and
+        not off why the planner left it out — the planner's reasons are a list
+        that grows, and the question here is only whether anything is left.
+        """
+        mine = list(self.controlled_by(seat))
+        planned = self.payment_lands(seat)
+        return any(
+            not perm.tapped
+            and perm.effective_produced_mana
+            and not any(perm is land for land in planned)
+            for perm in mine
+        )
+
+    def payment_may_be_offered(self, player, entry: dict) -> bool:
+        """Whether an offer priced in mana is put to *player* at all.
+
+        ``_player_can_pay_optional`` for every seat the engine answers for: a
+        price its plan cannot collect is a price that seat does not pay, so
+        the offer is not made and the "if they don't" follows at once.
+
+        **A person is asked whenever they might pay by their own hand.** The
+        same gate used to stand in front of them, so "sacrifice it unless you
+        pay {2}" with a Sol Ring untapped sacrificed it without a word: the
+        plan taps free land abilities only, said "cannot pay", and the offer
+        was never armed. CR 118.12a makes "unless" a choice the player has,
+        and CR 605.3a lets them activate mana abilities to make it. What they
+        are shown says whether "pay" would be accepted as the board stands
+        (``payable``), and an answer it would not be is refused rather than
+        read as a decline (:meth:`seat_answers_for_itself`).
+
+        Still not made where nothing they control could change the answer —
+        no mana source beyond the plan, or a life half they cannot cover
+        (CR 119.4) — so a person is not asked a question with one answer.
+        """
+        if self._player_can_pay_optional(player, entry):
+            return True
+        seat = self.seat_index(player)
+        if not entry.get("cost") or not self.seat_answers_for_itself(seat):
+            return False
+        if player.life < int(entry.get("life_cost", 0) or 0):
+            return False
+        return self.mana_beyond_the_plan(seat)
+
     def graded_pay_options(self, entry: dict) -> list[dict] | None:
         """The costs a **graded** offer asks the payer to choose between, or None.
 
@@ -8338,38 +8546,50 @@ class PendingChoicesMixin:
 
     def _pay_optional(
         self, player_index: int, entry: dict, option: int | None = None,
-    ) -> None:
-        """Collect the entry's mana cost from its player and run what accepting
-        buys. A cost that turns out to be unpayable buys nothing.
+    ) -> bool:
+        """Collect the entry's price from its player and run what accepting
+        buys; True when it was paid. A price that turns out to be unpayable
+        buys nothing, and the caller is told so — an "unless they pay" that
+        was not paid has its other half to carry out (CR 118.12a).
 
         *option* is which of a graded offer's costs the payer chose; None
         everywhere else, and on a graded offer means "take the stated policy".
         """
+        paid, option = self._collect_optional_price(player_index, entry, option)
+        if paid:
+            self._run_optional_purchase(player_index, entry, option)
+        return paid
+
+    def _collect_optional_price(
+        self, player_index: int, entry: dict, option: int | None = None,
+    ) -> "tuple[bool, int | None]":
+        """Charge the whole price of an optional offer, or none of it.
+
+        ``(paid, option)`` — the option a graded offer was paid with comes
+        back because the purchase reads it. Separate from the purchase so a
+        caller can learn that the price was *not* paid before anything it
+        buys has run, and before the prompt that asked is given up: a
+        person's "pay" that cannot be collected leaves the question standing
+        (:meth:`seat_answers_for_itself`).
+
+        The mana is collected **before** any life is charged. A plan can fail
+        part-way — a land it counted makes nothing this payment can spend —
+        and a payer charged the life first would have paid it for nothing
+        (CR 601.2h: no partial payment).
+        """
         player = self.players[player_index]
         # A free optional "you may draw a card" rider (Verduran Enchantress): no
-        # cost to pay, just draw on accept.
+        # cost to pay; the draw is what accepting buys.
         if entry.get("draw"):
-            drawn = self._draw_with_replacements(player, int(entry["draw"]))
-            self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
-            return
+            return True, option
         # "That player may pay 10 life." (Bronze Tablet.) A life cost rather
-        # than a mana one, and the two never appear together — a cost of one
-        # kind is not payable out of the other.
+        # than a mana one — or both, "You may pay {4} **and** 2 life."
+        # (Purgatory): both halves or neither, and CR 601.2h is asked of the
+        # whole price as the board stands now, which can have changed since
+        # the offer was made.
         life_cost = int(entry.get("life_cost", 0) or 0)
-        if life_cost:
-            if player.life < life_cost:
-                return
-            # "You may pay {4} **and** 2 life." (Purgatory.) Both halves or
-            # neither: the mana is planned *before* the life is spent, because
-            # a payer charged the life and then unable to cover the mana would
-            # have paid for nothing — CR 601.2h is asked of the whole price,
-            # and the board can have changed since the offer was made.
-            if entry.get("cost") and self._optional_pay_plan(player, entry) is None:
-                return
-            player.life -= life_cost
-            self.log.append(
-                f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
-            )
+        if life_cost and player.life < life_cost:
+            return False, option
         if not life_cost or entry.get("cost"):
             # A graded offer is paid with the option that was chosen and with no
             # other: falling back through the alternatives would charge a cost
@@ -8378,9 +8598,11 @@ class PendingChoicesMixin:
             if self.graded_pay_options(entry) is not None:
                 option = self._graded_option_taken(player, entry, option)
                 if option is None:
-                    return
+                    return False, None
             plan = self._optional_pay_plan(player, entry, option=option)
             if plan is None:
+                if life_cost:
+                    return False, option
                 # CR 118.8's alternative ("…pays {1} **or 1 life**", Erosion).
                 # A *stated policy* rather than a second prompt: the mana is
                 # spent whenever the board can cover it, and the life only when
@@ -8390,7 +8612,7 @@ class PendingChoicesMixin:
                 # total for the alternatives that have no other currency.
                 alternative = int(entry.get("life_alternative", 0) or 0)
                 if not alternative or player.life < alternative:
-                    return
+                    return False, option
                 player.life -= alternative
                 self.log.append(
                     f"{player.name} paid {alternative} life "
@@ -8400,8 +8622,24 @@ class PendingChoicesMixin:
                 player,
                 lambda: self._optional_pay_plan(player, entry, option=option),
             ):
-                # Could not be met after all (CR 601.2h): it buys nothing.
-                return
+                # Could not be met after all (CR 601.2h): nothing is bought.
+                return False, option
+        if life_cost:
+            player.life -= life_cost
+            self.log.append(
+                f"{player.name} paid {life_cost} life ({entry.get('card_name', '')})"
+            )
+        return True, option
+
+    def _run_optional_purchase(
+        self, player_index: int, entry: dict, option: int | None = None,
+    ) -> None:
+        """What a paid optional offer buys (the price is already collected)."""
+        player = self.players[player_index]
+        if entry.get("draw"):
+            drawn = self._draw_with_replacements(player, int(entry["draw"]))
+            self.log.append(f"{player.name} drew {drawn} card(s) from {entry['card_name']}")
+            return
         # A grammar-lowered "may" carries its consequence as instructions rather
         # than as one of the three fixed fields above, so any effect can sit
         # behind an optional cost.
@@ -9351,14 +9589,30 @@ class PendingChoicesMixin:
         if choice is None:
             return False
         return self._answer_pending_choice(
-            choice, lambda: self._resolve_optional_pay(choice, accept, option)
+            choice,
+            lambda: self._resolve_optional_pay(choice, accept, option, asked=True),
         )
 
     def _resolve_optional_pay(
         self, choice: PendingChoice, accept: bool, option: int | None = None,
+        *, asked: bool = False,
     ) -> bool:
+        """Apply one answer to an optional offer.
+
+        *asked* is whether this is a seat's own answer (the registered
+        ``resolve``) rather than a default taken for it. With it, a person's
+        "yes" to a price that cannot be collected — up front, or part-way
+        through the plan — is **refused** and the offer stands; it used to be
+        carried out as a "no", so "Pay" on an "unless you pay" took the
+        penalty. See :meth:`seat_answers_for_itself`.
+        """
         player_index = choice.player_index
         entry = choice.data
+        held = bool(accept) and asked and self.seat_answers_for_itself(player_index)
+        if held and not self._player_can_pay_optional(
+            self.players[player_index], entry
+        ):
+            return False
         # CR 601.2b: a player chooses among the options they are **able** to
         # take. A named option they cannot cover is not an answer, so the prompt
         # stands rather than being consumed — the alternative is an answer that
@@ -9375,14 +9629,27 @@ class PendingChoicesMixin:
             ) is None
         ):
             return False
-        self.discard_pending_choice(choice)
         if (
             accept
             and self._player_can_pay_optional(self.players[player_index], entry)
             and self._optional_action_still_takeable(player_index, entry)
         ):
-            self._pay_optional(player_index, entry, option)
+            # The price first, with the prompt still owed: a plan can fail
+            # part-way (a land it counted made nothing the payment can
+            # spend), and then nothing was bought. A person is told so and
+            # asked again; for any other seat the price was not paid, which
+            # for an "unless" is the other half (CR 118.12a) — it used to be
+            # neither, and a toll failed that way was simply forgiven.
+            paid, option = self._collect_optional_price(player_index, entry, option)
+            if not paid and held:
+                return False
+            self.discard_pending_choice(choice)
+            if paid:
+                self._run_optional_purchase(player_index, entry, option)
+            else:
+                self._apply_optional_pay_decline(player_index, entry)
         else:
+            self.discard_pending_choice(choice)
             self._apply_optional_pay_decline(player_index, entry)
         # The trigger ability that raised this prompt was held on the stack (human
         # priority path). Whether it now leaves is `_release_stack_item`'s answer,
@@ -9559,7 +9826,7 @@ class PendingChoicesMixin:
                     optional_pay_may_tap_lands(self, choice.player_index, entry)
                 )
             return may_tap[0] and plan_payment(
-                player.mana_pool, untapped_mana_lands(self.controlled_by(player)),
+                player.mana_pool, self.payment_lands(player),
                 cost, produces=self._land_payment_colors, payer=player,
             ) is not None
 
@@ -9675,11 +9942,17 @@ class PendingChoicesMixin:
                     "(the penalty is the smaller loss)"
                 )
         self.discard_pending_choice(choice)
+        penalised = int(entry.get("damage", 0) or 0) > 0 or bool(entry.get("_on_decline"))
         if floating is not None and self._optional_action_still_takeable(
             choice.player_index, entry
         ):
-            self._pay_optional(choice.player_index, entry, option)
-        elif int(entry.get("damage", 0) or 0) > 0 or entry.get("_on_decline"):
+            # A price the policy meant to pay and the board then could not
+            # collect (a planned land that made nothing spendable) was not
+            # paid — so an "unless" carries out its other half (CR 118.12a)
+            # instead of being forgiven.
+            if not self._pay_optional(choice.player_index, entry, option) and penalised:
+                self._apply_optional_pay_decline(choice.player_index, entry)
+        elif penalised:
             # A decline is an *answer*, and an answer with a consequence has to
             # have it applied. This read the legacy damage field alone, so a
             # grammar-lowered "if you don't, …" branch was dropped for every
@@ -10976,7 +11249,7 @@ register_choice(
 register_choice(
     "optional_pay",
     resolve=lambda game, choice, r: game._resolve_optional_pay(
-        choice, r["accept"], r.get("option"),
+        choice, r["accept"], r.get("option"), asked=True,
     ),
     default=lambda game, choice: game._default_optional_pay(choice),
     action="resolve_optional_pay",
@@ -10985,6 +11258,13 @@ register_choice(
     # action, on a trigger or on a whole spell (Twiddle, Rebirth), so the
     # message names the offer rather than the one card it was written for.
     blocked_detail="answer the optional-cost offer before other actions",
+    # An offer priced in mana is paid by tapping for it, and the engine taps
+    # only free land abilities on a payer's behalf — so the seat's own mana
+    # abilities answer the offer as much as the yes does (CR 605.3a), exactly
+    # as they do for ``mana_payment`` below. The web layer admits a *mana*
+    # ability and nothing else while one of these is owed
+    # (``web/actions.py``): nobody has priority in the middle of a resolution.
+    also_answers=("tap", "activate"),
 )
 
 register_choice(
@@ -11291,7 +11571,9 @@ register_choice(
 
 register_choice(
     "mana_payment",
-    resolve=lambda game, choice, r: game._resolve_mana_payment(choice, r["pay"]),
+    resolve=lambda game, choice, r: game._resolve_mana_payment(
+        choice, r["pay"], asked=True,
+    ),
     default=lambda game, choice: game._default_mana_payment(choice),
     action="confirm_mana_payment",
     prompt_key="mana_payment",

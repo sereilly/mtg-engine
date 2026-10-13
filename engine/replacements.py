@@ -3365,6 +3365,41 @@ def _battlefield_instead_of_graveyard(game, payload: dict) -> ReplacementOutcome
     return ReplacementOutcome(replaced=True)
 
 
+#: The key a suspended draw's prompt carries for **the draws queued behind
+#: it**: the sources those draws are already excluded from (CR 614.5).
+#:
+#: Not the prompt's own ``exclude_sources``. That one is about the draw the
+#: prompt was asked of and includes the asker (a declined Pursuit of
+#: Knowledge is not offered the same draw twice); the draws *behind* are
+#: later draws of the same event, which the asker has not seen and whatever
+#: modified the whole event has (the doubler that made them).
+QUEUED_EXCLUDES = "queued_exclude_sources"
+
+
+def queued_excludes(payload: dict) -> tuple:
+    """What the draws behind the first of *payload*'s are excluded from: what
+    the event itself has been excluded from so far, and nothing the
+    replacement taking that first draw adds for it."""
+    return tuple(payload.get("exclude_sources") or ())
+
+
+def draws_behind(game, player, count: int, excludes=()) -> int:
+    """Make the draws queued behind one a replacement took (CR 121.2).
+
+    One spelling for every tail that makes them, because what they carry is
+    the same wherever they are made from: they are draws of the *same event*
+    as the one in front, so the replacements that event has already been
+    through stay excluded (CR 614.5) — and through the seam, which parks
+    them while the draw in front is still waiting on its player
+    (``Game._draw_prompt_open``).
+    """
+    if count <= 0:
+        return 0
+    return game._draw_with_replacements(
+        player, int(count), exclude_sources=tuple(excludes)
+    )
+
+
 def _doubled_draw_count(game, payload: dict) -> int:
     """How many cards this draw event should take, once the doublers have had
     it — the same number back when none apply.
@@ -3385,13 +3420,28 @@ def _doubled_draw_count(game, payload: dict) -> int:
     """
     count = int(payload.get("count", 0))
     exempt = 1 if payload.get("turn_based") else 0
-    doublers = sum(
-        1
-        for perm in game.controlled_by(payload["player"])
-        if DOUBLE_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
-    )
     affected = max(0, count - exempt)
-    return exempt + affected * (2 ** doublers)
+    return exempt + affected * (2 ** len(_draw_doublers(game, payload)))
+
+
+def _draw_doublers(game, payload: dict) -> list:
+    """The doublers that have not had this event yet (CR 614.5).
+
+    "A replacement effect … gets only one opportunity to affect an event **or
+    any modified events resulting from that event**." The two draws a doubler
+    makes of one are that event modified, so it is excluded from them by the
+    key every other draw replacement here reads — and the exclusion has to
+    ride ``exclude_sources`` rather than rest on "an effect applies once per
+    event", because the draws do not stay one event: a replacement that takes
+    the first of them hands the rest back to the seam as a fresh one.
+    """
+    exclude = set(payload.get("exclude_sources") or ())
+    return [
+        perm
+        for perm in game.controlled_by(payload["player"])
+        if perm.permanent_id not in exclude
+        and DOUBLE_DRAW_TEXT in (perm.effective_card.oracle_text or "").lower()
+    ]
 
 
 def _applies_double_draw(game, payload: dict) -> bool:
@@ -3408,10 +3458,20 @@ def _draw_two_cards_instead(game, payload: dict) -> ReplacementOutcome | None:
     is consumed and the draws stay ordinary draws — a Ring of Ma'rûf or an
     Aladdin's Lamp armed alongside still gets one of them (CR 616.1f re-asks
     against the raised count).
+
+    **The doubler is then excluded from every draw of the event it made**
+    (CR 614.5). It used not to be: with an Abundance beside it, the draw
+    Abundance took left one "queued behind", the seam met that one as a new
+    event, doubled it, Abundance took the first of *those* — and one card
+    drawn was a library revealed to the bottom and a ``RecursionError``.
     """
     player = payload["player"]
     before = int(payload["count"])
+    doublers = _draw_doublers(game, payload)
     payload["count"] = _doubled_draw_count(game, payload)
+    payload["exclude_sources"] = tuple(payload.get("exclude_sources") or ()) + tuple(
+        perm.permanent_id for perm in doublers
+    )
     game.log.append(
         f"{player.name} draws {payload['count']} instead of {before} "
         "(Teferi's Ageless Insight)"
@@ -3442,8 +3502,7 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
         game.log.append(
             f"{player.name} has no cards outside the game to take (Ring of Ma'rûf)"
         )
-        if remaining > 0:
-            game._draw_with_replacements(player, remaining)
+        draws_behind(game, player, remaining, queued_excludes(payload))
         payload["drawn"] = 0
         return ReplacementOutcome(replaced=True)
     suspended, drawn = offer_replacement_choice(
@@ -3455,7 +3514,11 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
             default_option=0,
             # Sideboard positions behind each offered name, so a choice made
             # against the filtered list still pulls the right card.
-            data={"sideboard_indices": available, "remaining_draws": remaining},
+            data={
+                "sideboard_indices": available,
+                "remaining_draws": remaining,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -3470,9 +3533,11 @@ def _draw_from_outside_the_game(game, payload: dict) -> ReplacementOutcome | Non
 def _resolve_outside_game_draw(game, choice: ReplacementChoice, option_index: int) -> int:
     indices = choice.data.get("sideboard_indices") or list(range(len(choice.options)))
     game._finish_outside_game_draw(choice.player_index, indices[option_index])
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        game._draw_with_replacements(game.players[choice.player_index], remaining)
+    draws_behind(
+        game, game.players[choice.player_index],
+        int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return 0
 
 
@@ -3532,14 +3597,9 @@ def _run_armed_draw_replacement(game, payload: dict) -> ReplacementOutcome | Non
             caster=player, target=player, card=card, source_permanent=source
         ),
     )
-    drawn = 0
-    remaining = int(payload["count"]) - 1
-    if remaining > 0:
-        drawn += game._draw_with_replacements(
-            player, remaining,
-            exclude_sources=tuple(payload.get("exclude_sources") or ()),
-        )
-    payload["drawn"] = drawn
+    payload["drawn"] = draws_behind(
+        game, player, int(payload["count"]) - 1, queued_excludes(payload)
+    )
     return ReplacementOutcome(replaced=True)
 
 
@@ -3631,6 +3691,7 @@ def _reveal_until_kind_instead_of_drawing(game, payload: dict) -> ReplacementOut
             data={
                 "remaining_draws": count - 1,
                 "exclude_sources": tuple(payload.get("exclude_sources") or ()),
+                QUEUED_EXCLUDES: queued_excludes(payload),
                 "source_id": source.permanent_id,
             },
         ),
@@ -3700,16 +3761,25 @@ def _resolve_reveal_until_kind_draw(
                 f"{player.name} revealed their whole library and found no "
                 f"{'land' if wants_land else 'nonland'} card (Abundance)"
             )
-        for card in revealed:
-            game.put_card_into_library(player, card)
-    if remaining > 0:
-        # The draws queued behind this one are their own events (CR 121.2) and
-        # get their own trip through the seam - including this replacement
-        # again, which is what a two-card draw under Abundance is.
-        drawn += game._draw_with_replacements(
-            player, remaining,
-            exclude_sources=tuple(choice.data.get("exclude_sources") or ()),
+        bottomed = sum(
+            1 for card in revealed if game.put_card_into_library(player, card)
         )
+        # "…on the bottom of your library **in any order**" is the owner's
+        # order to choose (CR 401.4), asked of an interactive seat by the
+        # prompt the look-and-pick family already uses. It was the one such
+        # look left unasked, because on a two-card draw the order prompt sat
+        # beside the next draw's offer and each refused the other; the draws
+        # behind now wait for it (``Game._draw_prompt_open``), which is also
+        # what keeps "the last N cards" the pile this reveal laid down.
+        game.offer_library_bottom_order(player, bottomed)
+    # The draws queued behind this one are their own draws (CR 121.2) and get
+    # their own trip through the seam - including this replacement again,
+    # which is what a two-card draw under Abundance is. A draw the decline
+    # above remade and another replacement is now asking about is still in
+    # front of them: the seam parks these until it is answered.
+    drawn += draws_behind(
+        game, player, remaining, choice.data.get(QUEUED_EXCLUDES) or ()
+    )
     return drawn
 
 
@@ -3740,7 +3810,10 @@ def _look_at_top_cards_and_draw_one(game, payload: dict) -> ReplacementOutcome |
             player_index=player_index,
             options=tuple(card.name for card in player.library[:x]),
             default_option=0,
-            data={"remaining_draws": payload["count"] - 1},
+            data={
+                "remaining_draws": payload["count"] - 1,
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -3756,9 +3829,10 @@ def _resolve_lamp_draw(game, choice: ReplacementChoice, option_index: int) -> in
     player = game.players[choice.player_index]
     looked_at = min(len(choice.options), len(player.library))
     drawn = game._finish_lamp_draw(choice.player_index, option_index, looked_at)
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        drawn += game._draw_with_replacements(player, remaining)
+    drawn += draws_behind(
+        game, player, int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return drawn
 
 
@@ -3991,15 +4065,12 @@ def _reveal_top_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | 
         game.log.append(
             f"{player.name} has no card to reveal ({source.card.name})"
         )
-    # The draws queued behind this one are their own events (CR 121.2) and get
+    # The draws queued behind this one are their own draws (CR 121.2) and get
     # their own trip through the seam — including this replacement again, which
-    # is what a two-card draw under Enduring Renewal is.
-    if count > 1:
-        drawn += game._draw_with_replacements(
-            player, count - 1,
-            turn_based=False,
-            exclude_sources=tuple(payload.get("exclude_sources") or ()),
-        )
+    # is what a two-card draw under Enduring Renewal is. The seam parks them
+    # while the "otherwise, draw a card" above is waiting on another
+    # replacement's offer.
+    drawn += draws_behind(game, player, count - 1, queued_excludes(payload))
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
 
@@ -4122,6 +4193,7 @@ def _counter_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
                 "source_id": source.permanent_id,
                 "remaining_draws": int(payload["count"]) - 1,
                 "exclude_sources": excludes,
+                QUEUED_EXCLUDES: queued_excludes(payload),
                 "turn_based": bool(payload.get("turn_based")),
             },
         ),
@@ -4182,8 +4254,9 @@ def _resolve_draw_becomes_counter(
                 f"{player.name} put a {data['counter']} counter on "
                 f"{source.card.name} instead of drawing"
             )
-    if remaining > 0:
-        drawn += game._draw_with_replacements(player, remaining)
+    # Behind this draw, and parked by the seam while the draw a decline
+    # remade is waiting on another replacement's offer (CR 121.2).
+    drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
     return drawn
 
 
@@ -4269,6 +4342,7 @@ def _skip_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | None:
                 "source_id": source.permanent_id,
                 "remaining_draws": int(payload["count"]) - 1,
                 "exclude_sources": excludes,
+                QUEUED_EXCLUDES: queued_excludes(payload),
                 "turn_based": bool(payload.get("turn_based")),
             },
         ),
@@ -4313,10 +4387,10 @@ def _resolve_skip_draw(game, choice: ReplacementChoice, option_index: int) -> in
             f"{player.name} skipped a draw"
             + (f" ({source.card.name})" if source is not None else "")
         )
-    if remaining > 0:
-        # The draws queued behind this one are their own events (CR 121.2) and
-        # are offered on their own — including by this source again.
-        drawn += game._draw_with_replacements(player, remaining)
+    # The draws queued behind this one are their own draws (CR 121.2) and are
+    # offered on their own — including by this source again — once the draw
+    # in front of them is finished (the seam parks them until then).
+    drawn += draws_behind(game, player, remaining, data.get(QUEUED_EXCLUDES) or ())
     return drawn
 
 
@@ -4366,8 +4440,20 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
     if exempt:
         # Not replaced, and still a draw like any other: it goes back through
         # the seam so an Aladdin's Lamp armed for the draw step still takes it.
-        drawn += game._draw_with_replacements(player, exempt, turn_based=True)
-    remaining = count - exempt - 1
+        # The draws behind it are this event without its first draw — so they
+        # go back as one, and this replacement meets the first of *them* there.
+        # One at a time (CR 121.2): were the discard armed here, it would sit
+        # beside whatever the exempt draw is still waiting on.
+        drawn += game._draw_with_replacements(
+            player, exempt, turn_based=True,
+            exclude_sources=queued_excludes(payload),
+        )
+        drawn += draws_behind(
+            game, player, count - exempt, queued_excludes(payload)
+        )
+        payload["drawn"] = drawn
+        return ReplacementOutcome(replaced=True)
+    remaining = count - 1
     source = min(_chains_sources(game, payload), key=lambda perm: perm.permanent_id)
     # CR 614.5: the draw this effect creates is not replaced by this effect
     # again. A *second* copy is a different effect and still applies, which is
@@ -4382,6 +4468,7 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
             draw_that_many=True,
             draw_exclude_sources=excludes,
             queued_draws=max(0, remaining),
+            queued_exclude_sources=queued_excludes(payload),
         )
         game.log.append(
             f"{player.name} discards a card instead of drawing ({source.card.name})"
@@ -4392,8 +4479,7 @@ def _discard_instead_of_drawing(game, payload: dict) -> ReplacementOutcome | Non
             f"{player.name} had no card to discard and milled {milled} card(s) "
             f"({source.card.name})"
         )
-        if remaining > 0:
-            drawn += game._draw_with_replacements(player, remaining)
+        drawn += draws_behind(game, player, remaining, queued_excludes(payload))
     payload["drawn"] = drawn
     return ReplacementOutcome(replaced=True)
 
@@ -4795,7 +4881,10 @@ def _return_from_graveyard_instead_of_drawing(game, payload: dict) -> Replacemen
             # more is a valuation question that belongs in
             # ``engine/ai_valuation.py`` rather than in a replacement effect.
             default_option=0,
-            data={"remaining_draws": max(0, remaining)},
+            data={
+                "remaining_draws": max(0, remaining),
+                QUEUED_EXCLUDES: queued_excludes(payload),
+            },
         ),
     )
     if suspended:
@@ -4826,9 +4915,10 @@ def _resolve_return_from_graveyard_instead_of_draw(
             f"{player.name} returned {card.name} from their graveyard to their "
             f"hand instead of drawing (Forbidden Crypt)"
         )
-    remaining = int(choice.data.get("remaining_draws", 0))
-    if remaining > 0:
-        game._draw_with_replacements(player, remaining)
+    draws_behind(
+        game, player, int(choice.data.get("remaining_draws", 0)),
+        choice.data.get(QUEUED_EXCLUDES) or (),
+    )
     return 0
 
 

@@ -426,13 +426,13 @@ def _payment_plan(game: "Game", seat: int, cost: "dict[str, int]"):
     other "you may pay" in this engine goes through
     (``mana_payment.plan_payment``).
     """
-    from .mana_payment import plan_payment, untapped_mana_lands
+    from .mana_payment import plan_payment
 
     if not any(cost.values()):
         return {}
     return plan_payment(
         game.players[seat].mana_pool,
-        untapped_mana_lands(game.controlled_by(seat)),
+        game.payment_lands(seat),
         cost,
         produces=game._land_payment_colors, payer=game.players[seat],
     )

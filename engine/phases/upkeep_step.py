@@ -34,7 +34,7 @@ from ..trigger_utils import iter_triggered_abilities, matching_triggers
 from ..turn_state import record_controllers_upkeep
 from ..mixins._constants import _UPKEEP_PAY_KINDS
 from ..cumulative_upkeep import upcoming_cost
-from ..mana_payment import plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..upkeep_costs import (UpkeepCost, cost_from_payload, cost_prompt_fields,
                             resolved_toll_instruction)
 from ..effect_labels import triggered_label
@@ -221,7 +221,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         about which lands and which units are in play."""
         return plan_payment(
             self._upkeep_pool(player, purpose),
-            untapped_mana_lands(self.controlled_by(player)),
+            self.payment_lands(player),
             mana,
             produces=self._land_payment_colors, payer=player,
         )
@@ -245,7 +245,7 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
             merged[symbol] = merged.get(symbol, 0) + amount
         return merged
 
-    def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> None:
+    def _spend_upkeep_mana(self, player, mana: dict[str, int], *, purpose=None) -> bool:
         """Spend an upkeep cost validated by ``can_pay_upkeep_mana``: the plan's
         floating units out of the pool (restricted bucket first where the
         purpose admits it) and the plan's lands tapped.
@@ -256,6 +256,12 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         formed here is a caller that skipped the affordability test, and that
         is raised rather than spent in part: a cost half charged is a free
         ability, the class Vodalian War Machine's tap costs were.
+
+        True when the cost was paid. False is a plan that held when it was
+        made and failed part-way — which, since the plan is made over
+        ``Game.payment_lands``, takes a tap that changed the board under it
+        (a watcher answering the first land by tapping the rest). It is said
+        in the log rather than left to read as paid.
         """
         from ..restricted_mana import debit_restricted_mana, spendable_restricted_mana
 
@@ -281,10 +287,16 @@ class UpkeepStepMixin(UpkeepEffectsMixin):
         # the plan is asked again after each tap — so a Snowfall's extra mana,
         # which lands in the very bucket this purpose admits, pays the upkeep
         # it was made for instead of floating beside it.
-        self._pay_planned_cost(
+        paid = self._pay_planned_cost(
             player, lambda: self._upkeep_payment_plan(player, mana, purpose),
             spend=spend,
         )
+        if not paid:
+            self.log.append(
+                f"{player.name} could not pay {mana_cost_label(mana)} in full: "
+                "a land the payment counted on made nothing it could spend"
+            )
+        return paid
 
     def can_pay_upkeep_cost(self, player, cost, *, purpose=None) -> bool:
         """Whether *player* can pay a whole upkeep cost — CR 702.24a's [cost],

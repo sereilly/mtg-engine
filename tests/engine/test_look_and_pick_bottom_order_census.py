@@ -18,9 +18,9 @@ the cards that were not taken. On the tree before the wire this named Impulse,
 Prophetic Bolt, Raven Familiar, See the Truth and Worldly Counsel — the list
 W1G3 measured — which is the census's own backwards validation.
 
-Abundance bottoms "in any order" through a replacement resolver and is **not**
-here; see ``test_abundance_bottoms_as_revealed_and_asks_nothing`` for why it
-still asks nothing.
+Abundance bottoms "in any order" through a replacement resolver rather than
+this handler; ``test_abundance_asks_for_the_order_and_the_next_draw_waits`` is
+its row, and says what had to be true first.
 """
 
 from __future__ import annotations
@@ -187,21 +187,7 @@ def test_a_seat_nobody_asks_keeps_them_as_they_lay(bottoming_looks):
     assert examined >= 5, examined
 
 
-def test_abundance_bottoms_as_revealed_and_asks_nothing(set_pool):
-    """Abundance: "…put all other cards revealed this way on the bottom of
-    your library in any order."
-
-    Still laid down as revealed, unasked, and this pins that it is a *decline
-    with its parts measured* rather than an oversight. The one call the family
-    above makes would arm the order prompt beside the **next** draw's
-    Abundance offer on a two-card draw, and two blocking prompts of different
-    kinds owed by one seat each refuse the other's answer over the wire
-    (``web.prompts.blocking_prompt``) — a human seat would be soft-locked.
-    Needs: (a) that gate admitting an answer to any prompt the seat owes, or a
-    queue order; (b) the draws behind a reveal waiting for its order, because a
-    later reveal bottoms beneath the earlier pile and the prompt reads "the
-    last N cards"; (c) then the call.
-    """
+def _abundance_game(set_pool):
     from engine.models import Permanent
 
     abundance = set_pool("USG")["Abundance"]
@@ -211,13 +197,63 @@ def test_abundance_bottoms_as_revealed_and_asks_nothing(set_pool):
         land("L1"), land("L2"), spell("S1"), land("L3"), spell("S2"),
     ])
     game = Game(players=[me, PlayerState(name="P1")])
-    game.interactive_seats = {0}
     me.battlefield.append(Permanent(card=abundance))
+    return game, me
 
-    game._draw_with_replacements(me, 1)
+
+def test_abundance_asks_for_the_order_and_the_next_draw_waits(set_pool):
+    """Abundance: "…put all other cards revealed this way on the bottom of
+    your library in any order."
+
+    The last look in the pool that laid its pile down unasked, and it was a
+    decline with its parts measured: the one call the family above makes armed
+    the order prompt beside the **next** draw's Abundance offer on a two-card
+    draw, and two blocking prompts of different kinds owed by one seat each
+    refuse the other's answer over the wire — a human seat was soft-locked.
+
+    What had to be true first is that the second draw does not begin while
+    the first still owes a decision (CR 121.2,
+    ``Game._draw_prompt_open``). It does not: the draw behind the reveal is
+    parked until the order is given, which is also what keeps "the last N
+    cards" the pile *this* reveal put down rather than the next one's.
+    """
+    game, me = _abundance_game(set_pool)
+    game.interactive_seats = {0}
+
+    game._draw_with_replacements(me, 2)
     assert [c.kind for c in game.pending_replacement_choices] == ["reveal_until_kind_draw"]
     assert game.confirm_reveal_until_kind_draw(0, 0)
 
+    # The first draw: S1 to hand, the two lands in front of it to the bottom
+    # as revealed — and their order is asked. The second draw has not begun.
     assert [c.name for c in me.hand] == ["S1"]
     assert [c.name for c in me.library] == ["L3", "S2", "L1", "L2"]
+    assert [c.kind for c in game.pending_choices] == ["reorder_library"]
+    order = game.pending_choices[0]
+    assert order.data["position"] == "bottom" and order.data["top_count"] == 2
+    assert game.pending_replacement_choices == [], "one draw at a time"
+
+    assert game.confirm_reorder_library(0, [1, 0])
+    assert [c.name for c in me.library] == ["L3", "S2", "L2", "L1"]
+
+    # Now the second draw, and its own offer.
+    assert game.pending_choices == []
+    assert [c.kind for c in game.pending_replacement_choices] == ["reveal_until_kind_draw"]
+    assert game.confirm_reveal_until_kind_draw(0, 0)
+    assert [c.name for c in me.hand] == ["S1", "S2"]
+    # One card bottomed is no order to choose.
     assert game.pending_choices == [] and game.pending_replacement_choices == []
+    assert not game.parked_draws
+
+
+def test_abundance_asks_a_seat_nobody_is_asking_nothing(set_pool):
+    """Headless and AI seats take "as they lay" and queue nothing, so a seeded
+    run consumes no randomness and reads as it did before the question."""
+    game, me = _abundance_game(set_pool)
+
+    game._draw_with_replacements(me, 2)
+
+    assert [c.name for c in me.hand] == ["S1", "S2"]
+    assert [c.name for c in me.library] == ["L1", "L2", "L3"]
+    assert game.pending_choices == [] and game.pending_replacement_choices == []
+    assert not game.parked_draws

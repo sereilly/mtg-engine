@@ -2111,10 +2111,17 @@ def put_graveyard_cards_on_library_top(
     from the returns above, and it is why the cards are resolved through
     :func:`_resolve_graveyard_slots` with the target player passed in.
 
-    **"In any order" is the order the targets were named in.** CR 601.2c
-    chooses the targets in sequence, and there is nothing else on the wire that
-    could carry an ordering — so the controller's choice of order *is* their
-    choice of order, and the first card named ends up on top.
+    **The order they are laid down in is the order the targets were named
+    in** — CR 601.2c chooses the targets in sequence, so the first card named
+    ends up on top — **and then the owner of the library is asked** (CR 401.4:
+    "the owner of those cards may arrange them in any order"). The naming
+    order was the whole of it, on the ground that nothing else on the wire
+    carried an ordering. Two things that reading could not say: the arranger
+    is the cards' *owner*, who for "a player's graveyard" (Lodestone Bauble)
+    need not be the player who named them; and a player naming three cards in
+    a picker was never told the order of the clicks was the order of their
+    next three draws. ``Game.offer_library_top_order`` asks an interactive
+    owner; every other seat keeps the naming order.
     """
     # Whose graveyard, said by the lowering rather than inferred here. "Your
     # graveyard … your library" (Reinforcements) names the ability's controller
@@ -2151,11 +2158,16 @@ def put_graveyard_cards_on_library_top(
         game.log.append(f"{context.card.name}: no card moved out of the graveyard")
         return True, "resolved"
     # Last named first, so the first card the controller chose ends up on top.
-    for card in reversed(picked):
-        game.put_card_into_library(victim, card, position="top")
+    landed = sum(
+        1 for card in reversed(picked)
+        if game.put_card_into_library(victim, card, position="top")
+    )
     game.log.append(
         f"{context.card.name} put {len(picked)} card(s) on top of {victim.name}'s library"
     )
+    # CR 401.4: the order is the library owner's. Counted off what landed —
+    # a card the funnel diverted (a commander, CR 903.9b) is not in the pile.
+    game.offer_library_top_order(victim, landed)
     return True, "resolved"
 
 

@@ -676,7 +676,10 @@ def _resolve_optional_pay_trigger(game: Game, item: StackItem) -> None:
         "cost": cost,
         "life": int(ev.get("life", 0)),
     }
-    if total_pips(cost) > 0 and not game._player_can_pay_optional(
+    # A person is offered it whenever they hold mana the plan does not tap
+    # (`Game.payment_may_be_offered`); every other seat only what its plan
+    # can collect.
+    if total_pips(cost) > 0 and not game.payment_may_be_offered(
         game.players[player_index], entry
     ):
         return

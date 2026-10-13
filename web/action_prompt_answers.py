@@ -52,8 +52,20 @@ def _action_search_library_decline(session, req, seat_type):
     if req.seat != pending["caster_index"]:
         raise HTTPException(status_code=400, detail="not your library search")
     # Failing to find is legal (CR 701.23b) and is the only answer available
-    # when nothing in the searched zones matches the restriction.
-    session.game.decline_search_library(req.seat)
+    # when nothing in the searched zones matches the restriction — for a
+    # search with a stated quality. A search simply for a quantity of cards
+    # ("a card", "three cards") must find that many, or as many as the zone
+    # holds (CR 701.23d); the engine refuses the decline, and the refusal is
+    # said rather than swallowed — this used to return 200 either way, which
+    # for a refused decline is a click that does nothing.
+    if not session.game.decline_search_library(req.seat):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "this search must find a card — it names no quality, so it "
+                "can't fail to find while the zone has one (CR 701.23d)"
+            ),
+        )
 
 @action_handler("search_destination_confirm")
 def _action_search_destination_confirm(session, req, seat_type):
@@ -633,9 +645,17 @@ def _action_resolve_optional_pay(session, req, seat_type):
         # The offer is still owed -- the engine rejected the answer rather than
         # consuming it (CR 601.2b: a player chooses among the options they are
         # able to take). Saying so beats a silent no-op that leaves the same
-        # prompt on screen with no explanation.
+        # prompt on screen with no explanation. An accept of a price the board
+        # cannot be made to pay as it stands arrives here too, where it used
+        # to be carried out as a decline: the engine taps only free land
+        # abilities for a payer, so the seat taps what else it has and answers
+        # again (CR 605.3a) -- `Game.seat_answers_for_itself`.
         raise HTTPException(
-            status_code=400, detail="that payment option can't be paid",
+            status_code=400,
+            detail=(
+                "that payment option can't be paid — tap for the mana "
+                "first, or decline"
+            ),
         )
 
 @action_handler("pay_life_to_save_confirm")
@@ -768,9 +788,22 @@ def _action_confirm_mana_payment(session, req, seat_type):
     # or declines and it is countered. They tap lands to fill their pool first.
     if req.accept is None:
         raise HTTPException(status_code=400, detail="accept (true/false) is required")
+    owed = session.game.pending_choice_of("mana_payment", req.seat)
+    if owed is None:
+        raise HTTPException(status_code=400, detail="no mana payment pending for you")
     ok = session.game.confirm_mana_payment(req.seat, bool(req.accept))
     if not ok:
-        raise HTTPException(status_code=400, detail="no mana payment pending for you")
+        # "Pay" that cannot be collected is refused, never read as a decline
+        # (CR 608.2d, CR 118.3): the prompt is still owed, and the payer may
+        # tap whatever makes mana — the engine taps only free land abilities
+        # for them (CR 605.3a, 118.3c) — and answer again, or decline.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "you can't pay that from your mana pool and untapped lands — "
+                "tap for the mana first, or decline"
+            ),
+        )
 
 @action_handler("flip_again_confirm")
 def _action_flip_again_confirm(session, req, seat_type):

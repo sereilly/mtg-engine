@@ -487,7 +487,9 @@ def target_gains_life(game: Game, instruction: OracleInstruction, context: Oracl
         cost = tctx.get("optional_pay_cost")
         if cost is not None:
             entry = {"card_name": card.name, "cost": generic_cost(int(cost)), "life": life}
-            if game._player_can_pay_optional(controller, entry):
+            # Offered to a person whenever they hold mana the plan does not
+            # tap (`Game.payment_may_be_offered`).
+            if game.payment_may_be_offered(controller, entry):
                 game.arm_pending_choice(
                     "optional_pay", game.players.index(controller), **entry
                 )

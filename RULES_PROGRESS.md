@@ -5,7 +5,7 @@ Tests cite rules with `@pytest.mark.cr(...)`; regenerate this file with
 `python scripts/rules_progress.py`. Tracked scope is defined in that
 script — rules for mechanics outside the Alpha-era pool are omitted.
 
-**419 / 622 tracked rules covered (67%)** — 2914 tests, 0 unannotated.
+**419 / 622 tracked rules covered (67%)** — 2950 tests, 0 unannotated.
 
 | Section | Covered | % |
 | --- | --- | --- |
@@ -287,14 +287,14 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **117.2** Other kinds of abilities and actions are automatically generated or performed by the game rules, ... *(1 tests, subrules c)*
 - [x] **117.3** Which player has priority is determined by the following rules: *(22 tests, subrules abcd)*
 - [x] **117.4** If all players pass in succession (that is, if all players pass without taking any actions in bet... *(3 tests)*
-- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(1 tests)*
+- [x] **117.5** Each time a player would get priority, the game first performs all applicable state-based actions... *(3 tests)*
 - [x] **117.7** If a player with priority casts a spell or activates an activated ability while another spell or ... *(1 tests)*
 
 ### 118. Costs
 
 - [x] **118.1** A cost is an action or payment necessary to take another action or to stop another action from ta... *(3 tests)*
 - [x] **118.2** If a cost includes a mana payment, the player paying the cost has a chance to activate mana abili... *(1 tests)*
-- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(22 tests, subrules abc)*
+- [x] **118.3** A player can’t pay a cost without having the necessary resources to pay it fully. For example, a ... *(27 tests, subrules abc)*
 - [x] **118.4** Some costs include an {X} or an X. See rule 107.3. *(1 tests)*
 - [x] **118.5** Some costs are represented by {0}, or are reduced to {0}. The action necessary for a player to pa... *(3 tests, subrules a)*
 - [x] **118.6** Some objects have no mana cost. This represents an unpayable cost. An ability can also have an un... *(1 tests)*
@@ -303,7 +303,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **118.9** Some spells have alternative costs. An alternative cost is a cost listed in a spell’s text, or ap... *(27 tests, subrules abcd)*
 - [ ] **118.10** Each payment of a cost applies to only one spell, ability, or effect. For example, a player can’t...
 - [ ] **118.11** The actions performed when paying a cost may be modified by effects. Even if they are, meaning th...
-- [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(2 tests, subrules a)*
+- [x] **118.12** Some spells, activated abilities, and triggered abilities read, “[Do something]. If [a player] [d... *(5 tests, subrules a)*
 - [ ] **118.13** Some costs contain mana symbols that can be paid in multiple ways. These include hybrid mana symb...
 - [ ] **118.14** Some effects say that “mana of any type can be spent” to pay a cost. This means that players may ...
 
@@ -336,7 +336,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 121. Drawing a Card
 
 - [x] **121.1** A player draws a card by putting the top card of their library into their hand. This is done as a... *(6 tests)*
-- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(4 tests, subrules a)*
+- [x] **121.2** Cards may only be drawn one at a time. If a player is instructed to draw multiple cards, that pla... *(7 tests, subrules a)*
 - [ ] **121.3** If there are no cards in a player’s library and an effect offers that player the choice to draw a...
 - [x] **121.4** A player who attempts to draw a card from a library with no cards in it loses the game the next t... *(5 tests)*
 - [x] **121.5** If an effect moves cards from a player’s library to that player’s hand without using the word “dr... *(1 tests)*
@@ -501,7 +501,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **401.1** When a game begins, each player’s deck becomes their library. *(1 tests)*
 - [x] **401.2** Each library must be kept in a single face-down pile. Players can’t look at or change the order o... *(2 tests)*
 - [ ] **401.3** Any player may count the number of cards remaining in any player’s library at any time.
-- [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(6 tests)*
+- [x] **401.4** If an effect puts two or more cards in a specific position in a library at the same time, the own... *(10 tests)*
 - [x] **401.5** Some effects tell a player to play with the top card of their library revealed, or say that a pla... *(2 tests)*
 - [ ] **401.6** If an effect causes a player to play with the top card of their library revealed, and that partic...
 - [ ] **401.7** If an effect causes a player to put a card into a library “Nth from the top,” and that library ha...
@@ -562,7 +562,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 500. General
 
 - [x] **500.1** A turn consists of five phases, in this order: beginning, precombat main, combat, postcombat main... *(7 tests)*
-- [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(1 tests)*
+- [x] **500.2** A phase or step in which players receive priority ends when the stack is empty and all players pa... *(4 tests)*
 - [x] **500.3** A step in which no players receive priority ends when all specified actions that take place durin... *(2 tests)*
 - [ ] **500.4** As a step or phase begins, if there are effects that last until that step or phase, those effects...
 - [x] **500.5** As a step or phase ends, if there are effects that last until the end of that step or phase, thos... *(2 tests)*
@@ -690,8 +690,8 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **603.4** A triggered ability may read “When/Whenever/At [trigger event], if [condition], [effect].” When t... *(26 tests)*
 - [x] **603.5** Some triggered abilities’ effects are optional (they contain “may,” as in “At the beginning of yo... *(10 tests)*
 - [x] **603.6** Trigger events that involve objects changing zones are called “zone-change triggers.” Many abilit... *(16 tests, subrules acd)*
-- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(36 tests, subrules bcde)*
-- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(12 tests)*
+- [x] **603.7** An effect may create a delayed triggered ability that can do something at a later time. A delayed... *(40 tests, subrules abcde)*
+- [x] **603.8** Some triggered abilities trigger when a game state (such as a player controlling no permanents of... *(14 tests)*
 - [ ] **603.9** Some triggered abilities trigger specifically when a player loses the game. These abilities trigg...
 - [x] **603.10** Normally, objects that exist immediately after an event are checked to see if the event matched a... *(16 tests, subrules a)*
 - [x] **603.11** Some objects have a static ability that’s linked to one or more triggered abilities. (See rule 60... *(1 tests)*
@@ -711,7 +711,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 - [x] **605.1** Some activated abilities and some triggered abilities are mana abilities, which are subject to sp... *(21 tests, subrules ab)*
 - [x] **605.2** A mana ability remains a mana ability even if the game state doesn’t allow it to produce mana. *(1 tests)*
-- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(28 tests, subrules abc)*
+- [x] **605.3** Activating an activated mana ability follows the rules for activating any other activated ability... *(30 tests, subrules abc)*
 - [x] **605.4** Triggered mana abilities follow all the rules for other triggered abilities (see rule 603, “Handl... *(7 tests, subrules a)*
 - [x] **605.5** Abilities that don’t meet the criteria specified in rules 605.1a–b and spells aren’t mana abilities. *(4 tests, subrules ab)*
 
@@ -735,7 +735,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 ### 608. Resolving Spells and Abilities
 
 - [x] **608.1** Each time all players pass in succession, the spell or ability on top of the stack resolves. (See... *(1 tests)*
-- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(143 tests, subrules bcdhmn)*
+- [x] **608.2** If the object that’s resolving is an instant spell, a sorcery spell, or an ability, its resolutio... *(145 tests, subrules bcdhmn)*
 - [x] **608.3** If the object that’s resolving is a permanent spell, its resolution may involve several steps. Th... *(3 tests, subrules ab)*
 
 ### 609. Effects
@@ -795,7 +795,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **614.2** Some replacement effects apply to damage from a source. See rule 609.7. *(1 tests)*
 - [x] **614.3** There are no special restrictions on casting a spell or activating an ability that generates a re... *(2 tests)*
 - [x] **614.4** Replacement effects must exist before the appropriate event occurs—they can’t “go back in time” a... *(2 tests)*
-- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(7 tests)*
+- [x] **614.5** A replacement effect doesn’t invoke itself repeatedly; it gets only one opportunity to affect an ... *(9 tests)*
 - [x] **614.6** If an event is replaced, it never happens. A modified event occurs instead, which may in turn tri... *(10 tests)*
 - [x] **614.7** If a replacement effect would replace an event, but that event never happens, the replacement eff... *(5 tests, subrules a)*
 - [x] **614.8** Regeneration is a destruction-replacement effect. The word “instead” doesn’t appear on the card b... *(9 tests)*
@@ -827,7 +827,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 
 ### 616. Interaction of Replacement and/or Prevention Effects
 
-- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(51 tests, subrules efg)*
+- [x] **616.1** If two or more replacement and/or prevention effects are attempting to modify the way an event af... *(52 tests, subrules efg)*
 - [x] **616.2** A replacement or prevention effect can become applicable to an event as the result of another rep... *(1 tests)*
 
 ### 700. General
@@ -866,7 +866,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [x] **701.20** Reveal *(9 tests, subrules ab)*
 - [x] **701.21** Sacrifice *(16 tests, subrules a)*
 - [x] **701.22** Scry *(8 tests, subrules ab)*
-- [x] **701.23** Search *(4 tests, subrules ad)*
+- [x] **701.23** Search *(10 tests, subrules abd)*
 - [x] **701.24** Shuffle *(2 tests, subrules a)*
 - [x] **701.26** Tap and Untap *(3 tests, subrules ab)*
 
@@ -940,7 +940,7 @@ script — rules for mechanics outside the Alpha-era pool are omitted.
 - [ ] **707.7** If a pair of linked abilities are copied, those abilities will be similarly linked to one another...
 - [ ] **707.8** When copying a melded permanent or other double-faced permanent, use the copiable values of the f...
 - [x] **707.9** Copy effects may include modifications or exceptions to the copying process. *(15 tests, subrules abc)*
-- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(9 tests, subrules ac)*
+- [x] **707.10** To copy a spell, activated ability, or triggered ability means to put a copy of it onto the stack... *(16 tests, subrules ac)*
 - [ ] **707.11** If an effect refers to a permanent by name, the effect still tracks that permanent even if it cha...
 - [ ] **707.12** An effect that instructs a player to cast a copy of an object (and not just copy a spell) follows...
 - [ ] **707.13** One card (Garth One-Eye) instructs a player to create a copy of a card defined by name rather tha...

@@ -388,6 +388,35 @@ def create_delayed_trigger(game: Game, instruction: OracleInstruction, context: 
             game.log.append(f"{context.card.name} had no player to watch")
             return True, "no player"
         bound_seat = recorded
+    else:
+        # CR 603.7c for every entry no record above seats: the player this
+        # resolution was *about* — its own target, or the seat an offer was
+        # put to — is the player a delayed "that player" names, frozen now.
+        #
+        # It used to be left unbound, and an unbound trigger's target is the
+        # seat opposite its controller (``_run_stack_item_resolution``'s
+        # default for a resolution that names nobody). So "…from a player's
+        # graveyard on top of their library. **That player** draws a card at
+        # the beginning of the next turn's upkeep" (Lodestone Bauble) drew
+        # for the opponent whenever it was aimed at its controller's own
+        # graveyard, "**Target player** draws a card at the beginning of the
+        # next turn's upkeep" (Sapphire Charm) did the same aimed at oneself,
+        # and Horn of Plenty paid for the other player's card — each right
+        # exactly when the named player happened to be the opponent, which is
+        # the half a two-player test tries first.
+        #
+        # For a resolution that named nobody the context's target *is* that
+        # default, so the entry carries the seat it would have been given at
+        # fire time and nothing else changes; an effect that does not read a
+        # target player never looks. By identity: a ``PlayerState`` compares
+        # by value, and two seats holding equal state match each other.
+        bound_seat = next(
+            (
+                index for index, seated in enumerate(game.players)
+                if seated is context.target
+            ),
+            None,
+        )
     # "Choose a color. Whenever this creature becomes blocked by a creature
     # **of that color** this turn, …" (Zombie Boa.) CR 608.2d's choice, made by
     # an earlier step of this resolution and spent **now** into the ordinary
