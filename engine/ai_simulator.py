@@ -1337,8 +1337,10 @@ def run_ai_simulation(
             # asked before the activations, so the card it bought was never
             # played — and the permission ends before this seat's next main
             # phase. Asked again, and only when an activation opened a cast
-            # that was not there before it, so a turn in which none did is
-            # the turn it always was.
+            # from outside the hand that was not there before it — a card
+            # lent, or a flashback card a looter's discard just put in the
+            # graveyard — so a turn in which none did is the turn it always
+            # was.
             if not game.is_game_over() and _casts_on_loan(game, active) - lent:
                 _play_land_drops(game, active, report, game_index, turn)
                 _play_casts(game, active, report, game_index, turn)
