@@ -3923,15 +3923,13 @@ def _offered_seats(
         # once a named spell has left (CR 608.2b - nobody is asked about a
         # counter that cannot happen), and the top of the stack for the
         # headless caller that named none.
-        named = context.stack_target
-        if named is not None:
-            item = named if any(found is named for found in game.stack) else None
-        else:
-            item = game.stack[-1] if game.stack else None
-        if item is None or item.is_ability:
-            return []
-        seat = item.caster_index
-        if not (0 <= seat < len(game.players)) or game.players[seat].lost:
+        #
+        # One reader with the recipients that name the same seat after the
+        # counter has run (``_common.stack_target_controller_seat``).
+        from ._common import stack_target_controller_seat
+
+        seat = stack_target_controller_seat(game, context, spells_only=True)
+        if seat is None or game.players[seat].lost:
             return []
         return [seat]
     if actor == "target_opponent":

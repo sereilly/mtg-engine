@@ -516,6 +516,19 @@ def _lower_lose_life(
         # wrote one, so "Destroy target creature. Its controller loses 2 life."
         # keeps the reading it has: inside one resolution the pronoun names
         # what that resolution acted on, not what fired it.
+        #
+        # "Counter target spell. **Its controller** loses 3 life." (Undermine.)
+        # The object the step in front chose is a *spell*, and a spell's seat
+        # has its own record (``COUNTERED_SPELL_CONTROLLER`` — a countered
+        # spell is a card in a graveyard, which CR 109.4 gives no controller).
+        # This branch wrote the permanent record whatever the step in front
+        # had produced, so the sentence compiled and read a key only a destroy
+        # writes: Undermine shipped and never made anyone lose life. Asked in
+        # the order `_lower_gain_life` above already asks for the same word —
+        # one module, one phrase, and until now two answers.
+        if COUNTERED_SPELL_CONTROLLER in produced:
+            payload["recipient"] = COUNTERED_SPELL_CONTROLLER
+            return (OracleInstruction("target_loses_life", "", payload),)
         if LAST_TARGET_CONTROLLER not in produced and (
             event in _EVENT_SUBJECT_CONTROLLERS
         ):
