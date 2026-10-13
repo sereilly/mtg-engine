@@ -246,9 +246,14 @@ def test_w2g6_a_kicker_is_not_paid_to_destroy_the_casters_own_enchantment(_w2g6_
 
 
 def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w2g6_pool):
-    """Four cards choose a card name as a step of their own (the three naming
+    """Five cards choose a card name as a step of their own (the three naming
     paragraphs with whole-effect handlers are not this). Three then look among
-    the chooser's own cards; Foreshadow mills an opponent."""
+    the chooser's own cards; Foreshadow and Predict mill a *target* player and
+    look among what was milled, which is nobody's own zone to read a name off -
+    ``tests/ai/test_ai_chosen_name_mill.py`` is where that default is held.
+
+    A reviewed inventory of the shipped pool. Predict joined at Odyssey's
+    promotion, and the review was that its answer is Foreshadow's."""
     found = {}
     for card, program in compiled_units(_w2g6_pool.values()):
         roots = [
@@ -264,6 +269,7 @@ def test_w2g6_where_a_chosen_name_is_looked_for_is_read_off_the_next_sentence(_w
         "Desperate Research": "library",
         "Cursed Scroll": "hand",
         "Foreshadow": None,
+        "Predict": None,
     }
 
     invented = _mk_card(

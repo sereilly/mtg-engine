@@ -27,8 +27,17 @@ from engine import targeting
 APP_JS = (Path(__file__).resolve().parents[2] / "web" / "static" / "app.js").read_text(encoding="utf-8")
 
 #: The pool's divided spells that print a bound, as the Phase 5 census found
-#: them. A seventh joins by being printed; the picker needs nothing for it.
-BOUNDED = {"Arc Lightning": 3, "Bounty of the Hunt": 3, "Contagion": 2, "Elven Rite": 2, "Fire": 2, "Flameshot": 3}
+#: them. "A seventh joins by being printed; the picker needs nothing for it"
+#: is what this comment said, and the seventh showed why an equality is held
+#: here rather than a count: Odyssey's Shower of Coals deals its damage "to
+#: **each of up to** three targets", so it rides the divided channel with a
+#: bound and divides nothing - and the picker did need something, an arm for
+#: a list that may be confirmed empty and sends no shares (``dividedEachUpTo``,
+#: built and clicked by the set's client group; held below).
+BOUNDED = {
+    "Arc Lightning": 3, "Bounty of the Hunt": 3, "Contagion": 2, "Elven Rite": 2,
+    "Fire": 2, "Flameshot": 3, "Shower of Coals": 3,
+}
 
 
 def _function(name: str) -> str:
@@ -49,6 +58,17 @@ def test_the_divided_picker_stops_at_the_printed_bound():
     assert "dividedPickCeiling(" in _function("dividedPicksAreFull")
     ceiling = _function("dividedPickCeiling")
     assert "divided_target_count" in ceiling and "max_targets" in ceiling
+
+
+def test_an_each_of_up_to_list_may_be_confirmed_with_no_target():
+    """CR 601.2d's floor of one target is about a *division*. "Each of up to
+    three targets" shares nothing out, so naming nobody is a legal cast
+    (CR 115.6), and the confirm must not hold it back."""
+    each = _function("dividedEachUpTo")
+    assert '"each"' in each and "max_targets" in each and "divided_target_count" in each
+    confirm = _function("confirmDividedTargets")
+    asked = confirm.index("dividedEachUpTo(")
+    assert asked < confirm.index("Choose at least one target first.")
 
 
 def test_the_bounded_divided_spells_are_the_ones_the_census_found(catalog_by_name):
