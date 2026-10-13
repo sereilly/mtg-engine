@@ -17,15 +17,31 @@ class PhaseStepsMixin:
         play queue the same prompts and drain them deterministically afterwards,
         so those runs resolve exactly as they did. That is also what keeps a
         seeded simulation reproducible.
+
+        **An empty stack is not yet the end of the step.** CR 500.2: a step
+        ends "when the stack is empty and all players pass in succession", and
+        CR 117.5: each time a player would get priority — which they must, to
+        pass — state-based actions are performed first and what has triggered
+        is put on the stack. This drained the stack and returned, so an
+        ability the *last* resolution made trigger was announced by whatever
+        next checked state, a step late: Bomb Squad's upkeep counter took a
+        creature to four, the draw step drew, and only then was the creature
+        destroyed. Ten state triggers in the pool reach the stack (CR 603.8),
+        and every one made true by an upkeep effect resolved after the draw —
+        on the web path, the headless one and the simulator's alike. So the
+        check is made where the players would pass, and the window goes round
+        again for whatever it put there (:meth:`_window_may_close`).
         """
         pause_for_choices = bool(self.interactive_seats)
         if not pause_for_choices and self.prompt_driver is not None:
             self._resolve_window_answering_prompts()
             return
-        while True:
+        for _ in range(self.MAX_SETTLE_ITERS):
             self.resolve_stack(pause_for_choices=pause_for_choices)
             if not self.stack:
-                return
+                if self._window_may_close(waits=pause_for_choices):
+                    return
+                continue
             top = self.stack[-1]
             # Two ways the top can refuse to resolve, and both end this loop:
             # its resolution is held pending a decision it armed, or it is
@@ -36,6 +52,24 @@ class PhaseStepsMixin:
             # shrinking, the condition never true.
             if top.resolution_held or self.announcement_choice_for(top) is not None:
                 return
+
+    def _window_may_close(self, *, waits: bool) -> bool:
+        """With the stack empty: whether the step's priority window is over.
+
+        CR 117.5's check before the players pass. True when it put nothing on
+        the stack; False when something triggered and the window has another
+        object to resolve.
+
+        *waits* is a table with somebody to stop for. There a decision still
+        owed means a resolution is not finished (CR 608.2), and a sweep now
+        would be one at a moment CR 704.3 does not name — the answer path runs
+        it when the resolution ends (``_settle_resumed_resolution``), and the
+        caller comes back through this window afterwards.
+        """
+        if waits and self.waiting_prompt() is not None:
+            return True
+        self.check_state_based_actions()
+        return not self.stack
 
     def _resolve_window_answering_prompts(self) -> None:
         """The window above for a table whose prompts a driver answers.
@@ -68,7 +102,12 @@ class PhaseStepsMixin:
                 self.check_state_based_actions()
             resolved = bool(self.stack) and self.resolve_top_of_stack()
             if not answered and not resolved:
-                return
+                # An object that refuses to resolve ends the window as it
+                # always did. An *empty* stack ends it only once the check
+                # the players' passes would make has put nothing there
+                # (CR 117.5; ``_window_may_close``).
+                if self.stack or self._window_may_close(waits=False):
+                    return
 
     def _close_or_defer_step(self, phase: str, step: str, defer_priority: bool) -> None:
         """End a step, or — when defer_priority is set — leave a priority window open
