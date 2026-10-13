@@ -6,7 +6,7 @@ from ..damage_events import (DAMAGE_DENIES_REGENERATION,
                              DAMAGE_EXILES_INSTEAD)
 from ..damage_redirects import DamageRedirect, add_redirect
 from ..divided_damage import (
-    DIVIDED_TARGETS, EVENLY, divide, divided_entry,
+    DIVIDED_TARGETS, EVENLY, announced_no_targets, divide, divided_entry,
 )
 from ..dexterity import flip_lands_on
 from ..models import Permanent
@@ -721,6 +721,15 @@ def deal_damage(game: Game, instruction: OracleInstruction, context: OracleExecu
     # and "divided evenly, rounded down" otherwise. It was `damage // n` for
     # both, so four cards printing the second sentence were played as the first.
     divided = context.choices.get(DIVIDED_TARGETS)
+    if announced_no_targets(divided, instruction.payload.get("targets")):
+        # "…to each of **up to** three targets", cast naming nobody (CR 115.6:
+        # such a spell "is targeted only if one or more targets have been
+        # chosen for it"). The cast path wrote the empty list onto the
+        # announcement; with nothing on it nothing is dealt — and in
+        # particular nothing falls through to the single-target path below,
+        # whose default is the opposing player's face.
+        game.log.append(f"{card.name} was cast with no targets")
+        return True, "resolved"
     if divided:
         # Each entry is turned into the permanent it *named* once, through the
         # one resolver, and carried as the object from there. It was resolved by

@@ -1409,6 +1409,19 @@ def _cast_candidate_announcing(
             # none.
             if not _alternative_cost_is_payable(game, player_index, card, hand_index):
                 return None
+            # CR 118.9d: the cost increases in force are "applied to that
+            # alternative cost", so a pitch spell under Sphere of Resistance
+            # owes {1} beside its card and its life. Planned here for the
+            # reason the mana cost above is — the cast spends the pool, and a
+            # proposal with nothing tapped behind it is refused, the same card
+            # every turn — and through the one reader the offer's `payable`
+            # and the castable highlight price the same announcement with.
+            plan = _alternative_cost_tap_plan(
+                game, player_index, card, extra_generic=extra_generic,
+            )
+            if plan is None:
+                return None
+            tap_indices, tap_colors = plan
             alternative_cost = True
         else:
             tap_indices, tap_colors = plan
@@ -1589,6 +1602,42 @@ def _alternative_cost_is_payable(
     return game._unpayable_alternative_cost(
         player_index, card, printed[0], spell_hand_index=hand_index,
     ) is None
+
+
+def _alternative_cost_tap_plan(
+    game: Game, player_index: int, card: CardDefinition, *, extra_generic: int = 0,
+) -> "tuple[tuple[int, ...], tuple[str, ...]] | None":
+    """The taps that pay the **mana** an alternative-cost cast of *card* still
+    owes (CR 118.9d), or None when the board cannot pay it.
+
+    The amount is the engine's (`Game.alternative_cost_mana`): nothing on an
+    untaxed board, which plans no tap at all and is every such cast this policy
+    made before the cast path charged the increases.
+
+    A plan that would tap the creature the cost itself must tap ("you may tap
+    an untapped creature you control rather than pay this spell's mana cost",
+    Lashknife, with a Llanowar Elves the only creature) is no plan: the mana
+    would be made and the cast refused for want of an untapped creature.
+    """
+    printed = game.applicable_alternative_costs(player_index, card)
+    if len(printed) != 1:
+        return None
+    cost = printed[0]
+    owed = game.alternative_cost_mana(
+        player_index, card, cost, extra_generic=extra_generic,
+    )
+    plan = _plan_land_taps(game, game.players[player_index], owed)
+    if plan is None or not cost.tap_count:
+        return plan
+    planned = [game.permanent_at(player_index, index) for index in plan[0]]
+    left = [
+        permanent
+        for permanent in game._additional_cost_candidates(
+            player_index, cost, giving_up="tap"
+        )
+        if not any(permanent is tapped for tapped in planned)
+    ]
+    return plan if len(left) >= cost.tap_count else None
 
 
 def choose_activation_action(game: Game, player_index: int) -> ActivationAction | None:

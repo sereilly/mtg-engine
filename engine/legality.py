@@ -1274,6 +1274,48 @@ class LegalityMixin:
         context = OracleExecutionContext(caster=caster, target=caster, card=card)
         return max(0, int(count_from_payload(self, context, spec)))
 
+    def _size_conditional_division(
+        self, caster_index: int, card: CardDefinition, spec: dict
+    ) -> None:
+        """Make a divided spec's ``division_total`` the amount of the arm the
+        board selects **now**, where the card prints two.
+
+        "Shower of Coals deals 2 damage to each of up to three targets. …
+        deals 4 damage to each of those permanents and/or players instead if
+        there are seven or more cards in your graveyard." One list, two
+        amounts, and the amount is settled as the spell resolves (CR 608.2h).
+        The card-level spec carries the replacing arm's (``derive_cast_spec``
+        has no game to ask), so a picker and the AI's "how much does each
+        target take" were told 4 over a graveyard of none.
+
+        Asked through the resolution's own evaluator with the caster's game as
+        it stands — the answer a spell cast and resolved now would get. It can
+        still change before the spell resolves, which is the rule; what this
+        stops is the spec naming a number the present board contradicts.
+
+        A condition settled at the cast (``was_kicked``) is not this:
+        ``divided_damage.conditional_division`` hands back only the
+        resolution-time kind, and the kicker's arm is already chosen by the
+        announcement the spec was derived for.
+        """
+        from .divided_damage import conditional_division
+        from .game_types import OracleExecutionContext
+        from .handlers.control_flow import evaluate_condition
+
+        arms = conditional_division(compile_card_oracle(card).instructions)
+        if arms is None:
+            return
+        condition, replacing, base = arms
+        caster = self.players[caster_index]
+        holds = evaluate_condition(
+            self,
+            OracleExecutionContext(caster=caster, target=caster, card=card),
+            condition,
+        )
+        amount = (replacing if holds else base).payload.get("amount")
+        if isinstance(amount, int) and not isinstance(amount, bool):
+            spec["division_total"] = amount
+
     def cast_target_spec(
         self,
         caster_index: int,
@@ -1357,6 +1399,8 @@ class LegalityMixin:
             mode_index=mode_index,
         ) or {"kind": "none"}
         spec["requires_target"] = spec["kind"] != "none"
+        if spec.get("kind") == "divided" and mode_index is None:
+            self._size_conditional_division(caster_index, card, spec)
         # CR 107.3c: a spell that defines its own X takes the announcement away
         # from the caster, so the picker must not ask for one — and a divided
         # spell's caster needs the number *before* announcing the division
@@ -1461,6 +1505,13 @@ class LegalityMixin:
         offers = self.cast_cost_offers(
             caster_index, card, from_zone=from_zone,
             spell_hand_index=spell_hand_index, taken=optional_cost_payments,
+            # CR 903.8's tax is a cost increase like any other, and CR 118.9d
+            # applies it to an alternative cost: the offer's ``payable`` is
+            # told what this zone adds.
+            extra_generic=(
+                self.commander_tax(caster_index, card)
+                if from_zone == "command" else 0
+            ),
         )
         if offers:
             spec["cost_offers"] = offers
@@ -1692,9 +1743,14 @@ class LegalityMixin:
         from_zone: str = "hand",
         spell_hand_index: int | None = None,
         taken: dict[str, int] | None = None,
+        extra_generic: int = 0,
     ) -> list[dict]:
         """Every *optional* price CR 601.2b lets the caster announce for *card*,
         with what each one costs and how many times it is payable.
+
+        *extra_generic* is what the zone adds to this cast's cost (CR 903.8's
+        commander tax), for the one offer whose ``payable`` is a promise about
+        the whole cast: the alternative cost's (see below).
 
         The two optional cost kinds this engine has grown, described in one
         vocabulary because the browser asks one question about them ("what are
@@ -1739,6 +1795,30 @@ class LegalityMixin:
                     caster_index, card, cost, spell_hand_index=spell_hand_index,
                 ) is None,
             }
+            # CR 118.9d: "any additional costs, cost increases, and cost
+            # reductions that affect that spell are applied to that alternative
+            # cost." So a pitched card and a life are not the whole price under
+            # Sphere of Resistance — the {1} is owed beside them, and an offer
+            # that says "payable" over a board that cannot make it is a cast
+            # the payment refuses (and the reason the castable highlight, which
+            # falls back to this flag, glowed over it). Priced by the one
+            # reader the AI plans the same announcement with, and asked of the
+            # pool plus the untapped lands as every other ceiling here is.
+            # ``mana_owed`` tells the prompt what to float.
+            if self.enforce_mana_costs:
+                from .board_payment import board_can_pay
+                from .mana_payment import mana_cost_label
+                from .restricted_mana import CAST, PaymentPurpose
+
+                owed = self.alternative_cost_mana(
+                    caster_index, card, cost, extra_generic=extra_generic,
+                )
+                if any(owed.values()):
+                    entry["mana_owed"] = mana_cost_label(owed)
+                    entry["payable"] = entry["payable"] and board_can_pay(
+                        self, caster_index, owed,
+                        purpose=PaymentPurpose(CAST, card=card),
+                    )
             if (
                 cost.exile_from_hand is not None
                 or cost.discard_from_hand is not None

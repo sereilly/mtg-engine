@@ -72,19 +72,24 @@ _PICKERLESS_ACTIVATION_COSTS: set[tuple[str, int]] = set()
 # it would take:
 _PICKERLESS_CAST_COSTS: dict[str, str] = {
     # "As an additional cost to cast this spell, exile X creature cards from
-    # your graveyard." The charger takes the top X of the pile and says so
-    # (casting.py, "this engine has no graveyard picker on the cast path yet"):
-    # there is no wire field for a set of graveyard positions on a cast, and the
-    # client's X box and the picker would have to be one announcement.
-    "Haunting Misery": "no cast-path graveyard set picker or wire field",
+    # your graveyard." **Half of this closed at ODY W2G1**: the cast path and
+    # the cast route take ``cost_graveyard_indices`` and hold a named set to
+    # the cost (CR 601.2h; ``tests/regressions/test_ody_w2g1_graveyard_cast_
+    # cost.py``), so the choice is the caster's the moment something names it.
+    # What is still missing is what this guard asks about — the *spec*: no
+    # ``_cost_picker_spec`` arm describes a cast-side ``exile_graveyard_filter``
+    # counted by X, because the client asks X after any cost stage (Infernal
+    # Harvest's reason below) and a set of X has nowhere to learn its size
+    # from. A seat that names no set still pays with the top of the pile.
+    "Haunting Misery": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
     # "As an additional cost to cast this spell, exile X cards from your
     # graveyard." (Odyssey.) Haunting Misery's cost with the type left off,
-    # charged by the same branch and missing the same two things. In a set
-    # whose graveyard is a resource the choice matters more than it did —
-    # which X cards go decides what threshold and flashback have left — so it
-    # is pinned beside the card it shares the gap with rather than papered
-    # over by a spec no client surface reads.
-    "Skeletal Scrying": "no cast-path graveyard set picker or wire field",
+    # charged by the same branch and missing the same thing. In a set whose
+    # graveyard is a resource the choice matters more than it did — which X
+    # cards go decides what threshold and flashback have left — so it is
+    # pinned beside the card it shares the gap with rather than papered over
+    # by a spec no client surface reads.
+    "Skeletal Scrying": "wire field exists; no cast-side X-sized graveyard set spec or client picker",
     # "As an additional cost to cast this spell, return X Swamps you control to
     # their owner's hand." The charger already honours ``cost_permanent_ids``
     # (casting.py's return branch); what is missing is the whole announcement:

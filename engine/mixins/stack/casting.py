@@ -35,8 +35,8 @@ from ...cost_x_definitions import (caps_cast_x, cast_x_ceiling, cast_x_floor,
                                    cast_x_value, defines_cast_x, floors_cast_x)
 from ...damage_ledger import record_cast
 from ...divided_damage import (
-    CARD_DIVIDED, EVENLY, card_shares, divided_description, divided_entry,
-    division_refusal, stamp_card_shares, stamped_entry,
+    CARD_DIVIDED, EACH, EVENLY, FIXED, card_shares, divided_description,
+    divided_entry, division_refusal, stamp_card_shares, stamped_entry,
 )
 from ...hand_locks import hand_lock_reason, playable_hand_index
 from ...faces import choose_a_face_refusal, holds_spell_named, spell_named
@@ -539,6 +539,11 @@ class SpellCastingMixin:
         # `activate_permanent_ability` takes them.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # Which cards in the caster's graveyard pay "exile X cards from your
+        # graveyard" (Skeletal Scrying, Haunting Misery), by graveyard slot,
+        # the whole set at once -- the channel `activate_permanent_ability`
+        # takes the same choice on. None is the deterministic pick.
+        cost_graveyard_indices: list[int] | None = None,
         # "Buyback—Discard **two** cards" (Forbid): the cards after the one
         # `cost_hand_index` names, by position in the hand the caster is
         # looking at — the shape `alternative_cost_other_hand_indices` below
@@ -611,6 +616,7 @@ class SpellCastingMixin:
             cost_permanent_index=cost_permanent_index,
             cost_permanent_ids=cost_permanent_ids,
             cost_hand_index=cost_hand_index,
+            cost_graveyard_indices=cost_graveyard_indices,
             cost_other_hand_indices=cost_other_hand_indices,
             alternative_cost=alternative_cost,
             alternative_cost_hand_index=alternative_cost_hand_index,
@@ -874,6 +880,9 @@ class SpellCastingMixin:
         # `activate_permanent_ability` takes them.
         cost_permanent_ids: list[int] | None = None,
         cost_hand_index: int | None = None,
+        # …and which graveyard cards pay an "exile X cards from your
+        # graveyard" cost, by slot (see `cast_from_hand`).
+        cost_graveyard_indices: list[int] | None = None,
         # …and the further cards a "discard two cards" cost names (see
         # `cast_from_hand`). None is the deterministic pick.
         cost_other_hand_indices: list[int] | None = None,
@@ -1602,6 +1611,14 @@ class SpellCastingMixin:
 
         # A divided spell's cross-seat target list: sanity-check every entry so a
         # stale battlefield index can't crash resolution.
+        #
+        # Whether the caller sent the list **empty** is kept, because the
+        # cleaning below folds an empty list into "no list": for the one shape
+        # that may name nobody ("each of up to three targets") an explicit
+        # empty list is that announcement, and the division gate reads it.
+        named_no_division_targets = (
+            divided_targets is not None and not divided_targets
+        )
         if divided_targets is not None:
             cleaned: list[tuple] = []
             for entry in divided_targets:
@@ -1900,28 +1917,66 @@ class SpellCastingMixin:
                 _card_divided_target_count(found[1], resolved_x_value)
                 if division in CARD_DIVIDED else None
             )
+            named_outside = _named_divided_targets(
+                card, from_zone, target_player_index,
+                target_permanent_index, target_permanent_ids,
+            )
             refusal = division_refusal(
                 total,
                 divided_targets or (),
                 division=division,
                 max_targets=found[1].get("max_targets"),
-                named_targets=_named_divided_targets(
-                    card, from_zone, target_player_index,
-                    target_permanent_index, target_permanent_ids,
-                ),
+                named_targets=named_outside,
                 exact_targets=exact,
+                # The announcement of no targets is written down just below
+                # and read at resolution (``announced_no_targets``).
+                carries_no_targets=True,
             )
             if refusal is not None:
                 self.log.append(f"{card.name}: {refusal}")
                 return SimulationResult(
                     card.name, False, classification.effect_kind, refusal,
                 )
+            # "…to each of **up to** three targets" (Shower of Coals), cast
+            # naming nobody (CR 115.6). Written onto the announcement as the
+            # empty list it is — and an *explicit* empty list is that
+            # announcement whatever seat the cast also carries, because every
+            # cast over the wire carries one. Without the mark the resolution
+            # could not tell "nobody" from "nothing said", and a spell that
+            # targets nothing went looking for the default opponent's face.
+            #
+            # The seat is dropped with it: a spell that chose no target has
+            # none (CR 115.6 — "targeted only if one or more targets have been
+            # chosen"), and a seat left on the stack object would be read back
+            # as a player it targets. A *permanent* named outside the list is
+            # a target and keeps the announcement what it was.
+            names_a_permanent = bool(target_permanent_ids) or (
+                target_permanent_index is not None
+            )
+            if (
+                division == EACH
+                and found[1].get("max_targets") is not None
+                and not divided_targets
+                and not names_a_permanent
+                and (named_no_division_targets or not named_outside)
+            ):
+                divided_targets = []
+                target_player_index = None
             # The card's own shares, written onto the announcement now that it
             # is known to be legal. Here rather than at resolution because the
             # share has to ride its target: a target that has left is dropped
             # from the list (CR 608.2b), and a share read by position after that
             # would slide Cone of Flame's 3 onto the creature it assigned 2.
-            if division in CARD_DIVIDED and divided_targets:
+            #
+            # **Printed shares only** (:data:`FIXED`). An :data:`EACH` entry
+            # was stamped too, with "the whole amount" — a number the
+            # resolution settles, not the announcement (CR 608.2h): Shower of
+            # Coals deals 2 or 4 by the graveyard it finds, and its entries
+            # read 4 on a board where it would deal 2. ``divide`` has never
+            # read the stamp for ``EACH``, so the number said nothing true and
+            # nothing was asked of it; an entry with no amount is what "the
+            # card supplies it as it resolves" looks like.
+            if division == FIXED and divided_targets:
                 divided_targets = stamp_card_shares(
                     divided_targets,
                     card_shares(
@@ -1944,6 +1999,17 @@ class SpellCastingMixin:
         # announcements and 601.2c's targets, and nothing between the two
         # positions spends anything, so a refusal here costs the caster exactly
         # what a refusal above it did.
+        # Where the spell itself sits in the caster's own graveyard, when that
+        # is where it is being cast from (flashback, Yawgmoth's Will). CR
+        # 601.2a moves it to the stack before any cost is paid, so it is not
+        # one of the cards an "exile X cards from your graveyard" cost can
+        # take — and every slot above it is one lower by the time the cost is
+        # collected.
+        spell_graveyard_slot = (
+            hand_index
+            if from_zone == "graveyard" and source_seat == caster_index
+            else None
+        )
         unpayable = self._unpayable_additional_cost(
             caster_index, card, cast_costs, spell_hand_index=hand_index,
             from_zone=from_zone, x_value=resolved_x_value,
@@ -1955,6 +2021,7 @@ class SpellCastingMixin:
             # CR 601.2b's announcement, made above: an optional price is a
             # price only for the caster who took it.
             taken=optional_paid,
+            spell_graveyard_slot=spell_graveyard_slot,
         )
         if unpayable is not None:
             self.log.append(unpayable)
@@ -1970,6 +2037,14 @@ class SpellCastingMixin:
             cost_permanent_index=cost_permanent_index,
             x_value=resolved_x_value, taken=optional_paid,
         )
+        if unpayable is None:
+            # …the same rule for the cards named out of a graveyard, which
+            # have no id to be named by: a set of slots, whole or refused.
+            unpayable = self._named_graveyard_cost_refusal(
+                caster_index, card, cast_costs, cost_graveyard_indices,
+                x_value=resolved_x_value, taken=optional_paid,
+                spell_graveyard_slot=spell_graveyard_slot,
+            )
         if unpayable is not None:
             self.log.append(unpayable)
             return SimulationResult(card.name, False, classification.effect_kind, unpayable)
@@ -2044,7 +2119,7 @@ class SpellCastingMixin:
                 # its mana cost" (Recoup) over an X spell, whose X is then the
                 # one the caster announced.
                 resolved_x_value = 0
-            if alternative_mana is not None and self.enforce_mana_costs:
+            if self.enforce_mana_costs:
                 # **An alternative cost paid in mana** (CR 702.34a: flashback's
                 # "by paying [cost] rather than paying its mana cost"). Charged
                 # where the mana cost would have been and by the same payment,
@@ -2053,7 +2128,21 @@ class SpellCastingMixin:
                 # gathered above for this cast apply to *this* total — "start
                 # with the mana cost or alternative cost you're paying, add any
                 # cost increases, then apply any cost reductions".
-                if not alternative_mana.strip():
+                #
+                # **And an alternative cost paid in something else** — a
+                # pitched card, life, a sacrifice (Force of Will, Fireblast,
+                # Dream Halls' grant). Its mana is nothing, and CR 118.9d says
+                # the same thing about it: the increases and the additional
+                # costs are "applied to that alternative cost", so the payment
+                # is this same one over an empty run of symbols. This branch
+                # charged mana only when the alternative cost itself printed
+                # some, which made a Sphere of Resistance, a per-target tax,
+                # the commander tax and the mana of a kicker or a buyback the
+                # caster had *announced* free for every such cast: 43 of 43
+                # pitch spells were cast under a Sphere with an empty pool,
+                # and Capsize came back to hand off a Dream Halls discard with
+                # its {3} unpaid.
+                if alternative_mana is not None and not alternative_mana.strip():
                     # A flashback cost "equal to its mana cost" over a card
                     # that has none (CR 118.6): unpayable, never free.
                     details = (
@@ -2079,7 +2168,7 @@ class SpellCastingMixin:
                     ),
                     extra_pips=extra_pip_tax,
                     offer_x_colorings=offer_x_colorings,
-                    mana_cost=alternative_mana,
+                    mana_cost=alternative_mana or "",
                 )
                 if paid is None:
                     details = (
@@ -2087,6 +2176,13 @@ class SpellCastingMixin:
                         f"{chosen_alternative.keyword or 'alternative'} cost "
                         f"({alternative_mana})"
                     )
+                    if alternative_mana is None:
+                        details = self._mana_still_owed_refusal(
+                            card,
+                            f"its alternative cost "
+                            f"({chosen_alternative.describe()})",
+                            extra_generic_tax, extra_pip_tax, cost_reduction,
+                        )
                     self.log.append(details)
                     return SimulationResult(
                         card.name, False, classification.effect_kind, details,
@@ -2105,6 +2201,32 @@ class SpellCastingMixin:
         elif free_grant is not None and card.primary_type != "land":
             if "{X}" in card.mana_cost.upper():
                 resolved_x_value = 0  # CR 107.3b: the only legal choice for X
+            if self.enforce_mana_costs:
+                # "Without paying its mana cost" is an alternative cost
+                # (CR 118.9), and CR 118.9d keeps every additional cost and
+                # cost increase in force on top of one: what is waived is the
+                # mana cost and nothing else. So the payment still runs, over
+                # an empty run of symbols — the taxes, the commander tax and
+                # the mana of every optional cost this caster announced. It
+                # did not run at all, which made a kicker and a buyback free
+                # under any waiver (61 of 73 such cards were cast, kicked, with
+                # an empty pool) and Aluren a way round Sphere of Resistance.
+                x_mana_spent = self._pay_cast_cost(
+                    caster, card, resolved_x_value, x_colors,
+                    extra_generic=extra_generic_tax, reduction=cost_reduction,
+                    extra_pips=extra_pip_tax,
+                    offer_x_colorings=offer_x_colorings,
+                    mana_cost="",
+                )
+                if x_mana_spent is None:
+                    details = self._mana_still_owed_refusal(
+                        card, "cast without paying its mana cost",
+                        extra_generic_tax, extra_pip_tax, cost_reduction,
+                    )
+                    self.log.append(details)
+                    return SimulationResult(
+                        card.name, False, classification.effect_kind, details,
+                    )
             self.log.append(
                 f"{card.name} cast without paying its mana cost"
                 + (f" ({free_grant.source_name})" if free_grant.source_name else "")
@@ -2178,6 +2300,17 @@ class SpellCastingMixin:
             cost_hand_cards=cost_hand_cards,
             x_value=resolved_x_value,
             taken=optional_paid,
+            # Re-counted for a spell that has just left the same pile: the
+            # gate above refused the spell's own slot, and every slot above it
+            # slid down one when it went to the stack.
+            cost_graveyard_indices=(
+                cost_graveyard_indices
+                if cost_graveyard_indices is None or spell_graveyard_slot is None
+                else [
+                    slot - 1 if slot > spell_graveyard_slot else slot
+                    for slot in cost_graveyard_indices
+                ]
+            ),
         )
         sacrificed_for_cost = cost_spoils["sacrificed_for_cost"]
         exiled_for_cost = cost_spoils["exiled_for_cost"]
@@ -2565,6 +2698,7 @@ class SpellCastingMixin:
         x_value: int | None = None,
         life_already_owed: int = 0,
         taken: dict[str, int] | None = None,
+        spell_graveyard_slot: int | None = None,
     ) -> str | None:
         """Why *card*'s printed additional costs can't be paid, or None.
 
@@ -2577,6 +2711,12 @@ class SpellCastingMixin:
         is not printed: Fire Covenant's "pay X life". It reaches both this and
         the payment through ``AdditionalCost.life_charged``, so the gate and the
         charge cannot come to disagree about the number.
+
+        *spell_graveyard_slot* is where the spell itself sits in the caster's
+        graveyard when it is being cast from there (CR 601.2a: it is on the
+        stack before a cost is paid, so it is not a card a graveyard exile can
+        take). Without it Skeletal Scrying cast out of a graveyard of five for
+        X = 5 counted itself, was admitted, and then found four.
         """
         caster = self.players[caster_index]
         for cost in costs:
@@ -2647,7 +2787,9 @@ class SpellCastingMixin:
             # picks from, so the two cannot count different sets.
             if cost.exile_graveyard_filter is not None:
                 wanted = cost.exiled_from_graveyard(x_value)
-                available = self._graveyard_exile_candidates(caster_index, cost)
+                available = self._graveyard_exile_candidates(
+                    caster_index, cost, spell_slot=spell_graveyard_slot,
+                )
                 if len(available) < wanted:
                     noun = graveyard_card_noun(cost.exile_graveyard_filter)
                     return (
@@ -3098,7 +3240,8 @@ class SpellCastingMixin:
         return payers
 
     def _graveyard_exile_candidates(
-        self, caster_index: int, cost: "AdditionalCost"
+        self, caster_index: int, cost: "AdditionalCost", *,
+        spell_slot: int | None = None,
     ) -> list[int]:
         """Which cards in the caster's own graveyard could pay *cost*'s exile,
         as **indices** in pile order.
@@ -3125,8 +3268,79 @@ class SpellCastingMixin:
         return [
             index
             for index, held in enumerate(self.players[caster_index].graveyard)
-            if _card_matches_filter(held, described)
+            # *spell_slot*: the spell being cast out of this pile, withheld by
+            # position (CR 601.2a) — a second copy beside it is another card.
+            if index != spell_slot and _card_matches_filter(held, described)
         ]
+
+    def _named_graveyard_cost_refusal(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        costs: tuple[AdditionalCost, ...],
+        named_slots: "list[int] | None",
+        *,
+        x_value: int | None = None,
+        taken: dict[str, int] | None = None,
+        spell_graveyard_slot: int | None = None,
+    ) -> str | None:
+        """Why the graveyard cards the caster **named** to pay "exile X cards
+        from your graveyard" cannot pay it, or None.
+
+        CR 601.2b lets the caster choose which cards leave (Skeletal Scrying,
+        Haunting Misery) and CR 601.2h holds them to it: "Partial payments are
+        not allowed." The pile half of :meth:`_named_cast_cost_refusal`, for a
+        cost whose objects have no id to be named by — a card in a graveyard
+        is a position, and a deck repeats one immutable ``CardDefinition`` per
+        copy, so only the position tells two copies apart.
+
+        The whole set or a refusal: every slot a card this cost could take
+        (``_graveyard_exile_candidates``, the list the CR 601.2h gate counted
+        and the payment takes from), none named twice, and exactly as many as
+        the cost exiles — a short list topped up from the default is the
+        caster paying with a card they did not name.
+
+        A cast that names **no set** (``None``) is not asked and takes the
+        deterministic pick, the headless convention. Nor is one that charges
+        no graveyard exile at all: a stray field there names nothing.
+        """
+        if named_slots is None:
+            return None
+        demands = [
+            (cost, cost.exiled_from_graveyard(x_value))
+            for cost in costs
+            if cost.exile_graveyard_filter is not None
+            and optional_cost_taken(cost, taken)
+        ]
+        if not demands:
+            return None
+        slots = list(named_slots)
+        cost, wanted = demands[0]
+        candidates = self._graveyard_exile_candidates(
+            caster_index, cost, spell_slot=spell_graveyard_slot,
+        )
+        for slot in slots:
+            if (
+                not isinstance(slot, int) or isinstance(slot, bool)
+                or slot not in candidates
+            ):
+                return (
+                    f"{card.name} can't be cast: no card at graveyard position "
+                    f"{slot} that can be exiled for its additional cost "
+                    f"(CR 601.2h)"
+                )
+        if len(set(slots)) != len(slots):
+            return (
+                f"{card.name} can't be cast: graveyard positions {slots} name "
+                f"one card more than once for its additional cost (CR 601.2h)"
+            )
+        if len(slots) != wanted:
+            return (
+                f"{card.name} can't be cast: its additional cost exiles "
+                f"{wanted} card(s) from the graveyard and {len(slots)} were "
+                f"named (CR 601.2h)"
+            )
+        return None
 
     def _resolve_alternative_cost(
         self,
@@ -3272,12 +3486,13 @@ class SpellCastingMixin:
         play unblocked. A named id that is not a candidate — another seat's
         creature, an already-tapped one, a land the phrase does not name — is a
         refusal with nothing spent, never a slide onto a legal neighbour; so is
-        an id named twice, or more ids than the cost takes. Fewer than the cost
-        takes is a partial naming, and the payment fills the rest by the
-        default rule. (The counted *additional* cost did the same until
-        ``_named_cast_cost_refusal``, which refuses a short list — CR 601.2h
-        allows no partial payment. This path still tops one up; it is the same
-        question and a separate change.)
+        an id named twice, or more ids than the cost takes — **or fewer**.
+        CR 601.2h: "Partial payments are not allowed." A caster who names one
+        of Gush's two Islands has announced half a payment, and filling the
+        other half from the default pick returns an Island they did not name:
+        the same substitution as replacing the one they did. This path topped a
+        short list up until the counted *additional* cost's twin
+        (``_named_cast_cost_refusal``) had been refusing one for a set.
         """
         if not named_ids:
             return [], None
@@ -3292,6 +3507,12 @@ class SpellCastingMixin:
             return [], (
                 f"{card.name} can't be cast: its alternative cost takes "
                 f"{count} permanent(s), each named once (CR 601.2b)"
+            )
+        if len(named_ids) < count:
+            return [], (
+                f"{card.name} can't be cast: its alternative cost takes "
+                f"{count} permanent(s) to {verb} and {len(named_ids)} "
+                f"were named (CR 601.2h)"
             )
         candidates = self._additional_cost_candidates(
             caster_index, cost, giving_up=verb
@@ -3598,6 +3819,76 @@ class SpellCastingMixin:
                 )
         return None
 
+    def alternative_cost_mana(
+        self,
+        caster_index: int,
+        card: CardDefinition,
+        cost: "AlternativeCost | None" = None,
+        *,
+        extra_generic: int = 0,
+    ) -> dict[str, int]:
+        """CR 118.9d, for a reader that **prices** a cast before making it: the
+        mana a cast of *card* owes when it is paid for with *cost* rather than
+        with its mana cost.
+
+        The cost's own mana (a flashback cost) or none (a pitched card, a life
+        payment, a sacrifice), plus every cost increase in force and less every
+        reduction, in CR 601.2f's order — the total ``_cast_onto_stack`` hands
+        ``_pay_cast_cost`` for the same announcement, with every optional cost
+        declined and nothing aimed at. *cost* None is a waiver ("without paying
+        its mana cost"), which CR 118.9 calls an alternative cost too.
+        *extra_generic* is what the zone adds — CR 903.8's commander tax.
+
+        Three readers price a cast and all three used to read an alternative
+        cost as costing no mana, because the cast path charged none: the offer's
+        ``payable`` (``legality.cast_cost_offers``), the castable highlight's
+        fallback behind it, and the AI's ``_alternative_cost_is_payable``. One
+        reader so the day the cast path began charging the taxes was not the day
+        the other three began offering casts it refuses.
+        """
+        tax, _taxing = spell_cost_tax(self, caster_index, card)
+        pips, _pip_taxing = spell_symbol_tax(self, caster_index, card)
+        reduction, _reducing = cost_reduction_for_cast(self, caster_index, card)
+        more, less, _by = keyword_cost_modifiers(
+            self, caster_index, cost.keyword if cost is not None else None
+        )
+        return reduce_cost(
+            self._parse_mana_cost(
+                (cost.mana if cost is not None else None) or "",
+                x_value=0,
+                extra_generic=max(0, extra_generic) + tax + more,
+                extra_pips=pips,
+            ),
+            CostReduction(reduction.generic + less, reduction.colored),
+        )
+
+    def _mana_still_owed_refusal(
+        self, card: CardDefinition, how: str, extra_generic: int,
+        extra_pips: "dict[str, int] | None", reduction: "CostReduction | None",
+    ) -> str:
+        """The refusal for a cast whose mana cost is not being paid and whose
+        pool cannot pay what CR 118.9d leaves owing.
+
+        *how* is the cost that replaced the mana cost, as the log should name
+        it. The amount is this cast's own total — its taxes and the optional
+        costs it announced, after its reductions — so the line says what to
+        float, which "insufficient mana" alone would not: the card's mana cost
+        is exactly what the caster is not paying.
+        """
+        from ...mana_payment import mana_cost_label
+
+        owed = reduce_cost(
+            self._parse_mana_cost(
+                "", x_value=0, extra_generic=extra_generic, extra_pips=extra_pips,
+            ),
+            reduction or CostReduction(),
+        )
+        return (
+            f"insufficient mana for {card.name}: {how} still owes "
+            f"{mana_cost_label(owed)} in additional costs and cost increases "
+            f"(CR 118.9d)"
+        )
+
     def _life_gain_cost_payer(self, caster_index: int) -> "int | None":
         """The seat an "have an opponent gain N life" cost will hand its life to.
 
@@ -3892,6 +4183,7 @@ class SpellCastingMixin:
         x_value: int | None = None,
         cost_permanent_ids: list[int] | None = None,
         taken: dict[str, int] | None = None,
+        cost_graveyard_indices: list[int] | None = None,
     ) -> dict:
         """Perform *card*'s printed additional costs, returning what they ate.
 
@@ -3961,14 +4253,41 @@ class SpellCastingMixin:
             # `exiled` above — which carries the Permanent a battlefield exile
             # ate — is deliberately not touched.
             #
-            # Taken from the top of the pile down, which is a deterministic pick
-            # and not the payer's choice: CR 601.2b lets them choose, and this
-            # engine has no graveyard picker on the cast path yet. Recorded in
-            # the W1G1 report rather than left silent — the choice matters to a
-            # deck with recursion, and the default is the honest floor until
-            # there is somewhere to make it.
+            # **The cards the caster named** (CR 601.2b: the choice is
+            # theirs), by graveyard slot — ``cost_graveyard_indices``, checked
+            # whole by ``_named_graveyard_cost_refusal`` before anything was
+            # spent and re-counted by the caller for a spell that left this
+            # pile. Resolved to cards before the first one leaves and removed
+            # highest slot first, so no removal renumbers a slot still owed;
+            # each ``pop`` takes exactly one copy.
+            #
+            # A cast that named no set takes the top of the pile down, the
+            # deterministic pick every unnamed cost here has.
             if cost.exile_graveyard_filter is not None:
                 owed = cost.exiled_from_graveyard(x_value)
+                if cost_graveyard_indices is not None:
+                    # Only slots this cost could take, each once, and no more
+                    # than it charges: the gate has already held the set to
+                    # exactly that, and the payment does not lean on it — a
+                    # caller that reached here past the gate still cannot
+                    # exile a card the cost does not name, and whatever the
+                    # set falls short by is taken by the default below rather
+                    # than left unpaid.
+                    payable = self._graveyard_exile_candidates(caster_index, cost)
+                    named = [
+                        slot for slot in dict.fromkeys(cost_graveyard_indices)
+                        if slot in payable
+                    ][:owed]
+                    cards_by_slot = {slot: caster.graveyard[slot] for slot in named}
+                    for slot in sorted(named, reverse=True):
+                        caster.graveyard.pop(slot)
+                    for slot in named:
+                        caster.exile.append(cards_by_slot[slot])
+                        self.log.append(
+                            f"{caster.name} exiled {cards_by_slot[slot].name} "
+                            f"from their graveyard to cast {card.name}"
+                        )
+                    owed -= len(named)
                 for _ in range(owed):
                     candidates = self._graveyard_exile_candidates(
                         caster_index, cost

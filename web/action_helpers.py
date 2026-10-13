@@ -136,6 +136,12 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
     # A three-tuple only where a share was announced (CR 601.2d): the two-tuple
     # is what every evenly-divided spell and every non-interactive caller sends,
     # and `engine/divided_damage.divided_entry` reads both.
+    #
+    # **An empty list is forwarded as one**, not as an absent field: "each of
+    # up to three targets" (Shower of Coals) may be cast naming nobody
+    # (CR 115.6), and `[]` is how a client says so — the default seat below
+    # rides every cast, so without the list the engine reads a face. For every
+    # other spell an empty list and an absent one are the same announcement.
     divided = (
         [
             (entry.seat, entry.index)
@@ -143,7 +149,7 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             else (entry.seat, entry.index, entry.amount)
             for entry in req.divided_targets
         ]
-        if req.divided_targets
+        if req.divided_targets is not None
         else None
     )
     return game.queue_from_hand(
@@ -196,6 +202,13 @@ def _queue_spell_from_request(game, seat: int, card_name: str, req, *, x_value):
             else [req.cost_permanent_id]
         ),
         cost_hand_index=req.cost_hand_index,
+        # …and which cards in the caster's graveyard pay "exile X cards from
+        # your graveyard" (Skeletal Scrying, Haunting Misery), by slot, on the
+        # field the activation branch already forwards for Psychatog. The
+        # engine holds a named set to the count (CR 601.2h) and takes the top
+        # of the pile for a cast that names none, so an absent field is every
+        # cast a client that does not know the field makes today.
+        cost_graveyard_indices=req.cost_graveyard_indices,
         # …and the further cards of a "discard two cards" cost (Forbid's
         # buyback), on the activation path's field.
         cost_other_hand_indices=req.cost_other_hand_indices,
