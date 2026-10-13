@@ -9,10 +9,11 @@ is not an event at all.
 The boundary is the CR's own. Every other production next door reads a clause
 naming something that **happens** — a creature attacks, a land is tapped, a
 spell is cast — and fires once per occurrence. CR 603.8 is a condition that is
-simply *true*: the ability triggers whenever the game state matches and does
-not trigger again until the state stops matching. Nothing in the two readings
-is shared, which is why this module imports no word table from up there and
-``triggers`` reaches down for one name.
+simply *true*: the ability triggers whenever the game state matches, and not
+again until it has left the stack (``engine/state_triggers.py`` holds that
+latch, and the sweep for the one state here that is about *another*
+permanent). Nothing in the two readings is shared, which is why this module
+imports no word table from up there and ``triggers`` reaches down for one name.
 
 Below ``triggers`` in the layer order for that reason, and above nothing but
 the readers a fragment production needs.

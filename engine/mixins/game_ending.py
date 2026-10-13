@@ -1232,8 +1232,11 @@ class GameEndingMixin:
         # (Mazemind Tome.) CR 603.8's *state* trigger: it fires whenever the
         # game state matches rather than on an event, so this sweep is where it
         # belongs — there is no call site to hang it on, and CR 603.8 says it
-        # fires only once until the state stops matching, which is why the
-        # permanent remembers that it announced.
+        # does not trigger again until it has left the stack, which is why the
+        # permanent remembers that it announced. The blocks below forget when
+        # the state stops matching; an ability that is *countered* gives its
+        # latch back through the key its stack object carries
+        # (`engine/state_triggers.py`, which has the rule and its one bound).
         # "When this enchantment has no +1/+1 counters on it, sacrifice it."
         # (Afiya Grove.) The mirror state of the threshold sweep below, and it
         # shares that sweep's CR 603.8 bookkeeping: it fires once and does not
@@ -1330,7 +1333,8 @@ class GameEndingMixin:
         #
         # The latch is the neighbours' ``_state_trigger_announced`` set, and the
         # rule is theirs: fire once, and not again until the state has stopped
-        # matching. CR 603.4 finishes the job at resolution — both cards print
+        # matching or the ability was countered (the key rides the object, as
+        # theirs does). CR 603.4 finishes the job at resolution — both cards print
         # "if this permanent is an enchantment", which is false once the
         # animation has replaced its types (CR 205.1a), so the ability an
         # unchanged board announces again does nothing.
