@@ -1167,9 +1167,29 @@ class TurnManagementMixin:
             if described:
                 from ..subject_filters import subject_matches
 
+                watcher = self.controller_index_of(perm)
+                if not self.is_on_battlefield(land):
+                    # **A land its own cost sacrificed** ("{T}, Sacrifice this
+                    # land: Add {B}{B}", Ebon Stronghold). It was tapped for
+                    # mana and the ability has now resolved (CR 106.12a), but
+                    # the land is a card in a graveyard, which CR 109.4 gives
+                    # no controller — so "a land **an opponent controls**"
+                    # asked of the control seam answers no, and Mana Web
+                    # slept through every sacrifice land. Whose it was is the
+                    # seat that tapped it; the rest of the phrase is asked of
+                    # the object as it last was.
+                    described = dict(described)
+                    whose = described.pop("controller", None)
+                    if whose == "opponent" and (
+                        watcher is None or watcher == player_index
+                    ):
+                        continue
+                    if whose == "you" and watcher != player_index:
+                        continue
+                    if whose not in (None, "opponent", "you"):
+                        continue
                 if not subject_matches(
-                    self, land, described,
-                    observer=self.controller_index_of(perm), source=perm,
+                    self, land, described, observer=watcher, source=perm,
                 ):
                     continue
             # "…that player adds one mana of any type that land produced.
