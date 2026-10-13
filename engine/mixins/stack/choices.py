@@ -46,7 +46,7 @@ from ... import piles
 from ...pending_choices import (CHOICE_SPECS, PendingChoice,
                                 optional_pay_options, register_choice,
                                 spec_for)
-from ...replacement_choices import pending_choices_for
+from ...replacement_choices import pending_choices_for, stamp_draw_of
 from ...resumption import resume_after_answer, run_resumable
 from ...mana_payment import (generic_cost, mana_cost_label, plan_payment,
                             untapped_mana_lands)
@@ -194,6 +194,11 @@ class PendingChoicesMixin:
         # queue, so appending here is what stops the loop and nothing sets a
         # flag. Nothing is waiting on a default taken inline above — that already
         # happened.
+        #
+        # A prompt a *draw* armed says so (CR 121.2): the draws behind that one
+        # wait for it, whichever queue it sits on — see
+        # ``EffectsMixin._draw_prompt_open``.
+        stamp_draw_of(self, choice)
         self.pending_choices.append(choice)
         return choice
 
@@ -356,7 +361,12 @@ class PendingChoicesMixin:
         if item is not None:
             self.resolving_stack_item = item
         try:
-            answered = apply()
+            # A prompt a draw armed is answered inside that draw (CR 121.2):
+            # the draws parked behind it are released here, with the object
+            # they belong to still resolving, so a prompt one of *them* arms
+            # holds the same object. Inert for every other prompt.
+            with self.answering_draw_prompt(choice):
+                answered = apply()
         finally:
             self.resolving_stack_item = previous
         if item is not None:
@@ -2649,9 +2659,19 @@ class PendingChoicesMixin:
         # CR 121.2 makes "draw three cards" three individual draws; a
         # replacement takes one of them and the rest have to wait for the
         # answer, because they are later steps of the same instruction.
+        # They are draws of the same event as the one the prompt replaced, so
+        # what that event had already been through stays excluded (CR 614.5:
+        # the doubler that made them does not double them again) — and the
+        # seam parks them while the draw above is waiting on another
+        # replacement's offer.
         queued = int(choice.data.get("queued_draws", 0) or 0)
         if queued > 0:
-            self._draw_with_replacements(player, queued)
+            self._draw_with_replacements(
+                player, queued,
+                exclude_sources=tuple(
+                    choice.data.get("queued_exclude_sources") or ()
+                ),
+            )
 
     # -- An opponent picks out of a revealed pile (Thran Tome) ---------------
 

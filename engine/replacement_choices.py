@@ -81,6 +81,23 @@ def resolve_choice(game, choice: ReplacementChoice, option_index: int) -> int:
     return resolver(game, choice, option_index)
 
 
+#: The data key a prompt carries when a **draw** armed it: the seat whose draw
+#: is not finished until the prompt is answered. Stamped where a prompt is
+#: queued (here and in ``Game.arm_pending_choice``) while that seat's draw
+#: machinery is running, and read by ``Game._draw_prompt_open`` — CR 121.2
+#: makes a multi-card draw that many individual draws, so the next one must
+#: not begin while this one still owes a decision. Engine-private (the leading
+#: underscore keeps it off every client payload).
+DRAW_OF = "_draw_of"
+
+
+def stamp_draw_of(game, choice) -> None:
+    """Mark *choice* as owed by the draw in progress, if one is."""
+    scopes = getattr(game, "draw_scopes", None)
+    if scopes and DRAW_OF not in choice.data:
+        choice.data[DRAW_OF] = scopes[-1]
+
+
 def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int]:
     """Present *choice* to its chooser.
 
@@ -91,6 +108,7 @@ def offer_replacement_choice(game, choice: ReplacementChoice) -> tuple[bool, int
     """
     if choice.player_index not in game.interactive_seats:
         return False, resolve_choice(game, choice, choice.default_option)
+    stamp_draw_of(game, choice)
     game.pending_replacement_choices.append(choice)
     return True, 0
 
