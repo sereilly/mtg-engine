@@ -21,7 +21,7 @@ from ..combat_restrictions import (declaration_company_required,
                                    defender_attack_cap,
                                    participation_cap,
                                    restriction_condition_holds)
-from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..subject_filters import subject_matches
 from ..events import emit
 from ..handlers._common import evaluate_count
@@ -754,7 +754,7 @@ class DeclareAttackersStepMixin:
         controller = self.players[controller_index]
         available = [
             land
-            for land in untapped_mana_lands(self.controlled_by(controller))
+            for land in self.payment_lands(controller)
             if not any(land is attacker for attacker in attackers)
         ]
         return total, plan_payment(
@@ -779,19 +779,27 @@ class DeclareAttackersStepMixin:
         # tapped (CR 508.1f), and a land it left out is one it must still
         # leave out.
         planned = list(plan.tapped)
-        self._pay_planned_cost(
+        paid = self._pay_planned_cost(
             controller,
             lambda: plan_payment(
                 controller.mana_pool,
                 [
-                    land for land in untapped_mana_lands(self.controlled_by(controller))
+                    land for land in self.payment_lands(controller)
                     if any(land is named for named in planned)
                 ],
                 total, payer=controller,
             ),
         )
+        # Said as it happened. The plan is made over ``Game.payment_lands``,
+        # so it fails here only when a tap changed the board under it; the
+        # declaration is already made by then, and a log that read "paid"
+        # either way was the one place the shortfall could have been seen.
         self.log.append(
             f"{controller.name} paid {mana_cost_label(total)} to declare attackers"
+            if paid else
+            f"{controller.name} could not pay {mana_cost_label(total)} in full "
+            "to declare attackers: a land the payment counted on made nothing "
+            "it could spend"
         )
 
     def _attack_costs_of(self, attacker: Permanent) -> list[dict]:
@@ -1183,7 +1191,7 @@ class DeclareAttackersStepMixin:
                 self.players[attacker_seat].mana_pool,
                 [
                     land
-                    for land in untapped_mana_lands(self.controlled_by(attacker_seat))
+                    for land in self.payment_lands(attacker_seat)
                     if land is not attacker
                 ],
                 cost, payer=self.players[attacker_seat],

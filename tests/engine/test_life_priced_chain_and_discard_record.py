@@ -98,8 +98,10 @@ def test_an_opponent_priced_chain_never_asks_the_controller(set_pool):
 
 
 def test_a_seat_below_the_price_cannot_pay_it(set_pool):
-    """CR 119.4. The accept is not a payment: no life moves and the chain goes
-    on to its unpaid branch."""
+    """CR 119.4. The accept is not a payment, and not an answer either: a
+    seat that is asked cannot choose what it cannot do (CR 608.2d), so the
+    "yes" is refused and the offer stands until it says the "no" it can say.
+    No life moves and the chain goes on to its unpaid branch."""
     game = _duel(
         set_pool, "Draw a card unless any player pays 5 life.", interactive=(0, 1),
     )
@@ -107,7 +109,9 @@ def test_a_seat_below_the_price_cannot_pay_it(set_pool):
     game.cast_from_hand(0, "Probe")
 
     assert game.confirm_optional_pay(0, accept=False)
-    assert game.confirm_optional_pay(1, accept=True)
+    assert game.confirm_optional_pay(1, accept=True) is False
+    assert game.players[1].life == 4 and game.pending_optional_pays
+    assert game.confirm_optional_pay(1, accept=False)
     game._settle()
 
     assert game.players[1].life == 4

@@ -1236,6 +1236,16 @@ def _optional_pay(ctx: PromptContext, choices: list) -> dict:
             **public_data(choice),
             "player_index": choice.player_index,
             **({} if choice.data.get("prompt") else offer_wording(choice.data)),
+            # Whether "yes" would be accepted as the board stands: the price
+            # from the pool plus the lands the engine taps for a payer. False
+            # is not "cannot pay" — the seat may hold mana the plan does not
+            # tap (a Sol Ring, a filter land), and may tap it and answer again
+            # — it is "tap for it first": an accept now is a 400 that keeps
+            # the offer (`Game.seat_answers_for_itself`). The engine's own
+            # reader, so the button and the answer cannot disagree.
+            "payable": ctx.game._player_can_pay_optional(
+                ctx.game.players[choice.player_index], choice.data
+            ),
         }
         for choice in choices
     ]}
@@ -1381,12 +1391,12 @@ def _pay_any_amount(ctx: PromptContext, choices: list) -> dict:
     of the same reader the resolver uses — an offer the engine would refuse is
     not an offer.
     """
-    from engine.mana_payment import generic_cost, plan_payment, untapped_mana_lands
+    from engine.mana_payment import generic_cost, plan_payment
 
     choice = choices[0]
     seat = choice.player_index
     player = ctx.game.players[seat]
-    lands = untapped_mana_lands(ctx.game.controlled_by(seat))
+    lands = ctx.game.payment_lands(seat)
     affordable = 0
     # Walk up rather than compute: `plan_payment` is the one answer to "can
     # this be paid", and a second arithmetic here is a second answer. The
@@ -1545,6 +1555,12 @@ def _mana_payment(ctx: PromptContext, choices: list) -> dict:
         + (f" and {life} life" if life else ""),
         "life": life,
         "spell_name": target_item.card.name if target_item is not None else None,
+        # Whether "pay" would be accepted as the board stands — the pool plus
+        # the lands the engine taps for a payer. False means "tap for it
+        # first": the payer may hold mana the plan does not tap (a Sol Ring, a
+        # filter land), and an accept sent now is a 400 that keeps this prompt
+        # rather than a counter. See `Game.mana_payment_is_payable`.
+        "payable": ctx.game.mana_payment_is_payable(choices[0]),
     }
 
 

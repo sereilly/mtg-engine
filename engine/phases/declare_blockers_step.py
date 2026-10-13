@@ -29,7 +29,7 @@ from ..combat_restrictions import (declaration_company_required,
                                   restriction_condition_holds)
 from ..evasion_negation import negated_evasion_abilities
 from ..landwalk import LANDWALK, land_satisfies, landwalk_requirement
-from ..mana_payment import mana_cost_label, plan_payment, untapped_mana_lands
+from ..mana_payment import mana_cost_label, plan_payment
 from ..delayed_triggers import fire_delayed_triggers
 from ..layer_bridge import computed_abilities
 from ..subject_filters import subject_matches
@@ -1449,14 +1449,14 @@ class DeclareBlockersStepMixin:
             toll = self._block_toll_of(blocker)
             if toll and plan_payment(
                 self.players[blocker_seat].mana_pool,
-                untapped_mana_lands(self.controlled_by(blocker_seat)),
+                self.payment_lands(blocker_seat),
                 toll, payer=self.players[blocker_seat],
             ) is None:
                 return False
             for cost in self._block_mana_costs_of(blocker, attacker):
                 if plan_payment(
                     self.players[blocker_seat].mana_pool,
-                    untapped_mana_lands(self.controlled_by(blocker_seat)),
+                    self.payment_lands(blocker_seat),
                     cost, payer=self.players[blocker_seat],
                 ) is None:
                     return False
@@ -1786,7 +1786,7 @@ class DeclareBlockersStepMixin:
         defender = self.players[controller_index]
         return total, plan_payment(
             defender.mana_pool,
-            untapped_mana_lands(self.controlled_by(controller_index)),
+            self.payment_lands(controller_index),
             total, payer=defender,
         )
 
@@ -1808,19 +1808,24 @@ class DeclareBlockersStepMixin:
         # one payer every effect-collected cost shares, re-planned over those
         # same lands as the attack side does.
         planned = list(plan.tapped)
-        self._pay_planned_cost(
+        paid = self._pay_planned_cost(
             defender,
             lambda: plan_payment(
                 defender.mana_pool,
                 [
-                    land for land in untapped_mana_lands(self.controlled_by(controller_index))
+                    land for land in self.payment_lands(controller_index)
                     if any(land is named for named in planned)
                 ],
                 total, payer=defender,
             ),
         )
+        # Said as it happened, for the attack side's reason.
         self.log.append(
             f"{defender.name} paid {mana_cost_label(total)} to declare blockers"
+            if paid else
+            f"{defender.name} could not pay {mana_cost_label(total)} in full "
+            "to declare blockers: a land the payment counted on made nothing "
+            "it could spend"
         )
 
     def _negated_evasion_abilities(self) -> frozenset[str]:

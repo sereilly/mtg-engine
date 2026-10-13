@@ -4209,7 +4209,10 @@ def _offer_to_seat(
         _resolved_cost(alternative, context, game)
         for alternative in (instruction.payload.get("cost_alternatives") or ())
     ]
-    if (cost or life_cost) and not game._player_can_pay_optional(player, {
+    # "Cannot afford" is the plan's answer for a seat the engine answers for.
+    # A person is still asked whenever they hold mana the plan does not tap
+    # (`Game.payment_may_be_offered`): the choice in "unless" is theirs.
+    if (cost or life_cost) and not game.payment_may_be_offered(player, {
         "cost": cost,
         "cost_alternatives": alternatives,
         "life_cost": life_cost,

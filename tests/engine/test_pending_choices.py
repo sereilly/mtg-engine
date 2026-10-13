@@ -92,15 +92,27 @@ def test_the_completeness_check_fires():
     assert any("is not an ActionKind" in p for p in problems)
 
 
+#: The two actions a payment prompt admits without being answered by them: a
+#: price in mana is paid by tapping for it, and the seat's own mana abilities
+#: are how (CR 605.3a). They are ordinary game actions — neither dispatches to
+#: any prompt's resolver — so every prompt that is paid in mana lists the same
+#: two (``mana_payment``, ``optional_pay``), and that is not an ambiguity.
+_MANA_ACTIONS = {"tap", "activate"}
+
+
 def test_kinds_and_keys_are_unique():
     actions = [
         action
         for spec in CHOICE_SPECS.values()
         for action in (spec.action, *spec.also_answers)
+        if action not in _MANA_ACTIONS
     ]
     keys = [spec.prompt_key for spec in CHOICE_SPECS.values()]
     assert len(set(actions)) == len(actions), "two prompts answered by one action"
     assert len(set(keys)) == len(keys), "two prompts sharing a state key"
+    # …and no prompt's own answer is one of the two: a kind answered *by*
+    # "tap" would make every land tap an answer to it.
+    assert not _MANA_ACTIONS & {spec.action for spec in CHOICE_SPECS.values()}
 
 
 def test_duplicate_registration_raises():

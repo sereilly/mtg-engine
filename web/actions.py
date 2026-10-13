@@ -19,7 +19,7 @@ from engine.activation_permissions import card_widens_activation
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
-from engine.mana_payment import taps_for_payment
+from engine.mana_payment import is_mana_ability, taps_for_payment
 from engine.mixins.turn_management import is_tap_alone_mana_ability
 from engine.oracle import compile_card_oracle
 from engine.targeting import usable_activated_abilities
@@ -444,7 +444,30 @@ def _action_activate(session, req, seat_type):
         if not tapped:
             raise HTTPException(status_code=400, detail="failed to tap land for mana")
     else:
-        if not session.game.has_priority(req.seat):
+        # CR 605.3a: a player may activate a mana ability "whenever a rule or
+        # effect asks for a mana payment, even if it's in the middle of …
+        # resolving a spell". A payment prompt admits ``activate`` for exactly
+        # that (``ChoiceSpec.also_answers``) — so while this seat owes one, a
+        # mana ability is activated whoever holds priority, and nothing else
+        # is: nobody has priority part-way through a resolution (CR 117.1),
+        # and an ability put on the stack there would be one the resolving
+        # object never finished under.
+        paying = _owes_a_mana_payment(session.game, req.seat)
+        if paying:
+            abilities = session.game.usable_abilities_of(
+                permanent, card=permanent.effective_card
+            )
+            named = req.ability_index if req.ability_index is not None else 0
+            chosen = abilities[named] if 0 <= named < len(abilities) else None
+            if chosen is None or not is_mana_ability(chosen):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "only a mana ability can be activated while a payment "
+                        "is being asked of you"
+                    ),
+                )
+        elif not session.game.has_priority(req.seat):
             raise HTTPException(status_code=400, detail="you do not currently have priority")
         if req.target_seat is not None:
             target = req.target_seat
@@ -569,7 +592,27 @@ def _action_activate(session, req, seat_type):
         )
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
-        session.game.note_priority_action_taken(req.seat)
+        if not paying:
+            # A mana ability activated to pay what an effect asked for is not
+            # an action taken with priority (CR 605.3a), so it moves none.
+            session.game.note_priority_action_taken(req.seat)
+
+
+def _owes_a_mana_payment(game, seat: int) -> bool:
+    """Whether *seat* owes an open prompt that its own mana abilities answer.
+
+    Read off the registry (``ChoiceSpec.also_answers``), which is where each
+    kind says what besides its confirm answers it — ``mana_payment`` and
+    ``optional_pay`` today, and whichever kind next says a seat pays it by
+    tapping. A list of kinds here would be the second copy.
+    """
+    return any(
+        choice.player_index == seat
+        and spec.holds_priority
+        and "activate" in spec.also_answers
+        and spec.open_for(game, choice)
+        for spec, choice in game.iter_pending_prompts()
+    )
 
 
 @action_handler("activate_hand", human_only=HUMAN_ONLY)
