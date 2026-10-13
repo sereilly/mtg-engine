@@ -163,6 +163,51 @@ def test_707_10_a_forked_copy_carries_every_decision_made_for_the_original(
     assert copy.chosen_modes == bolt.chosen_modes
 
 
+@pytest.mark.cr("707.10")
+@pytest.mark.parametrize("spell, x_value, each", [
+    # "…2 damage to each of up to three targets": every target takes it all.
+    ("Shower of Coals", None, 2),
+    # "…X damage divided evenly, rounded down, among any number of targets."
+    ("Fireball", 4, 2),
+])
+def test_707_10_a_copy_resolves_at_every_target_the_original_named(
+    catalog_by_name, spell, x_value, each
+):
+    """Carrying the decision is half of CR 707.10; the copy has to *resolve*
+    with it. A spell with several targets announces them on a channel of its
+    own, the copy had the list, and the copy's arm of the resolution did not
+    read it - so the copy went wherever a spell with no target named goes.
+    Found by a person Forking a Shower of Coals aimed at two creatures and
+    watching the copy burn the opponent's face."""
+    me = PlayerState(name="P0", life=20, library=[catalog_by_name["Forest"]] * 5)
+    you = PlayerState(name="P1", life=20, library=[catalog_by_name["Forest"]] * 5)
+    game = Game(players=[me, you])
+    game.enforce_mana_costs = False
+    wurms = []
+    for _ in range(2):
+        wurm = Permanent(card=catalog_by_name["Scaled Wurm"])
+        game._put_permanent_onto_battlefield(1, wurm, None)
+        wurms.append(wurm)
+    announced = {"divided_targets": [(1, 0), (1, 1)]}
+    if x_value is not None:
+        announced["x_value"] = x_value
+    me.hand = [catalog_by_name[spell], catalog_by_name["Fork"]]
+    assert game.queue_from_hand(0, spell, **announced).supported
+    assert game.queue_from_hand(0, "Fork", target_stack_index=0).supported
+
+    game.resolve_top_of_stack()  # Fork: the copy goes on the stack
+    copy = game.stack[-1]
+    assert copy.is_copy and copy.card.name == spell
+    game.resolve_top_of_stack()  # the copy
+
+    assert [wurm.damage_marked for wurm in wurms] == [each, each]
+    assert (me.life, you.life) == (20, 20)
+
+    game.resolve_top_of_stack()  # the original
+    assert [wurm.damage_marked for wurm in wurms] == [2 * each, 2 * each]
+    assert (me.life, you.life) == (20, 20)
+
+
 def _walk(value):
     if hasattr(value, "kind") and hasattr(value, "payload"):
         yield value

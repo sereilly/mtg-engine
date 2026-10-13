@@ -1738,7 +1738,16 @@ class StackResolutionMixin:
                 stack_target=item.target_stack_item,
                 mode_index=item.chosen_mode_index,
                 old_color=item.choices.get("old_color"),
+                # CR 707.10: a copy has the targets chosen for the original,
+                # and a spell with several of them carries them on this
+                # channel, not in the two fields above. The copy *had* the
+                # list (``_copy_of_spell`` copies ``choices``) and this arm
+                # did not pass it, so a Forked Shower of Coals aimed at two
+                # creatures resolved as a spell with no target named - at the
+                # opponent's face.
+                divided_targets=item.choices.get("divided_targets"),
                 choices=item.choices,
+                trigger_context=item.trigger_context,
             )
             self.log.append(f"{item.card.name} (copy) resolved")
             return
