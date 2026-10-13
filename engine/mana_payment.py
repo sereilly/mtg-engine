@@ -466,6 +466,65 @@ MANA_PRODUCING_KINDS: frozenset[str] = frozenset({
     "channel_life_for_mana",
 })
 
+#: Costs that move a card to or from a library, as fields of
+#: ``ActivatedAbilityCost`` - each a count, zero for "no such cost". CR 605.1a's
+#: fourth criterion (in the rules since the September 2026 edition): an
+#: activated ability is a mana ability only if "its cost and effect don't move
+#: any card to or from a library". Milling (Millikin, Charmed Pendant) and
+#: exiling the top of a library move one *from* it; a card put from a hand on
+#: top moves one *to* it.
+LIBRARY_MOVING_COSTS: tuple[str, ...] = (
+    "mill_cards", "exile_top_of_library", "hand_to_library_top",
+)
+
+#: The effect half of the same criterion, asked **the other way round**. Every
+#: effect that moves a card between zones lowers into one grammar category
+#: (:data:`_ZONE_MOVING_CATEGORY`, 166 kinds), and a step of that category
+#: beside an add-mana step is *presumed* to move a card to or from a library
+#: unless it is one of these - the zone-moving steps the pool's mana abilities
+#: carry that have been read and do not:
+#:
+#: * ``sacrifice_self`` - battlefield to graveyard (Gemstone Mine and the five
+#:   storage lands sacrifice themselves when the last counter is gone);
+#: * ``return_self_instead_of_untapping`` - battlefield to hand, later
+#:   (Undiscovered Paradise);
+#: * ``reveal_cards_from_hand`` - nothing moves (Metalworker).
+#:
+#: Presumed, because the two ways of being wrong are not alike. A mana ability
+#: read as an ordinary one still works, through the stack; an ordinary ability
+#: read as a mana ability can be activated in the middle of a payment and
+#: cannot be responded to, which is the card doing more than it prints with
+#: nothing to show for it. A draw is the step the pool actually carries ("Add
+#: one mana of any color. **Draw a card.**" - Chromatic Sphere, Odyssey's five
+#: Eggs), and a set collected off the pool would have held that one kind and
+#: called "{T}: Add {G}. Mill a card." a mana ability the day it was printed.
+#: ``tests/engine/test_mana_ability_library_criterion.py`` holds every such
+#: step in either manifest role to a reviewed verdict, so an entry is added
+#: here by reading a card, never by default.
+LIBRARY_SAFE_ZONE_KINDS: frozenset[str] = frozenset({
+    "sacrifice_self",
+    "return_self_instead_of_untapping",
+    "reveal_cards_from_hand",
+})
+
+#: The grammar category of an effect that moves a card between zones
+#: (``lowering/categories.INSTRUCTION_CATEGORIES``).
+_ZONE_MOVING_CATEGORY = "zones"
+
+#: A step that sets up a **later** ability rather than doing its work now. CR
+#: 603.7: "An effect may create a delayed triggered ability that can do
+#: something at a later time" - the delayed ability is another ability, with its
+#: own resolution, and what *it* moves is not moved by the cost or the effect of
+#: the ability that created it. So "Add one mana of any color. Draw a card at
+#: the beginning of the next turn's upkeep." (Barbed Sextant, Astrolabe) is a
+#: mana ability and "Add one mana of any color. Draw a card." (Chromatic Sphere)
+#: is not. No ruling says so of the Sextant by name; the Sphere's, Millikin's
+#: and Selvala's (all 2026-08-05) are each about a card moved as the ability is
+#: activated or resolves, and the mischief the criterion answers - a card drawn
+#: or revealed in the middle of paying for something - is one a draw at the next
+#: upkeep cannot do.
+_LATER_ABILITY_KINDS: frozenset[str] = frozenset({"create_delayed_trigger"})
+
 
 def has_nonmana_activated_ability(card) -> bool:
     """Whether *card* has an activated ability that isn't a mana ability
@@ -553,21 +612,33 @@ def is_mana_ability(ability) -> bool:
     one — the four AI call sites pass a bare instruction and no planeswalker
     reaches them.
 
-    **An ability whose cost mills is not a mana ability either**, and this one
-    is a *ruling*, not a rule this repo can cite. "{T}, Mill a card: Add {C}.
-    (Activate only as an instant.)" — Millikin's Scryfall ruling of 2026-08-05:
-    "Millikin's ability is not a mana ability. Players can respond to it, and
-    it can't be activated in the middle of paying for a cost. A recent update
-    to rule 605.1a has made any abilities that move cards to or from libraries
-    no longer mana abilities." The ``MagicCompRules.txt`` shipped here is the
-    April 2026 edition and its 605.1a does not carry that clause yet, so the
-    reading is held to the one cost the ruling was written about — a **mill**
-    cost (Millikin, Charmed Pendant) — rather than to everything a wider
-    reading of "move cards to or from libraries" would reach. It is the
-    printed reminder text made true: an ability that uses the stack is
-    activated whenever its controller has priority, which is "only as an
-    instant". Like the loyalty clause it is a property of the cost, so a
-    caller holding a bare instruction is not told.
+    **And an ability that moves a card to or from a library is not a mana
+    ability** — the fourth criterion, which CR 605.1a has carried since the
+    September 2026 edition: "…and its cost and effect don't move any card to
+    or from a library." It first reached this function as a *ruling* (Millikin,
+    2026-08-05: "not a mana ability. Players can respond to it, and it can't be
+    activated in the middle of paying for a cost"), while the rules file this
+    repo shipped was the April edition, and was held to the one cost that
+    ruling was written about. Both halves are asked now:
+
+    * the **cost** (:data:`LIBRARY_MOVING_COSTS`) — a mill, the top of a
+      library exiled, a card put on top of one. A property of the cost, like
+      the loyalty clause, so a caller holding a bare instruction is not told;
+    * the **effect** (:func:`moves_a_library_card`) — "Add one mana of any
+      color. Draw a card." (Chromatic Sphere, the five Eggs). Asked of the
+      steps the ability carries out *as it resolves*: a delayed ability it
+      sets up is another ability (:data:`_LATER_ABILITY_KINDS`, with the
+      reasoning), so Barbed Sextant's draw at the next upkeep leaves its mana
+      ability one. And asked fail-closed: a zone-moving step that nobody has
+      read is presumed to reach a library (:data:`LIBRARY_SAFE_ZONE_KINDS`).
+
+    It is those cards' printed reminder text made true: an ability that uses
+    the stack is activated whenever its controller has priority, which is
+    "only as an instant". The rule's last sentence — "Do not take into account
+    replacement effects that may apply, other than self-replacement effects" —
+    is why this reads the compiled ability and never the board: a mana ability
+    whose draw something would replace is still not a mana ability, and one
+    that a replacement would *make* draw still is.
     """
     instruction = getattr(ability, "instruction", ability)
     if instruction is None or not hasattr(instruction, "kind"):
@@ -575,15 +646,56 @@ def is_mana_ability(ability) -> bool:
     cost = getattr(ability, "cost", None)
     if getattr(cost, "loyalty", None) is not None:
         return False
-    if getattr(cost, "mill_cards", 0):
+    if any(getattr(cost, field, 0) for field in LIBRARY_MOVING_COSTS):
         return False
     steps = (instruction, *_every_nested_step(instruction))
     if not any(step.kind in MANA_PRODUCING_KINDS for step in steps):
+        return False
+    if moves_a_library_card(instruction):
         return False
     return not any(
         (step.payload or {}).get("targets") or _names_a_target(step.payload)
         for step in steps
     )
+
+
+def moves_a_library_card(instruction) -> bool:
+    """Whether resolving *instruction* moves a card to or from a library, as
+    far as CR 605.1a's fourth criterion is concerned: any step it carries out
+    now (:func:`steps_carried_out_now`) that moves a card between zones and is
+    not one of :data:`LIBRARY_SAFE_ZONE_KINDS`."""
+    from .grammar.lowering.categories import INSTRUCTION_CATEGORIES
+
+    return any(
+        INSTRUCTION_CATEGORIES.get(step.kind) == _ZONE_MOVING_CATEGORY
+        and step.kind not in LIBRARY_SAFE_ZONE_KINDS
+        for step in steps_carried_out_now(instruction)
+    )
+
+
+def steps_carried_out_now(instruction) -> tuple:
+    """*instruction* and every step inside it that happens as it resolves —
+    :func:`_every_nested_step` that does not open a step which only sets up a
+    later ability (:data:`_LATER_ABILITY_KINDS`).
+
+    The walk CR 605.1a's fourth criterion needs and the first three do not:
+    "could add mana" and "doesn't require a target" are true of an ability
+    whatever part of it says so, while "its … effect [doesn't] move any card to
+    or from a library" is about what this ability's own resolution does.
+    """
+    if instruction is None or not hasattr(instruction, "kind"):
+        return ()
+    found = [instruction]
+    if instruction.kind in _LATER_ABILITY_KINDS:
+        return tuple(found)
+    from .grammar.lower import nested_instructions, offer_branches
+
+    inner = nested_instructions(instruction)
+    if inner is None:
+        inner = offer_branches(instruction)
+    for step in inner or ():
+        found.extend(steps_carried_out_now(step))
+    return tuple(found)
 
 
 def carries_an_offer(instruction) -> bool:

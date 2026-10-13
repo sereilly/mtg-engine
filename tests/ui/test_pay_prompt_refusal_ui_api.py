@@ -126,6 +126,33 @@ def test_pay_with_a_sol_ring_untapped_is_refused_then_paid_by_hand():
     assert sum(me.mana_pool.values()) == 0
 
 
+def test_an_ability_that_draws_is_not_a_way_to_pay():
+    """CR 605.1a's fourth criterion on the wire. "{1}, {T}, Sacrifice this
+    artifact: Add one mana of any color. Draw a card." (Chromatic Sphere)
+    moves a card from a library, so it is not a mana ability - its ruling of
+    2026-08-05: "it can't be activated in the middle of paying for a cost."
+    The payment prompt admits a mana ability and nothing else, so the Sphere
+    is refused where the Sol Ring beside it is not, and it is still on the
+    battlefield, untapped, afterwards."""
+    sid, _session_, game, me = _session("Island", "Chromatic Sphere", "Sol Ring")
+    me.mana_pool["C"] = 1          # the Sphere's own {1} is not what refuses it
+    bolt = _mana_leak(game)
+
+    sphere = _act(sid, action="activate", permanent_name="Chromatic Sphere", mana_color="U")
+    assert sphere.status_code == 400
+    assert "only a mana ability" in sphere.json()["detail"]
+    assert [p.card.name for p in me.battlefield] == ["Island", "Chromatic Sphere", "Sol Ring"]
+    assert not any(permanent.tapped for permanent in me.battlefield)
+    assert len(game.stack) == 1 and me.mana_pool.get("C", 0) == 1
+
+    ring = _act(sid, action="activate", permanent_name="Sol Ring")
+    assert ring.status_code == 200, ring.text
+    assert me.mana_pool.get("C", 0) == 3
+    paid = _act(sid, action="confirm_mana_payment", accept=True)
+    assert paid.status_code == 200, paid.text
+    assert any(item is bolt for item in game.stack), "paid for, not countered"
+
+
 def test_declining_is_still_one_request():
     sid, _session_, game, me = _session("Island", "Sol Ring")
     bolt = _mana_leak(game)

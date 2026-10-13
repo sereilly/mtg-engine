@@ -2219,6 +2219,21 @@ instruments current.
    its own. A creature type or keyword the vocabulary has never heard of does
    not fail loudly later — it refuses to parse in a way that looks exactly
    like a grammar gap, and gets debugged as one.
+
+   **And if the Comprehensive Rules have a newer edition, bump the file on a
+   commit of its own, before the set.** Keep the old one (`git show
+   HEAD:MagicCompRules.txt > old.txt`), install the download with
+   `python scripts/cr_edition_diff.py --install <download.txt>`, then run
+   `python scripts/cr_edition_diff.py old.txt` *before* touching a citation:
+   it lists every citation in the repo of a rule whose text moved to another
+   number, changed in place, or went. Re-point the moved ones, re-read the
+   changed ones, then `rules_progress.py --check` and `rules_gaps.py`. The
+   September 2026 bump moved five cited rules and 53 citations, none of
+   which any test would have failed on, and the edition carried a rule
+   (CR 605.1a's library criterion) the engine had been holding as a ruling
+   for two months because the file did not say it yet. A set that prints a
+   mechanic newer than the file is a set whose rulings cite rules this repo
+   cannot.
 3. **Read the size-guard headroom before briefing anyone**:
    `python scripts/check_all.py --caps` (it runs every check and takes
    minutes; `find engine/grammar -name "*.py" | xargs wc -l | sort -rn | head`
@@ -4746,3 +4761,8 @@ rounds; the CI baseline read: 4,253 s against a budget of 940) and
 rewritten - seven modules inside the band for the next Phase 0, and the
 budget decision still the owner's. What the set measured and left is one
 ROADMAP entry with its parts named.
+
+*After the close:* the rules file was bumped from the April to the September
+2026 edition - `scripts/cr_edition_diff.py`, five cited rules re-pointed -
+and CR 605.1a's fourth criterion became a rule the engine asks rather than a
+ruling it held to one cost. Phase 0 gains the bump as a step of its own.

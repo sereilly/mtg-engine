@@ -68,14 +68,23 @@ def _w1g2_egg_floating(game) -> dict:
 
 
 @_w1g2_pytest.mark.parametrize("name, made", _W1G2_EGGS)
-def test_an_egg_is_a_mana_ability_that_also_draws(set_pool, name, made):
-    """"{2}, {T}, Sacrifice this artifact: Add {U}{B}. Draw a card." CR 605.1a
-    asks only that the ability could add mana, has no target and is not a
-    loyalty ability — so the draw rides a mana ability: it resolves inline
-    (CR 605.3b), with a spell already on the stack, and never goes on it."""
+def test_an_egg_adds_its_mana_through_the_stack_because_it_draws(set_pool, name, made):
+    """"{2}, {T}, Sacrifice this artifact: Add {U}{B}. Draw a card." It could
+    add mana, has no target and is not a loyalty ability - and it is **not** a
+    mana ability: CR 605.1a's fourth criterion excludes an ability whose "cost
+    and effect … move any card to or from a library", and a draw does.
+
+    This test asserted the opposite ("the draw rides a mana ability: it
+    resolves inline") while the rules file in the repo was the April 2026
+    edition, which had three criteria; the September edition has four, and
+    Chromatic Sphere's ruling of 2026-08-05 says of the same sentence "not a
+    mana ability. Players can respond to it". So the Egg is an object on the
+    stack: its cost is paid as it is activated, and the mana and the card
+    arrive when it resolves - the printed "(Activate only as an instant.)"
+    made true rather than read past."""
     lea = set_pool("LEA")
     (ability,) = _w1g2_compile(set_pool("ODY")[name]).activated_abilities
-    assert _w1g2_is_mana_ability(ability)
+    assert not _w1g2_is_mana_ability(ability)
 
     game, egg = _w1g2_egg_game(set_pool, name, pool={"C": 2, "R": 1})
     game.players[0].hand.append(lea["Lightning Bolt"])
@@ -83,11 +92,18 @@ def test_an_egg_is_a_mana_ability_that_also_draws(set_pool, name, made):
 
     result = game.queue_permanent_ability(0, name, ability_index=0)
 
-    assert result.supported and result.details == "resolved"
-    assert len(game.stack) == 1, "the Bolt alone: the Egg never used the stack"
-    assert _w1g2_egg_floating(game) == made
+    assert result.supported and result.details == "queued"
+    assert len(game.stack) == 2, "the Bolt and, above it, the Egg's ability"
+    # Paid for and not yet resolved: sacrificed and {2} spent, no mana, no card.
     assert not game.is_on_battlefield(egg)
     assert [card.name for card in game.players[0].graveyard] == [name]
+    assert _w1g2_egg_floating(game) == {}
+    assert game.players[0].hand == [] and len(game.players[0].library) == 10
+
+    game.resolve_top_of_stack()
+
+    assert len(game.stack) == 1, "the Bolt is still waiting underneath"
+    assert _w1g2_egg_floating(game) == made
     assert len(game.players[0].hand) == 1 and len(game.players[0].library) == 9
 
 
@@ -129,6 +145,7 @@ def test_an_eggs_draw_is_a_real_draw(set_pool):
     game.players[0].library.clear()
 
     assert game.queue_permanent_ability(0, "Sungrass Egg", ability_index=0).supported
+    game.resolve_top_of_stack()
     game._settle()
 
     assert _w1g2_egg_floating(game) == {"G": 1, "W": 1}

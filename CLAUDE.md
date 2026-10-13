@@ -401,7 +401,7 @@ checked. Advisory only; nothing fails on its output.
 that is the one that rotted: `CR 701.15c` is a real subrule of a real rule and it
 is **Goad**, not the no-regeneration rider. VIS wave 4 read every CR citation in
 `engine/` and `web/` against `MagicCompRules.txt` and rewrote **185** of them —
-almost none a typo. The shipped CR is the April 2026 edition, which inserted
+almost none a typo. The April 2026 edition had inserted
 `701.4 Behold` and `701.11 Triple` and shifted the whole keyword-action block, so
 a citation written against the older numbering now names a different action:
 `701.7` (Create) for destroying, `701.13a` (Exile) for milling, `701.5a` (Cast)
@@ -409,8 +409,21 @@ for countering. **A CR bump is a silent, repo-wide correctness event.**
 `tests/engine/test_cr_citation_subjects.py` makes it loud for the 701 block,
 where each rule is headed by one keyword word: it reads the heading map out of
 `MagicCompRules.txt` at test time, so a later edition fails every citation whose
-keyword moved. Outside 701 the headings are prose and nothing checks them —
-bumping the CR file means re-reading those by hand.
+keyword moved. Outside 701 the headings are prose and no test can read them —
+`scripts/cr_edition_diff.py` does, by **text**: it compares two editions rule by
+rule and lists every citation here of a rule that moved, changed or went.
+
+**The shipped CR is the September 25, 2026 edition**, bumped at Odyssey's close
+with that script, and the bump is the run to copy. It left the 701 and 702
+headings where they were (three appended to each) and renumbered by insertion
+elsewhere: five cited rules moved - 506.6 to 506.7 ("had to attack"), 506.7
+to 506.8 (the combat cast windows), 601.5 to 601.6, 601.7 to 601.8, and 704.5y
+to 704.5z (the Role rule) - 53 citations in ten files, each of which would
+have gone on naming a real rule about something else. Install a download with
+`--install`: Wizards' text marks blank lines with a NO-BREAK SPACE in some
+editions, and left alone the diff is four thousand whitespace lines around the
+hundred that changed. What the edition brought the engine is CR 605.1a's
+fourth criterion (below, under `engine/mana_payment.py`).
 
 ```powershell
 
@@ -433,6 +446,7 @@ python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set impl
 python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
+python scripts/cr_edition_diff.py old.txt   # a CR bump: every citation here of a rule that moved, changed or went between two editions (old.txt = `git show HEAD:MagicCompRules.txt`); --install <download> writes the new file in the repo's convention
 python scripts/unasked_narrowings.py  # printed narrowings whose handler never supplies the seat `subject_matches` needs — the fail-closed half of the asymmetric-gate class (advisory; --check to fail)
 python scripts/behaviour_classes.py   # regenerate BEHAVIOUR_CLASSES.md (behavioural-equivalence tracker); --check fails on drift, --accept re-snapshots; --set <CODE> prints which existing classes that set's cards land in (stdout only)
 python scripts/parse_coverage.py      # regenerate PARSE_COVERAGE.md (oracle-text parse-coverage tracker); --check fails on unclaimed text; --set <CODE> prints that set's per-card claims/unclaimed (stdout only)
@@ -767,6 +781,21 @@ adding entries, not editing dispatch**:
   under-reports a board that could pay and CR 601.2h asks what a player is
   *able* to do), over the lands whose tap would in fact pay
   (`Game.payment_lands` — five lands answered "can pay" and then failed).
+  **What a mana ability *is* is one predicate here, `is_mana_ability`** (CR
+  605.1a), and it asks all four criteria: no target, could add mana, not a
+  loyalty ability, and - in the rules since September 2026 - neither its cost
+  nor its effect moves a card to or from a library. So Chromatic Sphere and
+  Odyssey's five Eggs ("Add …. Draw a card.") and Millikin and Charmed
+  Pendant ("{T}, Mill a card: …") use the stack, can be responded to, and are
+  refused in the middle of a payment; Barbed Sextant's draw "at the beginning
+  of the next turn's upkeep" is a delayed ability's (CR 603.7) and leaves its
+  mana ability one. The effect half is asked **fail-closed**: a zone-moving
+  step beside an add-mana step is presumed to reach a library unless it has
+  been read and does not (`LIBRARY_SAFE_ZONE_KINDS`), and
+  `tests/engine/test_mana_ability_library_criterion.py` fails on one nobody
+  has read. Activation, the tap seam, the payment prompt, the AI and Faith's
+  Fetters all ask this one function, which is why the rule change was one
+  edit.
   A cost is a symbol dict everywhere — `generic_cost(n)` is the
   one line that turns a legacy number into one. **The planner is told who is
   paying** (`plan_payment(..., payer=)`): a seat holding a CR 106.6 spending

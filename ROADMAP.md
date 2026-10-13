@@ -979,14 +979,20 @@ one card prints this") reads as a work item long after it stopped being true.
     a person can be asked a toll they cannot pay; the upkeep's cumulative
     gate sums mana only; and under Manabarbs, Scald and Overabundance 53 of
     128 casts the AI proposed killed their caster.
-  * *Mana abilities that move cards to or from a library.* Scryfall's
-    rulings of 2026-08-05 on Millikin and Chromatic Sphere cite a CR 605.1a
-    change that the repository's April 2026 `MagicCompRules.txt` does not
-    have; Chromatic Sphere and the five Eggs are still mana abilities here.
-    **Bumping the CR file is a decision** - it shifts citations repo-wide
-    (CLAUDE.md, "a CR bump is a silent, repo-wide correctness event").
-    Beside it: the Eggs' "(Activate only as an instant.)" is in parentheses,
-    is read as reminder text and is not enforced.
+  * *CR 605.1a's library criterion, what is presumed.* The rules file is
+    the September 2026 edition since the set's close and the predicate asks
+    all four criteria (Chromatic Sphere and the five Eggs use the stack; the
+    parenthesised "Activate only as an instant" on nine cards is true by
+    construction now, each being an ordinary ability). Two readings stand
+    without a ruling. Barbed Sextant and Astrolabe are held to be mana
+    abilities, because their draw is a delayed ability's (CR 603.7) - the
+    2026-08-05 rulings name Chromatic Sphere, Millikin and Selvala, each a
+    card moved as the ability is activated or resolves. And the effect half
+    is fail-closed, so "{T}: Add {G}. Scry 1." (no pool card) reads as not a
+    mana ability although a scry moves no card to or from a library; an
+    entry on `LIBRARY_SAFE_ZONE_KINDS` is added by reading a card. Unprobed:
+    a permanent tapped for one of these abilities is no longer "tapped for
+    mana" (CR 106.12) for a watcher that asks.
   * *State triggers.* Twenty-four are carried out inside the state-based
     sweep and never become stack objects (17 `controls_no_matching`, 3
     `no_permanents_anywhere`, Goblins of the Flarg, Endangered Armodon,
@@ -1728,7 +1734,7 @@ three: Gaea's Liege, Erg Raiders, Kudzu). That is the
 measure moving the way the architecture needs it to. Parse coverage: 5,244 of
 5,246 supported cards fully claimed, 2 acknowledged, **0 unclaimed**
 (`PARSE_COVERAGE.md`). `RULES_PROGRESS.md` is the CR coverage tracker
-(419 of 622 tracked rules, 2,951 tests).
+(419 of 625 tracked rules, 2,956 tests).
 `CARD_VERIFICATION.md` is a log, not a target: 754 passed (497 in-game, 257
 auto), 59 equivalent, 0 failed, 4,433 untested.
 
