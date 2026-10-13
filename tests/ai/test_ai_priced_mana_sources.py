@@ -4,7 +4,8 @@
 lands) is a land with no ``{T}: Add …`` of its own. The tap-for-mana seam runs
 only an ability whose whole cost is {T}, the AI's planner asked the seam, and
 so a filter land in an AI seat's hands was a land that made nothing: ten were
-played in a ten-game seeded Odyssey run and none was ever activated (W1G2).
+played in the ten-game seeded Odyssey run and none was ever activated (W1G2
+measured the same over six games).
 
 This is the cheap half of ROADMAP's "costed and sacrifice mana sources". A
 price paid in **mana** moves nothing on the battlefield — the reason the

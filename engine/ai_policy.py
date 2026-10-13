@@ -434,7 +434,8 @@ def _priced_mana_source(
     whose whole cost is {T} (`land_mana_tap_refusal` answers
     ``priced_mana_ability``), so the planner left it out and the seat counted
     one land fewer than it controlled — ten filter lands were played in a
-    ten-game seeded Odyssey run and not one was ever activated (W1G2).
+    ten-game seeded Odyssey run and not one was ever activated (W1G2 saw the
+    same in six).
 
     The cheap half of ROADMAP's "costed and sacrifice mana sources": a price
     paid in mana renumbers nothing, where a sacrifice during payment moves the
