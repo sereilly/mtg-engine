@@ -474,6 +474,26 @@ def test_every_divided_card_in_the_pool_is_described(catalog):
         # test below holds that it is the only division in the pool that needs
         # one.
         "Captain's Maneuver",
+        # Reviewed ahead of Odyssey's promotion, at its rehearsal, by running
+        # each. Three cards, two that add nothing and one that is the finding.
+        #
+        # Volley of Boulders is Arc Lightning with no ceiling on its targets:
+        # "opponent" off the `damage` category (derived: thresholded, not
+        # whole-board), and driven it sends all 6 at the opponent's face.
+        # Embolden is Remedy with a flashback: "you" off `prevention`, spread
+        # over the caster's face and creatures. For both, what is new is beside
+        # the division - a second cast from the graveyard - and changes where
+        # the AI finds the card rather than where it aims.
+        "Volley of Boulders", "Embolden",
+        # Shower of Coals is the finding. "…deals 2 damage to each of up to
+        # three targets" is the pool's first `EACH` list under a printed
+        # *ceiling* (Firestorm and Magma Burst print a count), and its side is
+        # right - "opponent" - while its play was not: the concentrate policy
+        # is for a total that is split, and it named one target of three where
+        # every target takes the whole amount. `choose_divided_targets` fills
+        # the list now; `tests/ai/test_ai_policy.py` holds it on an invented
+        # card.
+        "Shower of Coals",
     }
     assert set(described) <= reviewed, sorted(set(described) - reviewed)
 

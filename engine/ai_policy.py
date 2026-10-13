@@ -65,6 +65,7 @@ from .activation_restrictions import activation_denial, global_activation_ban
 from .cast_costs import additional_costs, cast_announces_x
 from .cast_prohibitions import cast_prohibition
 from .cast_restrictions import check_cast_timing
+from .divided_damage import EACH
 from .cost_modifiers import (CostReduction, cost_reduction_for_cast,
                              keyword_cost_modifiers, reduce_cost,
                              sacrifice_taxes, spell_cost_tax, spell_symbol_tax)
@@ -4553,6 +4554,12 @@ def choose_divided_targets(
     * **A whole-board division takes the whole board** — "…among all creatures
       target opponent controls" (Dwarven Catapult) chooses nothing, so every
       candidate on the named side is announced and the even split does the rest.
+
+    And one that is not a policy at all: **an "each of up to N targets" list
+    is filled** (Shower of Coals). Nothing there is divided — every target
+    takes the whole printed amount (``divided_damage.EACH``) — so the reason
+    damage concentrates does not apply to it, and a slot left unnamed is
+    damage the card printed and nobody received.
     """
     program = compile_card_oracle(card)
     # The candidate being built's own answer to CR 601.2b (`_OFFERS_ANNOUNCED`):
@@ -4621,6 +4628,17 @@ def choose_divided_targets(
             [] if len(wanted) < exact
             else [(entry["seat"], entry.get("index")) for entry in wanted[:exact]]
         )
+    ceiling = spec.get("max_targets")
+    if spec.get("division") == EACH and isinstance(ceiling, int):
+        # "…deals 2 damage to **each of up to three targets**" (Shower of
+        # Coals, the pool's first EACH list under a ceiling rather than a
+        # printed count — Firestorm and Magma Burst print how many, and are
+        # answered by `exact` above). It reached the threshold arm below and
+        # named one target of its three, which is a third of the card: a share
+        # is measured against a toughness only where there is a share.
+        return [
+            (entry["seat"], entry.get("index")) for entry in wanted[:max(1, ceiling)]
+        ]
     if shape.whole_board:
         chosen = wanted
     elif shape.thresholded:

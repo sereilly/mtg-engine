@@ -756,6 +756,32 @@ ACTIVATED_LABELS: dict[str, str] = {
     # walked in the open rather than searched, so `name_then_reveal_top`'s
     # `activated_look` rather than `search_library`'s `activated_search`.
     "name_then_consult": "activated_look",
+    # --- Odyssey, at its promotion ----------------------------------------
+    # Four kinds five of the set's activated abilities reach, each of which
+    # existed already and had only ever been a spell's or a trigger's. Settled
+    # against a shipped neighbour, as Mirage's block at the top was:
+    #
+    # Aboshan, Cephalid Emperor: "{U}{U}{U}: Tap all creatures without
+    # flying." The sweep of `tap_target_permanent`, and the mirror image of
+    # `untap_all_matching` above -- how many permanents is not what the
+    # ability does.
+    "tap_all_matching": "activated_tapping",
+    # Aven Windreader: "{1}{U}: Target player reveals the top card of their
+    # library." A card is seen and stays where it was, which is
+    # `look_at_target_library_top`'s bucket; that the table sees it too is
+    # not a different thing to do.
+    "reveal_top_of_library": "activated_look",
+    # Crypt Creeper and Steamclaw: "Sacrifice this: Exile target card from a
+    # graveyard." One card out of a pile by name, beside
+    # `exile_graveyard_position` (one card off a named end) and
+    # `exile_target_graveyard` (the whole zone): what the ability is for is
+    # that the graveyard stops holding it.
+    "exile_target_graveyard_card": "activated_recursion",
+    # Pardic Miner: "Sacrifice this creature: Target player can't play lands
+    # this turn." A thing its target may no longer do, which is the
+    # restriction word wherever the thing denied happens to be -- a block, a
+    # phasing, here a land play.
+    "forbid_land_plays_this_turn": "activated_restriction",
 }
 
 # Instruction kind -> label, for an ability the grammar reads in the **triggered**
@@ -1288,6 +1314,16 @@ TRIGGERED_LABELS: dict[str, str] = {
     # claim about the payload rather than about what the ability does to the
     # turn.
     "skip_next_phase": "triggered_turn",
+    # --- Odyssey, at its promotion ------------------------------------------
+    # Battle of Wits and Chance Encounter: "At the beginning of your upkeep,
+    # if <you have 200 or more cards in your library / this enchantment has
+    # ten or more luck counters on it>, you win the game." The other end of
+    # `player_loses_game` above and the same bucket: the game ends.
+    "player_wins_game": "triggered_game_end",
+    # Decaying Soil: "At the beginning of your upkeep, exile a card from your
+    # graveyard." Beside `exile_graveyard_cards` -- whose pile and how the
+    # card is picked are payload.
+    "exile_cards_from_graveyard": "triggered_exile",
 }
 
 # The one instruction kind whose label depends on what triggered it: `may` wraps
@@ -1432,6 +1468,16 @@ TRIGGERED_LABELS_BY_CONDITION: dict[tuple[str, str], str] = {
     # is declined — the same reading `unless_player_pays` takes for Scarwood
     # Bandits in the activated table above.
     ("matching_permanent_enters", "may"): "triggered_damage",
+    # --- Odyssey, at its promotion ------------------------------------------
+    # `may` says nothing, so each row names the moment, as M21's and Legends'
+    # blocks above do. Confessor: "Whenever a player discards a card, you may
+    # gain 1 life."
+    ("discards_card", "may"): "triggered_discard",
+    # Karmic Justice: "Whenever a spell or ability an opponent controls
+    # destroys a noncreature permanent you control, you may destroy target
+    # permanent that opponent controls." The moment is a destruction, and so
+    # is the answer.
+    ("permanent_destroyed", "may"): "triggered_destruction",
 }
 
 
