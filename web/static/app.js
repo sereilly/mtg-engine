@@ -9886,6 +9886,16 @@ function renderGraveyardExileModal(info) {
 // Rewind's "Untap up to four lands": a resolution-time multi-select over
 // matching permanents, capped at the printed amount. Confirming with nothing
 // selected is legal ("up to" includes zero).
+// A modal's Confirm is bound ONCE, by the `dataset.bound` marker, and the
+// marker is never cleared. Each of these handlers used to `delete` it as it
+// ran, which removed the marker and not the listener: the next prompt bound a
+// second listener beside the first, the one after a third, and every Confirm
+// then sent one request per prompt ever shown — the real answer, then empty
+// ones. Cultural Exchange's second prompt answered `[126]` and then `[]`
+// (400 "no permanent choice pending"); a prompt that accepts an empty answer
+// would have been answered by the echo before its player saw it. The handlers
+// close over the button, the modal and module state only, so one binding
+// serves every prompt.
 let untapUpToSelected = new Set();
 
 function getUntapUpToInfo(state = currentState) {
@@ -9935,7 +9945,6 @@ function renderUntapUpToModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...untapUpToSelected];
       untapUpToSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "untap_up_to_confirm", target_permanent_ids: ids });
     });
@@ -9995,7 +10004,6 @@ function renderPermanentSetChoiceModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...permanentSetChoiceSelected];
       permanentSetChoiceSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "permanent_set_choice_confirm", target_permanent_ids: ids });
     });
@@ -10116,7 +10124,6 @@ function renderKeepPermanentsModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...keepPermanentsSelected];
       keepPermanentsSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "keep_permanents_confirm", target_permanent_ids: ids });
     });
@@ -10179,7 +10186,6 @@ function renderModalModeTargetsModal(info) {
     confirmBtn.addEventListener("click", async () => {
       const ids = [...modalModeTargetsSelected];
       modalModeTargetsSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "modal_mode_targets_confirm", target_permanent_ids: ids });
     });
@@ -10264,7 +10270,6 @@ function renderSearchExileModal(info) {
         return { zone, index: Number(idx) };
       });
       searchExileSelected = new Set();
-      delete confirmBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "search_exile_confirm", search_picks: picks });
     });
@@ -10460,14 +10465,12 @@ function renderReorderLibraryModal(info) {
   if (confirmBtn && !confirmBtn.dataset.bound) {
     confirmBtn.dataset.bound = "1";
     confirmBtn.addEventListener("click", async () => {
-      // Each answered prompt clears `bound` below, so the next prompt binds a
-      // second listener beside this one. The first to run takes the order and
-      // nulls it; the rest have nothing to send (they used to throw on it).
+      // Bound once for the life of the page (see the note above
+      // `untapUpToSelected`); the null check is what is left of
+      // the days this button collected a listener per prompt.
       if (!reorderLibraryCurrentOrder) return;
       const order = [...reorderLibraryCurrentOrder];
       reorderLibraryCurrentOrder = null;
-      delete confirmBtn.dataset.bound;
-      if (shuffleBtn) delete shuffleBtn.dataset.bound;
       modal.classList.add("hidden");
       await sendAction({ seat, action: "reorder_library_confirm", card_order: order });
     });
@@ -10485,8 +10488,6 @@ function renderReorderLibraryModal(info) {
           if (!reorderLibraryCurrentOrder) return;
           const order = [...reorderLibraryCurrentOrder];
           reorderLibraryCurrentOrder = null;
-          delete shuffleBtn.dataset.bound;
-          if (confirmBtn) delete confirmBtn.dataset.bound;
           modal.classList.add("hidden");
           await sendAction({ seat, action: "reorder_library_confirm", card_order: order, shuffle: true });
         });
