@@ -39,6 +39,7 @@ import pytest
 
 from engine import Game, PlayerState, load_cards
 from engine.card_loader import manifest_set_paths
+from engine.faces import compilation_units
 from engine.models import Permanent
 from engine.replacements import replacement_candidates
 from web.prompts import blocking_prompt
@@ -101,15 +102,20 @@ def _draw_sources(pool) -> dict[str, tuple[str, ...]]:
 
     nothing = applicable(_game(pool, ()))
     found: dict[str, tuple[str, ...]] = {}
-    for name, card in pool.items():
-        if "draw" not in (card.oracle_text or "").lower():
+    # By compilation unit, so a split card is asked half by half: read whole
+    # it has an empty text box and would be passed over without a look
+    # (`tests/engine/test_face_blind_guards.py`).
+    for unit in compilation_units(list(pool.values())):
+        if "draw" not in (unit.oracle_text or "").lower():
             continue
-        type_line = (card.type_line or "").lower()
+        type_line = (unit.type_line or "").lower()
         if "instant" in type_line or "sorcery" in type_line:
             continue
-        keys = applicable(_game(pool, (name,))) - nothing
+        if unit.name not in pool:
+            continue
+        keys = applicable(_game(pool, (unit.name,))) - nothing
         if keys:
-            found[name] = tuple(sorted(keys))
+            found[unit.name] = tuple(sorted(keys))
     found[_LAMP] = ("armed",)
     found[_RING] = ("armed",)
     return found
