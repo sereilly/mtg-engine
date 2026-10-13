@@ -5,6 +5,11 @@
       "status": "pass",
       "updated_at": 1786234428.1613116
     },
+    "Afflict": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884553.4271803
+    },
     "Air Elemental": {
       "reason": "",
       "status": "pass",
@@ -94,6 +99,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782970621.4418297
+    },
+    "Aven Fisher": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884555.9780376
     },
     "Aysen Crusader": {
       "reason": "",
@@ -185,6 +195,11 @@
       "status": "pass",
       "updated_at": 1783040115.5705063
     },
+    "Blazing Salvo": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884616.6367981
+    },
     "Blessing": {
       "reason": "",
       "status": "pass",
@@ -204,6 +219,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782970150.6128771
+    },
+    "Bomb Squad": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884583.8747036
     },
     "Bottle of Suleiman": {
       "reason": "",
@@ -225,10 +245,25 @@
       "status": "pass",
       "updated_at": 1783302244.299019
     },
+    "Buried Alive": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884611.6485288
+    },
     "Burrowing": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782542361.3458302
+    },
+    "Cabal Pit": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884571.184789
+    },
+    "Call of the Herd": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884545.8836093
     },
     "Camel": {
       "reason": "",
@@ -250,6 +285,11 @@
       "status": "pass",
       "updated_at": 1791787836.1057532
     },
+    "Careful Study": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884558.5084772
+    },
     "Castle": {
       "reason": "",
       "status": "pass",
@@ -259,6 +299,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782105893.8562238
+    },
+    "Cephalid Looter": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884550.949608
     },
     "Cetavolver": {
       "reason": "",
@@ -318,7 +363,7 @@
     "City of Brass": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1786226571.004825
+      "updated_at": 1791884634.2909925
     },
     "Clockwork Beast": {
       "reason": "",
@@ -405,6 +450,11 @@
       "status": "pass",
       "updated_at": 1782971480.711318
     },
+    "Cultural Exchange": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884581.346135
+    },
     "Cuombajj Witches": {
       "reason": "",
       "status": "pass",
@@ -445,6 +495,11 @@
       "status": "pass",
       "updated_at": 1782190991.2357428
     },
+    "Darkwater Catacombs": {
+      "reason": "Clicking it opens a \"Choose a mana color\" fan (U or B) although the card adds both {U}{B}; the answer is ignored. A {3} toll (Mana Leak) with Island + Catacombs + Cabal Pit untapped: Pay answered 200 and the spell was countered, nothing tapped.",
+      "status": "fail",
+      "updated_at": 1791884641.9502833
+    },
     "Death Ward": {
       "reason": "",
       "status": "pass",
@@ -459,6 +514,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782958758.4311402
+    },
+    "Decompose": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884619.1295793
     },
     "Degavolver": {
       "reason": "",
@@ -524,6 +584,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782591684.9327972
+    },
+    "Divert": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884596.4732132
     },
     "Dizzying Gaze": {
       "reason": "",
@@ -625,6 +690,11 @@
       "status": "pass",
       "updated_at": 1791787847.7523997
     },
+    "Entomb": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884609.0928023
+    },
     "Erg Raiders": {
       "reason": "",
       "status": "pass",
@@ -690,6 +760,11 @@
       "status": "pass",
       "updated_at": 1782964664.3713038
     },
+    "Firebolt": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884519.6944766
+    },
     "Firebreathing": {
       "reason": "",
       "status": "pass",
@@ -699,6 +774,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786226371.911434
+    },
+    "Flame Burst": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884543.264552
     },
     "Flashfires": {
       "reason": "",
@@ -834,6 +914,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1781382558.5296042
+    },
+    "Gravedigger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884624.1303585
     },
     "Gray Ogre": {
       "reason": "",
@@ -1065,6 +1150,11 @@
       "status": "pass",
       "updated_at": 1782008813.4584646
     },
+    "Karmic Justice": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884578.7988408
+    },
     "Kavu Titan": {
       "reason": "",
       "status": "pass",
@@ -1094,6 +1184,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783044075.765462
+    },
+    "Krosan Beast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884561.0395966
     },
     "Kudzu": {
       "reason": "",
@@ -1150,6 +1245,11 @@
       "status": "pass",
       "updated_at": 1787807423.861365
     },
+    "Liquid Fire": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884586.4228766
+    },
     "Living Artifact": {
       "reason": "",
       "status": "pass",
@@ -1203,7 +1303,7 @@
     "Mana Flare": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1781394187.407336
+      "updated_at": 1791884629.232374
     },
     "Mana Short": {
       "reason": "",
@@ -1218,7 +1318,7 @@
     "Manabarbs": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782107912.8393338
+      "updated_at": 1791884626.655493
     },
     "Meddling Mage": {
       "reason": "",
@@ -1269,6 +1369,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783303091.3089557
+    },
+    "Mossfire Valley": {
+      "reason": "Clicking it opens a \"Choose a mana color\" fan (R or G) although the card adds both {R}{G}; the answer is ignored. Castable highlight and Auto-Tap also say no when the payment needs its net mana.",
+      "status": "fail",
+      "updated_at": 1791884639.4550457
     },
     "Mountain": {
       "reason": "",
@@ -1340,6 +1445,11 @@
       "status": "pass",
       "updated_at": 1782358516.6641526
     },
+    "Nimble Mongoose": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884566.100352
+    },
     "Northern Paladin": {
       "reason": "",
       "status": "pass",
@@ -1354,6 +1464,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782542915.6789494
+    },
+    "Obstinate Familiar": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884598.9352796
     },
     "Old Man of the Sea": {
       "reason": "",
@@ -1448,12 +1563,22 @@
     "Power Sink": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782970983.7247415
+      "updated_at": 1791884636.8405428
     },
     "Power Surge": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782587670.902289
+    },
+    "Predict": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884601.486465
+    },
+    "Price of Glory": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884588.95452
     },
     "Prodigal Sorcerer": {
       "reason": "",
@@ -1545,6 +1670,16 @@
       "status": "pass",
       "updated_at": 1786235480.123106
     },
+    "Rites of Refusal": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884606.5311298
+    },
+    "Roar of the Wurm": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884548.4458292
+    },
     "Roc of Kher Ridges": {
       "reason": "",
       "status": "pass",
@@ -1604,6 +1739,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786225107.8603985
+    },
+    "Savage Firecat": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884591.4774485
     },
     "Savannah": {
       "reason": "",
@@ -1710,6 +1850,11 @@
       "status": "pass",
       "updated_at": 1791787846.124625
     },
+    "Shower of Coals": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884573.7527978
+    },
     "Silent Dart": {
       "reason": "",
       "status": "pass",
@@ -1785,6 +1930,11 @@
       "status": "pass",
       "updated_at": 1782599426.231112
     },
+    "Springing Tiger": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884568.648824
+    },
     "Squee's Revenge": {
       "reason": "",
       "status": "pass",
@@ -1794,6 +1944,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787827.9391923
+    },
+    "Standstill": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884604.0100887
     },
     "Stasis": {
       "reason": "",
@@ -1859,6 +2014,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782592454.1705534
+    },
+    "Tainted Pact": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884576.274099
     },
     "Temporal Spring": {
       "reason": "",
@@ -1959,6 +2119,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782364240.6447637
+    },
+    "Undermine": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884594.0051842
     },
     "Unholy Strength": {
       "reason": "",
@@ -2100,6 +2265,11 @@
       "status": "pass",
       "updated_at": 1782584783.5423143
     },
+    "Werebear": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884563.5701327
+    },
     "Wheel of Fortune": {
       "reason": "",
       "status": "pass",
@@ -2118,7 +2288,7 @@
     "Wild Growth": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782971442.1941066
+      "updated_at": 1791884631.7705472
     },
     "Will-o'-the-Wisp": {
       "reason": "",
@@ -2155,6 +2325,11 @@
       "status": "pass",
       "updated_at": 1788931575.2148283
     },
+    "Yawgmoth's Will": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884621.627041
+    },
     "Ydwen Efreet": {
       "reason": "",
       "status": "pass",
@@ -2164,6 +2339,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782965491.067869
+    },
+    "Zombify": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791884614.124099
     },
     "gloom": {
       "reason": "",
