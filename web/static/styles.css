@@ -855,6 +855,31 @@ h2.targeting-valid {
   border-color: rgba(80, 230, 140, 0.9);
   box-shadow: 0 0 10px rgba(80, 230, 140, 0.55);
 }
+/* …and one of those the board could cast right now (timing, targets and mana
+   all said yes, at the price THIS cast is charged — a flashback cost): the
+   hand's own cyan, so "I can cast this" reads the same wherever the card is. */
+.card-wrapper.castable-from-zone.castable-from-zone--now .card {
+  border-color: rgba(0, 220, 220, 0.9);
+  box-shadow: 0 0 0 2px rgba(0, 220, 220, 0.8), 0 0 14px rgba(0, 220, 220, 0.4);
+}
+/* What each way of casting it is charged ("Flashback {4}{R}"), under the
+   card. Dimmed for a way the board cannot make right now. */
+.zone-cards .card-wrapper {
+  flex: 0 0 auto;
+  vertical-align: top;
+}
+.zone-cast-price {
+  max-width: 72px;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+  color: rgba(190, 215, 240, 0.55);
+  pointer-events: none;
+}
+.zone-cast-way--now {
+  color: #b9f6f6;
+}
 
 /* Section headers and the empty note inside the two-zone search modal. */
 .modal-section-title {

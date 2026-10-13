@@ -76,50 +76,12 @@ def _menu_abilities(card):
     ]
 
 
-#: CR 113.6j has a second cost that can only be paid from a hand, and the
-#: client reads one. ``abilityFunctionsOnBattlefield`` tests the printed cost
-#: for "discard this card"; "**Exile this card from your hand**: Add {G}."
-#: (Elvish Spirit Guide) is the other spelling, and until Odyssey's W1G6 round
-#: the engine read it as no cost at all — the Guide made a free {G} every time
-#: it was clicked on the battlefield and could not be used from a hand. The
-#: engine now keeps it off a permanent's menu and lists it in
-#: ``state.hand_abilities``, which the client renders as given, so the card
-#: works from a hand in the browser today.
-#:
-#: What is left is the client's *battlefield* menu still listing the line, and
-#: that round was told to stay out of ``web/static/``. It is the dead menu
-#: entry the graveyard half above already is (the server's list is empty, so
-#: the index is refused), and it is excused only where it can renumber
-#: nothing: see ``_dead_hand_exile_entries``. **The fix is one alternation in
-#: ``abilityFunctionsOnBattlefield``** — ``/\b(discard this card|exile this
-#: card from your hand)\b/i`` — and the day it lands this pin fails, by
-#: construction, asking to be deleted.
-_HAND_EXILE_COST = re.compile(r"\bexile this card from your hand\b", re.IGNORECASE)
-
-#: How many cards may carry that dead entry. One prints it today; a second is a
-#: reason to make the client change rather than to raise this.
-_DEAD_HAND_EXILE_CEILING = 1
-
-
-def _dead_hand_exile_entries(card) -> int:
-    """How many options the client lists on the battlefield for a hand-only
-    "exile this card from your hand" ability of *card* — zero when the card has
-    none, **and zero when one of them sits in front of a battlefield ability**:
-    that would move a live option's index, which is the defect this file exists
-    for and is never excused."""
-    abilities = compile_card_oracle(card).activated_abilities
-    hand_only = [
-        index for index, ability in enumerate(abilities)
-        if ability_functions_from(ability) == HAND
-        and _HAND_EXILE_COST.search((ability.source_line or "").split(":")[0])
-    ]
-    menu = [
-        index for index, ability in enumerate(abilities)
-        if ability_functions_from(ability) != HAND
-    ]
-    if hand_only and menu and min(hand_only) < max(menu):
-        return 0
-    return len(hand_only)
+#: CR 113.6j has a second cost that can only be paid from a hand: "**Exile
+#: this card from your hand**: Add {G}." (Elvish Spirit Guide). The client's
+#: ``abilityFunctionsOnBattlefield`` reads both spellings, so the Guide's line
+#: is on neither side's battlefield list. It was a dead entry there for one
+#: round (a pin here excused it, one card wide, and failed the day the client
+#: learned the second spelling - which is how it came to be deleted).
 
 REPO = Path(__file__).resolve().parents[2]
 APP_JS = REPO / "web" / "static" / "app.js"
@@ -231,33 +193,35 @@ def test_the_client_lists_the_same_abilities_the_compiler_does(js_readings):
         (card.name, [a.source_line for a in _menu_abilities(card)],
          js[card.name]["options"])
         for card in cards
-        if len(_menu_abilities(card)) + _dead_hand_exile_entries(card)
-        != len(js[card.name]["options"])
+        if len(_menu_abilities(card)) != len(js[card.name]["options"])
     ]
     assert not dropped, (
         "the client's ability list is a different length from the compiler's, "
         "so every index after the difference names a different ability "
-        "(card, compiled lines, client costs). A card with an 'exile this card "
-        "from your hand' ability shows here once the client stops offering it "
-        "on the battlefield — delete `_dead_hand_exile_entries` then:\n"
+        "(card, compiled lines, client costs):\n"
         + "\n".join(f"  {d}" for d in dropped)
     )
 
 
-def test_the_one_dead_hand_exile_entry_is_named_and_alone(js_readings):
-    """The excuse above is one card wide, and says which.
-
-    A pin nobody counts grows: the next card printing the phrase would be
-    excused in silence, and a card whose hand-only line sits *before* a
-    battlefield ability is never excused at all — so this names the population
-    and holds its size, the way a ceiling does.
-    """
-    cards, _ = js_readings
-    excused = sorted(
-        card.name for card in cards if _dead_hand_exile_entries(card)
-    )
-    assert len(excused) <= _DEAD_HAND_EXILE_CEILING, excused
-    assert excused == ["Elvish Spirit Guide"], excused
+def test_a_hand_only_exile_cost_is_not_on_the_battlefield_menu(js_readings):
+    """Elvish Spirit Guide's "Exile this card from your hand: Add {G}." is
+    listed by neither side for a permanent: the compiler keeps it in the
+    hand's list, and the client's menu now reads the second spelling of
+    CR 113.6j's cost. Named, with a floor, so the sweep above cannot pass
+    by the card having left the pool."""
+    cards, js = js_readings
+    hand_exile = re.compile(r"\bexile this card from your hand\b", re.IGNORECASE)
+    printing = [
+        card for card in cards
+        if any(
+            ability_functions_from(ability) == HAND
+            and hand_exile.search((ability.source_line or "").split(":")[0])
+            for ability in compile_card_oracle(card).activated_abilities
+        )
+    ]
+    assert [card.name for card in printing] == ["Elvish Spirit Guide"]
+    for card in printing:
+        assert js[card.name]["options"] == [], js[card.name]["options"]
 
 
 def test_every_ability_both_sides_list_has_the_same_cost(js_readings):

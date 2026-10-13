@@ -30,7 +30,9 @@ client = TestClient(app)
 
 def _cards() -> dict:
     found: dict = {}
-    for code in ("ODY", "LEA"):
+    # INV and EXO for the two shipped cards the W2G6 tests put beside a
+    # flashback card: Yawgmoth's Agenda and Sphere of Resistance.
+    for code in ("ODY", "LEA", "INV", "EXO"):
         for card in load_cards(manifest_set_path(code, include_measured=True)):
             found.setdefault(card.name, card)
     return found
@@ -68,12 +70,23 @@ def _act(sid: str, **body):
     return client.post(f"/api/sessions/{sid}/action", json=body)
 
 
+def _engine_keys(entry: dict) -> dict:
+    """A ``castable_from_zones`` entry without the two keys the web layer adds
+    (``ways``, ``castable_now``): what the engine's permission seam said."""
+    return {key: value for key, value in entry.items() if key not in ("ways", "castable_now")}
+
+
+def _zone_entries(sid: str, seat: int = 0) -> dict:
+    return {entry["name"]: entry for entry in _state(sid, seat)["castable_from_zones"]}
+
+
 def test_a_flashback_card_in_the_viewer_s_graveyard_is_offered_with_its_price():
     sid, game, cards = _session()
     game.players[0].graveyard.extend([cards["Firebolt"], cards["Grizzly Bears"], cards["Morgue Theft"]])
 
     state = _state(sid)
-    assert state["castable_from_zones"] == [
+    # The engine's entry (``playable_from_zones``), exactly as it was…
+    assert [_engine_keys(entry) for entry in state["castable_from_zones"]] == [
         {"zone": "graveyard", "index": 0, "name": "Firebolt", "free": False,
          "source": "flashback", "owner_seat": 0, "cost": "pay {4}{R}",
          "cost_mana": "{4}{R}", "cost_keyword": "flashback"},
@@ -81,6 +94,18 @@ def test_a_flashback_card_in_the_viewer_s_graveyard_is_offered_with_its_price():
          "source": "flashback", "owner_seat": 0, "cost": "pay {4}{B}",
          "cost_mana": "{4}{B}", "cost_keyword": "flashback"},
     ]
+    # …and what the web layer adds for a person (``_zone_cast_options``): the
+    # one way each may be cast, its price, and that this empty board cannot
+    # pay for either.
+    assert [entry["ways"] for entry in state["castable_from_zones"]] == [
+        [{"alternative_cost": True, "source": "flashback", "keyword": "flashback",
+          "free": False, "land": False, "price": "{4}{R}", "cost": "pay {4}{R}",
+          "castable_now": False}],
+        [{"alternative_cost": True, "source": "flashback", "keyword": "flashback",
+          "free": False, "land": False, "price": "{4}{B}", "cost": "pay {4}{B}",
+          "castable_now": False}],
+    ]
+    assert [entry["castable_now"] for entry in state["castable_from_zones"]] == [False, False]
     mine = {card["name"]: card for card in state["players"][0]["graveyard"]}
     # What this cast is charged, and what the card prints.
     assert (mine["Firebolt"]["mana_cost"], mine["Firebolt"]["printed_mana_cost"]) == ("{4}{R}", "{R}")
@@ -168,3 +193,128 @@ def test_the_price_shown_is_the_price_a_cost_modifier_leaves():
     cast = _act(sid, seat=0, action="cast", card_name="Firebolt", from_zone="graveyard", target_seat=1)
     assert cast.status_code == 200, cast.text
     assert not any(game.players[0].mana_pool.values())
+
+
+# --- W2G6: what a person is shown about a cast out of a graveyard -----------
+
+
+def test_castable_now_is_the_board_paying_this_cast_s_price():
+    """A permission is not a payment. ``castable_from_zones`` said only that
+    the pile was open, so the browser's emerald glow sat on a Morgue Theft
+    over five Mountains. ``castable_now`` is the hand highlight's question
+    asked of the flashback cost: timing, targets, and the mana on the board."""
+    sid, game, cards = _session(mountains=5)
+    game._put_permanent_onto_battlefield(1, Permanent(card=cards["Grizzly Bears"]), None)
+    game.players[0].graveyard.extend([cards["Firebolt"], cards["Morgue Theft"], cards["Grizzly Bears"]])
+    entries = _zone_entries(sid)
+    assert entries["Firebolt"]["castable_now"] is True          # {4}{R} over five Mountains
+    assert entries["Morgue Theft"]["castable_now"] is False     # {4}{B}: no black source
+
+    # One land short.
+    mountain = next(p for p in game.controlled_by(0) if p.card.name == "Mountain")
+    game.remove_from_battlefield(mountain)
+    assert _zone_entries(sid)["Firebolt"]["castable_now"] is False
+    game._put_permanent_onto_battlefield(0, Permanent(card=cards["Mountain"]), None)
+    assert _zone_entries(sid)["Firebolt"]["castable_now"] is True
+
+    # A sorcery, on another player's turn.
+    session = store.get(sid)
+    session.current_turn = 1
+    game.active_player_index = 1
+    game.priority_player_index = 0
+    entry = _zone_entries(sid)["Firebolt"]
+    assert entry["castable_now"] is False and entry["ways"][0]["castable_now"] is False
+
+
+def test_the_price_of_a_way_is_what_the_cast_is_charged():
+    """Read off the engine's own pricing (``alternative_cost_mana``, CR
+    118.9d): Catalyst Stone takes {2} off, Sphere of Resistance puts {1} on,
+    and the number the card shows is the number the payment takes."""
+    sid, game, cards = _session(mountains=5)
+    game.players[0].graveyard.append(cards["Firebolt"])
+    assert _zone_entries(sid)["Firebolt"]["ways"][0]["price"] == "{4}{R}"
+    game._put_permanent_onto_battlefield(1, Permanent(card=cards["Sphere of Resistance"]), None)
+    assert _zone_entries(sid)["Firebolt"]["ways"][0]["price"] == "{5}{R}"
+    game._put_permanent_onto_battlefield(0, Permanent(card=cards["Catalyst Stone"]), None)
+    assert _zone_entries(sid)["Firebolt"]["ways"][0]["price"] == "{3}{R}"
+
+    for index in range(4):
+        assert _act(sid, seat=0, action="tap", permanent_index=index).status_code == 200
+    cast = _act(
+        sid, seat=0, action="cast", card_name="Firebolt", from_zone="graveyard",
+        target_seat=1, alternative_cost=True,
+    )
+    assert cast.status_code == 200, cast.text
+    assert not any(game.players[0].mana_pool.values())
+
+
+def test_two_permissions_are_two_ways_and_the_cast_says_which():
+    """A flashback card under Yawgmoth's Agenda may be cast for its mana cost
+    under the Agenda or for its flashback cost under its own keyword (CR
+    601.2b). The entry named one permission, so the browser could not flash
+    Roar of the Wurm back for {3}{G} at all. Both ways are listed, each with
+    the ``alternative_cost`` flag the cast action takes to pick it."""
+    sid, game, cards = _session()
+    for _ in range(4):
+        game._put_permanent_onto_battlefield(0, Permanent(card=cards["Forest"]), None)
+    game._put_permanent_onto_battlefield(0, Permanent(card=cards["Yawgmoth's Agenda"]), None)
+    roar = cards["Roar of the Wurm"]
+    game.players[0].graveyard.extend([roar, cards["Forest"]])
+
+    entries = _zone_entries(sid)
+    assert [
+        (way["alternative_cost"], way["source"], way["keyword"], way["price"], way["castable_now"])
+        for way in entries["Roar of the Wurm"]["ways"]
+    ] == [
+        (False, "Yawgmoth's Agenda", None, "{6}{G}", False),   # four Forests cannot
+        (True, "flashback", "flashback", "{3}{G}", True),      # …and can
+    ]
+    assert entries["Roar of the Wurm"]["castable_now"] is True
+    # A land is played, and its one way says so.
+    assert [(way["land"], way["price"]) for way in entries["Forest"]["ways"]] == [(True, "")]
+
+    for index in range(4):
+        assert _act(sid, seat=0, action="tap", permanent_index=index).status_code == 200
+    # A bare cast is the Agenda's, at the mana cost: four mana do not pay it.
+    bare = _act(sid, seat=0, action="cast", card_name="Roar of the Wurm", from_zone="graveyard")
+    assert bare.status_code == 400 and bare.json()["detail"].startswith("insufficient mana")
+    # The flag picks the permission that requires an alternative cost.
+    flashed = _act(
+        sid, seat=0, action="cast", card_name="Roar of the Wurm", from_zone="graveyard",
+        alternative_cost=True,
+    )
+    assert flashed.status_code == 200, flashed.text
+    item = game.stack[-1]
+    assert (item.card.name, item.flashback) == ("Roar of the Wurm", True)
+    assert not any(game.players[0].mana_pool.values())
+
+
+def test_the_client_sends_the_way_it_offered():
+    """The client half, read as text (``app.js`` is DOM-coupled). A zone cast
+    asks which way when the server lists two, hands the cast chain the price
+    of the way chosen, and ``sendAction`` carries ``alternative_cost`` for a
+    way that requires one. The canvas lights a pile by ``castable_now``."""
+    from pathlib import Path
+
+    import re
+
+    from tests.helpers import app_js_function_body
+
+    static = Path(__file__).resolve().parents[2] / "web" / "static"
+    app_js = (static / "app.js").read_text(encoding="utf-8")
+    # `beginZoneCast` is async, which `app_js_function_body` does not match.
+    begin = re.search(
+        r"^async function beginZoneCast\([^)]*\)\s*\{\n(.*?)^\}$", app_js, re.S | re.M,
+    ).group(1)
+    assert "startZoneWayChoicePrompt(card, zone, entry)" in begin
+    assert "card = zoneCastCard(card, chosenWay)" in begin
+    assert "pendingCastZoneWay = chosenWay" in begin
+    priced = app_js_function_body("zoneCastCard")
+    assert "mana_cost: way.price" in priced
+
+    assert "pendingCastZoneWay?.alternative_cost === true && body.alternative_cost == null" in app_js
+    assert "entry.castable_now === true" in (static / "battlefield-canvas.js").read_text(encoding="utf-8")
+    # Nothing about a price is computed in the browser: the zone panel reads
+    # the server's `ways`.
+    zone_cards = app_js_function_body("renderZoneCards")
+    assert "zoneEntry.ways" in zone_cards and "zoneEntry.castable_now" in zone_cards

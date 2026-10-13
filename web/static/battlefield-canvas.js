@@ -1655,9 +1655,24 @@ class BattlefieldCanvas {
       // reads the same wherever the card is sitting. The server answers per
       // index and this pile is one face, so any castable commander lights it —
       // clicking opens the reveal panel, where the individual cards glow.
+      //
+      // A graveyard or an exile takes the same light for the same reason: a
+      // flashback card the board can pay for right now is a card the viewer
+      // can cast, and the pile shows only its top card. `castable_now` is the
+      // server's per-entry answer (web/state_view `_zone_cast_options`); the
+      // permission alone — a card the viewer may cast from here but cannot
+      // pay for yet — lights nothing, exactly as an unaffordable card in hand
+      // does not.
       const castableFromPile =
-        pile.kind === "command" &&
-        (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0;
+        (pile.kind === "command" &&
+          (this.currentState?.players?.[pile.seat]?.playable_command_indices || []).length > 0) ||
+        ((pile.kind === "graveyard" || pile.kind === "exile") &&
+          (this.currentState?.castable_from_zones || []).some(
+            (entry) =>
+              entry.zone === pile.kind &&
+              (entry.owner_seat ?? this.viewerSeat) === pile.seat &&
+              entry.castable_now === true,
+          ));
       if (castableFromPile) {
         ctx.strokeStyle = "rgba(0, 220, 220, 0.85)";
         ctx.lineWidth = 2 / this.zoom;

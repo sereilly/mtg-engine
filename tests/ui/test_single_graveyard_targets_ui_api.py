@@ -157,13 +157,43 @@ def test_naming_no_cards_is_a_legal_cast_that_exiles_nothing():
     assert game.players[1].exile == []
 
 
-def test_the_body_the_shipped_client_sends_for_an_activation_is_accepted():
-    """`confirmSeveralGraveyardTargets` builds one body for casts and
-    activations: ``card_name``, ``target_seat`` and the slots, with no
-    ``permanent_name`` / ``permanent_index`` / ``ability_index``. No ability
-    reached that confirm before this one, so this replays exactly what the
-    browser sends — a person must be able to finish what the picker starts.
-    The route's own comment says why reading the name there is a stopgap."""
+def test_the_body_the_client_sends_for_an_activation_names_its_permanent():
+    """`confirmSeveralGraveyardTargets` built ONE body for casts and
+    activations — ``card_name``, ``target_seat`` and the slots — so an
+    activation arrived with no ``permanent_index`` and no ``ability_index``,
+    and the route read ``card_name`` as the permanent's name for want of
+    anything better (a stopgap, deleted with its cause: two permanents of one
+    name were told apart by nothing).
+
+    The confirm now builds an activate body the way every other one is built,
+    with the source by slot **and by id**. Replayed here against the SECOND of
+    two Carrion Beetles, which is the board the old body could not address."""
+    sid, _session, game = _make_session(beetles=True)
+    second = Permanent(card=_USG["Carrion Beetles"])
+    game._put_permanent_onto_battlefield(0, second, None)
+    second.metadata["summoning_sickness_turn"] = -99
+    first = next(p for p in game.controlled_by(0) if p is not second)
+
+    resp = client.post(
+        f"/api/sessions/{sid}/action",
+        json={
+            "seat": 0, "action": "activate", "permanent_name": "Carrion Beetles",
+            "permanent_index": 1, "permanent_id": second.permanent_id,
+            "ability_index": 0,
+            "target_seat": 1, "target_permanent_indices": [1, 3],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert (first.tapped, second.tapped) == (False, True)
+    game.resolve_stack()
+
+    assert _names(game.players[1].exile) == ["Hill Giant", "Island"]
+    assert game.pending_choices == []
+
+
+def test_an_activation_named_only_by_a_cast_s_card_name_is_refused():
+    """The body the stopgap existed for. It names no permanent, so it is not
+    an activation of anything; the route says so instead of guessing."""
     sid, _session, game = _make_session(beetles=True)
 
     resp = client.post(
@@ -173,11 +203,26 @@ def test_the_body_the_shipped_client_sends_for_an_activation_is_accepted():
             "target_seat": 1, "target_permanent_indices": [1, 3],
         },
     )
-    assert resp.status_code == 200, resp.text
-    game.resolve_stack()
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "permanent_name or permanent_index is required"
+    assert game.players[1].exile == [] and not game.stack
 
-    assert _names(game.players[1].exile) == ["Hill Giant", "Island"]
-    assert game.pending_choices == []
+
+def test_the_several_graveyard_confirm_builds_an_activate_body():
+    """The client half, read as text (``app.js`` is DOM-coupled): the confirm
+    that sends several graveyard slots builds the activation's own body — the
+    permanent's slot, its id and the ability — and never an ``activate``
+    carrying a cast's ``card_name``."""
+    from tests.helpers import app_js_function_body
+
+    body = app_js_function_body("confirmSeveralGraveyardTargets")
+    assert 'action: "activate"' in body
+    assert "permanent_index: p.sourcePermanentIndex" in body
+    assert '"permanent_id", seat, p.sourcePermanentIndex' in body
+    assert "body.ability_index = p.abilityIndex" in body
+    # The cast body is the only one that carries `card_name`.
+    activate_half = body.split('action: "activate"', 1)[1].split("card_name", 1)[0]
+    assert "permanent_name: cardName" in activate_half
 
 
 def test_an_activation_names_its_cards_the_same_way():
