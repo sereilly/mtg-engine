@@ -15983,73 +15983,18 @@ function startCastStackSpellPrompt(card, castAction = "cast", validTargets = nul
   }
   pendingCastTarget = {
     card, cardName, targetKind: "stack", castAction,
-    // Fork copies the chosen spell and lets the caster pick new targets for the
-    // copy, so selecting the spell starts a second target prompt rather than
-    // casting immediately.
-    copiesSpell: !!targetSpecOf(card).copies_spell,
+    // Fork's "you may choose new targets for the copy" is not asked here. It
+    // was, as a second prompt before the cast went out — but only for a copied
+    // spell whose picker was a creature / permanent / artifact / land, so a
+    // Forked Lightning Bolt was never offered anything, and a player could not
+    // be named at all. The server asks now, as the copy is made (CR 707.10c),
+    // through the `copy_spell_target` prompt Chain Lightning's copy uses, with
+    // every candidate the original's own picker would offer and the original's
+    // target among them. One way of asking, not two.
     ...fields,
   };
   renderActivationPrompt();
   renderStack(currentState ? currentState.stack : _currentStack);
-}
-
-// Fork second step: after the spell to copy is chosen, offer the caster a new
-// target for the copy (when the copied spell targets a permanent), then send the
-// cast carrying both the copied-spell index and the chosen target. A copied spell
-// that targets a player or nothing simply keeps its original targets.
-const _FORK_RETARGET_KINDS = new Set(["creature", "permanent", "artifact", "land"]);
-
-async function startForkCopyRetarget(forkPending, stackArrayIndex, copiedItem) {
-  const copiedName = copiedItem?.card?.name || "the spell";
-  const copiedCard = await attachCardTargetSpec(await fetchCardByName(copiedName), seat);
-  const spec = copiedCard ? targetSpecOf(copiedCard) : EMPTY_TARGET_SPEC;
-  const fields = indexValidTargets(spec.valid_targets || []);
-  if (!_FORK_RETARGET_KINDS.has(spec.kind) || fields.validKeys.size === 0) {
-    // Nothing to retarget — copy keeps the original spell's targets.
-    sendForkCopyCast(forkPending, stackArrayIndex, null, null, copiedName);
-    return;
-  }
-  pendingCastTarget = {
-    card: forkPending.card,
-    cardName: forkPending.cardName,
-    targetKind: spec.kind === "creature" ? "creature" : "permanent",
-    castAction: forkPending.castAction,
-    forkStackIndex: stackArrayIndex,
-    copyTargetName: copiedName,
-    ...fields,
-  };
-  renderActivationPrompt();
-  renderBoard(currentState);
-  updateActionHint(`Choose a new target for the copy of ${copiedName} (click the original to keep it).`);
-}
-
-function sendForkCopyCast(forkPending, stackArrayIndex, targetSeat, permanentIndex, copiedName) {
-  const body = {
-    seat,
-    action: forkPending.castAction || "cast",
-    card_name: forkPending.cardName,
-    target_stack_index: stackArrayIndex,
-  };
-  if (Number.isInteger(targetSeat)) body.target_seat = targetSeat;
-  if (Number.isInteger(permanentIndex)) {
-    body.permanent_index = permanentIndex;
-    withPermanentId(body, "target_permanent_id", targetSeat, permanentIndex);
-  }
-  updateActionHint(`Casting ${forkPending.cardName} (copying ${copiedName})...`);
-  sendAction(body)
-    .then(() => {
-      updateActionHint(`Cast ${forkPending.cardName}.`);
-      clearPendingHandCast();
-    })
-    .catch((e) => {
-      if (e.message && e.message.toLowerCase().startsWith("insufficient mana")) {
-        pendingAutoTap = { card: forkPending.card, cardName: forkPending.cardName, actionBody: body };
-        renderActivationPrompt();
-        return;
-      }
-      clearPendingHandCast();
-      updateActionHint(e.message, true);
-    });
 }
 
 // The X prompt for an **activated ability**, priced against the activation cost
@@ -16274,13 +16219,6 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     const costPermanentId = permanentIdAt(selectedTarget, selectedPermanentIndex);
     if (Number.isInteger(costPermanentId)) pendingCastCost.cost_permanent_id = costPermanentId;
     continueCastAfterCost(pending.card, pending.castAction || "cast");
-    return;
-  }
-
-  // Fork copy retarget: the chosen permanent becomes the copy's new target. Send
-  // the Fork cast carrying both the copied-spell index and the new target.
-  if (Number.isInteger(pending.forkStackIndex)) {
-    sendForkCopyCast(pending, pending.forkStackIndex, selectedTarget, selectedPermanentIndex, pending.copyTargetName);
     return;
   }
 
@@ -18630,13 +18568,6 @@ function selectStackSpellTarget(arrayIndex) {
 
   pendingCastTarget = null;
   renderActivationPrompt();
-
-  // Fork: after choosing the spell to copy, run a second prompt to let the caster
-  // choose new targets for the copy before the cast is sent.
-  if (pending.copiesSpell && pending.castAction !== "activate") {
-    startForkCopyRetarget(pending, arrayIndex, item);
-    return;
-  }
 
   // A *cast*'s source stage answered with a spell on the stack (CR 609.7a lets
   // a source be one). arrayIndex is the top-first index the server converts.
