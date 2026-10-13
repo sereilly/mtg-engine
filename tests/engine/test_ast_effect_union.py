@@ -76,7 +76,15 @@ _TABLES = (
 #: lines, and two names the `isinstance` scan picks up from the vocabulary
 #: floors (`RawEffect`, and `TargetSpec` in a subject test). None of these is a
 #: leaf effect, which is why the union is not asked about them.
-_NON_FAMILY_HOMES = {"statements", "lines", "_core", "_targets"}
+#:
+#: `costs` is the same case one vocabulary over: `lower_ability` tests an
+#: activated ability's **cost** list (`ExileSelf`, so a "return this card"
+#: behind an exile-self cost comes back from exile and not from a graveyard -
+#: Shifty Doppelganger). A cost is paid, never lowered as a statement, so the
+#: scan's `isinstance` hit is a read and not a dispatch. One name today
+#: (measured when it was added); `test_every_dispatched_node_is_in_the_effect_union`
+#: is unaffected, because it asks only about family leaves.
+_NON_FAMILY_HOMES = {"statements", "lines", "_core", "_targets", "costs"}
 _LEAF_FLOOR = 200
 _DISPATCHED_FLOOR = 180
 _TABLE_KEY_FLOOR = 150

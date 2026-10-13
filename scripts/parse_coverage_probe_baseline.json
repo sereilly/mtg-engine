@@ -971,6 +971,13 @@
   ]
  },
  {
+  "card": "Erg Raiders",
+  "clause": "if this creature didn't attack this turn, it deals 2 damage to you unless it came under your control this turn",
+  "ignored": [
+   "creature"
+  ]
+ },
+ {
   "card": "Erithizon",
   "clause": "put a +1/+1 counter on target creature of defending player's choice",
   "ignored": [

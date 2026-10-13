@@ -10,25 +10,7 @@ unclaimed text. Do not edit by hand.
 - Fully claimed: **4922**
 - With acknowledged simplifications: **2**
 - With UNCLAIMED text (must fix or acknowledge): **0**
-- With deletion-probe findings (ignored words): **602**
-
-## Measured sets — reported, not gated
-
-Cards in a `measured` set (see `cards/manifest.json`) that the
-compiler calls **supported** while carrying a printed line nothing
-implements. They are the debt behind that set's progress number, and
-`--hollow-lines` sees only the ones that produced an *ability part* —
-a line yielding nothing at all leaves that probe nothing to find.
-
-Not gated, for the reason `GRAMMAR_COVERAGE.md`'s floors and
-`HOOK_RELIANCE.md`'s ceilings exclude the same sets: a ratchet over a
-set nobody has implemented fires on its composition rather than on
-anything anyone did, and every ingest would arrive red.
-
-**1 unclaimed sentence(s) across 1 supported card(s).**
-
-- **Cease-Fire**
-  - `target player can't cast creature spells this turn`
+- With deletion-probe findings (ignored words): **603**
 
 ## Acknowledged simplifications
 
@@ -184,6 +166,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | Energy Vortex | `this enchantment deals 3 damage to that player unless they pay {1} for` | enchantment |
 | Enervate | `tap target artifact, creature, or land` | or |
 | Ensnare | `tap all creatures` | all |
+| Erg Raiders | `if this creature didn't attack this turn, it deals 2 damage to you unl` | creature |
 | Erithizon | `put a +1/+1 counter on target creature of defending player's choice` | target |
 | Errant Minion | `that player may pay any amount of mana. this aura deals 2 damage to th` | aura |
 | Escape Routes | `return target white or black creature you control to its owner's hand` | or |
@@ -669,7 +652,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 
 | Channel | Sentences claimed |
 | --- | --- |
-| parse rule | 4794 |
+| parse rule | 4796 |
 | activation cost | 2083 |
 | trigger table | 1479 |
 | static-line table | 1151 |
@@ -677,7 +660,7 @@ the Hasran-Ogress class of bug. Ratcheted via `PROBE_ACKNOWLEDGED`.
 | aura enchant noun (oracle_instructions attach) | 328 |
 | cast_costs.py | 144 |
 | activation_restrictions.py | 138 |
-| card_hooks CARD_LINE_INSTRUCTIONS (this printed line) | 75 |
+| card_hooks CARD_LINE_INSTRUCTIONS (this printed line) | 72 |
 | alternative_costs.py | 51 |
 | cost_modifiers.py | 43 |
 | oracle.py (modal trigger head) | 37 |
