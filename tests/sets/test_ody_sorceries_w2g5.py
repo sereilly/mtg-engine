@@ -511,3 +511,36 @@ def test_a_closing_noun_that_names_neither_set_is_not_this_paragraph():
     )
 
     assert not compile_card_oracle(wrong).supported
+
+
+# --------------------------------------------------------------------------
+# The sweep the other way: the resolution with the announcement gate off
+# --------------------------------------------------------------------------
+
+
+def test_cultural_exchange_resolution_does_not_lean_on_the_gate(set_pool, monkeypatch):
+    """The resolution now trusts a per-role seat list, so it is asked what it
+    does with one no gate checked. One player named for both roles: the picks
+    are made off one board and CR 701.12b exchanges nothing. A seat that does
+    not exist: its step is skipped, the other side has nothing to match, and
+    nobody is asked anything."""
+    card = set_pool("ODY")[NAME]
+    monkeypatch.setattr(
+        Game, "_validate_cast_targets", lambda self, *args, **kwargs: (True, "valid"),
+    )
+
+    game = _table(card, creatures=(2, 2))
+    before = (_names(game, 0), _names(game, 1))
+    assert _cast(game, [{"seat": 1}, {"seat": 1}]).supported
+    game.resolve_top_of_stack()
+    first, second = _ids(game, 1, 2)
+    assert game.confirm_permanent_set_choice(0, [first])
+    assert game.confirm_permanent_set_choice(0, [second])
+    assert (_names(game, 0), _names(game, 1)) == before
+    assert any("could not be completed" in line for line in game.log)
+
+    game = _table(card, creatures=(2, 2))
+    assert _cast(game, [{"seat": 1}, {"seat": 9}]).supported
+    game.resolve_top_of_stack()
+    assert game.waiting_prompt() is None
+    assert (_names(game, 0), _names(game, 1)) == before

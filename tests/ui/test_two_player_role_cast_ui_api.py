@@ -97,6 +97,12 @@ def test_two_seat_refs_cast_the_spell_and_record_both_players():
     assert resp.status_code == 200, resp.text
     (item,) = game.stack
     assert item.choices[ROLE_SEATS] == [1, 0]
+    # ...and the table is shown both of them: the hover arrows read the
+    # per-role seats, where the scalar beside them is only the first.
+    (shown,) = _state(sid, 1)["stack"]
+    assert shown["targets"] == [
+        {"kind": "player", "seat": 1}, {"kind": "player", "seat": 0},
+    ]
 
 
 def test_an_announcement_that_is_not_two_different_players_is_a_400():

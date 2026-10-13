@@ -28,7 +28,8 @@ from engine.oracle import LOYALTY_ANY_TIME_STATIC, compile_card_oracle
 from engine.keywords import derived_ability_lines
 from engine.hand_locks import locked_hand_indices
 from engine.revealed_hands import hand_revealed_to
-from engine.targeting import derive_cast_spec, usable_activated_abilities
+from engine.targeting import (derive_cast_spec, recorded_role_seats,
+                              usable_activated_abilities)
 from engine.text_changes import changed_words
 
 from .runtime import CARD_BY_NAME
@@ -876,6 +877,19 @@ def _stack_item_targets(item, game: Game) -> list[dict]:
                 targets.append({"kind": "stack", "index": len(game.stack) - 1 - depth})
                 break
         return targets
+
+    # Several **players**, each its own target ("…target player controls …
+    # another target player controls", Cultural Exchange). The announcement
+    # recorded a seat per role (``targeting.ROLE_SEATS``) and the scalar read
+    # below is only the first of them, so without this the table was shown a
+    # spell aimed at one player while it was aimed at two. A slot CR 608.2b
+    # blanked is ``None`` and draws no arrow.
+    named_seats = [
+        named for named in (recorded_role_seats(item) or ())
+        if isinstance(named, int) and 0 <= named < len(players)
+    ]
+    if named_seats:
+        return [{"kind": "player", "seat": named} for named in named_seats]
 
     seat = item.target_player_index
     if seat is None or not 0 <= seat < len(players):
