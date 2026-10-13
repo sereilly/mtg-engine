@@ -379,6 +379,45 @@ def test_ground_seal_arriving_in_response_spares_every_named_card(pool):
 
 
 # ---------------------------------------------------------------------------
+# Cast out of the pile it names (Recoup grants Decompose flashback)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("own_slot", [0, 2])
+def test_a_flashed_back_spell_holds_its_slots_through_leaving_the_pile(pool, own_slot):
+    """The spell is in the graveyard as its targets are counted and on the
+    stack by the time they are read (CR 601.2a before CR 601.2c —
+    ``targeting.CAST_FROM_GRAVEYARD``, W1G3). Several slots, named around the
+    card being cast, have to come back as the cards that were named."""
+    game = _duel(pool, hand=["Recoup"], mine=())
+    caster = game.players[0]
+    yard = ["Grizzly Bears", "Forest", "Giant Growth"]
+    yard.insert(own_slot, "Decompose")
+    caster.graveyard[:] = [pool[name] for name in yard]
+    game.interactive_seats = set()
+    assert game.cast_from_hand(
+        0, "Recoup", target_player_index=0, target_permanent_index=own_slot,
+    ).supported
+    resolve_stack(game)
+
+    spec = game.cast_target_spec(0, pool["Decompose"], from_zone="graveyard")
+    mine = [target for target in spec["valid_targets"] if target["seat"] == 0]
+    # The card being cast is not one of its own targets.
+    assert "Decompose" not in [target["name"] for target in mine]
+    named = [target for target in mine if target["name"] in ("Grizzly Bears", "Forest")]
+    assert game.queue_from_hand(
+        0, "Decompose", from_zone="graveyard", target_player_index=0,
+        target_permanent_index=[target["index"] for target in named],
+    ).supported
+    assert _names(
+        target.stamp.card for target in chosen_targets(game, game.stack[-1])
+    ) == ["Grizzly Bears", "Forest"]
+    resolve_stack(game)
+
+    assert _names(caster.graveyard) == ["Giant Growth", "Recoup"]
+    assert sorted(_names(caster.exile)) == ["Decompose", "Forest", "Grizzly Bears"]
+
+
+# ---------------------------------------------------------------------------
 # The sweep the other way: the gate off, and nothing unoffered is acted on
 # ---------------------------------------------------------------------------
 
