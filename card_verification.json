@@ -5,6 +5,11 @@
       "status": "pass",
       "updated_at": 1786234428.1613116
     },
+    "Abundance": {
+      "reason": "With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 \"choose which effect applies\" / \"choose whether to take the counter\"). Each card alone answered its prompt correctly.",
+      "status": "fail",
+      "updated_at": 1791886359.2900853
+    },
     "Afflict": {
       "reason": "",
       "status": "pass",
@@ -280,6 +285,11 @@
       "status": "pass",
       "updated_at": 1788202934.1076071
     },
+    "Capsize": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886048.5416698
+    },
     "Captain's Maneuver": {
       "reason": "",
       "status": "pass",
@@ -318,7 +328,7 @@
     "Chaos Orb": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782364304.0696912
+      "updated_at": 1791884857.1619985
     },
     "Chaoslace": {
       "reason": "",
@@ -389,6 +399,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782601599.96855
+    },
+    "Cone of Flame": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885873.7576416
     },
     "Consecrate Land": {
       "reason": "",
@@ -698,7 +713,7 @@
     "Erg Raiders": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1786228072.2936523
+      "updated_at": 1791885106.1012766
     },
     "Erhnam Djinn": {
       "reason": "",
@@ -748,7 +763,7 @@
     "Fire // Ice": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1791790086.8479145
+      "updated_at": 1791885868.4064605
     },
     "Fire Elemental": {
       "reason": "",
@@ -758,7 +773,12 @@
     "Fireball": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782964664.3713038
+      "updated_at": 1791885871.0576384
+    },
+    "Fireblast": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886043.2485075
     },
     "Firebolt": {
       "reason": "",
@@ -790,6 +810,11 @@
       "status": "pass",
       "updated_at": 1782586086.2205951
     },
+    "Flux": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885884.4141772
+    },
     "Flying Carpet": {
       "reason": "",
       "status": "pass",
@@ -810,6 +835,11 @@
       "status": "pass",
       "updated_at": 1782540724.534931
     },
+    "Force of Will": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886045.8751473
+    },
     "Forcefield": {
       "reason": "",
       "status": "pass",
@@ -821,9 +851,9 @@
       "updated_at": 1781503124.4112332
     },
     "Fork": {
-      "reason": "",
-      "status": "pass",
-      "updated_at": 1782695006.953429
+      "reason": "Forking a spell whose picker is \"any target\" or \"target player\" (Lightning Bolt) never offers new targets for the copy; only creature/permanent/artifact/land spells get the second step. The copy does keep the original target (a Bolt at a creature is copied at that creature).",
+      "status": "fail",
+      "updated_at": 1791885065.052563
     },
     "Frozen Shade": {
       "reason": "",
@@ -848,7 +878,7 @@
     "Gaea's Liege": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782797369.9786677
+      "updated_at": 1791884737.6925726
     },
     "Garruk's Uprising": {
       "reason": "",
@@ -909,6 +939,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1791787842.6988528
+    },
+    "Goblin Warrens": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885903.5971868
     },
     "Granite Gargoyle": {
       "reason": "",
@@ -1029,6 +1064,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783041095.545866
+    },
+    "Impulse": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886560.772456
     },
     "Index": {
       "reason": "",
@@ -1170,6 +1210,11 @@
       "status": "pass",
       "updated_at": 1786229070.187415
     },
+    "Kinetic Augur": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885887.007062
+    },
     "King Suleiman": {
       "reason": "",
       "status": "pass",
@@ -1193,12 +1238,17 @@
     "Kudzu": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1783034080.3751044
+      "updated_at": 1791884781.4385245
     },
     "Lance": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782591087.8997903
+    },
+    "Lava Blister": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885879.147208
     },
     "Ley Druid": {
       "reason": "",
@@ -1269,6 +1319,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782544325.311722
+    },
+    "Lodestone Bauble": {
+      "reason": "\"That player draws a card at the beginning of the next turn's upkeep\": three basic lands from MY graveyard went on top of my library, and at the AI's upkeep the AI drew the card.",
+      "status": "fail",
+      "updated_at": 1791885747.5969656
     },
     "Lord of Atlantis": {
       "reason": "",
@@ -1355,10 +1410,25 @@
       "status": "pass",
       "updated_at": 1783302645.6635115
     },
+    "Mind Bomb": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885889.6597443
+    },
+    "Mind Maggots": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885892.2548516
+    },
     "Mind Twist": {
       "reason": "",
       "status": "pass",
       "updated_at": 1782105016.6717145
+    },
+    "Molten Influence": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885881.813527
     },
     "Mons's Goblin Raiders": {
       "reason": "",
@@ -1425,6 +1495,11 @@
       "status": "pass",
       "updated_at": 1791787824.558571
     },
+    "Necropolis": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886040.6455135
+    },
     "Nether Shadow": {
       "reason": "",
       "status": "pass",
@@ -1450,6 +1525,11 @@
       "status": "pass",
       "updated_at": 1791884566.100352
     },
+    "Nomad Decoy": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885898.1475408
+    },
     "Northern Paladin": {
       "reason": "",
       "status": "pass",
@@ -1474,6 +1554,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1786235256.9291842
+    },
+    "Opt": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886558.1335342
     },
     "Orcish Artillery": {
       "reason": "",
@@ -1600,6 +1685,11 @@
       "status": "pass",
       "updated_at": 1782970446.445287
     },
+    "Pursuit of Knowledge": {
+      "reason": "With Abundance and Pursuit of Knowledge both out, a three-card draw (Ancestral Recall) hard-locks: after choosing Abundance first and declining it on the second draw, effect_order and draw_becomes_counter are both pending and each refuses the other's answer (400 \"choose which effect applies\" / \"choose whether to take the counter\"). Each card alone answered its prompt correctly.",
+      "status": "fail",
+      "updated_at": 1791886361.9396043
+    },
     "Pyramids": {
       "reason": "",
       "status": "pass",
@@ -1644,6 +1734,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1783039708.1276677
+    },
+    "Reinforcements": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885895.3077137
     },
     "Repentant Blacksmith": {
       "reason": "",
@@ -1694,6 +1789,11 @@
       "reason": "",
       "status": "pass",
       "updated_at": 1782107895.8262937
+    },
+    "Rotting Giant": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791885900.7560735
     },
     "Rousing Read": {
       "reason": "",
@@ -2168,7 +2268,7 @@
     "Volcanic Eruption": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1782969601.709291
+      "updated_at": 1791885876.473652
     },
     "Volcanic Island": {
       "reason": "",
@@ -2283,12 +2383,17 @@
     "White Ward": {
       "reason": "",
       "status": "pass",
-      "updated_at": 1781761323.133161
+      "updated_at": 1791884889.7408051
     },
     "Wild Growth": {
       "reason": "",
       "status": "pass",
       "updated_at": 1791884631.7705472
+    },
+    "Wild Mongrel": {
+      "reason": "",
+      "status": "pass",
+      "updated_at": 1791886555.5106957
     },
     "Will-o'-the-Wisp": {
       "reason": "",
