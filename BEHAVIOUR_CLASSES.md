@@ -46,7 +46,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 5 | Rune of Protection: Black, Rune of Protection: Blue, Rune of Protection: Green, Rune of Protection: Red, Rune of Protection: White |
 | 5 | Sphere of Duty, Sphere of Grace, Sphere of Law, Sphere of Reason, Sphere of Truth |
 | 4 | Bloated Toad, Darkwatch Elves, Disciple of Grace, Disciple of Law |
-| 4 | Breath of Life, **Resurrection**, Rise Again, Zombify |
+| 4 | Breath of Life, **Resurrection**, Rise Again, **Zombify** |
 | 4 | Colossal Dreadmaw, Rootbreaker Wurm, Wildwood Patrol, Yavimaya Wurm |
 | 4 | Crossbow Infantry, D'Avenant Archer, Elite Archers, Heavy Ballista |
 | 4 | **Deathlace**, **Lifelace**, **Purelace**, **Thoughtlace** |
@@ -73,7 +73,7 @@ A card whose class contains a **verified** card needs no separate manual pass: i
 | 3 | Fyndhorn Elves, **Llanowar Elves**, Skyshroud Troopers |
 | 3 | **Giant Growth**, Might of Oaks, Titanic Growth |
 | 3 | Killer Whale, Manta Riders, Whiptongue Frog |
-| 3 | Krosan Beast, Metamorphic Wurm, Springing Tiger |
+| 3 | **Krosan Beast**, Metamorphic Wurm, **Springing Tiger** |
 | 3 | Lone Wolf, Pride of Lions, Thorn Elemental |
 | 3 | Metathran Soldier, Phantom Warrior, Tidal Kraken |
 | 3 | Ramosian Commander, Ramosian Lieutenant, Ramosian Sergeant |
