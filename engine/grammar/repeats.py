@@ -37,12 +37,13 @@ count is not taken off the pool:
   cards with the same name, whichever comes first**." (Tainted Pact.) A loop
   that ends on *conditions asked when the round is over* — and the round ends
   in an offer, so "over" is after the answer. Grindstone's clause read the
-  other way round, and the one whose round may stop to ask.
+  other way round, and the one whose round may stop to ask. The newest of the
+  seven; it sits here beside the five it shares a shape with.
 
 * "…unless you pay {3} **and repeat this process**." (Crooked Scales.) A loop
   bought by a *price inside the round*, on one arm of a coin flip that may not
-  even have been taken. The seventh, and the only one whose reader is **not in
-  this module**: every clause above is its own sentence or opens one, and is
+  even have been taken. The sixth to arrive, and the only one whose reader is
+  **not in this module**: every clause above is its own sentence or opens one, and is
   read where the sentence loop has just finished a statement it can fold into,
   while this one is joined to a price by the printed "and" and is consumed by
   the toll. So its reader is ``tolls._accept_repeat_request``, two layers

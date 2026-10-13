@@ -4753,7 +4753,7 @@ def repeat_process_until(game: Game, instruction: OracleInstruction, context: Or
     this process until you put a card into your hand or you exile two cards
     with the same name, whichever comes first.**" (Tainted Pact.)
 
-    The fifth repeat in this file and the fifth mechanism: a loop that ends on
+    One more repeat in this file and one more mechanism: a loop that ends on
     conditions asked **when the round is over** — and whose round may end in
     an offer, so "over" can be an answer away. ``repeat_process_while`` asks
     its condition on the line after the round and says why it cannot be
