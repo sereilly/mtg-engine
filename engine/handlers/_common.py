@@ -123,6 +123,15 @@ def resolve_amount(raw: object, x_value: int | None) -> int:
         base = raw.get("plus_x")
         if base is not None:
             return max(0, int(base) + max(0, x_value or 0))
+        # ``{"minus_x": n}`` — "…and **5 minus X** damage to that creature's
+        # controller" (Liquid Fire). The printed number with the X taken off
+        # it, the third arithmetic beside the two above and read here for
+        # their reason. Floored at zero: CR 107.1b uses zero where a
+        # calculation that determines the result of an effect would be
+        # negative, so an X larger than the printed number spends nothing.
+        minuend = raw.get("minus_x")
+        if minuend is not None:
+            return max(0, int(minuend) - max(0, x_value or 0))
         raise ValueError(f"unreadable amount payload {raw!r}")
     return max(0, x_value or 0) if raw == "x" else int(raw)
 

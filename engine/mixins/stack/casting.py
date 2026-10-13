@@ -2360,6 +2360,17 @@ class SpellCastingMixin:
                 self._rebase_graveyard_targets(spell_item, source_seat, hand_index)
             self._stack_push(spell_item)
             self.log.append(f"{card.name} added to stack")
+            if any(cost.choose_number is not None for cost in cast_costs):
+                # "As an additional cost to cast this spell, choose a number
+                # between 0 and 5." (Liquid Fire.) Said in the log for the
+                # reason a kick is, one block down: CR 601.2b makes the choice
+                # part of the announcement so that an opponent deciding whether
+                # to respond knows which spell this is — five damage to the
+                # creature or five to its controller's face.
+                self.log.append(
+                    f"{caster.name} chose {int(resolved_x_value or 0)} "
+                    f"for {card.name}"
+                )
             if kicked(card, spell_item.choices):
                 # CR 702.33d: the spell is kicked from the moment its
                 # controller declared the intention to pay, which is now. Said
@@ -2587,6 +2598,24 @@ class SpellCastingMixin:
             # mandatory ones.
             if not optional_cost_taken(cost, taken):
                 continue
+            # "…, **choose a number between 0 and 5**." (Liquid Fire.) The
+            # number is the cast's announced X (CR 601.2b: a variable defined
+            # by a choice made in the announcement is chosen then), so a number
+            # outside the printed range is not a choice the card offers — and
+            # CR 601.2e returns the game to before a proposal that made one.
+            # Here with the other gates, before anything is spent. A mana cost
+            # that prints {X} would make one announcement both a price and a
+            # choice from a range; no card prints the pair, and it refuses
+            # rather than charge the chosen number in mana.
+            if cost.choose_number is not None:
+                refused = cost.number_refusal(x_value)
+                if refused is None and "{X}" in (card.mana_cost or "").upper():
+                    refused = "its {X} is already the number its mana cost charges"
+                if refused is not None:
+                    return (
+                        f"{card.name} can't be cast: {refused} "
+                        f"(CR 601.2b)"
+                    )
             if cost.sacrifice_filter is not None:
                 # "…, sacrifice **two** creatures." (Phyrexian Tribute.) The
                 # *count* is what makes such a cost unpayable: one creature is

@@ -61,6 +61,7 @@ from .alternative_costs import (
     unread_granted_alternative_cost_sentence,
 )
 from .cast_costs import (cast_cost_claims_line, read_discard_clause,
+                         unchosen_number_definition,
                          unenforced_x_spend_restriction,
                          unlinked_kicker_question, unread_cost_sentence)
 from .special_actions import special_action_line
@@ -7683,6 +7684,25 @@ def _compile_card_oracle(
             False,
             "unsupported",
             f"restricts an X nothing charges that way: {unenforced}",
+            normalized_text,
+        )
+
+    # "…, where X is the chosen number" on a card no cast of which chooses one
+    # (Liquid Fire prints the cost that does: "As an additional cost to cast
+    # this spell, choose a number between 0 and 5"). The words lower to the
+    # cast's own X, so without the cost the line compiles and spends an X
+    # nobody announced -- the uncharged cost's mirror, a number nothing
+    # chooses. A permanent is refused outright: its abilities' X is not its
+    # spell's.
+    unchosen = unchosen_number_definition(
+        printed_text, name, legendary,
+        spell=primary_type in {"instant", "sorcery"},
+    )
+    if unchosen is not None:
+        return OracleProgram(
+            False,
+            "unsupported",
+            f"defines X as a number nothing chooses: {unchosen}",
             normalized_text,
         )
 

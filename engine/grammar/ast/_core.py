@@ -686,6 +686,28 @@ class LifePaidAsEntered:
 
 
 @dataclass(frozen=True)
+class ChosenNumberAsCast:
+    """"…, where X is **the chosen number**" (Liquid Fire) — the number its
+    controller chose "as an additional cost to cast this spell".
+
+    Parameterless for :class:`LifePaidAsEntered`'s reason: there is one such
+    number per cast, and the sentence names it without describing it. Its own
+    node rather than a :class:`ThatMuch` over a scratchpad key, because it is
+    not a record of anything a *resolution* did. CR 601.2b: "If the value of
+    that variable is defined in the text of the spell by a choice that player
+    would make later in the announcement or resolution of the spell, that
+    player makes that choice at this time instead" — so the number is the
+    spell's announced X, fixed before any opponent can respond.
+
+    The node says only what the words say. Whether a card printing them also
+    prints the cost that chooses the number is the support gate's question
+    (``cast_costs.unchosen_number_definition``): a line cannot see its
+    neighbours, and an X nobody announced reads as 0.
+    """
+    __slots__ = ()
+
+
+@dataclass(frozen=True)
 class DamageDealtThisTurn:
     """"the amount of damage dealt to this creature this turn by other sources
     named ~" (Blazing Effigy) — a *history*, not anything on a board.
@@ -739,7 +761,7 @@ class DamageDealtByChosenCast:
     card_type: str
 
 
-Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
+Amount = Union[Fixed, Var, CountOf, CountersOnSource, CountersOnEventSubject, CountersOnGranter, LifePaidAsEntered, ChosenNumberAsCast, ThatMuch, SacrificedForCost, ExiledForCost, TappedForCost, TotalPowerSacrificedThisWay, Half, Times, AllOf, AnyNumber, BoardCount, Plus, Minus, CharacteristicOfTarget, DamageDealtThisTurn, DamageDealtByChosenCast, AdditionalCostPaidCount]
 
 
 # ---------------------------------------------------------------------------

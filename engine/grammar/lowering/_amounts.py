@@ -773,7 +773,8 @@ def halved_count_spec(amount: "ast.Amount", node) -> dict | None:
 # back, which is what makes them floor rather than family.
 # ---------------------------------------------------------------------------
 def x_offset_amount(amount: ast.Amount) -> dict | None:
-    """``{"plus_x": n}`` for "**X plus n**", or None when the amount is not one.
+    """``{"plus_x": n}`` for "**X plus n**", ``{"minus_x": n}`` for "**n minus
+    X**", or None when the amount is neither.
 
     "You gain X plus 1 life, where X is the number of green creatures on the
     battlefield." (An-Havva Inn.) The constant belongs to the *sentence that
@@ -794,6 +795,16 @@ def x_offset_amount(amount: ast.Amount) -> dict | None:
         and isinstance(amount.right, ast.Fixed)
     ):
         return {"plus_x": amount.right.value}
+    # "**5 minus X**" (Liquid Fire). The mirror, with the printed number on
+    # the left because that is the only order a subtraction of X from a
+    # constant can be printed in; "X minus 1" is a different quantity and
+    # no reader of this shape, so it stays refused.
+    if (
+        isinstance(amount, ast.Minus)
+        and isinstance(amount.left, ast.Fixed)
+        and isinstance(amount.right, ast.Var)
+    ):
+        return {"minus_x": amount.left.value}
     return None
 
 
@@ -881,7 +892,7 @@ def _stamp_x_from_count(
 #: makes a key one of these is that ``handlers/_common.resolve_amount`` reads
 #: the X for it — and a key added here that resolver does not read is an
 #: instruction reporting itself computed and resolving to a literal.
-_X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x"})
+_X_ARITHMETIC_KEYS = frozenset({"times_x", "plus_x", "minus_x"})
 
 
 def _mentions_x(instructions: tuple[OracleInstruction, ...]) -> bool:

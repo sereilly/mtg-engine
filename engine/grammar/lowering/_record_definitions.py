@@ -82,6 +82,7 @@ def lower_record_definition(
     node: ast.WhereX,
     inner: tuple[OracleInstruction, ...],
     produced: frozenset[str],
+    event: str | None = None,
 ) -> tuple[OracleInstruction, ...] | None:
     """*inner* with the X a **record** defines stamped onto it, or None when
     the clause's definition is not a record's.
@@ -93,8 +94,9 @@ def lower_record_definition(
     than returning None, which would hand the card on to the count's refusal
     with the wrong reason on it.
 
-    The firing event is not passed, because nothing here reads one; a reading
-    that comes to need it takes it as a parameter.
+    The firing event is passed for the one reading that needs it: a number
+    announced as a spell was cast (:func:`_lower_where_x_chosen_number`) is
+    something a triggered ability, which nobody cast, cannot have.
     """
     damage = _damage_dealt_definition(node.definition)
     if damage is not None:
@@ -145,6 +147,8 @@ def lower_record_definition(
         return _stamp_x_from_count(inner, paid)
     if isinstance(node.definition, ast.LifePaidAsEntered):
         return _lower_where_x_life_paid(node, inner)
+    if isinstance(node.definition, ast.ChosenNumberAsCast):
+        return _lower_where_x_chosen_number(node, inner, produced, event)
     if isinstance(node.definition, ast.TotalPowerSacrificedThisWay):
         return _lower_where_x_sacrificed_power(node, inner)
     return None
@@ -171,6 +175,54 @@ def _lower_where_x_life_paid(
     if not _mentions_x(inner):
         raise LoweringError("a where-clause defined an X nothing reads", node=node)
     return _stamp_x_from_count(inner, {"source_record": LIFE_PAID_AS_ENTERED})
+
+
+def _lower_where_x_chosen_number(
+    node: ast.WhereX,
+    inner: tuple[OracleInstruction, ...],
+    produced: frozenset[str],
+    event: str | None,
+) -> tuple[OracleInstruction, ...]:
+    """"…, where X is the chosen number." (Liquid Fire.)
+
+    The one definition here that stamps **nothing**. CR 601.2b: a variable
+    "defined in the text of the spell by a choice that player would make later
+    in the announcement" is chosen as the spell is announced — so the chosen
+    number *is* the cast's X, the number already on the stack object and
+    already what every ``"x"`` in *inner* resolves against. A count spec here
+    would be a second copy of a number the announcement fixed, free to be
+    counted again at resolution; what this function contributes is the three
+    refusals, each a place the same five words would read a different number
+    or none.
+
+    * Under a trigger there was no cast, so no announcement: the ability's X
+      is None and the sentence would spend a zero.
+    * Behind a step of this same effect that chose a number as it resolved
+      (CR 608.2d; ``choose_number`` writes ``CHOSEN_NUMBER_THIS_WAY``), the
+      words name *that* number, which rides the scratchpad and not the X.
+    * A sentence that reads no X was misread, as for every definition here.
+
+    What it cannot see is whether the card prints the cost that makes the
+    choice — a line is lowered alone — so the support gate asks
+    ``cast_costs.unchosen_number_definition`` of the whole card.
+    """
+    from ...oracle_types import CHOSEN_NUMBER_THIS_WAY
+
+    if event is not None:
+        raise LoweringError(
+            "a triggered ability was never cast, so nothing announced the "
+            "number its X would be",
+            node=node,
+        )
+    if CHOSEN_NUMBER_THIS_WAY in (produced | _records_within(inner)):
+        raise LoweringError(
+            "a number chosen as this effect resolves is not the X announced "
+            "as the spell was cast",
+            node=node,
+        )
+    if not _mentions_x(inner):
+        raise LoweringError("a where-clause defined an X nothing reads", node=node)
+    return inner
 
 
 def _lower_where_x_sacrificed_power(
