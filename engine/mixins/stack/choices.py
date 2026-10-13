@@ -2407,6 +2407,40 @@ class PendingChoicesMixin:
         )
         return True
 
+    def offer_library_top_order(
+        self, owner, count: int, *, chooser_index: int | None = None
+    ) -> bool:
+        """Ask for the order of the *count* cards an effect has just put on
+        **top** of *owner*'s library. True when a seat was asked.
+
+        :meth:`offer_library_bottom_order`'s twin for the library's other end,
+        and CR 401.4 is the same sentence for both: "If an effect puts two or
+        more cards in a specific position in a library at the same time, the
+        **owner** of those cards may arrange them in any order." The caller
+        lays the cards down first; the order is then the ordinary
+        ``reorder_library`` prompt over the top *count* — the look-and-put-back
+        prompt, with no shuffle on offer.
+
+        The owner, not the spell's controller, which is the half the order
+        "the targets were named in" could not carry: Lodestone Bauble puts
+        cards from *a player's* graveyard on top of *their* library, and the
+        player who named them is not the player whose draws they decide.
+
+        Only an interactive seat is asked, for the bottom twin's reason: "as
+        they lay" needs no prompt, so a headless or AI seat queues nothing and
+        a seeded run reads as it did.
+        """
+        seat = self.seat_index(owner)
+        count = min(int(count), len(self.players[seat].library))
+        chooser = seat if chooser_index is None else chooser_index
+        if count < 2 or chooser not in self.interactive_seats:
+            return False
+        self.arm_pending_choice(
+            "reorder_library", chooser,
+            target_index=seat, top_count=count, may_shuffle=False,
+        )
+        return True
+
     def _resolve_reorder_library(self, choice: PendingChoice, new_order: list, shuffle: bool) -> bool:
         target = self.players[choice.data["target_index"]]
         top_count = choice.data["top_count"]
