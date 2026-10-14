@@ -360,7 +360,7 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         # reading: CR 104.3b's superlative has no answer when two seats are
         # level, and handing it to the controller instead would be the ability
         # doing the opposite of what it says.
-        from .control_flow import most_life_seat
+        from .conditions import most_life_seat
 
         seat = most_life_seat(game)
         if seat is None:
@@ -374,7 +374,7 @@ def give_control_of_source_to_player(game: Game, instruction: OracleInstruction,
         # asks for the same reason: the gate and the hand-over cannot disagree
         # about whether there is a leader. A tie names nobody and the creature
         # stays where it is.
-        from .control_flow import most_controlling_seat
+        from .conditions import most_controlling_seat
 
         seat = most_controlling_seat(
             game, dict(instruction.payload.get("filter") or {})

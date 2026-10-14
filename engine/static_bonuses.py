@@ -636,7 +636,7 @@ def conditional_static_holds(
         # eight or more cards in **their** graveyard"), whose existential seat
         # this payload cannot say.
         from .handlers._common import evaluate_count
-        from .handlers.control_flow import _compare_count
+        from .handlers.conditions import _compare_count
 
         return _compare_count(
             evaluate_count(

@@ -143,7 +143,7 @@ def player_wins_game(game: Game, instruction: OracleInstruction, context: Oracle
         # the reader Wild Dogs' gate and hand-over share, so a tie names nobody
         # and nobody wins here; the card's own tie sentence is the branch the
         # grammar builds in front of this step.
-        from .control_flow import most_life_seat
+        from .conditions import most_life_seat
 
         seat = most_life_seat(game)
         if seat is None:
