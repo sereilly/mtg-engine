@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Sequence, Union
@@ -93,8 +94,44 @@ def load_cards(path: Union[str, Path, Sequence[Union[str, Path]]]) -> list[CardD
     keeps that answer stable when a reprint set is added to the pool.
 
     Dedupe is by ``oracle_id`` when the data has it, falling back to name.
+
+    **One catalog per list of files, shared by every caller in the process.**
+    The list returned is the caller's own; the ``CardDefinition`` objects in it
+    are not. A definition is immutable and a game already repeats one object
+    per copy of a card (CLAUDE.md, the hand seam), so a second load of the same
+    files has nothing to add but memory — and it added a great deal: 27 MB per
+    whole-manifest load, and collecting the test suite made 928 loads and built
+    582,846 card objects, which left every process at 3.1 GB before it ran a
+    test. That number, times the worker count, is what decided how many xdist
+    workers this suite fits on a machine; shared, it is 0.8 GB.
+
+    Keyed by each file's path, size and modification time, never by path
+    alone, so a file rewritten in place (an ingest, a test's scratch set) is
+    read again.
     """
     paths = [path] if isinstance(path, (str, Path)) else list(path)
+    try:
+        key = tuple(_file_stamp(one_path) for one_path in paths)
+    except OSError:
+        # A file that is not there: let the read below raise what it always has.
+        return _load_cards_uncached(paths)
+    shared = _LOADED_CATALOGS.get(key)
+    if shared is None:
+        shared = tuple(_load_cards_uncached(paths))
+        _LOADED_CATALOGS[key] = shared
+    return list(shared)
+
+
+#: ``{(path, size, mtime) per file: the deduped catalog}``. See :func:`load_cards`.
+_LOADED_CATALOGS: dict[tuple, tuple[CardDefinition, ...]] = {}
+
+
+def _file_stamp(path: str | Path) -> tuple[str, int, int]:
+    status = os.stat(path)
+    return (os.path.abspath(path), status.st_size, status.st_mtime_ns)
+
+
+def _load_cards_uncached(paths: Sequence[Union[str, Path]]) -> list[CardDefinition]:
     cards: list[CardDefinition] = []
     index_by_key: dict[str, int] = {}
     printings: list[list[str]] = []
