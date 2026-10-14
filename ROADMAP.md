@@ -59,8 +59,16 @@ Anything that weakens these is a regression regardless of what it enables:
    677s`, **72% of budget** - *at 21,127 tests*. The baseline is unchanged
    and now predates **nine** sets and six thousand tests, so it is the
    stalest number in this file and no longer a statement about this suite:
-   locally, alone on a 12-core, 16 GB machine, the suite takes 34 minutes at
-   `-n 8` and 41 at `-n 6`. `main` is 79 commits ahead of anything
+   locally, alone on a 12-core, 16 GB machine, the suite took 34 minutes at
+   `-n 8` and 41 at `-n 6`, and takes **24 minutes at `-n 8 --dist
+   worksteal`** (29,996 tests, 2026-10-13) since the Phase 0 after
+   Odyssey — which found that the cost was mostly not the tests. Collecting
+   the suite loaded the catalog 928 times, so each worker held 3.1 GB before
+   its first test (0.8 GB now: `load_cards` shares its objects) and eight of
+   them paged; `Permanent.effective_card` executed six import statements per
+   read; and the default scheduler queued the long censuses on two workers
+   while six sat idle (31 minutes without the flag). `main` is 79 commits
+   ahead of anything
    pushed (the rule below about an unpushed branch), so no runner number
    exists for it. The next Phase 0 owes CI a fresh one, and should expect
    the reading to be over budget rather than near it.

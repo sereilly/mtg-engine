@@ -2204,6 +2204,41 @@ budgeted fast half and an unbudgeted census half, is the owner's decision and
 was not made during the set; `main` is unpushed again. **Phase 0 of the next
 set** needs that decision before a CI number means anything.
 
+**Half-drained 2026-10-13, at the Phase 0 before the next set: the local
+gate, and why it cost what it did.** The budget decision is still open and
+still needs a runner reading, but the number it was waiting on has moved,
+and for three reasons none of which was a slow test:
+
+- *Every worker held 3.1 GB before its first test.* 107 test files load the
+  pool themselves; collecting the suite called `load_cards` 928 times and
+  built 582,846 card objects - 111 catalogs. `load_cards` shares its objects
+  between calls that name the same files now (0.8 GB a worker, collection 90 s
+  -> 41 s). That number is what the Apocalypse block's "a suite worker peaks
+  near 2 GB" was measuring, and it is why workers died.
+- *The hot accessor imported on every read.* `Permanent.effective_card` and
+  the layer accessors beside it ran function-local imports: 3.8 of the 6.9
+  microseconds a read cost. One census sample went from 12.2 s to 7.5 s.
+- *The scheduler.* The first gate after those two fixes still took 31
+  minutes, the last 14 with two workers busy and six idle: the default
+  scheduler deals each worker its share up front, and the long censuses had
+  been dealt to two of them. With `--dist worksteal` all eight reached 94%
+  within a second of each other's CPU time. What is left of the tail is one
+  test - five run over 200 s under load, the longest 531 s, and a test cannot
+  be split across workers - so sharding those five is the next four minutes.
+
+The full gate is `python -m pytest -n 8 --dist worksteal`, **24 minutes**
+alone on this machine. `scripts/meeting_point.py` and
+`scripts/set_test_sections.py` are the committed forms of the two scratch
+scripts the Integration blocks describe, and `/merge-gate` is rewritten to
+the batch-and-bisect procedure it had not been updated for. Still open: the
+seven grammar modules and four per-set files above, and - found by counting
+which files Odyssey's seventeen groups each touched - `ast/__init__.py` at
+951 lines (seven groups; every node is listed there twice, once imported and
+once in `__all__`), `oracle.py` (eleven), `mixins/stack/choices.py` (nine)
+and `handlers/zones.py` (eight), none of them under any cap.
+`handlers/control_flow.py` (six) is done: `evaluate_condition`'s 72 arms are
+a registry in `handlers/conditions.py`.
+
 ## Phase 0 — Pre-flight
 
 **Entry:** a set has been chosen. **Exit:** clean tree, every gate green,

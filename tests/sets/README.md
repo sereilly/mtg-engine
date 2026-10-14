@@ -75,7 +75,11 @@ Three rules follow from that, and the guard test checks all three:
 
 1. `python scripts/ingest_set.py <CODE> --fetch`
 2. Append one entry to `cards/manifest.json`.
-3. Write `tests/sets/test_<set>_cards.py` using `set_pool("<CODE>")`.
+3. Write `tests/sets/test_<set>_cards.py` using `set_pool("<CODE>")` - or, for
+   a set worked in parallel groups, open one file per printed type with a
+   marked section per group: `python scripts/set_test_sections.py open <CODE>
+   --groups W1G1 W1G2 ...`. The same script reports lines per section against
+   the size cap and moves whole sections to a sibling file when one is crossed.
 
 Steps 1 and 2 are the whole registration: the web app, the coverage scripts,
 the catalog sweeps and the fixtures all read the manifest, so nothing else has

@@ -178,6 +178,12 @@ resolution ("deals X damage… you gain that much life"). That is what removes t
 need for fused kinds like `deal_damage_and_gain_life` — 28 of the legacy
 compiler's 120 kinds were conjunctions of this sort.
 
+What an `if_then` asks is a registry too: `engine/handlers/conditions.py` holds
+one `@condition(kind)` handler per lowered condition kind behind
+`evaluate_condition`. It was one function of 72 arms; a new condition is a
+registered function, and `tests/engine/test_condition_registry.py` fails a kind
+the pool compiles with no handler, which would otherwise read False for ever.
+
 Coverage is tracked in `GRAMMAR_COVERAGE.md` with floors in
 `scripts/grammar_ratchet.json`, guarded by `tests/engine/test_grammar_ratchet.py`.
 Those floors were the migration ratchet and are now a division-of-labour one:

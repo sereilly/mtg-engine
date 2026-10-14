@@ -349,7 +349,7 @@ All Python runs through the workspace venv (Windows / PowerShell):
 ```powershell
 # Tests (pytest.ini sets testpaths=tests, addopts=-q)
 python -m pytest                                  # full suite (serial — the CI-comparable number)
-python -m pytest -n auto                          # full suite in parallel (~3x faster; use for the merge-gate loop)
+python -m pytest -n 8 --dist worksteal            # full suite in parallel: the gate (about 24 minutes here; without worksteal the long censuses queue on two workers)
 python -m pytest -m "not slow"                    # skip the AI-simulation batch tests
 python -m pytest tests/ui/test_web_api.py -q      # one file
 python -m pytest tests/sets/test_lea_creatures.py::test_name -q   # one test
@@ -364,6 +364,13 @@ keywords, replacements, and the casual variants — ante, Commander, Brawl),
 `tests/sets/` (per-card tests for a specific set),
 `tests/regressions/` (in-game bug regressions). Shared fixtures live in
 `tests/conftest.py` and helpers in `tests/helpers.py`, both at the root.
+
+**A loaded card is shared, so never write to one.** `load_cards` returns the
+same `CardDefinition` objects to every caller that names the same files (the
+list is the caller's own). Collecting the suite used to build 111 copies of
+the catalog and leave every xdist worker at 3.1 GB before its first test,
+which is what decided how many workers this machine could run. A test that
+needs a card with different numbers builds one (`tests.helpers._mk_card`).
 
 **Per-set tests follow `tests/sets/README.md`**, enforced by
 `tests/engine/test_set_test_convention.py`. In short: get a set's cards from
@@ -444,6 +451,8 @@ python scripts/oracle_diff.py snapshot   # record every card's full compiled pro
 python scripts/oracle_diff.py compare    # every card whose program moved since the snapshot, payloads and all; exit 1 if any did
 python scripts/set_progress.py        # regenerate SET_PROGRESS.md (per-set implementation tracker); --refresh re-fetches Scryfall data
 python scripts/check_all.py           # every CI guard check, in ci.yml's order, one summary table (--freshness adds the tracker regenerations + a clean-tree check)
+python scripts/meeting_point.py --base main --set <CODE>   # what a merge gets instead of the suite: changed test files, the set's own, the structural guards, every file a gate has surprised (--list prints it; a missing path or an empty run is an error)
+python scripts/set_test_sections.py open <CODE> --groups W1G1 W1G2   # a set's test files with one marked section per group; `report <CODE>` is lines per section against the cap, `move <file> --to later_groups --sections W1G6` moves whole sections and leaves their markers
 python scripts/rules_progress.py      # regenerate RULES_PROGRESS.md (CR test-coverage tracker); --check fails on unannotated tests
 python scripts/rules_gaps.py          # rank untested CR rules by engine citations + section momentum; also flags stale CR citations in engine/web (advisory, stdout only)
 python scripts/cr_edition_diff.py old.txt   # a CR bump: every citation here of a rule that moved, changed or went between two editions (old.txt = `git show HEAD:MagicCompRules.txt`); --install <download> writes the new file in the repo's convention
@@ -705,6 +714,13 @@ adding entries, not editing dispatch**:
   write "deal damage, then gain life" as two instructions in a `sequence`, never
   as a new `deal_damage_and_gain_life`. Values pass between steps through
   `OracleExecutionContext.results`.
+- `engine/handlers/conditions.py` — what a lowered `condition` payload asks:
+  one `@condition(kind)` handler per kind behind `evaluate_condition` (still
+  importable from `control_flow`). A new condition is a registered function,
+  never an arm; an unregistered kind answers False, so
+  `tests/engine/test_condition_registry.py` holds the registry to the compiled
+  pool both ways. Conditional statics keep their own vocabulary in
+  `engine/static_bonuses.py`.
 - `engine/handlers/` — `@effect_handler(kind)` functions mutate game state for one
   instruction kind. Registered into `EFFECT_HANDLERS`, dispatched by dict lookup.
   `engine/handlers/_common.py` holds shared helpers (target resolution, filter
