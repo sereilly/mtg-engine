@@ -88,3 +88,26 @@ def test_the_rules_file_in_the_repo_is_already_in_that_convention():
     assert len(rules) > 3000
     # The edition the engine's mana-ability predicate is written against.
     assert "move any card to or from a library" in rules["605.1a"]
+
+
+def test_every_top_level_document_that_cites_a_rule_is_one_the_diff_reads():
+    """The script reads the source directories whole and the top-level
+    documents by name, so a document added beside them is outside the diff
+    until somebody lists it — and its citations go on naming whatever rule
+    took the old number. ``SET_HISTORY.md`` was that document for the length
+    of one test run: it holds the pool's history, moved out of CLAUDE.md with
+    every citation it carried."""
+    import re
+
+    read = {path.resolve() for path in cr_edition_diff.citing_files()}
+    citing = [
+        path.name for path in sorted(REPO.glob("*.md"))
+        if path.name not in cr_edition_diff._NOT_A_CITER
+        and re.search(r"CR \d{3}\.\d", path.read_text(encoding="utf-8"))
+    ]
+    assert len(citing) >= 4, citing
+    unread = [name for name in citing if (REPO / name).resolve() not in read]
+    assert not unread, (
+        f"{unread} cite Comprehensive Rules numbers and are not in "
+        "cr_edition_diff._CITING_DOCS, so a rules bump would not see them."
+    )

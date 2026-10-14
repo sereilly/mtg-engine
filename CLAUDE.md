@@ -10,7 +10,9 @@ the long form:
 
 - `engine/ARCHITECTURE.md` — every seam below, in full ("Extension points, in
   full"), the web layer, and the tests, instruments and AI simulator.
-- `SET_PLAYBOOK.md` — the set lifecycle, and the pool's history set by set.
+- `SET_PLAYBOOK.md` — the set lifecycle, phase by phase.
+- `SET_HISTORY.md` — the pool set by set, and the verification tracker's
+  history.
 - `ROADMAP.md` — what is measured and not yet fixed, and what the next set is.
 
 **Read a module's long-form entry before changing it.** A rule here is one

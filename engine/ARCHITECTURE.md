@@ -572,7 +572,7 @@ code blocks it refers to are still in CLAUDE.md.
 **New history is written here**, under the entry it belongs to, and the rule
 it changes is changed in CLAUDE.md in a sentence
 (`tests/engine/test_claude_md_size.py` holds that file's size). The pool's
-history set by set, and the verification tracker's, are in `SET_PLAYBOOK.md`.
+history set by set, and the verification tracker's, are in `SET_HISTORY.md`.
 
 ## Extension points, in full
 

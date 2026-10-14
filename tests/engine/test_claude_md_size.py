@@ -13,8 +13,9 @@ they need them:
 
 * ``engine/ARCHITECTURE.md``, "The long form of CLAUDE.md" — every seam in full,
   the web layer, the tests, instruments and AI simulator;
-* ``SET_PLAYBOOK.md``, "The pool and its manifest, set by set" and "The
-  verification tracker, set by set".
+* ``SET_HISTORY.md`` — the pool and its manifest, set by set, and the
+  verification tracker's history. A file of its own, because the playbook owns
+  sequence and gates and nothing else.
 
 **New history goes there.** What a set found is a paragraph under the entry it
 belongs to, and the rule it changes is changed here in a sentence. If this test
@@ -48,7 +49,7 @@ def test_claude_md_stays_the_short_form():
         "loaded into every session and every subagent. Keep the rule and its "
         "guard here in a sentence; the incident, the cards and the numbers go in "
         "engine/ARCHITECTURE.md (\"The long form of CLAUDE.md\") or, for a set's "
-        "history, SET_PLAYBOOK.md (\"The pool and its manifest, set by set\")."
+        "history, SET_HISTORY.md."
     )
 
 
@@ -71,11 +72,12 @@ def test_the_long_form_is_where_the_short_form_says_it_is():
         "## Web layer, in full",
     ):
         assert f"\n{heading}\n" in architecture, heading
-    playbook = _text("SET_PLAYBOOK.md")
+    history = _text("SET_HISTORY.md")
     for heading in (
         "## The pool and its manifest, set by set",
         "## The verification tracker, set by set",
     ):
-        assert f"\n{heading}\n" in playbook, heading
+        assert f"\n{heading}\n" in history, heading
     short = _text("CLAUDE.md")
-    assert "engine/ARCHITECTURE.md" in short and "SET_PLAYBOOK.md" in short
+    for document in ("engine/ARCHITECTURE.md", "SET_HISTORY.md", "SET_PLAYBOOK.md"):
+        assert document in short, document

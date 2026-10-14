@@ -48,7 +48,7 @@ CR_PATH = REPO_ROOT / "MagicCompRules.txt"
 
 _RULE = re.compile(r"^(\d{3}\.\d+[a-z]*)\.?\s+(.*)$")
 _CITING_DIRS = ("engine", "web", "tests", "scripts")
-_CITING_DOCS = ("CLAUDE.md", "ROADMAP.md", "SET_PLAYBOOK.md")
+_CITING_DOCS = ("CLAUDE.md", "ROADMAP.md", "SET_PLAYBOOK.md", "SET_HISTORY.md")
 #: Generated from the citations themselves, the rules file, or this script
 #: (whose docstring names rules as examples).
 _NOT_A_CITER = {"RULES_PROGRESS.md", "MagicCompRules.txt", "cr_edition_diff.py"}
