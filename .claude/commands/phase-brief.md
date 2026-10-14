@@ -15,3 +15,18 @@ been wrong):
    lands-in-an-existing-class questions.
 4. Every brief carries the standing paragraphs from SET_PLAYBOOK.md Phase 3
    (differential, Rock Hydra test via `run_ai_simulation(required=…)`, caps).
+5. And the four from "Integration" that are about the machine and the merge,
+   not the cards:
+   - **Never the full suite.** Run the files you wrote, every test file you
+     edited and the files covering the modules you touched, serially or at
+     `-n 2`, and list them. `scripts/meeting_point.py --base <your base> --list`
+     prints the guards that sit far from your code.
+   - **Commit as soon as the first card lands**, so an interrupted wave resumes
+     from a branch and not from a transcript.
+   - **Write only inside your marked section** of each per-set test file, with
+     your imports at the top of your own block.
+   - **Report every red on your base** beyond the ones this brief names. That
+     list is the earliest gate there is.
+
+At most five agents at once; hold the rest of the wave and start each as a slot
+frees.

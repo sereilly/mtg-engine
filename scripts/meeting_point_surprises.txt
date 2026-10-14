@@ -1,0 +1,21 @@
+# Test files a full gate turned red behind a green meeting-point run.
+#
+# One per line: `<path>  # <set and gate>: <what the file states about the pool>`.
+# scripts/meeting_point.py runs every one of them on every merge. Add a line the
+# day a gate surprises you - each of these was a test stating a fact about the
+# pool that a merged branch had legitimately changed, and five of Odyssey's six
+# were first reported by a later group, from its base, as "a red I did not cause".
+#
+# A path that no longer exists fails the script and tests/engine/test_meeting_point.py.
+
+tests/rules/test_echo.py                                # ODY wave-1 gate: lists the windows that must refuse to borrow echo's; a group made one of them readable
+tests/engine/test_trigger_tables.py                     # ODY wave-1 gate: every trigger condition row needs a canonical example
+tests/regressions/test_activation_announcement_gate.py  # ODY wave-1 gate: validated backwards against named cards; one was a hook a group retired
+tests/engine/test_effect_labels.py                      # ODY rehearsal: every new activated or triggered kind needs a label, and the two halves are one test
+tests/engine/test_optional_offer_defaults.py            # ODY rehearsal: an inventory of "you may" offers that carry a rider
+tests/rules/test_land_type_set_loses_abilities.py       # ODY rehearsal: every land-type setter in the pool is driven
+tests/ai/test_ai_policy.py                              # ODY rehearsal: the AI's divided cards, each run rather than read
+tests/ai/test_ai_valuation.py                           # ODY rehearsal: the same inventory, read off the compiled program
+tests/regressions/test_modal_mode_announcements.py      # ODY gate 4: a census floor per bucket; a mode moved to a bucket the census had no arm for
+tests/ai/test_ai_choice_defaults.py                     # ODY promotion gate: the cards that choose a card name, written as an equality over the shipped catalog
+tests/ui/test_divided_bound_picker.py                   # ODY promotion gate: the divided spells that print a bound, written as an equality over the shipped catalog
