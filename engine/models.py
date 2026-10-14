@@ -14,6 +14,23 @@ from .copies import card_identity, copiable_card, copied_name
 # …and land_types the same: the layer system's types and nothing from here.
 from .land_types import added_land_types, lost_abilities_to_type_change
 from .text_changes import apply_text_changes, has_text_changes, text_changes
+# …and these four, for the same reason and with the same safety: none of them
+# imports anything from here at module level (`keywords` and `layer_bridge`
+# name this module only under TYPE_CHECKING). They were function-local imports
+# inside `effective_card` and the layer accessors below it, where an import
+# statement is executed on every read: 3.8 of the 6.9 microseconds a read of a
+# vanilla creature's `effective_card` cost, and 5.2 million executions in a
+# 216-cast sample of one pool-wide census.
+# `tests/engine/test_hot_accessor_imports.py` holds the accessors to it.
+from .auras import (aura_granted_ability_lines,
+                    aura_granted_line_derived_lines, auras_attached_to)
+from .global_statics import global_statics_applying_to, removes_all_abilities
+from .keywords import (all_abilities_removed, derived_ability_lines,
+                       granted_ability_lines, keyword_ability_name,
+                       normalized_ability_line, removed_ability_keywords,
+                       removed_ability_lines)
+from .layer_bridge import (computed_abilities, computed_colors, computed_pt,
+                           computed_supertypes, computed_types)
 
 # Basic land subtype → the mana symbol it taps for. Used when a land's type has
 # been overridden (e.g. Evil Presence makes a land a Swamp).
@@ -210,9 +227,6 @@ def _abilities_stripped(permanent) -> bool:
     downstream asks "what does this permanent say?", and a reader that knew one
     channel would answer the other wrongly for whichever card it had not met.
     """
-    from .global_statics import removes_all_abilities
-    from .keywords import all_abilities_removed
-
     return removes_all_abilities(permanent) or all_abilities_removed(permanent)
 
 
@@ -250,8 +264,6 @@ def _without_ability_lines(
     ``keywords`` after losing the line still answers yes to a keyword read,
     which is the two-representations-one-reader bug this engine keeps finding.
     """
-    from .keywords import normalized_ability_line
-
     key = (card_identity(card), removed)
     cached = _REMOVED_CARDS.get(key)
     if cached is None:
@@ -301,7 +313,6 @@ def _without_keyword_parts(
     flanking blocks…") is not a keyword line, and rewriting it by comma would
     be rewriting prose.
     """
-    from .keywords import keyword_ability_name
     from .oracle import _is_supported_keyword_line, normalize_creature_line
 
     key = (card_identity(card), removed)
@@ -580,8 +591,6 @@ class Permanent:
         # the effective text, so the compiler produces it like any printed
         # ability and the upkeep step, the UI and the coverage scripts all see
         # it without knowing a static granted it.
-        from .global_statics import global_statics_applying_to
-
         granted = [
             static.grants_ability
             for static in global_statics_applying_to(self)
@@ -594,9 +603,6 @@ class Permanent:
         # Appended after the board-wide ones so the fold order matches the order
         # the two were recorded in — a static applies from the board, a grant
         # from the moment it resolved.
-        from .keywords import (derived_ability_lines, granted_ability_lines,
-                               removed_ability_lines)
-
         granted.extend(granted_ability_lines(self))
         # …and an ability a **lord on the battlefield** grants its tribe in
         # quotes ('All Slivers have "{2}: Regenerate this permanent."'). Same
@@ -611,9 +617,6 @@ class Permanent:
         # arrived, so detaching it takes the ability away with nothing to undo
         # (CR 611.3b). Read off the Aura's *effective* card, because a text
         # change rewrites what the Aura says before anything reads it.
-        from .auras import (aura_granted_ability_lines,
-                            aura_granted_line_derived_lines, auras_attached_to)
-
         for aura in auras_attached_to(self):
             # …bound to *this* Aura (CR 201.5a): a quote that names its own
             # Aura means the object granting it, so the name and the id of the
@@ -665,8 +668,6 @@ class Permanent:
         # the card: Agility grants flanking as a printed line, so a removal
         # folded in first would strike a line that is not there yet and leave
         # the granted one standing.
-        from .keywords import removed_ability_keywords
-
         stripped = removed_ability_keywords(self)
         if stripped:
             base = _without_keyword_parts(base, tuple(sorted(set(stripped))))
@@ -681,8 +682,6 @@ class Permanent:
         ``primary_type`` collapses multi-type lines to one type, so type checks
         on permanents should use this instead.
         """
-        from .layer_bridge import computed_types
-
         wanted = card_type.lower()
         card_types, subtypes = computed_types(self)
         return wanted in card_types or wanted in subtypes
@@ -696,8 +695,6 @@ class Permanent:
         special case. Targeting, combat, and creature-only effects must use
         this rather than the printed ``card.primary_type``.
         """
-        from .layer_bridge import computed_types
-
         return "creature" in computed_types(self)[0]
 
     def has_supertype(self, supertype: str) -> bool:
@@ -715,15 +712,11 @@ class Permanent:
         ``printed_supertypes`` stays for the callers that hold a *card* — a
         thing in a hand or a graveyard, where CR 613 does not apply at all.
         """
-        from .layer_bridge import computed_supertypes
-
         return supertype.lower() in computed_supertypes(self)
 
     @property
     def effective_supertypes(self) -> frozenset[str]:
         """Every supertype this permanent currently has, after layer 4."""
-        from .layer_bridge import computed_supertypes
-
         return frozenset(computed_supertypes(self))
 
     @property
@@ -735,8 +728,6 @@ class Permanent:
         re-derive this by checking the printed type line and the override
         separately, which meant each had to remember both.
         """
-        from .layer_bridge import computed_types
-
         subtypes = computed_types(self)[1]
         return tuple(land_type for land_type in _LAND_TYPE_MANA if land_type in subtypes)
 
@@ -764,8 +755,6 @@ class Permanent:
     def effective_colors(self) -> set[str]:
         """The colours this permanent currently is, after layer 5 — printed,
         or replaced by a lace or a copy effect."""
-        from .layer_bridge import computed_colors
-
         return computed_colors(self)
 
     def has_keyword(self, keyword: str) -> bool:
@@ -779,8 +768,6 @@ class Permanent:
         ``Game._has_keyword`` adds a fallback for keywords that only appear in a
         card's oracle text; prefer that from inside the engine.
         """
-        from .layer_bridge import computed_abilities
-
         return keyword.lower() in computed_abilities(self)
 
     @property
@@ -794,15 +781,11 @@ class Permanent:
         convention: written by hand it was correct only as long as nobody added
         a channel in the wrong place.
         """
-        from .layer_bridge import computed_pt
-
         return computed_pt(self)[0]
 
     @property
     def effective_toughness(self) -> int:
         """Toughness after every continuous effect. See effective_power."""
-        from .layer_bridge import computed_pt
-
         return computed_pt(self)[1]
 
 
