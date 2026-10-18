@@ -121,6 +121,8 @@ def _mana_made_since(player, before: dict) -> dict[str, int]:
             if gained > 0:
                 made[symbol] = made.get(symbol, 0) + gained
     return made
+#: The six types of mana a tap can be asked for (CR 106.1b).
+_TAPPABLE_SYMBOLS = frozenset({"W", "U", "B", "R", "G", "C"})
 
 
 def is_tap_alone_mana_ability(ability) -> bool:
@@ -602,6 +604,11 @@ class TurnManagementMixin:
         free, _priced = self._land_mana_abilities(land)
         if free is None or color in mana_ability_symbols(free):
             return None
+        # …nor where a land type the land **gained** makes it (CR 305.6:
+        # "{T}: Add {B}" for a Swamp it was made): that is the seam's own arm,
+        # which runs when no ability is named.
+        if color in self._gained_type_mana(land):
+            return None
         # **A land under a swap makes the swapped symbol by any of its
         # abilities** ("If a land is tapped for mana, it produces {B}
         # instead", Infernal Darkness), so the default one answers — and it is
@@ -744,6 +751,17 @@ class TurnManagementMixin:
             if land_type in added
         )
 
+    def _default_tap_symbols(self, land, mana_ability) -> tuple[str, ...]:
+        """The symbols *mana_ability* — the one a tap of *land* with no
+        ability named runs — can make, read off the ability itself; the
+        printed summary where its shape is not read."""
+        from ..board_payment import _makes
+
+        made = _makes(self, land, mana_ability)
+        if made is None:
+            return tuple(land.effective_card.produced_mana or ())
+        return tuple(made)
+
     @staticmethod
     def _tap_alone_makes_only_gained_mana(land) -> tuple[str, ...]:
         """The symbols a **tap alone** makes from *land* where its own mana
@@ -769,7 +787,7 @@ class TurnManagementMixin:
         self,
         player_index: int,
         land_name: str,
-        chosen_color: str = "G",
+        chosen_color: str | None = None,
         permanent_index: int | None = None,
         *,
         permanent_id: int | None = None,
@@ -777,12 +795,23 @@ class TurnManagementMixin:
     ) -> bool:
         """Tap one land for mana (CR 605.1a), as its controller.
 
+        *chosen_color* is the mana symbol the seat asks the land for — one of
+        the six types (CR 106.1b), or None for "whatever it makes". **Asking
+        chooses the ability as well as the colour** (CR 605: each mana ability
+        is its own, and the player picks which to activate): a Karplusan
+        Forest asked for {R} runs "{T}: Add {R} or {G}. This land deals 1
+        damage to you.", and asked for nothing runs "{T}: Add {C}."
+        (``board_payment.tap_alone_ability_for``). It used to run the first
+        one whatever was asked, so every reader that said the land pays {R}
+        was contradicted by the tap. A symbol the land cannot make is no
+        choice and takes the land's default, as it always has; a string that
+        is no mana symbol at all is **refused**, with nothing tapped — it
+        reached the colour normalizer inside a handler and raised.
+
         *ability_index* is which of the land's mana abilities the player chose
-        (CR 605: each is its own ability), indexing the same list the
-        activation path does. Omitted, the land's first tap-alone mana ability
-        runs, which is the answer for every land with one — and the reason a
-        *granted* one (Overlaid Terrain) or a painland's coloured second one
-        could never be reached here.
+        outright, indexing the same list the activation path does, and wins
+        over what the colour would have picked. With neither, the land's
+        first tap-alone mana ability runs.
 
         *permanent_id* addresses the land the way the rest of the engine does
         and takes precedence over the name-and-slot pair above it, which exists
@@ -804,6 +833,23 @@ class TurnManagementMixin:
                 player, land_name, permanent_index
             )
             land = resolved[1] if resolved else None
+        # What was *asked for*, kept apart from the default the rest of this
+        # method falls back on: only a symbol somebody named picks an ability.
+        asked = None if chosen_color is None else str(chosen_color).strip().upper()
+        if asked is not None and asked not in _TAPPABLE_SYMBOLS:
+            if asked:
+                # Not one of the six mana types: nothing this land or any
+                # other could be tapped for.
+                return False
+            asked = None
+        chosen_color = asked or "G"
+        if (
+            ability_index is None and asked is not None
+            and land is not None and land.has_type("land")
+        ):
+            from ..board_payment import tap_alone_ability_for
+
+            ability_index = tap_alone_ability_for(self, land, asked)
         refusal = self.land_mana_tap_refusal(land, ability_index)
         if refusal is not None:
             # The two refusals a player can see the reason for are logged, as
@@ -833,7 +879,14 @@ class TurnManagementMixin:
                 or (
                     mana_ability is not None
                     and chosen_color in gained
-                    and chosen_color not in (land.effective_card.produced_mana or ())
+                    # …and not what the ability about to run makes. This asked
+                    # the printed summary, which lists what *every* ability of
+                    # the land makes: an Underground River under the Blanket,
+                    # asked for {B}, was "already a {B} land" by its painful
+                    # second ability and so ran its first, for {C}.
+                    and chosen_color not in self._default_tap_symbols(
+                        land, mana_ability
+                    )
                 )
             ):
                 mana_ability = None

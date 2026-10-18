@@ -602,6 +602,48 @@ def global_static_sources(permanents) -> list[tuple]:
 #: reading it here would apply the ability from the wrong zone.
 STACK_STATICS_KEY = "stack_static_effects"
 
+#: …and **when each of them began** — the timestamp of the stack object the
+#: static is on, position for position with the list above. CR 613.7a gives a
+#: static ability's effect "the same timestamp as the object the static
+#: ability is on", and CR 613.7d stamps an object "at the time it enters a
+#: zone": for a spell that is the moment it was put on the stack
+#: (``Game._stack_push`` writes it on the :class:`StackItem`).
+#:
+#: A second list rather than pairs in the first, so the four readers of that
+#: key keep reading statics. The key was missing altogether — the refresh
+#: recorded the derived static and nothing about its source — so the one
+#: reader that orders a granted ability against "loses all abilities"
+#: (``Permanent.effective_card``) had nothing to compare and kept the grant
+#: whatever the loss's age: a creature Humbled *in response to* Torrent of
+#: Lava still had the Torrent's "{T}: Prevent the next 1 damage…".
+STACK_STATIC_STAMPS_KEY = "stack_static_stamps"
+
+
+def record_stack_statics(permanent, applying: list[tuple]) -> None:
+    """Write (or clear) the statics a spell on the stack applies to
+    *permanent*: *applying* is ``(static, timestamp)`` per static, in stack
+    order. The one writer of both keys, so they cannot fall out of step."""
+    if applying:
+        permanent.metadata[STACK_STATICS_KEY] = [static for static, _ in applying]
+        permanent.metadata[STACK_STATIC_STAMPS_KEY] = [
+            int(stamp) for _, stamp in applying
+        ]
+    else:
+        permanent.metadata.pop(STACK_STATICS_KEY, None)
+        permanent.metadata.pop(STACK_STATIC_STAMPS_KEY, None)
+
+
+def stack_statics_applying_to(permanent) -> list[tuple]:
+    """``(static, timestamp)`` for every static a spell on the stack is
+    applying to *permanent*. A record with no stamp (a board built by hand)
+    reads as timestamp 0: older than every effect the clock has stamped."""
+    statics = permanent.metadata.get(STACK_STATICS_KEY) or ()
+    stamps = permanent.metadata.get(STACK_STATIC_STAMPS_KEY) or ()
+    return [
+        (static, int(stamps[index]) if index < len(stamps) else 0)
+        for index, static in enumerate(statics)
+    ]
+
 
 def global_statics_applying_to(permanent) -> list[GlobalStatic]:
     """Every global static currently applying to *permanent*.

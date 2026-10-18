@@ -200,6 +200,12 @@ def _on_board(game, board: str, seat: int, land_seat: int) -> bool:
     return land_seat in game.opponents_of(seat)
 
 
+def _gained_type_symbols(game, land) -> set[str]:
+    """The mana of the basic land types *land* gained in addition to its own
+    (``Game._gained_type_mana``), as upper-case symbols."""
+    return {str(symbol).upper() for symbol in game._gained_type_mana(land)}
+
+
 def lands_could_produce(game) -> dict[int, frozenset[str]]:
     """CR 106.7's answer for every land on the battlefield: the mana types it
     could produce, as upper-case symbols, keyed by ``permanent_id``.
@@ -242,7 +248,17 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
                 # {C} on an empty board. Read off its other mana abilities
                 # rather than off ``produced_mana``, which for a derived land
                 # is Scryfall's list of everything the clause could ever name.
-                answer[perm.permanent_id] = _stated_symbols(perm.effective_card)
+                #
+                # …and beside what a basic land type it **gained** gives it
+                # (CR 305.7's last sentence, CR 305.6): "Each land is a Swamp
+                # in addition to its other land types" hands a Reflecting
+                # Pool the intrinsic "{T}: Add {B}", which is no text at all
+                # and so in neither reading above. Left out, a Pool alone
+                # under a Blanket of Night could produce nothing — it read
+                # only itself, and itself as it was printed.
+                answer[perm.permanent_id] = _stated_symbols(
+                    perm.effective_card
+                ) | _gained_type_symbols(game, perm)
                 continue
             amongs = _color_choice_amongs(perm.effective_card)
             if amongs:
@@ -251,9 +267,11 @@ def lands_could_produce(game) -> dict[int, frozenset[str]]:
                 # produce nothing — where its printed summary says all five,
                 # which an opponent's Quirion Explorer or Fellwar Stone would
                 # then read as five colours on offer.
-                answer[perm.permanent_id] = _stated_symbols(
-                    perm.effective_card
-                ) | _colors_chosen_among(game, seat, perm, amongs)
+                answer[perm.permanent_id] = (
+                    _stated_symbols(perm.effective_card)
+                    | _colors_chosen_among(game, seat, perm, amongs)
+                    | _gained_type_symbols(game, perm)
+                )
             else:
                 answer[perm.permanent_id] = {
                     str(symbol).upper() for symbol in perm.effective_produced_mana

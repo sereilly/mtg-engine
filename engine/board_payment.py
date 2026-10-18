@@ -158,10 +158,27 @@ def _instruction_yields(
     """What running *instruction* — one tap-alone mana ability — adds.
 
     Read off the add-mana step's payload, the shapes ``handlers/mana`` carries
-    out. A shape this does not read exactly falls back to **one** mana of what
-    the engine says the land offers, which is the amount every reader assumed
-    before any of them counted — unless *summary* is off (a non-land source,
-    which has no tap seam and so no summary path), where it counts nothing.
+    out (:func:`_read_yields`). A shape that does not read exactly falls back
+    to **one** mana of what the engine says the land offers, which is the
+    amount every reader assumed before any of them counted — unless *summary*
+    is off (a non-land source, which has no tap seam and so no summary path),
+    where it counts nothing.
+    """
+    found = _read_yields(game, land, instruction, purpose)
+    if found is not None:
+        return found
+    fallback = _summary_yield(game, land) if summary else None
+    return [fallback] if fallback is not None else []
+
+
+def _read_yields(
+    game: "Game", land: "Permanent", instruction, purpose
+) -> "list[TapYield] | None":
+    """What running *instruction* adds, where its payload is a shape this
+    module reads exactly — and **None where it is not**, which is a different
+    answer from "nothing": the caller decides what an unread ability counts
+    as, and the planner's hook (:func:`tap_alone_symbols`) must not mistake
+    one for an ability that makes no mana.
     """
     from .handlers._common import count_from_payload
     from .handlers.control_flow import evaluate_condition
@@ -187,10 +204,8 @@ def _instruction_yields(
         if step.kind in MANA_PRODUCING_KINDS
     ]
     if len(steps) != 1:
-        # More than one producing step (or none this reads): one mana, of what
-        # the land offers.
-        fallback = _summary_yield(game, land) if summary else None
-        return [fallback] if fallback is not None else []
+        # More than one producing step (or none this reads).
+        return None
     payload = steps[0].payload or {}
     spend_only = payload.get("spend_only")
     if spend_only and not restriction_admits(str(spend_only), purpose):
@@ -247,8 +262,7 @@ def _instruction_yields(
         # choose as they enter): the colour is on the permanent.
         chosen = (land.metadata or {}).get("chosen_color")
         return [TapYield((frozenset({str(chosen)}),))] if chosen in PIP_SYMBOLS else []
-    fallback = _summary_yield(game, land) if summary else None
-    return [fallback] if fallback is not None else []
+    return None
 
 
 def _under_a_swap(game: "Game", land: "Permanent", found: TapYield) -> TapYield:
@@ -412,10 +426,17 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
     # does not print.
     if game.land_mana_tap_refusal(land) is None:
         free, _priced = game._land_mana_abilities(land)
-        printed = set(land.effective_card.produced_mana or ())
+        # What the tap-alone abilities counted above already make. This asked
+        # the printed summary, which also lists what a *priced* ability makes:
+        # a School of the Unseen ("{2}, {T}: Add one mana of any color.")
+        # under the Blanket was "already a {B} land", so the gained Swamp's
+        # free {B} was never counted and a {B} spell stayed dark over it.
+        counted = {
+            symbol for item in yields for unit in item.units for symbol in unit
+        }
         if free is not None:
             for symbol in game._gained_type_mana(land):
-                if symbol in printed:
+                if str(symbol).upper() in counted:
                     continue
                 item = _under_a_swap(
                     game, land, TapYield((frozenset({str(symbol).upper()}),))
@@ -426,6 +447,83 @@ def land_tap_yields(game: "Game", land: "Permanent", purpose=None) -> list[TapYi
                         item.units, item.one_color, item.extra + _aura_units(land)
                     ))
     return yields
+
+
+#: The order a land's symbols are listed in where nothing else orders them:
+#: CR 105.1's WUBRG, then colourless.
+_SYMBOL_ORDER: tuple[str, ...] = ("W", "U", "B", "R", "G", "C")
+
+
+def _makes(game: "Game", land: "Permanent", instruction) -> "frozenset[str] | None":
+    """Every symbol one run of *instruction* can put in the pool toward a
+    payment with no purpose named — None where the shape is not read."""
+    found = _read_yields(game, land, instruction, None)
+    if found is None:
+        return None
+    return frozenset(symbol for item in found for unit in item.units for symbol in unit)
+
+
+def tap_alone_symbols(game: "Game", land: "Permanent") -> "tuple[str, ...] | None":
+    """Every symbol **a tap alone** can make from *land*, read ability by
+    ability — or None for a land this cannot answer for (no compiled
+    tap-alone ability, or one whose shape is not read), whose caller keeps the
+    printed summary.
+
+    CR 605: each mana ability is its own ability, and what a land "taps for"
+    is what the abilities whose whole cost is {T} make. The printed
+    ``produced_mana`` summary is a different list — every symbol *any*
+    ability of the land makes, whatever it costs — and the planner's hook
+    (``Game._land_payment_colors``) answered with it. So a School of the
+    Unseen ("{T}: Add {C}." and "{2}, {T}: Add one mana of any color.") was
+    five colours to a payment that taps and pays nothing more, and a Tinder
+    Farm paid {R}{W} without being sacrificed.
+
+    The default ability's symbols come first — what the land makes unasked —
+    then the rest in WUBRG-then-colourless order, then the mana of a basic
+    land type the land *gained* (CR 305.7).
+    """
+    from .mixins.turn_management import is_tap_alone_mana_ability
+
+    free, _priced = game._land_mana_abilities(land)
+    if free is None:
+        return None
+    first = _makes(game, land, free)
+    if first is None:
+        return None
+    rest: set[str] = set()
+    for index, ability in enumerate(game.usable_abilities_of(land)):
+        if ability.instruction is free or not is_tap_alone_mana_ability(ability):
+            continue
+        if game.land_mana_tap_refusal(land, index) is not None:
+            continue
+        made = _makes(game, land, ability.instruction)
+        if made is None:
+            return None
+        rest |= made
+    rest |= {str(symbol).upper() for symbol in game._gained_type_mana(land)}
+    ordered = [symbol for symbol in _SYMBOL_ORDER if symbol in first]
+    ordered += [symbol for symbol in _SYMBOL_ORDER if symbol in rest - first]
+    return tuple(ordered)
+
+
+def tap_alone_ability_for(
+    game: "Game", land: "Permanent", symbol: str
+) -> "int | None":
+    """Which of *land*'s mana abilities a tap **asked for** *symbol* runs: an
+    index into ``Game.usable_abilities_of`` — or None for the default.
+
+    CR 605.1a / CR 106.12: tapping a land for mana is activating one of its
+    mana abilities, and the player chooses which. The seam ran the first one
+    whatever was asked, so a Karplusan Forest asked for {R} made {C} — while
+    every reader that counts the land (the planner's hook, the wire's colour
+    list, the castable highlight) said it pays {R}.
+
+    **The game's one answer** (``Game.land_mana_ability_for``), which the
+    AI's executor and an effect's payer already asked: two readers choosing
+    an ability two ways is a land that pays for one player and not for the
+    other.
+    """
+    return game.land_mana_ability_for(land, symbol)
 
 
 def _expanded(
@@ -565,4 +663,7 @@ def board_can_pay(
     return False
 
 
-__all__ = ["TapYield", "board_can_pay", "land_tap_yields", "source_tap_yields"]
+__all__ = [
+    "TapYield", "board_can_pay", "land_tap_yields", "source_tap_yields",
+    "tap_alone_ability_for", "tap_alone_symbols",
+]

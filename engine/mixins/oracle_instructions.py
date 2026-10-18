@@ -759,11 +759,11 @@ class OracleInstructionsMixin:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
-                if candidate is not None and candidate.card.primary_type == "land":
+                if candidate is not None and candidate.has_type("land"):
                     target_land = candidate
             if target_land is None and target_permanent_index is None:
                 target_land = next(
-                    (p for p in self.controlled_by(target_player) if p.card.primary_type == "land"),
+                    (p for p in self.controlled_by(target_player) if p.has_type("land")),
                     None,
                 )
             if target_land is None:
@@ -855,14 +855,19 @@ class OracleInstructionsMixin:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
-                if candidate is not None and candidate.card.primary_type == "artifact":
+                # ``has_type`` (CR 613 layer 4, and the whole type line):
+                # the printed type collapsed to one word calls an Artifact
+                # Creature a creature, so an "Enchant artifact" Aura aimed at
+                # a Juggernaut — a target the cast accepted — found "no legal
+                # target" here and went to the graveyard.
+                if candidate is not None and candidate.has_type("artifact"):
                     target_artifact = candidate
             if target_artifact is None and target_permanent_index is None:
                 target_artifact = next(
                     (
                         perm
                         for perm in self.controlled_by(target_player)
-                        if perm.card.primary_type == "artifact"
+                        if perm.has_type("artifact")
                     ),
                     None,
                 )
@@ -905,14 +910,14 @@ class OracleInstructionsMixin:
                 candidate = self.chosen_permanent(
                     target_player, target_permanent_index, target_permanent_id
                 )
-                if candidate is not None and candidate.card.primary_type == "enchantment":
+                if candidate is not None and candidate.has_type("enchantment"):
                     target_enchantment = candidate
             if target_enchantment is None and target_permanent_index is None:
                 target_enchantment = next(
                     (
                         perm
                         for perm in self.controlled_by(target_player)
-                        if perm.card.primary_type == "enchantment"
+                        if perm.has_type("enchantment")
                     ),
                     None,
                 )

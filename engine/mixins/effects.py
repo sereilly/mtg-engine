@@ -715,7 +715,7 @@ class EffectsMixin:
         remove all damage marked on it instead." Consumes the one-shot shield
         and reports True when the destruction was replaced."""
         if (
-            perm.card.primary_type == "land"
+            perm.has_type("land")
             and perm.metadata.pop("land_destruction_shield_this_turn", None)
         ):
             perm.damage_marked = 0

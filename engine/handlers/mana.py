@@ -64,6 +64,8 @@ def activate_each_lands_mana_ability(
     Drain Power, where it is exactly the choice the handler this replaced also
     made.
     """
+    from ..board_payment import tap_alone_ability_for
+
     seats = _pool_clause_seats(game, context, str(instruction.payload.get("player")))
     if not seats:
         game.log.append(f"{context.card.name} named no player to tap out")
@@ -72,7 +74,7 @@ def activate_each_lands_mana_ability(
         land_ids = [
             game.permanent_id_of(perm)
             for perm in game.controlled_by(seat)
-            if perm.card.primary_type == "land" and not perm.tapped
+            if perm.has_type("land") and not perm.tapped
         ]
         tapped = 0
         for land_id in land_ids:
@@ -80,10 +82,18 @@ def activate_each_lands_mana_ability(
             if land is None or land.tapped:
                 continue
             produced = land.effective_produced_mana or land.basic_land_mana
+            symbol = produced[0].upper() if produced else "C"
+            # **The land's default mana ability, whatever its summary lists
+            # first.** A symbol named at the seam picks the ability that
+            # makes it (CR 605: the player chooses which), and this clause
+            # chooses nothing: an Underground River's summary begins with the
+            # {B} of its painful second ability, so naming it here would deal
+            # that player a damage nobody decided on. Where the default
+            # ability does not make the first printed symbol, none is named.
+            if tap_alone_ability_for(game, land, symbol) is not None:
+                symbol = None
             if game.tap_land_for_mana(
-                seat, land.card.name,
-                produced[0].upper() if produced else "C",
-                permanent_id=land_id,
+                seat, land.card.name, symbol, permanent_id=land_id,
             ):
                 tapped += 1
         game.log.append(
@@ -689,10 +699,21 @@ def add_mana_from_text(game: Game, instruction: OracleInstruction, context: Orac
     pips_choice = instruction.payload.get("pips_choice")
     if pips_choice:
         alternatives = [symbol for symbol, _count in pips_choice]
-        chosen = game._normalize_mana_color(
+        # The symbol the seat asked for, read as a *symbol*: "{T}: Add {U} or
+        # {C}" can be asked for either, and {C} is one of the six types a tap
+        # can be asked for (CR 106.1b) without being one of the five colours.
+        # It went through the colour normalizer, which **raises** on anything
+        # outside WUBRG — so a tap of Bloodfell Caves, a Lair or any other
+        # "{X} or {Y}" land asked for {C} (the wire's own ``mana_color``
+        # value for "no colour in particular") ended in a ValueError, which
+        # the route turns into a 500. A symbol the ability does not offer is
+        # no choice at all and takes the first printed alternative, as an
+        # unoffered colour always has.
+        chosen = str(
             instruction.payload.get("color")
             or (context.choices or {}).get("new_color")
-        )
+            or ""
+        ).strip().upper()
         if chosen not in alternatives:
             chosen = alternatives[0]
         count = next(int(c) for s, c in pips_choice if s == chosen)

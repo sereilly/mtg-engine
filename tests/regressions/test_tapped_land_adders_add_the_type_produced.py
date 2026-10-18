@@ -56,8 +56,11 @@ def _pool(game) -> dict:
     # A land that makes colourless, asked (by default) for green.
     ("Mishra's Factory", "G", {"C": 2}),
     ("Ancient Tomb", "G", {"C": 3}),
-    # A painland's first ability, asked for the colour of its second.
-    ("Karplusan Forest", "R", {"C": 2}),
+    # A painland's first ability, asked for a colour neither of its abilities
+    # makes. (This asked for {R}, the colour of its second ability, when the
+    # seam ran the first one whatever was asked; a symbol named now picks the
+    # ability that makes it, so {R} would be the land making {R}.)
+    ("Karplusan Forest", "U", {"C": 2}),
     # Lands that make what they are asked for are as they were.
     ("Forest", "G", {"G": 2}),
     ("Tropical Island", "U", {"U": 2}),

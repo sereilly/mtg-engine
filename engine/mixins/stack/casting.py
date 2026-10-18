@@ -214,7 +214,7 @@ def _optional_cost_totals(
 _ENCHANT_TARGET_MATCHERS = {
     "artifact": lambda perm: perm.has_type("artifact"),
     "creature": lambda perm: perm.is_creature,
-    "land": lambda perm: perm.card.primary_type == "land",
+    "land": lambda perm: perm.has_type("land"),
     "enchantment": lambda perm: perm.has_type("enchantment"),
     "wall": lambda perm: perm.has_type("wall"),
     # "Enchant **permanent**" (Faith's Fetters). Everything on the battlefield

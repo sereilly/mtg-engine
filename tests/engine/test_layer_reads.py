@@ -384,30 +384,41 @@ def test_printed_colour_reads_of_a_non_permanent_stay_where_they_belong():
 
 _PRINTED_PRIMARY_TYPE = re.compile(r"\.card\.primary_type\b")
 
-#: module -> how many ``.card.primary_type`` reads survive in it. **Untriaged
-#: debt, not blessings**: unlike every other baseline in this file, no entry
-#: here carries a reason, because no one has yet asked of these sites whether
-#: they mean the card or the permanent. Lower an entry when you drain one; the
+#: module -> how many ``.card.primary_type`` reads survive in it.
+#:
+#: **Triaged, all but one module.** There were 51 across eighteen modules and
+#: no entry carried a reason. The 43 outside the AI's policy have each been
+#: asked whether they mean the card or the permanent: 37 meant the permanent
+#: and ask ``has_type`` / ``is_creature`` now
+#: (``tests/rules/test_printed_type_reads_of_a_permanent.py`` drives the first
+#: of each shape — the live one was an "Enchant artifact" Aura aimed at an
+#: Artifact Creature, which resolved into the graveyard), and the six below
+#: mean something else and say what. Lower an entry when you drain one; the
 #: only rule the guard enforces is that no entry may rise.
 PRIMARY_TYPE_BASELINE: dict[str, int] = {
+    # **Untriaged still**: which cards a weight reaches (``choose_*``'s
+    # counts of an opponent's lands and creatures). Each wants the judgement
+    # the others got, in the module whose round it is.
     "ai_policy.py": 8,
-    "card_hooks.py": 1,
-    "handlers/board_misc.py": 4,
-    "handlers/destruction.py": 1,   # 2 -> 1: Kudzu's hook handler (ODY W1G8)
-    "handlers/mana.py": 1,
-    "handlers/prevention.py": 1,
-    "handlers/stack.py": 2,
-    "handlers/tapping.py": 2,
-    "mixins/effects.py": 1,
-    "mixins/game_ending.py": 1,
+    # **A spell on the stack, not a permanent.** ``item.card`` is the card as
+    # it was cast — for a split card the half (CR 709.3b) — and CR 613 has no
+    # permanent to ask: "copy target instant or sorcery spell" (Fork), "an
+    # instant or sorcery spell" a copy is. No effect in the pool changes a
+    # spell's card type, so the printed word is the answer; the collapse to
+    # one word is harmless for the two types that are never combined.
+    "handlers/stack.py": 2,         # Fork's target: an instant or sorcery spell
+    "mixins/stack/casting.py": 2,   # …and the cast gate for the same target
+    "mixins/stack/resolution.py": 1,  # a copy of an instant or sorcery
+    # **A permanent that has already left.** "…if a creature dealt damage by
+    # this creature this turn **died**" (Krovikan Vampire): the ledger is
+    # written after the permanent is off the battlefield, where ``is_creature``
+    # would be asked of an object the derived layer-4 records have already
+    # dropped. What it wants is last-known information (CR 603.10a) — whether
+    # it *was* a creature as it died — and the printed word is the
+    # approximation: a land an animator had made a creature dies unrecorded.
+    # Its fix is a "was a creature" stamp at the removal seam, not a
+    # different read here.
     "mixins/helpers.py": 1,
-    "mixins/oracle_instructions.py": 6,
-    "mixins/permanent_state.py": 4,
-    "mixins/stack/casting.py": 3,
-    "mixins/stack/choices.py": 5,   # 7 -> 5: Kudzu's reattach prompt (ODY W1G8)
-    "mixins/stack/resolution.py": 1,
-    "phases/untap_step.py": 2,
-    "phases/upkeep_step.py": 3,
 }
 
 

@@ -617,7 +617,7 @@ def destroy_all_lands_of_type(game: Game, instruction: OracleInstruction, contex
     ) if instruction.payload.get("except_recorded") else frozenset()
 
     def _matches(perm: Permanent) -> bool:
-        if perm.card.primary_type != "land":
+        if not perm.has_type("land"):
             return False
         if perm.permanent_id in spared:
             return False

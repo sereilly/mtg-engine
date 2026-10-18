@@ -500,7 +500,7 @@ class UntapStepMixin:
         record_turn_start_states(self.all_permanents(), self.turn)
         self.untapped_lands_at_turn_start[player_index] = sum(
             1 for perm in self.controlled_by(player)
-            if perm.card.primary_type == "land" and not perm.tapped
+            if perm.has_type("land") and not perm.tapped
         )
         # Island Sanctuary protection lasts until the player's next turn begins
         player.island_sanctuary_protected = False
@@ -696,7 +696,7 @@ class UntapStepMixin:
             ):
                 continue
 
-            if permanent.card.primary_type == "creature":
+            if permanent.is_creature:
                 if aura_restriction_active(
                     permanent, "doesnt_untap", game=self, seat=player_index
                 ):

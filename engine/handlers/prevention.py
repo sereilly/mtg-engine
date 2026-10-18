@@ -1107,7 +1107,7 @@ def shield_target_land_from_destruction(game: Game, instruction: OracleInstructi
     target_land = resolve_target_permanent(
         game,
         context,
-        predicate=lambda p: p.card.primary_type == "land",
+        predicate=lambda p: p.has_type("land"),
         fallback_players=(context.caster, context.target),
     )
     if target_land is None:

@@ -586,7 +586,8 @@ class Permanent:
         # reader below orders them: "loses all abilities" (the blanket strike)
         # takes what the permanent has when it applies, and a grant is kept
         # only if it is newer. ``lost_at`` is that moment, or None.
-        from .global_statics import STACK_STATICS_KEY, global_static_sources
+        from .global_statics import (global_static_sources,
+                                     stack_statics_applying_to)
         from .keywords import abilities_lost_at
 
         lost_at = abilities_lost_at(self)
@@ -603,14 +604,16 @@ class Permanent:
             if static.grants_ability and _kept(source.timestamp)
         ]
         # …and the same statics from a spell on the stack (CR 113.6b, Torrent
-        # of Lava). Kept whatever the loss's age: the refresh records the
-        # derived static and not the stack object, so there is no stamp to
-        # compare, and a spell still on the stack is nearly always the newer
-        # of the two (the exception is a Humble cast in response to it).
+        # of Lava), each with the timestamp of the object it is on — the
+        # moment that spell was put on the stack (CR 613.7a, CR 613.7d). So
+        # the Torrent cast under a Humility grants its ability, and a Humble
+        # cast *in response to* the Torrent takes it. This was "kept whatever
+        # the loss's age", because the refresh recorded the derived static
+        # and nothing about its source: there was no stamp to compare.
         granted.extend(
             static.grants_ability
-            for static in self.metadata.get(STACK_STATICS_KEY) or ()
-            if static.grants_ability
+            for static, stamp in stack_statics_applying_to(self)
+            if static.grants_ability and _kept(stamp)
         )
         # …and an ability granted to *this permanent alone* (Rapid Fire's
         # rampage), on the same channel and for the same reason: CR 702.23a

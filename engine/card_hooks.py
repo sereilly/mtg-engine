@@ -556,7 +556,7 @@ ON_SELF_RESOLVED: dict[str, SelfResolvedHook] = {
 def _power_sink(game: Game, counter_card: CardDefinition, countered: StackItem) -> None:
     ctrl = game.players[countered.caster_index]
     for perm in game.controlled_by(countered.caster_index):
-        if perm.card.primary_type == "land":
+        if perm.has_type("land"):
             game.become_tapped(perm)
     ctrl.mana_pool = {k: 0 for k in ctrl.mana_pool}
     game.log.append(f"{counter_card.name} tapped all lands and drained mana from {ctrl.name}")

@@ -3543,7 +3543,7 @@ class PendingChoicesMixin:
         source = f"{choice.data.get('duration', 'until_end_of_turn')}:{next_timestamp()}"
         swapped = []
         for land in self.permanents_matching(
-            lambda perm: perm.card.primary_type == "land" and perm.has_type(first)
+            lambda perm: perm.has_type("land") and perm.has_type(first)
         ):
             change_land_type(land, second, source=source, label=choice.data["card_name"])
             swapped.append(land)
@@ -5254,6 +5254,26 @@ class PendingChoicesMixin:
             free, _priced = self._land_mana_abilities(land)
             if free is not None and (free.payload or {}).get("any_color"):
                 return land_mana_swaps.COLORS
+        # **Per ability, not per land** (CR 605: each mana ability is its
+        # own). ``own`` is the printed summary — every symbol *any* ability
+        # of the land makes, whatever that ability costs — and this hook is
+        # asked what **a tap** would add. So a land with compiled tap-alone
+        # abilities answers with what those make
+        # (``board_payment.tap_alone_symbols``): a School of the Unseen is
+        # {C}, not five colours behind a {2} nobody is paying, and a Tinder
+        # Farm is {G}, not the {R}{W} of a sacrifice. A painland still
+        # answers both its colours, because both its abilities are the tap
+        # alone — and the seam runs the one that makes the colour asked for
+        # (``tap_land_for_mana``), which is what keeps this answer true.
+        #
+        # A land with no compiled tap-alone ability is the summary path's (a
+        # basic, a dual), and one whose ability's shape is not read keeps the
+        # summary too: both come back None.
+        from ...board_payment import tap_alone_symbols
+
+        tapped_for = tap_alone_symbols(self, land)
+        if tapped_for is not None:
+            return tapped_for
         return own
 
     def _default_mana_payment(self, choice: PendingChoice) -> None:
@@ -8297,10 +8317,10 @@ class PendingChoicesMixin:
             return False
         # Validate the chosen battlefield indices are the right card type.
         for i in lands:
-            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "land":
+            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].has_type("land"):
                 return False
         for i in creatures:
-            if not (0 <= i < len(player.battlefield)) or player.battlefield[i].card.primary_type != "creature":
+            if not (0 <= i < len(player.battlefield)) or not player.battlefield[i].is_creature:
                 return False
         for i in hand:
             if not (0 <= i < len(player.hand)):
@@ -8335,8 +8355,8 @@ class PendingChoicesMixin:
         """Keep the lowest-index permanents and cards."""
         plan = choice.data["plan"]
         player = self.players[choice.player_index]
-        land_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "land"][-plan["lands"]:] if plan["lands"] else []
-        creature_idx = [i for i, p in enumerate(player.battlefield) if p.card.primary_type == "creature"][-plan["creatures"]:] if plan["creatures"] else []
+        land_idx = [i for i, p in enumerate(player.battlefield) if p.has_type("land")][-plan["lands"]:] if plan["lands"] else []
+        creature_idx = [i for i, p in enumerate(player.battlefield) if p.is_creature][-plan["creatures"]:] if plan["creatures"] else []
         hand_idx = list(range(len(player.hand)))[-plan["hand"]:] if plan["hand"] else []
         if not self._resolve_balance(choice, land_idx, creature_idx, hand_idx):
             self.discard_pending_choice(choice)

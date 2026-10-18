@@ -73,11 +73,40 @@ def test_a_granted_mana_ability_is_reachable_through_the_tap_seam(set_pool):
 
 @pytest.mark.cr("605.1a", "106.12")
 def test_the_lands_own_first_ability_is_still_the_default(set_pool):
+    """With no symbol named. This asked for {U} and expected the {C} — the
+    module docstring's own example of the defect, kept as the default: a tap
+    that *names* a symbol runs the tap-alone ability that makes it
+    (``board_payment.tap_alone_ability_for``), which is the test below."""
     game, forest = _w2g3_karplusan_under_terrain(set_pool)
 
-    assert game.tap_land_for_mana(0, "Karplusan Forest", "U", permanent_id=forest.permanent_id)
+    assert game.tap_land_for_mana(0, "Karplusan Forest", permanent_id=forest.permanent_id)
 
     assert _w2g3_pool(game) == {"C": 1}, game.log
+    assert game.players[0].life == 20
+
+
+@pytest.mark.cr("605.1a", "106.12")
+def test_a_symbol_asked_for_picks_the_ability_that_makes_it(set_pool):
+    """Each mana ability is its own (CR 605), and the player chooses which to
+    activate: asked for {U}, the granted "two mana of any one color"; asked
+    for {R}, the painland's own second ability, with its damage; asked for a
+    symbol nothing makes here, the default."""
+    game, forest = _w2g3_karplusan_under_terrain(set_pool)
+    assert game.tap_land_for_mana(0, "Karplusan Forest", "U", permanent_id=forest.permanent_id)
+    assert _w2g3_pool(game) == {"U": 2}, game.log
+    assert game.players[0].life == 20
+
+    forest = Permanent(card=set_pool("ICE")["Karplusan Forest"])
+    game = _w2g3_seat(forest)
+    assert game.tap_land_for_mana(0, "Karplusan Forest", "R", permanent_id=forest.permanent_id)
+    assert _w2g3_pool(game) == {"R": 1}, game.log
+    assert game.players[0].life == 19
+
+    forest = Permanent(card=set_pool("ICE")["Karplusan Forest"])
+    game = _w2g3_seat(forest)
+    assert game.tap_land_for_mana(0, "Karplusan Forest", "U", permanent_id=forest.permanent_id)
+    assert _w2g3_pool(game) == {"C": 1}, game.log
+    assert game.players[0].life == 20
 
 
 @pytest.mark.cr("605.1a", "106.12")

@@ -19,7 +19,7 @@ from ..keywords import (clear_granted_ability_lines, clear_granted_keywords,
                         clear_removed_ability_lines,
                         clear_all_abilities_removals)
 from ..models import Permanent
-from ..pt import remove_temporary_pt
+from ..pt import clear_base_pt, remove_temporary_pt
 from ..damage_redirects import clear_redirects
 from ..prevention import clear_directional_shields
 from ..shields import END_OF_COMBAT, clear_shields
@@ -57,8 +57,9 @@ class EndOfCombatStepMixin:
             clear_granted_keywords(permanent, "end_of_combat")
             if permanent.metadata.get("animate_until_end_of_combat"):
                 permanent.metadata.pop("animate_until_end_of_combat", None)
-                permanent.metadata.pop("absolute_power", None)
-                permanent.metadata.pop("absolute_toughness", None)
+                # Through the channel's own API, which takes the slot's
+                # timestamp with it (``pt.set_base_pt`` stamps every write).
+                clear_base_pt(permanent)
             # "…prevent all combat damage that would be dealt to and dealt by
             # that creature **this combat**." (Winter's Chill.) The directional
             # marker's window is data on the record, so this sweep asks for the
