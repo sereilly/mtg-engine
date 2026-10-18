@@ -5320,10 +5320,13 @@ class LegalityMixin:
         # including the shapes that gate declines on purpose. A permanent
         # spell that is not an Aura targets nothing (``chosen_targets`` is
         # empty for it), so in practice this is the Auras.
+        # The object is a spell (its card is the cast object, CR 709.3b), not
+        # a permanent, so its printed type is the question.
+        spell = item.card
         aura_spell = (
             item.ability_instruction is None
             and not getattr(item, "is_ability", False)
-            and item.card.primary_type not in ("instant", "sorcery")
+            and spell.primary_type not in ("instant", "sorcery")
         )
         if not (announced_by_a_choice(item) or aura_spell):
             return None

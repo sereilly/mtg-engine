@@ -942,6 +942,23 @@ def zone_being_cast_from(game: Game, seat: int, action: "CastAction") -> list:
 
 
 def choose_cast_action(game: Game, player_index: int) -> CastAction | None:
+    """The cast this seat makes now, out of everything it may cast — its hand,
+    its commander, and whatever an effect has opened to it — or None.
+
+    **One deliberation for the whole decision** (``ai_valuation.deliberating``).
+    Every card weighed here is weighed against the same table with nothing
+    cast, and reading that table costs a copy of the game run out to the end of
+    its turn; each card took its own (`_cast_candidate`), so a hand of seven
+    read the one table seven times. Nothing is decided differently: the reading
+    is a function of the game, which no chooser moves, and a rehearsal is kept
+    under everything that tells two of them apart (`_rehearse_announcement`).
+    """
+    with deliberating():
+        return _choose_cast_action(game, player_index)
+
+
+def _choose_cast_action(game: Game, player_index: int) -> CastAction | None:
+    """`choose_cast_action`, inside its deliberation."""
     best: CastAction | None = None
     for hand_index, card in hand_spells(game.players[player_index]):
         # The plan is told what it pays for (`_paying_for`): the spell, which
@@ -1553,8 +1570,16 @@ def _rehearse_announcement(
     return rehearse(
         game, seat, perform, spell_name=zone_name,
         leaves_hand=from_hand and held,
+        # Everything that tells two rehearsals of one decision apart: the
+        # announcement, and — once there is one — the plan that pays for it.
+        # One card priced twice (a free cast that takes a kicker is priced
+        # again as an ordinary one, `_priced_candidate`) announces the same
+        # thing over two different payments, and the lands left untapped are
+        # part of what the resolution has to spend.
         key=(
-            seat, card.name, held, planned is not None,
+            seat, card.name, held,
+            (planned.land_tap_indices, planned.land_tap_colors)
+            if planned is not None else None,
             repr(sorted(announcement.items())),
         ),
         without=paid_for if taps else None,
@@ -1639,6 +1664,10 @@ def choose_trigger_mode(game: Game, choice, stated: int) -> int:
                     bool(table._resolve_mode_choice(prompt, index))
                 ),
                 leaves_hand=False, carried=choice, detach=True, without=without,
+                label=(
+                    f"{getattr(getattr(item, 'card', None), 'name', None) or 'a trigger'}"
+                    f" (its triggered ability's mode {index})"
+                ),
             )
             if rehearsal is None:
                 return stated
@@ -2693,7 +2722,17 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # one, so naming one is a turn spent on a refusal, every turn.
         if game.lost_abilities_refusal(permanent) is not None:
             continue
-        program = compile_card_oracle(permanent.card)
+        # **What the permanent has, not what its card prints** — the engine's
+        # own list (`Game.usable_abilities_of`), which is the one the
+        # activation path indexes into and the browser shows a person. It
+        # compiles the permanent's *effective* card: CR 613's layer 1 gives a
+        # copy the copied object's abilities and layer 6 gives an enchanted
+        # permanent the ones its Aura quotes. This compiled ``permanent.card``,
+        # so a Clone of a Prodigal Sorcerer never pinged in an AI's hands and
+        # a creature wearing Hermetic Study was a creature wearing nothing
+        # (`tests/ai/test_ai_activation_effective_card_census.py`: of 931
+        # cards whose printed self the seat activates, a copy of none).
+        #
         # The shared reader, not a third copy of its predicate: it carries
         # CR 113.6's zone read, so a cycling creature's "{2}, Discard this card:
         # Draw a card." is not on this list at all. Open-coded, the policy
@@ -2701,7 +2740,7 @@ def choose_activation_action(game: Game, player_index: int) -> ActivationAction 
         # draw for a card that was never discarded, on eight of Urza's Saga's
         # creatures. It is also the list `activation_target_spec` narrows by,
         # which the `ability_index=0` below already assumes.
-        ability = next(iter(usable_activated_abilities(program)), None)
+        ability = next(iter(game.usable_abilities_of(permanent)), None)
         if ability is None or ability.instruction is None:
             continue
 

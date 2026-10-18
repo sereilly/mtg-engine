@@ -504,9 +504,33 @@ def _deal_combat_damage_once_announced(session: Session) -> None:
     game.resolve_combat_damage(game.active_player_index)
 
 
+def _a_person_assigns_for_a_defender(session: Session) -> bool:
+    """Whether some attacker's combat damage this combat is assigned by a
+    **person** who is defending (CR 702.22j, Defensive Formation) — the seat
+    whose announcement each combat damage step asks for again (CR 510.4)."""
+    game = session.game
+    return any(
+        (assigner := game.combat_damage_assigner(attacker_idx)) is not None
+        and assigner != game.active_player_index
+        and _seat_type(session, assigner) == "human"
+        for attacker_idx in game.combat_attackers
+    )
+
+
 def _ai_assign_combat_damage(session: Session) -> None:
     """Active-player (AI) assigns combat damage — the turn-based action the engine
-    defers to a player when an attacker is blocked by two or more creatures."""
+    defers to a player when an attacker is blocked by two or more creatures.
+
+    **One combat damage step at a time where a person defending assigns an
+    attacker's damage.** There are two steps when anything has first or double
+    strike (CR 510.4), and each is its own announcement: the defending player
+    who divided a double striker's damage for the first is owed the question
+    again for the second, over the board the first one left. This dealt both
+    in one call, so their first answer was replayed where it still fitted and
+    the default used where it did not, and they were never asked — the mirror
+    of what a person *attacking* was given a round earlier, when the dialogs
+    learned to reopen per step.
+    """
     game = session.game
     if game.current_step != "combat_damage" or game.combat_damage_resolved:
         return
@@ -518,13 +542,46 @@ def _ai_assign_combat_damage(session: Session) -> None:
         return
     if _multiblock_split_pending(session):
         return
+    stepwise = _a_person_assigns_for_a_defender(session)
+    if stepwise and (game.resume_stack or game.waiting_prompt() is not None):
+        # A step dealt on its own can be part-way through (a damage event
+        # stopped to ask which effect applies first, CR 616.1e), with nothing
+        # recorded behind it to say so: dealing again would deal it twice.
+        return
     # The division, and which "as though it weren't blocked" offers are taken
     # — the one chooser the simulator's driver and the engine's own
     # auto-resolve ask (`engine.ai_combat.choose_combat_damage_assignment`).
     auto, past_blockers = choose_combat_damage_assignment(game)
-    # Both strike passes (CR 510.4). One call rather than two, so a first-strike
-    # pass that stops to ask a human defender something (CR 616.1e) records the
-    # second pass behind it instead of having it re-run the first.
+    first_of_two = (
+        stepwise
+        and not game.combat_first_strike_done
+        and game._first_strike_pass_pending()
+    )
+    if first_of_two:
+        # The first-strike step alone (CR 510.4)…
+        ok, _why = game.resolve_combat_damage(
+            game.active_player_index, attacker_damage=auto,
+            as_though_unblocked=past_blockers,
+        )
+        if (
+            not ok
+            or game.combat_damage_resolved
+            or not game.combat_first_strike_done
+            or game.resume_stack
+            or game.waiting_prompt() is not None
+        ):
+            return
+        # …and then the defending player's announcement for the second, if
+        # they have one to make. Their answer deals it
+        # (`_deal_combat_damage_once_announced`); with nothing to ask, it is
+        # dealt now, as both always were.
+        if _banding_assignment_pending(session) or _multiblock_split_pending(session):
+            return
+        auto, past_blockers = choose_combat_damage_assignment(game)
+    # Every pass still owed (CR 510.4). One call rather than two, so a
+    # first-strike pass that stops to ask a human defender something
+    # (CR 616.1e) records the second pass behind it instead of having it
+    # re-run the first.
     game.resolve_all_combat_damage(
         game.active_player_index, attacker_damage=auto,
         as_though_unblocked=past_blockers,

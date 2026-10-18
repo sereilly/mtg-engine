@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from engine.faces import spell_named
 from engine.models import Permanent, PlayerState
 from engine.oracle import compile_card_oracle
-from engine.targeting import cast_helps_the_player_it_names
+from engine.ai_valuation import cast_helps_the_player_it_names
 
 
 def _default_target(game, caster_index: int, card_name: str, req) -> int:
@@ -27,7 +27,8 @@ def _default_target(game, caster_index: int, card_name: str, req) -> int:
     name guard does not walk. What the three have in common is in their
     compiled programs ("target player draws", "target player gains life", a
     damage shield), so that is what is asked
-    (``targeting.cast_helps_the_player_it_names``), and Inspiration, Stroke of
+    (``ai_valuation.cast_helps_the_player_it_names``, the derivation the AI's
+    own tie-break between two seats reads), and Inspiration, Stroke of
     Genius and every other printing of those sentences stop defaulting to the
     opponent.
 

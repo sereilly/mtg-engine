@@ -515,10 +515,11 @@ PRINTED_COMPILE_BASELINE: dict[str, int] = {
     # addition to its other types") are read off the copier as printed, before
     # the copy that would replace its text is recorded.
     "mixins/permanent_state.py": 1,
-    # **Debt, not a blessing**: the AI's own-seat activation chooser compiles
-    # the permanent's printed card, so it proposes nothing a Clone copied and
-    # nothing an Aura granted. Named in the round that added this guard.
-    "ai_policy.py": 1,
+    # ``ai_policy.py`` stood here at 1, as debt: the own-seat activation
+    # chooser compiled the permanent's printed card, so it proposed nothing a
+    # Clone copied and nothing an Aura granted. It asks
+    # ``Game.usable_abilities_of`` now
+    # (tests/ai/test_ai_activation_effective_card_census.py).
 }
 
 

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 import random
 
+from . import ai_valuation
 from .ai_combat import run_ai_combat_phase
 from .ai_policy import (cast_announcement, choose_activation_action,
                         choose_cast_action, choose_foreign_activation_action,
@@ -153,6 +154,20 @@ class SimulationReport:
     #: something only beside a number here: an instrument that looked at
     #: nothing reports nothing owed.
     step_changes: int = 0
+    #: Rehearsals that **raised** during this run, by what was being rehearsed
+    #: and what the engine raised (``ai_valuation.REHEARSALS_RAISED``).
+    #:
+    #: The policy carries a candidate cast out on a copy of the game before it
+    #: proposes it, and a copy that raises answers "this could not be weighed"
+    #: — so an engine exception on a card's cast, which used to stop a
+    #: simulated run on the spot (that was how a crash-on-cast card was
+    #: found), is now caught one layer down and read as a quiet "no". Where
+    #: the policy's answer to "could not be weighed" is to hold the card, that
+    #: card is never cast again and nothing says why. So it is counted, each
+    #: distinct one is an issue naming the card and the exception, and
+    #: ``simulate_ai_games.py`` exits 1 on any: a raised rehearsal is a crash
+    #: the game was spared, not a decision.
+    rehearsals_raised: Counter[str] = field(default_factory=Counter)
 
     @property
     def ok(self) -> bool:
@@ -1224,6 +1239,10 @@ def run_ai_simulation(
     # module-level RNG. Seed it so the simulation is fully reproducible — the
     # deck-construction rng above only covers deck ordering.
     random.seed(seed)
+    # What this run adds to the process's record of rehearsals that raised
+    # (`SimulationReport.rehearsals_raised`): read as a difference, since the
+    # record is the process's and a test before this one may have written it.
+    raised_seen = Counter(ai_valuation.REHEARSALS_RAISED)
 
     for game_index in range(1, games + 1):
         p1 = PlayerState(
@@ -1386,6 +1405,21 @@ def run_ai_simulation(
             new_logs = game.log[log_cursor:]
             report.log_lines.extend(f"  {line}" for line in new_logs)
             log_cursor = len(game.log)
+
+            # A rehearsal that raised this turn: an engine exception the real
+            # cast would have crashed on, caught in the copy. Each distinct
+            # one is an issue, in the turn it first happened.
+            raised = ai_valuation.REHEARSALS_RAISED - raised_seen
+            if raised:
+                for what in sorted(raised):
+                    if what not in report.rehearsals_raised:
+                        report.issues.append(InteractionIssue(
+                            game_index, turn,
+                            "A rehearsal raised (a crash the game was spared, "
+                            f"and a cast nobody weighed): {what}",
+                        ))
+                report.rehearsals_raised.update(raised)
+                raised_seen = Counter(ai_valuation.REHEARSALS_RAISED)
 
             current = _zone_counter(game)
             if current != initial_cards:

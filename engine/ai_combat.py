@@ -219,6 +219,183 @@ def _offer_is_better_declined(game, attacker_slot: int, division: dict) -> bool:
     return reaches_a_blocker and not reaches_player
 
 
+# --- The defending player's chair (CR 702.22j) -------------------------------
+#
+# Where the defending player assigns an attacker's combat damage — a creature
+# with banding is blocking it, or "rather than the attacking player, you
+# assign the combat damage of each creature attacking you" (Defensive
+# Formation) — the two answers above are that player's: how the damage is
+# divided among the creatures blocking, and, for an attacker that "may …
+# assign its combat damage as though it weren't blocked", whether it is.
+# An attacking AI seat has weighed its half since `choose_combat_damage_
+# assignment` existed. A *defending* one was given the engine's defaults: the
+# division that kills as many of its own creatures as the power allows
+# (`_default_attacker_division`, "the attacker's rather than the defender's"),
+# and the offer always declined — so its blocker died in front of a Thorn
+# Elemental at twenty life.
+
+def _lethal_from(game, attacker, blocker) -> int:
+    """How much of *attacker*'s combat damage destroys *blocker* (CR 702.2c:
+    any amount from a source with deathtouch) — the damage step's own count."""
+    lethal = max(0, blocker.effective_toughness - blocker.damage_marked)
+    if lethal > 0 and game._has_keyword(attacker, "deathtouch"):
+        return 1
+    return lethal
+
+
+def _division_costing_least(game, attacker, blockers: dict, damage: int) -> tuple[dict, list]:
+    """How a defending player divides *damage* among the creatures blocking
+    *attacker* so as to lose least: ``(division, the creatures it kills)``.
+
+    All of it has to be assigned (CR 510.1c), and any division of it among
+    the blockers is legal — so the question is only which of them die.
+
+    * **None**, where the damage fits under what each can take: each is
+      assigned less than lethal damage, the first in slot order filled first.
+      A blocker the damage would not reach at all (protection from the
+      attacker's colour, a shield — ``_would_be_prevented``) takes everything.
+    * Otherwise **one**: a creature already assigned lethal damage can be
+      assigned the rest as well, so all of it goes on the one worth least
+      (``ai_valuation.permanent_worth``) and every other blocker lives. The
+      engine's default walked the blockers in slot order assigning lethal
+      damage to each — the most deaths the power allows, which is what an
+      *attacker* wants.
+    """
+    from .ai_valuation import permanent_worth
+
+    division = {slot: 0 for slot in blockers}
+    if damage <= 0 or not blockers:
+        return division, []
+    for slot, blocker in blockers.items():
+        if _would_be_prevented(game, attacker, blocker, damage):
+            division[slot] = damage
+            return division, []
+    room = {slot: max(0, _lethal_from(game, attacker, blocker) - 1)
+            for slot, blocker in blockers.items()}
+    if damage <= sum(room.values()):
+        left = damage
+        for slot in sorted(blockers):
+            division[slot] = min(left, room[slot])
+            left -= division[slot]
+        return division, []
+    cheapest = min(sorted(blockers), key=lambda slot: permanent_worth(blockers[slot]))
+    division[cheapest] = damage
+    return division, [blockers[cheapest]]
+
+
+def _defender_takes_the_damage_itself(
+    game, attacker, attacker_slot: int, defending: int, damage: int, dying: list,
+) -> bool:
+    """Whether a defending player who assigns an offered attacker's damage
+    has it assigned "as though it weren't blocked" — to themself — rather
+    than to the creatures blocking it.
+
+    The attacker's own question (`_offer_is_better_declined`) from the other
+    chair, in the valuation's own units: taken when keeping the damage on the
+    blockers would cost a creature (*dying*) worth more than the life it
+    costs to take it (``ai_valuation.life_worth``, which makes the last
+    points dear and a loss of the game unaffordable) — or costs nothing to
+    take at all, because it would not reach the player. Kept on the blockers
+    when none of them dies of it, and for an attack on a planeswalker, whose
+    loyalty this has no price for.
+    """
+    from .ai_valuation import life_worth, permanent_worth
+
+    if not dying or game.combat_attacked_planeswalkers.get(attacker_slot) is not None:
+        return False
+    defender = game.players[defending]
+    if _would_be_prevented(game, attacker, defender, damage):
+        return True
+    active = game.active_player_index
+    # What is coming at this player beside it: the attackers nothing blocks.
+    beside = sum(
+        combat_damage_assigned_by(other)
+        for slot, seat in game.combat_attackers.items()
+        if slot != attacker_slot and seat == defending
+        and game.combat_attacked_planeswalkers.get(slot) is None
+        and (other := game.permanent_at(active, slot)) is not None
+        and not other.blocked and not game._attacker_all_blockers(slot)
+    )
+    life_after_the_rest = defender.life - beside
+    cost_in_life = life_worth(life_after_the_rest) - life_worth(life_after_the_rest - damage)
+    return cost_in_life < sum(permanent_worth(creature) for creature in dying)
+
+
+def choose_defender_damage_assignment(game, defender_index: int) -> tuple[dict, list[int]]:
+    """How *defender_index* assigns the combat damage of each attacker it
+    assigns, has a decision about and has not yet announced for this step
+    (``Game.defender_assignments_owed``): ``(divisions, as_though_unblocked)``
+    for ``Game.assign_banding_combat_damage``.
+
+    A division for each such attacker that keeps its damage on the creatures
+    blocking it (`_division_costing_least`), and the ``permanent_id`` of each
+    whose "as though it weren't blocked" the defending player takes
+    (`_defender_takes_the_damage_itself`) — one answer per attacker, never
+    some of each.
+    """
+    active = game.active_player_index
+    divisions: dict[int, dict[int, int]] = {}
+    taken: list[int] = []
+    for slot in game.defender_assignments_owed(defender_index):
+        attacker = game.permanent_at(active, slot)
+        if attacker is None:
+            continue
+        damage = combat_damage_assigned_by(attacker)
+        blockers = {
+            blocker_slot: blocker
+            for blocker_slot in game._attacker_all_blockers(slot)
+            if (blocker := game.permanent_at(defender_index, blocker_slot)) is not None
+        }
+        division, dying = _division_costing_least(game, attacker, blockers, damage)
+        if (
+            game.unblocked_assignment_chooser(slot) == defender_index
+            and _defender_takes_the_damage_itself(
+                game, attacker, slot, defender_index, damage, dying
+            )
+        ):
+            taken.append(attacker.permanent_id)
+        elif blockers:
+            divisions[slot] = division
+    return divisions, taken
+
+
+def announce_defender_assignments(game) -> int:
+    """Have every defending seat **nobody is sitting at** announce how the
+    attackers it assigns the combat damage of assign it (CR 510.1, CR
+    702.22j), for the combat damage step about to be dealt. Returns how many
+    attackers were answered for.
+
+    Called by the damage step itself (``Game.resolve_combat_damage``), which
+    is the one line every way of dealing combat damage passes through — an AI
+    attacker's assignment, a person's, the engine's own auto-resolve, the
+    second step of a double strike — so the defending seat's answer cannot be
+    there for some of them. A person is not answered for: their dialog asks
+    (``Game.unblocked_assignments_to_ask``, ``web/combat_prompts``).
+
+    An announcement the engine refuses is dropped and the default stands, as
+    it did before this existed; the chooser builds only divisions
+    ``_attacker_division_refusal`` accepts. Nothing is logged for a division
+    (the damage lines say where it went); an offer taken is the engine's own
+    line, as it is for an attacker's.
+    """
+    answered = 0
+    for defender_index in sorted(game.combat_defending_players()):
+        if defender_index in game.interactive_seats:
+            continue
+        if not 0 <= defender_index < len(game.players):
+            continue
+        divisions, taken = choose_defender_damage_assignment(game, defender_index)
+        if not divisions and not taken:
+            continue
+        ok, _why = game.assign_banding_combat_damage(
+            defender_index, divisions, as_though_unblocked=taken,
+        )
+        if not ok:
+            continue
+        answered += len(divisions) + len(taken)
+    return answered
+
+
 def declare_ai_attackers(
     game, seat: int, *, attacker_indices: list[int] | None = None,
     outcome: CombatOutcome | None = None,

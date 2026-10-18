@@ -1185,6 +1185,16 @@ class CombatDamageStepMixin:
         if attacker_damage is None:
             attacker_damage = {}
 
+        # CR 510.1 / CR 702.22j: the defending player's announcement for the
+        # attackers whose damage *they* assign comes before this one is read.
+        # A person has made theirs (their dialog holds the step until they
+        # have); a seat nobody is sitting at makes its own here, for this
+        # step — so it is there however the step came to be resolved, and
+        # again for a double striker's second (CR 510.4).
+        from ..ai_combat import announce_defender_assignments
+
+        announce_defender_assignments(self)
+
         ok, message = self._validate_blocker_damage_split(blocker_damage_split)
         if not ok:
             return False, message

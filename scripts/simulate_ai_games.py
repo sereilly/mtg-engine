@@ -145,6 +145,20 @@ def main() -> int:
         for reason, count in report.refused_activations.most_common(5):
             print(f"  {count}x {reason}")
 
+    # A rehearsal that raised. The policy carries a cast out on a copy of the
+    # game before proposing it, so an engine exception that used to stop this
+    # script on the spot is now caught in the copy and read as "could not be
+    # weighed". Counted, so that it is still a failed run: each is in the
+    # issue list below, which is what exits 1.
+    if report.rehearsals_raised:
+        total = sum(report.rehearsals_raised.values())
+        print(
+            f"Rehearsals that raised: {total} "
+            "(an engine exception on a cast, caught in the policy's copy of the game)"
+        )
+        for what, count in report.rehearsals_raised.most_common(8):
+            print(f"  {count}x {what}")
+
     # The guard the fixed decklist used to give for free. Building the deck out
     # of the set means no pool can fail to supply it, so nothing stops a run
     # over a set whose cards the AI can never pay for — and "no illegal

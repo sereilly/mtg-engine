@@ -5392,50 +5392,12 @@ _ANNOUNCED_QUANTIFIERS = frozenset({"target", "any_target", "up_to"})
 ANNOUNCED_PLAYER_WORDS = frozenset({"target", "target_player", "target_opponent"})
 
 
-#: Instruction kinds whose effect on the **player** they are aimed at is a
-#: gift: cards drawn, life gained, damage that will not be dealt. What the
-#: compiled program does rather than what a card is called — so every printing
-#: of "target player draws N cards" answers the same way.
-#:
-#: Narrow on purpose. It answers one question, for a caller that has to pick a
-#: seat nobody picked (:func:`cast_helps_the_player_it_names`), and an
-#: instruction left out keeps the opposing default it has always had.
-_SEAT_GIFT_KINDS = frozenset({
-    "draw_target_cards", "target_gains_life", "grant_prevention_shield",
-})
-
-#: The spec kinds whose candidates include a player's face.
-_SEAT_SPEC_KINDS = frozenset({"player", "player_or_planeswalker", "any"})
-
-
-def cast_helps_the_player_it_names(
-    card, program, *, mode_index: "int | None" = None,
-) -> bool:
-    """Whether the player a cast of *card* announces (CR 601.2c) is one its
-    effect **helps** — "target player draws three cards", "target player gains
-    X life", "prevent the next 3 damage that would be dealt to any target".
-
-    For the one caller that must aim a cast whose announcement named no seat:
-    the web route's default. That default was a set of three card names, which
-    is right for three cards and wrong for every other printing of their
-    sentences (Inspiration and Stroke of Genius defaulted to the opponent).
-
-    Read off the slot the cast's own picker is derived from
-    (:func:`_first_described_slot`, through the mode the cast names), so the
-    answer is about the target the announcement actually makes. False where
-    the card prints "target **opponent**" — the caster is not a seat that
-    phrase admits — and for a permanent spell, whose own cast names nobody.
-    """
-    type_line = (getattr(card, "type_line", "") or "").lower()
-    if "instant" not in type_line and "sorcery" not in type_line:
-        return False
-    slot = _first_described_slot(announced_mode_instructions(program, mode_index))
-    if slot is None:
-        return False
-    spec, instruction = slot
-    if spec.get("kind") not in _SEAT_SPEC_KINDS or spec.get("opponents_only"):
-        return False
-    return instruction.kind in _SEAT_GIFT_KINDS
+# "Is the player this cast names one its effect helps?" was answered here, for
+# the web route's default seat, off a list of three instruction kinds — and
+# again in ``engine/ai_valuation.py``, for the AI's tie-break, off a different
+# list and a family rule. It is ``ai_valuation.cast_helps_the_player_it_names``
+# now, one derivation with both readers: which kinds are a gift is a valuation
+# (the families are that module's), and this module does not import it.
 
 
 def announces_a_target(payload, *, described_only: bool = False) -> bool:
