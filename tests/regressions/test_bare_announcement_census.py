@@ -208,8 +208,10 @@ def _state(game, labelled) -> tuple:
     inside a record is spelled as that permanent's label and a timestamp is
     dropped, so two tables built alike compare equal.
 
-    A timestamp is dropped **wherever it is kept**: a key ending in
-    ``timestamp``, and the three ``…_stamps`` records ``engine/keywords.py``
+    A timestamp is dropped **wherever it is kept**: a key naming a
+    ``timestamp`` (the base P/T slots' ``absolute_pt_timestamp_until_eot``
+    carries its duration after the word), and the three ``…_stamps`` records
+    ``engine/keywords.py``
     keeps of when a grant began to apply (``{'red': 29}`` beside
     ``{'red': 58}`` is one grant on two tables whose clocks differ, and was
     this census's only finding the day those records and it first met).
@@ -237,7 +239,7 @@ def _state(game, labelled) -> tuple:
             tuple(sorted(
                 (key, spell(repr(value))[:160]) for key, value in perm.metadata.items()
                 if key != "tapped_to_pay_for_ability_ids"
-                and not key.endswith(("timestamp", "_stamps"))
+                and "timestamp" not in key and not key.endswith("_stamps")
             )),
         )
 

@@ -228,7 +228,12 @@ def test_mishras_factory_under_blood_moon_is_a_mountain_and_nothing_else(_by_nam
 def test_the_ai_does_not_propose_an_ability_the_board_took_away(_by_name, monkeypatch):
     """"{4}, {T}: Draw a card." (Jayemdae Tome.) Under Titania's Song the Tome
     is a 4/4 with no abilities; the own-seat chooser read the card's program
-    and proposed the draw, which the engine refused, every turn."""
+    and proposed the draw, which the engine refused, every turn.
+
+    Two layers keep it out now: the door's refusal, and the chooser reading
+    what the permanent *has* (``Permanent.effective_card``, R3 K4) rather than
+    what its card prints — so with the refusal switched off it still proposes
+    nothing."""
     game, (tome, _song) = _game_with(_by_name, "Jayemdae Tome", "Titania's Song")
     game._recompute_continuous_effects()
 
@@ -237,4 +242,4 @@ def test_the_ai_does_not_propose_an_ability_the_board_took_away(_by_name, monkey
     monkeypatch.setattr(Game, "lost_abilities_refusal", lambda self, permanent: None)
     proposed = choose_activation_action(game, 0)
 
-    assert proposed is not None and proposed.permanent_name == "Jayemdae Tome"
+    assert proposed is None or proposed.permanent_name != "Jayemdae Tome", proposed

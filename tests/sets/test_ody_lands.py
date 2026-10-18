@@ -402,8 +402,9 @@ def test_crystal_quarry_makes_one_of_each_for_five(set_pool):
 def test_tarnished_citadel_charges_three_only_for_a_colour(set_pool):
     """"{T}: Add {C}." / "{T}: Add one mana of any color. This land deals 3
     damage to you." Two tap-alone mana abilities: the seam's default is the
-    free one, a colour is the painful one by index, and the AI's tap executor
-    asks for the painful one only when its plan needs the colour."""
+    free one; a colour asked for runs the painful one, which makes it (the
+    player chooses which mana ability to activate, CR 605); and the AI's tap
+    executor names the painful one only when its plan needs the colour."""
     ody = set_pool("ODY")
     game = _w1g2_duel(set_pool)
     citadel = _w1g2_put(game, 0, ody["Tarnished Citadel"])
@@ -411,8 +412,13 @@ def test_tarnished_citadel_charges_three_only_for_a_colour(set_pool):
     assert _w1g2_planned_tap_ability(game, citadel, "C") is None
     assert _w1g2_planned_tap_ability(game, citadel, "U") == 1
 
-    assert game.tap_land_for_mana(0, "Tarnished Citadel", "U")
+    assert game.tap_land_for_mana(0, "Tarnished Citadel")
     assert _w1g2_floating(game) == {"C": 1} and game.players[0].life == 20
+
+    game = _w1g2_duel(set_pool)
+    _w1g2_put(game, 0, ody["Tarnished Citadel"])
+    assert game.tap_land_for_mana(0, "Tarnished Citadel", "U")
+    assert _w1g2_floating(game) == {"U": 1} and game.players[0].life == 17
 
     game = _w1g2_duel(set_pool)
     _w1g2_put(game, 0, ody["Tarnished Citadel"])

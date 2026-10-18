@@ -74,16 +74,26 @@ def test_a_plan_that_says_a_land_pays_is_a_payment_that_succeeds(lands):
 def test_the_census_names_the_five_with_the_narrowing_switched_off(
     lands, monkeypatch,
 ):
-    """Backwards: planned over the pure list, the lands whose tap cannot pay
-    are counted again and the payment fails on each."""
+    """Backwards: planned over the pure list. The five used to be counted
+    again and the payment failed on each; they are still not planned, because
+    a second layer now answers for them — the planner's hook reads what a tap
+    *alone* makes of each land (``board_payment.tap_alone_symbols``, R3 K3),
+    and a Gaea's Cradle on a bare board or a Workshop's restricted mana offers
+    a payment with no purpose nothing."""
     monkeypatch.setattr(
         Game, "payment_lands",
         lambda self, seat: untapped_mana_lands(self.controlled_by(seat)),
     )
 
-    lies = _census(lands)["lies"]
+    census = _census(lands)
 
-    assert len(lies) >= 4, lies
+    assert census["lies"] == [], census["lies"]
+    five = {
+        "Mishra's Workshop", "City of Shadows", "Gaea's Cradle",
+        "Serra's Sanctum", "Tolarian Academy",
+    }
+    assert not five & set(census["planned"]), sorted(five & set(census["planned"]))
+    assert len(census["planned"]) >= _MIN_PLANNED
 
 
 def test_a_land_the_plan_leaves_out_is_still_a_person_s_to_tap(lands):
