@@ -541,10 +541,28 @@ class StackResolutionMixin:
         # than recursing is what the rule's "doesn't invoke itself repeatedly"
         # asks for. Each instance is its own stack object and so chooses its own
         # targets; it is not a copy (CR 707), which would inherit them.
-        for _ in range(1 + additional_triggers(
+        #
+        # **Which is the one thing the loop did not do.** It built every
+        # instance from the same target fields and pushed every one
+        # ``announced_at_cast`` — so where those fields were a permanent
+        # spell's announcement for its entry trigger (this engine's
+        # convention), the additional instance was held to the cast's answer
+        # too, as a copy would be. A cast names a target for **the** trigger
+        # it will cause; nobody named one for the ability that triggered an
+        # additional time, and that instance is put on the stack as one nobody
+        # chose for (CR 603.3d): asked for where its seat can be, the picker's
+        # default where it cannot, removed where nothing is legal.
+        #
+        # Only an announcement is dropped. Fields a **fire site** bound are
+        # what the event was about ("destroy that Wall"), and the event is the
+        # same event however many times the ability triggers.
+        for instance in range(1 + additional_triggers(
             self, source_permanent, controller_index,
             delayed=effect_kind == "triggered_delayed",
         )):
+            from_the_cast = announced_at_cast and instance == 0
+            if announced_at_cast and not from_the_cast:
+                target_player_index = target_permanent_index = target_permanent_id = None
             self._stack_push(
                 StackItem(
                     card=stack_card,
@@ -564,7 +582,7 @@ class StackResolutionMixin:
                     hook_event=hook_event,
                     targets_chosen=targets_chosen,
                 ),
-                announced_at_cast=announced_at_cast,
+                announced_at_cast=from_the_cast,
             )
 
     def _ability_execution_context(self, item: StackItem) -> OracleExecutionContext:

@@ -4938,9 +4938,19 @@ def spell_targets(game, item) -> tuple[tuple[int, ...], tuple[int, ...]]:
     ids are settled before any trigger is announced.
     """
     from .oracle import compile_card_oracle
+    from .stack_targets import permanent_spell_targets_nothing
 
     card = getattr(item, "card", None)
     if card is None or getattr(item, "ability_instruction", None) is not None:
+        return (), ()
+    if permanent_spell_targets_nothing(item):
+        # CR 115.1: a creature, artifact, enchantment or planeswalker spell
+        # that is not an Aura targets nothing. What its fields hold is its
+        # entry trigger's target, named as the permanent is cast and chosen —
+        # by CR 115.1d — as that trigger is put on the stack. Read here, a
+        # Man-o'-War cast at a Grizzly Bears was "a spell that targets a
+        # creature you control" and Reparations drew for it: 34 of the 55
+        # (permanent, kind of target) casts in the pool.
         return (), ()
     seats: list[int] = []
     permanents: list[int] = []
@@ -5010,7 +5020,14 @@ def stack_object_target_spec(item) -> dict | None:
     if card is None:
         return None
     from .oracle import compile_card_oracle
+    from .stack_targets import permanent_spell_targets_nothing
 
+    if permanent_spell_targets_nothing(item):
+        # A permanent spell that is not an Aura chose no targets (CR 115.1),
+        # so there is no spec it chose them *by*. ``derive_cast_spec`` answers
+        # for it all the same — with its entry trigger's picker, which is the
+        # question "what does the cast name" and not this one.
+        return None
     return derive_cast_spec(card, compile_card_oracle(card))
 
 
@@ -5061,8 +5078,20 @@ def single_spell_target(game, item) -> dict | None:
     # spell announced them at CR 601.2c, and Silver Wyvern re-aims either. What
     # differs is only *which program* says how many targets there are, and
     # ``stack_object_target_spec`` is the one place that decides.
+    from .stack_targets import permanent_spell_targets_nothing
+
     card = getattr(item, "card", None)
     if card is None:
+        return None
+    if permanent_spell_targets_nothing(item):
+        # **A permanent spell that is not an Aura has no targets to count**
+        # (CR 115.1; CR 115.9a counts "the number of targets chosen for" the
+        # object). Its fields carry its entry trigger's target, named as it is
+        # cast, and read as the spell's own that made a Man-o'-War "a spell
+        # with a single target": Deflection's picker offered it, Meddle's did,
+        # and the change rewrote what the *trigger* would later take as
+        # announced — 45 of 55 casts in the pool. The trigger is the object
+        # that targets, and it is asked as an ability, below.
         return None
     if getattr(item, "chosen_modes", ()) or getattr(item, "chosen_mode_index", None) is not None:
         return None

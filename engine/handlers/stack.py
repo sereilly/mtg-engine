@@ -673,8 +673,15 @@ def _spell_targets_matching(
     so "you control" here is the same seat question every other narrowing asks,
     measured against the counter's own controller (CR 109.5).
     """
+    from ..stack_targets import permanent_spell_targets_nothing
     from ..subject_filters import subject_matches
 
+    if permanent_spell_targets_nothing(item):
+        # CR 115.1: a permanent spell that is not an Aura targets nothing. The
+        # ids it carries are its entry trigger's, named as it is cast — read
+        # here they made a Man-o'-War "a spell that targets a creature", which
+        # Confound, Intervene, Mistfolk and Diplomatic Escort then countered.
+        return False
     recorded = getattr(item, "target_permanent_id", None)
     ids = recorded if isinstance(recorded, list) else [recorded]
     for permanent_id in ids:

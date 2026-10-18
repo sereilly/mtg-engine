@@ -38,8 +38,17 @@ def untap_self(game: Game, instruction: OracleInstruction, context: OracleExecut
     source_permanent = context.source_permanent
     if source_permanent is None:
         return False, "ability not implemented"
-    context.results.setdefault("untapped_permanents", []).append(
-        source_permanent.permanent_id
+    # Added to what an earlier step of the same resolution recorded, and
+    # written as a **tuple**, which is what every other writer of this key in
+    # this file writes. This was ``setdefault(key, []).append(...)``: right on
+    # its own, and an ``AttributeError`` the moment a sibling had written
+    # first — "you may untap target tapped creature an opponent controls. If
+    # you do, untap this creature" (Soldevi Golem) records the creature as a
+    # tuple and then came here, so accepting the Golem's own offer raised out
+    # of the upkeep.
+    context.results["untapped_permanents"] = (
+        *(context.results.get("untapped_permanents") or ()),
+        source_permanent.permanent_id,
     )
     if not source_permanent.tapped:
         return False, f"{card.name} is already untapped"

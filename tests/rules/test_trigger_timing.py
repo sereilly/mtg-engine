@@ -23,6 +23,8 @@ from engine import Game, PlayerState, load_cards
 from engine.card_loader import load_catalog, manifest_set_path
 from engine.models import CardDefinition, Permanent
 from engine.oracle_types import OracleInstruction
+from engine.stack_targets import chosen_targets
+from tests.helpers import resolve_stack
 
 _CATALOG = {c.name: c for c in load_catalog()}
 _M21 = {
@@ -261,6 +263,139 @@ def test_603_2d_a_delayed_trigger_with_no_source_permanent_is_not_doubled():
         effect_kind="triggered_life",
     )
     assert len(game.stack) == 3
+
+
+_TIDE_BEAST_TEXT = "When this creature enters, return target creature to its owner's hand."
+
+
+def _sized_beast(name: str, oracle_text: str = "") -> CardDefinition:
+    """An invented 2/2 Beast. ``_invented`` gives a card no power or
+    toughness, which is fine for a board nothing sweeps and fatal for one a
+    cast is made on: the state-based check a cast runs (CR 704.5f) puts every
+    0/0 Beast into the graveyard, and the doubler then counts none."""
+    kind = "Creature — Beast"
+    return CardDefinition(
+        name=name, mana_cost="{2}", cmc=2.0, type_line=kind, oracle_text=oracle_text,
+        colors=(), color_identity=(), keywords=(), produced_mana=(),
+        raw={"name": name, "type_line": kind, "oracle_text": oracle_text,
+             "power": "2", "toughness": "2"},
+    )
+
+
+def _doubled_entry_table(*, interactive=()):
+    """Seat A: the Beast doubler, two Beasts, and in hand a third Beast that
+    prints a **targeted entry trigger**. Seat B: a Grizzly Bears, then a Hill
+    Giant. No card in the pool is a doubled permanent whose cast names its
+    entry trigger's target — the one card that prints the sentence doubles
+    Shrines, and no Shrine has an entry trigger — so both are invented, which
+    is this block's rule anyway."""
+    game, p1, p2 = _duel()
+    game.interactive_seats = set(interactive)
+    tide = _sized_beast("Tide Beast", _TIDE_BEAST_TEXT)
+    p1.hand = [tide]
+    p1.library = [_CATALOG["Forest"]] * 8
+    p2.library = [_CATALOG["Forest"]] * 8
+    doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
+    # Three Beasts already out: the printed threshold is met before the
+    # Tide Beast arrives, so this table asks about the instance's target and
+    # nothing about when the count is taken.
+    p1.battlefield = [doubler] + [
+        Permanent(card=_sized_beast(f"{nth} Beast")) for nth in ("First", "Second", "Third")
+    ]
+    bears = Permanent(card=_CATALOG["Grizzly Bears"])
+    giant = Permanent(card=_CATALOG["Hill Giant"])
+    p2.battlefield = [bears, giant]
+    game._sync_control()
+    return game, p2, bears, giant
+
+
+def _triggers_of(game, name: str) -> list:
+    return [item for item in game.stack if item.is_ability and item.card.name == name]
+
+
+@pytest.mark.cr("603.2d", "603.3d")
+def test_603_2d_the_additional_instance_chooses_its_own_target():
+    """603.2d makes the ability trigger twice; 603.3d has each instance choose
+    its targets as it is put on the stack. This engine names an entry
+    trigger's target as the permanent is cast, and the additional instance was
+    built from the same fields and held to the same answer — a copy's
+    behaviour (CR 707.10), which this is not.
+
+    The cast names the Hill Giant. One instance carries that; the other was
+    named for by nobody and takes its own (a seat that is not asked gets the
+    first of its trigger's list, the Grizzly Bears). Both creatures are
+    returned. With the announcement inherited, both instances returned the
+    Giant and the Bears never left."""
+    game, p2, bears, giant = _doubled_entry_table()
+
+    assert game.queue_from_hand(
+        0, "Tide Beast", target_permanent_ids=[giant.permanent_id],
+    ).supported
+    game.resolve_top_of_stack()
+
+    instances = _triggers_of(game, "Tide Beast")
+    assert len(instances) == 2
+    named = sorted(
+        target.permanent_id
+        for item in instances for target in chosen_targets(game, item)
+    )
+    assert named == sorted([bears.permanent_id, giant.permanent_id])
+
+    resolve_stack(game)
+    assert not game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    assert sorted(card.name for card in p2.hand) == ["Grizzly Bears", "Hill Giant"]
+
+
+@pytest.mark.cr("603.2d", "603.3d")
+def test_603_2d_a_seat_that_can_be_asked_is_asked_for_the_additional_instance():
+    """The same cast by a seat that answers its own prompts: the instance
+    nobody named for owes a ``trigger_target`` choice, offered both creatures,
+    and the game waits on it. Answered with the Hill Giant, the two instances
+    return the Giant and — the cast's — the Bears."""
+    game, p2, bears, giant = _doubled_entry_table(interactive={0})
+
+    assert game.queue_from_hand(
+        0, "Tide Beast", target_permanent_ids=[bears.permanent_id],
+    ).supported
+    game.resolve_top_of_stack(pause_for_choices=True)
+
+    owed = [choice for choice in game.pending_choices if choice.kind == "trigger_target"]
+    assert len(owed) == 1 and owed[0].player_index == 0
+    offered = {entry.get("permanent_id") for entry in owed[0].data.get("targets") or ()}
+    assert {bears.permanent_id, giant.permanent_id} <= offered
+    assert game.waiting_prompt() is not None
+
+    assert game.confirm_trigger_target(0, permanent_id=giant.permanent_id)
+    resolve_stack(game)
+
+    assert not game.is_on_battlefield(bears) and not game.is_on_battlefield(giant)
+    assert sorted(card.name for card in p2.hand) == ["Grizzly Bears", "Hill Giant"]
+
+
+@pytest.mark.cr("603.2d")
+def test_603_2d_what_the_event_bound_is_bound_for_every_instance():
+    """The other half, so the first is not "an additional instance forgets
+    its target": a target the **fire site** stamped is what the event was
+    about, and the event is the same however many times the ability triggers.
+    Only a cast's announcement is dropped."""
+    game, p1, p2 = _duel()
+    doubler = Permanent(card=_invented("Beast Chorus", "Enchantment", _DOUBLER_TEXT))
+    triggerer = _beast("First Beast")
+    p1.battlefield = [doubler, triggerer, _beast("Second Beast"), _beast("Third Beast")]
+    bears = Permanent(card=_CATALOG["Grizzly Bears"])
+    p2.battlefield = [bears, Permanent(card=_CATALOG["Hill Giant"])]
+    game._sync_control()
+
+    game._enqueue_triggered_ability(
+        controller_index=0, source_permanent=triggerer,
+        instruction=OracleInstruction("gain_life", "", {"amount": 1}),
+        effect_kind="triggered_life",
+        target_player_index=1, target_permanent_id=bears.permanent_id,
+    )
+
+    assert [item.target_permanent_id for item in game.stack] == [
+        bears.permanent_id, bears.permanent_id,
+    ]
 
 
 @pytest.mark.cr("603.3", "503.1")

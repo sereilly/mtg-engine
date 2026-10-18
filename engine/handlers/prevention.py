@@ -274,7 +274,9 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
     # compared against `source_colors` and never match.
     source_type = instruction.payload.get("prevention_source_type")
     if instruction.payload.get("protection_kind") == "source_type" and source_type:
-        add_shield(caster, make_source_type_shield(str(source_type), source_name))
+        add_shield(caster, make_source_type_shield(
+            str(source_type), source_name, source=chosen_shield_source(game, context),
+        ))
         game.log.append(
             f"{caster.name} sets a Circle of Protection shield against "
             f"an {source_type} source"
@@ -296,7 +298,8 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
             add_shield(
                 caster,
                 make_source_subject_shield(
-                    described, game.players.index(caster), source_name
+                    described, game.players.index(caster), source_name,
+                    source=chosen_shield_source(game, context),
                 ),
             )
             game.log.append(
@@ -323,17 +326,28 @@ def grant_prevention_shield(game: Game, instruction: OracleInstruction, context:
         # that armed it, which is what the cleanup sweep walks; what makes every
         # recipient find it is ``prevention._table_shields``.
         any_recipient = bool(instruction.payload.get("prevention_any_recipient"))
+        # **The chosen source is the shield's, not the log's.** "The next time
+        # a red source **of your choice** would deal damage to you" names one
+        # object (CR 609.7a) and CR 615.8 prevents "the next instance of
+        # damage from that source". This read the choice for the log line
+        # below and armed a shield that answered the colour — so a Circle that
+        # named the Hill Giant spent itself on a Goblin that dealt its damage
+        # first. Through the one reader every "source of your choice" card
+        # uses, so a spell on the stack is a source here as it is there; an
+        # activation that named nothing arms the sourceless form, as before.
+        chosen_source = chosen_shield_source(game, context)
         for _ in range(max(1, amount) if prevention_colors else 0):
             add_shield(
                 caster,
                 make_color_shield(
-                    prevention_colors, source_name, any_recipient=any_recipient
+                    prevention_colors, source_name, any_recipient=any_recipient,
+                    source=chosen_source,
                 ),
             )
-        # The chosen source (if the controller picked a specific permanent) is
-        # recorded only for the log; matching is by color.
-        chosen_perm = resolve_target_permanent(game, context, predicate=lambda p: True, fallback_players=())
-        chosen = chosen_perm.card.name if chosen_perm is not None else None
+        chosen = (
+            getattr(getattr(chosen_source, "card", chosen_source), "name", None)
+            if chosen_source is not None else None
+        )
         game.log.append(
             f"{caster.name} sets a Circle of Protection shield against "
             + (
