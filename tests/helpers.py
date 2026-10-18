@@ -227,8 +227,70 @@ def app_js_function_body(name: str) -> str:
         Path(__file__).resolve().parents[1] / "web" / "static" / "app.js"
     ).read_text(encoding="utf-8")
     match = re.search(
-        r"^function " + re.escape(name) + r"\([^)]*\)\s*\{\n(.*?)^\}$",
+        r"^(?:async )?function " + re.escape(name) + r"\([^)]*\)\s*\{\n(.*?)^\}$",
         source, re.S | re.M,
     )
     assert match is not None, f"{name} is gone or was renamed"
     return match.group(1)
+
+
+_APP_JS_DRIVER = r'''
+const fs = require("fs");
+const CR = String.fromCharCode(13);
+const src = fs.readFileSync(process.argv[2], "utf8").split(CR).join("");
+function grab(name) {
+  const at = src.indexOf("\nfunction " + name + "(");
+  const asyncAt = src.indexOf("\nasync function " + name + "(");
+  const i = at >= 0 ? at : asyncAt;
+  if (i < 0) throw new Error("app.js no longer defines " + name);
+  const end = src.indexOf("\n}\n", i);
+  return src.slice(i, end + 2);
+}
+const INPUT = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
+__PRELUDE__
+eval(__NAMES__.map(grab).join("\n") + ";globalThis.__run = async (INPUT) => {" + __BODY__ + "}");
+globalThis.__run(INPUT).then(
+  (out) => process.stdout.write(JSON.stringify(out === undefined ? null : out)),
+  (err) => { process.stderr.write(String(err && err.stack || err)); process.exit(1); },
+);
+'''
+
+
+def run_app_js(functions, body: str, payload=None, *, prelude: str = ""):
+    """Run *body* in bare node with the named top-level functions of
+    ``app.js`` in scope, and return what it returns.
+
+    ``app.js`` is one DOM-bound script and cannot be loaded whole, so the
+    functions under test are lifted out by name — the real source, not a
+    paraphrase — and everything they reach for that touches the page is
+    declared by *prelude* (plain JavaScript: the module state they close over,
+    and stubs that record what they were handed). *body* is the body of an
+    async function taking ``INPUT`` (*payload*, round-tripped through JSON);
+    its return value comes back parsed.
+
+    Here because several ``tests/ui`` modules ask a client function what it
+    decides for a payload the server really sent; each used to carry its own
+    copy of this driver.
+    """
+    import json
+    import subprocess
+    import tempfile
+
+    app_js = Path(__file__).resolve().parents[1] / "web" / "static" / "app.js"
+    driver = (
+        _APP_JS_DRIVER
+        .replace("__PRELUDE__", prelude)
+        .replace("__NAMES__", json.dumps(list(functions)))
+        .replace("__BODY__", json.dumps(body))
+    )
+    with tempfile.TemporaryDirectory(prefix="app-js-") as folder:
+        driver_path = Path(folder) / "driver.js"
+        payload_path = Path(folder) / "input.json"
+        driver_path.write_text(driver, encoding="utf-8")
+        payload_path.write_text(json.dumps(payload), encoding="utf-8")
+        done = subprocess.run(
+            ["node", str(driver_path), str(app_js), str(payload_path)],
+            capture_output=True, text=True, encoding="utf-8",
+        )
+    assert done.returncode == 0, done.stderr
+    return json.loads(done.stdout)

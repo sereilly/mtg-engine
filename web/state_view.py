@@ -487,6 +487,74 @@ def _card_castable_now(
     return True
 
 
+def _band_forms(game) -> list[dict]:
+    """CR 702.22c's two ways a set of the active player's attackers may be
+    declared as one band, as facts about *this* board.
+
+    One entry per form that some creature there can lead, each
+    ``{"members", "needs", "extras"}`` over the active player's battlefield
+    slots: a set of attackers is a legal band of that form when it lies inside
+    ``members``, holds at least one creature of ``needs``, and has no more
+    than ``extras`` others (None: any number).
+
+    * the plain form — "one or more attacking creatures with banding and up to
+      one attacking creature without banding": every creature is a member,
+      the ones with banding are needed, one other may join;
+    * a "bands with other [quality]" form — "one or more attacking [quality]
+      creatures with 'bands with other [quality]' and any number of other
+      [quality] creatures": the [quality] creatures are the members, the ones
+      holding the ability are needed, and the rest are unbounded.
+
+    Both read through the predicates the declaration itself is validated by
+    (``Game._creature_has_banding``, layer 6; ``engine/banding.py``'s quality
+    filter), because who may band is not a fact about a card: Helm of Chatzuk
+    grants banding, Humility takes it, Cathedral of Serra hands a band to a
+    colour of legendary creatures.
+
+    The browser counted the word "banding" on each selected card and applied
+    the plain form's arithmetic. The word it had right — the payload's keyword
+    strip is layer 6's — and the rule it had half of: measured over every set
+    of two or more creatures on six boards, 12 of 60 answers were wrong, every
+    one a legal "bands with other" band the button was never offered for.
+    """
+    from engine.banding import (abilities_of, band_quality, band_quality_filter,
+                                computed_abilities_of)
+    from engine.subject_filters import subject_matches
+
+    creatures = [
+        (slot, permanent)
+        for slot, permanent in enumerate(game.controlled_by(game.active_player_index))
+        if permanent.is_creature
+    ]
+    forms: list[dict] = []
+    banders = [slot for slot, permanent in creatures if game._creature_has_banding(permanent)]
+    if banders:
+        forms.append({
+            "members": [slot for slot, _permanent in creatures],
+            "needs": banders,
+            "extras": 1,
+        })
+    held = {
+        slot: {
+            band_quality(ability)
+            for ability in abilities_of(computed_abilities_of(permanent))
+        }
+        for slot, permanent in creatures
+    }
+    for quality in sorted({q for qualities in held.values() for q in qualities if q}):
+        described = band_quality_filter(quality)
+        if described is None:
+            continue
+        members = [
+            slot for slot, permanent in creatures
+            if subject_matches(game, permanent, described)
+        ]
+        needs = [slot for slot in members if quality in held[slot]]
+        if needs and len(members) >= 2:
+            forms.append({"members": members, "needs": needs, "extras": None})
+    return forms
+
+
 def _compute_playable_hand_indices(session: Session, player_index: int) -> list[int]:
     """Return hand indices the player can legally cast right now (considering timing,
     mana already in pool plus potential mana from untapped lands, and restrictions)."""
@@ -963,8 +1031,12 @@ def _serialize_state(session: Session, viewer_seat: int | None) -> dict:
     game = session.game
     if game.current_turn_phase == "combat" and game.current_step == "declare_attackers":
         combat_state["legal_attacker_indices"] = game.legal_attacker_indices(game.active_player_index)
+        # CR 702.22c: which sets of the active player's creatures may be
+        # declared as one band. See ``_band_forms``.
+        combat_state["band_forms"] = _band_forms(game)
     else:
         combat_state["legal_attacker_indices"] = []
+        combat_state["band_forms"] = []
     # CR 802.4: aggregate legal blocker assignments across every defending
     # player this combat (2+ in FFA), not just a single pre-picked one. Blocker
     # indices are only unambiguous within one defender's battlefield, so tag

@@ -13,9 +13,13 @@ path is declared.
 
 from __future__ import annotations
 
+import copy
+import random
+
 from fastapi import HTTPException
 
 from engine.activation_permissions import card_widens_activation
+from engine.ai_valuation import mid_resolution
 from engine.cast_permissions import permission_for
 from engine.cast_timing import casts_at_instant_speed
 from engine.faces import choose_a_face_refusal, holds_spell_named, spell_named
@@ -42,6 +46,8 @@ from .turn_steps import (
 from .game_flow import _auto_resolve_ai_pending, _run_priority_exchange
 from .state_view import build_state
 from .debug_actions import _DEBUG_ANYTIME_ACTIONS
+from .payment_plan import (PAYING_ACTIONS, pay_from_board, recording_taps,
+                           trial_copy)
 from .action_helpers import (
     _find_card_in_hand,
     _find_controlled_permanent,
@@ -301,9 +307,16 @@ def _action_cast(session, req, seat_type):
         if session.game.stack:
             raise HTTPException(status_code=400, detail="can only cast this card when stack is empty")
 
-    result = _queue_spell_from_request(
-        session.game, req.seat, req.card_name, req, x_value=req.x_value,
-    )
+    def announce(game):
+        return _queue_spell_from_request(
+            game, req.seat, req.card_name, req, x_value=req.x_value,
+        )
+
+    # CR 601.2g for a person who asked for it: every gate above has passed, so
+    # what stands between this cast and the stack is mana.
+    if req.auto_tap:
+        pay_from_board(session.game, req.seat, announce)
+    result = announce(session.game)
     if not result.supported:
         raise HTTPException(status_code=400, detail=result.details)
     session.game.note_priority_action_taken(req.seat)
@@ -556,69 +569,76 @@ def _action_activate(session, req, seat_type):
             named_cost = session.game.permanent_by_id(req.cost_permanent_id)
             if named_cost is None or not session.game.controls(req.seat, named_cost):
                 cost_permanent_index = None
-        result = session.game.queue_permanent_ability(
-            req.seat,
-            permanent.card.name,
-            target_player_index=target,
-            permanent_index=permanent_index,
-            mana_color=req.mana_color,
-            # The "from" word of a text change activated as an ability
-            # (Balduvian Shaman); the cast side already forwards the same
-            # field, and the request schema has carried it all along.
-            old_color=req.old_color,
-            target_permanent_index=(
-                req.target_permanent_indices
-                if req.target_permanent_indices is not None
-                else req.target_permanent_index
-            ),
-            target_permanent_ids=req.target_permanent_ids,
-            # …and the same announcement where its slots are not all
-            # permanents (Goblin Welder's artifact plus a card in a graveyard).
-            # Forwarded as plain dicts, which is the shape the engine's own
-            # channel takes: the engine has no business importing a request
-            # model, and the two names are the same words.
-            target_role_refs=role_refs,
-            # CR 601.2d's announced division, forwarded exactly as the cast
-            # path's helper forwards it and in the same shape: a two-tuple
-            # where no share was announced (which is what an evenly-divided
-            # ability and every non-interactive caller send) and a three-tuple
-            # where one was. Serra's Hymn is the pool's first ability to print
-            # a division, so this field reached the engine on the cast side
-            # alone until now.
-            divided_targets=(
-                [
-                    (entry.seat, entry.index)
-                    if entry.amount is None
-                    else (entry.seat, entry.index, entry.amount)
-                    for entry in req.divided_targets
-                ]
-                if req.divided_targets
-                else None
-            ),
-            target_stack_index=engine_stack_index,
-            ability_index=req.ability_index,
-            x_value=req.x_value,
-            cost_permanent_index=cost_permanent_index,
-            cost_permanent_ids=cost_permanent_ids,
-            cost_hand_index=req.cost_hand_index,
-            cost_other_hand_indices=req.cost_other_hand_indices,
-            cost_graveyard_indices=req.cost_graveyard_indices,
-            # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
-            # forwarded like every other announcement-time choice above.
-            chosen_keyword=req.chosen_keyword,
-            source_seat=req.source_seat,
-            source_permanent_index=req.source_permanent_index,
-            source_stack_index=engine_source_stack_index,
-            source_controller_index=source_controller_seat,
-            # CR 601.2c through CR 602.2b: a client announces every target an
-            # ability owes — the browser runs a picker for each and cannot send
-            # the activation without an answer — so the engine is told this
-            # caller is one, and whether the seat above was sent or is this
-            # route's default. A bare ``activate`` for "Prevent the next X
-            # damage that would be dealt to target creature" (Samite Pilgrim)
-            # returned 200 and shielded the opponent.
-            seat_announced=req.target_seat is not None,
-        )
+        def announce(game):
+            return game.queue_permanent_ability(
+                req.seat,
+                permanent.card.name,
+                target_player_index=target,
+                permanent_index=permanent_index,
+                mana_color=req.mana_color,
+                # The "from" word of a text change activated as an ability
+                # (Balduvian Shaman); the cast side already forwards the same
+                # field, and the request schema has carried it all along.
+                old_color=req.old_color,
+                target_permanent_index=(
+                    req.target_permanent_indices
+                    if req.target_permanent_indices is not None
+                    else req.target_permanent_index
+                ),
+                target_permanent_ids=req.target_permanent_ids,
+                # …and the same announcement where its slots are not all
+                # permanents (Goblin Welder's artifact plus a card in a graveyard).
+                # Forwarded as plain dicts, which is the shape the engine's own
+                # channel takes: the engine has no business importing a request
+                # model, and the two names are the same words.
+                target_role_refs=role_refs,
+                # CR 601.2d's announced division, forwarded exactly as the cast
+                # path's helper forwards it and in the same shape: a two-tuple
+                # where no share was announced (which is what an evenly-divided
+                # ability and every non-interactive caller send) and a three-tuple
+                # where one was. Serra's Hymn is the pool's first ability to print
+                # a division, so this field reached the engine on the cast side
+                # alone until now.
+                divided_targets=(
+                    [
+                        (entry.seat, entry.index)
+                        if entry.amount is None
+                        else (entry.seat, entry.index, entry.amount)
+                        for entry in req.divided_targets
+                    ]
+                    if req.divided_targets
+                    else None
+                ),
+                target_stack_index=engine_stack_index,
+                ability_index=req.ability_index,
+                x_value=req.x_value,
+                cost_permanent_index=cost_permanent_index,
+                cost_permanent_ids=cost_permanent_ids,
+                cost_hand_index=req.cost_hand_index,
+                cost_other_hand_indices=req.cost_other_hand_indices,
+                cost_graveyard_indices=req.cost_graveyard_indices,
+                # Phyrexian Splicer: the ability the activation chose (CR 601.2b),
+                # forwarded like every other announcement-time choice above.
+                chosen_keyword=req.chosen_keyword,
+                source_seat=req.source_seat,
+                source_permanent_index=req.source_permanent_index,
+                source_stack_index=engine_source_stack_index,
+                source_controller_index=source_controller_seat,
+                # CR 601.2c through CR 602.2b: a client announces every target an
+                # ability owes — the browser runs a picker for each and cannot send
+                # the activation without an answer — so the engine is told this
+                # caller is one, and whether the seat above was sent or is this
+                # route's default. A bare ``activate`` for "Prevent the next X
+                # damage that would be dealt to target creature" (Samite Pilgrim)
+                # returned 200 and shielded the opponent.
+                seat_announced=req.target_seat is not None,
+            )
+
+        # The auto-tap, where every gate of this route has passed: tap what
+        # the board must for the ability's mana, then announce as always.
+        if req.auto_tap:
+            pay_from_board(session.game, req.seat, announce)
+        result = announce(session.game)
         if not result.supported:
             raise HTTPException(status_code=400, detail=result.details)
         if not paying:
@@ -673,12 +693,17 @@ def _action_activate_hand(session, req, seat_type):
         card_name = hand[hand_index].name
     if not session.game.has_priority(req.seat):
         raise HTTPException(status_code=400, detail="you do not currently have priority")
-    result = session.game.activate_from_hand(
-        req.seat,
-        card_name,
-        ability_index=req.ability_index if req.ability_index is not None else 0,
-        hand_index=hand_index,
-    )
+    def announce(game):
+        return game.activate_from_hand(
+            req.seat,
+            card_name,
+            ability_index=req.ability_index if req.ability_index is not None else 0,
+            hand_index=hand_index,
+        )
+
+    if req.auto_tap:
+        pay_from_board(session.game, req.seat, announce)
+    result = announce(session.game)
     if not result.supported:
         raise HTTPException(status_code=400, detail=result.details)
     session.game.note_priority_action_taken(req.seat)
@@ -688,10 +713,15 @@ def _action_activate_hand(session, req, seat_type):
 def _action_activate_emblem(session, req, seat_type):
     if not session.game.has_priority(req.seat):
         raise HTTPException(status_code=400, detail="you do not currently have priority")
-    result = session.game.activate_prevent_one_emblem(
-        req.seat,
-        emblem_index=req.emblem_index if req.emblem_index is not None else 0,
-    )
+    def announce(game):
+        return game.activate_prevent_one_emblem(
+            req.seat,
+            emblem_index=req.emblem_index if req.emblem_index is not None else 0,
+        )
+
+    if req.auto_tap:
+        pay_from_board(session.game, req.seat, announce)
+    result = announce(session.game)
     if not result.supported:
         raise HTTPException(status_code=400, detail=result.details)
     session.game.note_priority_action_taken(req.seat)
@@ -784,6 +814,64 @@ def _action_pass_priority(session, req, seat_type):
         _run_priority_exchange(session, req.seat)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def preview_payment(session_id: str, req: GameActionRequest):
+    """``POST /api/sessions/{id}/payment_plan`` — what the auto-tap would do
+    for this action, without doing it.
+
+    The body is the action the client is about to send (a ``cast``, an
+    ``activate``, an ``activate_hand``, an ``activate_emblem``). The answer is
+    ``{"payable", "taps", "cost", "reason"}``: whether the action goes through
+    once this seat's board has been tapped for it, the permanents that would
+    be tapped — each by its stable ``id``, with the ``mana_color`` it is asked
+    for — the mana the engine asked the pool for (None where the pool was not
+    short) and, where the action does not go through, the refusal in the
+    engine's own words.
+
+    **Not a prediction.** The action's own handler is run with ``auto_tap`` on
+    a scratch copy of the table, so every gate the real action passes is
+    passed here, the plan is the one ``pay_from_board`` would carry out, and
+    "payable" is that the copy's cast reached the stack. ``taps`` empty with
+    ``payable`` true is a pool that already pays.
+
+    A read: no snapshot, no notification, nothing of the session touched.
+    """
+    session = _require_session(session_id)
+    if req.action not in PAYING_ACTIONS:
+        raise HTTPException(status_code=400, detail="that action pays no mana")
+    if req.seat not in session.joined_seats:
+        raise HTTPException(status_code=400, detail="seat has not joined")
+    game = session.game
+    if mid_resolution(game):
+        # A table part-way through a resolution is not copied (its
+        # continuations are closures over the game they were made on).
+        return {
+            "payable": False, "taps": [], "cost": None,
+            "reason": "a resolution is in progress",
+        }
+    view = copy.copy(session)
+    view.game = trial_copy(game)
+    reason = None
+    sequence = random.getstate()
+    with recording_taps() as paid:
+        try:
+            asked = _resolve_permanent_ids(
+                view.game, req.model_copy(update={"auto_tap": True})
+            )
+            ACTION_HANDLERS[req.action].handler(
+                view, asked, _seat_type(session, req.seat)
+            )
+        except HTTPException as refusal:
+            reason = str(refusal.detail)
+        finally:
+            random.setstate(sequence)
+    return {
+        "payable": reason is None,
+        "taps": list(paid["taps"]),
+        "cost": paid["cost"],
+        "reason": reason,
+    }
 
 
 def do_action(session_id: str, req: GameActionRequest):

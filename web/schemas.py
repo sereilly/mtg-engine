@@ -643,6 +643,14 @@ class GameActionRequest(BaseModel):
     # costs"): true to use it. Absent lets the engine apply it automatically
     # to spells without {X} in their cost (a waived X is 0, CR 107.3b).
     use_free_permission: bool | None = None
+    # **Auto-tap.** True on a `cast`, `activate`, `activate_hand` or
+    # `activate_emblem` asks the server to tap what this seat's board must for
+    # the action to be paid — lands through the tap seam, a Sol Ring or a
+    # Llanowar Elves through its own mana ability — and then to take the
+    # action (`web/payment_plan.py`). Nothing is tapped unless a whole plan
+    # exists. The same request, posted to `/payment_plan` instead, is the
+    # preview: what would be tapped, and whether the action then goes through.
+    auto_tap: bool | None = None
     # How many of `card_order`'s trailing entries a scry sends to the bottom
     # (CR 701.22a). Separate from card_order so the permutation stays a
     # permutation and can be validated as one.

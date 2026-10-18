@@ -672,30 +672,31 @@ function cardHasKeyword(card, keyword) {
   return String(card?.oracle_text || "").toLowerCase().includes(keyword);
 }
 
-// Banding (printed or granted). Prefer the serialized effective-keyword strip so
-// a creature granted banding (Helm of Chatzuk) reads correctly; fall back to the
-// printed reminder text on the card itself.
-function cardHasBanding(card) {
-  if (!card || typeof card !== "object") return false;
-  const kws = Array.isArray(card.keywords) ? card.keywords : [];
-  if (kws.some((k) => String(k).toLowerCase() === "banding")) return true;
-  return String(card.oracle_text || "").toLowerCase().startsWith("banding");
-}
-
 // CR 702.22c: whether the currently-selected attackers can be declared as one
-// legal band — at least two creatures, at least one with banding, and at most one
-// without banding.
+// legal band. The server's answer — `combat.band_forms`, one entry per way a
+// band may be formed on this board (web/state_view.py `_band_forms`): the
+// selection must lie inside a form's `members`, hold at least one of its
+// `needs`, and bring no more than `extras` others (null: any number).
+//
+// This used to count the word "banding" on each selected card — its keyword
+// strip, else its printed text — against the plain form alone ("one or more
+// creatures with banding and up to one without"). The count was right (the
+// keyword strip is the server's, through layer 6); the rule was half of
+// CR 702.22c, so a "bands with other legendary creatures" band — legal, and
+// accepted by the server — was never offered.
 function selectedAttackersCanBand(state) {
-  const battlefield = state?.players?.[state.current_turn]?.battlefield || [];
-  const selected = combatAttackerDraft.filter((i) => i >= 0 && i < battlefield.length);
+  const forms = getCombatState(state)?.band_forms;
+  if (!Array.isArray(forms)) return false;
+  const selected = [...new Set(combatAttackerDraft)].filter((i) => Number.isInteger(i));
   if (selected.length < 2) return false;
-  let banders = 0;
-  let nonbanders = 0;
-  for (const idx of selected) {
-    if (cardHasBanding(battlefield[idx])) banders += 1;
-    else nonbanders += 1;
-  }
-  return banders >= 1 && nonbanders <= 1;
+  return forms.some((form) => {
+    const members = new Set(form?.members || []);
+    const needs = new Set(form?.needs || []);
+    if (!selected.every((i) => members.has(i))) return false;
+    const leading = selected.filter((i) => needs.has(i)).length;
+    if (leading < 1) return false;
+    return form.extras == null || selected.length - leading <= Number(form.extras);
+  });
 }
 
 // CR 510.1 / 702.22j: whether the DEFENDING player, not the attacker's
@@ -2594,86 +2595,105 @@ function getMaxAffordableX(manaPool, manaCost, card = null) {
   return 0;
 }
 
-function inferLandProducedMana(perm) {
-  if (Array.isArray(perm.produced_mana) && perm.produced_mana.length > 0) {
-    return perm.produced_mana.map((s) => s.toUpperCase());
-  }
-  const type = (perm.type || "").toLowerCase();
-  const symbols = [];
-  if (type.includes("plains")) symbols.push("W");
-  if (type.includes("island")) symbols.push("U");
-  if (type.includes("swamp")) symbols.push("B");
-  if (type.includes("mountain")) symbols.push("R");
-  if (type.includes("forest")) symbols.push("G");
-  return symbols;
+// --- auto-tap: the server's plan, rendered ---------------------------------
+//
+// A card glows when its seat *could* pay for it (the server's
+// `playable_hand_indices`: the pool plus what a tap would add — lands, a Sol
+// Ring, a Llanowar Elves). Clicking one sends the cast; a pool that cannot pay
+// is refused "insufficient mana" and this dialog offers to do the tapping.
+//
+// It used to plan that tapping itself: lands only, one mana a land, the colour
+// read off `produced_mana`, the printed cost — so a card that glowed on a Sol
+// Ring opened this dialog with the button disabled, a Mana Flare's second mana
+// was never counted, and a painland asked for its colour made {C}. Every one
+// of those is a question the engine answers.
+//
+// Now the server is asked (`POST …/payment_plan` with the very action that
+// was refused): it runs that action on a copy of the table, taps what its own
+// planner says, and reports what it tapped and whether the action then went
+// through (web/payment_plan.py). The dialog shows that; the button sends the
+// same action with `auto_tap: true`, and the server makes those taps — a land
+// through the tap seam, a creature through its own mana ability — and the
+// cast in one request. Nothing here adds mana, picks a land or reads a cost.
+
+// What the plan depends on that this client can watch change: the pool, what
+// is tapped, and the log (anything else that happened).
+function autoTapStateKey(state = currentState) {
+  const me = getCurrentPlayerState(state);
+  return JSON.stringify([
+    Array.isArray(state?.log) ? state.log.length : 0,
+    me?.mana_pool || null,
+    (me?.battlefield || []).map((perm) => [perm?.id ?? null, !!perm?.tapped]),
+  ]);
 }
 
-// One planner behind both auto-tap questions ("can it pay?" and "tap what?"),
-// so the button's promise and the taps it fires can't disagree. Each tap
-// carries the COLOR the land was assigned to produce: a multi-color land
-// (City of Brass) tapped without one defaults server-side to whatever it
-// defaults to, which is how auto-tap used to pay {1}{W} with two green.
-function computeAutoTapPlan(manaCost, currentManaPool, battlefield) {
-  const required = parseManaCostSymbols(manaCost || "");
-  const pool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0, ...currentManaPool };
-  const taps = [];
-
-  const untapped = [];
-  for (let i = 0; i < (battlefield || []).length; i++) {
-    const perm = battlefield[i];
-    if (!(perm.type || "").toLowerCase().includes("land")) continue;
-    if (perm.tapped) continue;
-    // A land the server's tap seam refuses (Rhystic Cave: its mana needs
-    // priority and can be denied; a depletion land: its mana costs a counter)
-    // is activated, never auto-tapped — a "tap" sent for it is a 400 that
-    // aborts the whole payment. `=== false` so a payload without the field
-    // plans as it always did.
-    if (perm.taps_for_mana === false) continue;
-    const produces = inferLandProducedMana(perm);
-    if (produces.length > 0) untapped.push({ index: i, produces, used: false });
-  }
-  // Constrained lands first for the colored pips: spending the Forest on {G}
-  // before City of Brass keeps the any-color land free for the pip only it
-  // can pay (and for generic, where its color doesn't matter).
-  const byFlexibility = [...untapped].sort((a, b) => a.produces.length - b.produces.length);
-
-  let ok = true;
-  for (const color of ["W", "U", "B", "R", "G", "C"]) {
-    let deficit = Math.max(0, (required[color] || 0) - (pool[color] || 0));
-    for (const land of byFlexibility) {
-      if (deficit <= 0) break;
-      if (land.used || !land.produces.includes(color)) continue;
-      land.used = true;
-      taps.push({ index: land.index, color });
-      pool[color] = (pool[color] || 0) + 1;
-      deficit--;
-    }
-    if (deficit > 0) ok = false;
-  }
-
-  // Generic is paid by whatever is left; any color works, so a mono-color
-  // land names its own and a multi-color land is left to the server default.
-  const totalPool = MANA_ORDER.reduce((sum, c) => sum + (pool[c] || 0), 0);
-  const totalRequired = MANA_ORDER.reduce((sum, c) => sum + (required[c] || 0), 0) + (required.generic || 0);
-  let genericDeficit = Math.max(0, totalRequired - totalPool);
-  for (const land of untapped) {
-    if (genericDeficit <= 0) break;
-    if (land.used) continue;
-    land.used = true;
-    taps.push({ index: land.index, color: land.produces.length === 1 ? land.produces[0] : null });
-    genericDeficit--;
-  }
-  if (genericDeficit > 0) ok = false;
-
-  return { taps, ok };
+// The action a pending auto-tap is about, as `sendAction` would send it: the
+// announcement so far (mode, zone, cost already named) rides module state, so
+// the preview has to carry it too or it would be planning a different cast.
+function autoTapActionBody(pending) {
+  return carryCastZoneAndCost(carryCastMode({ ...pending.actionBody }));
 }
 
-function computeAutoTapLands(manaCost, currentManaPool, battlefield) {
-  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).taps;
+// Ask the server what it would tap for the pending action. Called from the
+// dialog's own renderer, so the plan follows the board: a land tapped by hand
+// while the dialog is open is a new state key and a new plan.
+function refreshAutoTapPlan() {
+  const pending = pendingAutoTap;
+  if (!pending || !sessionId) return;
+  const key = autoTapStateKey();
+  if (pending.planKey === key) return;
+  pending.planKey = key;
+  pending.plan = null;
+  postJson(`/api/sessions/${sessionId}/payment_plan`, autoTapActionBody(pending))
+    .then((plan) => plan, (e) => ({ payable: false, taps: [], reason: e.message }))
+    .then((plan) => {
+      if (pendingAutoTap !== pending || pending.planKey !== key) return;
+      pending.plan = plan;
+      renderActivationPrompt();
+    });
 }
 
-function canAutoTapSatisfyCost(manaCost, currentManaPool, battlefield) {
-  return computeAutoTapPlan(manaCost, currentManaPool, battlefield).ok;
+// Whether the Auto-Tap button may be pressed: the server ran the action on a
+// copy with its own taps and it went through. Unknown (still asking) is no.
+function autoTapIsPayable(pending) {
+  return !!(pending && pending.plan && pending.plan.payable === true);
+}
+
+// One line per permanent the plan taps, in tap order, with what it is asked
+// for. A source the server did not ask for a colour names none.
+function autoTapPlanLines(plan) {
+  const taps = Array.isArray(plan?.taps) ? plan.taps : [];
+  return taps.map((tap) => {
+    const color = typeof tap.mana_color === "string" && tap.mana_color ? ` for {${tap.mana_color}}` : "";
+    return `${tap.name || "a permanent"}${color}`;
+  });
+}
+
+// The cost the engine actually asked the pool for — taxes, reductions, a
+// kicker and an announced X included — as the server reports it, or null
+// while it is unknown (then the printed cost is all the dialog can show).
+function autoTapChargedCost(plan) {
+  const cost = plan && plan.cost && typeof plan.cost === "object" ? plan.cost : null;
+  if (!cost) return null;
+  const tokens = [];
+  if (Number(cost.generic || 0) > 0) tokens.push(`{${Number(cost.generic)}}`);
+  for (const symbol of ["W", "U", "B", "R", "G", "C"]) {
+    for (let n = 0; n < Number(cost[symbol] || 0); n += 1) tokens.push(`{${symbol}}`);
+  }
+  return tokens.length ? tokens.join("") : "{0}";
+}
+
+// What the dialog says under its title, for the three things a plan can be.
+function autoTapPromptText(pending) {
+  const plan = pending.plan;
+  if (!plan) return `Asking what could pay for ${pending.cardName}…`;
+  if (plan.payable) {
+    const count = Array.isArray(plan.taps) ? plan.taps.length : 0;
+    return count > 0
+      ? `Your mana pool can't pay for ${pending.cardName}. Auto-Tap will tap ${count} permanent${count === 1 ? "" : "s"} to pay the cost, or cancel.`
+      : `Your mana pool can pay for ${pending.cardName} now. Press Auto-Tap to go ahead, or cancel.`;
+  }
+  return `Nothing you could tap pays for ${pending.cardName}${plan.reason ? ` (${plan.reason})` : ""}. Add mana yourself, or cancel.`;
 }
 
 async function performAutoTap() {
@@ -2683,31 +2703,23 @@ async function performAutoTap() {
   renderActivationPrompt();
 
   try {
-    const me = getCurrentPlayerState();
-    if (!me) throw new Error("Cannot read player state.");
-
-    const taps = computeAutoTapLands(pendingAutoTapCost(pending), me.mana_pool, me.battlefield);
-    if (taps.length > 0) {
-      updateActionHint(`Auto-tapping ${taps.length} land(s)...`);
-      for (const tap of taps) {
-        const body = withPermanentId(
-          { seat, action: "tap", permanent_index: tap.index },
-          "permanent_id", seat, tap.index,
-        );
-        // The color this land was assigned to pay. Without it the server
-        // picks for a multi-color land, and its pick owes nothing to the cost.
-        if (tap.color) body.mana_color = tap.color;
-        await sendAction(body);
-      }
-    }
-
-    await sendAction(pending.actionBody);
-    updateActionHint(`Cast ${pending.cardName}.`);
+    updateActionHint(`Paying for ${pending.cardName}...`);
+    // One request: the server taps what its plan names and takes the action.
+    await sendAction({ seat, ...pending.actionBody, auto_tap: true });
+    updateActionHint(`Paid for ${pending.cardName}.`);
   } catch (e) {
     updateActionHint(e.message, true);
   } finally {
     clearPendingHandCast();
   }
+}
+
+// A refusal that is about mana and nothing else, in either of the engine's
+// two wordings: a cast and a permanent's ability say "insufficient mana …",
+// an ability activated from a hand says "… cannot pay for …'s ability".
+function isManaRefusal(message) {
+  const text = String(message || "").toLowerCase();
+  return text.startsWith("insufficient mana") || /cannot pay for .*'s ability/.test(text);
 }
 
 function formatManaSymbols(counts) {
@@ -4037,7 +4049,7 @@ function getPromptBoardTargeting(state = currentState) {
   // `stack_index`, top-first, which is the index the canvas cascade and a
   // cast's `target_stack_index` already use.
   const triggerTargetInfo = getTriggerTargetInfo(state);
-  if (triggerTargetInfo) {
+  if (triggerTargetInfo && !triggerNamesSeveralTargets(triggerTargetInfo)) {
     const byKey = new Map();
     const playerSeats = [];
     const stackIndices = [];
@@ -7148,6 +7160,26 @@ function applyPermanentChoicePrompt(info) {
   }
 }
 
+// Whose graveyard a card offered by a prompt is in, for the button that names
+// it: "your graveyard", or the other player's by name.
+function graveyardOwnerLabel(ownerSeat, state = currentState) {
+  const owner = Number(ownerSeat);
+  if (owner === seat) return "your graveyard";
+  const name = state?.players?.[owner]?.name;
+  return `${name || `Seat ${owner + 1}`}'s graveyard`;
+}
+
+// Whether a trigger-target prompt asks for several targets at once, to be
+// picked together: the server sends `max_targets` only for an ability that
+// prints more than one. Only where every candidate is a permanent — a list of
+// ids is the one several-target answer the server takes, so a list of cards
+// in a graveyard ("up to two target creature cards from defending player's
+// graveyard", Rysorian Badger) keeps its one-click buttons.
+function triggerNamesSeveralTargets(info) {
+  if (!info || Number(info.max_targets || 1) <= 1) return false;
+  return (info.candidates || []).every((c) => (c.kind || "permanent") === "permanent");
+}
+
 // A triggered ability choosing its target as it goes on the stack (CR 603.3d):
 // Floral Spuzzem's artifact, Teferi's Tutelage's opponent, Mystic Snake's
 // spell, Gravedigger's card. Four kinds of candidate arrive in one list and
@@ -7158,6 +7190,8 @@ function applyPermanentChoicePrompt(info) {
 //   * a card in a graveyard (Gravedigger, Karmic Guide) is a button here — it
 //     is in no zone the board draws, so the panel is where it can be clicked,
 //     and it is answered by pile and slot because a graveyard card has no id;
+//   * several permanents at once ("up to two target creatures", CR 601.2c)
+//     are picked together in the several-targets dialog;
 //   * and "up to one target" (Barrin, Tolarian Archmage) may name nobody,
 //     which is the one answer that is none of these — a button, offered only
 //     when the server says the ability is an "up to" (`up_to`).
@@ -7172,6 +7206,20 @@ function applyTriggerTargetPrompt(info) {
   q("promptCancelBtn").disabled = true;
   q("promptCustomOkBtn").disabled = true;
   const candidates = info.candidates || [];
+  // Several targets in one announcement are picked together in the
+  // several-targets dialog (`renderSeveralTargetsModal`) — a click on the
+  // board answers with one id, which for this ability was the whole answer
+  // and never the second target.
+  if (triggerNamesSeveralTargets(info)) {
+    const limit = Number(info.max_targets);
+    q("promptTitle").textContent = "Choose targets";
+    q("promptBody").textContent =
+      `${info.card_name || "The ability"}: its triggered ability names ` +
+      `${info.up_to ? "up to " : ""}${limit} targets.`;
+    q("promptSteps").innerHTML = "<div>Action: choose them in the dialog and confirm.</div>";
+    q("promptOkBtn").classList.add("hidden");
+    return;
+  }
   const cards = candidates.filter((c) => c.kind === "graveyard");
   const kinds = new Set(candidates.map((c) => c.kind || "permanent"));
   const where = [];
@@ -7201,7 +7249,9 @@ function applyTriggerTargetPrompt(info) {
   if (cards.length) {
     const buttons = cards
       .map((c, i) => {
-        const whose = Number(c.seat) === seat ? "your graveyard" : "opponent's graveyard";
+        // Whose pile, by name: "opponent's graveyard" is one pile only while
+        // there is one opponent, and with three or four seats it named none.
+        const whose = graveyardOwnerLabel(c.seat);
         return (
           `<button type="button" class="prompt-choice-btn" data-trigger-graveyard="${i}">` +
           `${escapeHtml(c.name || "a card")} (${whose})</button>`
@@ -10240,6 +10290,9 @@ function renderKeepPermanentsModal(info) {
 // game; the list is what the server froze when the mode was chosen, so an
 // empty selection is legal wherever the mode printed "up to".
 let modalModeTargetsSelected = new Set();
+// Which prompt the dialog is open for (`severalTargetsPrompt`'s key), so a
+// selection made for one is never carried into the next.
+let severalTargetsOpenFor = null;
 
 function getModalModeTargetsInfo(state = currentState) {
   if (!state || seat === null) return null;
@@ -10249,28 +10302,91 @@ function getModalModeTargetsInfo(state = currentState) {
   return info;
 }
 
-function renderModalModeTargetsModal(info) {
+// The several-targets dialog's question, whichever prompt asks it — two do:
+//
+//   * the targets of a mode an opponent chose (Fatal Lore, `modal_mode_targets`),
+//     where an empty selection is legal wherever the mode printed "up to";
+//   * a triggered ability that prints several targets ("put a +1/+1 counter on
+//     each of up to two other target creatures you control", Basri's Acolyte;
+//     `trigger_target` with `max_targets`). CR 601.2c makes them one
+//     announcement, so they are confirmed together: `minimum` is 0 for an
+//     "up to" and 1 otherwise, and the server counts the answer against the
+//     printed number either way.
+//
+// The descriptor says what to send, so the dialog stays one renderer.
+function severalTargetsPrompt(state = currentState) {
+  const mode = getModalModeTargetsInfo(state);
+  if (mode) {
+    const limit = Number(mode.max_targets || 1);
+    return {
+      key: `mode:${mode.card_name}:${mode.mode_label || ""}`,
+      action: "modal_mode_targets_confirm",
+      candidates: mode.candidates || [],
+      limit,
+      minimum: 0,
+      subtitle: `${mode.card_name}: your opponent chose "${mode.mode_label || ""}". Choose up to ${limit}.`,
+    };
+  }
+  const trigger = getTriggerTargetInfo(state);
+  if (triggerNamesSeveralTargets(trigger)) {
+    const limit = Number(trigger.max_targets);
+    // Only permanents: a several-target answer is a list of ids, and that is
+    // the only shape the server takes one in.
+    const candidates = (trigger.candidates || []).filter(
+      (c) => (c.kind || "permanent") === "permanent" && Number.isInteger(c.id),
+    );
+    const minimum = trigger.up_to ? 0 : 1;
+    return {
+      key: `trigger:${trigger.card_name}:${candidates.map((c) => c.id).join(",")}`,
+      action: "trigger_target_confirm",
+      candidates,
+      limit,
+      minimum,
+      subtitle: `${trigger.card_name || "The ability"}: its triggered ability names `
+        + `${trigger.up_to ? "up to " : ""}${limit} targets. `
+        + (minimum === 0 ? "Confirm with none chosen to name no target." : "Choose at least one."),
+    };
+  }
+  return null;
+}
+
+// Whose permanent a candidate is, for its tile: "yours", or the controller's
+// name — "opponent's" names nobody at a table of three.
+function candidateOwnerLabel(ownerSeat, state = currentState) {
+  const owner = Number(ownerSeat);
+  if (owner === seat) return "yours";
+  const name = state?.players?.[owner]?.name;
+  return `${name || `Seat ${owner + 1}`}'s`;
+}
+
+function renderSeveralTargetsModal(prompt) {
   const modal = document.getElementById("modalModeTargetsModal");
   if (!modal) return;
-  if (!info) {
+  if (!prompt) {
     modal.classList.add("hidden");
     modalModeTargetsSelected = new Set();
+    severalTargetsOpenFor = null;
     return;
   }
-  modal.classList.remove("hidden");
-  const limit = Number(info.max_targets || 1);
-  const subtitle = document.getElementById("modalModeTargetsSubtitle");
-  if (subtitle) {
-    subtitle.textContent = `${info.card_name}: your opponent chose "${info.mode_label || ""}". Choose up to ${limit}.`;
+  if (severalTargetsOpenFor !== prompt.key) {
+    severalTargetsOpenFor = prompt.key;
+    modalModeTargetsSelected = new Set();
   }
+  modal.classList.remove("hidden");
+  const limit = prompt.limit;
+  const subtitle = document.getElementById("modalModeTargetsSubtitle");
+  if (subtitle) subtitle.textContent = prompt.subtitle;
   const list = document.getElementById("modalModeTargetsList");
   const confirmBtn = document.getElementById("modalModeTargetsConfirmBtn");
+  const syncConfirm = () => {
+    if (confirmBtn) confirmBtn.disabled = modalModeTargetsSelected.size < prompt.minimum;
+  };
   if (list) {
-    list.innerHTML = (info.candidates || [])
+    list.innerHTML = prompt.candidates
       .map((entry) => {
         const selectedClass = modalModeTargetsSelected.has(entry.id) ? " selected" : "";
-        const owner = entry.seat === seat ? "yours" : "opponent's";
-        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${owner}</div></div>`;
+        const owner = candidateOwnerLabel(entry.seat);
+        return `<div class="library-card-choice${selectedClass}" data-id="${entry.id}"><div class="library-card-text-placeholder">${escapeHtml(entry.name)}</div><div class="library-card-choice-name">${escapeHtml(owner)}</div></div>`;
       })
       .join("") || `<div class="modal-empty-note">Nothing to choose.</div>`;
     list.querySelectorAll(".library-card-choice").forEach((el) => {
@@ -10280,17 +10396,27 @@ function renderModalModeTargetsModal(info) {
         else if (modalModeTargetsSelected.size < limit) modalModeTargetsSelected.add(id);
         else return;
         el.classList.toggle("selected");
+        syncConfirm();
       });
     });
   }
-  if (confirmBtn && !confirmBtn.dataset.bound) {
-    confirmBtn.dataset.bound = "1";
-    confirmBtn.addEventListener("click", async () => {
+  syncConfirm();
+  if (confirmBtn) {
+    // Rebound on every render: the action is the open prompt's, and a handler
+    // bound for the last prompt would answer this one with the wrong action.
+    confirmBtn.onclick = async () => {
       const ids = [...modalModeTargetsSelected];
+      if (ids.length < prompt.minimum) return;
       modalModeTargetsSelected = new Set();
+      severalTargetsOpenFor = null;
       modal.classList.add("hidden");
-      await sendAction({ seat, action: "modal_mode_targets_confirm", target_permanent_ids: ids });
-    });
+      try {
+        // An explicit list either way: an empty one is the answer "nobody".
+        await sendAction({ seat, action: prompt.action, target_permanent_ids: ids });
+      } catch (e) {
+        updateActionHint(e.message, true);
+      }
+    };
   }
 }
 
@@ -11438,23 +11564,26 @@ function renderActivationPrompt() {
 
   if (pendingAutoTap) {
     panel.classList.remove("hidden");
+    // The plan is the server's (see `refreshAutoTapPlan`): asked for when the
+    // dialog opens and again whenever the board under it moves.
+    refreshAutoTapPlan();
+    const plan = pendingAutoTap.plan;
     if (autoTapBtn) {
       autoTapBtn.classList.remove("hidden");
-      const canSatisfy = !!me && canAutoTapSatisfyCost(
-        pendingAutoTapCost(pendingAutoTap),
-        me.mana_pool,
-        me.battlefield
-      );
-      autoTapBtn.disabled = !canSatisfy;
+      autoTapBtn.disabled = !autoTapIsPayable(pendingAutoTap);
     }
     okBtn.classList.add("hidden");
     customRow.classList.add("hidden");
     title.textContent = `Insufficient mana`;
-    body.textContent = `You don't have enough mana to cast ${pendingAutoTap.cardName}. Auto-tap lands to pay the cost, or cancel.`;
+    body.textContent = autoTapPromptText(pendingAutoTap);
+    const planLines = autoTapPlanLines(plan);
     steps.innerHTML = [
       `<div>Card: ${escapeHtml(pendingAutoTap.cardName)}</div>`,
-      `<div>Cost: ${renderSymbolsInline(pendingAutoTapCost(pendingAutoTap) || "none")}</div>`,
-      `<div>Current mana: ${me ? formatManaSymbolsHtml(me.mana_pool) : "Unknown"}</div>`,
+      `<div>Cost: ${renderSymbolsInline(autoTapChargedCost(plan) || pendingAutoTapCost(pendingAutoTap) || "none")}</div>`,
+      `<div>Current mana: ${me ? (MANA_ORDER.some((symbol) => Number(me.mana_pool?.[symbol] || 0) > 0) ? formatManaSymbolsHtml(me.mana_pool) : "none") : "Unknown"}</div>`,
+      plan && plan.payable && planLines.length
+        ? `<div id="autoTapPlan">Auto-Tap: ${planLines.map((line) => renderSymbolsInline(escapeHtml(line))).join(", ")}</div>`
+        : "",
     ].join("");
     cancelBtn.classList.remove("hidden");
     cancelBtn.disabled = false;
@@ -11959,19 +12088,26 @@ function renderActivationPrompt() {
     // "sacrifice" for a cost that does no such thing.
     const costVerb = (costSpec?.exile_cost || pendingSpec?.exile_cost) ? "exile" : "sacrifice";
     const sacrificeNoun = costSpec?.kind || pendingSpec?.kind || "permanent";
+    // "…an artifact source **of your choice**…" is chosen, not targeted
+    // (CR 609.7a), and the prompt says which: the word decides whether shroud
+    // and protection matter, and a Circle asking for a "target" was asking
+    // for something it does not have.
+    const picked = pendingSpec?.source_of_choice && !isSacrificeCost ? "source" : "target";
     title.textContent = isSacrificeCost
       ? `Choose ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} to ${costVerb} for ${pendingCastTarget.cardName}`
+      : picked === "source"
+      ? `Choose a source for ${pendingCastTarget.cardName}`
       : `Choose target for ${pendingCastTarget.cardName}`;
     if (pendingCastTarget.targetKind === "land") {
-      body.textContent = "Click a valid land on the battlefield to choose the target.";
+      body.textContent = `Click a valid land on the battlefield to choose the ${picked}.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "creature") {
       body.textContent = isSacrificeCost
         ? `Click ${/^[aeiou]/.test(sacrificeNoun) ? "an" : "a"} ${sacrificeNoun} you control on the battlefield to ${costVerb} it.`
-        : "Click a valid creature on the battlefield to choose the target.";
+        : `Click a valid creature on the battlefield to choose the ${picked}.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "artifact") {
-      body.textContent = "Click a valid artifact on the battlefield to choose the target.";
+      body.textContent = `Click a valid artifact on the battlefield to choose the ${picked}.`;
       steps.innerHTML = `<div>Card: ${pendingCastTarget.cardName}</div>`;
     } else if (pendingCastTarget.targetKind === "permanent") {
       const isEnchantEnchantment = String(pendingCastTarget.card?.oracle_text || "")
@@ -12340,6 +12476,12 @@ function renderActivationPrompt() {
             },
           )
           .join("")}</div>`,
+        // CR 602.5: why a greyed-out ability is greyed out, in the server's
+        // words and on the prompt's face — the button's title says it too,
+        // but a reason only a hover reveals reads as a broken button.
+        ...abilityProhibitionLines(choiceCard).map(
+          (line) => `<div class="ability-prohibition-note">${escapeHtml(`⛔ ${line}.`)}</div>`,
+        ),
       ].join("");
     }
     cancelBtn.classList.remove("hidden");
@@ -12392,6 +12534,22 @@ function renderActivationPrompt() {
 
   panel.classList.remove("hidden");
   okBtn.classList.remove("hidden");
+  if (pendingActivation.nothingToChoose) {
+    // Not a payment yet: the question an empty picker becomes for an ability
+    // that owes no target (`abilityHasNothingToChoose`).
+    title.textContent = `Nothing to choose for ${pendingActivation.cardName}`;
+    body.textContent = pendingActivation.nothingToChoose.text;
+    steps.innerHTML = [
+      `<div>Cost: ${renderSymbolsInline(pendingActivation.activationCost || "none")}</div>`,
+      `<div>Action: press OK to activate it anyway, or cancel.</div>`,
+    ].join("");
+    customRow.classList.add("hidden");
+    okBtn.disabled = false;
+    cancelBtn.classList.remove("hidden");
+    cancelBtn.disabled = false;
+    customOkBtn.disabled = true;
+    return;
+  }
   const manaRequirement = pendingActivation.manaRequirement || {};
   const canPay = me ? manaPoolCanPayCost(me.mana_pool, manaRequirement) : false;
 
@@ -12416,7 +12574,7 @@ function renderActivationPrompt() {
 
 async function attemptPendingActivation() {
   if (!pendingActivation || seat === null) return;
-  if (pendingActivation.awaitingApproval) {
+  if (pendingActivation.awaitingApproval || pendingActivation.nothingToChoose) {
     renderActivationPrompt();
     return;
   }
@@ -12845,16 +13003,93 @@ function loyaltyAbilityDisabledReason(card, opt) {
 // permanent forbids (City of Solitude, Null Rod) — where the text mirror
 // below knows six. Each is the whole sentence the route refuses with.
 function serverAbilityDenial(card, abilityIndex) {
-  const denials = card?.ability_denials;
-  if (!Array.isArray(denials)) return null;
-  const reason = denials[Number.isInteger(abilityIndex) ? abilityIndex : 0];
-  return typeof reason === "string" && reason ? reason : null;
+  return abilityProhibitionOf(card, abilityIndex);
 }
 
 // Per-option gate for the multi-ability menu.
 function abilityOptionDisabledReason(opt, card) {
+  // The server's answer first (CR 602.5): what forbids this ability outright
+  // — a Cursed Totem, a Null Rod, a City of Solitude on another player's turn
+  // — is a fact about the board, and no reading of the ability's own line
+  // finds it. The click was offered and then refused with a 400.
+  const prohibited = abilityProhibitionOf(card, opt?.index);
+  if (prohibited) return prohibited;
   if (opt?.loyalty) return loyaltyAbilityDisabledReason(card, opt);
-  return serverAbilityDenial(card, opt.index) || abilityLineDisabledReason(opt.line);
+  return abilityLineDisabledReason(opt.line);
+}
+
+// CR 602.5 as the server answers it: why the ability at `abilityIndex` of this
+// permanent may not be activated **now**, in the engine's own sentence, or
+// null — `serverAbilityDenial`'s answer (`ability_denials`, one entry per
+// usable ability in the order `ability_index` counts them, absent when nothing
+// is denied). A permanent with one ability is clicked with no index, which is
+// its ability 0.
+function abilityProhibitionOf(card, abilityIndex = null) {
+  if (!card || typeof card !== "object") return null;
+  const listed = Array.isArray(card.ability_denials) ? card.ability_denials : null;
+  if (!listed) return null;
+  const reason = listed[Number.isInteger(abilityIndex) ? abilityIndex : 0];
+  return typeof reason === "string" && reason ? reason : null;
+}
+
+// --- a picker with nothing in it --------------------------------------------
+//
+// "The next time an artifact source of your choice would deal damage to you
+// this turn, prevent that damage." (Circle of Protection: Artifacts.) A source
+// is *chosen*, not targeted (CR 609.7a), so the ability owes no target and may
+// be activated on a table with no artifact at all — the engine accepts that
+// activation from every caller and arms the shield against the next source of
+// the printed kind. This cascade could not send it: every kind's branch
+// refuses an empty list ("No valid artifact targets in play"), whatever the
+// list is for. 38 shipped abilities are of this shape — the colour and type
+// Circles and Runes, a planeswalker's "up to one target creature".
+//
+// The server says which (`may_name_nothing` on the activation spec: the
+// engine's own "does this ability owe a target?", web/serialization.py). With
+// nothing to pick the player is *asked* — the ability still costs what it
+// costs — and a yes sends it naming nothing.
+function abilityMayNameNothing(card) {
+  return targetSpecOf(card).may_name_nothing === true;
+}
+
+function abilityHasNothingToChoose(card) {
+  const spec = targetSpecOf(card);
+  return abilityMayNameNothing(card) && (spec.valid_targets || []).length === 0;
+}
+
+// Whether the picker chooses a *source* of damage (CR 609.7a) rather than a
+// target: the server's flag, or the stack half only a chosen source is
+// offered (the colour Circles carry that and not the flag).
+function abilityChoosesASource(card) {
+  const spec = targetSpecOf(card);
+  return !!(spec.source_of_choice || spec.also_stack);
+}
+
+// What the "nothing to choose" prompt says, in the two cases it has.
+function nothingToChooseText(card, cardName) {
+  return abilityChoosesASource(card)
+    ? `There is no source for ${cardName} to choose right now. A source is chosen, not targeted (CR 609.7a), so the ability can still be activated — naming none.`
+    : `There is no legal target for ${cardName} right now, and this ability does not need one. It can still be activated — naming none.`;
+}
+
+// The same permanent with its picker answered "nothing": a spec of kind
+// "none", so every target branch of the activation cascade passes it by and
+// it reaches the cost, X and payment steps a targetless ability takes.
+function withNothingChosen(card, abilityIndex) {
+  const answered = {
+    ...card,
+    target_spec: { ...targetSpecOf(card), kind: "none", requires_target: false, valid_targets: [] },
+    __choseNothing: true,
+  };
+  if (Number.isInteger(abilityIndex)) answered.__abilityIndex = abilityIndex;
+  return answered;
+}
+
+// Every distinct sentence forbidding an ability of this permanent, for the
+// hover preview: what a click would be told, readable before the click.
+function abilityProhibitionLines(card) {
+  if (!card || typeof card !== "object" || !Array.isArray(card.ability_denials)) return [];
+  return [...new Set(card.ability_denials.filter((reason) => typeof reason === "string" && reason))];
 }
 
 // Where a permanent is now, by its id: { seat, index, card } or null if it has
@@ -13046,12 +13281,45 @@ function startActivationPrompt(card, targetSeat, permanentIndex = null) {
   }
   const abilityIndex = Number.isInteger(card?.__abilityIndex) ? card.__abilityIndex : null;
 
+  // CR 602.5: an ability the board forbids (see `abilityProhibitionOf`). A
+  // permanent with several was stopped at its menu, where the button is
+  // greyed out; one with a single ability has no menu, so this is where its
+  // click learns the reason — instead of walking the target and cost prompts
+  // to a request the server refuses.
+  {
+    const prohibited = abilityProhibitionOf(card, abilityIndex);
+    if (prohibited) {
+      SFX.onError();
+      updateActionHint(prohibited, true);
+      return;
+    }
+  }
+
   // A {T} ability can't be activated while the creature is summoning sick
   // (CR 302.6). When the only way to use the card is a tap ability, don't open a
   // prompt that's doomed to fail — play the error sound and say why.
   if (card && card.summoning_sick && abilityCostRequiresTap(card)) {
     SFX.onError();
     updateActionHint(`${cardName} has summoning sickness and can't use its tap ability yet.`, true);
+    return;
+  }
+
+  // A picker with nothing in it, for an ability that owes no target (see
+  // `abilityMayNameNothing`): asked here, ahead of every branch below that
+  // would refuse the empty list. OK comes back through this function with the
+  // picker answered, so the costs and the payment are asked as they always are.
+  if (!card.__choseNothing && abilityHasNothingToChoose(card)) {
+    pendingActivation = {
+      cardName,
+      permanentIndex,
+      targetSeat,
+      abilityIndex,
+      activationCost: getActivatedAbilityCost(card, abilityIndex),
+      manaRequirement: {},
+      awaitingApproval: true,
+      nothingToChoose: { card, text: nothingToChooseText(card, cardName) },
+    };
+    renderActivationPrompt();
     return;
   }
 
@@ -16564,20 +16832,31 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
   // the engine treat it as one, which is how the cost came to be paid twice
   // once the cost itself became general.
   const paysCostWithPermanent = !!targetSpecOf(pending.card)?.sacrifice_cost;
-  const actionBody = withPermanentId(
-    {
-      seat,
-      action: pending.castAction || "cast",
-      card_name: pending.cardName,
-      ...(paysCostWithPermanent
-        ? { cost_permanent_index: selectedPermanentIndex }
-        : { target_seat: selectedTarget, permanent_index: selectedPermanentIndex }),
-    },
-    // The chosen target, captured now: this body can sit in `pendingManaColor`
-    // through several polls before it is sent.
-    paysCostWithPermanent ? "cost_permanent_id" : "target_permanent_id",
-    selectedTarget, selectedPermanentIndex,
-  );
+  const actionBody = {
+    seat,
+    action: pending.castAction || "cast",
+    card_name: pending.cardName,
+    ...(paysCostWithPermanent
+      ? { cost_permanent_index: selectedPermanentIndex }
+      : { target_seat: selectedTarget, permanent_index: selectedPermanentIndex }),
+  };
+  // The chosen target's stable id, captured now: this body can sit in
+  // `pendingManaColor` through several polls before it is sent.
+  //
+  // **Not for a card in a graveyard.** The slot a graveyard pick carries
+  // counts into a *pile*, and the id used to be read off whatever permanent
+  // sat in the same numbered slot of that seat's battlefield — so a Raise
+  // Dead at graveyard card 0 also named the first permanent on the board. The
+  // server writes an id's seat and slot over the ones sent beside it, which
+  // was harmless only while that permanent stayed where it was: gone, the
+  // cast was a 404, and under new control it named another player's pile.
+  if (castTargetIsAPermanent(pending)) {
+    withPermanentId(
+      actionBody,
+      paysCostWithPermanent ? "cost_permanent_id" : "target_permanent_id",
+      selectedTarget, selectedPermanentIndex,
+    );
+  }
 
   // Honorable Passage: the target is chosen, now the source. Before the colour
   // prompts below rather than after, because both of those hand the body to a
@@ -16662,6 +16941,13 @@ function resolvePendingCastTarget(targetSeat, targetPermanentIndex = null) {
     });
 }
 
+// Whether the slot a target prompt collected is a **battlefield** slot — the
+// only kind a permanent id may be read off. A graveyard pick's slot counts
+// into a pile (see `resolvePendingCastTarget`).
+function castTargetIsAPermanent(pending) {
+  return !!pending && pending.targetKind !== "graveyard_creature";
+}
+
 function handlePlayerTargetClick(targetSeat) {
   if (!pendingCastTarget) return;
   if (!Number.isInteger(targetSeat)) return;
@@ -16690,6 +16976,18 @@ function handlePlayerTargetClick(targetSeat) {
 
 function confirmPendingActivation() {
   if (!pendingActivation || !pendingActivation.awaitingApproval) return;
+  if (pendingActivation.nothingToChoose) {
+    // "Activate it anyway": the picker is answered with nothing and the
+    // activation goes on from where an ability with no target starts.
+    const pending = pendingActivation;
+    pendingActivation = null;
+    renderActivationPrompt();
+    startActivationPrompt(
+      withNothingChosen(pending.nothingToChoose.card, pending.abilityIndex),
+      pending.targetSeat, pending.permanentIndex,
+    );
+    return;
+  }
   pendingActivation.awaitingApproval = false;
   renderActivationPrompt();
   updateActionHint(`Paying activation cost for ${pendingActivation.cardName}.`);
@@ -17542,6 +17840,8 @@ function showCardPreview(card) {
       : "";
     sections.push(renderSymbolsInline(`⛔ ${abilitiesLost}.${tapsFor}`));
   }
+  // CR 602.5: an ability the board forbids right now, in the server's words.
+  for (const line of abilityProhibitionLines(card)) sections.push(escapeHtml(`⛔ ${line}.`));
   if (previewText) {
     const rulesHtml = renderOracleTextWithChanges(previewText, textChanges);
     sections.push(abilitiesLost ? `<span class="text-changed-old">${rulesHtml}</span>` : rulesHtml);
@@ -17853,14 +18153,13 @@ function createCardElement(card, options = {}) {
       // Second click on the card while the insufficient-mana prompt is open
       // performs the auto-tap, same as pressing the Auto-Tap button.
       if (pendingAutoTap && isPendingHandCastCard(card, handIndex)) {
-        const me = getCurrentPlayerState();
-        const canSatisfy = !!me && canAutoTapSatisfyCost(
-          pendingAutoTapCost(pendingAutoTap),
-          me.mana_pool,
-          me.battlefield
-        );
-        if (!canSatisfy) {
-          updateActionHint("Not enough untapped lands to auto-tap for this cost.", true);
+        if (!autoTapIsPayable(pendingAutoTap)) {
+          updateActionHint(
+            pendingAutoTap.plan
+              ? "Nothing you could tap pays for this cost."
+              : "Still asking what could pay for this — try again in a moment.",
+            true,
+          );
           return;
         }
         await performAutoTap();
@@ -21024,7 +21323,7 @@ function renderState(state, { skipStaleCheck = false } = {}) {
   renderUntapUpToModal(getUntapUpToInfo(state));
   renderPermanentSetChoiceModal(getPermanentSetChoiceInfo(state));
   renderKeepPermanentsModal(getKeepPermanentsInfo(state));
-  renderModalModeTargetsModal(getModalModeTargetsInfo(state));
+  renderSeveralTargetsModal(severalTargetsPrompt(state));
   renderLookTopPickModal(getLookTopPickInfo(state));
   renderRevealedHandPickModal(getRevealedHandPickInfo(state));
   renderGraveyardExileModal(getGraveyardExilePickInfo(state));
@@ -22447,6 +22746,12 @@ function renderSpecialActions(state, hasPriority) {
 // (`engine/activation_zones.py`) and whether the board can pay; this renders
 // what it is given rather than re-deciding, so the client cannot become the
 // second copy that disagrees with the action.
+// Why a hand ability may not be activated at all (CR 602.5), or null: the
+// `prohibited` sentence the server puts on a `hand_abilities` entry.
+function handAbilityProhibition(entry) {
+  return entry && typeof entry.prohibited === "string" && entry.prohibited ? entry.prohibited : null;
+}
+
 function renderHandAbilities(state, hasPriority) {
   const host = q("handAbilities");
   if (!host) return;
@@ -22465,21 +22770,92 @@ function renderHandAbilities(state, hasPriority) {
     button.textContent = `${entry.cost_text || "Activate"}: ${entry.name}`;
     button.title = entry.text || "An ability activated from your hand (CR 113.6).";
     button.disabled = entry.payable === false;
+    // CR 602.5: forbidden outright (a City of Solitude on another player's
+    // turn, a Hand to Hand during combat). The server sends its sentence as
+    // `prohibited`; the button is dead and says why, on its face and on hover
+    // — a disabled button that only *looked* unaffordable sent the player
+    // looking for mana.
+    const prohibited = handAbilityProhibition(entry);
+    if (prohibited) {
+      button.disabled = true;
+      button.classList.add("is-prohibited");
+      button.textContent = `⛔ ${button.textContent}`;
+      button.title = prohibited;
+      button.dataset.prohibited = prohibited;
+    }
     button.addEventListener("click", () => {
       // `hand_index` says which copy: two copies of a card in a hand are the
       // same immutable definition, so the name alone would activate whichever
       // came first. `seat` is required of every action — the omission that
       // made every CR 116 special action answer a click with a silent 422.
-      sendAction({
+      const actionBody = {
         seat,
         action: "activate_hand",
         card_name: entry.name,
         hand_index: entry.hand_index,
         ability_index: entry.ability_index,
+      };
+      // `payable` is "the pool plus what you could tap", so the click is
+      // refused whenever the mana is still on the board — and that refusal
+      // used to be the end of it (the button did nothing until the lands were
+      // tapped by hand). It opens the auto-tap dialog a cast opens.
+      sendAction(actionBody).catch((e) => {
+        if (isManaRefusal(e.message)) {
+          pendingAutoTap = {
+            card: { name: entry.name, mana_cost: "" },
+            cardName: `${entry.name} (${entry.cost_text || "ability"})`,
+            cost: entry.cost_text || "",
+            actionBody,
+          };
+          renderActivationPrompt();
+          return;
+        }
+        updateActionHint(e.message, true);
       });
     });
     host.appendChild(button);
   }
+}
+
+// The parts of a cast's announcement that ride module state rather than the
+// body a prompt built — named, because two senders need them: `sendAction`,
+// and the auto-tap preview, which must ask about the cast that will be sent.
+//
+// The chosen mode of a "Choose one —" modal spell, through whichever cast path
+// fires (direct, targeted, X, auto-tap retry) without threading it manually.
+function carryCastMode(body) {
+  if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
+    body.mode_index = pendingCastModeIndex;
+  }
+  return body;
+}
+
+// A cast permission's zone — whichever cast path fires, the engine learns
+// which zone the card leaves — and a printed additional cost already paid:
+// CR 601.2b's announcement happens a prompt before CR 601.2c's, so the payment
+// has to survive whichever targeting path finally sends the cast. Never
+// overwrites a field the caller set — the single-prompt cost flows put it on
+// the body themselves.
+function carryCastZoneAndCost(body) {
+  if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
+    body.from_zone = pendingCastFromZone;
+  }
+  // …and which permission, for a zone cast the caster chose a priced way for
+  // (flashback, CR 702.34a). Never overwrites an announcement the offer prompt
+  // already made about the card's own printed alternative cost.
+  if (
+    body.action === "cast" && pendingCastFromZone != null &&
+    body.from_zone === pendingCastFromZone &&
+    pendingCastZoneWay?.alternative_cost === true && body.alternative_cost == null
+  ) {
+    body.alternative_cost = true;
+  }
+  if (_CAST_ACTIONS.has(body.action) && pendingCastCost) {
+    for (const [field, value] of Object.entries(pendingCastCost)) {
+      if (body[field] == null) body[field] = value;
+    }
+  }
+  return body;
 }
 
 async function sendAction(actionBody) {
@@ -22487,16 +22863,16 @@ async function sendAction(actionBody) {
   // Always carry the current phase-rail hold preferences so the server knows where
   // to stop on the AI's turn — including steps it resolves itself (turn start, end).
   const body = { stop_steps: opponentStopSteps(), self_stop_steps: selfStopSteps(), ...actionBody };
-  // Carry the chosen mode for a "Choose one —" modal spell through whichever cast
-  // path fires (direct, targeted, X, auto-tap retry) without threading it manually.
-  if (_CAST_ACTIONS.has(body.action) && body.mode_index == null && pendingCastModeIndex != null) {
-    body.mode_index = pendingCastModeIndex;
-  }
+  carryCastMode(body);
   // Phyrexian Splicer's chosen ability, carried the same way and for the same
   // reason: it is part of the announcement (CR 601.2b), and the activate body
   // is built in a dozen places while this is the one they all pass through.
+  // Written onto the caller's body too, like the cost just below: an
+  // "insufficient mana" retry resends that body after the word is spent here,
+  // and without it the retry announced an activation that chose nothing.
   if (body.action === "activate" && body.chosen_keyword == null && pendingChosenAbilityWord) {
     body.chosen_keyword = pendingChosenAbilityWord;
+    actionBody.chosen_keyword = pendingChosenAbilityWord;
     pendingChosenAbilityWord = null;
   }
   // And the cost the activation announced before its X and its targets were
@@ -22540,30 +22916,7 @@ async function sendAction(actionBody) {
     promptNextModeTarget();
     return;
   }
-  // Same trick for a cast permission's zone: whichever cast path fires, the
-  // engine learns which zone the card leaves.
-  if (body.action === "cast" && body.from_zone == null && pendingCastFromZone != null) {
-    body.from_zone = pendingCastFromZone;
-  }
-  // …and which permission, for a zone cast the caster chose a priced way for
-  // (flashback, CR 702.34a). Never overwrites an announcement the offer prompt
-  // already made about the card's own printed alternative cost.
-  if (
-    body.action === "cast" && pendingCastFromZone != null &&
-    body.from_zone === pendingCastFromZone &&
-    pendingCastZoneWay?.alternative_cost === true && body.alternative_cost == null
-  ) {
-    body.alternative_cost = true;
-  }
-  // And for a printed additional cost already paid: CR 601.2b's announcement
-  // happens a prompt before CR 601.2c's, so the payment has to survive whichever
-  // targeting path finally sends the cast. Never overwrites a field the caller
-  // set — the single-prompt cost flows put it on the body themselves.
-  if (_CAST_ACTIONS.has(body.action) && pendingCastCost) {
-    for (const [field, value] of Object.entries(pendingCastCost)) {
-      if (body[field] == null) body[field] = value;
-    }
-  }
+  carryCastZoneAndCost(body);
   const payload = await postJson(`/api/sessions/${sessionId}/action`, body);
   renderState(payload);
 }

@@ -8,10 +8,11 @@ them as one list of stable ids — CR 601.2c makes the targets of one ability on
 announcement.
 
 The engine half is ``tests/regressions/test_trigger_target_several.py``; this
-pins the wire. The browser client still sends one id per click — a legal
-answer to "up to two", and the part still to do: a multi-pick for this prompt
-in ``app.js``, the shape ``renderModalModeTargetsModal`` already has for
-``modal_mode_targets``.
+pins the wire. The browser client sent one id per click when this was written
+— a legal answer to "up to two", and never the second target; it picks them
+together now, in the dialog ``modal_mode_targets`` already had
+(``renderSeveralTargetsModal``), which
+``tests/ui/test_trigger_target_client.py`` runs against this prompt.
 """
 from __future__ import annotations
 

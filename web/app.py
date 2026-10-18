@@ -78,7 +78,7 @@ from .turn_steps import _end_turn
 from .game_flow import _advance_phase, _ai_step
 from .state_view import build_card_target_spec, build_state
 from .debug_actions import _apply_raw_state
-from .actions import do_action
+from .actions import do_action, preview_payment
 
 # Names other code reaches for through ``web.app`` — ``from web.app import
 # _end_turn``, ``web_app._advance_phase`` — that app.py itself no longer uses.
@@ -589,6 +589,11 @@ def search_cards(
 # web.actions.do_action; the path is declared here so app.py stays the one
 # place a route is registered.
 app.post("/api/sessions/{session_id}/action")(do_action)
+
+# The auto-tap preview: the same request body, answered with what the
+# server would tap to pay for it and whether the action then goes through
+# (web.actions.preview_payment). A read — nothing of the session moves.
+app.post("/api/sessions/{session_id}/payment_plan")(preview_payment)
 
 
 @app.post("/api/sessions/{session_id}/run-ai")
